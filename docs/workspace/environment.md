@@ -90,14 +90,14 @@ grep = "rg" # (1)!
 
 1. I prefer `ripgrep` than the GNU `grep`
 
-
-After install the global tools with `pixi global update`, there comes two problems if you use the `pwsh` as your shell, though its valid to pixi.
+After install the global tools with `pixi global update`, two issues appear when using `pwsh` as the shell, though its valid to pixi.
 
 1. Pixi silently **"exposes"** all GNU coreutils by prepending `$PIXI_HOME/envs/tool/Library/mingw-w64/bin` to `PATH`, and `pwsh` inherits `PATH`.
 2. The `grep` in `pwsh` is not the `ripgrep` one, but the GNU `grep` installed with `git`, because `$PIXI_HOME/envs/tool/Library/mingw-w64/bin`
-   (where the GNU `grep` locates) in `PATH` has the higher priority than `$PIXI_HOME/bin`.
+   (where the GNU `grep` binary is located) in `PATH` has the higher priority than `$PIXI_HOME/bin`.
 
-The solution is to install `powershell` in a isolated environment. Though pixi prepend the `$PIXI_HOME/envs/shell/Library/mingw-w64/bin` to `PATH`, but there is nothing under it.
+The solution is to install `powershell` in a isolated environment. Pixi still prepends `$PIXI_HOME/envs/shell/Library/mingw-w64/bin` to `PATH`,
+but there is nothing under it.
 
 ```toml
 version = 1
@@ -120,9 +120,9 @@ powershell = "*"
 pwsh = "pwsh"
 ```
 
-!!! tip "danger"
-    - **Use Windows** More paths prepends to `PATH` than other system and there might be some executables with the same name in these
-      paths.
+!!! note PATH Precedence Caveats
+    - **On Windows** Pixi prepends multiple directories to `PATH`.
+      This can cause unexpected executable precedence when using global tools together with shells or editors installed in the same environment.
     - **Use Global Tools** Global tools allow you to modify the executable name, which will be omitted if there is a executable or shell
       alias with the same name and has higher priority than the one in `$PIXI_HOME/bin`.
     - **Use Shell or Editor** The shell or editor that installed in a `pixi` environment will inherit the `PATH` that effected by `pixi`.
