@@ -5578,7 +5578,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "toml_edit",
+ "toml_edit 0.25.4+spec-1.1.0",
  "tracing",
  "tracing-subscriber",
  "typed-path",
@@ -6004,7 +6004,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util 0.7.18",
- "toml_edit",
+ "toml_edit 0.25.4+spec-1.1.0",
  "tracing",
  "tracing-subscriber",
  "typed-path",
@@ -6105,7 +6105,7 @@ dependencies = [
  "serde_ignored",
  "serde_json",
  "thiserror 2.0.18",
- "toml_edit",
+ "toml_edit 0.25.4+spec-1.1.0",
  "tracing",
  "url",
 ]
@@ -6191,7 +6191,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "toml_edit",
+ "toml_edit 0.25.4+spec-1.1.0",
  "tracing",
  "tracing-test",
  "typed-path",
@@ -6348,7 +6348,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "toml-span",
- "toml_edit",
+ "toml_edit 0.25.4+spec-1.1.0",
  "tracing",
  "url",
  "zstd",
@@ -6457,7 +6457,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "toml-span",
- "toml_edit",
+ "toml_edit 0.25.4+spec-1.1.0",
  "tracing",
  "url",
 ]
@@ -6507,7 +6507,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "toml-span",
- "toml_edit",
+ "toml_edit 0.25.4+spec-1.1.0",
  "tracing",
  "url",
 ]
@@ -6594,7 +6594,7 @@ dependencies = [
  "serde_with",
  "thiserror 2.0.18",
  "toml-span",
- "toml_edit",
+ "toml_edit 0.25.4+spec-1.1.0",
  "tracing",
  "typed-path",
  "url",
@@ -6971,7 +6971,7 @@ version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "219cb19e96be00ab2e37d6e299658a0cfa83e52429179969b0f0121b4ac46983"
 dependencies = [
- "toml_edit",
+ "toml_edit 0.23.10+spec-1.0.0",
 ]
 
 [[package]]
@@ -10548,7 +10548,7 @@ dependencies = [
  "indexmap 2.13.0",
  "serde_core",
  "serde_spanned",
- "toml_datetime",
+ "toml_datetime 0.7.5+spec-1.1.0",
  "toml_parser",
  "toml_writer",
  "winnow",
@@ -10556,9 +10556,9 @@ dependencies = [
 
 [[package]]
 name = "toml-span"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c6532e5b62b652073bff0e2050ef57e4697a853be118d6c57c32b59fffdeaab"
+checksum = "f22ba417d437b5fa5dcba6c27dbd6c14f38845315b724d89fed73b7a426451b7"
 dependencies = [
  "serde",
  "smallvec",
@@ -10574,6 +10574,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml_datetime"
+version = "1.0.0+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32c2555c699578a4f59f0cc68e5116c8d7cabbd45e1409b989d4be085b53f13e"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
 name = "toml_edit"
 version = "0.23.10+spec-1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10582,7 +10591,22 @@ dependencies = [
  "indexmap 2.13.0",
  "serde_core",
  "serde_spanned",
- "toml_datetime",
+ "toml_datetime 0.7.5+spec-1.1.0",
+ "toml_parser",
+ "toml_writer",
+ "winnow",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.25.4+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7193cbd0ce53dc966037f54351dbbcf0d5a642c7f0038c382ef9e677ce8c13f2"
+dependencies = [
+ "indexmap 2.13.0",
+ "serde_core",
+ "serde_spanned",
+ "toml_datetime 1.0.0+spec-1.1.0",
  "toml_parser",
  "toml_writer",
  "winnow",
@@ -11071,7 +11095,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "toml_edit",
+ "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
  "uv-cache-key",
  "uv-configuration",
@@ -11748,7 +11772,7 @@ dependencies = [
  "serde",
  "serde-untagged",
  "thiserror 2.0.18",
- "toml_edit",
+ "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
  "url",
  "uv-cache-key",
@@ -11921,7 +11945,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "toml",
- "toml_edit",
+ "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
  "url",
  "uv-cache-key",
@@ -12168,7 +12192,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "toml",
- "toml_edit",
+ "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
  "uv-build-backend",
  "uv-cache-key",

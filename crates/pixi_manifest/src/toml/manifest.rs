@@ -1207,6 +1207,124 @@ mod test {
         ));
     }
 
+    /// Tests that TOML 1.1 multiline inline tables are parsed correctly.
+    /// TOML 1.1 allows inline tables to span multiple lines with trailing
+    /// commas. Verify that various forms parse successfully (the upstream
+    /// `toml_edit` crate handles this). Each sub-case triggers `unwrap()`,
+    /// which will panic if parsing fails.
+    #[test]
+    fn test_multiline_inline_tables_parsing() {
+        // Basic multiline inline table with trailing comma in dependencies
+        WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test-multiline-inline"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [dependencies]
+        python = {
+            version = ">=3.12",
+            channel = "conda-forge",
+        }
+
+        [feature.test.dependencies]
+        pytest = {
+            version = ">=7.0",
+            channel = "conda-forge",
+        }
+
+        [environments]
+        test = ["test"]
+        "#,
+        )
+        .unwrap();
+
+        // Deeply nested multiline inline table (e.g. package.build.backend)
+        WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test-nested-multiline"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+        preview = ["pixi-build"]
+
+        [package]
+        name = "test-nested-multiline"
+        version = "0.1.0"
+
+        [package.build]
+        backend = {
+            name = "pixi-build-python",
+            version = "*",
+        }
+        "#,
+        )
+        .unwrap();
+
+        // Multiline arrays combined with multiline inline table
+        WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test-trailing-comma"
+        channels = [
+            "conda-forge",
+        ]
+        platforms = [
+            "linux-64",
+            "osx-arm64",
+        ]
+
+        [dependencies]
+        numpy = {
+            version = ">=1.24",
+        }
+        "#,
+        )
+        .unwrap();
+    }
+
+    /// Tests that error spans are correctly reported inside multiline inline
+    /// tables (TOML 1.1). The span should point to the invalid value itself,
+    /// not just the surrounding table.
+    #[test]
+    fn test_multiline_inline_table_error_span() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test-error-span"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dependencies]
+        bad-pkg = {
+            version = "!invalid!",
+            channel = "conda-forge",
+        }
+        "#,
+        ), @r#"
+          × 0: at line 1, in Tag:
+          │ !invalid!
+          │ ^
+
+          │ 1: at line 1, in Alt:
+          │ !invalid!
+          │ ^
+
+          │ 2: at line 1, in version:
+          │ !invalid!
+          │ ^
+
+
+            ╭─[pixi.toml:9:24]
+          8 │         bad-pkg = {
+          9 │             version = "!invalid!",
+            ·                        ─────────
+         10 │             channel = "conda-forge",
+            ╰────
+        "#);
+    }
+
     #[test]
     fn test_project_deprecation_warning() {
         assert_snapshot!(
