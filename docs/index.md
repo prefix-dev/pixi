@@ -4,30 +4,25 @@ template: home.html
 ---
 # Pixi
 
-Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
+Pixi is a **fast** workspace manager. Beyond installing packages, Pixi manages reproducible
+development environments with [lockfiles](workspace/lockfile.md), runs
+[tasks](workspace/advanced_tasks.md) (like build scripts, test runners, or linters), supports
+[multiple environments](workspace/multi_environment.md) in a single workspace (e.g. separate `test`
+and `docs` environments), and works across
+[Linux, macOS, and Windows](workspace/multi_platform_configuration.md) from the same declaration.
 
-## Highlights
+By building on conda, Pixi gives you access to tens of thousands of ready-to-use packages from
+[conda-forge](https://conda-forge.org/) — covering everything from Python and R to C++ libraries,
+compilers, and CLI tools. Beyond conda-forge, specialized channels serve specific communities:
+[robostack](https://robostack.github.io/) for OS-independent ROS packages or
+[bioconda](https://bioconda.github.io/) for bioinformatics spring to mind.
 
-- [🔄 **Reproducibility**](workspace/lockfile.md)  
-  Isolated, easily recreated environments with lockfiles built-in
-
-- [🛠️ **Tasks**](workspace/advanced_tasks.md)  
-  Manage complex pipelines effortlessly.
-
-- [🌐 **Multi Platform**](workspace/multi_platform_configuration.md)  
-  Works on Linux, macOS, Windows, and more.
-
-- [🧩 **Multiple Environments**](workspace/multi_environment.md)  
-  Compose multiple environments in one manifest.
-
-- [🐍 **Python**](python/tutorial.md)  
-  Support for `pyproject.toml` and PyPI through uv.
-
-- [💾 **Disk Efficient**](workspace/environment.md#de-duplication)
-  Environments share files through hard links or reflinks, so packages are stored only once.
-
-- [🌍 **Global Tools**](global_tools/introduction.md)
-  Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`.
+The ecosystem also works both ways: when you
+[build your own packages](build/getting_started.md) with [pixi build](build/getting_started.md),
+you can publish them to a channel and make them installable by anyone using Pixi, or any other
+conda-based tooling — tying your work into a distribution network that already serves millions of
+users. [prefix.dev](https://prefix.dev/channels/) makes it easy to host both public and private
+channels, so you can share packages with the world or keep them internal to your team.
 
 ---
 
