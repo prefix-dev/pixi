@@ -1512,4 +1512,128 @@ platforms = []
             "ruff should be on its own line:\n{result}"
         );
     }
+
+    /// Tests that `reformat_array_multiline` does not panic on an empty array
+    /// and preserves the empty array structure.
+    #[test]
+    fn reformat_array_multiline_empty_array() {
+        let mut doc: DocumentMut = r#"
+[project]
+dependencies = []
+"#
+        .parse()
+        .unwrap();
+
+        reformat_array_multiline(
+            doc["project"]["dependencies"]
+                .as_array_mut()
+                .expect("dependencies array"),
+        );
+
+        assert!(
+            doc.to_string().contains("dependencies = []"),
+            "empty array should remain unchanged:\n{}",
+            doc.to_string()
+        );
+    }
+
+    /// Tests that calling `reformat_array_multiline` twice produces identical
+    /// output (idempotency).
+    #[test]
+    fn reformat_array_multiline_is_idempotent() {
+        let mut doc: DocumentMut = r#"
+[project]
+dependencies = ["numpy>=1.0", "pandas>=2.0"]
+"#
+        .parse()
+        .unwrap();
+
+        reformat_array_multiline(
+            doc["project"]["dependencies"]
+                .as_array_mut()
+                .expect("dependencies array"),
+        );
+        let first = doc.to_string();
+
+        let mut doc2: DocumentMut = first.parse().unwrap();
+        reformat_array_multiline(
+            doc2["project"]["dependencies"]
+                .as_array_mut()
+                .expect("dependencies array"),
+        );
+
+        assert_eq!(first, doc2.to_string(), "reformat should be idempotent");
+    }
+
+    /// Tests that own-line comments, end-of-line comments, and both forms of
+    /// trailing comments are preserved correctly after reformatting.
+    #[test]
+    fn reformat_array_multiline_preserves_all_comment_types() {
+        let mut doc: DocumentMut = r#"
+[project]
+dependencies = [
+    # own-line comment
+    "numpy>=1.0",     # end-of-line comment
+    # second own-line comment
+    "pandas>=2.0",
+    # comment before closing
+] # actual trailing comment
+"#
+        .parse()
+        .unwrap();
+
+        reformat_array_multiline(
+            doc["project"]["dependencies"]
+                .as_array_mut()
+                .expect("dependencies array"),
+        );
+        let result = doc.to_string();
+
+        assert!(
+            result.contains("# own-line comment"),
+            "own-line comment should be preserved:\n{result}"
+        );
+        assert!(
+            result.contains("\"numpy>=1.0\",     # end-of-line comment"),
+            "end-of-line comment spacing should be preserved:\n{result}"
+        );
+        assert!(
+            result.contains("# second own-line comment"),
+            "second own-line comment should be preserved:\n{result}"
+        );
+        assert!(
+            result.contains("# comment before closing"),
+            "comment before closing bracket should be preserved:\n{result}"
+        );
+        assert!(
+            result.contains("# actual trailing comment"),
+            "trailing comment after bracket should be preserved:\n{result}"
+        );
+    }
+
+    /// Tests that inline comment with no padding before `#` is preserved.
+    /// Important edge case from uv behavior.
+    #[test]
+    fn reformat_array_multiline_preserves_inline_comment_without_padding() {
+        let mut doc: DocumentMut = r#"
+[project]
+dependencies = [
+    "attrs>=25.4.0",#comment
+]
+"#
+        .parse()
+        .unwrap();
+
+        reformat_array_multiline(
+            doc["project"]["dependencies"]
+                .as_array_mut()
+                .expect("dependencies array"),
+        );
+
+        assert!(
+            doc.to_string().contains("\"attrs>=25.4.0\",#comment"),
+            "inline comment without padding should be preserved:\n{}",
+            doc.to_string()
+        );
+    }
 }
