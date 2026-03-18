@@ -9,7 +9,8 @@ use rattler_conda_types::{
 };
 
 use crate::{
-    CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
+    CondaConstraints, CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType,
+    SystemRequirements,
     dependencies::CondaDevDependencies,
     has_features_iter::HasFeaturesIter,
     has_manifest_ref::HasWorkspaceManifest,
@@ -166,6 +167,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
         let deps: Vec<_> = self
             .features()
+            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.pypi_dependencies(platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -183,6 +185,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> CondaDependencies {
         let deps: Vec<_> = self
             .features()
+            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.dependencies(kind, platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -203,6 +206,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn combined_dependencies(&self, platform: Option<Platform>) -> CondaDependencies {
         let deps: Vec<_> = self
             .features()
+            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.combined_dependencies(platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -216,10 +220,28 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn combined_dev_dependencies(&self, platform: Option<Platform>) -> CondaDevDependencies {
         let deps: Vec<_> = self
             .features()
+            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.dev_dependencies(platform))
             .collect();
 
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
+    }
+
+    /// Returns the combined version constraints for this collection.
+    ///
+    /// Constraints from all features are combined. If multiple features define
+    /// a constraint for the same package, all constraints are retained and the
+    /// solver must satisfy all of them simultaneously.
+    ///
+    /// If the `platform` is `None`, no platform specific constraints are taken
+    /// into consideration.
+    fn combined_constraints(&self, platform: Option<Platform>) -> CondaConstraints {
+        let constraints: Vec<_> = self
+            .features()
+            .filter(|f| f.supports_platform(platform))
+            .filter_map(|f| f.constraints(platform))
+            .collect();
+        DependencyMap::merge_all(constraints.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the pypi options for this collection.

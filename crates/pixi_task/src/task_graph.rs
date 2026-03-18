@@ -132,10 +132,9 @@ impl TaskNode<'_> {
     ) -> miette::Result<Option<String>> {
         let mut cmd = self.task.as_single_command(context)?;
 
-        if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args
-            && !additional_args.is_empty()
-        {
-            // Pass each additional argument varbatim by wrapping it in single quotes
+        let extra = self.extra_passthrough_args();
+        if !extra.is_empty() {
+            // Pass each additional argument verbatim by wrapping it in single quotes
             let formatted_args = format!(" {}", self.format_additional_args());
             cmd = match cmd {
                 Some(Cow::Borrowed(s)) => Some(Cow::Owned(format!("{s}{formatted_args}"))),
@@ -150,11 +149,17 @@ impl TaskNode<'_> {
         Ok(cmd.map(|c| c.into_owned()))
     }
 
+    /// Returns the extra passthrough args (free-form or after `--`)
+    fn extra_passthrough_args(&self) -> &[String] {
+        self.args.as_ref().map_or(&[], ArgValues::extra_args)
+    }
+
     /// Format the additional arguments passed to this command
     fn format_additional_args(&self) -> Box<dyn Display + '_> {
-        if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args {
+        let extra = self.extra_passthrough_args();
+        if !extra.is_empty() {
             Box::new(
-                additional_args
+                extra
                     .iter()
                     .format_with(" ", |arg, f| f(&format_args!("'{arg}'"))),
             )
@@ -246,6 +251,18 @@ impl<'p> TaskGraph<'p> {
                     let task_name = args.remove(0);
 
                     let arg_values = if let Some(task_arguments) = task.args() {
+                        // Extract any arguments after `--`. For tasks with typed args, `--`
+                        // can appear anywhere after the task name (e.g. after providing all
+                        // typed arg values). Everything before `--` is treated as typed args;
+                        // everything after is forwarded verbatim to the underlying command.
+                        let extra_args = if let Some(pos) = args.iter().position(|a| a == "--") {
+                            let extra = args[pos + 1..].to_vec();
+                            args.truncate(pos);
+                            extra
+                        } else {
+                            vec![]
+                        };
+
                         // Check if we don't have more arguments than the task expects
                         if args.len() > task_arguments.len() {
                             return Err(TaskGraphError::TooManyArguments(task_name.to_string()));
@@ -257,13 +274,34 @@ impl<'p> TaskGraph<'p> {
                             .map(|a| TypedDependencyArg::Positional(a.to_string()))
                             .collect();
 
-                        Some(Self::merge_args(
+                        let merged = Self::merge_args(
                             &TaskName::from(task_name.clone()),
                             Some(&task_arguments.to_vec()),
                             Some(&typed_dep_args),
-                        )?)
+                        )?;
+
+                        // Combine with any extra args passed after `--`
+                        Some(match merged {
+                            ArgValues::TypedArgs { args: typed, .. } => ArgValues::TypedArgs {
+                                args: typed,
+                                extra: extra_args,
+                            },
+                            ArgValues::FreeFormArgs(mut free) => {
+                                free.extend(extra_args);
+                                ArgValues::FreeFormArgs(free)
+                            }
+                        })
                     } else {
-                        Some(ArgValues::FreeFormArgs(args.clone()))
+                        // Task has no typed args — strip the `--` separator only if it is
+                        // the first argument after the task name. A `--` that appears later
+                        // is passed through verbatim (it may be meaningful to the underlying
+                        // command, e.g. `git log -- somefile`).
+                        let free_args = if args.first().map(|s| s.as_str()) == Some("--") {
+                            args[1..].to_vec()
+                        } else {
+                            args.clone()
+                        };
+                        Some(ArgValues::FreeFormArgs(free_args))
                     };
 
                     if skip_deps {
@@ -577,7 +615,10 @@ impl<'p> TaskGraph<'p> {
             });
         }
 
-        Ok(ArgValues::TypedArgs(typed_args))
+        Ok(ArgValues::TypedArgs {
+            args: typed_args,
+            extra: vec![],
+        })
     }
 
     /// Returns the topological order of the tasks in the graph.
@@ -627,6 +668,7 @@ pub enum TaskGraphError {
     InvalidTask,
 
     #[error("task '{0}' received more arguments than expected")]
+    #[diagnostic(help("use `--` to separate task arguments from extra passthrough arguments"))]
     TooManyArguments(String),
 
     #[error(transparent)]
@@ -1222,5 +1264,134 @@ mod test {
         assert_eq!(order.len(), 1);
         let task = &graph[order[0]];
         assert!(task.name.is_none());
+    }
+
+    #[test]
+    fn test_double_dash_separator_with_typed_args() {
+        // pixi run build release -- --verbose
+        // "release" fills the typed arg; "--verbose" is forwarded to the command.
+        // `--` can appear anywhere after the task name for tasks with typed args.
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ target }}"
+        args = [{ arg = "target", choices = ["debug", "release"] }]
+    "#;
+        let run_args = &["build", "release", "--", "--verbose"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo release '--verbose'"]);
+    }
+
+    #[test]
+    fn test_double_dash_with_defaults_only() {
+        // pixi run build -- --verbose
+        // No typed arg value provided; default "debug" is used; "--verbose" is appended
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ target }}"
+        args = [{ arg = "target", default = "debug", choices = ["debug", "release"] }]
+    "#;
+        let run_args = &["build", "--", "--verbose"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo debug '--verbose'"]);
+    }
+
+    #[test]
+    fn test_double_dash_with_free_form_args() {
+        // Task has NO typed args. `--` only acts as a separator when it is the
+        // first arg after the task name. Here "arg1" comes first, so `--` is
+        // passed through verbatim to the underlying command.
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.mytask]
+        cmd = "echo"
+    "#;
+        let run_args = &["mytask", "arg1", "--", "arg2"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo 'arg1' '--' 'arg2'"]);
+    }
+
+    #[test]
+    fn test_double_dash_first_with_free_form_args() {
+        // Task has NO typed args. `--` is the first arg after the task name, so
+        // it is consumed by pixi and the remaining args are forwarded.
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.mytask]
+        cmd = "echo"
+    "#;
+        let run_args = &["mytask", "--", "arg1", "arg2"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo 'arg1' 'arg2'"]);
+    }
+
+    #[test]
+    fn test_double_dash_custom_command_preserved() {
+        // Custom commands (no pixi task found) pass `--` through verbatim.
+        // e.g. `pixi run git log -- somefile`
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+    "#;
+        let run_args = &["git", "log", "--", "somefile"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["'git' 'log' '--' 'somefile'"]);
+    }
+
+    #[test]
+    fn test_double_dash_no_extra_args() {
+        // Trailing "--" with nothing after it, and `--` is the first arg after
+        // the task name, so it is consumed. Task uses its default value.
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.build]
+        cmd = "echo {{ target }}"
+        args = [{ arg = "target", default = "debug", choices = ["debug", "release"] }]
+    "#;
+        let run_args = &["build", "--"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo debug"]);
+    }
+
+    #[test]
+    fn test_double_dash_prefix_not_separator() {
+        // `--verbose` is NOT the `--` separator — only the exact token `--`
+        // (with a space after it) is recognised. A flag like `--verbose` as the
+        // first arg is forwarded to the underlying command unchanged.
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks.mytask]
+        cmd = "echo"
+    "#;
+        let run_args = &["mytask", "--verbose"];
+        let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
+        assert_eq!(commands, vec!["echo '--verbose'"]);
     }
 }

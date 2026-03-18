@@ -24,7 +24,7 @@ use thiserror::Error;
 use crate::{
     BuildEnvironment, BuildProfile, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, SourceBuildError, SourceBuildSpec,
-    build::PinnedSourceCodeLocation, executor::ExecutorFutures,
+    build::PinnedSourceCodeLocation, executor::CancellationAwareFutures,
     install_pixi::reporter::WrappingInstallReporter,
 };
 
@@ -134,7 +134,7 @@ impl InstallPixiEnvironmentSpec {
 
         // Build all the source packages concurrently.
         binary_records.reserve(source_records.len());
-        let mut build_futures = ExecutorFutures::new(command_dispatcher.executor());
+        let mut build_futures = CancellationAwareFutures::new(command_dispatcher.executor());
         for source_record in source_records {
             // Do not build if package is explicitly ignored
             if self
