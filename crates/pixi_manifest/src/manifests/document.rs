@@ -1533,7 +1533,7 @@ dependencies = []
         assert!(
             doc.to_string().contains("dependencies = []"),
             "empty array should remain unchanged:\n{}",
-            doc.to_string()
+            doc
         );
     }
 
@@ -1633,7 +1633,7 @@ dependencies = [
         assert!(
             doc.to_string().contains("\"attrs>=25.4.0\",#comment"),
             "inline comment without padding should be preserved:\n{}",
-            doc.to_string()
+            doc
         );
     }
 }
