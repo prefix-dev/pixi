@@ -16,9 +16,9 @@ pub struct BuildScriptContext {
 #[derive(Default, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Installer {
-    Uv,
-    #[default]
     Pip,
+    #[default]
+    Uv,
 }
 
 impl Installer {
