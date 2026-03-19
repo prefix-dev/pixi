@@ -302,7 +302,7 @@ impl<'p> Environment<'p> {
     ///
     /// The activation scripts of all features are combined in the order they
     /// are defined for the environment.
-    pub(crate) fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
+    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
         self.features()
             .filter_map(|f| f.activation_scripts(platform))
             .flatten()
