@@ -183,14 +183,15 @@ A **channel** is a repository of conda packages, served over HTTP. When
 you add a dependency, Pixi fetches it from one or more channels. The
 most important ones:
 
-- **[conda-forge](https://conda-forge.org/)** — the community-maintained
+- **[conda-forge](https://conda-forge.org/)** - the community-maintained
   default channel with over 30,000 packages. This is where most
   open-source software lives.
-- **[prefix.dev](https://prefix.dev/)** — browse and search conda-forge
-  packages, or [host your own private channels](https://prefix.dev/channels/).
-- **[prefix.dev/github-releases](https://prefix.dev/channels/github-releases)**
-  — automatically generated conda packages from GitHub releases, so you
-  can install CLI tools that don't have a conda-forge recipe yet.
+- **[bioconda](https://bioconda.github.io/)** - the community-maintained channel focused on biomedical research.
+- **[robostack-<ros-distro>](https://robostack.github.io/)** - the community-maintained channels for using ROS packages in the conda ecosystem.
+- **[prefix.dev/github-releases](https://prefix.dev/channels/github-releases)** - automatically
+generated conda packages from GitHub releases, so you can install CLI tools that don't have a conda-forge recipe yet.
+
+All of these channels can be discovered and browsed on **[prefix.dev](https://prefix.dev/)** , or [host your own private channels](https://prefix.dev/channels/).
 
 You can mix channels in a single workspace. For example, the
 [PyTorch tutorial](python/pytorch.md) shows you how to combine different channels. See
