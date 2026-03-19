@@ -389,8 +389,8 @@ class ReservedTaskArgName(str, Enum):
 
 
 TaskName = Annotated[
-    str,
-    Field(pattern=r"^[^\s\$]+$", min_length=1, description="A valid task name."),
+    NonEmptyStr,
+    Field(pattern=r"^[^\s\$]+$", description="A valid task name."),
 ]
 NotReservedSchema: Any = {"not": {"enum": sorted(r.value for r in ReservedTaskArgName)}}
 TaskArgName = Annotated[
