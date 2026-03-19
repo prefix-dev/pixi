@@ -361,10 +361,7 @@ impl<'p> ExecutableTask<'p> {
                     formatted,
                 );
             } else {
-                tracing::warn!(
-                    "No files matched the output globs for task '{}'",
-                    task_name
-                );
+                tracing::warn!("No files matched the output globs for task '{}'", task_name);
                 tracing::warn!("Output globs: {}", formatted);
             }
         }
@@ -383,10 +380,7 @@ impl<'p> ExecutableTask<'p> {
                     formatted,
                 );
             } else {
-                tracing::warn!(
-                    "No files matched the input globs for task '{}'",
-                    task_name
-                );
+                tracing::warn!("No files matched the input globs for task '{}'", task_name);
                 tracing::warn!("Input globs: {}", formatted);
             }
         }
@@ -686,17 +680,18 @@ mod tests {
         };
 
         // Test with error_on_missing = false (should succeed/warn)
-        assert!(executable_task.check_missing_globs(&post_hash, false).is_ok());
+        assert!(
+            executable_task
+                .check_missing_globs(&post_hash, false)
+                .is_ok()
+        );
 
         // Test with error_on_missing = true (should error)
         let result = executable_task.check_missing_globs(&post_hash, true);
         assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("No files matched the input globs for task 'test'. Input globs: `missing_file.txt`")
-        );
+        assert!(result.unwrap_err().to_string().contains(
+            "No files matched the input globs for task 'test'. Input globs: `missing_file.txt`"
+        ));
     }
 
     #[tokio::test]
