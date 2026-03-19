@@ -90,9 +90,7 @@ impl MappedCondaDependency {
     /// Convert to a conda MatchSpec.
     pub fn to_match_spec(&self) -> MatchSpec {
         MatchSpec {
-            name: Some(rattler_conda_types::PackageNameMatcher::Exact(
-                self.name.clone(),
-            )),
+            name: rattler_conda_types::PackageNameMatcher::Exact(self.name.clone()),
             version: self.version_spec.clone(),
             ..Default::default()
         }
