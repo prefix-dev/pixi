@@ -13,7 +13,7 @@ use rattler_shell::{
         ActivationError, ActivationError::FailedToRunActivationScript, ActivationVariables,
         Activator, PathModificationBehavior,
     },
-    shell::{Shell, ShellEnum},
+    shell::ShellEnum,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -154,13 +154,6 @@ pub fn get_activator<'p>(
         }
     }
 
-    // Build the PIXI_ACTIVATION_SCRIPTS env var from the pixi.toml-defined scripts.
-    let pixi_activation_scripts_value = additional_activation_scripts
-        .iter()
-        .map(|p| p.to_string_lossy().into_owned())
-        .collect::<Vec<_>>()
-        .join(shell.path_separator(&platform));
-
     let mut activator =
         Activator::from_path(environment.dir().as_path(), shell, Platform::current())?;
 
@@ -173,13 +166,6 @@ pub fn get_activator<'p>(
     activator
         .env_vars
         .extend(get_static_environment_variables(environment));
-
-    // Set PIXI_ACTIVATION_SCRIPTS to the shell-separator-delimited list of
-    // pixi.toml-defined activation script paths.
-    activator.env_vars.insert(
-        "PIXI_ACTIVATION_SCRIPTS".to_string(),
-        pixi_activation_scripts_value,
-    );
 
     // Add environment variables that should be applied after activation scripts run.
     activator
