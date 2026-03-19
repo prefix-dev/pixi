@@ -126,6 +126,8 @@ impl BackendConfig for PythonBackendConfig {
 #[cfg(test)]
 mod tests {
 
+    use crate::build_script::Installer;
+
     use super::PythonBackendConfig;
     use pixi_build_backend::generated_recipe::BackendConfig;
     use serde_json::json;
@@ -360,5 +362,20 @@ mod tests {
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("`debug_dir` cannot have a target specific value"));
+    }
+
+    #[test]
+    fn test_deserialize_installer_field() {
+        let json_data = json!({"installer": "uv"});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, Some(Installer::Uv));
+
+        let json_data = json!({"installer": "pip"});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, Some(Installer::Pip));
+
+        let json_data = json!({});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, None);
     }
 }

@@ -12,7 +12,7 @@ pub struct BuildScriptContext {
     pub manifest_root: PathBuf,
 }
 
-#[derive(Default, Serialize, Clone, Debug, Deserialize)]
+#[derive(Default, Serialize, Clone, Debug, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Installer {
     Pip,
