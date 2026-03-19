@@ -3,7 +3,7 @@ mod config;
 mod metadata;
 mod pypi_mapping;
 
-use build_script::{BuildPlatform, BuildScriptContext, Installer};
+use build_script::{BuildPlatform, BuildScriptContext};
 use config::PythonBackendConfig;
 use fs_err as fs;
 use miette::IntoDiagnostic;
@@ -156,8 +156,7 @@ impl GenerateRecipe for PythonGenerator {
         // are added to the `host` requirements, while for cmake/rust they are
         // added to the `build` requirements.
         // We only check build and host dependencies for the installer.
-        let installer =
-            Installer::determine_installer_from_names(model_dependencies.build_and_host_names());
+        let installer = config.installer.clone().unwrap_or_default();
 
         let installer_name = installer.package_name().to_string();
         let installer_pkg = pixi_build_types::SourcePackageName::from(installer_name.as_str());
