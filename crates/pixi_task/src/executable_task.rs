@@ -671,6 +671,7 @@ mod tests {
             task: Cow::Borrowed(task),
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
+            init_cwd: None,
         };
 
         let post_hash = TaskHash {
@@ -690,9 +691,11 @@ mod tests {
         // Test with error_on_missing = true (should error)
         let result = executable_task.check_missing_globs(&post_hash, true);
         assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "No files matched the input globs for task 'test'. Input globs: `missing_file.txt`"
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No files matched the input globs for task 'test'. Input globs: `missing_file.txt`")
         );
     }
 
