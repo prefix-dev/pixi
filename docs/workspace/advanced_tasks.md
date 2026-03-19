@@ -231,6 +231,38 @@ pixi run deploy auth-service
 pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
 ```
+### Passing Extra Arguments with `--`
+
+When a task defines typed `args`, all command-line values are matched against those definitions. If you need to pass *additional* flags or arguments directly to the underlying command on top of the typed args, use `--` as a separator. Everything after `--` is forwarded verbatim to the command, regardless of the task's `args` definition.
+
+```toml
+[tasks.test]
+cmd = "pytest {{ target }} -v"
+args = [{ arg = "target", default = "tests/unit" }]
+```
+
+```shell
+# Without --, extra flags would cause an error:
+# × task 'test' received more arguments than expected
+#   hint: use `--` to separate task arguments from extra passthrough arguments
+pixi run test tests/integration --tb=short --maxfail=5
+
+# With --, the typed arg is filled and the rest is forwarded:
+pixi run test tests/integration -- --tb=short --maxfail=5
+✨ Pixi task (test in default): pytest tests/integration -v --tb=short --maxfail=5
+```
+
+You can also use `--` when relying on a default argument value:
+
+```shell
+# "target" uses its default, "--maxfail=5" is forwarded to the command
+pixi run test -- --maxfail=5
+✨ Pixi task (test in default): pytest tests/unit -v --maxfail=5
+```
+
+!!! note "Tasks without typed args"
+    For tasks that do **not** define `args`, `--` is passed through to the underlying command unchanged. This preserves its meaning for programs that use `--` themselves (e.g. `git log -- somefile`).
+
 ### Restricting Values with Choices
 
 You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error instead of running the task.
@@ -300,7 +332,7 @@ pixi run partial-override-with-arg cli-arg
 
 ### MiniJinja Templating for Task Arguments
 
-Task commands defined in the manifest support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
+Task commands and env variables defined in the manifest support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
 
 !!! note "Templating and ad-hoc CLI commands"
     MiniJinja templating is only applied to tasks defined in your manifest file (`pixi.toml` / `pyproject.toml`).
@@ -437,6 +469,7 @@ and how those ways interact with each other.
 
 Notes on environment variables in tasks:
 - Values set via `tasks.<name>.env` are interpreted by `deno_task_shell` when the task runs. Shell-style expansions like `env = { VAR = "$FOO" }` therefore work the same on all operating systems.
+- Templating is allowed in env variables, when you have something like `{ cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] }`. The arg `{{ backend }}` value is interpreted by the `backend` values passed in.  
 
 !!! warning
 

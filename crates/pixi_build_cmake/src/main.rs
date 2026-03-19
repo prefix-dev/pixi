@@ -187,7 +187,7 @@ mod tests {
         ProjectModel, VariantValue,
         procedures::{conda_outputs::CondaOutputsParams, initialize::InitializeParams},
     };
-    use rattler_build::console_utils::LoggingOutputHandler;
+    use rattler_build_core::console_utils::LoggingOutputHandler;
     use recipe_stage0::recipe::{Item, Value};
     use tokio::fs;
 

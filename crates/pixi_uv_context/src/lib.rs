@@ -5,7 +5,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, get_cache_dir};
 use pixi_consts::consts;
 use pixi_utils::reqwest::{
-    should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares,
+    LazyReqwestClient, should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares,
 };
 use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 use tracing::debug;
@@ -51,7 +51,7 @@ pub struct UvResolutionContext {
 }
 
 impl UvResolutionContext {
-    pub fn from_config(config: &Config) -> miette::Result<Self> {
+    pub fn from_config(config: &Config, client: LazyReqwestClient) -> miette::Result<Self> {
         let uv_cache = get_cache_dir()?.join(consts::PYPI_CACHE_DIR);
         if !uv_cache.exists() {
             create_dir_all(&uv_cache)
@@ -96,7 +96,7 @@ impl UvResolutionContext {
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
-            extra_middleware: ExtraMiddleware(uv_middlewares(config)),
+            extra_middleware: ExtraMiddleware(uv_middlewares(config, client)),
             proxies: config.get_proxies().into_diagnostic()?,
             tls_no_verify: config.tls_no_verify(),
             use_native_tls: should_use_native_tls_for_uv(),

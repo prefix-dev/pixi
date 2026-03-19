@@ -193,6 +193,31 @@ compilers = ["c", "cxx"]
 !!! info "Comprehensive Compiler Documentation"
     For detailed information about available compilers, platform-specific behavior, and how conda-forge compilers work, see the [Compilers Documentation](../key_concepts/compilers.md).
 
+### `abi3`
+
+- **Type**: `Boolean`
+- **Default**: `false`
+- **Target Merge Behavior**: `Overwrite` - Platform-specific setting takes precedence over base
+
+Controls whether the package uses the [Python Stable ABI (abi3)](https://docs.python.org/3/c-api/stable.html). When set to `true`, a `python_abi` dependency is added to the host requirements with version bounds derived from `requires-python` in your `pyproject.toml`.
+
+The `python_abi` package has `run_exports` that automatically propagate the ABI constraint to the run environment, so only a host dependency is needed.
+
+```toml
+[package.build.config]
+abi3 = true
+compilers = ["c"]
+```
+
+The version bounds are computed from the lower bound of `requires-python`:
+
+- `requires-python = ">=3.9"` → `python_abi >=3.9,<3.10.0a0`
+- `requires-python = ">=3.11,<4"` → `python_abi >=3.11,<3.12.0a0`
+- If `requires-python` is not specified, defaults to `python_abi >=3.8,<3.9.0a0`
+
+!!! warning "Incompatible with noarch"
+    Setting `abi3 = true` with `noarch = true` will produce an error, since the stable ABI is only meaningful for packages with compiled extensions.
+
 ### `extra-args`
 
 - **Type**: `Array<String>`
@@ -369,7 +394,7 @@ The Python backend follows this build process:
 
 The backend automatically detects which Python installer to use:
 
-- **uv**: Used if `uv` is present in any dependency category (build, host, or run)
+- **uv**: Used if `uv` is present in the build or host dependencies
 - **pip**: Used as the default fallback installer
 
 To use `uv` for faster installations, add it to your dependencies:

@@ -65,7 +65,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Rust
-        uses: taiki-e/setup-cross-toolchain-action@b8d1a322a6009a2b7220f53996695778eef89b41 # v1
+        uses: taiki-e/setup-cross-toolchain-action@20dbac418ca692fd1a9377acf2cec38161169a39 # v1
         with:
           target: ${{ matrix.target }}
 
@@ -103,7 +103,7 @@ jobs:
         run: pixi run compress-trampoline --target ${{ matrix.target }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: trampoline-${{ matrix.target }}
           path: trampoline/binaries/pixi-trampoline-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}.zst
@@ -129,7 +129,7 @@ jobs:
         run: ls -R trampoline/binaries/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: trampolines
           path: trampoline/binaries/

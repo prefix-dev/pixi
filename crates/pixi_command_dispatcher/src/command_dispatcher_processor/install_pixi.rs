@@ -14,6 +14,10 @@ impl CommandDispatcherProcessor {
     /// Called when a [`super::ForegroundMessage::InstallPixiEnvironment`]
     /// task was received.
     pub(crate) fn on_install_pixi_environment(&mut self, task: InstallPixiEnvironmentTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Notify the reporter that a new solve has been queued.
         let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
         let reporter_id = self

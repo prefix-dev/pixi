@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc};
 
 use miette::IntoDiagnostic;
-use rattler_build::{
+use rattler_build_core::{
     DiscoveredOutput,
     metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
     render::resolved_dependencies::RunExportsDownload,

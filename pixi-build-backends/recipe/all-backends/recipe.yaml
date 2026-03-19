@@ -7,6 +7,7 @@ context:
   cmake_version: ${{ env.get('PIXI_BUILD_CMAKE_VERSION', default='0.1.0dev') }}
   mojo_version: ${{ env.get('PIXI_BUILD_MOJO_VERSION', default='0.1.0dev') }}
   python_backend_version: ${{ env.get('PIXI_BUILD_PYTHON_VERSION', default='0.1.0dev') }}
+  r_version: ${{ env.get('PIXI_BUILD_R_VERSION', default='0.1.0dev') }}
   rattler_build_version: ${{ env.get('PIXI_BUILD_RATTLER_BUILD_VERSION', default='0.1.0dev') }}
   rust_version: ${{ env.get('PIXI_BUILD_RUST_VERSION', default='0.1.0dev') }}
   py_pixi_build_backend_version: ${{ env.get('PY_PIXI_BUILD_BACKEND_VERSION', default='0.1.0dev') }}
@@ -57,7 +58,7 @@ outputs:
               - set RUSTC_WRAPPER=sccache
               - set "CARGO_TARGET_DIR=${{ SRC_DIR }}\..\..\..\\target-cache-rust-backends"
           # Build all Rust backends at once
-          - cargo auditable build --locked --release --bins -p pixi_build_cmake -p pixi_build_mojo -p pixi_build_python -p pixi_build_rattler_build -p pixi_build_rust
+          - cargo auditable build --locked --release --bins -p pixi_build_cmake -p pixi_build_mojo -p pixi_build_python -p pixi_build_r -p pixi_build_rattler_build -p pixi_build_rust
           # Install binaries to prefix
           - if: unix
             then:
@@ -65,6 +66,7 @@ outputs:
               - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-cmake $PREFIX/bin/pixi-build-cmake
               - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-mojo $PREFIX/bin/pixi-build-mojo
               - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-python $PREFIX/bin/pixi-build-python
+              - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-r $PREFIX/bin/pixi-build-r
               - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-rattler-build $PREFIX/bin/pixi-build-rattler-build
               - install -Dm755 $CARGO_TARGET_DIR/$TARGET/release/pixi-build-rust $PREFIX/bin/pixi-build-rust
           - if: win
@@ -73,6 +75,7 @@ outputs:
               - copy %CARGO_TARGET_DIR%\release\pixi-build-cmake.exe %PREFIX%\bin\
               - copy %CARGO_TARGET_DIR%\release\pixi-build-mojo.exe %PREFIX%\bin\
               - copy %CARGO_TARGET_DIR%\release\pixi-build-python.exe %PREFIX%\bin\
+              - copy %CARGO_TARGET_DIR%\release\pixi-build-r.exe %PREFIX%\bin\
               - copy %CARGO_TARGET_DIR%\release\pixi-build-rattler-build.exe %PREFIX%\bin\
               - copy %CARGO_TARGET_DIR%\release\pixi-build-rust.exe %PREFIX%\bin\
           - if: unix
@@ -207,6 +210,43 @@ outputs:
       description: |
         This package provides a build backend for pixi that allows building Python packages
         using PEP 517 compatible build systems.
+      license: BSD-3-Clause
+      license_file:
+        - LICENSE
+        - THIRDPARTY.yml
+      documentation: https://prefix-dev.github.io/pixi-build-backends
+      repository: https://github.com/prefix-dev/pixi-build-backends
+
+  # === pixi-build-r ===
+  - package:
+      name: pixi-build-r
+      version: ${{ r_version }}
+    inherit: rust-backends-build
+    build:
+      files:
+        - bin/pixi-build-r
+        - bin/pixi-build-r.exe
+        - LICENSE
+        - THIRDPARTY.yml
+      script:
+        - if: unix
+          then:
+            - mv ${{ PREFIX }}/THIRDPARTY.yml ${{ SRC_DIR }}/THIRDPARTY.yml
+          else:
+            - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
+    requirements:
+      run:
+        - pixi-build-api-version >=4,<5
+    tests:
+      - script: pixi-build-r --help
+      - package_contents:
+          bin:
+            - pixi-build-r
+    about:
+      homepage: https://github.com/prefix-dev/pixi-build-backends
+      summary: A pixi build backend to build R packages.
+      description: |
+        This package provides a build backend for pixi that allows building R packages.
       license: BSD-3-Clause
       license_file:
         - LICENSE
