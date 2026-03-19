@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc};
 use miette::IntoDiagnostic;
 use rattler_build_core::{
     DiscoveredOutput,
-    metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
+    metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
     render::resolved_dependencies::RunExportsDownload,
     system_tools::SystemTools,
     tool_configuration,
@@ -194,7 +194,6 @@ pub async fn get_build_output(
                 store_recipe: false,
                 force_colors: false,
                 sandbox_config: None,
-                debug: Debug::default(),
                 solve_strategy: Default::default(),
                 exclude_newer: None,
             },

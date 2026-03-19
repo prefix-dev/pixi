@@ -192,10 +192,7 @@ mod tests {
         match spec_or_path {
             MatchSpecOrPath::MatchSpec(spec) => {
                 assert_eq!(
-                    spec.name
-                        .as_ref()
-                        .and_then(|n| n.as_exact())
-                        .map(|e| e.as_normalized()),
+                    spec.name.as_exact().map(|e| e.as_normalized()),
                     Some("tzdata")
                 );
                 assert!(spec.url.is_some());
@@ -212,10 +209,7 @@ mod tests {
         match spec_or_path {
             MatchSpecOrPath::MatchSpec(spec) => {
                 assert_eq!(
-                    spec.name
-                        .as_ref()
-                        .and_then(|n| n.as_exact())
-                        .map(|e| e.as_normalized()),
+                    spec.name.as_exact().map(|e| e.as_normalized()),
                     Some("test-package")
                 );
                 assert!(spec.url.is_some());

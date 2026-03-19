@@ -24,7 +24,7 @@ use rattler_build_core::{
     DiscoveredOutput,
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
-    metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
+    metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
     tool_configuration::Configuration,
     types::{Directories, PackageIdentifier, PackagingSettings},
 };
@@ -772,7 +772,6 @@ where
                 store_recipe: false,
                 force_colors: true,
                 sandbox_config: None,
-                debug: Debug::new(false),
                 exclude_newer: None,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
