@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use minijinja::Environment;
 use serde::Serialize;
 
-const UV: &str = "uv";
 #[derive(Serialize)]
 pub struct BuildScriptContext {
     pub installer: Installer,
@@ -26,21 +25,6 @@ impl Installer {
         match self {
             Installer::Uv => "uv",
             Installer::Pip => "pip",
-        }
-    }
-
-    /// Determine the installer from an iterator of dependency package names.
-    /// Checks if "uv" is present in the package names.
-    pub fn determine_installer_from_names<'a>(
-        mut package_names: impl Iterator<Item = &'a str>,
-    ) -> Installer {
-        // Check all dependency names for "uv" package
-        let has_uv = package_names.any(|name| name == UV);
-
-        if has_uv {
-            Installer::Uv
-        } else {
-            Installer::Pip
         }
     }
 }
