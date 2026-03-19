@@ -903,6 +903,8 @@ pixi shell
 python -VV
 exit
 ```
+
+Want to understand the concepts behind what you just did — packages, channels, platforms? Continue to [The Conda Ecosystem](../conda_ecosystem/).
 # Tutorials documentation
 
 We support the use of the `pyproject.toml` as our manifest file in pixi. This allows the user to keep one file with all configuration. The `pyproject.toml` file is a standard for Python projects. We don't advise to use the `pyproject.toml` file for anything else than python projects, the `pixi.toml` is better suited for other types of projects.
