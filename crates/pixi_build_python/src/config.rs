@@ -64,9 +64,10 @@ impl PythonBackendConfig {
     /// Creates a new [`PythonBackendConfig`] with default values and
     /// `ignore_pyproject_manifest` set to `true`.
     #[cfg(test)]
-    pub fn default_with_ignore_pyproject_manifest() -> Self {
+    pub fn default_with_ignore_pyproject_manifest(installer: Option<Installer>) -> Self {
         Self {
             ignore_pyproject_manifest: Some(true),
+            installer,
             ..Default::default()
         }
     }

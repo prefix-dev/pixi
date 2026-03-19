@@ -650,11 +650,7 @@ version = "0.1.0"
         let generated_recipe = PythonGenerator::default()
             .generate_recipe(
                 &project_model,
-                &PythonBackendConfig{
-                    ignore_pyproject_manifest: Some(true),
-                    installer: Some(build_script::Installer::Pip),
-                    ..Default::default()
-                },
+                &PythonBackendConfig::default_with_ignore_pyproject_manifest(Some(build_script::Installer::Pip)),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -699,7 +695,7 @@ version = "0.1.0"
         let generated_recipe = PythonGenerator::default()
             .generate_recipe(
                 &project_model,
-                &PythonBackendConfig::default_with_ignore_pyproject_manifest(),
+                &PythonBackendConfig::default_with_ignore_pyproject_manifest(None),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -1258,6 +1254,51 @@ build-backend = "setuptools.build_meta"
         assert!(
             config.ignore_pypi_mapping(),
             "ignore_pypi_mapping should default to true"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_uv_is_default_installer_in_host_requirements() {
+        let config = PythonBackendConfig::default_with_ignore_pyproject_manifest(None);
+        let recipe = generate_test_recipe(&config)
+            .await
+            .expect("Failed to generate recipe");
+        let host_deps: Vec<String> = recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|item| item.to_string())
+            .collect();
+        assert!(
+            host_deps.contains(&"uv".to_string()),
+            "uv should be in host deps when installer not specified, got: {host_deps:?}"
+        );
+        assert!(
+            !host_deps.contains(&"pip".to_string()),
+            "pip should NOT be in host deps when installer not specified, got: {host_deps:?}"
+        );
+    }
+    #[tokio::test]
+    async fn test_explicit_pip_installer_in_host_requirements() {
+        let config = PythonBackendConfig::default_with_ignore_pyproject_manifest(Some(build_script::Installer::Pip));
+        let recipe = generate_test_recipe(&config)
+            .await
+            .expect("Failed to generate recipe");
+        let host_deps: Vec<String> = recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|item| item.to_string())
+            .collect();
+        assert!(
+            host_deps.contains(&"pip".to_string()),
+            "pip should be in host deps when explicitly specified, got: {host_deps:?}"
+        );
+        assert!(
+            !host_deps.contains(&"uv".to_string()),
+            "uv should NOT be in host deps when pip is explicitly specified, got: {host_deps:?}"
         );
     }
 }
