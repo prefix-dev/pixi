@@ -1,8 +1,5 @@
 use std::path::Path;
 
-/// Build a [`tempfile::NamedTempFile`] in the same directory as `path`, using
-/// the original filename as the prefix so the temp file is easily identifiable
-/// (e.g. `.pixi.toml.XXXXXX`).
 fn temp_file_for(path: &Path) -> std::io::Result<tempfile::NamedTempFile> {
     let dir = path.parent().ok_or_else(|| {
         std::io::Error::new(
@@ -16,11 +13,19 @@ fn temp_file_for(path: &Path) -> std::io::Result<tempfile::NamedTempFile> {
         path.file_name().and_then(|n| n.to_str()).unwrap_or("tmp")
     );
 
-    tempfile::Builder::new().prefix(&prefix).tempfile_in(dir)
+    match tempfile::Builder::new().prefix(&prefix).tempfile_in(dir) {
+        Ok(file) => Ok(file),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            tempfile::Builder::new()
+                .prefix(&prefix)
+                .tempfile_in(std::env::temp_dir())
+        }
+        Err(e) => Err(e),
+    }
 }
 
-/// Atomically write contents to a file by first writing to a temporary file in
-/// the same directory and then renaming it to the target path.
+/// Atomically write contents to a file by first writing to a temporary file and
+/// then renaming it to the target path.
 ///
 /// This ensures that the target file is never left in a partially-written state.
 /// If the write fails (e.g., due to disk full), the original file remains
