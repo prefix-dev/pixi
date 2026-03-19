@@ -2,6 +2,7 @@ use indexmap::IndexMap;
 use pixi_build_backend::generated_recipe::BackendConfig;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use crate::build_script::Installer;
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
@@ -39,6 +40,13 @@ pub struct PythonBackendConfig {
     /// Only meaningful for packages with compiled extensions (non-noarch).
     #[serde(default)]
     pub abi3: Option<bool>,
+
+    /// The package installer to use for building.
+    /// Defaults to `uv` (recommended). Use `pip` only when needed for
+    /// compatibility with packages that require pip-specific behavior.
+    /// Supported values: `"uv"` (default), `"pip"`
+    #[serde(default)]
+    pub installer: Option<Installer>,
 }
 
 impl PythonBackendConfig {
@@ -110,12 +118,14 @@ impl BackendConfig for PythonBackendConfig {
                 .ignore_pypi_mapping
                 .or(self.ignore_pypi_mapping),
             abi3: target_config.abi3.or(self.abi3),
+            installer: target_config.installer.clone().or(self.installer.clone()),
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
+
     use super::PythonBackendConfig;
     use pixi_build_backend::generated_recipe::BackendConfig;
     use serde_json::json;
@@ -143,6 +153,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: Some(true),
+            installer: None,
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -159,6 +170,7 @@ mod tests {
             ignore_pyproject_manifest: Some(false),
             ignore_pypi_mapping: Some(false),
             abi3: Some(false),
+            installer: None,
         };
 
         let merged = base_config
@@ -213,6 +225,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: None,
+            installer: None,
         };
 
         let empty_target_config = PythonBackendConfig::default();

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use minijinja::Environment;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
 pub struct BuildScriptContext {
@@ -12,7 +12,7 @@ pub struct BuildScriptContext {
     pub manifest_root: PathBuf,
 }
 
-#[derive(Default, Serialize)]
+#[derive(Default, Serialize, Clone, Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Installer {
     Pip,
