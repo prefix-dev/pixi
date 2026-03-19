@@ -98,10 +98,10 @@ configuration, and a build number:
 
 ```
 numpy-2.1.0-py311h43a39b2_0.conda
-              ^^^^^ ^^^^^^^^ ^
-              │     │        └─ build number
-              │     └────────── configuration hash
-              └──────────────── Python version
+            ^^^^^ ^^^^^^^^ ^
+            │     │        └─ build number
+            │     └────────── configuration hash
+            └──────────────── Python version
 ```
 
 The solver picks the right variant automatically based on what's
