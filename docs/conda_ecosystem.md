@@ -193,8 +193,7 @@ most important ones:
   can install CLI tools that don't have a conda-forge recipe yet.
 
 You can mix channels in a single workspace. For example, the
-[PyTorch tutorial](python/pytorch.md) combines conda-forge with an
-NVIDIA channel for CUDA packages. See
+[PyTorch tutorial](python/pytorch.md) shows you how to combine different channels. See
 [Channel Logic](advanced/channel_logic.md) for details on how channel
 priority works.
 
