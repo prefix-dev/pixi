@@ -2163,16 +2163,15 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         ),
                     };
 
-                    if let Some((source, package_name)) = record
-                        .as_source()
-                        .and_then(|record| Some((record, name.as_exact()?)))
-                        .and_then(|(record, package_name)| {
-                            Some((
-                                record.sources.get(package_name.as_normalized())?,
-                                package_name,
-                            ))
-                        })
-                    {
+                    if let Some((source, package_name)) = record.as_source().and_then(|record| {
+                        let package_name = name
+                            .as_exact()
+                            .expect("depends can only contain exact package names");
+                        Some((
+                            record.sources.get(package_name.as_normalized())?,
+                            package_name,
+                        ))
+                    }) {
                         let anchored_location = anchor.resolve(source.clone());
                         let source_spec = SourceSpec::new(anchored_location, spec);
                         conda_queue.push(Dependency::CondaSource(

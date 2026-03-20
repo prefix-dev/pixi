@@ -230,8 +230,8 @@ pub(crate) fn validate_system_meets_environment_requirements(
             continue;
         }
 
-        let name = if let Some(name) = required.name.as_exact() {
-            name
+        let name = if let Some(name_exact) = required.name.as_exact() {
+            name_exact
         } else {
             continue;
         };
