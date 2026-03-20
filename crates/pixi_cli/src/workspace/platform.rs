@@ -26,6 +26,10 @@ pub struct AddArgs {
     #[clap(required = true, num_args=1..)]
     pub platform: Vec<String>,
 
+    /// Helper flag to add the current platform.
+    #[clap(long, conflicts_with = "platform")]
+    pub current: bool,
+
     /// Don't update the environment, only add changed packages to the
     /// lock-file.
     #[clap(long)]
