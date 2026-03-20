@@ -9,7 +9,7 @@ use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpe
 use toml_edit::Value;
 
 use crate::{
-    DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,
+    DependencyOverwriteBehavior, EnvironmentFeature, GetFeatureError, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskName,
     TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName},
@@ -310,7 +310,11 @@ impl WorkspaceManifestMut<'_> {
 
         let environment_idx = self.workspace.environments.add(Environment {
             name: EnvironmentName::Named(name),
-            features: features.unwrap_or_default(),
+            features: features
+                .unwrap_or_default()
+                .into_iter()
+                .map(EnvironmentFeature::Named)
+                .collect(),
             solve_group: None,
             no_default_feature,
         });
@@ -378,15 +382,27 @@ impl WorkspaceManifestMut<'_> {
             .workspace
             .environments
             .iter()
-            .filter(|env| env.features.contains(&feature_name.to_string()))
+            .filter(|env| {
+                env.features.iter().any(|f| {
+                    matches!(
+                        f,
+                        EnvironmentFeature::Named(name) if name == feature_name.as_str()
+                    )
+                })
+            })
             .cloned()
             .collect();
 
         for env in &environments_using_feature {
-            let updated_features: Vec<String> = env
+            let updated_features: Vec<EnvironmentFeature> = env
                 .features
                 .iter()
-                .filter(|f| f.as_str() != feature_name.to_string())
+                .filter(|f| {
+                    !matches!(
+                        f,
+                        EnvironmentFeature::Named(name) if name == feature_name.as_str()
+                    )
+                })
                 .cloned()
                 .collect();
 
@@ -394,10 +410,15 @@ impl WorkspaceManifestMut<'_> {
                 .solve_group
                 .map(|idx| self.workspace.solve_groups[idx].name.clone());
 
+            let features_for_toml: Vec<String> = updated_features
+                .iter()
+                .filter_map(|f| f.as_named().map(String::from))
+                .collect();
+
             // Update the environment, minus the removed feature
             self.document.add_environment(
                 env.name.to_string(),
-                Some(updated_features.clone()),
+                Some(features_for_toml),
                 solve_group.clone(),
                 env.no_default_feature,
             )?;
@@ -2476,18 +2497,33 @@ platforms = ["linux-64", "win-64"]
         let manifest = parse_pixi_toml(file_contents).manifest;
         let default_env = manifest.default_environment();
         assert_eq!(default_env.name, EnvironmentName::Default);
-        assert_eq!(default_env.features, vec!["py39"]);
+        assert_eq!(
+            default_env.features,
+            vec![EnvironmentFeature::Named("py39".to_string())]
+        );
 
         let cuda_env = manifest
             .environment(&EnvironmentName::Named("cuda".to_string()))
             .unwrap();
-        assert_eq!(cuda_env.features, vec!["cuda", "py310"]);
+        assert_eq!(
+            cuda_env.features,
+            vec![
+                EnvironmentFeature::Named("cuda".to_string()),
+                EnvironmentFeature::Named("py310".to_string()),
+            ]
+        );
         assert_eq!(cuda_env.solve_group, None);
 
         let test1_env = manifest
             .environment(&EnvironmentName::Named("test1".to_string()))
             .unwrap();
-        assert_eq!(test1_env.features, vec!["test", "py310"]);
+        assert_eq!(
+            test1_env.features,
+            vec![
+                EnvironmentFeature::Named("test".to_string()),
+                EnvironmentFeature::Named("py310".to_string()),
+            ]
+        );
         assert_eq!(
             test1_env
                 .solve_group
@@ -2498,7 +2534,10 @@ platforms = ["linux-64", "win-64"]
         let test2_env = manifest
             .environment(&EnvironmentName::Named("test2".to_string()))
             .unwrap();
-        assert_eq!(test2_env.features, vec!["py39"]);
+        assert_eq!(
+            test2_env.features,
+            vec![EnvironmentFeature::Named("py39".to_string())]
+        );
         assert_eq!(
             test2_env
                 .solve_group
@@ -3040,8 +3079,14 @@ bar = "*"
 
         // Check the environment was updated (feature removed)
         let env = manifest.workspace.environment("test-env").unwrap();
-        assert!(!env.features.contains(&"used".to_string()));
-        assert!(env.features.contains(&"also-used".to_string()));
+        assert!(
+            !env.features
+                .contains(&EnvironmentFeature::Named("used".to_string()))
+        );
+        assert!(
+            env.features
+                .contains(&EnvironmentFeature::Named("also-used".to_string()))
+        );
 
         // Cannot remove default feature
         let result = manifest.remove_feature(&FeatureName::from_str("default").unwrap());
