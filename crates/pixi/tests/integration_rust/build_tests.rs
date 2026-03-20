@@ -789,14 +789,14 @@ test-source-pkg = {{ path = "./source-package" }}
         "Lock file should contain the source package"
     );
 
-    // Verify we can find the package with the expected version
+    // Verify we can find the package
     assert!(
         lock_file.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
             Platform::current(),
-            "test-source-pkg ==1.2.3"
+            "test-source-pkg"
         ),
-        "Lock file should contain test-source-pkg with version 1.2.3"
+        "Lock file should contain test-source-pkg"
     );
 
     // Second invocation: Load the workspace again and check if lock-file is up to date
@@ -1035,5 +1035,272 @@ noarch = false
         count_conda_outputs_events(&events_after_sixth),
         0,
         "conda_outputs should NOT be called again after cache is updated"
+    );
+}
+
+/// Test that demonstrates a bug with unresolvable partial source records.
+///
+/// When a lock-file contains partial source records (from mutable path sources)
+/// and the source package changes in a way that makes the partial record
+/// unresolvable (e.g., the package is renamed), the update flow should gracefully
+/// re-solve instead of erroring out.
+///
+/// The bug: `UpdateContext::finish()` tries to resolve ALL partial records from
+/// the lock-file (including from environments already marked as out-of-date).
+/// If resolution fails, it produces a hard error instead of proceeding with
+/// the re-solve.
+#[tokio::test]
+async fn test_update_lock_file_with_unresolvable_partial_source_record() {
+    setup_tracing();
+
+    // Use an in-memory backend override so we don't need a real build backend.
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create a source package directory with an initial name
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+
+    let source_pixi_toml = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_pixi_toml).unwrap();
+
+    // Create the workspace manifest
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        Platform::current()
+    );
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // First invocation: Generate the lock-file.
+    // This creates a lock-file where path source records are stored as partial
+    // (mutable sources are downgraded to partial on write).
+    let workspace = pixi.workspace().unwrap();
+    let (_lock_file_data, was_updated) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("First lock file generation should succeed");
+    assert!(was_updated, "First invocation should create the lock-file");
+
+    // Now rename the package in the child manifest. The lock-file on disk still
+    // has a partial record for "my-package", but the source now produces
+    // metadata for "renamed-package". This makes the old partial record
+    // unresolvable (name mismatch).
+    let renamed_pixi_toml = r#"
+[package]
+name = "renamed-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#;
+    fs::write(source_dir.join("pixi.toml"), renamed_pixi_toml).unwrap();
+
+    // Also update the workspace manifest to reference the new name
+    let updated_manifest = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+renamed-package = {{ path = "./my-package" }}
+"#,
+        Platform::current()
+    );
+    fs::write(pixi.manifest_path(), updated_manifest).unwrap();
+
+    // Second invocation: Update the lock-file.
+    //
+    // The satisfiability check correctly identifies the lock-file as out-of-date
+    // (the old "my-package" partial record can't be resolved because the source
+    // now produces "renamed-package"). However, `UpdateContext::finish()` also
+    // tries to resolve ALL partial records from the old lock-file (including
+    // the unresolvable one) and fails with a hard error.
+    //
+    // This SHOULD succeed — the system should re-solve and produce a new
+    // lock-file with "renamed-package".
+    let workspace = pixi.workspace().unwrap();
+    let result = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await;
+
+    match result {
+        Ok(_) => {
+            // This is the expected behavior — the system should gracefully
+            // re-solve and produce a new lock-file with "renamed-package".
+        }
+        Err(e) => {
+            panic!(
+                "Updating the lock-file after renaming a source package should succeed, \
+                 but it failed with: {e}"
+            );
+        }
+    }
+}
+
+/// Test that source records (including their metadata) survive a lock-file
+/// roundtrip through `UnresolvedPixiRecord`.
+///
+/// On the first lock, the solver produces a full source record. On write, path-
+/// based sources are downgraded to partial. On the second lock, the partial
+/// record is read back as `UnresolvedPixiRecord`, the satisfiability check
+/// re-evaluates it, and the lock-file is written again. The source package
+/// should be present and equivalent in both lock-files.
+#[tokio::test]
+async fn test_source_record_roundtrips_through_lock_file() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create a source package directory
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+
+    let source_pixi_toml = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_pixi_toml).unwrap();
+
+    // Create the workspace manifest
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        Platform::current()
+    );
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // First lock
+    let workspace = pixi.workspace().unwrap();
+    let (lock_file_data, _) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("First lock should succeed");
+
+    let lock_file = lock_file_data.into_lock_file();
+
+    // Find the source package in the lock-file.
+    let env = lock_file
+        .environment(consts::DEFAULT_ENVIRONMENT_NAME)
+        .expect("default environment should exist");
+    let platform = lock_file
+        .platform(&Platform::current().to_string())
+        .expect("current platform should exist");
+
+    let source_packages: Vec<_> = env
+        .packages(platform)
+        .into_iter()
+        .flatten()
+        .filter_map(|p| p.as_source_conda())
+        .collect();
+
+    assert!(
+        !source_packages.is_empty(),
+        "Expected at least one source package in the lock-file"
+    );
+
+    // Verify the source package location and metadata are present
+    let my_pkg = source_packages
+        .iter()
+        .find(|p| {
+            p.metadata
+                .as_full()
+                .is_some_and(|f| f.package_record.name.as_normalized() == "my-package")
+                || p.metadata
+                    .as_partial()
+                    .is_some_and(|part| part.name.as_normalized() == "my-package")
+        })
+        .expect("my-package should be in source packages");
+
+    // The location should point to the source directory
+    let location_str = my_pkg.location.to_string();
+    assert!(
+        location_str.contains('.'),
+        "Source package location should be a relative path, got: {location_str}"
+    );
+
+    // Second lock: records roundtrip through UnresolvedPixiRecord
+    let workspace = pixi.workspace().unwrap();
+    let (lock_file_data_2, was_updated) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("Second lock should succeed");
+
+    assert!(
+        !was_updated,
+        "Second lock invocation should not update the lock-file"
+    );
+
+    let lock_file_2 = lock_file_data_2.into_lock_file();
+    let env_2 = lock_file_2
+        .environment(consts::DEFAULT_ENVIRONMENT_NAME)
+        .unwrap();
+    let platform_2 = lock_file_2
+        .platform(&Platform::current().to_string())
+        .unwrap();
+
+    let source_packages_2: Vec<_> = env_2
+        .packages(platform_2)
+        .into_iter()
+        .flatten()
+        .filter_map(|p| p.as_source_conda())
+        .collect();
+
+    let my_pkg_2 = source_packages_2
+        .iter()
+        .find(|p| {
+            p.metadata
+                .as_full()
+                .is_some_and(|f| f.package_record.name.as_normalized() == "my-package")
+                || p.metadata
+                    .as_partial()
+                    .is_some_and(|part| part.name.as_normalized() == "my-package")
+        })
+        .expect("my-package should still be in source packages after roundtrip");
+
+    // Location should be preserved
+    assert_eq!(
+        my_pkg.location.to_string(),
+        my_pkg_2.location.to_string(),
+        "Source package location should be identical after roundtrip"
+    );
+
+    // package_build_source should be preserved (None == None for path deps
+    // without [package.build.source], or Some == Some for git/url sources)
+    assert_eq!(
+        my_pkg.package_build_source, my_pkg_2.package_build_source,
+        "package_build_source should be identical after roundtrip"
     );
 }

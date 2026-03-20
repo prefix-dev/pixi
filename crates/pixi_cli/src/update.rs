@@ -227,7 +227,8 @@ fn ensure_package_exists(
     let similar_names = environments
         .iter()
         .flat_map(|env| env.packages_by_platform())
-        .filter_map(|(p, packages)| {
+        .filter_map(|(lock_p, packages)| {
+            let p = lock_p.subdir();
             if let Some(platforms) = &specs.platforms
                 && !platforms.contains(&p)
             {

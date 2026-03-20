@@ -2,7 +2,7 @@ mod event_reporter;
 mod event_tree;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
     // ptr,
     str::FromStr,
@@ -647,7 +647,7 @@ async fn source_build_cache_status_clear_works() {
         build_environment: build_env,
         channel_config: default_channel_config(),
         enabled_protocols: Default::default(),
-        variants: None,
+        variants: BTreeMap::new(),
     };
 
     let first = dispatcher

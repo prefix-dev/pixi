@@ -85,7 +85,7 @@ pub struct SourceBuildSpec {
     /// If provided, output matching uses (name, subdir, variants) instead of
     /// (name, version, build, subdir). The variants must be a subset of the
     /// output's variants.
-    pub variants: Option<BTreeMap<String, VariantValue>>,
+    pub variants: BTreeMap<String, VariantValue>,
 
     /// The directory where to place the built package.
     pub output_directory: Option<PathBuf>,
@@ -517,7 +517,7 @@ impl SourceBuildSpec {
                 PixiRecord::Source(source) => {
                     let repodata_record = prefix
                         .resolved_source_records
-                        .get(&source.package_record.name)
+                        .get(&source.data.package_record.name)
                         .cloned()
                         .expect("the source record should be present in the result sources");
                     BuildHostPackage {

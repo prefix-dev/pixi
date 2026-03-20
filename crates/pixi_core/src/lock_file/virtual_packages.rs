@@ -4,7 +4,7 @@ use miette::Diagnostic;
 use pixi_manifest::EnvironmentName;
 use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_record};
 use rattler_conda_types::ParseStrictness::Lenient;
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageName, PackageRecord};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageName};
 use rattler_conda_types::{ParseMatchSpecError, Platform};
 use rattler_lock::{CondaPackageData, ConversionError, LockFile, PypiPackageData};
 use rattler_virtual_packages::{
@@ -99,22 +99,14 @@ pub enum MachineValidationError {
     NoPythonRecordFound(Platform),
 }
 
-/// Get the required virtual packages for the given environment based on the given lock file.
-pub(crate) fn get_required_virtual_packages_from_conda_records(
-    conda_records: &[&PackageRecord],
+/// Get the required virtual packages from dependency strings.
+pub(crate) fn get_required_virtual_packages_from_depends(
+    depends: &[&str],
 ) -> Result<Vec<MatchSpec>, MachineValidationError> {
-    // Collect all dependencies from the package records.
-    let virtual_dependencies = conda_records
+    depends
         .iter()
-        .flat_map(|record| record.depends.iter().filter(|dep| dep.starts_with("__")))
-        .collect_vec();
-
-    // Convert the virtual dependencies into `MatchSpec`s.
-    virtual_dependencies
-        .iter()
-        // Lenient parsing is used here because the dependencies to avoid issues with the parsing of the dependencies.
-        // As the user can't do anything about the dependencies, we don't want to fail the whole process because of a parsing error.
-        .map(|dep| MatchSpec::from_str(dep.as_str(), Lenient))
+        .filter(|dep| dep.starts_with("__"))
+        .map(|dep| MatchSpec::from_str(dep, Lenient))
         .dedup()
         .collect::<Result<Vec<MatchSpec>, _>>()
         .map_err(MachineValidationError::DependencyParsingError)
@@ -155,7 +147,8 @@ pub(crate) fn validate_system_meets_environment_requirements(
     )?;
 
     // Retrieve all conda packages for the specified platform (both binary and source).
-    let Some(conda_packages) = environment.conda_packages(platform) else {
+    let lock_platform = environment.lock_file().platform(&platform.to_string());
+    let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
         // Early out if there are no packages, as we don't need to check for virtual packages
         return Ok(true);
     };
@@ -168,18 +161,23 @@ pub(crate) fn validate_system_meets_environment_requirements(
         return Ok(true);
     }
 
-    // Get package records from both binary and source packages
-    let conda_records = conda_packages
+    // Get depends from all packages (binary and source, including partial)
+    let all_depends: Vec<&str> = conda_packages
         .iter()
-        .map(|data| match data {
-            CondaPackageData::Binary(binary) => &binary.package_record,
-            CondaPackageData::Source(source) => &source.package_record,
-        })
+        .flat_map(|data| data.depends())
+        .map(|s| s.as_str())
         .collect_vec();
 
     // Get the virtual packages required by the conda records
-    let required_virtual_packages =
-        get_required_virtual_packages_from_conda_records(&conda_records)?;
+    let required_virtual_packages = get_required_virtual_packages_from_depends(&all_depends)?;
+
+    // Find the python package record (needed for wheel tag validation below).
+    // This works for binary and full source packages; partial source records
+    // don't have a PackageRecord and are skipped.
+    let python_record = conda_packages
+        .iter()
+        .filter_map(|data| data.record())
+        .find(|record| is_python_record(record));
 
     tracing::debug!(
         "Required virtual packages of environment '{}': {}",
@@ -255,19 +253,14 @@ pub(crate) fn validate_system_meets_environment_requirements(
     }
 
     // Check if the wheel tags match the system virtual packages if there are any
-    if environment.has_pypi_packages(platform)
-        && let Some(pypi_packages) = environment.pypi_packages(platform)
+    if lock_platform.is_some_and(|p| environment.has_pypi_packages(p))
+        && let Some(pypi_packages) = lock_platform.and_then(|p| environment.pypi_packages(p))
     {
-        // Get python record from conda packages
-        let python_record = conda_records
-            .iter()
-            .find(|record| is_python_record(record))
-            .ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
+        let python_record =
+            python_record.ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
 
         // Check if all the wheel tags match the system virtual packages
-        let pypi_packages = pypi_packages
-            .map(|(pkg_data, _)| pkg_data.clone())
-            .collect_vec();
+        let pypi_packages = pypi_packages.cloned().collect_vec();
 
         let wheels = get_wheels_from_pypi_package_data(pypi_packages);
 
@@ -305,19 +298,19 @@ mod test {
         let lockfile = LockFile::from_path(&lockfile_path).unwrap();
         let platform = Platform::Linux64;
         let env = lockfile.default_environment().unwrap();
-        let conda_data = env
-            .conda_repodata_records(platform)
-            .map_err(MachineValidationError::RepodataConversionError)
+        let lock_platform = lockfile.platform(&platform.to_string()).unwrap();
+        let conda_packages = env
+            .conda_packages(lock_platform)
             .unwrap()
-            .unwrap();
+            .collect::<Vec<_>>();
 
-        let conda_records: Vec<&PackageRecord> = conda_data
+        let all_depends: Vec<&str> = conda_packages
             .iter()
-            .map(|binding| &binding.package_record)
+            .flat_map(|data| data.depends())
+            .map(|s| s.as_str())
             .collect();
 
-        let virtual_matchspecs =
-            get_required_virtual_packages_from_conda_records(&conda_records).unwrap();
+        let virtual_matchspecs = get_required_virtual_packages_from_depends(&all_depends).unwrap();
 
         assert!(
             virtual_matchspecs

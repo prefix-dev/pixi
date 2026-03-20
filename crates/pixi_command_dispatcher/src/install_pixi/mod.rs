@@ -140,7 +140,7 @@ impl InstallPixiEnvironmentSpec {
             if self
                 .ignore_packages
                 .as_ref()
-                .is_some_and(|ignore| ignore.contains(&source_record.package_record.name))
+                .is_some_and(|ignore| ignore.contains(&source_record.package_record().name))
             {
                 continue;
             }
@@ -213,13 +213,13 @@ impl InstallPixiEnvironmentSpec {
         // Verify if we need to force the build even if the cache is up to date.
         let force = self
             .force_reinstall
-            .contains(&source_record.package_record.name);
+            .contains(&source_record.package_record().name);
 
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
                 source: PinnedSourceCodeLocation::new(
-                    source_record.manifest_source.clone(),
-                    source_record.build_source.clone(),
+                    source_record.manifest_source().clone(),
+                    source_record.build_source().cloned(),
                 ),
                 package: source_record.into(),
                 channel_config: self.channel_config.clone(),
@@ -227,7 +227,7 @@ impl InstallPixiEnvironmentSpec {
                 build_environment: self.build_environment.clone(),
                 variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
-                variants: source_record.variants.clone(),
+                variants: source_record.variants().clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: None,
                 work_directory: None,
@@ -253,8 +253,8 @@ pub enum InstallPixiEnvironmentError {
     Installer(InstallerError),
 
     #[error("failed to build '{}' from '{}'",
-        .0.package_record.name.as_source(),
-        .0.manifest_source)]
+        .0.package_record().name.as_source(),
+        .0.manifest_source())]
     BuildSourceError(
         Box<SourceRecord>,
         #[diagnostic_source]

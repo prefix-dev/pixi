@@ -87,7 +87,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
     let locked_deps = lock_file
         .environment(environment.name().as_str())
-        .and_then(|env| env.packages(platform).map(Vec::from_iter))
+        .and_then(|env| {
+            let p = lock_file.platform(&platform.to_string())?;
+            env.packages(p).map(Vec::from_iter)
+        })
         .unwrap_or_default();
 
     let dep_map = generate_dependency_map(&locked_deps);
@@ -120,11 +123,10 @@ pub(crate) fn extract_package_info(
     package: rattler_lock::LockedPackageRef<'_>,
 ) -> Option<PackageInfo> {
     if let Some(conda_package) = package.as_conda() {
-        let name = conda_package.record().name.as_normalized().to_string();
+        let name = conda_package.name().as_normalized().to_string();
 
         let dependencies: Vec<String> = conda_package
-            .record()
-            .depends
+            .depends()
             .iter()
             .map(|d| {
                 d.split_once(' ')
@@ -137,7 +139,7 @@ pub(crate) fn extract_package_info(
             dependencies,
             source: PackageSource::Conda,
         })
-    } else if let Some((pypi_package_data, _pypi_env_data)) = package.as_pypi() {
+    } else if let Some(pypi_package_data) = package.as_pypi() {
         let name = pypi_package_data.name.as_dist_info_name().into_owned();
         let dependencies = pypi_package_data
             .requires_dist
@@ -178,10 +180,11 @@ pub fn generate_dependency_map(locked_deps: &[LockedPackageRef<'_>]) -> HashMap<
                 Package {
                     name: package_info.name,
                     version: match package {
-                        LockedPackageRef::Conda(conda_data) => {
-                            conda_data.record().version.to_string()
-                        }
-                        LockedPackageRef::Pypi(pypi_data, _) => pypi_data.version.to_string(),
+                        LockedPackageRef::Conda(conda_data) => conda_data
+                            .record()
+                            .map(|r| r.version.to_string())
+                            .unwrap_or_default(),
+                        LockedPackageRef::Pypi(pypi_data) => pypi_data.version_string(),
                     },
                     dependencies: package_info
                         .dependencies
