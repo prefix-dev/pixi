@@ -1,3 +1,4 @@
+use crate::build_script::Installer;
 use indexmap::IndexMap;
 use pixi_build_backend::generated_recipe::BackendConfig;
 use serde::{Deserialize, Serialize};
@@ -39,6 +40,13 @@ pub struct PythonBackendConfig {
     /// Only meaningful for packages with compiled extensions (non-noarch).
     #[serde(default)]
     pub abi3: Option<bool>,
+
+    /// The package installer to use for building.
+    /// Defaults to `uv` (recommended). Use `pip` only when needed for
+    /// compatibility with packages that require pip-specific behavior.
+    /// Supported values: `"uv"` (default), `"pip"`
+    #[serde(default)]
+    pub installer: Option<Installer>,
 }
 
 impl PythonBackendConfig {
@@ -56,9 +64,10 @@ impl PythonBackendConfig {
     /// Creates a new [`PythonBackendConfig`] with default values and
     /// `ignore_pyproject_manifest` set to `true`.
     #[cfg(test)]
-    pub fn default_with_ignore_pyproject_manifest() -> Self {
+    pub fn default_with_ignore_pyproject_manifest(installer: Option<Installer>) -> Self {
         Self {
             ignore_pyproject_manifest: Some(true),
+            installer,
             ..Default::default()
         }
     }
@@ -110,12 +119,16 @@ impl BackendConfig for PythonBackendConfig {
                 .ignore_pypi_mapping
                 .or(self.ignore_pypi_mapping),
             abi3: target_config.abi3.or(self.abi3),
+            installer: target_config.installer.clone().or(self.installer.clone()),
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
+
+    use crate::build_script::Installer;
+
     use super::PythonBackendConfig;
     use pixi_build_backend::generated_recipe::BackendConfig;
     use serde_json::json;
@@ -143,6 +156,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: Some(true),
+            installer: None,
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -159,6 +173,7 @@ mod tests {
             ignore_pyproject_manifest: Some(false),
             ignore_pypi_mapping: Some(false),
             abi3: Some(false),
+            installer: None,
         };
 
         let merged = base_config
@@ -213,6 +228,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: None,
+            installer: None,
         };
 
         let empty_target_config = PythonBackendConfig::default();
@@ -347,5 +363,20 @@ mod tests {
         assert!(result.is_err());
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("`debug_dir` cannot have a target specific value"));
+    }
+
+    #[test]
+    fn test_deserialize_installer_field() {
+        let json_data = json!({"installer": "uv"});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, Some(Installer::Uv));
+
+        let json_data = json!({"installer": "pip"});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, Some(Installer::Pip));
+
+        let json_data = json!({});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.installer, None);
     }
 }
