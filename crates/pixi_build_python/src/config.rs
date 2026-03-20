@@ -1,8 +1,8 @@
+use crate::build_script::Installer;
 use indexmap::IndexMap;
 use pixi_build_backend::generated_recipe::BackendConfig;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use crate::build_script::Installer;
 
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
