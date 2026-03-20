@@ -572,6 +572,9 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
             }
             .into());
         }
+        if !no_install {
+            env.emit_emulation_warning();
+        }
     }
 
     // Make sure the project is in a sane state

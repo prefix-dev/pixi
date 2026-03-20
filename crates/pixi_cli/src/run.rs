@@ -163,6 +163,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into());
     }
 
+    if args.lock_and_install_config.allow_installs() {
+        environment.emit_emulation_warning();
+    }
+
     // Ensure that the lock-file is up-to-date.
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
