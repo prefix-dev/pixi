@@ -1,0 +1,14 @@
+[project]
+name = "zig_python_example"
+version = "0.1.0"
+requires-python = ">= 3.11"
+
+[project.scripts]
+zig-python-example = "zig_python_example:main"
+
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = ["setuptools"]
+
+[tool.setuptools.package-data]
+zig_python_example = ["*.so", "*.dylib", "*.dll"]
