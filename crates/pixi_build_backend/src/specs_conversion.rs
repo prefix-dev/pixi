@@ -182,7 +182,7 @@ pub(crate) fn source_package_spec_to_package_dependency(
     source_spec: SourcePackageSpec,
 ) -> miette::Result<SourceMatchSpec> {
     let spec = MatchSpec {
-        name: Some(PackageNameMatcher::Exact(name)),
+        name: PackageNameMatcher::Exact(name),
         ..Default::default()
     };
 
@@ -214,7 +214,7 @@ fn binary_package_spec_to_package_dependency(
     let version = version.filter(|v| v != &rattler_conda_types::VersionSpec::Any);
 
     PackageDependency::Binary(MatchSpec {
-        name: Some(PackageNameMatcher::Exact(name)),
+        name: PackageNameMatcher::Exact(name),
         version,
         build,
         build_number,

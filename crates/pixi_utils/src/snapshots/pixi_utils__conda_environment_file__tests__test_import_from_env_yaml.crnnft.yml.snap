@@ -6,13 +6,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
     (
         [
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "pip",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "pip",
+                    },
                 ),
                 version: Some(
                     StrictRange(
@@ -40,13 +38,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "python",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "python",
+                    },
                 ),
                 version: Some(
                     StrictRange(
@@ -74,13 +70,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "setuptools",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "setuptools",
+                    },
                 ),
                 version: Some(
                     StrictRange(
@@ -108,13 +102,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "wheel",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "wheel",
+                    },
                 ),
                 version: Some(
                     StrictRange(

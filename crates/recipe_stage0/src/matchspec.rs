@@ -84,15 +84,13 @@ impl PackageDependency {
         match self {
             PackageDependency::Binary(spec) => spec
                 .name
-                .as_ref()
-                .and_then(|matcher| matcher.as_exact())
+                .as_exact()
                 .cloned()
                 .expect("Binary spec should have a name"),
             PackageDependency::Source(source_spec) => source_spec
                 .spec
                 .name
-                .as_ref()
-                .and_then(|matcher| matcher.as_exact())
+                .as_exact()
                 .cloned()
                 .expect("Source spec should have a name"),
         }
