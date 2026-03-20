@@ -1460,3 +1460,82 @@ version = "0.1.0"
         "Package should NOT be installed as editable when manifest doesn't specify editable = true (even if lock file has editable: true)"
     );
 }
+
+/// Test that changing only metadata fields in pyproject.toml (like version, authors) does NOT invalidate the lockfile.
+/// See: https://github.com/prefix-dev/pixi/discussions/3627
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn pyproject_metadata_change_does_not_invalidate_lockfile() {
+    setup_tracing();
+
+    let platform = Platform::current();
+    let platform_str = platform.to_string();
+
+    // Use conda-forge directly since we need a real Python
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "metadata_test"
+version = "0.1.0"
+authors = [
+    {{ name = "Original Author", email = "original@example.com" }}
+]
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{platform_str}"]
+
+[tool.pixi.dependencies]
+python = "~=3.12.0"
+
+[tool.pixi.pypi-dependencies]
+metadata_test = {{ path = ".", editable = true }}
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    // Create the package source
+    let src_dir = pixi.workspace_path().join("metadata_test");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "").unwrap();
+
+    // Create the lock file and install
+    pixi.update_lock_file().await.unwrap();
+    pixi.install().await.unwrap();
+
+    // Make sure that the workspace package has no hash stored in the lockfile.
+    let lock = pixi.lock_file().await.unwrap();
+    let env = lock.environment("default").unwrap();
+
+    let has_no_hash = env
+        .pypi_packages(platform)
+        .unwrap()
+        .any(|(pkg_data, _)| pkg_data.name.as_ref() == "metadata-test" && pkg_data.hash.is_none());
+    assert!(
+        has_no_hash,
+        "Workspace package should not have a hash in the lockfile"
+    );
+
+    // Update ONLY metadata fields (version, authors) — dependencies stay the same
+    let pyproject_v2 = pyproject
+        .replace("version = \"0.1.0\"", "version = \"0.2.0\"")
+        .replace("Original Author", "New Author")
+        .replace("original@example.com", "new@example.com");
+    fs_err::write(pixi.manifest_path(), pyproject_v2).unwrap();
+
+    // install --locked should succeed because only metadata changed, not dependencies.
+    let result = pixi.install().with_locked().await;
+    assert!(
+        result.is_ok(),
+        "pixi install --locked should succeed when only metadata (version, authors) changes. Error: {:?}",
+        result.err()
+    );
+}
