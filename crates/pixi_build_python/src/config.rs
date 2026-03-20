@@ -39,6 +39,10 @@ pub struct PythonBackendConfig {
     /// Only meaningful for packages with compiled extensions (non-noarch).
     #[serde(default)]
     pub abi3: Option<bool>,
+    /// Whether to skip .pyc compilation during package installation.
+    /// When true, .py files will not be compiled to .pyc bytecode files.
+    #[serde(default)]
+    pub skip_pyc_compilation: Option<bool>,
 }
 
 impl PythonBackendConfig {
@@ -110,6 +114,9 @@ impl BackendConfig for PythonBackendConfig {
                 .ignore_pypi_mapping
                 .or(self.ignore_pypi_mapping),
             abi3: target_config.abi3.or(self.abi3),
+            skip_pyc_compilation: target_config
+                .skip_pyc_compilation
+                .or(self.skip_pyc_compilation),
         })
     }
 }
@@ -143,6 +150,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: Some(true),
+            skip_pyc_compilation: Some(true),
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -159,6 +167,7 @@ mod tests {
             ignore_pyproject_manifest: Some(false),
             ignore_pypi_mapping: Some(false),
             abi3: Some(false),
+            skip_pyc_compilation: Some(false),
         };
 
         let merged = base_config
@@ -196,6 +205,8 @@ mod tests {
         assert_eq!(merged.ignore_pypi_mapping, Some(false));
         // abi3 should use target value
         assert_eq!(merged.abi3, Some(false));
+        // skip_pyc_compilation should use target value
+        assert_eq!(merged.skip_pyc_compilation, Some(false));
     }
 
     #[test]
@@ -213,6 +224,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: None,
+            skip_pyc_compilation: None,
         };
 
         let empty_target_config = PythonBackendConfig::default();

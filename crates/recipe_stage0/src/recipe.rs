@@ -518,12 +518,17 @@ pub struct Python {
     /// does not need to be rebuilt for different Python minor versions.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub version_independent: bool,
+    /// When true, skips the compilation of .py files to .pyc files during
+    /// package installation. This can be useful for reducing package size
+    /// or when .pyc files are not needed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub skip_pyc_compilation: bool,
 }
 
 impl Python {
     /// Returns true if this is the default python configuration.
     pub fn is_default(&self) -> bool {
-        self.entry_points.is_empty() && !self.version_independent
+        self.entry_points.is_empty() && !self.version_independent && !self.skip_pyc_compilation
     }
 }
 
