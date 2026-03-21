@@ -1,12 +1,8 @@
 [package]
 edition.workspace = true
 license.workspace = true
-name = "pixi_build_rattler_build"
-version = "0.3.9"
-
-[[bin]]
 name = "pixi-build-rattler-build"
-path = "src/main.rs"
+version = "0.3.9"
 
 [package.metadata.dist]
 dist = false

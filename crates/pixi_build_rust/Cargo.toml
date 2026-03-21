@@ -3,13 +3,9 @@ description = "A Rust build backend for Pixi"
 documentation = "https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-rust/"
 edition.workspace = true
 license.workspace = true
-name = "pixi_build_rust"
+name = "pixi-build-rust"
 repository.workspace = true
 version = "0.4.7"
-
-[[bin]]
-name = "pixi-build-rust"
-path = "src/main.rs"
 
 [package.metadata.dist]
 dist = false
