@@ -324,9 +324,11 @@ test-slow = { cmd = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspa
 # Feature for JSON schema generation and testing
 #
 [feature.schema.dependencies]
+jsonschema = ">=4.26.0,<5"
 jsonschema-rs = ">=0.45,<1"
-pydantic = ">=2.11.10,<3"
+pydantic = ">=2.12.5,<3"
 pytest = ">=9.0.2,<10"
+python-fastjsonschema = ">=2.21.2,<3"
 pyyaml = ">=6.0.3,<7"
 
 [feature.schema.tasks]
