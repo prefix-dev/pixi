@@ -39,10 +39,10 @@ pub struct PythonBackendConfig {
     /// Only meaningful for packages with compiled extensions (non-noarch).
     #[serde(default)]
     pub abi3: Option<bool>,
-    /// Whether to skip .pyc compilation during package installation.
-    /// When true, .py files will not be compiled to .pyc bytecode files.
+    /// Glob patterns for .py files that should skip .pyc compilation.
+    /// For example, `["**/*.py"]` skips all .pyc compilation.
     #[serde(default)]
-    pub skip_pyc_compilation: Option<bool>,
+    pub skip_pyc_compilation: Vec<String>,
 }
 
 impl PythonBackendConfig {
@@ -114,9 +114,11 @@ impl BackendConfig for PythonBackendConfig {
                 .ignore_pypi_mapping
                 .or(self.ignore_pypi_mapping),
             abi3: target_config.abi3.or(self.abi3),
-            skip_pyc_compilation: target_config
-                .skip_pyc_compilation
-                .or(self.skip_pyc_compilation),
+            skip_pyc_compilation: if target_config.skip_pyc_compilation.is_empty() {
+                self.skip_pyc_compilation.clone()
+            } else {
+                target_config.skip_pyc_compilation.clone()
+            },
         })
     }
 }
@@ -150,7 +152,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: Some(true),
-            skip_pyc_compilation: Some(true),
+            skip_pyc_compilation: vec!["**/*.py".to_string()],
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -167,7 +169,7 @@ mod tests {
             ignore_pyproject_manifest: Some(false),
             ignore_pypi_mapping: Some(false),
             abi3: Some(false),
-            skip_pyc_compilation: Some(false),
+            skip_pyc_compilation: vec!["tests/**/*.py".to_string()],
         };
 
         let merged = base_config
@@ -205,8 +207,11 @@ mod tests {
         assert_eq!(merged.ignore_pypi_mapping, Some(false));
         // abi3 should use target value
         assert_eq!(merged.abi3, Some(false));
-        // skip_pyc_compilation should use target value
-        assert_eq!(merged.skip_pyc_compilation, Some(false));
+        // skip_pyc_compilation should be completely overridden by target
+        assert_eq!(
+            merged.skip_pyc_compilation,
+            vec!["tests/**/*.py".to_string()]
+        );
     }
 
     #[test]
@@ -224,7 +229,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: None,
-            skip_pyc_compilation: None,
+            skip_pyc_compilation: vec![],
         };
 
         let empty_target_config = PythonBackendConfig::default();
