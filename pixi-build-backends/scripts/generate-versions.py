@@ -44,12 +44,12 @@ def main():
 
     # Rust backends
     rust_packages = [
-        "pixi_build_cmake",
-        "pixi_build_mojo",
-        "pixi_build_python",
-        "pixi_build_r",
-        "pixi_build_rattler_build",
-        "pixi_build_rust",
+        "pixi-build-cmake",
+        "pixi-build-mojo",
+        "pixi-build-python",
+        "pixi-build-r",
+        "pixi-build-rattler-build",
+        "pixi-build-rust",
     ]
     for package in cargo_metadata.get("packages", []):
         if package["name"] in rust_packages:
