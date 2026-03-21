@@ -10,6 +10,8 @@ pub struct BuildScriptContext {
     /// This is used to determine if the build script
     /// should include Python-related logic.
     pub has_host_python: bool,
+    /// Whether sccache is available and should be used as a compiler launcher.
+    pub has_sccache: bool,
 }
 
 #[derive(Copy, Clone, Serialize)]
@@ -48,6 +50,7 @@ mod test {
             source_dir: String::from("my-prefix-dir"),
             extra_args: extra_args.clone(),
             has_host_python,
+            has_sccache: false,
         };
         let script = context.render();
 
@@ -66,6 +69,26 @@ mod test {
                 "with-extra-args"
             }
         ));
+        settings.bind(|| {
+            insta::assert_snapshot!(script);
+        });
+    }
+
+    #[rstest]
+    fn test_build_script_sccache(
+        #[values(BuildPlatform::Windows, BuildPlatform::Unix)] build_platform: BuildPlatform,
+    ) {
+        let context = BuildScriptContext {
+            build_platform,
+            source_dir: String::from("my-prefix-dir"),
+            extra_args: vec![],
+            has_host_python: false,
+            has_sccache: true,
+        };
+        let script = context.render();
+
+        let mut settings = insta::Settings::clone_current();
+        settings.set_snapshot_suffix(format!("{}", build_platform));
         settings.bind(|| {
             insta::assert_snapshot!(script);
         });

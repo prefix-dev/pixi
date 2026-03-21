@@ -610,6 +610,7 @@ impl Workspace {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
             })
+            .with_compiler_cache(self.config().build.compiler_cache.clone())
             .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 

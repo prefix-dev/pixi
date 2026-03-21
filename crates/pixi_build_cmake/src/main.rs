@@ -2,9 +2,10 @@ mod build_script;
 mod config;
 
 use build_script::{BuildPlatform, BuildScriptContext};
-use config::CMakeBackendConfig;
+use config::{CMakeBackendConfig, CompilerCache};
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
+    cache::sccache_tools,
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     traits::ProjectModel,
@@ -13,7 +14,10 @@ use pixi_build_types::SourcePackageName;
 use rattler_build_jinja::Variable;
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Platform};
-use recipe_stage0::recipe::Script;
+use recipe_stage0::{
+    matchspec::PackageDependency,
+    recipe::{Item, Script},
+};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{
@@ -104,6 +108,35 @@ impl GenerateRecipe for CMakeGenerator {
             .host
             .contains_key(&SourcePackageName::from("python"));
 
+        let mut sccache_secrets = Vec::default();
+        let has_sccache = matches!(config.compiler_cache, Some(CompilerCache::Sccache));
+
+        if has_sccache {
+            // Mark any SCCACHE_* variables in the system environment as secrets so they
+            // are not leaked into the build recipe.
+            sccache_secrets = config
+                .system_env
+                .keys()
+                .filter(|k| k.starts_with("SCCACHE") && !config.env.contains_key(*k))
+                .cloned()
+                .collect();
+
+            let sccache_dep: Vec<Item<PackageDependency>> = sccache_tools()
+                .iter()
+                .map(|tool| tool.parse().into_diagnostic())
+                .collect::<miette::Result<Vec<_>>>()?;
+
+            // Add sccache tools to the build requirements
+            // only if they are not already present
+            let existing_reqs: Vec<_> = requirements.build.clone().into_iter().collect();
+
+            requirements.build.extend(
+                sccache_dep
+                    .into_iter()
+                    .filter(|dep| !existing_reqs.contains(dep)),
+            );
+        }
+
         let build_script = BuildScriptContext {
             build_platform: if Platform::current().is_windows() {
                 BuildPlatform::Windows
@@ -113,13 +146,14 @@ impl GenerateRecipe for CMakeGenerator {
             source_dir: manifest_root.display().to_string(),
             extra_args: config.extra_args.clone(),
             has_host_python,
+            has_sccache,
         }
         .render();
 
         generated_recipe.recipe.build.script = Script {
             content: build_script,
             env: config.env.clone(),
-            ..Default::default()
+            secrets: sccache_secrets,
         };
 
         Ok(generated_recipe)
@@ -197,7 +231,7 @@ mod tests {
     fn test_input_globs_includes_extra_globs() {
         let config = CMakeBackendConfig {
             extra_input_globs: vec!["custom/*.c".to_string()],
-            ..Default::default()
+            ..CMakeBackendConfig::new_with_clean_environment()
         };
 
         let generator = CMakeGenerator::default();
@@ -237,7 +271,7 @@ mod tests {
         let generated_recipe = CMakeGenerator::default()
             .generate_recipe(
                 &project_model,
-                &CMakeBackendConfig::default(),
+                &CMakeBackendConfig::new_with_clean_environment(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -279,7 +313,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig {
                     env: env.clone(),
-                    ..Default::default()
+                    ..CMakeBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -318,7 +352,7 @@ mod tests {
         let generated_recipe = CMakeGenerator::default()
             .generate_recipe(
                 &project_model,
-                &CMakeBackendConfig::default(),
+                &CMakeBackendConfig::new_with_clean_environment(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -366,7 +400,7 @@ mod tests {
         let generated_recipe = CMakeGenerator::default()
             .generate_recipe(
                 &project_model,
-                &CMakeBackendConfig::default(),
+                &CMakeBackendConfig::new_with_clean_environment(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -538,7 +572,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig {
                     compilers: Some(vec!["c".to_string(), "cxx".to_string(), "cuda".to_string()]),
-                    ..Default::default()
+                    ..CMakeBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -594,7 +628,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig {
                     compilers: None,
-                    ..Default::default()
+                    ..CMakeBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -640,7 +674,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig {
                     compilers: None,
-                    ..Default::default()
+                    ..CMakeBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
@@ -668,5 +702,58 @@ mod tests {
             stdlib_templates[0], "${{ stdlib('c') }}",
             "Default stdlib should be c"
         );
+    }
+
+    #[tokio::test]
+    async fn test_sccache_is_enabled() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "runDependencies": {
+                        "boltons": {
+                            "binary": {
+                                "version": "*"
+                            }
+                        }
+                    }
+                },
+            }
+        });
+
+        // SCCACHE_* env vars in system_env should be marked as secrets when
+        // compiler_cache is set to sccache.
+        let env = IndexMap::from([("SCCACHE_BUCKET".to_string(), "my-bucket".to_string())]);
+        let system_env = IndexMap::from([
+            ("SCCACHE_SYSTEM".to_string(), "SOME_VALUE".to_string()),
+            ("SCCACHE_BUCKET".to_string(), "system-bucket".to_string()),
+        ]);
+
+        let generated_recipe = CMakeGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &CMakeBackendConfig {
+                    env,
+                    system_env,
+                    compiler_cache: Some(CompilerCache::Sccache),
+                    ..CMakeBackendConfig::new_with_clean_environment()
+                },
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        // Verify that sccache is added to the build requirements
+        // when compiler_cache = "sccache" is set
+        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
+        ".source[0].path" => "[ ... path ... ]",
+        ".build.script.content" => "[ ... script ... ]",
+        });
     }
 }

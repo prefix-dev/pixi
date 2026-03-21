@@ -1090,6 +1090,14 @@ impl Serialize for PackageFormatAndCompression {
     }
 }
 
+/// The compiler cache to use during builds.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompilerCache {
+    /// Use sccache as the compiler cache.
+    Sccache,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct BuildConfig {
@@ -1097,11 +1105,21 @@ pub struct BuildConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub package_format: Option<PackageFormatAndCompression>,
+
+    /// The compiler cache to use during builds. If set, the specified cache
+    /// will be used in all build backends that support it (e.g. cmake, rust).
+    /// Can be set globally in `~/.config/pixi/config.toml` or per-project in
+    /// `.pixi/config.toml`.
+    ///
+    /// Example: `compiler-cache = "sccache"`
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compiler_cache: Option<CompilerCache>,
 }
 
 impl BuildConfig {
     pub fn is_default(&self) -> bool {
-        self.package_format.is_none()
+        self.package_format.is_none() && self.compiler_cache.is_none()
     }
     pub fn merge(&self, other: Self) -> Self {
         Self {
@@ -1109,6 +1127,11 @@ impl BuildConfig {
                 .package_format
                 .as_ref()
                 .or(self.package_format.as_ref())
+                .cloned(),
+            compiler_cache: other
+                .compiler_cache
+                .as_ref()
+                .or(self.compiler_cache.as_ref())
                 .cloned(),
         }
     }
@@ -1403,6 +1426,9 @@ impl Config {
             "shell.change-ps1",
             "shell.force-activate",
             "shell.source-completion-scripts",
+            "build",
+            "build.compiler-cache",
+            "build.package-format",
             "tls-no-verify",
             "tls-root-certs",
             "tool-platform",

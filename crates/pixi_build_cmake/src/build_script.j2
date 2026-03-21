@@ -2,7 +2,6 @@
 {%- macro env(key) -%}
 {%- if is_cmd_exe %}{{ "%" ~ key ~ "%" }}{% else %}{{ "$" ~key }}{% endif -%}
 {% endmacro -%}
-
 {# - Set up common variables -#}
 {%- set build_dir = "build" -%}
 {%- set library_prefix =  "%LIBRARY_PREFIX%" if build_platform == "windows" else "$PREFIX" -%}
@@ -23,6 +22,14 @@
 {%- if has_host_python -%}
 {%- set cmake_args = cmake_args + [
     "-DPython_EXECUTABLE=" ~ env("PYTHON")
+] -%}
+{% endif -%}
+
+{# Add sccache compiler launchers if available -#}
+{%- if has_sccache -%}
+{%- set cmake_args = cmake_args + [
+    "-DCMAKE_C_COMPILER_LAUNCHER=sccache",
+    "-DCMAKE_CXX_COMPILER_LAUNCHER=sccache",
 ] -%}
 {% endif -%}
 
@@ -56,3 +63,6 @@ fi
 
 cmake --build . --target install
 {% endif -%}
+{%- if has_sccache %}
+sccache --show-stats
+{%- endif %}

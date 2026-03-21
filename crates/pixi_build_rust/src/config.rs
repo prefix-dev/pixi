@@ -4,6 +4,14 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+/// The compiler cache to use during builds.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompilerCache {
+    /// Use sccache as the compiler cache.
+    Sccache,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct RustBackendConfig {
@@ -29,6 +37,10 @@ pub struct RustBackendConfig {
     /// List of compilers to use (e.g., ["rust", "c", "cxx"])
     /// If not specified, a default will be used
     pub compilers: Option<Vec<String>>,
+    /// The compiler cache to use. If set, the build will use the specified
+    /// compiler cache. Can also be set globally in `~/.config/pixi/config.toml`
+    /// or per-project in `.pixi/config.toml`.
+    pub compiler_cache: Option<CompilerCache>,
 
     /// List of binaries to install. If empty, all binaries are installed.
     /// Example: `binaries = ["rattler-build"]`
@@ -65,6 +77,7 @@ impl RustBackendConfig {
             extra_input_globs: Default::default(),
             ignore_cargo_manifest: Default::default(),
             compilers: Default::default(),
+            compiler_cache: Default::default(),
             binaries: Default::default(),
         }
     }
@@ -126,6 +139,10 @@ impl BackendConfig for RustBackendConfig {
                 .compilers
                 .clone()
                 .or_else(|| self.compilers.clone()),
+            compiler_cache: target_config
+                .compiler_cache
+                .clone()
+                .or_else(|| self.compiler_cache.clone()),
         })
     }
 }
@@ -193,6 +210,7 @@ mod tests {
             extra_input_globs: vec!["*.base".to_string()],
             ignore_cargo_manifest: None,
             compilers: Some(vec!["rust".to_string()]),
+            compiler_cache: None,
             binaries: vec![],
         };
 
@@ -208,6 +226,7 @@ mod tests {
             extra_input_globs: vec!["*.target".to_string()],
             ignore_cargo_manifest: Some(true),
             compilers: Some(vec!["c".to_string(), "rust".to_string()]),
+            compiler_cache: None,
             binaries: vec![],
         };
 
@@ -255,6 +274,7 @@ mod tests {
             extra_input_globs: vec!["*.base".to_string()],
             ignore_cargo_manifest: None,
             compilers: Some(vec!["rust".to_string()]),
+            compiler_cache: None,
             binaries: vec![],
         };
 
