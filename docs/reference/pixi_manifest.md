@@ -174,6 +174,7 @@ URL of the workspace documentation.
 
 ```toml
     --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_documentation"
+```
 
 ### `conda-pypi-map` (optional)
 
