@@ -22,7 +22,7 @@ test-integration = { cmd = "pytest tests/integration", default-environment = "in
 # Unit testing and type checking
 [feature.test.dependencies]
 mypy = ">=1.18.2,<2"
-pytest = ">=8,<9"
+pytest = ">=9,<10"
 syrupy = ">=5,<6"
 types-pyyaml = ">=5.4"
 
