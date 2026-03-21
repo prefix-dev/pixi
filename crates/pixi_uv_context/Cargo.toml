@@ -10,9 +10,12 @@ version = "0.1.0"
 
 [dependencies]
 fs-err = { workspace = true }
+indexmap = { workspace = true }
 miette = { workspace = true }
+pep508_rs = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_pypi_spec = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
 reqwest = { workspace = true }
