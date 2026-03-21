@@ -176,7 +176,7 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    #[expect(unused)]
+    // #[expect(unused)]
     pub fn with_extra_build_requires(mut self, extra_build_requires: ExtraBuildRequires) -> Self {
         self.extra_build_requires = extra_build_requires;
         self
