@@ -1,3 +1,6 @@
+[package]
+name = "pixi-build-python"
+
 [package.build.backend]
 channels = [
   "https://prefix.dev/pixi-build-backends",

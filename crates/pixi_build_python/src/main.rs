@@ -349,6 +349,7 @@ impl GenerateRecipe for PythonGenerator {
         let python = Python {
             entry_points: PythonGenerator::entry_points(pyproject_manifest),
             version_independent: config.abi3 == Some(true),
+            skip_pyc_compilation: config.skip_pyc_compilation.clone(),
         };
 
         generated_recipe.recipe.build.python = python;
