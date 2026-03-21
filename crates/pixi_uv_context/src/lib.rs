@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};
@@ -48,6 +49,108 @@ pub struct UvResolutionContext {
     pub extra_build_variables: ExtraBuildVariables,
     pub preview: Preview,
     pub workspace_cache: WorkspaceCache,
+    /// HTTP timeout for uv operations, read from UV_HTTP_TIMEOUT,
+    /// UV_REQUEST_TIMEOUT, or HTTP_TIMEOUT environment variables.
+    pub http_timeout: Option<Duration>,
+    /// HTTP retry count for uv operations, read from UV_HTTP_RETRIES.
+    pub http_retries: Option<u32>,
+}
+
+/// Read a `usize` from an environment variable, logging on success or invalid
+/// values.
+fn read_usize_env(var: &str) -> Option<usize> {
+    let val = std::env::var(var).ok()?;
+    match val.parse::<usize>() {
+        Ok(n) if n > 0 => {
+            debug!("using {var}={n}");
+            Some(n)
+        }
+        _ => {
+            tracing::warn!(
+                "ignoring invalid value for {var}: {val:?} (expected a positive integer)"
+            );
+            None
+        }
+    }
+}
+
+/// Read the HTTP timeout from environment variables.
+///
+/// Checks `UV_HTTP_TIMEOUT`, `UV_REQUEST_TIMEOUT`, and `HTTP_TIMEOUT`
+/// (in that order of precedence), matching the behavior of the `uv` CLI.
+/// The value should be a number of seconds (e.g., `300` for 5 minutes).
+fn read_http_timeout_from_env() -> Option<Duration> {
+    let env_vars = ["UV_HTTP_TIMEOUT", "UV_REQUEST_TIMEOUT", "HTTP_TIMEOUT"];
+    for var in env_vars {
+        if let Ok(val) = std::env::var(var) {
+            match val.parse::<u64>() {
+                Ok(secs) => {
+                    debug!("using {var}={secs}s for HTTP timeout");
+                    return Some(Duration::from_secs(secs));
+                }
+                Err(_) => {
+                    // Also try parsing as float for values like "30.5"
+                    match val.parse::<f64>() {
+                        Ok(secs) if secs >= 0.0 => {
+                            debug!("using {var}={secs}s for HTTP timeout");
+                            return Some(Duration::from_secs_f64(secs));
+                        }
+                        _ => {
+                            tracing::warn!(
+                                "ignoring invalid value for {var}: {val:?} (expected a number of seconds)"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Read `UV_HTTP_RETRIES` from the environment.
+///
+/// The value should be a non-negative integer (e.g., `5`). The default in uv
+/// is 3.
+fn read_http_retries_from_env() -> Option<u32> {
+    let val = std::env::var("UV_HTTP_RETRIES").ok()?;
+    match val.parse::<u32>() {
+        Ok(n) => {
+            debug!("using UV_HTTP_RETRIES={n}");
+            Some(n)
+        }
+        Err(_) => {
+            tracing::warn!(
+                "ignoring invalid value for UV_HTTP_RETRIES: {val:?} (expected a non-negative integer)"
+            );
+            None
+        }
+    }
+}
+
+/// Build a [`Concurrency`] from pixi config and UV environment variables.
+///
+/// Precedence (highest wins):
+/// 1. `UV_CONCURRENT_DOWNLOADS` / `UV_CONCURRENT_BUILDS` /
+///    `UV_CONCURRENT_INSTALLS` environment variables
+/// 2. Pixi `concurrency.downloads` config value
+/// 3. uv defaults (50 downloads, system threads for builds/installs)
+fn build_concurrency(config: &Config) -> Concurrency {
+    let defaults = Concurrency::default();
+
+    // Start with pixi config for downloads (it defaults to 50, same as uv)
+    let downloads = config.max_concurrent_downloads();
+
+    // Apply UV_ env var overrides
+    let downloads = read_usize_env("UV_CONCURRENT_DOWNLOADS").unwrap_or(downloads);
+    let builds = read_usize_env("UV_CONCURRENT_BUILDS").unwrap_or(defaults.builds);
+    let installs = read_usize_env("UV_CONCURRENT_INSTALLS").unwrap_or(defaults.installs);
+
+    Concurrency {
+        downloads,
+        builds,
+        installs,
+    }
 }
 
 impl UvResolutionContext {
@@ -86,12 +189,16 @@ impl UvResolutionContext {
             )
             .into_diagnostic()
             .context("failed to parse trusted host")?;
+        let http_timeout = read_http_timeout_from_env();
+        let http_retries = read_http_retries_from_env();
+        let concurrency = build_concurrency(config);
+
         Ok(Self {
             cache,
             in_flight: InFlight::default(),
             hash_strategy: HashStrategy::None,
             keyring_provider,
-            concurrency: Concurrency::default(),
+            concurrency,
             source_strategy: SourceStrategy::Enabled,
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
@@ -106,6 +213,8 @@ impl UvResolutionContext {
             extra_build_variables: ExtraBuildVariables::default(),
             preview: Preview::default(),
             workspace_cache: WorkspaceCache::default(),
+            http_timeout,
+            http_retries,
         })
     }
 
@@ -143,6 +252,14 @@ impl UvResolutionContext {
             .built_in_root_certs(self.use_builtin_certs)
             .extra_middleware(self.extra_middleware.clone());
 
+        if let Some(timeout) = self.http_timeout {
+            base_client_builder = base_client_builder.timeout(timeout);
+        }
+
+        if let Some(retries) = self.http_retries {
+            base_client_builder = base_client_builder.retries(retries);
+        }
+
         if let Some(markers) = markers {
             base_client_builder = base_client_builder.markers(markers);
         }
@@ -157,5 +274,150 @@ impl UvResolutionContext {
         }
 
         Arc::new(uv_client_builder.build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static ENV_MUTEX: Mutex<()> = Mutex::new(());
+
+    fn with_env_vars<F, R>(vars: &[(&str, Option<&str>)], f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        let _lock = ENV_MUTEX.lock().unwrap();
+        let originals: Vec<_> = vars
+            .iter()
+            .map(|(k, _)| (*k, std::env::var(k).ok()))
+            .collect();
+
+        // SAFETY: We hold ENV_MUTEX to ensure no concurrent env var access.
+        unsafe {
+            for (k, v) in vars {
+                match v {
+                    Some(val) => std::env::set_var(k, val),
+                    None => std::env::remove_var(k),
+                }
+            }
+        }
+
+        let result = f();
+
+        unsafe {
+            for (k, v) in &originals {
+                match v {
+                    Some(val) => std::env::set_var(k, val),
+                    None => std::env::remove_var(k),
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Clear all timeout-related env vars for a clean test.
+    const TIMEOUT_VARS: [(&str, Option<&str>); 3] = [
+        ("UV_HTTP_TIMEOUT", None),
+        ("UV_REQUEST_TIMEOUT", None),
+        ("HTTP_TIMEOUT", None),
+    ];
+
+    fn timeout_vars_with<'a>(
+        overrides: &'a [(&'a str, &'a str)],
+    ) -> Vec<(&'a str, Option<&'a str>)> {
+        TIMEOUT_VARS
+            .iter()
+            .map(|&(k, _)| {
+                let val = overrides.iter().find(|(ok, _)| *ok == k).map(|(_, v)| *v);
+                (k, val)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_http_timeout_precedence_and_parsing() {
+        // No env vars → None
+        with_env_vars(&TIMEOUT_VARS, || {
+            assert!(read_http_timeout_from_env().is_none());
+        });
+
+        // UV_HTTP_TIMEOUT takes precedence over the others
+        with_env_vars(
+            &[
+                ("UV_HTTP_TIMEOUT", Some("100")),
+                ("UV_REQUEST_TIMEOUT", Some("200")),
+                ("HTTP_TIMEOUT", Some("300")),
+            ],
+            || {
+                assert_eq!(read_http_timeout_from_env(), Some(Duration::from_secs(100)));
+            },
+        );
+
+        // Falls through to UV_REQUEST_TIMEOUT, then HTTP_TIMEOUT
+        with_env_vars(&timeout_vars_with(&[("UV_REQUEST_TIMEOUT", "200")]), || {
+            assert_eq!(read_http_timeout_from_env(), Some(Duration::from_secs(200)));
+        });
+        with_env_vars(&timeout_vars_with(&[("HTTP_TIMEOUT", "300")]), || {
+            assert_eq!(read_http_timeout_from_env(), Some(Duration::from_secs(300)));
+        });
+
+        // Invalid value is skipped, falls through to next
+        with_env_vars(
+            &[
+                ("UV_HTTP_TIMEOUT", Some("nope")),
+                ("UV_REQUEST_TIMEOUT", Some("200")),
+                ("HTTP_TIMEOUT", None),
+            ],
+            || {
+                assert_eq!(read_http_timeout_from_env(), Some(Duration::from_secs(200)));
+            },
+        );
+
+        // Float seconds work
+        with_env_vars(&timeout_vars_with(&[("UV_HTTP_TIMEOUT", "30.5")]), || {
+            assert_eq!(
+                read_http_timeout_from_env(),
+                Some(Duration::from_secs_f64(30.5))
+            );
+        });
+    }
+
+    #[test]
+    fn test_http_retries() {
+        with_env_vars(&[("UV_HTTP_RETRIES", None)], || {
+            assert!(read_http_retries_from_env().is_none());
+        });
+        with_env_vars(&[("UV_HTTP_RETRIES", Some("5"))], || {
+            assert_eq!(read_http_retries_from_env(), Some(5));
+        });
+        with_env_vars(&[("UV_HTTP_RETRIES", Some("0"))], || {
+            assert_eq!(read_http_retries_from_env(), Some(0));
+        });
+        with_env_vars(&[("UV_HTTP_RETRIES", Some("abc"))], || {
+            assert!(read_http_retries_from_env().is_none());
+        });
+    }
+
+    #[test]
+    fn test_read_usize_env() {
+        with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some("10"))], || {
+            assert_eq!(read_usize_env("UV_CONCURRENT_DOWNLOADS"), Some(10));
+        });
+        // Zero and invalid values are rejected
+        for bad in ["0", "-1", "abc"] {
+            with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", Some(bad))], || {
+                assert!(
+                    read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none(),
+                    "expected None for {bad:?}"
+                );
+            });
+        }
+        // Unset → None
+        with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", None)], || {
+            assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none());
+        });
     }
 }
