@@ -20,7 +20,6 @@ version = "0.1.0"
 # --8<-- [start:build-system]
 [package.build.backend]
 channels = [
-  "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 name = "pixi-build-python"

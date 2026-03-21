@@ -7,7 +7,6 @@ preview = ["pixi-build"]
 [package.build]
 backend = { name = "pixi-build-python", version = "0.4.*" }
 channels = [
-  "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
 # --8<-- [end:build]
