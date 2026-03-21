@@ -637,7 +637,7 @@ impl PyPython {
                 inner: RecipePython {
                     entry_points,
                     version_independent: false,
-                    skip_pyc_compilation: false,
+                    skip_pyc_compilation: vec![],
                 },
             }),
             Err(_) => Err(pyo3::exceptions::PyValueError::new_err(
