@@ -872,6 +872,10 @@ impl WorkspaceManifestMut<'_> {
         };
         self.document.set_requires_pixi(version).into_diagnostic()
     }
+    /// Set the `requires-python` version specifier (pyproject.toml only)
+    pub fn set_requires_python(&mut self, version: Option<&str>) -> miette::Result<()> {
+        self.document.set_requires_python(version).into_diagnostic()
+    }
 }
 
 // Handles the target missing error cases
@@ -1987,6 +1991,28 @@ feature_target_dep = "*"
                 .clone(),
             Version::from_str("1.2.3").unwrap()
         );
+    }
+
+    #[test]
+    fn test_set_requires_python() {
+        let file_contents = r#"
+[project]
+name = "foo"
+version = "0.1.0"
+requires-python = ">=3.9"
+
+[tool.pixi.project]
+channels = []
+platforms = ["linux-64", "win-64"]
+"#;
+
+        let mut manifest = parse_pyproject_toml(file_contents);
+        let mut manifest = manifest.editable();
+
+        manifest.set_requires_python(Some(">=3.10")).unwrap();
+
+        let edited_toml = manifest.document.to_string();
+        assert!(edited_toml.contains("requires-python = \">=3.10\""));
     }
 
     #[test]
