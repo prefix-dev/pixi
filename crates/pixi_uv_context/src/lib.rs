@@ -28,6 +28,15 @@ use uv_preview::Preview;
 use uv_types::{HashStrategy, InFlight};
 use uv_workspace::WorkspaceCache;
 
+/// Convert manifest-defined extra build dependencies into uv's
+/// [`ExtraBuildRequires`] structure.
+///
+/// Each manifest requirement is converted to a uv requirement and wrapped in an
+/// [`ExtraBuildRequirement`] with `match_runtime = false` for v1 behavior.
+///
+/// The `workspace_root` parameter is currently unused but kept in the API to
+/// preserve call-site intent and future conversion support for path-based
+/// requirement forms.
 pub fn convert_extra_build_dependencies(
     deps: &Option<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>,
     _workspace_root: &Path,

@@ -51,6 +51,11 @@ pub struct TomlManifest {
     pub constraints: Option<PixiSpanned<UniquePackageMap>>,
 
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
+    /// Additional build dependencies for PyPI packages.
+    ///
+    /// This maps a PyPI package name to additional PEP 508 requirements that
+    /// should be injected into build-time requirements when an sdist is built.
+    /// This only affects build dependency payloads and not runtime resolution.
     pub extra_build_dependencies:
         Option<PixiSpanned<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>>,
     pub dev_dependencies: Option<
