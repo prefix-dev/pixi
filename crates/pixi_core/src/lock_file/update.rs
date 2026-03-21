@@ -32,7 +32,7 @@ use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
-use pixi_uv_context::UvResolutionContext;
+use pixi_uv_context::{UvResolutionContext, convert_extra_build_dependencies};
 use pixi_uv_conversions::{
     ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
     to_uv_normalize,
@@ -759,10 +759,21 @@ impl<'p> LockFileDerivedData<'p> {
                 let uv_context = self
                     .uv_context
                     .get_or_try_init(|| {
-                        UvResolutionContext::from_config(
+                        let mut context = UvResolutionContext::from_config(
                             self.workspace.config(),
                             self.workspace.client()?.clone(),
+                        )?;
+                        context.extra_build_requires = convert_extra_build_dependencies(
+                            &self
+                                .workspace
+                                .workspace
+                                .value
+                                .workspace
+                                .extra_build_dependencies,
+                            self.workspace.root(),
                         )
+                        .into_diagnostic()?;
+                        Ok::<UvResolutionContext, miette::Report>(context)
                     })?
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
@@ -1758,7 +1769,16 @@ impl<'p> UpdateContext<'p> {
 
             let uv_context = uv_context
                 .get_or_try_init(|| {
-                    UvResolutionContext::from_config(project.config(), project.client()?.clone())
+                    let mut context = UvResolutionContext::from_config(
+                        project.config(),
+                        project.client()?.clone(),
+                    )?;
+                    context.extra_build_requires = convert_extra_build_dependencies(
+                        &project.workspace.value.workspace.extra_build_dependencies,
+                        project.root(),
+                    )
+                    .into_diagnostic()?;
+                    Ok::<UvResolutionContext, miette::Report>(context)
                 })?
                 .clone();
 

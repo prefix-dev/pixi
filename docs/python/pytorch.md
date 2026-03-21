@@ -29,11 +29,11 @@ You can install PyTorch using the `conda-forge` channel.
 These are the conda-forge community maintained builds of PyTorch.
 You can make direct use of the Nvidia provided packages to make sure the packages can work together.
 
-=== "`pixi.toml`"
+=== "pixi.toml"
     ```toml title="Bare minimum conda-forge pytorch with cuda installation"
     --8<-- "docs/source_files/pixi_tomls/pytorch-conda-forge.toml:minimal"
     ```
-=== "`pyproject.toml`"
+=== "pyproject.toml"
     ```toml title="Bare minimum conda-forge pytorch with cuda installation"
     --8<-- "docs/source_files/pyproject_tomls/pytorch-conda-forge.toml:minimal"
     ```
@@ -42,11 +42,11 @@ To deliberately install a specific version of the `cuda` packages you can depend
 The `cuda-version` package constraints the version of the `__cuda` virtual package and `cudatoolkit` package.
 This ensures that the correct version of the `cudatoolkit` package is installed and the tree of dependencies is resolved correctly.
 
-=== "`pixi.toml`"
+=== "pixi.toml"
     ```toml title="Add cuda version to the conda-forge pytorch installation"
     --8<-- "docs/source_files/pixi_tomls/pytorch-conda-forge.toml:cuda-version"
     ```
-=== "`pyproject.toml`"
+=== "pyproject.toml"
     ```toml title="Add cuda version to the conda-forge pytorch installation"
     --8<-- "docs/source_files/pyproject_tomls/pytorch-conda-forge.toml:cuda-version"
     ```
@@ -54,11 +54,11 @@ This ensures that the correct version of the `cudatoolkit` package is installed 
 With `conda-forge` you can also install the `cpu` version of PyTorch.
 A common use-case is having two environments, one for CUDA machines and one for non-CUDA machines.
 
-=== "`pixi.toml`"
+=== "pixi.toml"
     ```toml title="Adding a cpu environment"
     --8<-- "docs/source_files/pixi_tomls/pytorch-conda-forge-envs.toml:use-envs"
     ```
-=== "`pyproject.toml`"
+=== "pyproject.toml"
     ```toml title="Split into environments and add a CPU environment"
     --8<-- "docs/source_files/pyproject_tomls/pytorch-conda-forge-envs.toml:use-envs"
     ```
@@ -101,22 +101,22 @@ Best to do this per dependency to force the index to be used.
 - CUDA 12.4: [https://download.pytorch.org/whl/cu124](https://download.pytorch.org/whl/cu124)
 - ROCm6: [https://download.pytorch.org/whl/rocm6.2](https://download.pytorch.org/whl/rocm6.2)
 
-=== "`pixi.toml`"
+=== "pixi.toml"
     ```toml title="Install PyTorch from pypi"
     --8<-- "docs/source_files/pixi_tomls/pytorch-pypi.toml:minimal"
     ```
-=== "`pyproject.toml`"
+=== "pyproject.toml"
     ```toml title="Install PyTorch from pypi"
     --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi.toml:minimal"
     ```
 
 You can tell Pixi to use multiple environments for the multiple versions of PyTorch, either `cpu` or `gpu`.
 
-=== "`pixi.toml`"
+=== "pixi.toml"
     ```toml title="Use multiple environments for the pypi pytorch installation"
     --8<-- "docs/source_files/pixi_tomls/pytorch-pypi-envs.toml:multi-env"
     ```
-=== "`pyproject.toml`"
+=== "pyproject.toml"
     ```toml title="Use multiple environments for the pypi pytorch installation"
     --8<-- "docs/source_files/pyproject_tomls/pytorch-pypi-envs.toml:multi-env"
     ```
@@ -147,11 +147,11 @@ In the meantime, you may need to run the resolution process on a machine that su
 !!! note
     This is the [legacy](https://dev-discuss.pytorch.org/t/pytorch-deprecation-of-conda-nightly-builds/2590) way of installing pytorch, this will not be updated to later versions as pytorch has discontinued their channel.
 
-=== "`pixi.toml`"
+=== "pixi.toml"
     ```toml title="Install PyTorch from the PyTorch channel"
     --8<-- "docs/source_files/pixi_tomls/pytorch-from-pytorch-channel.toml:minimal"
     ```
-=== "`pyproject.toml`"
+=== "pyproject.toml"
     ```toml title="Install PyTorch from the PyTorch channel"
     --8<-- "docs/source_files/pyproject_tomls/pytorch-from-pytorch-channel.toml:minimal"
     ```

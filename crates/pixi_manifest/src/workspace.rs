@@ -1,6 +1,8 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use indexmap::IndexMap;
 use indexmap::IndexSet;
+use pixi_pypi_spec::PypiPackageName;
 use pixi_toml::TomlEnum;
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
 use serde::Deserialize;
@@ -71,6 +73,11 @@ pub struct Workspace {
 
     /// The pypi options supported in the project
     pub pypi_options: Option<PypiOptions>,
+
+    /// Additional build dependencies for PyPI packages.
+    /// Used when upstream package metadata does not correctly
+    /// specify `build-system.requires`.
+    pub extra_build_dependencies: Option<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>,
 
     /// The S3 options supported in the project
     pub s3_options: Option<HashMap<String, S3Options>>,

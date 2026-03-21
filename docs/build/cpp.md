@@ -40,9 +40,14 @@ Next up we'll create the:
 ### The `pixi.toml` file
 Use the following `pixi.toml` file, you can hover over the annotations to see why each step was added.
 
-```toml
---8<-- "docs/source_files/pixi_workspaces/pixi_build/cpp/pixi.toml"
-```
+=== "pixi.toml"
+    ```toml
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/cpp/pixi.toml"
+    ```
+=== "pyproject.toml"
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/cpp_pixi.toml"
+    ```
 
 1. Add the **preview** feature `pixi-build` that enables Pixi to build the package.
 2. These are the workspace dependencies. We add our own package as well as Python so that we can later run our package.
