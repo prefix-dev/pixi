@@ -7,7 +7,7 @@ use std::{
 use indexmap::IndexMap;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
+use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::{Platform, Version};
 use toml_span::{
     DeserError, Spanned, Value,
@@ -51,6 +51,8 @@ pub struct TomlManifest {
     pub constraints: Option<PixiSpanned<UniquePackageMap>>,
 
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
+    pub extra_build_dependencies:
+        Option<PixiSpanned<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>>,
     pub dev_dependencies: Option<
         PixiSpanned<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
     >,
@@ -418,7 +420,7 @@ impl TomlManifest {
 
         let WithWarnings {
             warnings: mut workspace_warnings,
-            value: workspace,
+            value: mut workspace,
         } = workspace.value.into_workspace(
             ExternalWorkspaceProperties {
                 name: project_name.or(external.name),
@@ -426,6 +428,8 @@ impl TomlManifest {
             },
             root_directory,
         )?;
+        workspace.extra_build_dependencies =
+            self.extra_build_dependencies.map(PixiSpanned::into_inner);
         warnings.append(&mut workspace_warnings);
 
         let workspace_manifest = WorkspaceManifest {
@@ -529,6 +533,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         let pypi_dependencies = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-dependencies")
             .map(TomlWith::into_inner);
+        let extra_build_dependencies = th
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Vec<TomlFromStr<_>>>>>>(
+                "extra-build-dependencies",
+            )
+            .map(TomlWith::into_inner);
         let dev = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("dev")
             .map(TomlWith::into_inner);
@@ -594,6 +603,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             build_dependencies,
             constraints,
             pypi_dependencies,
+            extra_build_dependencies,
             dev_dependencies: dev,
             activation,
             tasks,
@@ -626,6 +636,8 @@ pub struct ExternalWorkspaceProperties {
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
 
@@ -1205,6 +1217,33 @@ mod test {
         bad-pkg = { path = "../path", git = "https://github.com/example/repo.git" }
         "#,
         ));
+    }
+
+    #[test]
+    fn test_parse_extra_build_dependencies() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [extra-build-dependencies]
+        fused-ssim = ["torch>=2", "numpy"]
+        "#,
+        )
+        .unwrap();
+
+        let extra_build_dependencies = manifest
+            .workspace
+            .extra_build_dependencies
+            .as_ref()
+            .expect("extra build dependencies should be parsed");
+        let specs = extra_build_dependencies
+            .get(&PypiPackageName::from_str("fused-ssim").unwrap())
+            .expect("package should exist");
+
+        assert_eq!(specs.len(), 2);
     }
 
     #[test]
