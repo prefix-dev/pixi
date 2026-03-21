@@ -30,7 +30,7 @@ PIP_REQUIRE_VIRTUALENV = "false"
 
 [feature.build.dependencies]
 maturin = "~=1.10.2"
-pip = "~=25.3.0"
+pip = "~=26.0.1"
 python = "*"
 rust = ">=1.90.0,<1.91"
 
