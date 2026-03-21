@@ -1,13 +1,17 @@
-use std::sync::Arc;
+use std::{path::Path, str::FromStr, sync::Arc};
 
 use fs_err::create_dir_all;
+use indexmap::IndexMap;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, get_cache_dir};
 use pixi_consts::consts;
+use pixi_pypi_spec::PypiPackageName;
 use pixi_utils::reqwest::{
     LazyReqwestClient, should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares,
 };
-use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
+use pixi_uv_conversions::{
+    ConversionError, pep508_requirement_to_uv_requirement, to_uv_trusted_host,
+};
 use tracing::debug;
 use uv_cache::Cache;
 use uv_client::{
@@ -16,13 +20,44 @@ use uv_client::{
 use uv_configuration::{Concurrency, IndexStrategy, SourceStrategy, TrustedHost};
 use uv_dispatch::SharedState;
 use uv_distribution_types::{
-    ExtraBuildRequires, ExtraBuildVariables, IndexCapabilities, IndexLocations,
-    PackageConfigSettings,
+    ExtraBuildRequirement, ExtraBuildRequires, ExtraBuildVariables, IndexCapabilities,
+    IndexLocations, PackageConfigSettings,
 };
 use uv_pep508::MarkerEnvironment;
 use uv_preview::Preview;
 use uv_types::{HashStrategy, InFlight};
 use uv_workspace::WorkspaceCache;
+
+pub fn convert_extra_build_dependencies(
+    deps: &Option<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>,
+    _workspace_root: &Path,
+) -> Result<ExtraBuildRequires, pixi_uv_conversions::ConversionError> {
+    let mut extra_build_requires = ExtraBuildRequires::default();
+
+    for (package, specs) in deps.iter().flatten() {
+        let requirements = specs
+            .iter()
+            .map(|spec| {
+                pep508_requirement_to_uv_requirement(spec.clone()).map(|requirement| {
+                    ExtraBuildRequirement {
+                        requirement,
+                        match_runtime: false,
+                    }
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if requirements.is_empty() {
+            continue;
+        }
+
+        let package_name = uv_normalize::PackageName::from_str(package.as_normalized().as_ref())
+            .expect("pypi package names in manifest should always be valid");
+        extra_build_requires.insert(package_name, requirements);
+    }
+
+    Ok(extra_build_requires)
+}
 
 <<<<<<< HEAD
 =======
@@ -200,5 +235,39 @@ impl UvResolutionContext {
         }
 
         Arc::new(uv_client_builder.build())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use indexmap::IndexMap;
+    use pixi_pypi_spec::PypiPackageName;
+
+    use super::convert_extra_build_dependencies;
+
+    #[test]
+    fn converts_extra_build_dependencies() {
+        let mut deps: IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>> = IndexMap::new();
+        deps.insert(
+            PypiPackageName::from_str("fused-ssim").unwrap(),
+            vec![pep508_rs::Requirement::from_str("torch>=2").unwrap()],
+        );
+
+        let converted = convert_extra_build_dependencies(&Some(deps), std::path::Path::new("."))
+            .expect("conversion should succeed");
+
+        let pkg_name = uv_normalize::PackageName::from_str("fused-ssim").unwrap();
+        let requirements = converted.get(&pkg_name).expect("package should be present");
+        assert_eq!(requirements.len(), 1);
+        assert_eq!(requirements[0].requirement.name.as_ref(), "torch");
+        assert!(!requirements[0].match_runtime);
+    }
+
+    #[test]
+    fn empty_extra_build_dependencies_is_noop() {
+        let converted = convert_extra_build_dependencies(&None, std::path::Path::new(".")).unwrap();
+        assert!(converted.is_empty());
     }
 }
