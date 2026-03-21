@@ -54,3 +54,54 @@ pub fn atomic_write_sync(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Re
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    /// temp file in same dir as pixi.toml.
+    #[test]
+    fn test_temp_file_created_in_same_dir_when_writable() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("pixi.toml");
+
+        let temp = temp_file_for(&target).unwrap();
+
+        assert_eq!(temp.path().parent().unwrap(), dir.path());
+    }
+
+    /// to test that if the parent dir is not writeable
+    /// the temp file is created in $TEMPDIR
+    #[test]
+    #[cfg(unix)]
+    fn test_temp_file_falls_back_to_tmp_when_parent_not_writable() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("pixi.toml");
+        fs::write(&target, b"[project]").unwrap(); 
+
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
+
+        let temp = temp_file_for(&target).unwrap();
+
+        assert_eq!(temp.path().parent().unwrap(), std::env::temp_dir());
+        // resetting the permissions for cleanup 
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    /// To test the prefix
+    #[test]
+    fn temp_file_has_correct_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("pixi.toml");
+
+        let temp = temp_file_for(&target).unwrap();
+        let name = temp.path().file_name().unwrap().to_str().unwrap();
+
+        assert!(
+            name.starts_with(".pixi.toml."),
+            "expected prefix `.pixi.toml.`, got `{name}`"
+        );
+    }
+}
