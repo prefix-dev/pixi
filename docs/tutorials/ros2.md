@@ -28,20 +28,41 @@ my_ros2_project
 
 The `pixi.toml` file is the manifest file for your workspace. It should look like this:
 
-```toml title="pixi.toml"
-[workspace]
-name = "my_ros2_project"
-version = "0.1.0"
-description = "Add a short description here"
-authors = ["User Name <user.name@email.url>"]
-channels = ["robostack-humble", "conda-forge"]
-# Your project can support multiple platforms, the current platform will be automatically added.
-platforms = ["linux-64"]
+=== "pixi.toml"
 
-[tasks]
+    ```toml
+    [workspace]
+    name = "my_ros2_project"
+    version = "0.1.0"
+    description = "Add a short description here"
+    authors = ["User Name <user.name@email.url>"]
+    channels = ["robostack-humble", "conda-forge"]
+    # Your project can support multiple platforms, the current platform will be automatically added.
+    platforms = ["linux-64"]
+    
+    [tasks]
+    
+    [dependencies]
+    ```
 
-[dependencies]
-```
+=== "pyproject.toml"
+
+    ```toml
+    [project]
+    name = "my_ros2_project"
+    version = "0.1.0"
+    description = "Add a short description here"
+    authors = ["User Name <user.name@email.url>"]
+    
+    [tool.pixi.workspace]
+    channels = ["robostack-humble", "conda-forge"]
+    # Your project can support multiple platforms, the current platform will be automatically added.
+    platforms = ["linux-64"]
+    
+    [tool.pixi.tasks]
+    
+    [tool.pixi.dependencies]
+    ```
 
 The `channels` you added to the `init` command are repositories of packages, you can search in these repositories through our [prefix.dev](https://prefix.dev/channels) website.
 The `platforms` are the systems you want to support, in Pixi you can support multiple platforms, but you have to define which platforms, so Pixi can test if those are supported for your dependencies.
@@ -126,15 +147,29 @@ Normally this would be the script you add to your `.bashrc` but instead you tell
     You can add multiple activation scripts for different platforms, so you can support multiple platforms with one workspace.
     Use the following example to add support for both Linux and Windows, using the [target](../workspace/multi_platform_configuration.md#activation) syntax.
 
-    ```toml
-    [workspace]
-    platforms = ["linux-64", "win-64"]
+    === "pixi.toml"
 
-    [activation]
-    scripts = ["install/setup.sh"]
-    [target.win-64.activation]
-    scripts = ["install/setup.bat"]
-    ```
+        ```toml
+        [workspace]
+        platforms = ["linux-64", "win-64"]
+
+        [activation]
+        scripts = ["install/setup.sh"]
+        [target.win-64.activation]
+        scripts = ["install/setup.bat"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+        [tool.pixi.workspace]
+        platforms = ["linux-64", "win-64"]
+
+        [tool.pixi.activation]
+        scripts = ["install/setup.sh"]
+        [tool.pixi.target.win-64.activation]
+        scripts = ["install/setup.bat"]
+        ```
 
 Now you can run your custom node with the following command
 
@@ -169,12 +204,21 @@ pixi run hello
     - You can add [`inputs` and `outputs`](../workspace/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
     - You can use the [`target`](../reference/pixi_manifest.md#the-target-table) syntax to run specific tasks on specific machines.
 
-```toml
-[tasks]
-sim = "ros2 run turtlesim turtlesim_node"
-build = {cmd = "colcon build --symlink-install", inputs = ["src"]}
-hello = { cmd = "ros2 run my_package my_node", depends-on = ["build"] }
-```
+=== "pixi.toml"
+    ```toml
+    [tasks]
+    sim = "ros2 run turtlesim turtlesim_node"
+    build = {cmd = "colcon build --symlink-install", inputs = ["src"]}
+    hello = { cmd = "ros2 run my_package my_node", depends-on = ["build"] }
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.tasks]
+    sim = "ros2 run turtlesim turtlesim_node"
+    build = {cmd = "colcon build --symlink-install", inputs = ["src"]}
+    hello = { cmd = "ros2 run my_package my_node", depends-on = ["build"] }
+    ```
 
 ## Build a C++ node
 
@@ -232,3 +276,4 @@ You can find more documentation on RoboStack channels in the [RoboStack document
 ### Community examples
 
 ROS 2 Humble on macOS,[Simulating differential drive using Gazebo](https://medium.com/@davisogunsina/ros-2-macos-support-installing-and-running-ros-2-on-macos-79039d1d3655).
+

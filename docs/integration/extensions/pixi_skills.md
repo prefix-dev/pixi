@@ -35,16 +35,29 @@ A collection of ready-to-use skills is available as conda packages on the [skill
 
 To use skills from skill-forge, add the channel and the desired skill packages to your `pixi.toml`:
 
-```toml
-[workspace]
-channels = ["conda-forge", "https://prefix.dev/skill-forge"]
+=== "pixi.toml"
+    ```toml
+    [workspace]
+    channels = ["conda-forge", "https://prefix.dev/skill-forge"]
 
-[dependencies]
-polars = ">=1,<2"
+    [dependencies]
+    polars = ">=1,<2"
 
-[feature.dev.dependencies]
-agent-skill-polars = "*"
-```
+    [feature.dev.dependencies]
+    agent-skill-polars = "*"
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.workspace]
+    channels = ["conda-forge", "https://prefix.dev/skill-forge"]
+
+    [tool.pixi.dependencies]
+    polars = ">=1,<2"
+
+    [tool.pixi.feature.dev.dependencies]
+    agent-skill-polars = "*"
+    ```
 
 ### Scopes
 

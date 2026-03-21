@@ -5,11 +5,16 @@ The `pixi-build-python` backend is designed for building Python projects using s
 !!! warning
     `pixi-build` is a preview feature, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
-
-    ```toml
-    [workspace]
-    preview = ["pixi-build"]
-    ```
+    === "pixi.toml"
+        ```toml
+        [workspace]
+        preview = ["pixi-build"]
+        ```
+    === "pyproject.toml"
+        ```toml
+        [tool.pixi.workspace]
+        preview = ["pixi-build"]
+        ```
 
 
 ## Overview

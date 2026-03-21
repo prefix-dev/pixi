@@ -27,18 +27,37 @@ It contains all the information about your workspace, such as its channels, plat
 
 The file created by `pixi init` is a minimal manifest that looks like this:
 
-```toml title="pixi.toml"
-[workspace]
-authors = ["Jane Doe <jane.doe@example.com>"]
-channels = ["conda-forge"]
-name = "my_workspace"
-platforms = ["osx-arm64"]
-version = "0.1.0"
+=== "pixi.toml"
 
-[tasks]
+    ```toml
+    [workspace]
+    authors = ["Jane Doe <jane.doe@example.com>"]
+    channels = ["conda-forge"]
+    name = "my_workspace"
+    platforms = ["osx-arm64"]
+    version = "0.1.0"
+    
+    [tasks]
+    
+    [dependencies]
+    ```
 
-[dependencies]
-```
+=== "pyproject.toml"
+
+    ```toml
+    [project]
+    authors = ["Jane Doe <jane.doe@example.com>"]
+    name = "my_workspace"
+    version = "0.1.0"
+    
+    [tool.pixi.workspace]
+    channels = ["conda-forge"]
+    platforms = ["osx-arm64"]
+    
+    [tool.pixi.tasks]
+    
+    [tool.pixi.dependencies]
+    ```
 
 ??? tip "Do you want autocompletion of the manifest file?"
     As `pixi.toml` has a JSON schema, it is possible to use IDEs like VSCode to edit the field with autocompletion.
@@ -59,11 +78,21 @@ pixi add numpy pytest
 ```
 This results in these lines being added:
 
-```toml title="pixi.toml"
-[dependencies]
-numpy = ">=2.2.6,<3"
-pytest = ">=8.3.5,<9"
-```
+=== "pixi.toml"
+
+    ```toml
+    [dependencies]
+    numpy = ">=2.2.6,<3"
+    pytest = ">=8.3.5,<9"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies]
+    numpy = ">=2.2.6,<3"
+    pytest = ">=8.3.5,<9"
+    ```
 
 You can also specify the version of the dependency you want to add.
 
@@ -82,10 +111,19 @@ pixi add --pypi httpx
 ```
 This will add the `httpx` package from PyPI to the workspace:
 
-```toml title="pixi.toml"
-[pypi-dependencies]
-httpx = ">=0.28.1,<0.29"
-```
+=== "pixi.toml"
+
+    ```toml
+    [pypi-dependencies]
+    httpx = ">=0.28.1,<0.29"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.pypi-dependencies]
+    httpx = ">=0.28.1,<0.29"
+    ```
 
 To learn more about the differences between `conda` and PyPI, see [our Conda & PyPI concept documentation](./concepts/conda_pypi.md).
 
@@ -138,10 +176,19 @@ pixi task add hello "echo Hello, World!"
 ```
 This will add the following lines to the `pixi.toml` file:
 
-```toml title="pixi.toml"
-[tasks]
-hello = "echo Hello, World!"
-```
+=== "pixi.toml"
+
+    ```toml
+    [tasks]
+    hello = "echo Hello, World!"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.tasks]
+    hello = "echo Hello, World!"
+    ```
 You can then run the task using the `pixi run` command:
 
 ```shell

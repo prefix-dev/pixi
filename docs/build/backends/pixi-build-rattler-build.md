@@ -78,10 +78,19 @@ model only provides the workspace structure information that the recipe cannot k
 
 To specify source dependencies, add them to `build-dependencies`, `host-dependencies` or `run-dependencies` in the package manifest:
 
-```toml title="pixi.toml"
-[package.build-dependencies]
-a = { path = "../a" }
-```
+=== "pixi.toml"
+
+    ```toml
+    [package.build-dependencies]
+    a = { path = "../a" }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.package.build-dependencies]
+    a = { path = "../a" }
+    ```
 
 ## Configuration Options
 
@@ -165,3 +174,4 @@ The rattler-build backend follows this build process:
 - Requires an existing rattler-build recipe file - cannot infer build instructions automatically
 - Build configuration is primarily controlled through the recipe file rather than `pixi.toml`
 - Cannot specify binary dependencies in the manifest
+
