@@ -109,6 +109,7 @@ nav:
       - Installation: installation.md
       - First Workspace: first_workspace.md
       - Basic Usage: getting_started.md
+      - The Conda Ecosystem: conda_ecosystem.md
   - Tutorials:
       - Python:
           - Basic Usage: python/tutorial.md
@@ -158,6 +159,7 @@ nav:
       - Package Source: build/package_source.md
       - Dev Packages: build/dev.md
   - Distributing:
+      - Prefix.dev Channel: deployment/prefix.md
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
       - Container: deployment/container.md

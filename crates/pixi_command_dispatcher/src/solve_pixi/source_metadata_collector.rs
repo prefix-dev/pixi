@@ -17,7 +17,7 @@ use thiserror::Error;
 use crate::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
     PackageNotProvidedError, SourceCheckoutError, SourceMetadataSpec,
-    executor::ExecutorFutures,
+    executor::CancellationAwareFutures,
     source_metadata::{CycleEnvironment, SourceMetadata, SourceMetadataError},
 };
 
@@ -94,7 +94,7 @@ impl SourceMetadataCollector {
         self,
         specs: impl IntoIterator<Item = (rattler_conda_types::PackageName, SourceSpec)>,
     ) -> Result<CollectedSourceMetadata, CommandDispatcherError<CollectSourceMetadataError>> {
-        let mut source_futures = ExecutorFutures::new(self.command_queue.executor());
+        let mut source_futures = CancellationAwareFutures::new(self.command_queue.executor());
         let mut specs = specs
             .into_iter()
             .map(|(name, spec)| (name, spec, Vec::new()))
@@ -113,7 +113,9 @@ impl SourceMetadataCollector {
                 }
             }
 
-            // Wait for the next future to finish.
+            // Wait for the next future to finish. Cancelled results are
+            // transparently skipped by the `CancellationAwareFutures` adapter
+            // Only real errors or successes arrive here.
             let Some(source_metadata) = source_futures.next().await else {
                 // No more pending futures, we are done.
                 return Ok(result);
@@ -129,7 +131,7 @@ impl SourceMetadataCollector {
                     SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
                 for depend in &record.package_record.depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
-                        let (Some(PackageNameMatcher::Exact(name)), nameless_spec) =
+                        let (PackageNameMatcher::Exact(name), nameless_spec) =
                             spec.clone().into_nameless()
                         else {
                             unimplemented!(

@@ -45,6 +45,11 @@ pub struct TomlManifest {
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+
+    /// Version constraints - limit versions of packages that can be installed
+    /// without explicitly requiring them.
+    pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
     pub dev_dependencies: Option<
         PixiSpanned<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
@@ -157,6 +162,7 @@ impl TomlManifest {
             dependencies: self.dependencies,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
+            constraints: self.constraints,
             pypi_dependencies: self.pypi_dependencies.map(PixiSpanned::into_inner),
             dev_dependencies: self.dev_dependencies.map(PixiSpanned::into_inner),
             activation: self.activation.map(PixiSpanned::into_inner),
@@ -518,6 +524,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         }
         let build_dependencies = build_dependencies.map(From::from);
 
+        let constraints = th.optional("constraints");
+
         let pypi_dependencies = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-dependencies")
             .map(TomlWith::into_inner);
@@ -584,6 +592,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             dependencies,
             host_dependencies,
             build_dependencies,
+            constraints,
             pypi_dependencies,
             dev_dependencies: dev,
             activation,
@@ -688,6 +697,33 @@ mod test {
         platforms = []
 
         [feature.foobar.run-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_source_spec_in_constraints() {
+        // Path source specs are not allowed in [constraints]
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [constraints]
+        my-package = { path = "../my-package" }
+        "#,
+        ));
+
+        // Git source specs are not allowed in [constraints] either
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.gpu.constraints]
+        my-lib = { git = "https://github.com/example/my-lib" }
         "#,
         ));
     }

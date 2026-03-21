@@ -245,3 +245,6 @@ python -VV
 exit
 ```
 
+Want to understand the concepts behind what you just did — packages,
+channels, platforms? Continue to
+[The Conda Ecosystem](conda_ecosystem.md).

@@ -38,10 +38,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: linux-64
-            os: ubuntu-latest
-          - target: linux-aarch64
-            os: ubuntu-latest
           - target: win-64
             os: windows-latest
           - target: osx-64
@@ -58,7 +54,7 @@ jobs:
         with:
           environments: backends-release
       - name: Configure sccache
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
             core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
@@ -88,7 +84,7 @@ jobs:
         run: rm -rf output/build_cache
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
         with:
           name: conda-packages-${{ matrix.target }}
           path: output/**/*.conda
@@ -107,8 +103,70 @@ jobs:
           # Wait a moment for handles to be released
           Start-Sleep -Seconds 2
 
+  build-linux:
+    if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'release:backends')}}
+    timeout-minutes: 80
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      REPO_NAME: "prefix-dev/pixi"
+    strategy:
+      matrix:
+        include:
+          - target: linux-64
+          - target: linux-aarch64
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        with:
+          environments: backends-release
+      - name: Set package version environment variables
+        shell: bash
+        run: pixi run -e backends-release generate-versions >> $GITHUB_ENV
+
+      - name: Build all backends for ${{ matrix.target }}
+        shell: bash
+        env:
+          RATTLER_BUILD_ENABLE_GITHUB_INTEGRATION: "true"
+          RATTLER_BUILD_COLOR: "always"
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${{ github.workspace }}:${{ github.workspace }}" \
+            -v "$HOME/.pixi:$HOME/.pixi" \
+            -v "$HOME/.cache:$HOME/.cache" \
+            -w "${{ github.workspace }}" \
+            -e HOME="$HOME" \
+            -e RATTLER_BUILD_ENABLE_GITHUB_INTEGRATION \
+            -e RATTLER_BUILD_COLOR \
+            -e PIXI_BUILD_CMAKE_VERSION \
+            -e PIXI_BUILD_MOJO_VERSION \
+            -e PIXI_BUILD_PYTHON_VERSION \
+            -e PIXI_BUILD_R_VERSION \
+            -e PIXI_BUILD_RATTLER_BUILD_VERSION \
+            -e PIXI_BUILD_RUST_VERSION \
+            -e PY_PIXI_BUILD_BACKEND_VERSION \
+            -e PIXI_BUILD_ROS_VERSION \
+            quay.io/pypa/manylinux2014_x86_64 \
+            "$HOME/.pixi/bin/pixi" run -e backends-release build-backend-packages ${{ matrix.target }}
+
+      - name: Remove build cache
+        shell: bash
+        run: rm -rf output/build_cache
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        with:
+          name: conda-packages-${{ matrix.target }}
+          path: output/**/*.conda
+
   upload:
-    needs: build
+    needs: [build, build-linux]
     runs-on: ubuntu-latest
     if: github.repository == 'prefix-dev/pixi'
     permissions:

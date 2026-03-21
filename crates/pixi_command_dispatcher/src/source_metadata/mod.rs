@@ -32,7 +32,7 @@ use crate::{
         common::MetadataCache,
         source_metadata::{self, CachedSourceMetadata, SourceMetadataCacheShard},
     },
-    executor::ExecutorFutures,
+    executor::CancellationAwareFutures,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
@@ -122,7 +122,7 @@ impl SourceMetadataSpec {
             });
         }
 
-        let mut futures = ExecutorFutures::new(command_dispatcher.executor());
+        let mut futures = CancellationAwareFutures::new(command_dispatcher.executor());
         let source_location = build_backend_metadata.source.clone();
         for output in &build_backend_metadata.metadata.outputs {
             if output.metadata.name != self.package {
@@ -174,7 +174,7 @@ impl SourceMetadataSpec {
                 tracing::trace!("Cache updated successfully");
             }
             source_metadata::WriteResult::Conflict(_) => {
-                tracing::debug!(
+                tracing::warn!(
                     "Cache was updated by another process during computation (version conflict), using our computed result"
                 );
             }
@@ -369,14 +369,14 @@ impl SourceMetadataSpec {
                     };
                     Ok(MatchSpec::from_nameless(
                         source.to_nameless_match_spec(),
-                        Some(name.clone().into()),
+                        name.clone().into(),
                     ))
                 }
                 Either::Right(binary) => {
                     let spec = binary
                         .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
                         .map_err(SourceMetadataError::from)?;
-                    Ok(MatchSpec::from_nameless(spec, Some(name.clone().into())))
+                    Ok(MatchSpec::from_nameless(spec, name.clone().into()))
                 }
             }
         };
@@ -404,7 +404,7 @@ impl SourceMetadataSpec {
                     let nameless_spec = spec
                         .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
                         .map_err(SourceMetadataError::from)?;
-                    Ok(MatchSpec::from_nameless(nameless_spec, Some(name.into())).to_string())
+                    Ok(MatchSpec::from_nameless(nameless_spec, name.into()).to_string())
                 })
                 .collect::<Result<Vec<_>, SourceMetadataError>>()
                 .map_err(CommandDispatcherError::Failed)
@@ -574,7 +574,7 @@ impl PackageRecordDependencies {
             .map(|(name, spec)| {
                 Ok(MatchSpec::from_nameless(
                     spec.value.try_into_nameless_match_spec(channel_config)?,
-                    Some(name.into()),
+                    name.into(),
                 ))
             })
             .map_ok(|spec| spec.to_string())
@@ -586,14 +586,14 @@ impl PackageRecordDependencies {
                 Either::Left(source) => {
                     let spec = MatchSpec::from_nameless(
                         source.to_nameless_match_spec(),
-                        Some(name.clone().into()),
+                        name.clone().into(),
                     );
                     depends.push(spec.to_string());
                     sources.insert(name, source.location);
                 }
                 Either::Right(binary) => {
                     if let Ok(spec) = binary.try_into_nameless_match_spec(channel_config) {
-                        depends.push(MatchSpec::from_nameless(spec, Some(name.into())).to_string());
+                        depends.push(MatchSpec::from_nameless(spec, name.into()).to_string());
                     }
                 }
             }

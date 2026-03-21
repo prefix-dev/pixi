@@ -2750,7 +2750,7 @@ bar = "*"
         let spec = &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap();
 
         let (name, spec) = spec.clone().into_nameless();
-        let name = name.unwrap().as_exact().unwrap().clone();
+        let name = name.as_exact().unwrap().clone();
 
         let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
 
@@ -2787,7 +2787,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                name.unwrap().as_exact().unwrap(),
+                name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
                 &[],
@@ -2822,7 +2822,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                package_name.unwrap().as_exact().unwrap(),
+                package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
                 &[Platform::Linux64],
@@ -2858,7 +2858,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                package_name.unwrap().as_exact().unwrap(),
+                package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Build,
                 &[Platform::Linux64],
@@ -3329,5 +3329,132 @@ channels = ["nvidia", "pytorch"]
         "#;
         let manifest_no = parse_pixi_toml(contents_no).manifest;
         assert_eq!(manifest_no.workspace.requires_pixi, None);
+    }
+
+    #[test]
+    fn test_constraints_in_default_feature() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+
+[dependencies]
+python = ">=3.9"
+
+[constraints]
+openssl = "<3"
+zlib = ">=1.2"
+"#;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let constraints = manifest.default_feature().constraints(None);
+
+        assert!(
+            constraints.is_some(),
+            "Default feature should have constraints"
+        );
+        let constraints = constraints.unwrap();
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+        assert!(
+            constraints.get(&openssl).is_some(),
+            "Should have openssl constraint"
+        );
+    }
+
+    #[test]
+    fn test_combined_constraints_across_features() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+
+[constraints]
+openssl = "<3"
+
+[feature.extra.constraints]
+zlib = ">=1.2"
+
+[environments]
+full = ["extra"]
+"#;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let workspace = crate::WorkspaceManifest::from_toml_str(contents).unwrap();
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+        let zlib = PackageName::from_str("zlib").unwrap();
+
+        // Check default feature constraints
+        let default_constraints = workspace.default_feature().constraints(None);
+        assert!(default_constraints.is_some());
+        assert!(default_constraints.unwrap().get(&openssl).is_some());
+
+        // Check extra feature constraints
+        let extra = workspace
+            .features
+            .get(&FeatureName::from("extra"))
+            .expect("Should have extra feature");
+        let extra_constraints = extra.constraints(None);
+        assert!(extra_constraints.is_some());
+        assert!(extra_constraints.unwrap().get(&zlib).is_some());
+    }
+
+    #[test]
+    fn test_constraints_in_platform_target() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[constraints]
+openssl = "<3"
+
+[target.linux-64.constraints]
+openssl = "<2"
+"#;
+        use rattler_conda_types::{PackageName, Platform};
+        use std::str::FromStr;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+
+        // Platform-independent constraint
+        let base_constraints = default_feature.constraints(None);
+        assert!(base_constraints.is_some());
+        let base_spec = base_constraints
+            .unwrap()
+            .get(&openssl)
+            .expect("Should have openssl")
+            .iter()
+            .next()
+            .unwrap()
+            .as_version_spec()
+            .unwrap()
+            .to_string();
+        assert_eq!(base_spec, "<3");
+
+        // Platform-specific constraint overrides
+        let linux_constraints = default_feature.constraints(Some(Platform::Linux64));
+        assert!(linux_constraints.is_some());
+        let linux_spec = linux_constraints
+            .unwrap()
+            .get(&openssl)
+            .expect("Should have openssl on linux")
+            .iter()
+            .next()
+            .unwrap()
+            .as_version_spec()
+            .unwrap()
+            .to_string();
+        assert_eq!(linux_spec, "<2");
     }
 }

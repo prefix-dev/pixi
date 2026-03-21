@@ -6,13 +6,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
     (
         [
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "pip",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "pip",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -30,13 +28,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "python",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "python",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -54,13 +50,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "pytorch",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "pytorch",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -86,13 +80,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "torchvision",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "torchvision",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -118,13 +110,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "black",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "black",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -150,13 +140,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "darglint",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "darglint",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -182,13 +170,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "flake8",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "flake8",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -214,13 +200,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "flake8-bugbear",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "flake8-bugbear",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -246,13 +230,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "flake8-comprehensions",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "flake8-comprehensions",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -278,13 +260,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "isort",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "isort",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -310,13 +290,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "palettable",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "palettable",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -342,13 +320,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "pydocstyle",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "pydocstyle",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -374,13 +350,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "pytest",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "pytest",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -406,13 +380,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "pytest-cov",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "pytest-cov",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -438,13 +410,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "pytest-benchmark",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "pytest-benchmark",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -470,13 +440,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "m2r2",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "m2r2",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -502,13 +470,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "sphinx",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "sphinx",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -534,13 +500,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "sphinx-automodapi",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "sphinx-automodapi",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -566,13 +530,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "sphinx_rtd_theme",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "sphinx_rtd_theme",
+                    },
                 ),
                 version: None,
                 build: None,
@@ -598,13 +560,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "matplotlib",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "matplotlib",
+                    },
                 ),
                 version: Some(
                     StrictRange(
@@ -640,13 +600,11 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 track_features: None,
             },
             MatchSpec {
-                name: Some(
-                    Exact(
-                        PackageName {
-                            normalized: None,
-                            source: "tikzplotlib",
-                        },
-                    ),
+                name: Exact(
+                    PackageName {
+                        normalized: None,
+                        source: "tikzplotlib",
+                    },
                 ),
                 version: None,
                 build: None,

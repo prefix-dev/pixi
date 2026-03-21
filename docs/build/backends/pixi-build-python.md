@@ -399,7 +399,7 @@ The Python backend follows this build process:
 
 The backend automatically detects which Python installer to use:
 
-- **uv**: Used if `uv` is present in any dependency category (build, host, or run)
+- **uv**: Used if `uv` is present in the build or host dependencies
 - **pip**: Used as the default fallback installer
 
 To use `uv` for faster installations, add it to your dependencies:
