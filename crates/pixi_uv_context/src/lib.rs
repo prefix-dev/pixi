@@ -24,6 +24,49 @@ use uv_preview::Preview;
 use uv_types::{HashStrategy, InFlight};
 use uv_workspace::WorkspaceCache;
 
+<<<<<<< HEAD
+=======
+/// Convert manifest-defined extra build dependencies into uv's
+/// [`ExtraBuildRequires`] structure.
+///
+/// Each manifest requirement is converted to a uv requirement and wrapped in an
+/// [`ExtraBuildRequirement`] with `match_runtime = false` for v1 behavior.
+///
+/// The `workspace_root` parameter is currently unused but kept in the API to
+/// preserve call-site intent and future conversion support for path-based
+/// requirement forms.
+pub fn convert_extra_build_dependencies(
+    deps: &Option<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>,
+    _workspace_root: &Path,
+) -> Result<ExtraBuildRequires, pixi_uv_conversions::ConversionError> {
+    let mut extra_build_requires = ExtraBuildRequires::default();
+
+    for (package, specs) in deps.iter().flatten() {
+        let requirements = specs
+            .iter()
+            .map(|spec| {
+                pep508_requirement_to_uv_requirement(spec.clone()).map(|requirement| {
+                    ExtraBuildRequirement {
+                        requirement,
+                        match_runtime: false,
+                    }
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if requirements.is_empty() {
+            continue;
+        }
+
+        let package_name = uv_normalize::PackageName::from_str(package.as_normalized().as_ref())
+            .expect("pypi package names in manifest should always be valid");
+        extra_build_requires.insert(package_name, requirements);
+    }
+
+    Ok(extra_build_requires)
+}
+
+>>>>>>> e95077bdd (added some comments)
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
 pub struct UvResolutionContext {
