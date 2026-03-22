@@ -5,8 +5,9 @@ use marked_yaml::{Node as MarkedNode, Span};
 pub type MappingHash = LinkedHashMap<MarkedScalarNode, MarkedNode>;
 
 use crate::recipe::{
-    About, Build, Conditional, ConditionalList, ConditionalRequirements, Extra, IntermediateRecipe,
-    Item, ListOrItem, Package, PackageContents, Source, Test, Value,
+    About, Build, Conditional, ConditionalList, ConditionalRequirements, Extra,
+    IgnoreRunExports, IntermediateRecipe, Item, ListOrItem, Package, PackageContents, Source,
+    Test, Value,
 };
 
 // Trait for converting to marked YAML nodes
@@ -173,6 +174,57 @@ impl ToMarkedYaml for ConditionalRequirements {
             mapping.insert(
                 MarkedScalarNode::new(Span::new_blank(), "run_constraints"),
                 self.run_constraints.to_marked_yaml(),
+            );
+        }
+
+        if !self.ignore_run_exports.is_empty() {
+            mapping.insert(
+                MarkedScalarNode::new(Span::new_blank(), "ignore_run_exports"),
+                self.ignore_run_exports.to_marked_yaml(),
+            );
+        }
+
+        MarkedNode::Mapping(MarkedMappingNode::new(Span::new_blank(), mapping))
+    }
+}
+
+impl ToMarkedYaml for IgnoreRunExports {
+    fn to_marked_yaml(&self) -> MarkedNode {
+        let mut mapping = MappingHash::new();
+
+        if !self.by_name.is_empty() {
+            mapping.insert(
+                MarkedScalarNode::new(Span::new_blank(), "by_name"),
+                MarkedNode::Sequence(MarkedSequenceNode::new(
+                    Span::new_blank(),
+                    self.by_name
+                        .iter()
+                        .map(|name| {
+                            MarkedNode::Scalar(MarkedScalarNode::new(
+                                Span::new_blank(),
+                                name.as_normalized().to_string(),
+                            ))
+                        })
+                        .collect(),
+                )),
+            );
+        }
+
+        if !self.from_package.is_empty() {
+            mapping.insert(
+                MarkedScalarNode::new(Span::new_blank(), "from_package"),
+                MarkedNode::Sequence(MarkedSequenceNode::new(
+                    Span::new_blank(),
+                    self.from_package
+                        .iter()
+                        .map(|name| {
+                            MarkedNode::Scalar(MarkedScalarNode::new(
+                                Span::new_blank(),
+                                name.as_normalized().to_string(),
+                            ))
+                        })
+                        .collect(),
+                )),
             );
         }
 

@@ -174,6 +174,7 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Conditi
         host: host_items,
         run: run_items,
         run_constraints: run_constraints_items,
+        ..Default::default()
     }
 }
 

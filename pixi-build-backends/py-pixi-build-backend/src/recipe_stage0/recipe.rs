@@ -885,6 +885,7 @@ impl PyConditionalRequirements {
                 .clone()
                 .into_iter()
                 .collect(),
+            ..Default::default()
         }
     }
 
