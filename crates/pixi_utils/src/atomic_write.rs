@@ -1,5 +1,8 @@
 use std::path::Path;
 
+/// Build a [`tempfile::NamedTempFile`] in the same directory as `path`, using
+/// the original filename as the prefix so the temp file is easily identifiable
+/// (e.g. `.pixi.toml.XXXXXX`).
 fn temp_file_for(path: &Path) -> std::io::Result<tempfile::NamedTempFile> {
     let dir = path.parent().ok_or_else(|| {
         std::io::Error::new(
