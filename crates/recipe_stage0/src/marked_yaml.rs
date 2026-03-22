@@ -5,9 +5,8 @@ use marked_yaml::{Node as MarkedNode, Span};
 pub type MappingHash = LinkedHashMap<MarkedScalarNode, MarkedNode>;
 
 use crate::recipe::{
-    About, Build, Conditional, ConditionalList, ConditionalRequirements, Extra,
-    IgnoreRunExports, IntermediateRecipe, Item, ListOrItem, Package, PackageContents, Source,
-    Test, Value,
+    About, Build, Conditional, ConditionalList, ConditionalRequirements, Extra, IgnoreRunExports,
+    IntermediateRecipe, Item, ListOrItem, Package, PackageContents, Source, Test, Value,
 };
 
 // Trait for converting to marked YAML nodes

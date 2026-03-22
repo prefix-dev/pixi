@@ -237,10 +237,13 @@ impl GenerateRecipe for PythonGenerator {
         // ABI3 packages should not inherit CPython ABI pins from `host: python`.
         if config.abi3 == Some(true) {
             if !requirement_contains_package(&requirements.host, "python-abi3") {
-                let requires_python_str = pyproject_metadata_provider.requires_python().ok().flatten();
-                let abi3_spec = python_abi3_spec_from_requires_python(requires_python_str.as_deref())?;
-                let python_abi3_req: Item<PackageDependency> =
-                    format!("python-abi3 {abi3_spec}").parse().into_diagnostic()?;
+                let requires_python_str =
+                    pyproject_metadata_provider.requires_python().ok().flatten();
+                let abi3_spec =
+                    python_abi3_spec_from_requires_python(requires_python_str.as_deref())?;
+                let python_abi3_req: Item<PackageDependency> = format!("python-abi3 {abi3_spec}")
+                    .parse()
+                    .into_diagnostic()?;
                 requirements.host.push(python_abi3_req);
             }
 
@@ -250,7 +253,10 @@ impl GenerateRecipe for PythonGenerator {
                 .from_package
                 .contains(&python_package)
             {
-                requirements.ignore_run_exports.from_package.push(python_package);
+                requirements
+                    .ignore_run_exports
+                    .from_package
+                    .push(python_package);
             }
         }
 
@@ -1181,7 +1187,11 @@ build-backend = "setuptools.build_meta"
             "version_independent should be true when abi3=true"
         );
 
-        let ignored_packages = &generated_recipe.recipe.requirements.ignore_run_exports.from_package;
+        let ignored_packages = &generated_recipe
+            .recipe
+            .requirements
+            .ignore_run_exports
+            .from_package;
         assert!(
             ignored_packages
                 .iter()
