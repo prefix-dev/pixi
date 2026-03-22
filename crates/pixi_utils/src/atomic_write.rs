@@ -18,11 +18,9 @@ fn temp_file_for(path: &Path) -> std::io::Result<tempfile::NamedTempFile> {
 
     match tempfile::Builder::new().prefix(&prefix).tempfile_in(dir) {
         Ok(file) => Ok(file),
-        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
-            tempfile::Builder::new()
-                .prefix(&prefix)
-                .tempfile_in(std::env::temp_dir())
-        }
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => tempfile::Builder::new()
+            .prefix(&prefix)
+            .tempfile_in(std::env::temp_dir()),
         Err(e) => Err(e),
     }
 }
@@ -80,14 +78,14 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("pixi.toml");
-        fs::write(&target, b"[project]").unwrap(); 
+        fs::write(&target, b"[project]").unwrap();
 
         fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
 
         let temp = temp_file_for(&target).unwrap();
 
         assert_eq!(temp.path().parent().unwrap(), std::env::temp_dir());
-        // resetting the permissions for cleanup 
+        // resetting the permissions for cleanup
         fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
     }
 
