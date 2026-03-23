@@ -4250,7 +4250,7 @@ The scripts are open source and available on <a href="https://github.com/prefix-
 <div class="tabbed-block">
 <ol>
 <li><strong>Initialize a workspace:</strong>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi init hello-world
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi init hello-world
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>cd hello-world
 </span></code></pre></div></li>
 <li><strong>Add dependencies into the default environment:</strong>
@@ -4289,24 +4289,25 @@ The scripts are open source and available on <a href="https://github.com/prefix-
 <div class="tabbed-block">
 <ol>
 <li><strong>Initialize a workspace:</strong>
-    <code>pixi init pixi-rust
-    cd pixi-rust</code></li>
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi init pixi-rust
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>cd pixi-rust
+</span></code></pre></div></li>
 <li><strong>Add dependencies:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi add rust
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi add rust
 </span></code></pre></div></li>
 <li><strong>Create your workspace:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi run cargo init
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi run cargo init
 </span></code></pre></div></li>
 <li><strong>Add a task:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi task add start cargo run
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi task add start cargo run
 </span></code></pre></div></li>
 <li><strong>Run the task:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi run start
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi run start
 </span></code></pre></div>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>✨ Pixi task (start): cargo run
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>     Running `target/debug/pixi-rust`
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>Hello, world!
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>✨ Pixi task (start): cargo run
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>     Running `target/debug/pixi-rust`
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>Hello, world!
 </span></code></pre></div></li>
 </ol>
 <p>This is more of an example to show off how easy it is to use Pixi with Rust.
@@ -4316,35 +4317,35 @@ More details on how to use Pixi with Rust can be found in the <a href="tutorials
 <div class="tabbed-block">
 <ol>
 <li><strong>Initialize a workspace:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi init pixi-node
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>cd pixi-node
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi init pixi-node
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>cd pixi-node
 </span></code></pre></div></li>
 <li><strong>Add dependencies:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi add nodejs
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi add nodejs
 </span></code></pre></div></li>
 <li><strong>Create your script:</strong>
-    <div class="language-js highlight"><span class="filename">hello.js</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Hello Pixi fans!&quot;</span><span class="p">);</span>
+    <div class="language-js highlight"><span class="filename">hello.js</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Hello Pixi fans!&quot;</span><span class="p">);</span>
 </span></code></pre></div></li>
 <li><strong>Add a task:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi task add start &quot;node hello.js&quot;
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi task add start &quot;node hello.js&quot;
 </span></code></pre></div></li>
 <li><strong>Run the task:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi run start
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi run start
 </span></code></pre></div>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>✨ Pixi task (start): node hello.js
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>Hello Pixi fans!
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>✨ Pixi task (start): node hello.js
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>Hello Pixi fans!
 </span></code></pre></div></li>
 </ol>
 </div>
 <div class="tabbed-block">
 <ol>
 <li><strong>Initialize a workspace:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi init pixi-ros2 -c https://prefix.dev/conda-forge -c &quot;https://prefix.dev/robostack-humble&quot;
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>cd pixi-ros2
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi init pixi-ros2 -c https://prefix.dev/conda-forge -c &quot;https://prefix.dev/robostack-humble&quot;
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>cd pixi-ros2
 </span></code></pre></div></li>
 <li>
 <p><strong>Add dependencies:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi add ros-humble-desktop
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pixi add ros-humble-desktop
 </span></code></pre></div></p>
 <details class="tip">
 <summary>This might take a minute</summary>
@@ -4353,7 +4354,7 @@ More details on how to use Pixi with Rust can be found in the <a href="tutorials
 </li>
 <li>
 <p><strong>Start Rviz</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pixi run rviz2
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>pixi run rviz2
 </span></code></pre></div></p>
 </li>
 </ol>
@@ -4362,13 +4363,13 @@ More details on how to use Pixi with Rust can be found in the <a href="tutorials
 <div class="tabbed-block">
 <ol>
 <li>Install all your favorite tools with a single command:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>terraform<span class="w"> </span>ansible<span class="w"> </span>k9s<span class="w"> </span>make
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>terraform<span class="w"> </span>ansible<span class="w"> </span>k9s<span class="w"> </span>make
 </span></code></pre></div></li>
 <li>Use them everywhere:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>ansible<span class="w"> </span>--version
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>terraform<span class="w"> </span>--version
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>k9s<span class="w"> </span>version
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>make<span class="w"> </span>--version
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>ansible<span class="w"> </span>--version
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>terraform<span class="w"> </span>--version
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>k9s<span class="w"> </span>version
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>make<span class="w"> </span>--version
 </span></code></pre></div></li>
 </ol>
 </div>

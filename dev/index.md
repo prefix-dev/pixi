@@ -159,7 +159,12 @@ ______________________________________________________________________
 
 More details on how to use Pixi with Python can be found in the [Python tutorial](python/tutorial/).
 
-1. **Initialize a workspace:** `pixi init pixi-rust cd pixi-rust`
+1. **Initialize a workspace:**
+
+   ```text
+   pixi init pixi-rust
+   cd pixi-rust
+   ```
 
 1. **Add dependencies:**
 
