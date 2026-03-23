@@ -10,21 +10,25 @@ fn temp_file_for(path: &Path) -> std::io::Result<tempfile::NamedTempFile> {
             "path has no parent directory",
         )
     })?;
-
+ 
     let prefix = format!(
         ".{}.",
         path.file_name().and_then(|n| n.to_str()).unwrap_or("tmp")
     );
-
-    match tempfile::Builder::new().prefix(&prefix).tempfile_in(dir) {
-        Ok(file) => Ok(file),
-        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => tempfile::Builder::new()
-            .prefix(&prefix)
-            .tempfile_in(std::env::temp_dir()),
-        Err(e) => Err(e),
-    }
+ 
+    let target_dir = if std::fs::metadata(dir)?.permissions().readonly() {
+        tracing::warn!(
+            path = %path.display(),
+            "parent directory is read-only; temp file will be created in the system temp dir. \
+             Write will not be atomic."
+        );
+        std::env::temp_dir()
+    } else {
+        dir.to_path_buf()
+    };
+ 
+    tempfile::Builder::new().prefix(&prefix).tempfile_in(target_dir)
 }
-
 /// Atomically write contents to a file by first writing to a temporary file and
 /// then renaming it to the target path.
 ///
