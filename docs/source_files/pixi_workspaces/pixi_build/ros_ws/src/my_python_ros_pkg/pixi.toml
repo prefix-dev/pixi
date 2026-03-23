@@ -1,8 +1,5 @@
 [package.build.backend]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-ros"
 version = "*"
 
