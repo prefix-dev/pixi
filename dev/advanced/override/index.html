@@ -4057,7 +4057,7 @@ This will override the version of <code>numpy</code> used by all dependencies to
 This is useful if you need a specific version of a library that is not compatible with the versions specified by your dependencies.</p>
 <h3 id="override-a-dependency-version-in-a-specific-feature">Override a dependency version in a specific feature<a class="headerlink" href="#override-a-dependency-version-in-a-specific-feature" title="Permanent link">#</a></h3>
 <p>it can also be specified in feature level,
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[features.dev.pypi-options.dependency-overrides]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[feature.dev.pypi-options.dependency-overrides]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.0.0&quot;</span>
 </span></code></pre></div>
 This will override the version of <code>numpy</code> used by all dependencies in the <code>dev</code> feature to be at least <code>2.0.0</code>, regardless of what the dependencies specify when the <code>dev</code> feature is enabled.</p>
