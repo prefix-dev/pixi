@@ -1,4 +1,5 @@
 use std::path::Path;
+use fs_err::tokio as tokio_fs;
 
 /// Build a [`tempfile::NamedTempFile`] in the same directory as `path`, using
 /// the original filename as the prefix so the temp file is easily identifiable
@@ -36,19 +37,24 @@ fn temp_file_for(path: &Path) -> std::io::Result<tempfile::NamedTempFile> {
 /// If the write fails (e.g., due to disk full), the original file remains
 /// untouched.
 pub async fn atomic_write(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-    // Create a temp file in the same directory to ensure it's on the same
-    // filesystem, which is required for atomic rename.
     let temp_file = temp_file_for(path)?;
     let temp_path = temp_file.into_temp_path();
-
-    // Write contents to the temp file. If this fails (e.g. disk full), the temp
-    // file is automatically cleaned up when `temp_path` is dropped.
-    tokio::fs::write(&temp_path, contents).await?;
-
-    // Atomically rename the temp file to the target path.
-    temp_path.persist(path).map_err(|e| e.error)?;
-
-    Ok(())
+ 
+    let contents_ref = contents.as_ref();
+    tokio_fs::write(&temp_path, contents_ref).await?;
+ 
+    match temp_path.persist(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.error.kind() == std::io::ErrorKind::PermissionDenied => {
+            tracing::warn!(
+                path = %path.display(),
+                "atomic rename failed due to permissions; falling back to direct write. \
+                 Write will not be atomic."
+            );
+            tokio_fs::write(path, contents_ref).await
+        }
+        Err(e) => Err(e.error),
+    }
 }
 
 /// Synchronous version of [`atomic_write`].
