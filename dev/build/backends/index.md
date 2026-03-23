@@ -24,23 +24,17 @@ Install a certain build backend by adding it to the `package.build` section of t
 
 ```toml
 [package.build.backend]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-python"
-version = "0.1.*"
+version = "0.*"
 ```
 
 For custom backend channels, you can add the channel to the `channels` section of the manifest file:
 
 ```toml
 [package.build]
-backend = { name = "pixi-build-python", version = "0.4.*" }
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+backend = { name = "pixi-build-python", version = "0.*" }
+channels = ["https://prefix.dev/conda-forge"]
 ```
 
 ### Overriding the Build Backend

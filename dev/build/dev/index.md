@@ -18,7 +18,7 @@ preview = ['pixi-build']
 
 [package.build.backend]
 name = "pixi-build-rust"
-version = "0.4.*"
+version = "0.*"
 ```
 
 Now you can use Pixi to build the package into a conda package:
@@ -60,7 +60,7 @@ preview = ['pixi-build']
 
 [package.build.backend]
 name = "pixi-build-rust"
-version = "0.4.*"
+version = "0.*"
 
 [package.build-dependencies]
 cmake = "*"

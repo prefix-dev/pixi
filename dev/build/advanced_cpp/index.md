@@ -38,7 +38,7 @@ name = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+backend = { name = "pixi-build-rattler-build", version = "0.*" }
 ```
 
 ## The `recipe.yaml` file

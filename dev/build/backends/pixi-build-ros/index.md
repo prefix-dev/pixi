@@ -29,7 +29,6 @@ To use the ROS backend in your `pixi.toml`, add it to your package's build confi
 [workspace]
 preview = ["pixi-build"]
 channels = [
-    "https://prefix.dev/pixi-build-backends",
     "https://prefix.dev/robostack-jazzy",  # or robostack-humble, robostack-noetic, etc.
     "https://prefix.dev/conda-forge"
 ]

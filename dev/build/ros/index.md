@@ -84,10 +84,7 @@ src/my_python_ros_pkg/pixi.toml
 
 ```toml
 [package.build.backend]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-ros"
 version = "*"
 
@@ -145,10 +142,7 @@ src/my_cmake_ros_pkg/pixi.toml
 
 ```toml
 [package.build.backend]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-ros"
 version = "*"
 

@@ -6193,7 +6193,7 @@ name = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+backend = { name = "pixi-build-rattler-build", version = "0.*" }
 ```
 
 ## The `recipe.yaml` file
@@ -6293,23 +6293,17 @@ Install a certain build backend by adding it to the `package.build` section of t
 
 ```toml
 [package.build.backend]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-python"
-version = "0.1.*"
+version = "0.*"
 ```
 
 For custom backend channels, you can add the channel to the `channels` section of the manifest file:
 
 ```toml
 [package.build]
-backend = { name = "pixi-build-python", version = "0.4.*" }
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+backend = { name = "pixi-build-python", version = "0.*" }
+channels = ["https://prefix.dev/conda-forge"]
 ```
 
 ### Overriding the Build Backend
@@ -6456,7 +6450,7 @@ name = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "0.3.*" }
+backend = { name = "pixi-build-cmake", version = "0.*" }
 
 [package.build.config]
 extra-args = ["-DCMAKE_BUILD_TYPE=Release"] # (9)!
@@ -6666,7 +6660,7 @@ preview = ['pixi-build']
 
 [package.build.backend]
 name = "pixi-build-rust"
-version = "0.4.*"
+version = "0.*"
 ```
 
 Now you can use Pixi to build the package into a conda package:
@@ -6708,7 +6702,7 @@ preview = ['pixi-build']
 
 [package.build.backend]
 name = "pixi-build-rust"
-version = "0.4.*"
+version = "0.*"
 
 [package.build-dependencies]
 cmake = "*"
@@ -6778,7 +6772,7 @@ version = "0.1.0"
 # We are using `pixi-build-python` in order to build a Python package
 [package.build.backend]
 name = "pixi-build-python"
-version = "0.4.*"
+version = "0.*"
 
 
 # The Python package `python_rich` uses `hatchling` as Python build backend
@@ -6816,7 +6810,7 @@ Pixi backends describe how to build a conda package, for a certain language or b
 ```toml
 [package.build.backend]
 name = "pixi-build-python"
-version = "0.4.*"
+version = "0.*"
 ```
 
 We need to add our package `python_rich` as source dependency to the workspace.
@@ -7074,7 +7068,7 @@ name = "python_rich"
 version = "0.1.0"
 
 [package.build] # (5)!
-backend = { name = "pixi-build-python", version = "0.4.*" }
+backend = { name = "pixi-build-python", version = "0.*" }
 
 [package.host-dependencies] # (6)!
 hatchling = "==1.26.3"
@@ -7197,10 +7191,7 @@ src/my_python_ros_pkg/pixi.toml
 
 ```toml
 [package.build.backend]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-ros"
 version = "*"
 
@@ -7258,10 +7249,7 @@ src/my_cmake_ros_pkg/pixi.toml
 
 ```toml
 [package.build.backend]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-ros"
 version = "*"
 
@@ -7859,7 +7847,7 @@ name = "greetings"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-mojo", version = "0.1.*" }
+backend = { name = "pixi-build-mojo", version = "0.*" }
 
 [tasks]
 
@@ -8987,7 +8975,6 @@ To use the ROS backend in your `pixi.toml`, add it to your package's build confi
 [workspace]
 preview = ["pixi-build"]
 channels = [
-    "https://prefix.dev/pixi-build-backends",
     "https://prefix.dev/robostack-jazzy",  # or robostack-humble, robostack-noetic, etc.
     "https://prefix.dev/conda-forge"
 ]
@@ -14567,7 +14554,7 @@ More documentation on the backends can be found in the [build backend documentat
 
 ```toml
 [package.build]
-backend = { name = "pixi-build-cmake", version = "0.3.*" }
+backend = { name = "pixi-build-cmake", version = "0.*" }
 # not required:
 channels = ["https://prefix.dev/conda-forge"]
 config = { key = "value" }                    # Optional configuration, specific to the build backend
@@ -14579,7 +14566,7 @@ For platform-specific build configuration, use the `[package.build.target.<platf
 
 ```toml
 [package.build]
-backend = { name = "pixi-build-cmake", version = "0.3.*" }
+backend = { name = "pixi-build-cmake", version = "0.*" }
 
 [package.build.config]
 # Base configuration applied to all platforms
