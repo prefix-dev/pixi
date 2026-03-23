@@ -92,6 +92,20 @@ mod tests {
 
         assert_eq!(temp.path().parent().unwrap(), dir.path());
     }
+    
+    #[test]
+    fn test_temp_file_has_correct_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("pixi.toml");
+
+        let temp = temp_file_for(&target).unwrap();
+        let name = temp.path().file_name().unwrap().to_str().unwrap();
+
+        assert!(
+            name.starts_with(".pixi.toml."),
+            "expected prefix `.pixi.toml.`, got `{name}`"
+        );
+    }
 
     #[test]
     #[cfg(unix)]
@@ -107,21 +121,38 @@ mod tests {
         let temp = temp_file_for(&target).unwrap();
 
         assert_eq!(temp.path().parent().unwrap(), std::env::temp_dir());
+
         // resetting the permissions for cleanup
         fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
     }
 
-    #[test]
-    fn temp_file_has_correct_prefix() {
+    /// Integration test: when the parent directory is read-only, `atomic_write`
+    /// should fall back to a direct write and the file contents must be correct.
+    ///
+    /// Note: on Unix, a read-only directory still allows writing to existing
+    /// files within it (controlled by the file's own permissions), so the
+    /// fallback `tokio_fs::write` succeeds even though rename cannot.
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_temp_atomic_write_falls_back_when_dir_not_writable() {
+        use std::os::unix::fs::PermissionsExt;
+ 
         let dir = tempfile::tempdir().unwrap();
         let target = dir.path().join("pixi.toml");
+        let contents = b"[project]\nname = \"test\"";
+ 
+        fs::write(&target, b"").unwrap();
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
+ 
+        atomic_write(&target, contents).await.unwrap();
+ 
+        let written = fs::read(&target).unwrap();
+        assert_eq!(written, contents);
 
-        let temp = temp_file_for(&target).unwrap();
-        let name = temp.path().file_name().unwrap().to_str().unwrap();
-
-        assert!(
-            name.starts_with(".pixi.toml."),
-            "expected prefix `.pixi.toml.`, got `{name}`"
-        );
+        // Reset permissions for clean up
+        fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
     }
+
+
+
 }
