@@ -83,7 +83,6 @@ pub fn atomic_write_sync(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
     fn test_temp_file_created_in_same_dir_when_writable() {
@@ -118,14 +117,14 @@ mod tests {
         let target = dir.path().join("pixi.toml");
         fs_err::write(&target, b"[project]").unwrap();
 
-        fs_err::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
+        fs_err::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
 
         let temp = temp_file_for(&target).unwrap();
 
         assert_eq!(temp.path().parent().unwrap(), std::env::temp_dir());
 
         // resetting the permissions for cleanup
-        fs_err::set_permissions(dir.path(), fs::Permissions::from_mode(0o755)).unwrap();
+        fs_err::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
     }
 
     /// Integration test: when the parent directory is read-only, `atomic_write`
@@ -144,7 +143,7 @@ mod tests {
         let contents = b"[project]\nname = \"test\"";
 
         tokio_fs::write(&target, b"").await.unwrap();
-        tokio_fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555))
+        tokio_fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555))
             .await
             .unwrap();
 
@@ -154,7 +153,7 @@ mod tests {
         assert_eq!(written, contents);
 
         // Reset permissions for clean up
-        tokio_fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o755))
+        tokio_fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755))
             .await
             .unwrap();
     }
