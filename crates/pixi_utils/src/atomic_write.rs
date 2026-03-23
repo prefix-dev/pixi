@@ -60,10 +60,22 @@ pub async fn atomic_write(path: &Path, contents: impl AsRef<[u8]>) -> std::io::R
 /// Synchronous version of [`atomic_write`].
 pub fn atomic_write_sync(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
     let mut temp_file = temp_file_for(path)?;
-    std::io::Write::write_all(&mut temp_file, contents.as_ref())?;
-    temp_file.persist(path).map_err(|e| e.error)?;
-
-    Ok(())
+ 
+    let contents_ref = contents.as_ref();
+    std::io::Write::write_all(&mut temp_file, contents_ref)?;
+ 
+    match temp_file.persist(path) {
+        Ok(_) => Ok(()),
+        Err(e) if e.error.kind() == std::io::ErrorKind::PermissionDenied => {
+            tracing::warn!(
+                path = %path.display(),
+                "atomic rename failed due to permissions; falling back to direct write. \
+                 Write will not be atomic."
+            );
+            std::fs::write(path, contents_ref)
+        }
+        Err(e) => Err(e.error),
+    }
 }
 
 #[cfg(test)]
