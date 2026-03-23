@@ -21,7 +21,7 @@ version = "0.1.0"
 [package.build.backend]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-python"
-version = "0.1.*"
+version = "0.*"
 # --8<-- [end:build-system]
 
 
