@@ -1,14 +1,14 @@
-This guide helps you transition from `uv` to `pixi`.
-It compares commands and concepts between the two tools, and explains what `pixi` adds on top: the full conda ecosystem for managing non-Python dependencies, system libraries, and multi-language projects.
+This guide helps you transition from uv to Pixi.
+It compares commands and concepts between the two tools, and explains what Pixi adds on top: the full conda ecosystem for managing non-Python dependencies, system libraries, and multi-language projects.
 
 ## Why Pixi?
 
-`uv` is a fast Python package manager, but it's limited to the PyPI ecosystem. `pixi` builds on conda, which brings several fundamental advantages:
+uv is a fast Python package manager, but it's limited to the PyPI ecosystem. Pixi builds on conda, which brings several fundamental advantages:
 
-- **System dependencies included.** Need CUDA, OpenSSL, compilers, or C libraries? Conda packages bundle them. With `uv`, you have to install these yourself via `apt`, `brew`, Docker, or manual setup.
-- **Multi-language support.** A single `pixi` workspace can manage Python, R, C/C++, Rust, Node.js, and more, while `uv` only handles Python.
+- **System dependencies included.** Need CUDA, OpenSSL, compilers, or C libraries? Conda packages bundle them. With uv, you have to install these yourself via `apt`, `brew`, Docker, or manual setup.
+- **Multi-language support.** A single Pixi workspace can manage Python, R, C/C++, Rust, Node.js, and more, while uv only handles Python.
 - **Binary-first distribution.** Conda packages are pre-compiled, so you rarely need a build toolchain on your machine. No waiting for source builds or debugging missing C headers.
-- **Complete environment modeling.** Conda environments contain everything (interpreters, libraries, headers, compilers, CLI tools), all managed by the solver. With `uv`, your Python environment depends on whatever your system happens to provide.
+- **Complete environment modeling.** Conda environments contain everything (interpreters, libraries, headers, compilers, CLI tools), all managed by the solver. With uv, your Python environment depends on whatever your system happens to provide.
 - **True cross-platform lockfiles.** Pixi solves for all target platforms in a single lockfile, even platforms you're not currently running on.
 - **Built-in task runner.** Define and run tasks directly in your manifest, no need for `Makefile`, `just`, or shell scripts.
 
@@ -42,7 +42,7 @@ It compares commands and concepts between the two tools, and explains what `pixi
 
 ## Project configuration
 
-uv uses `pyproject.toml` for project configuration and `uv.toml` for tool-level settings. Pixi supports both `pixi.toml` (its native format) and `pyproject.toml` for project configuration, and uses a separate `pixi` [configuration file](../reference/pixi_configuration.md) for tool-level settings.
+uv uses `pyproject.toml` for project configuration and `uv.toml` for tool-level settings. Pixi supports both `pixi.toml` (its native format) and `pyproject.toml` for project configuration, and uses a separate [configuration file](../reference/pixi_configuration.md) for tool-level settings.
 
 === "uv (pyproject.toml)"
 
@@ -103,13 +103,13 @@ uv uses `pyproject.toml` for project configuration and `uv.toml` for tool-level 
     test = { features = ["test"], solve-group = "default" }
     ```
 
-With `pyproject.toml`, pixi reads `[project.dependencies]` as PyPI dependencies and `[tool.pixi.dependencies]` as conda dependencies. See the [pyproject.toml guide](../python/pyproject_toml.md) for details.
+With `pyproject.toml`, Pixi reads `[project.dependencies]` as PyPI dependencies and `[tool.pixi.dependencies]` as conda dependencies. See the [pyproject.toml guide](../python/pyproject_toml.md) for details.
 
 ## Concepts mapping
 
 ### Python version management
 
-uv manages Python installations separately with `uv python install`. In pixi, Python is just another package:
+uv manages Python installations separately with `uv python install`. In Pixi, Python is just another package:
 
 ```shell
 pixi add python=3.12    # add Python as a conda dependency
@@ -119,7 +119,7 @@ Python gets version-locked in your lockfile alongside everything else, so there'
 
 ### Virtual environments
 
-uv creates a single `.venv/` directory per project. Pixi creates environments under `.pixi/envs/` and supports **multiple named environments** that exist simultaneously in one workspace:
+uv creates a single `.venv/` directory per project. Pixi creates environments under `.pixi/envs/`, and supports **multiple named environments** that exist simultaneously in one workspace:
 
 ```toml title="pixi.toml"
 [environments]
@@ -157,7 +157,7 @@ Both tools support multi-package workspaces. uv defines workspace members with a
 members = ["packages/*"]
 ```
 
-Pixi takes a different approach: you reference local packages as `path` dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
+Pixi takes a different approach: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
 
 ```toml title="pixi.toml"
 [workspace]
@@ -232,7 +232,7 @@ Both tools install CLI tools globally in isolated environments:
 | `uv tool list`                 | `pixi global list`                 |
 | `uv tool uninstall ruff`       | `pixi global uninstall ruff`       |
 
-Because pixi global tools come from the conda ecosystem, you can install non-Python tools too:
+Because Pixi global tools come from the conda ecosystem, you can install non-Python tools too:
 
 ```shell
 pixi global install git bat ripgrep starship
@@ -277,7 +277,7 @@ Pixi builds packages via [pixi-build](../build/getting_started.md), which produc
 
 ### CI with GitHub Actions
 
-uv provides [`astral-sh/setup-uv`](https://github.com/astral-sh/setup-uv) for GitHub Actions. Pixi has [`prefix-dev/setup-pixi`](https://github.com/prefix-dev/setup-pixi), which installs pixi, sets up caching, and runs `pixi install` in your workflow:
+uv provides [`astral-sh/setup-uv`](https://github.com/astral-sh/setup-uv) for GitHub Actions. Pixi has [`prefix-dev/setup-pixi`](https://github.com/prefix-dev/setup-pixi), which installs Pixi, sets up caching, and runs `pixi install` in your workflow:
 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.8.8
@@ -289,7 +289,7 @@ See [GitHub Actions](../integration/ci/github_actions.md) for more details.
 
 uv provides a `uv pip` compatibility layer (`uv pip install`, `uv pip compile`, etc.).
 
-Pixi has no pip compatibility layer. It manages all dependencies declaratively through the manifest file. If you need pip for a specific use case, you can install it as a dependency:
+Pixi has no pip compatibility layer, it manages all dependencies declaratively through the manifest file. If you need pip for a specific use case, you can install it as a dependency:
 
 ```shell
 pixi add pip
@@ -298,7 +298,7 @@ pixi run pip install <some-package>
 ```
 
 !!! warning "Prefer `pixi add --pypi`"
-    Using `pip` inside a pixi environment bypasses the solver and lockfile.
+    Using `pip` inside a Pixi environment bypasses the solver and lockfile.
     Always prefer `pixi add --pypi <package>` to keep dependencies tracked and reproducible.
 
 ## Why the conda ecosystem matters
@@ -307,9 +307,9 @@ If you're coming from uv, you might wonder why conda packages matter when PyPI a
 
 ### System dependencies are included
 
-With `uv`, installing `scipy` or `pytorch` often requires system-level libraries (BLAS, LAPACK, CUDA) to already be on your machine. This leads to platform-specific setup instructions, Docker containers just for build deps, or cryptic build failures.
+With uv, installing `scipy` or `pytorch` often requires system-level libraries (BLAS, LAPACK, CUDA) to already be on your machine. This leads to platform-specific setup instructions, Docker containers just for build deps, or cryptic build failures.
 
-With `pixi`, these system dependencies are conda packages, managed by the solver like any other dependency:
+With Pixi, these system dependencies are conda packages, managed by the solver like any other dependency:
 
 ```shell
 # CUDA runtime, cuDNN, and all system libraries are resolved automatically
@@ -334,7 +334,7 @@ For a deeper dive into the differences between the conda and PyPI ecosystems, se
 
 ## Migrating a project
 
-To migrate an existing uv project to pixi, start by initializing pixi in your project directory:
+To migrate an existing uv project to Pixi, start by initializing Pixi in your project directory:
 
 === "pixi.toml"
 
