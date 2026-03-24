@@ -28,7 +28,7 @@ It compares commands and concepts between the two tools, and explains what `pixi
 | Running a command         | `uv run python main.py`           | `pixi run python main.py`                                                                 |
 | Running a standalone script | `uv run script.py` (PEP 723)   | `pixi exec` via [shebang](../advanced/shebang.md)                                        |
 | Running a task            | _(no built-in task runner)_       | `pixi run my_task`                                                                        |
-| Locking dependencies      | `uv lock`                         | Automatic on `pixi add` / `pixi install`                                                  |
+| Locking dependencies      | `uv lock`                         | `pixi lock` (also runs automatically on `pixi add` / `pixi install`)                     |
 | Installing Python         | `uv python install 3.12`          | `pixi add python=3.12` (managed as a regular dependency)                                  |
 | Ephemeral tool execution  | `uvx ruff check`                  | `pixi exec ruff check`                                                                    |
 | Global tool install       | `uv tool install ruff`            | `pixi global install ruff`                                                                |
@@ -42,7 +42,7 @@ It compares commands and concepts between the two tools, and explains what `pixi
 
 ## Project configuration
 
-uv uses `pyproject.toml` exclusively. Pixi supports both `pixi.toml` (its native format) and `pyproject.toml`.
+uv uses `pyproject.toml` for project configuration and `uv.toml` for tool-level settings. Pixi supports both `pixi.toml` (its native format) and `pyproject.toml` for project configuration, and uses a separate `pixi` [configuration file](../reference/pixi_configuration.md) for tool-level settings.
 
 === "uv (pyproject.toml)"
 
