@@ -129,7 +129,7 @@ docs = ["docs"]
 cuda = ["cuda"]
 ```
 
-Each environment can have completely different (even conflicting) dependencies, and pixi keeps them all installed side by side. For example, you can have one environment with `numpy 1.x` and another with `numpy 2.x`, both ready to use without reinstalling anything.
+Each environment can have completely different (even conflicting) dependencies, and Pixi keeps them all installed side by side. For example, you can have one environment with `numpy 1.x` and another with `numpy 2.x`, both ready to use without reinstalling anything.
 
 uv can resolve conflicting dependency groups separately in the lockfile via `tool.uv.conflicts`, but it still uses a single `.venv/` that you swap between with `uv sync --group <name>`. Pixi environments are independent directories, so switching is instant.
 
