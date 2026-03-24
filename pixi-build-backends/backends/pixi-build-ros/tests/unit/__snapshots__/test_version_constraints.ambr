@@ -1,16 +1,36 @@
 # serializer version: 1
 # name: test_generate_recipe_with_explicit_package_xml_path
   '''
-  context: {}
+  schema_version: 1
   package:
     name: ros-noetic-custom-ros
     version: 0.0.1
-  source: []
   build:
-    script:
-      content: ''
-      env: {}
-      secrets: []
+    script: {}
+    python:
+      entry_points: []
+      skip_pyc_compilation: []
+      use_python_app_entrypoint: false
+    skip: []
+    always_copy_files: []
+    always_include_files: []
+    merge_build_and_host_envs: false
+    files: []
+    dynamic_linking:
+      rpaths: []
+      binary_relocation: true
+      missing_dso_allowlist: []
+      rpath_allowlist: []
+    variant:
+      use_keys: []
+      ignore_keys: []
+    prefix_detection:
+      force_file_type:
+        text: []
+        binary: []
+      ignore: false
+      ignore_binary_files: false
+    post_process: []
   requirements:
     build:
     - ros-noetic-catkin
@@ -61,27 +81,45 @@
     - tinyxml2 ==10.0.0
     - asio <10.0.0
     - ros-distro-mutex
-    run_constraints: []
-  tests: []
   about:
-    license: LicenseRef-Apache License 2.0
     summary: Demo
     description: Demo
+  extra: {}
   
   '''
 # ---
 # name: test_generate_recipe_with_mutex_version
   '''
-  context: {}
+  schema_version: 1
   package:
     name: custom_ros
     version: 0.0.1
-  source: []
   build:
-    script:
-      content: ''
-      env: {}
-      secrets: []
+    script: {}
+    python:
+      entry_points: []
+      skip_pyc_compilation: []
+      use_python_app_entrypoint: false
+    skip: []
+    always_copy_files: []
+    always_include_files: []
+    merge_build_and_host_envs: false
+    files: []
+    dynamic_linking:
+      rpaths: []
+      binary_relocation: true
+      missing_dso_allowlist: []
+      rpath_allowlist: []
+    variant:
+      use_keys: []
+      ignore_keys: []
+    prefix_detection:
+      force_file_type:
+        text: []
+        binary: []
+      ignore: false
+      ignore_binary_files: false
+    post_process: []
   requirements:
     build:
     - ros-noetic-catkin
@@ -133,27 +171,45 @@
     - tinyxml2 ==10.0.0
     - asio <10.0.0
     - ros-distro-mutex
-    run_constraints: []
-  tests: []
   about:
-    license: LicenseRef-Apache License 2.0
     summary: Demo
     description: Demo
+  extra: {}
   
   '''
 # ---
 # name: test_generate_recipe_with_versions
   '''
-  context: {}
+  schema_version: 1
   package:
     name: ros-noetic-custom-ros
     version: 0.0.1
-  source: []
   build:
-    script:
-      content: ''
-      env: {}
-      secrets: []
+    script: {}
+    python:
+      entry_points: []
+      skip_pyc_compilation: []
+      use_python_app_entrypoint: false
+    skip: []
+    always_copy_files: []
+    always_include_files: []
+    merge_build_and_host_envs: false
+    files: []
+    dynamic_linking:
+      rpaths: []
+      binary_relocation: true
+      missing_dso_allowlist: []
+      rpath_allowlist: []
+    variant:
+      use_keys: []
+      ignore_keys: []
+    prefix_detection:
+      force_file_type:
+        text: []
+        binary: []
+      ignore: false
+      ignore_binary_files: false
+    post_process: []
   requirements:
     build:
     - ros-noetic-catkin
@@ -204,27 +260,45 @@
     - tinyxml2 ==10.0.0
     - asio <10.0.0
     - ros-distro-mutex
-    run_constraints: []
-  tests: []
   about:
-    license: LicenseRef-Apache License 2.0
     summary: Demo
     description: Demo
+  extra: {}
   
   '''
 # ---
 # name: test_generate_recipe_with_versions_in_model_and_package
   '''
-  context: {}
+  schema_version: 1
   package:
     name: custom_ros
     version: 0.0.1
-  source: []
   build:
-    script:
-      content: ''
-      env: {}
-      secrets: []
+    script: {}
+    python:
+      entry_points: []
+      skip_pyc_compilation: []
+      use_python_app_entrypoint: false
+    skip: []
+    always_copy_files: []
+    always_include_files: []
+    merge_build_and_host_envs: false
+    files: []
+    dynamic_linking:
+      rpaths: []
+      binary_relocation: true
+      missing_dso_allowlist: []
+      rpath_allowlist: []
+    variant:
+      use_keys: []
+      ignore_keys: []
+    prefix_detection:
+      force_file_type:
+        text: []
+        binary: []
+      ignore: false
+      ignore_binary_files: false
+    post_process: []
   requirements:
     build:
     - ros-noetic-catkin
@@ -275,12 +349,10 @@
     - tinyxml2 ==10.0.0
     - asio >=9.0,<10.0.0,<10.0.0,<10.0.0
     - ros-distro-mutex
-    run_constraints: []
-  tests: []
   about:
-    license: LicenseRef-Apache License 2.0
     summary: Demo
     description: Demo
+  extra: {}
   
   '''
 # ---

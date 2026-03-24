@@ -103,7 +103,7 @@ impl Dependencies {
         let mut constraints = DependencyMap::default();
 
         for depend in &output.depends {
-            let name = rattler_conda_types::PackageName::from_str(&depend.name)?;
+            let name = rattler_conda_types::PackageName::from_str(depend.name.as_str())?;
 
             // Match directly on PackageSpec
             match &depend.spec {
@@ -129,7 +129,7 @@ impl Dependencies {
         }
 
         for constraint in &output.constraints {
-            let name = rattler_conda_types::PackageName::from_str(&constraint.name)?;
+            let name = rattler_conda_types::PackageName::from_str(constraint.name.as_str())?;
 
             // Match on ConstraintSpec enum
             match &constraint.spec {
@@ -402,7 +402,7 @@ impl PixiRunExports {
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let name = PackageName::from_str(&named_spec.name)?;
+                    let name = PackageName::from_str(named_spec.name.as_str())?;
 
                     let spec = match named_spec.spec {
                         pbt::PackageSpec::Binary(binary) => {
@@ -428,7 +428,7 @@ impl PixiRunExports {
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let name = PackageName::from_str(&named_spec.name)?;
+                    let name = PackageName::from_str(named_spec.name.as_str())?;
 
                     // Match on ConstraintSpec enum
                     let spec = match named_spec.spec {

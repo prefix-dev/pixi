@@ -49,3 +49,6 @@ uv-distribution = { workspace = true }
 uv-distribution-types = { workspace = true }
 uv-normalize = { workspace = true }
 uv-types = { workspace = true }
+
+[package.metadata.cargo-shear]
+ignored = ["rattler_repodata_gateway"]

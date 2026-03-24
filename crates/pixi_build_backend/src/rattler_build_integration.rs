@@ -40,7 +40,7 @@ pub async fn get_build_output(
     output_dir: PathBuf,
 ) -> miette::Result<Vec<Output>> {
     let recipe_path = recipe_folder.join("recipe.yaml");
-    let recipe_code = generated_recipe.recipe.to_yaml_pretty().into_diagnostic()?;
+    let recipe_code = serde_yaml::to_string(&generated_recipe.recipe).into_diagnostic()?;
 
     // Create source for error reporting
     let source = rattler_build_recipe::source_code::Source::from_string(

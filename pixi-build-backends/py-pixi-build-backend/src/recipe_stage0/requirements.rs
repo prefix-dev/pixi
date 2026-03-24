@@ -1,14 +1,15 @@
+use pixi_build_backend::package_dependency::{PackageDependency, SourceMatchSpec};
 use pyo3::{pyclass, pymethods};
+use rattler_build_recipe::stage0::SerializableMatchSpec;
 use rattler_conda_types::MatchSpec;
-use recipe_stage0::matchspec::{PackageDependency, SerializableMatchSpec, SourceMatchSpec};
-use recipe_stage0::requirements::{PackageSpecDependencies, Selector};
-use std::collections::HashMap;
 use std::fmt::Display;
+
+use pixi_build_backend::specs_conversion::PackageSpecDependencies;
 
 #[pyclass]
 #[derive(Clone, Default)]
 pub struct PyPackageSpecDependencies {
-    pub(crate) inner: PackageSpecDependencies<PackageDependency>,
+    pub(crate) inner: PackageSpecDependencies,
 }
 
 #[pymethods]
@@ -21,7 +22,7 @@ impl PyPackageSpecDependencies {
     }
 
     #[getter]
-    pub fn build(&self) -> HashMap<String, PyPackageDependency> {
+    pub fn build(&self) -> std::collections::HashMap<String, PyPackageDependency> {
         self.inner
             .build
             .iter()
@@ -35,7 +36,7 @@ impl PyPackageSpecDependencies {
     }
 
     #[getter]
-    pub fn host(&self) -> HashMap<String, PyPackageDependency> {
+    pub fn host(&self) -> std::collections::HashMap<String, PyPackageDependency> {
         self.inner
             .host
             .iter()
@@ -49,7 +50,7 @@ impl PyPackageSpecDependencies {
     }
 
     #[getter]
-    pub fn run(&self) -> HashMap<String, PyPackageDependency> {
+    pub fn run(&self) -> std::collections::HashMap<String, PyPackageDependency> {
         self.inner
             .run
             .iter()
@@ -63,7 +64,7 @@ impl PyPackageSpecDependencies {
     }
 
     #[getter]
-    pub fn run_constraints(&self) -> HashMap<String, PyPackageDependency> {
+    pub fn run_constraints(&self) -> std::collections::HashMap<String, PyPackageDependency> {
         self.inner
             .run_constraints
             .iter()
@@ -125,7 +126,10 @@ impl PyPackageDependency {
     }
 
     pub fn package_name(&self) -> String {
-        self.inner.package_name().as_normalized().to_string()
+        self.inner
+            .package_name()
+            .map(|n| n.as_normalized().to_string())
+            .unwrap_or_default()
     }
 }
 
@@ -201,84 +205,13 @@ impl PySerializableMatchSpec {
     }
 }
 
-#[pyclass]
-#[derive(Clone)]
-pub struct PySelector {
-    pub(crate) inner: Selector,
-}
-
-#[pymethods]
-impl PySelector {
-    #[staticmethod]
-    pub fn unix() -> Self {
-        PySelector {
-            inner: Selector::Unix,
-        }
-    }
-
-    #[staticmethod]
-    pub fn linux() -> Self {
-        PySelector {
-            inner: Selector::Linux,
-        }
-    }
-
-    #[staticmethod]
-    pub fn win() -> Self {
-        PySelector {
-            inner: Selector::Win,
-        }
-    }
-
-    #[staticmethod]
-    pub fn macos() -> Self {
-        PySelector {
-            inner: Selector::MacOs,
-        }
-    }
-
-    #[staticmethod]
-    pub fn platform(platform: String) -> Self {
-        PySelector {
-            inner: Selector::Platform(platform),
-        }
-    }
-
-    pub fn is_unix(&self) -> bool {
-        matches!(self.inner, Selector::Unix)
-    }
-
-    pub fn is_linux(&self) -> bool {
-        matches!(self.inner, Selector::Linux)
-    }
-
-    pub fn is_win(&self) -> bool {
-        matches!(self.inner, Selector::Win)
-    }
-
-    pub fn is_macos(&self) -> bool {
-        matches!(self.inner, Selector::MacOs)
-    }
-
-    pub fn is_platform(&self) -> bool {
-        matches!(self.inner, Selector::Platform(_))
-    }
-
-    pub fn get_platform(&self) -> Option<String> {
-        match &self.inner {
-            Selector::Platform(p) => Some(p.clone()),
-            _ => None,
-        }
-    }
-}
-
-impl From<PackageSpecDependencies<PackageDependency>> for PyPackageSpecDependencies {
-    fn from(deps: PackageSpecDependencies<PackageDependency>) -> Self {
+impl From<PackageSpecDependencies> for PyPackageSpecDependencies {
+    fn from(deps: PackageSpecDependencies) -> Self {
         PyPackageSpecDependencies { inner: deps }
     }
 }
 
-impl From<PyPackageSpecDependencies> for PackageSpecDependencies<PackageDependency> {
+impl From<PyPackageSpecDependencies> for PackageSpecDependencies {
     fn from(py_deps: PyPackageSpecDependencies) -> Self {
         py_deps.inner
     }
@@ -311,17 +244,5 @@ impl From<SerializableMatchSpec> for PySerializableMatchSpec {
 impl From<PySerializableMatchSpec> for SerializableMatchSpec {
     fn from(py_spec: PySerializableMatchSpec) -> Self {
         py_spec.inner
-    }
-}
-
-impl From<Selector> for PySelector {
-    fn from(selector: Selector) -> Self {
-        PySelector { inner: selector }
-    }
-}
-
-impl From<PySelector> for Selector {
-    fn from(py_selector: PySelector) -> Self {
-        py_selector.inner
     }
 }

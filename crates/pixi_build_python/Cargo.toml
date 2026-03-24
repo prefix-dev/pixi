@@ -25,8 +25,8 @@ pep508_rs = { workspace = true }
 pixi_build_backend = { workspace = true }
 pixi_build_types = { workspace = true }
 pyproject-toml = { workspace = true }
+rattler_build_recipe = { workspace = true }
 rattler_conda_types = { workspace = true }
-recipe_stage0 = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

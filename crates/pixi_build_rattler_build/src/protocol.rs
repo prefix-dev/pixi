@@ -607,7 +607,7 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
                         match spec {
                             pixi_build_types::PackageSpec::Source(source_spec) => {
                                 // Source dependencies are allowed - they represent workspace packages
-                                workspace_deps.insert(name, source_spec);
+                                workspace_deps.insert(name.to_string(), source_spec);
                             }
                             pixi_build_types::PackageSpec::Binary(_) => {
                                 // Binary dependencies must be specified in the recipe, not here
