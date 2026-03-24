@@ -251,24 +251,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let package_path = dunce::canonicalize(&built_package.output_file)
             .expect("failed to canonicalize output file which must now exist");
 
-        let file_size = std::fs::metadata(&package_path).map(|m| m.len()).ok();
-
         let file_name = package_path
             .file_name()
             .expect("built package should have a file name")
-            .to_string_lossy();
+            .to_string_lossy()
+            .to_string();
 
-        let size_str = file_size
-            .map(|s| format!(" ({})", format_size(s)))
-            .unwrap_or_default();
+        let file_size = std::fs::metadata(&package_path)
+            .map(|m| indicatif::HumanBytes(m.len()).to_string())
+            .unwrap_or_else(|_| "unknown size".to_string());
 
         pixi_progress::println!(
-            "{}Successfully built '{}'{} -> {}",
+            "{}Successfully built '{}'",
             console::style(console::Emoji("✔ ", "")).green(),
             file_name,
-            size_str,
-            package_path.display()
         );
+        pixi_progress::println!("  Size: {}", file_size);
+        pixi_progress::println!("  Path: {}", package_path.display());
 
         built_package_paths.push(package_path);
     }
@@ -699,20 +698,3 @@ async fn upload_to_local_filesystem(
     Ok(())
 }
 
-/// Format a byte size into a human-readable string (e.g., "5.40 KiB").
-fn format_size(bytes: u64) -> String {
-    const KIB: f64 = 1024.0;
-    const MIB: f64 = KIB * 1024.0;
-    const GIB: f64 = MIB * 1024.0;
-
-    let bytes_f = bytes as f64;
-    if bytes_f >= GIB {
-        format!("{:.2} GiB", bytes_f / GIB)
-    } else if bytes_f >= MIB {
-        format!("{:.2} MiB", bytes_f / MIB)
-    } else if bytes_f >= KIB {
-        format!("{:.2} KiB", bytes_f / KIB)
-    } else {
-        format!("{} B", bytes)
-    }
-}
