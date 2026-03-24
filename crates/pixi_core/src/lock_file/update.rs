@@ -22,11 +22,9 @@ use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
-use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, PixiEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceMetadataSpec, executor::CancellationAwareFutures,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError, executor::CancellationAwareFutures,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -36,10 +34,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{
-    ParseLockFileError, PinnedBuildSourceSpec, PixiRecord, UnresolvedPixiRecord,
-    UnresolvedSourceRecord, VariantValue,
-};
+use pixi_record::{ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -49,9 +44,7 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{
-    Arch, ChannelUrl, GenericVirtualPackage, PackageName, ParseChannelError, Platform,
-};
+use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -68,8 +61,8 @@ use crate::{
     activation::CurrentEnvVarBehavior,
     environment::{
         CondaPrefixUpdated, EnvironmentFile, InstallFilter, LockFileUsage, LockedEnvironmentHash,
-        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
-        read_environment_file, write_environment_file,
+        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, read_environment_file,
+        write_environment_file,
     },
     lock_file::{
         self, reporter::SolveProgressBar,
@@ -496,7 +489,7 @@ pub struct LockFileDerivedData<'p> {
 
     /// A list of prefixes that are up-to-date with the latest conda packages.
     pub updated_conda_prefixes:
-        DashMap<EnvironmentName, Arc<async_once_cell::OnceCell<(Prefix, PythonStatus)>>>,
+        DashMap<EnvironmentName, Arc<async_once_cell::OnceCell<CondaPrefixUpdated>>>,
 
     /// A list of prefixes that have been updated while resolving all
     /// dependencies.
@@ -718,37 +711,8 @@ impl<'p> LockFileDerivedData<'p> {
                         LockedPackageRef::Pypi(data) => Either::Right(data.name.clone()),
                     });
 
-                let pixi_records = {
-                    let channel_config = environment.channel_config();
-                    let channels: Vec<ChannelUrl> = environment
-                        .channels()
-                        .into_iter()
-                        .cloned()
-                        .map(|c| c.into_base_url(&channel_config))
-                        .collect::<Result<Vec<_>, _>>()
-                        .into_diagnostic()?;
-                    let VariantConfig {
-                        variant_configuration,
-                        variant_files,
-                    } = self.workspace.variants(platform).into_diagnostic()?;
-                    let virtual_packages: Vec<GenericVirtualPackage> = environment
-                        .virtual_packages(platform)
-                        .into_iter()
-                        .map(GenericVirtualPackage::from)
-                        .collect();
-                    locked_packages_to_pixi_records(
-                        conda_packages,
-                        self.workspace.root(),
-                        &self.command_dispatcher,
-                        channel_config,
-                        channels,
-                        variant_configuration,
-                        variant_files,
-                        virtual_packages,
-                        platform,
-                    )
-                    .await?
-                };
+                let pixi_records =
+                    locked_packages_to_unresolved_records(conda_packages, self.workspace.root())?;
 
                 // Get the manifest's pypi dependencies for this environment to look up editability.
                 // The lock file always stores editable=false, so we apply the actual
@@ -791,9 +755,12 @@ impl<'p> LockFileDerivedData<'p> {
                 };
 
                 // Get the prefix with the conda packages installed.
-                let (prefix, python_status) = self
+                let conda_result = self
                     .conda_prefix(environment, conda_reinstall_packages, Some(ignored_conda))
                     .await?;
+                let prefix = conda_result.prefix.clone();
+                let python_status = *conda_result.python_status.clone();
+                let resolved_pixi_records = conda_result.into_pixi_records(pixi_records);
 
                 // No `uv` support for WASM right now
                 if platform.arch() == Some(Arch::Wasm32) {
@@ -885,7 +852,7 @@ impl<'p> LockFileDerivedData<'p> {
                         .into_diagnostic()?;
                     PyPIEnvironmentUpdater::new(config, build_config, context_config)
                         .with_ignored_extraneous(names)
-                        .update(&python_status, &pixi_records, &pypi_records)
+                        .update(&python_status, &resolved_pixi_records, &pypi_records)
                         .await
                 }
                 .with_context(|| {
@@ -921,7 +888,7 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
         reinstall_packages: Option<HashSet<PackageName>>,
         ignore_packages: Option<HashSet<PackageName>>,
-    ) -> miette::Result<(Prefix, PythonStatus)> {
+    ) -> miette::Result<CondaPrefixUpdated> {
         // If we previously updated this environment, early out.
         let prefix_once_cell = self
             .updated_conda_prefixes
@@ -968,51 +935,21 @@ impl<'p> LockFileDerivedData<'p> {
                 } else {
                     Vec::new()
                 };
-                let records = {
-                    let channel_config = environment.channel_config();
-                    let channels: Vec<ChannelUrl> = environment
-                        .channels()
-                        .into_iter()
-                        .cloned()
-                        .map(|c| c.into_base_url(&channel_config))
-                        .collect::<Result<Vec<_>, _>>()
-                        .into_diagnostic()?;
-                    let VariantConfig {
-                        variant_configuration,
-                        variant_files,
-                    } = self.workspace.variants(platform).into_diagnostic()?;
-                    let virtual_packages: Vec<GenericVirtualPackage> = environment
-                        .virtual_packages(platform)
-                        .into_iter()
-                        .map(GenericVirtualPackage::from)
-                        .collect();
-                    locked_packages_to_pixi_records(
-                        packages,
-                        self.workspace.root(),
-                        &self.command_dispatcher,
-                        channel_config,
-                        channels,
-                        variant_configuration,
-                        variant_files,
-                        virtual_packages,
-                        platform,
-                    )
-                    .await?
-                };
+                // Convert locked packages to unresolved records. Partial
+                // source records are NOT resolved here — they are passed
+                // directly to the installer which builds them using
+                // variant-based output matching.
+                let records =
+                    locked_packages_to_unresolved_records(packages, self.workspace.root())?;
 
                 // Update the conda prefix
-                let CondaPrefixUpdated {
-                    prefix,
-                    python_status,
-                    ..
-                } = conda_prefix_updater
+                conda_prefix_updater
                     .update(records, reinstall_packages, ignore_packages)
-                    .await?;
-
-                Ok((prefix.clone(), *python_status.clone()))
+                    .await
+                    .cloned()
             })
             .await
-            .map(|(prefix, python_status)| (prefix.clone(), python_status.clone()))
+            .cloned()
     }
 }
 
@@ -1100,163 +1037,6 @@ fn locked_packages_to_unresolved_records(
         .into_diagnostic()
 }
 
-#[allow(clippy::too_many_arguments)]
-async fn locked_packages_to_pixi_records(
-    conda_packages: Vec<LockedPackageRef<'_>>,
-    workspace_root: &std::path::Path,
-    command_dispatcher: &CommandDispatcher,
-    channel_config: rattler_conda_types::ChannelConfig,
-    channels: Vec<ChannelUrl>,
-    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
-    variant_files: Vec<std::path::PathBuf>,
-    virtual_packages: Vec<GenericVirtualPackage>,
-    platform: Platform,
-) -> Result<Vec<PixiRecord>, Report> {
-    let unresolved = locked_packages_to_unresolved_records(conda_packages, workspace_root)?;
-    resolve_unresolved_records(
-        unresolved,
-        command_dispatcher,
-        channel_config,
-        channels,
-        variants,
-        variant_files,
-        virtual_packages,
-        platform,
-    )
-    .await
-}
-
-/// Resolve a list of `UnresolvedPixiRecord` into `PixiRecord`.
-///
-/// Full records pass through directly. Partial source records are resolved
-/// by calling `source_metadata()` on the command dispatcher to fetch the
-/// full metadata.
-#[allow(clippy::too_many_arguments)]
-async fn resolve_unresolved_records(
-    records: Vec<UnresolvedPixiRecord>,
-    command_dispatcher: &CommandDispatcher,
-    channel_config: rattler_conda_types::ChannelConfig,
-    channels: Vec<ChannelUrl>,
-    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
-    variant_files: Vec<std::path::PathBuf>,
-    virtual_packages: Vec<GenericVirtualPackage>,
-    platform: Platform,
-) -> Result<Vec<PixiRecord>, Report> {
-    let mut resolved = Vec::with_capacity(records.len());
-    for record in records {
-        match record.try_into_resolved() {
-            Ok(pixi_record) => resolved.push(pixi_record),
-            Err(partial) => {
-                let pixi_record = resolve_partial_record(
-                    partial,
-                    command_dispatcher,
-                    channel_config.clone(),
-                    channels.clone(),
-                    variants.clone(),
-                    variant_files.clone(),
-                    virtual_packages.clone(),
-                    platform,
-                )
-                .await?;
-                resolved.push(pixi_record);
-            }
-        }
-    }
-    Ok(resolved)
-}
-
-/// Resolve a single partial `UnresolvedPixiRecord` into a `PixiRecord`
-/// by fetching source metadata from the command dispatcher.
-#[allow(clippy::too_many_arguments)]
-async fn resolve_partial_record(
-    partial: UnresolvedPixiRecord,
-    command_dispatcher: &CommandDispatcher,
-    channel_config: rattler_conda_types::ChannelConfig,
-    channels: Vec<ChannelUrl>,
-    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
-    variant_files: Vec<std::path::PathBuf>,
-    virtual_packages: Vec<GenericVirtualPackage>,
-    platform: Platform,
-) -> Result<PixiRecord, Report> {
-    let source = match partial.as_source() {
-        Some(s) => s,
-        None => {
-            // Binary records should never end up here since try_into_resolved
-            // would have succeeded. Defensive fallback.
-            miette::bail!("unexpected binary record in resolve_partial_record");
-        }
-    };
-
-    let spec = build_source_metadata_spec(
-        source,
-        channel_config,
-        channels,
-        variants,
-        variant_files,
-        virtual_packages,
-        platform,
-    );
-
-    let metadata = command_dispatcher
-        .source_metadata(spec)
-        .await
-        .into_diagnostic()?;
-
-    let partial_name = source.name().clone();
-    let partial_variants = source.variants().clone();
-
-    // Find the record that matches by name and variants.
-    let matched = metadata
-        .records
-        .iter()
-        .find(|r| {
-            r.name() == &partial_name
-                && (partial_variants.is_empty() || r.variants() == &partial_variants)
-        })
-        .cloned()
-        .ok_or_else(|| {
-            miette::miette!(
-                "could not resolve partial source record for '{}': no matching record found in source metadata",
-                partial_name.as_source()
-            )
-        })?;
-
-    Ok(PixiRecord::Source(matched))
-}
-
-/// Build a `SourceMetadataSpec` from an `UnresolvedSourceRecord`.
-fn build_source_metadata_spec(
-    source: &UnresolvedSourceRecord,
-    channel_config: rattler_conda_types::ChannelConfig,
-    channels: Vec<ChannelUrl>,
-    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
-    variant_files: Vec<std::path::PathBuf>,
-    virtual_packages: Vec<GenericVirtualPackage>,
-    platform: Platform,
-) -> SourceMetadataSpec {
-    SourceMetadataSpec {
-        package: source.name().clone(),
-        backend_metadata: BuildBackendMetadataSpec {
-            manifest_source: source.manifest_source().clone(),
-            preferred_build_source: source
-                .build_source()
-                .cloned()
-                .map(PinnedBuildSourceSpec::into_pinned),
-            channel_config,
-            channels,
-            build_environment: BuildEnvironment {
-                host_platform: platform,
-                build_platform: platform,
-                host_virtual_packages: virtual_packages.clone(),
-                build_virtual_packages: virtual_packages,
-            },
-            variant_configuration: Some(variants),
-            variant_files: Some(variant_files),
-            enabled_protocols: EnabledProtocols::default(),
-        },
-    }
-}
-
 pub struct UpdateContext<'p> {
     project: &'p Workspace,
 
@@ -1295,7 +1075,7 @@ pub struct UpdateContext<'p> {
     /// Keeps track of all pending prefix updates. This only tracks the conda
     /// updates to a prefix, not whether the pypi packages have also been
     /// updated.
-    instantiated_conda_prefixes: PerGroup<'p, Arc<BarrierCell<(Prefix, PythonStatus)>>>,
+    instantiated_conda_prefixes: PerGroup<'p, Arc<BarrierCell<CondaPrefixUpdated>>>,
 
     /// Keeps track of all pending conda targets that are being solved. The
     /// mapping contains a [`BarrierCell`] that will eventually contain the
@@ -1470,16 +1250,17 @@ impl<'p> UpdateContext<'p> {
     /// Get a list of conda prefixes that have been updated.
     pub(crate) fn take_instantiated_conda_prefixes(
         &mut self,
-    ) -> HashMap<EnvironmentName, (Prefix, PythonStatus)> {
+    ) -> HashMap<EnvironmentName, CondaPrefixUpdated> {
         self.instantiated_conda_prefixes
             .drain()
             .filter_map(|(env, cell)| match env {
                 GroupedEnvironment::Environment(env) => {
-                    let prefix = Arc::into_inner(cell)
+                    let result = Arc::into_inner(cell)
                         .expect("prefixes must not be shared")
                         .into_inner()
                         .expect("prefix must be available");
-                    Some((env.name().clone(), (prefix.0.clone(), prefix.1.clone())))
+                    let result = Arc::try_unwrap(result).unwrap_or_else(|arc| (*arc).clone());
+                    Some((env.name().clone(), result))
                 }
                 _ => None,
             })
@@ -2287,7 +2068,7 @@ impl<'p> UpdateContext<'p> {
                         self.instantiated_conda_prefixes
                             .get_mut(&group)
                             .expect("the entry for this environment should exists")
-                            .set(Arc::new((conda_prefix.prefix, *conda_prefix.python_status)))
+                            .set(Arc::new(conda_prefix))
                             .expect("prefix should not be instantiated twice");
 
                         tracing::info!(

@@ -8,10 +8,10 @@ use std::{
 };
 
 use futures::StreamExt;
-use itertools::{Either, Itertools};
 use miette::Diagnostic;
+
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::{PixiRecord, SourceRecord, VariantValue};
+use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
 use pixi_spec::ResolvedExcludeNewer;
 use rattler::install::{
     InstallationResultRecord, Installer, InstallerError, Transaction,
@@ -36,8 +36,12 @@ pub struct InstallPixiEnvironmentSpec {
     pub name: String,
 
     /// The specification of the environment to install.
+    ///
+    /// Records may be unresolved: partial source records (from mutable path
+    /// sources) are built from source using variant-based output matching,
+    /// without requiring a prior metadata resolution step.
     #[serde(skip)]
-    pub records: Vec<PixiRecord>,
+    pub records: Vec<UnresolvedPixiRecord>,
 
     /// The packages to ignore, meaning dont remove if not present in records
     /// do not update when also present in PixiRecord
@@ -101,7 +105,11 @@ pub struct InstallPixiEnvironmentResult {
 }
 
 impl InstallPixiEnvironmentSpec {
-    pub fn new(records: Vec<PixiRecord>, prefix: Prefix) -> Self {
+    pub fn new(
+        records: impl IntoIterator<Item = impl Into<UnresolvedPixiRecord>>,
+        prefix: Prefix,
+    ) -> Self {
+        let records = records.into_iter().map(Into::into).collect();
         InstallPixiEnvironmentSpec {
             name: prefix
                 .file_name()
@@ -129,33 +137,40 @@ impl InstallPixiEnvironmentSpec {
         install_reporter: Option<Box<dyn rattler::install::Reporter>>,
     ) -> Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>
     {
-        // Split into source and binary records
-        let (source_records, mut binary_records): (Vec<_>, Vec<_>) =
-            std::mem::take(&mut self.records)
-                .into_iter()
-                .partition_map(|record| match record {
-                    PixiRecord::Source(record) => Either::Left(record),
-                    PixiRecord::Binary(record) => Either::Right(record),
-                });
+        // Split into source and binary records.
+        // Source records may be fully resolved or partial (unresolved).
+        let mut source_records = Vec::new();
+        let mut binary_records = Vec::new();
+        for record in std::mem::take(&mut self.records) {
+            match record {
+                UnresolvedPixiRecord::Source(record) => source_records.push(record),
+                UnresolvedPixiRecord::Binary(record) => binary_records.push(record),
+            }
+        }
 
         // Build all the source packages concurrently.
+        // Filter out ignored packages upfront.
+        let source_records: Vec<_> = source_records
+            .into_iter()
+            .filter(|source_record| {
+                !self
+                    .ignore_packages
+                    .as_ref()
+                    .is_some_and(|ignore| ignore.contains(source_record.name()))
+            })
+            .collect();
         binary_records.reserve(source_records.len());
         let mut build_futures = CancellationAwareFutures::new(command_dispatcher.executor());
-        for source_record in source_records {
-            // Do not build if package is explicitly ignored
-            if self
-                .ignore_packages
-                .as_ref()
-                .is_some_and(|ignore| ignore.contains(&source_record.package_record().name))
-            {
-                continue;
-            }
+        for source_record in &source_records {
+            let name = source_record.name().clone();
+            let manifest_source = source_record.manifest_source().clone();
             build_futures.push(async {
-                self.build_from_source(&command_dispatcher, &source_record)
+                self.build_unresolved_source(&command_dispatcher, source_record)
                     .await
                     .map_err_with(move |build_err| {
-                        InstallPixiEnvironmentError::BuildSourceError(
-                            Box::new(source_record),
+                        InstallPixiEnvironmentError::BuildUnresolvedSourceError(
+                            name,
+                            Box::new(manifest_source),
                             build_err,
                         )
                     })
@@ -209,17 +224,17 @@ impl InstallPixiEnvironmentSpec {
         })
     }
 
-    /// Given a particular source record, build the package from source.
-    async fn build_from_source(
+    /// Given an unresolved source record (full or partial), build the package
+    /// from source.
+    async fn build_unresolved_source(
         &self,
         command_dispatcher: &CommandDispatcher,
-        source_record: &SourceRecord,
+        source_record: &UnresolvedSourceRecord,
     ) -> Result<RepoDataRecord, CommandDispatcherError<SourceBuildError>> {
-        // Build the source package.
+        let name = source_record.name().clone();
+
         // Verify if we need to force the build even if the cache is up to date.
-        let force = self
-            .force_reinstall
-            .contains(&source_record.package_record().name);
+        let force = self.force_reinstall.contains(&name);
 
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
@@ -227,7 +242,7 @@ impl InstallPixiEnvironmentSpec {
                     source_record.manifest_source().clone(),
                     source_record.build_source().cloned(),
                 ),
-                package: source_record.into(),
+                name,
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
@@ -260,10 +275,11 @@ pub enum InstallPixiEnvironmentError {
     Installer(InstallerError),
 
     #[error("failed to build '{}' from '{}'",
-        .0.package_record().name.as_source(),
-        .0.manifest_source())]
-    BuildSourceError(
-        Box<SourceRecord>,
+        .0.as_source(),
+        .1)]
+    BuildUnresolvedSourceError(
+        PackageName,
+        Box<pixi_record::PinnedSourceSpec>,
         #[diagnostic_source]
         #[source]
         SourceBuildError,

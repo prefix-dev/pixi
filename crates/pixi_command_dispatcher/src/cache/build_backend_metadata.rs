@@ -4,7 +4,9 @@ use super::common::{
 };
 use crate::build::CanonicalSourceCodeLocation;
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
-use crate::{BuildEnvironment, PackageIdentifier};
+use rattler_conda_types::PackageName;
+
+use crate::BuildEnvironment;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
@@ -196,15 +198,10 @@ impl VersionedMetadata for CachedCondaMetadata {
 impl CachedCondaMetadata {
     /// Returns the unique package identifiers for the packages in this
     /// metadata.
-    pub fn outputs(&self) -> Vec<PackageIdentifier> {
+    pub fn outputs(&self) -> Vec<PackageName> {
         self.outputs
             .iter()
-            .map(|output| PackageIdentifier {
-                name: output.metadata.name.clone(),
-                version: output.metadata.version.clone(),
-                build: output.metadata.build.clone(),
-                subdir: output.metadata.subdir.to_string(),
-            })
+            .map(|output| output.metadata.name.clone())
             .collect()
     }
 }
