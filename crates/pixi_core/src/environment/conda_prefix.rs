@@ -1,14 +1,15 @@
-use std::{collections::HashSet, sync::Arc};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use async_once_cell::OnceCell as AsyncOnceCell;
 use miette::IntoDiagnostic;
 use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec};
 use pixi_manifest::FeaturesExt;
-use pixi_record::PixiRecord;
+use pixi_record::{PixiRecord, UnresolvedPixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use rattler::install::link_script::LinkScriptType;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageName, Platform,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageName, Platform, RepoDataRecord,
 };
 
 use super::{
@@ -23,6 +24,19 @@ use crate::{
     },
 };
 
+/// The result of installing a conda prefix via [`update_prefix_conda`].
+///
+/// Contains the python status and the fully-resolved records for every
+/// source package that was built during installation.
+pub struct CondaPrefixInstallResult {
+    /// Any change to the python interpreter.
+    pub python_status: PythonStatus,
+
+    /// For each source package that was built, the resulting binary record.
+    /// Binary packages from the input are *not* included here.
+    pub resolved_source_records: HashMap<PackageName, RepoDataRecord>,
+}
+
 /// A struct that contains the result of updating a conda prefix.
 
 #[derive(Clone)]
@@ -33,6 +47,30 @@ pub struct CondaPrefixUpdated {
     pub prefix: Prefix,
     /// Any change to the python interpreter.
     pub python_status: Box<PythonStatus>,
+    /// Fully-resolved records for source packages that were built.
+    pub resolved_source_records: HashMap<PackageName, RepoDataRecord>,
+}
+
+impl CondaPrefixUpdated {
+    /// Merge unresolved records from the lock file with the build results
+    /// to produce a fully-resolved set of [`PixiRecord`]s.
+    ///
+    /// Binary records pass through as-is. Source records are replaced by their
+    /// built counterparts from [`resolved_source_records`](Self::resolved_source_records).
+    pub fn into_pixi_records(self, unresolved: Vec<UnresolvedPixiRecord>) -> Vec<PixiRecord> {
+        unresolved
+            .into_iter()
+            .filter_map(|r| match r {
+                UnresolvedPixiRecord::Binary(b) => Some(PixiRecord::Binary(b)),
+                UnresolvedPixiRecord::Source(_) => None,
+            })
+            .chain(
+                self.resolved_source_records
+                    .into_values()
+                    .map(PixiRecord::Binary),
+            )
+            .collect()
+    }
 }
 
 /// A task that updates the prefix for a given environment.
@@ -134,7 +172,7 @@ impl CondaPrefixUpdater {
     /// Updates the prefix for the given environment.
     pub async fn update(
         &self,
-        pixi_records: Vec<PixiRecord>,
+        pixi_records: Vec<UnresolvedPixiRecord>,
         reinstall_packages: Option<HashSet<PackageName>>,
         ignore_packages: Option<HashSet<PackageName>>,
     ) -> miette::Result<&CondaPrefixUpdated> {
@@ -147,7 +185,7 @@ impl CondaPrefixUpdater {
 
                 let group_name = self.inner.name.clone();
 
-                let python_status = update_prefix_conda(
+                let install_result = update_prefix_conda(
                     self.name().to_string(),
                     &self.inner.prefix,
                     pixi_records,
@@ -165,7 +203,8 @@ impl CondaPrefixUpdater {
                 Ok(CondaPrefixUpdated {
                     group: group_name,
                     prefix: self.inner.prefix.clone(),
-                    python_status: Box::new(python_status),
+                    python_status: Box::new(install_result.python_status),
+                    resolved_source_records: install_result.resolved_source_records,
                 })
             })
             .await
@@ -181,7 +220,7 @@ impl CondaPrefixUpdater {
 pub async fn update_prefix_conda(
     name: String,
     prefix: &Prefix,
-    pixi_records: Vec<PixiRecord>,
+    pixi_records: Vec<UnresolvedPixiRecord>,
     channels: Vec<ChannelUrl>,
     channel_config: ChannelConfig,
     host_platform: Platform,
@@ -190,7 +229,7 @@ pub async fn update_prefix_conda(
     command_dispatcher: CommandDispatcher,
     reinstall_packages: Option<HashSet<PackageName>>,
     ignore_packages: Option<HashSet<PackageName>>,
-) -> miette::Result<PythonStatus> {
+) -> miette::Result<CondaPrefixInstallResult> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
 
@@ -259,5 +298,10 @@ pub async fn update_prefix_conda(
     }
 
     // Determine if the python version changed.
-    Ok(PythonStatus::from_transaction(&result.transaction))
+    let python_status = PythonStatus::from_transaction(&result.transaction);
+
+    Ok(CondaPrefixInstallResult {
+        python_status,
+        resolved_source_records: result.resolved_source_records,
+    })
 }

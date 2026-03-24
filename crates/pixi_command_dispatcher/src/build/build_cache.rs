@@ -13,7 +13,9 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use itertools::Itertools;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
 use pixi_record::{CanonicalSourceLocation, VariantValue};
-use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
+use rattler_conda_types::{
+    ChannelUrl, GenericVirtualPackage, PackageName, Platform, RepoDataRecord,
+};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
@@ -35,8 +37,6 @@ pub enum BuildCacheError {
 
 /// Defines additional input besides the source files that are used to compute
 /// the metadata of a source checkout.
-///
-/// Specs
 #[derive(Hash, Clone, Eq, PartialEq)]
 pub struct BuildInput {
     /// The location of the source for the build
@@ -46,16 +46,7 @@ pub struct BuildInput {
     pub channel_urls: Vec<ChannelUrl>,
 
     /// The name of the package
-    pub name: String,
-
-    /// The version of the package to build
-    pub version: String,
-
-    /// The build string of the package to build
-    pub build: String,
-
-    /// The platform for which the metadata was computed.
-    pub subdir: String,
+    pub name: PackageName,
 
     /// The host platform
     pub host_platform: Platform,
@@ -80,9 +71,6 @@ impl BuildInput {
             build_source,
             channel_urls,
             name,
-            version,
-            build,
-            subdir,
             host_platform,
             host_virtual_packages,
             build_virtual_packages,
@@ -92,7 +80,6 @@ impl BuildInput {
         // Hash some of the keys
         let mut hasher = Xxh3::new();
         build_source.hash(&mut hasher);
-        build.hash(&mut hasher);
         channel_urls.hash(&mut hasher);
         host_platform.hash(&mut hasher);
         host_virtual_packages.hash(&mut hasher);
@@ -105,7 +92,7 @@ impl BuildInput {
 
         let hash = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
 
-        format!("{name}-{version}-{subdir}-{hash}",)
+        format!("{}-{host_platform}-{hash}", name.as_source())
     }
 }
 
@@ -135,11 +122,8 @@ impl BuildCache {
         tracing::debug!(
             manifest_source = %manifest_source,
             input_key = %input_key,
-            name = %input.name,
-            version = %input.version,
-            subdir = %input.subdir,
+            name = %input.name.as_source(),
             host_platform = %input.host_platform,
-            build = %input.build,
             channel_urls = ?input.channel_urls,
             host_virtual_packages = %input.host_virtual_packages.iter().format(","),
             build_virtual_packages = %input.build_virtual_packages.iter().format(","),

@@ -1,7 +1,7 @@
 use futures::TryFutureExt;
 use miette::IntoDiagnostic;
 use pixi_manifest::FeaturesExt;
-use pixi_record::PixiRecord;
+use pixi_record::UnresolvedPixiRecord;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::Platform;
 
@@ -57,7 +57,7 @@ impl<'a> CondaPrefixUpdater<'a> {
     /// Updates the prefix for the given environment.
     pub(crate) async fn update(
         &self,
-        pixi_records: Vec<PixiRecord>,
+        pixi_records: Vec<UnresolvedPixiRecord>,
     ) -> miette::Result<CondaPrefixUpdated> {
         tracing::debug!(
             "updating prefix for '{}'",
