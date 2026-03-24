@@ -4,7 +4,7 @@ use crate::plan::installed_dists::InstalledDists;
 use crate::{InstallablePypiRecord, ManifestData};
 use pixi_consts::consts;
 use pixi_uv_conversions::GitUrlWithPrefix;
-use rattler_lock::{PypiPackageData, UrlOrPath};
+use rattler_lock::{PypiDistributionData, PypiPackageData, UrlOrPath};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -371,9 +371,9 @@ enum UrlType {
 
 impl PyPIPackageDataBuilder {
     fn registry<S: AsRef<str>>(name: S, version: S) -> PypiPackageData {
-        PypiPackageData {
+        PypiPackageData::Distribution(Box::new(PypiDistributionData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
-            version: Some(pep440_rs::Version::from_str(version.as_ref()).unwrap()),
+            version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
             // We don't check these fields, for determining the installation from a registry
             //
             requires_dist: vec![],
@@ -389,20 +389,20 @@ impl PyPIPackageDataBuilder {
             .into(),
             hash: None,
             index_url: None,
-        }
+        }))
     }
 
     fn path<S: AsRef<str>>(name: S, version: S, path: PathBuf) -> PypiPackageData {
-        PypiPackageData {
+        PypiPackageData::Distribution(Box::new(PypiDistributionData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
-            version: Some(pep440_rs::Version::from_str(version.as_ref()).unwrap()),
+            version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
             requires_dist: vec![],
             requires_python: None,
             location: UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string()))
                 .into(),
             hash: None,
             index_url: None,
-        }
+        }))
     }
 
     fn url<S: AsRef<str>>(name: S, version: S, url: Url, url_type: UrlType) -> PypiPackageData {
@@ -412,15 +412,15 @@ impl PyPIPackageDataBuilder {
         } else {
             url
         };
-        PypiPackageData {
+        PypiPackageData::Distribution(Box::new(PypiDistributionData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
-            version: Some(pep440_rs::Version::from_str(version.as_ref()).unwrap()),
+            version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
             requires_dist: vec![],
             requires_python: None,
             location: UrlOrPath::Url(url).into(),
             hash: None,
             index_url: None,
-        }
+        }))
     }
 }
 
@@ -494,13 +494,12 @@ impl RequiredPackages {
         data: &PypiPackageData,
         editable: bool,
     ) {
-        let version_override = data
-            .version
-            .clone()
-            .unwrap_or_else(|| pep440_rs::MIN_VERSION.clone());
+        let wheel = data
+            .as_wheel()
+            .expect("test harness only supports wheel packages");
         self.required.insert(
             package_name,
-            InstallablePypiRecord::new(data, ManifestData { editable }, version_override),
+            InstallablePypiRecord::new(wheel, ManifestData { editable }, wheel.version.clone()),
         );
     }
 

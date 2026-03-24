@@ -58,7 +58,7 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
             LockedPackageRef::Pypi(pypi_data) => {
                 // For PyPI, use the requirement directly to get the name
                 pypi_data
-                    .requires_dist
+                    .requires_dist()
                     .iter()
                     .map(|req| req.name.to_string())
                     .collect()

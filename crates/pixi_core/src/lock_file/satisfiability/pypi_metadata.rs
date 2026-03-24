@@ -8,7 +8,7 @@ use std::str::FromStr;
 
 use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::Requirement;
-use pixi_install_pypi::UnresolvedPypiRecord;
+use pixi_install_pypi::LockedPypiRecord;
 use thiserror::Error;
 
 /// Metadata extracted from a local package source tree.
@@ -59,14 +59,14 @@ pub struct RequiresDistDiff {
 /// Returns `None` if the metadata matches, or `Some(MetadataMismatch)` describing
 /// what changed.
 pub fn compare_metadata(
-    locked: &UnresolvedPypiRecord,
+    locked_record: &LockedPypiRecord,
     current: &LocalPackageMetadata,
 ) -> Option<MetadataMismatch> {
-    let locked = locked.as_package_data();
+    let locked = &locked_record.data;
 
     // Compare requires_dist (as normalized sets)
     let locked_deps: BTreeSet<String> = locked
-        .requires_dist
+        .requires_dist()
         .iter()
         .map(normalize_requirement)
         .collect();
@@ -87,7 +87,7 @@ pub fn compare_metadata(
             .collect();
 
         let removed: Vec<Requirement> = locked
-            .requires_dist
+            .requires_dist()
             .iter()
             .filter(|r| !current_deps.contains(&normalize_requirement(r)))
             .cloned()
@@ -99,22 +99,21 @@ pub fn compare_metadata(
         }));
     }
 
-    // Compare version — only when both sides have one. `None` means the
-    // version is dynamic or not tracked (local path deps never store a
-    // version in the lock file).
-    if let (Some(locked_version), Some(current_version)) = (&locked.version, &current.version)
-        && locked_version != current_version
+    // Compare the locked version (always present on LockedPypiRecord)
+    // against the current version from the source tree.
+    if let Some(current_version) = &current.version
+        && &locked_record.locked_version != current_version
     {
         return Some(MetadataMismatch::Version {
-            locked: locked_version.clone(),
+            locked: locked_record.locked_version.clone(),
             current: current_version.clone(),
         });
     }
 
     // Compare requires_python
-    if locked.requires_python != current.requires_python {
+    if locked.requires_python() != current.requires_python.as_ref() {
         return Some(MetadataMismatch::RequiresPython {
-            locked: locked.requires_python.clone(),
+            locked: locked.requires_python().cloned(),
             current: current.requires_python.clone(),
         });
     }
@@ -177,7 +176,17 @@ mod tests {
     use super::*;
     use std::str::FromStr;
 
-    use rattler_lock::PypiPackageData;
+    use crate::lock_file::tests::make_wheel_package_with;
+    use pixi_install_pypi::UnresolvedPypiRecord;
+    use rattler_lock::{PypiDistributionData, PypiPackageData};
+
+    fn lock_for_test(data: PypiPackageData) -> LockedPypiRecord {
+        let version = data
+            .version()
+            .cloned()
+            .unwrap_or_else(|| Version::from_str("42.23").unwrap());
+        UnresolvedPypiRecord::from(data).lock(version)
+    }
 
     #[test]
     fn test_normalize_requirement() {
@@ -191,16 +200,18 @@ mod tests {
 
     #[test]
     fn test_compare_metadata_same() {
-        let locked: UnresolvedPypiRecord = PypiPackageData {
-            name: "test-package".parse().unwrap(),
-            version: Some(Version::from_str("1.0.0").unwrap()),
-            requires_dist: vec!["numpy>=1.0".parse().unwrap()],
-            requires_python: Some(VersionSpecifiers::from_str(">=3.8").unwrap()),
-            location: rattler_lock::UrlOrPath::Url(url::Url::parse("file:///test").unwrap()).into(),
-            hash: None,
-            index_url: None,
-        }
-        .into();
+        let locked = lock_for_test(PypiPackageData::Distribution(Box::new(
+            PypiDistributionData {
+                name: "test-package".parse().unwrap(),
+                version: Version::from_str("1.0.0").unwrap(),
+                requires_dist: vec!["numpy>=1.0".parse().unwrap()],
+                requires_python: Some(VersionSpecifiers::from_str(">=3.8").unwrap()),
+                location: rattler_lock::UrlOrPath::Url(url::Url::parse("file:///test").unwrap())
+                    .into(),
+                hash: None,
+                index_url: None,
+            },
+        )));
 
         let current = LocalPackageMetadata {
             version: Some(Version::from_str("1.0.0").unwrap()),
@@ -213,16 +224,15 @@ mod tests {
 
     #[test]
     fn test_compare_metadata_different_deps() {
-        let locked: UnresolvedPypiRecord = PypiPackageData {
-            name: "test-package".parse().unwrap(),
-            version: Some(Version::from_str("1.0.0").unwrap()),
-            requires_dist: vec!["numpy>=1.0".parse().unwrap()],
-            requires_python: None,
-            location: rattler_lock::UrlOrPath::Url(url::Url::parse("file:///test").unwrap()).into(),
-            hash: None,
-            index_url: None,
-        }
-        .into();
+        let locked = lock_for_test(make_wheel_package_with(
+            "test-package",
+            "1.0.0",
+            rattler_lock::UrlOrPath::Url(url::Url::parse("file:///test").unwrap()).into(),
+            None,
+            None,
+            vec!["numpy>=1.0".parse().unwrap()],
+            None,
+        ));
 
         let current = LocalPackageMetadata {
             version: Some(Version::from_str("1.0.0").unwrap()),

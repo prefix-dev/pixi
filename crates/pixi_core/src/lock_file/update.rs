@@ -708,7 +708,7 @@ impl<'p> LockFileDerivedData<'p> {
                 let (ignored_conda, ignored_pypi): (HashSet<_>, HashSet<_>) =
                     ignored.into_iter().partition_map(|p| match p {
                         LockedPackageRef::Conda(data) => Either::Left(data.name().clone()),
-                        LockedPackageRef::Pypi(data) => Either::Right(data.name.clone()),
+                        LockedPackageRef::Pypi(data) => Either::Right(data.name().clone()),
                     });
 
                 let pixi_records =
@@ -723,20 +723,20 @@ impl<'p> LockFileDerivedData<'p> {
                     .into_iter()
                     .filter_map(LockedPackageRef::as_pypi)
                     .map(move |data| {
-                        // Use the version requested in the lock file or be happy with *any* version
                         let version = data
-                            .version
-                            .clone()
+                            .version()
+                            .cloned()
                             .unwrap_or_else(|| pep440_rs::MIN_VERSION.clone());
-                        pixi_install_pypi::InstallablePypiRecord::new(
-                            data,
+                        let locked = pixi_install_pypi::UnresolvedPypiRecord::from(data.clone())
+                            .lock(version);
+                        pixi_install_pypi::InstallablePypiRecord::from_locked(
+                            &locked,
                             pixi_install_pypi::ManifestData {
                                 editable: is_editable_from_manifest(
                                     &manifest_pypi_deps,
-                                    &data.name,
+                                    data.name(),
                                 ),
                             },
-                            version,
                         )
                     })
                     .collect::<Vec<_>>();
@@ -1059,6 +1059,11 @@ pub struct UpdateContext<'p> {
     /// partially missing then the data also won't exist in this field.
     locked_pypi_records: PerEnvironmentAndPlatform<'p, Arc<PypiRecordsByName>>,
 
+    /// Locked pypi records with metadata, resolved during the satisfiability
+    /// check. These have correct versions for source packages (read from the
+    /// source tree) and are preferred over `locked_pypi_records` when available.
+    pre_resolved_pypi_records: HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
+
     /// Information about environments that are considered out of date. Only
     /// these environments are updated.
     outdated_envs: OutdatedEnvironments<'p>,
@@ -1226,6 +1231,13 @@ impl<'p> UpdateContext<'p> {
                     .expect("records must be available")
             })
             .or_else(|| {
+                // Prefer pre-resolved records from the satisfiability check —
+                // they have correct versions for source packages.
+                self.pre_resolved_pypi_records
+                    .remove(&(environment.clone(), platform))
+                    .map(Arc::new)
+            })
+            .or_else(|| {
                 self.locked_pypi_records
                     .get_mut(environment)
                     .and_then(|records| records.remove(&platform))
@@ -1234,11 +1246,9 @@ impl<'p> UpdateContext<'p> {
                             unresolved.records.iter().map(|ur| {
                                 ur.lock(
                                     ur.as_package_data()
-                                        .version
-                                        .as_ref()
+                                        .version()
                                         .unwrap_or(&pep440_rs::MIN_VERSION)
                                         .clone(),
-                                    ur.as_package_data().version.is_some(),
                                 )
                             }),
                         ))
@@ -1400,7 +1410,7 @@ impl<'p> UpdateContextBuilder<'p> {
         let multi_progress = pixi_progress::global_multi_progress();
         let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
 
-        let outdated = match self.outdated_environments {
+        let mut outdated = match self.outdated_environments {
             Some(outdated) => outdated,
             None => {
                 OutdatedEnvironments::from_workspace_and_lock_file(
@@ -1596,6 +1606,8 @@ impl<'p> UpdateContextBuilder<'p> {
                 .finish()
         });
 
+        let pre_resolved_pypi_records = std::mem::take(&mut outdated.locked_pypi_records);
+
         Ok(UpdateContext {
             project,
 
@@ -1603,6 +1615,7 @@ impl<'p> UpdateContextBuilder<'p> {
             locked_grouped_repodata_records,
             locked_grouped_pypi_records,
             locked_pypi_records,
+            pre_resolved_pypi_records,
             outdated_envs: outdated,
 
             solved_repodata_records: HashMap::new(),
@@ -2652,7 +2665,7 @@ async fn spawn_extract_environment_task(
                     .into_diagnostic()?
                     .unwrap_or_default();
 
-                for req in record.data.requires_dist.iter() {
+                for req in record.data.requires_dist().iter() {
                     // Evaluate the marker environment with the given extras
                     if let Some(marker_env) = &marker_environment {
                         // let marker_str = marker_env.to_string();

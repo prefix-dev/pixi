@@ -32,7 +32,7 @@ use pypi_modifiers::{
     pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_conda_types::Platform;
-use rattler_lock::{PypiIndexes, PypiPackageData, UrlOrPath};
+use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
@@ -78,14 +78,12 @@ impl UnresolvedPypiRecord {
         &self.0
     }
 
-    pub fn lock(
-        &self,
-        locked_version: pep440_rs::Version,
-        version_is_dynamic: bool,
-    ) -> LockedPypiRecord {
+    pub fn lock(&self, locked_version: pep440_rs::Version) -> LockedPypiRecord {
         let mut data = self.0.clone();
 
-        data.version = (!version_is_dynamic).then_some(locked_version.clone());
+        if let Some(wheel) = data.as_wheel_mut() {
+            wheel.version = locked_version.clone();
+        }
 
         LockedPypiRecord {
             data,
@@ -107,18 +105,33 @@ pub struct InstallablePypiRecord {
 
 impl InstallablePypiRecord {
     pub fn new(
-        data: &PypiPackageData,
+        wheel: &PypiDistributionData,
         manifest_data: ManifestData,
         version_override: pep440_rs::Version,
     ) -> Self {
         Self {
             manifest_data,
-            name: data.name.clone(),
-            location: data.location.inner().clone(),
-            hash: data.hash.clone(),
-            index_url: data.index_url.clone(),
-            requires_python: data.requires_python.clone(),
+            name: wheel.name.clone(),
+            location: wheel.location.inner().clone(),
+            hash: wheel.hash.clone(),
+            index_url: wheel.index_url.clone(),
+            requires_python: wheel.requires_python.clone(),
             version: version_override,
+        }
+    }
+
+    /// Create from a [`LockedPypiRecord`], which works for both wheel and
+    /// source packages.
+    pub fn from_locked(locked: &LockedPypiRecord, manifest_data: ManifestData) -> Self {
+        let data = &locked.data;
+        Self {
+            manifest_data,
+            name: data.name().clone(),
+            location: data.location().inner().clone(),
+            hash: data.as_wheel().and_then(|w| w.hash.clone()),
+            index_url: data.as_wheel().and_then(|w| w.index_url.clone()),
+            requires_python: data.requires_python().cloned(),
+            version: locked.locked_version.clone(),
         }
     }
 }

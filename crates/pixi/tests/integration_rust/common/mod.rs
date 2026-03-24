@@ -173,7 +173,7 @@ impl LockFileExt for LockFile {
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(|data| data.name.as_ref() == name)
+            .any(|data| data.name().as_ref() == name)
     }
 
     fn contains_match_spec(
@@ -228,7 +228,7 @@ impl LockFileExt for LockFile {
         self.environment(environment)
             .and_then(|env| {
                 env.pypi_packages(p)
-                    .and_then(|mut packages| packages.find(|data| data.name.as_ref() == package))
+                    .and_then(|mut packages| packages.find(|data| data.name().as_ref() == package))
             })
             .map(|data| data.version_string())
     }
