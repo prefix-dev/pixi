@@ -300,7 +300,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
-    // Clear any leftover progress bars from the upload
+    // Clear progress bar lines left behind by rattler_upload (one per package)
+    let term = console::Term::stderr();
+    term.clear_last_lines(built_package_paths.len()).ok();
+
+    // Clear any leftover progress bars from the global multi progress
     global_multi_progress().clear().ok();
 
     pixi_progress::println!(
@@ -309,6 +313,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         built_package_paths.len(),
         args.to
     );
+    for path in &built_package_paths {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy())
+            .unwrap_or_default();
+        pixi_progress::println!("  - {}", name);
+    }
 
     Ok(())
 }
