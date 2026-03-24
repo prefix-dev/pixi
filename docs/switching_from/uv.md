@@ -221,6 +221,7 @@ Tasks support inter-task dependencies, environment variables, working directory 
 |---------------------------------|------------------------------------|
 | `uvx ruff check`               | `pixi exec ruff check`            |
 | `uvx --from 'ruff>=0.5' ruff check` | `pixi exec --spec 'ruff>=0.5' ruff check` |
+| `uvx --with numpy ruff check`  | `pixi exec --with numpy ruff check` |
 
 ### Global tools (`uv tool` vs `pixi global`)
 
@@ -261,11 +262,11 @@ Both tools generate lockfiles for reproducibility.
 
 | Aspect             | uv (`uv.lock`)         | Pixi (`pixi.lock`)                                   |
 |--------------------|------------------------|-------------------------------------------------------|
-| Format             | TOML                   | YAML (conda-lock compatible)                          |
+| Format             | TOML                   | YAML                                                  |
 | Cross-platform     | Universal resolution   | Solves per-platform, stored in one file                |
 | Multi-environment  | Single resolution      | Per-environment resolution                            |
 | Package types      | PyPI only              | Conda + PyPI                                          |
-| Auto-generated     | `uv lock`              | Automatic on `pixi add` / `pixi install`              |
+| Generate/update    | `uv lock`              | `pixi lock` (also automatic on `pixi add` / `pixi install`) |
 
 See [Lock File](../workspace/lockfile.md).
 
