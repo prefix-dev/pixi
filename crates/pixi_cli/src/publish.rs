@@ -290,14 +290,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let target_url = parse_target_url(&args.to)?;
 
-    upload_packages(
-        &target_url,
-        &built_package_paths,
-        &auth_storage,
-        args.force,
-        args.skip_existing,
-        args.generate_attestation,
-    )
+    pixi_progress::await_in_progress("uploading packages", |_| {
+        upload_packages(
+            &target_url,
+            &built_package_paths,
+            &auth_storage,
+            args.force,
+            args.skip_existing,
+            args.generate_attestation,
+        )
+    })
     .await?;
 
     pixi_progress::println!(
