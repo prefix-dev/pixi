@@ -213,7 +213,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let fragment = pkg
         .as_pypi()
         .unwrap()
-        .location
+        .location()
         .as_url()
         .unwrap()
         .fragment()

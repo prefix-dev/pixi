@@ -178,12 +178,11 @@ index-url = "{index_url}"
             panic!("Got a Conda package when I expected a pypi one")
         }
         rattler_lock::LockedPackageRef::Pypi(pkg) => {
-            assert_eq!(pkg.name.as_dist_info_name(), "mine");
-            assert_eq!(pkg.location.given(), Some("./mine"));
+            assert_eq!(pkg.name().as_dist_info_name(), "mine");
+            assert_eq!(pkg.location().given(), Some("./mine"));
             assert!(
-                pkg.index_url.is_none(),
-                "path-based source package should not have index_url, got: {:?}",
-                pkg.index_url
+                pkg.as_source().is_some(),
+                "path-based package should be a source package, not a wheel",
             );
         }
     }
@@ -195,12 +194,11 @@ index-url = "{index_url}"
             panic!("Got a Conda package when I expected a pypi one")
         }
         rattler_lock::LockedPackageRef::Pypi(pkg) => {
-            assert_eq!(pkg.name.as_dist_info_name(), "also_mine");
-            assert_eq!(pkg.location.given(), Some("./also_mine"));
+            assert_eq!(pkg.name().as_dist_info_name(), "also_mine");
+            assert_eq!(pkg.location().given(), Some("./also_mine"));
             assert!(
-                pkg.index_url.is_none(),
-                "path-based source package should not have index_url, got: {:?}",
-                pkg.index_url
+                pkg.as_source().is_some(),
+                "path-based package should be a source package, not a wheel",
             );
         }
     }
@@ -272,17 +270,16 @@ setup(version="42.23.12")
 
     match pkg {
         rattler_lock::LockedPackageRef::Pypi(data) => {
-            eprintln!("dynamic-dep version in lock file: {:?}", data.version);
+            eprintln!("dynamic-dep version in lock file: {:?}", data.version());
             // A source dependency with dynamic version should have no version in the lock file
             assert!(
-                data.version.is_none(),
+                data.version().is_none(),
                 "expected no version for dynamic source dependency, got {:?}",
-                data.version
+                data.version()
             );
             assert!(
-                data.index_url.is_none(),
-                "path-based source package should not have index_url, got: {:?}",
-                data.index_url
+                data.as_source().is_some(),
+                "path-based package should be a source package, not a wheel",
             );
         }
         _ => panic!("expected a pypi package"),
@@ -312,9 +309,9 @@ version = "42.23.12"
     {
         rattler_lock::LockedPackageRef::Pypi(data) => {
             assert!(
-                data.version.is_none(),
+                data.version().is_none(),
                 "version should remain None for local source dependency even after making version static, got {:?}",
-                data.version
+                data.version()
             );
         }
         _ => panic!("expected a pypi package"),
@@ -349,9 +346,9 @@ setup(version="99.0.0")
     {
         rattler_lock::LockedPackageRef::Pypi(data) => {
             assert!(
-                data.version.is_none(),
+                data.version().is_none(),
                 "version should be None after switching back to dynamic version, got {:?}",
-                data.version
+                data.version()
             );
         }
         _ => panic!("expected a pypi package"),
@@ -366,14 +363,13 @@ setup(version="99.0.0")
     {
         rattler_lock::LockedPackageRef::Pypi(data) => {
             assert!(
-                data.version.is_none(),
+                data.version().is_none(),
                 "version should be None after round-trip, got {:?}",
-                data.version
+                data.version()
             );
             assert!(
-                data.index_url.is_none(),
-                "index_url should be None after round-trip, got: {:?}",
-                data.index_url
+                data.as_source().is_some(),
+                "package should be a source package after round-trip",
             );
         }
         _ => panic!("expected a pypi package"),
@@ -440,14 +436,13 @@ another-dep = {{ path = "./another-dep" }}
     {
         rattler_lock::LockedPackageRef::Pypi(data) => {
             assert!(
-                data.version.is_none(),
+                data.version().is_none(),
                 "version should be None after re-resolve, got {:?}",
-                data.version
+                data.version()
             );
             assert!(
-                data.index_url.is_none(),
-                "index_url should be None after re-resolve, got: {:?}",
-                data.index_url
+                data.as_source().is_some(),
+                "package should be a source package after re-resolve",
             );
         }
         _ => panic!("expected a pypi package"),
@@ -496,9 +491,9 @@ version = "50.0.0"
     {
         rattler_lock::LockedPackageRef::Pypi(data) => {
             assert!(
-                data.version.is_none(),
+                data.version().is_none(),
                 "dynamic-dep version should be None, got {:?}",
-                data.version
+                data.version()
             );
         }
         _ => panic!("expected a pypi package"),
@@ -509,9 +504,9 @@ version = "50.0.0"
     {
         rattler_lock::LockedPackageRef::Pypi(data) => {
             assert!(
-                data.version.is_none(),
+                data.version().is_none(),
                 "another-dep version should be None for local source dep, got {:?}",
-                data.version
+                data.version()
             );
         }
         _ => panic!("expected a pypi package"),
@@ -2020,9 +2015,9 @@ test-static-pkg = {{ path = ".", editable = true }}
     {
         rattler_lock::LockedPackageRef::Pypi(data) => {
             assert!(
-                data.version.is_none(),
+                data.version().is_none(),
                 "local path dep should have version=None in lock file, got {:?}",
-                data.version
+                data.version()
             );
         }
         _ => panic!("expected a pypi package"),
@@ -2312,10 +2307,11 @@ async fn test_index_url_in_lock_file() {
     let torch = env
         .pypi_packages(p)
         .expect("should have pypi packages")
-        .find(|data| data.name.as_ref() == "torch")
+        .find(|data| data.name().as_ref() == "torch")
         .expect("torch should be in pypi packages");
+    let torch_wheel = torch.as_wheel().expect("torch should be a wheel package");
     assert_eq!(
-        torch.index_url.as_ref().map(|u| u.as_str()),
+        torch_wheel.index_url.as_ref().map(|u| u.as_str()),
         Some(custom_index.index_url().as_str()),
         "torch should have index_url set to the custom index"
     );
@@ -2324,10 +2320,11 @@ async fn test_index_url_in_lock_file() {
     let rsa = env
         .pypi_packages(p)
         .expect("should have pypi packages")
-        .find(|data| data.name.as_ref() == "rsa")
+        .find(|data| data.name().as_ref() == "rsa")
         .expect("rsa should be in pypi packages");
+    let rsa_wheel = rsa.as_wheel().expect("rsa should be a wheel package");
     assert_eq!(
-        rsa.index_url.as_ref().map(|u| u.as_str()),
+        rsa_wheel.index_url.as_ref().map(|u| u.as_str()),
         Some(default_index.index_url().as_str()),
         "rsa should have the default index URL"
     );
@@ -2398,17 +2395,18 @@ async fn test_index_url_omitted_for_default_pypi() {
     let torch = env
         .pypi_packages(p)
         .expect("should have pypi packages")
-        .find(|data| data.name.as_ref() == "torch")
+        .find(|data| data.name().as_ref() == "torch")
         .expect("torch should be in pypi packages");
+    let torch_wheel = torch.as_wheel().expect("torch should be a wheel package");
     assert!(
-        torch
+        torch_wheel
             .index_url
             .as_ref()
             .expect("torch should have index_url")
             .as_str()
             .contains("download.pytorch.org"),
         "torch index_url should point to pytorch: {:?}",
-        torch.index_url
+        torch_wheel.index_url
     );
 
     // rsa comes from real PyPI — index_url is set but rattler elides it
@@ -2416,16 +2414,18 @@ async fn test_index_url_omitted_for_default_pypi() {
     let rsa = env
         .pypi_packages(p)
         .expect("should have pypi packages")
-        .find(|data| data.name.as_ref() == "rsa")
+        .find(|data| data.name().as_ref() == "rsa")
         .expect("rsa should be in pypi packages");
+    let rsa_wheel = rsa.as_wheel().expect("rsa should be a wheel package");
     assert!(
-        rsa.index_url
+        rsa_wheel
+            .index_url
             .as_ref()
             .expect("rsa should have index_url")
             .as_str()
             .contains("pypi.org"),
         "rsa index_url should point to pypi.org: {:?}",
-        rsa.index_url
+        rsa_wheel.index_url
     );
 
     // Verify the serialized lock file: pytorch index URL should appear,

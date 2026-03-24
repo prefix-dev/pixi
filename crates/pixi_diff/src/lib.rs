@@ -65,7 +65,7 @@ impl LockFileDiff {
                             Either::Left((conda_package_data.name().clone(), conda_package_data))
                         }
                         LockedPackageRef::Pypi(pypi_package_data) => {
-                            Either::Right((pypi_package_data.name.clone(), pypi_package_data))
+                            Either::Right((pypi_package_data.name().clone(), pypi_package_data))
                         }
                     });
 
@@ -88,9 +88,11 @@ impl LockFileDiff {
                             }
                         }
                         LockedPackageRef::Pypi(data) => {
-                            let name = &data.name;
+                            let name = data.name();
                             match previous_pypi_packages.remove(name) {
-                                Some(previous_data) if previous_data.location != data.location => {
+                                Some(previous_data)
+                                    if previous_data.location() != data.location() =>
+                                {
                                     diff.changed
                                         .push((previous_data.clone().into(), data.clone().into()));
                                 }
@@ -462,13 +464,13 @@ impl LockFileJsonDiff {
                         explicit: conda_dependencies.contains_key(pkg.name()),
                     },
                     LockedPackage::Pypi(pkg) => JsonPackageDiff {
-                        name: pkg.name.as_dist_info_name().into_owned(),
+                        name: pkg.name().as_dist_info_name().into_owned(),
                         before: None,
                         after: Some(
                             serde_json::to_value(&pkg).expect("should be able to serialize"),
                         ),
                         ty: JsonPackageType::Pypi,
-                        explicit: pypi_dependencies.contains_key(&pkg.name),
+                        explicit: pypi_dependencies.contains_key(pkg.name()),
                     },
                 });
 
@@ -484,13 +486,13 @@ impl LockFileJsonDiff {
                     },
 
                     LockedPackage::Pypi(pkg) => JsonPackageDiff {
-                        name: pkg.name.as_dist_info_name().into_owned(),
+                        name: pkg.name().as_dist_info_name().into_owned(),
                         before: Some(
                             serde_json::to_value(&pkg).expect("should be able to serialize"),
                         ),
                         after: None,
                         ty: JsonPackageType::Pypi,
-                        explicit: pypi_dependencies.contains_key(&pkg.name),
+                        explicit: pypi_dependencies.contains_key(pkg.name()),
                     },
                 });
 
@@ -513,11 +515,11 @@ impl LockFileJsonDiff {
                         let after = serde_json::to_value(&new).expect("should be able to serialize");
                         let (before, after) = compute_json_diff(before, after);
                         JsonPackageDiff {
-                            name: old.name.as_dist_info_name().into_owned(),
+                            name: old.name().as_dist_info_name().into_owned(),
                             before: Some(before),
                             after: Some(after),
                             ty: JsonPackageType::Pypi,
-                            explicit: pypi_dependencies.contains_key(&old.name),
+                            explicit: pypi_dependencies.contains_key(old.name()),
                         }
                     }
                     _ => unreachable!("packages cannot change type, they are represented as removals and inserts instead"),
