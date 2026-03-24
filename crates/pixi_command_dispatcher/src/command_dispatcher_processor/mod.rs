@@ -10,13 +10,14 @@ use std::{
 };
 
 use crate::source_build_cache_status::SourceBuildCacheKey;
+use crate::source_metadata::SourceMetadataSpecCacheKey;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, DevSourceMetadata,
     DevSourceMetadataError, DevSourceMetadataSpec, InstallPixiEnvironmentResult, Reporter,
     SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
     SourceBuildCacheStatusError, SourceBuildError, SourceBuildResult, SourceBuildSpec,
-    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    SourceMetadata, SourceMetadataError,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
@@ -107,7 +108,7 @@ pub(crate) struct CommandDispatcherProcessor {
         PendingDeduplicatingTask<Arc<SourceMetadata>, SourceMetadataError>,
     >,
     source_metadata_reporters: HashMap<SourceMetadataId, reporter::SourceMetadataId>,
-    source_metadata_ids: HashMap<SourceMetadataSpec, SourceMetadataId>,
+    source_metadata_ids: HashMap<SourceMetadataSpecCacheKey, SourceMetadataId>,
 
     /// A mapping of instantiated tool environments
     instantiated_tool_envs: HashMap<

@@ -114,6 +114,12 @@ pub struct SourceRecord<D> {
     /// The variants that uniquely identify the way this package was built.
     pub variants: BTreeMap<String, VariantValue>,
 
+    /// The timestamp at which this record was solved. Using the same timestamp
+    /// when solving the host and build environments of this source record
+    /// should yield roughly the same environment. This is used to soft-lock
+    /// those environments.
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+
     /// The short hash that was originally parsed from the lock file (e.g.
     /// the 9f3c2a7b part of numba-cuda[9f3c2a7b] @ .).
     ///
@@ -245,6 +251,7 @@ impl<D> SourceRecord<D> {
             manifest_source: self.manifest_source,
             build_source: self.build_source,
             variants: self.variants,
+            timestamp: self.timestamp,
             identifier_hash: self.identifier_hash,
         }
     }
@@ -263,6 +270,7 @@ impl<D> SourceRecord<D> {
             manifest_source,
             build_source,
             variants,
+            timestamp,
             identifier_hash,
         } = self;
         let shared = (manifest_source, build_source, variants, identifier_hash);
@@ -272,6 +280,7 @@ impl<D> SourceRecord<D> {
                 manifest_source: shared.0,
                 build_source: shared.1,
                 variants: shared.2,
+                timestamp,
                 identifier_hash: shared.3,
             }),
             Err(err_data) => Err(SourceRecord {
@@ -279,6 +288,7 @@ impl<D> SourceRecord<D> {
                 manifest_source: shared.0,
                 build_source: shared.1,
                 variants: shared.2,
+                timestamp,
                 identifier_hash: shared.3,
             }),
         }
@@ -466,6 +476,7 @@ impl SourceRecord<SourceRecordData> {
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
             identifier_hash: self.identifier_hash,
+            timestamp: self.timestamp,
             metadata,
         }
     }
@@ -510,6 +521,7 @@ impl SourceRecord<SourceRecordData> {
                 .into_iter()
                 .map(|(k, v)| (k, VariantValue::from(v)))
                 .collect(),
+            timestamp: data.timestamp,
             identifier_hash: data.identifier_hash,
         })
     }
@@ -680,6 +692,7 @@ mod tests {
                         manifest_source: unresolved.manifest_source,
                         build_source: unresolved.build_source,
                         variants: unresolved.variants,
+                        timestamp: unresolved.timestamp,
                         identifier_hash: unresolved.identifier_hash,
                     },
                     SourceRecordData::Partial(_) => {
@@ -816,6 +829,7 @@ mod tests {
                 "python".into(),
                 crate::VariantValue::from("3.12".to_string()),
             )]),
+            timestamp: chrono::Utc::now(),
             identifier_hash: Some("abcd1234".to_string()),
         };
 
@@ -885,6 +899,7 @@ mod tests {
             }),
             build_source: None,
             variants: BTreeMap::new(),
+            timestamp: chrono::Utc::now(),
             identifier_hash: None,
         });
 
@@ -918,6 +933,7 @@ mod tests {
             manifest_source,
             build_source,
             variants,
+            timestamp: chrono::Utc::now(),
             identifier_hash: None,
         }
     }

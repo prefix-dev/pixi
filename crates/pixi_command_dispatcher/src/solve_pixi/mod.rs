@@ -153,6 +153,10 @@ impl PixiEnvironmentSpec {
         Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)
             .map_err(|err| CommandDispatcherError::Failed(*err))?;
 
+        // Determine a common cut-off date for excluding packages. This is established to ensure
+        // that all downstream environments all use the same cut-off date.
+        let exclude_newer = self.exclude_newer.unwrap_or_else(Utc::now);
+
         // Recursively collect the metadata of all the source specs.
         let CollectedSourceMetadata {
             source_repodata,
@@ -166,6 +170,7 @@ impl PixiEnvironmentSpec {
             self.variant_files.clone(),
             self.enabled_protocols.clone(),
             self.preferred_build_source.clone(),
+            exclude_newer,
         )
         .collect(
             source_specs

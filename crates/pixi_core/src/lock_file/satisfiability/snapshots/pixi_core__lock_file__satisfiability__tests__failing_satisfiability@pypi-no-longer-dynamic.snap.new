@@ -1,8 +1,0 @@
----
-source: crates/pixi_core/src/lock_file/satisfiability/mod.rs
-assertion_line: 3670
-expression: s
----
-environment 'default' does not satisfy the requirements of the project for platform 'win-64'
-    Diagnostic severity: error
-    Caused by: metadata for local package 'dynamic-dep' has changed: version changed from 0 to 1.0.0

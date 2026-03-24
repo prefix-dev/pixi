@@ -1083,6 +1083,7 @@ pub async fn verify_platform_satisfiability(
                                 variant_files: Some(variant_files.clone()),
                                 enabled_protocols: EnabledProtocols::default(),
                             },
+                            exclude_newer: Some(source.timestamp),
                         };
 
                         let partial_name = source.name().clone();
@@ -1596,6 +1597,7 @@ async fn verify_source_metadata(
                     variant_files: Some(variant_files),
                     enabled_protocols: EnabledProtocols::default(),
                 },
+                exclude_newer: Some(source_record.timestamp),
             };
 
             // Request source metadata to verify if it still matches the

@@ -229,6 +229,7 @@ impl InstallPixiEnvironmentSpec {
             data,
             manifest_source,
             build_source,
+            timestamp,
             ..
         }: UnresolvedSourceRecord,
     ) -> Result<RepoDataRecord, CommandDispatcherError<SourceBuildError>> {
@@ -246,6 +247,7 @@ impl InstallPixiEnvironmentSpec {
             .source_build(SourceBuildSpec {
                 source: PinnedSourceCodeLocation::new(manifest_source, build_source),
                 name,
+                exclude_newer: Some(timestamp),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),

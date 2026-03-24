@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-
+use chrono::Utc;
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
@@ -55,6 +55,9 @@ pub struct SourceBuildSpec {
 
     /// The manifest and optional build source location.
     pub source: PinnedSourceCodeLocation,
+
+    /// The exclude-newer timestamp to use
+    pub exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
@@ -616,6 +619,9 @@ impl SourceBuildSpec {
         // Determine final directories for everything.
         let directories = Directories::new(&work_directory, host_platform);
 
+        // Create a common cut-off for the build and host environments.
+        let exclude_newer = self.exclude_newer.unwrap_or_else(Utc::now);
+
         // Solve the build environment.
         let mut compatibility_map = HashMap::new();
         let build_dependencies = output
@@ -632,6 +638,7 @@ impl SourceBuildSpec {
                 &command_dispatcher,
                 build_dependencies.clone(),
                 self.build_environment.to_build_from_build(),
+                exclude_newer
             )
             .await
             .map_err_with(Box::new)
@@ -674,6 +681,7 @@ impl SourceBuildSpec {
                 &command_dispatcher,
                 host_dependencies.clone(),
                 self.build_environment.clone(),
+                exclude_newer
             )
             .await
             .map_err_with(Box::new)
@@ -844,6 +852,7 @@ impl SourceBuildSpec {
         command_dispatcher: &CommandDispatcher,
         dependencies: Dependencies,
         build_environment: BuildEnvironment,
+        exclude_newer: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
@@ -867,7 +876,7 @@ impl SourceBuildSpec {
                 channels: self.channels.clone(),
                 strategy: Default::default(),
                 channel_priority: Default::default(),
-                exclude_newer: None,
+                exclude_newer: Some(exclude_newer),
                 channel_config: self.channel_config.clone(),
                 variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),

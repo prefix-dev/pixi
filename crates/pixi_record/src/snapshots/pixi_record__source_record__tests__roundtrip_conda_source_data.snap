@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_record/src/source_record.rs
-assertion_line: 698
 expression: roundtrip_lock
 ---
 version: 7
@@ -24,27 +23,34 @@ packages:
   version: 1.1.0
   build: h234567_0
   subdir: noarch
+  timestamp: 1626502400000
   source:
     path: ../src
 - conda_source: git-no-manifest-subdir[f0ed072f] @ git+https://github.com/example/repo.git?tag=v1.0.0#abc123def456abc123def456abc123def456abc1
   version: 3.0.0
   build: h901237_0
   subdir: noarch
+  timestamp: 1626502400000
   source:
     path: build/subdir
 - conda_source: git-sibling-test[cb1b107e] @ git+https://github.com/example/mono-repo.git?subdirectory=recipes&branch=main#abc123def456abc123def456abc123def456abc1
   version: 1.0.0
   build: h123456_0
   subdir: noarch
+  timestamp: 1626502400000
   source:
     path: ../non-nested
 - conda_source: path-absolute-manifest[17e682f7] @ /workspace/absolute-recipe
+  timestamp: 1626502400000
   source:
     path: ../src
 - conda_source: path-child-test[9d062313] @ recipes/my-package
+  timestamp: 1626502400000
   source:
     path: ../../src/lib
 - conda_source: path-no-build-source[e11447f7] @ recipes/no-build
+  timestamp: 1626502400000
 - conda_source: path-sibling-test[2c2ab470] @ recipes/my-package
+  timestamp: 1626502400000
   source:
     path: ../../other-package/src
