@@ -300,12 +300,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
-    // Clear progress bar lines left behind by rattler_upload (one per package)
+    // HACK: rattler_upload uses `progress_bar.finish()` instead of
+    // `finish_and_clear()`, leaving rendered progress bars on stderr.
+    // This workaround clears those leftover lines. Remove once
+    // rattler_upload is fixed upstream (finish -> finish_and_clear in
+    // upload/mod.rs and upload/prefix.rs).
     let term = console::Term::stderr();
     term.clear_last_lines(built_package_paths.len()).ok();
-
-    // Clear any leftover progress bars from the global multi progress
-    global_multi_progress().clear().ok();
 
     pixi_progress::println!(
         "{}Successfully published {} package(s) to {}",
