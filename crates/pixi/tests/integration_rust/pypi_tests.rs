@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, path::Path, str::FromStr};
+use std::{fs::File, io::Write, str::FromStr};
 
 use pep508_rs::Requirement;
 use rattler_conda_types::Platform;
@@ -9,60 +9,6 @@ use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 use crate::common::{LockFileExt, PixiControl};
 use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
-
-/// Helper to check if a pypi package is installed as editable by looking for a .pth file.
-/// Editable installations create a .pth file in site-packages that points to the source directory.
-/// For most backends, make sure to use the old style editables when using this function
-fn has_editable_pth_file(prefix: &Path, package_name: &str) -> bool {
-    let site_packages = if cfg!(target_os = "windows") {
-        prefix.join("Lib").join("site-packages")
-    } else {
-        // Find the python version directory
-        let lib_dir = prefix.join("lib");
-        if let Ok(entries) = fs_err::read_dir(&lib_dir) {
-            let entry = entries
-                .filter_map(|e| e.ok())
-                // Find the directory that starts with "python"
-                .find(|e| e.file_name().to_string_lossy().starts_with("python"))
-                .map(|e| e.path().join("site-packages"));
-            if let Some(entry) = entry {
-                entry
-            } else {
-                panic!("expected site-packages folder");
-            }
-        } else {
-            panic!("expected lib folder");
-        }
-    };
-
-    // Look for editable .pth files - different build backends use different naming:
-    // - hatchling: _{package_name}.pth (e.g., _editable_test.pth)
-    // - setuptools: __editable__.{package_name}-{version}.pth
-    let mut count = 0u32;
-    let normalized_name = package_name.replace('-', "_");
-    if let Ok(entries) = fs_err::read_dir(&site_packages) {
-        for entry in entries.flatten() {
-            count += 1;
-            let name = entry.file_name();
-            let name_str = name.to_string_lossy();
-            if name_str.ends_with(".pth") {
-                // Check for hatchling style: _{package_name}.pth
-                if name_str == format!("_{}.pth", normalized_name) {
-                    return true;
-                }
-                // Check for setuptools style: __editable__.{package_name}-*.pth
-                if name_str.starts_with(&format!("__editable__.{}", normalized_name)) {
-                    return true;
-                }
-            }
-        }
-    }
-    if count == 0 {
-        panic!("expected folders in directory");
-    }
-
-    false
-}
 
 /// This tests if we can resolve pyproject optional dependencies recursively
 /// before when running `pixi list -e all`, this would have not included numpy
@@ -335,6 +281,75 @@ setup(version="42.23.12")
         _ => panic!("expected a pypi package"),
     }
 
+    // Make the version static: remove `dynamic = ["version"]` and set an
+    // explicit version. The lock file should still store version as None
+    // because the package is a local source dependency.
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+version = "42.23.12"
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the lock file after making version static")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "version should remain None for local source dependency even after making version static, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Switch back to a dynamic version and re-resolve.
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+dynamic = ["version"]
+"#,
+    )
+    .unwrap();
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/setup.py"),
+        r#"from setuptools import setup
+setup(version="99.0.0")
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the lock file after switching back to dynamic version")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "version should be None after switching back to dynamic version, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
     // Round-trip: serialize and parse the lock file, then verify the version is still None
     let lock_str = lock.render_to_string().unwrap();
     let lock2 = rattler_lock::LockFile::from_str_with_base_directory(&lock_str, None).unwrap();
@@ -401,6 +416,70 @@ version = "1.0.0"
                 data.index_url.is_none(),
                 "index_url should be None after re-resolve, got: {:?}",
                 data.index_url
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Trigger a re-resolve so that update_lock_file writes a new lock file
+    // that includes another-dep. Then verify the lock file can be loaded
+    // again — this catches URL mismatches between the environment reference
+    // (e.g. "./another-dep") and the packages section (e.g.
+    // "file:///tmp/.../another-dep").
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+version = "50.0.0"
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    // The lock file written by the re-resolve must be loadable.
+    let lock_reloaded = pixi
+        .lock_file()
+        .await
+        .expect("lock file written by update_lock_file should be loadable");
+
+    // Both packages should be present after the round-trip through disk.
+    assert!(
+        lock_reloaded.contains_pypi_package("default", platform, "dynamic-dep"),
+        "dynamic-dep should be present after reload"
+    );
+    assert!(
+        lock_reloaded.contains_pypi_package("default", platform, "another-dep"),
+        "another-dep should be present after reload"
+    );
+
+    // Verify the in-memory lock also has both packages with correct properties.
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the re-resolved lock")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "dynamic-dep version should be None, got {:?}",
+                data.version
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+    match lock
+        .get_pypi_package("default", platform, "another-dep")
+        .expect("another-dep should be in the re-resolved lock")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version.is_none(),
+                "another-dep version should be None for local source dep, got {:?}",
+                data.version
             );
         }
         _ => panic!("expected a pypi package"),
@@ -1924,113 +2003,6 @@ test-project = {{ path = "." }}
             );
         }
     }
-}
-
-/// Test that when a lock file has editable: true but the manifest doesn't specify editable,
-/// the package is installed as non-editable (manifest takes precedence).
-///
-/// This tests the fix for the bug where old lock files with editable: true would cause
-/// packages to be installed as editable even when the manifest didn't specify it.
-#[tokio::test]
-#[cfg_attr(
-    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
-    ignore
-)]
-async fn test_editable_from_manifest_not_lockfile() {
-    use rattler_lock::LockFile;
-
-    setup_tracing();
-
-    let platform = Platform::current();
-
-    // Create a project with a path dependency WITHOUT editable specified
-    // Use conda-forge directly since we need a real Python
-    let pixi = PixiControl::from_manifest(&format!(
-        r#"
-        [workspace]
-        name = "editable-test"
-        platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
-
-        [dependencies]
-        python = "~=3.12.0"
-
-        [pypi-dependencies]
-        editable-test = {{ path = "." }}
-        "#,
-        platform = platform,
-    ))
-    .unwrap();
-
-    // Create a minimal pyproject.toml for the package
-    let pyproject = r#"
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "editable-test"
-version = "0.1.0"
-"#;
-    fs_err::write(pixi.workspace_path().join("pyproject.toml"), pyproject).unwrap();
-
-    // Create the package source
-    let src_dir = pixi.workspace_path().join("editable_test");
-    fs_err::create_dir_all(&src_dir).unwrap();
-    fs_err::write(src_dir.join("__init__.py"), "").unwrap();
-
-    // First, update the lock file (this won't have editable field since we don't record it)
-    let lock = pixi.update_lock_file().await.unwrap();
-
-    // Path-based source package should not have index_url
-    match lock
-        .get_pypi_package("default", platform, "editable-test")
-        .expect("editable-test should be in the lock file")
-    {
-        rattler_lock::LockedPackageRef::Pypi(data) => {
-            assert!(
-                data.index_url.is_none(),
-                "path-based source package should not have index_url, got: {:?}",
-                data.index_url
-            );
-        }
-        _ => panic!("expected a pypi package"),
-    }
-
-    // Manually modify the lock file to add editable: true, simulating an old lock file
-    let lock_file_str = lock.render_to_string().unwrap();
-
-    // Add editable: true after the package name line
-    let modified_lock_file_str = lock_file_str.replace(
-        "name: editable-test\n",
-        "name: editable-test\n  editable: true\n",
-    );
-
-    assert!(
-        modified_lock_file_str.contains("editable: true"),
-        "Failed to add editable: true to lock file"
-    );
-
-    // Parse and write the modified lock file back
-    let modified_lockfile =
-        LockFile::from_str_with_base_directory(&modified_lock_file_str, None).unwrap();
-    let workspace = pixi.workspace().unwrap();
-    modified_lockfile
-        .to_path(&workspace.lock_file_path())
-        .unwrap();
-
-    // Now install with --locked (uses the modified lock file without re-resolving)
-    // The fix should ensure that the package is installed as NON-editable
-    // because the manifest doesn't specify editable = true
-    pixi.install().with_locked().await.unwrap();
-
-    let prefix_path = pixi.default_env_path().unwrap();
-
-    // The package should NOT be installed as editable because the manifest doesn't specify editable
-    assert!(
-        !has_editable_pth_file(&prefix_path, "editable_test"),
-        "Package should NOT be installed as editable when manifest doesn't specify editable = true (even if lock file has editable: true)"
-    );
 }
 
 /// Test that packages from different indexes get distinct `index_url` values

@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use pixi_git::url::RepositoryUrl;
 use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{to_parsed_git_url, to_uv_version};
-use rattler_lock::{PypiPackageData, UrlOrPath};
+use rattler_lock::UrlOrPath;
 use url::Url;
 use uv_cache_info::CacheInfoError;
 use uv_distribution_types::{Dist, InstalledDist, InstalledDistKind};
@@ -31,14 +31,14 @@ pub enum NeedsReinstallError {
 /// Check if a package needs to be reinstalled
 pub(crate) fn need_reinstall(
     installed_dist: &InstalledDist,
-    required_pkg: &PypiPackageData,
+    required_pkg: &crate::InstallablePypiRecord,
     required_dist: &Dist,
     lock_file_dir: &Path,
 ) -> Result<ValidateCurrentInstall, NeedsReinstallError> {
     // Check if the installed version is the same as the required version
     match &installed_dist.kind {
         InstalledDistKind::Registry(reg) => {
-            if !matches!(*required_pkg.location, UrlOrPath::Url(_)) {
+            if !matches!(required_pkg.location, UrlOrPath::Url(_)) {
                 return Ok(ValidateCurrentInstall::Reinstall(
                     NeedReinstall::SourceMismatch {
                         locked_location: required_pkg.location.to_string(),
@@ -47,18 +47,13 @@ pub(crate) fn need_reinstall(
                 ));
             }
 
-            let specifier = to_uv_version(
-                required_pkg
-                    .version
-                    .as_ref()
-                    .expect("registry packages always have a version"),
-            )?;
+            let specifier = to_uv_version(&required_pkg.version)?;
 
             if reg.version != specifier {
                 return Ok(ValidateCurrentInstall::Reinstall(
                     NeedReinstall::VersionMismatch {
                         installed_version: reg.version.clone(),
-                        locked_version: required_pkg.version_string(),
+                        locked_version: required_pkg.version.to_string(),
                     },
                 ));
             }
@@ -91,7 +86,7 @@ pub(crate) fn need_reinstall(
                     match result {
                         Ok(url) => {
                             // Convert the locked location, which can be a path or a url, to a url
-                            let locked_url = match &*required_pkg.location {
+                            let locked_url = match &required_pkg.location {
                                 // Fine if it is already a url
                                 UrlOrPath::Url(url) => url.clone(),
                                 // Do some path mangling if it is actually a path to get it into a url
@@ -164,7 +159,7 @@ pub(crate) fn need_reinstall(
                     let lock_file_dir = typed_path::Utf8TypedPathBuf::from(
                         lock_file_dir.to_string_lossy().as_ref(),
                     );
-                    let locked_url = match &*required_pkg.location {
+                    let locked_url = match &required_pkg.location {
                         // Remove `direct+` scheme if it is there so we can compare the required to
                         // the installed url
                         UrlOrPath::Url(url) => strip_direct_scheme(url).into_owned(),
@@ -230,7 +225,7 @@ pub(crate) fn need_reinstall(
 
                     // Try to parse the locked git url, this can be any url, so this may fail
                     // in practice it always seems to succeed, even with a non-git url
-                    let locked_git_url = match &*required_pkg.location {
+                    let locked_git_url = match &required_pkg.location {
                         UrlOrPath::Url(url) => {
                             // is it a git url?
                             if LockedGitUrl::is_locked_git_url(url) {
