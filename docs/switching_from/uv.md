@@ -7,13 +7,13 @@ It compares commands and concepts between the two tools, and explains what `pixi
 
 - **System dependencies included.** Need CUDA, OpenSSL, compilers, or C libraries? Conda packages bundle them. With `uv`, you have to install these yourself via `apt`, `brew`, Docker, or manual setup.
 - **Multi-language support.** A single `pixi` workspace can manage Python, R, C/C++, Rust, Node.js, and more, while `uv` only handles Python.
-- **Binary-only distribution.** Conda packages are always pre-compiled, so you never need a build toolchain on your machine. No waiting for source builds or debugging missing C headers.
+- **Binary-first distribution.** Conda packages are pre-compiled, so you rarely need a build toolchain on your machine. No waiting for source builds or debugging missing C headers.
 - **Complete environment modeling.** Conda environments contain everything (interpreters, libraries, headers, compilers, CLI tools), all managed by the solver. With `uv`, your Python environment depends on whatever your system happens to provide.
 - **True cross-platform lockfiles.** Pixi solves for all target platforms in a single lockfile, even platforms you're not currently running on.
 - **Built-in task runner.** Define and run tasks directly in your manifest, no need for `Makefile`, `just`, or shell scripts.
 
 !!! tip "You can still use PyPI packages"
-    Pixi fully supports PyPI packages alongside conda packages.
+    Pixi fully supports PyPI packages alongside conda packages, powered by uv under the hood.
     Use `pixi add --pypi <package>` to add PyPI dependencies, or define them in `[project.dependencies]` when using `pyproject.toml`.
     See [Conda & PyPI](../concepts/conda_pypi.md) for how the two ecosystems work together.
 
