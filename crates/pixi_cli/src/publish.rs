@@ -84,6 +84,11 @@ pub struct Args {
     #[arg(long)]
     pub force: bool,
 
+    /// Skip uploading packages that already exist on the target channel.
+    /// This is enabled by default. Use `--no-skip-existing` to disable.
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+    pub skip_existing: bool,
+
     /// Generate sigstore attestation (prefix.dev only)
     #[arg(long)]
     pub generate_attestation: bool,
@@ -201,6 +206,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let packages = backend_metadata.metadata.outputs();
 
+    // Print initial build summary
+    pixi_progress::println!(
+        "\n{}Building {} package(s):",
+        console::style(console::Emoji("📋 ", "")).cyan(),
+        packages.len()
+    );
+    for pkg in &packages {
+        pixi_progress::println!(
+            "  - {} v{} [{}] ({})",
+            pkg.name.as_normalized(),
+            pkg.version,
+            pkg.build,
+            pkg.subdir
+        );
+    }
+    pixi_progress::println!("");
+
     // Build and collect all package paths
     let mut built_package_paths: Vec<PathBuf> = Vec::new();
 
@@ -229,13 +251,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let package_path = dunce::canonicalize(&built_package.output_file)
             .expect("failed to canonicalize output file which must now exist");
 
+        let file_size = std::fs::metadata(&package_path).map(|m| m.len()).ok();
+
+        let file_name = package_path
+            .file_name()
+            .expect("built package should have a file name")
+            .to_string_lossy();
+
+        let size_str = file_size
+            .map(|s| format!(" ({})", format_size(s)))
+            .unwrap_or_default();
+
         pixi_progress::println!(
-            "{}Successfully built '{}'",
+            "{}Successfully built '{}'{} -> {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            package_path
-                .file_name()
-                .expect("built package should have a file name")
-                .to_string_lossy()
+            file_name,
+            size_str,
+            package_path.display()
         );
 
         built_package_paths.push(package_path);
@@ -264,9 +296,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &built_package_paths,
         &auth_storage,
         args.force,
+        args.skip_existing,
         args.generate_attestation,
     )
     .await?;
+
+    // Clear any leftover progress bars from the upload
+    global_multi_progress().clear().ok();
 
     pixi_progress::println!(
         "{}Successfully published {} package(s) to {}",
@@ -299,6 +335,7 @@ async fn upload_packages(
     package_paths: &[PathBuf],
     auth_storage: &AuthenticationStorage,
     force: bool,
+    skip_existing: bool,
     generate_attestation: bool,
 ) -> miette::Result<()> {
     let scheme = url.scheme();
@@ -313,6 +350,7 @@ async fn upload_packages(
                 package_paths,
                 auth_storage,
                 force,
+                skip_existing,
                 generate_attestation,
             )
             .await
@@ -321,7 +359,7 @@ async fn upload_packages(
             let path = url
                 .to_file_path()
                 .map_err(|()| miette::miette!("Invalid file URL: {}", url))?;
-            upload_to_local_filesystem(&path, package_paths, force).await
+            upload_to_local_filesystem(&path, package_paths, force, skip_existing).await
         }
         "http" | "https" => {
             let host = url.host_str().unwrap_or("");
@@ -332,6 +370,7 @@ async fn upload_packages(
                     package_paths,
                     auth_storage,
                     force,
+                    skip_existing,
                     generate_attestation,
                 )
                 .await
@@ -360,6 +399,7 @@ async fn upload_to_prefix(
     package_paths: &[PathBuf],
     auth_storage: &AuthenticationStorage,
     force: bool,
+    skip_existing: bool,
     generate_attestation: bool,
 ) -> miette::Result<()> {
     use rattler_upload::upload::opt::{
@@ -394,7 +434,7 @@ async fn upload_to_prefix(
         channel,
         None,
         attestation,
-        SkipExisting(false),
+        SkipExisting(skip_existing),
         ForceOverwrite(force),
         false,
     );
@@ -576,6 +616,7 @@ async fn upload_to_local_filesystem(
     target_dir: &std::path::Path,
     package_paths: &[PathBuf],
     force: bool,
+    skip_existing: bool,
 ) -> miette::Result<()> {
     use rattler_index::{IndexFsConfig, ensure_channel_initialized_fs, index_fs};
     use std::collections::HashSet;
@@ -605,11 +646,21 @@ async fn upload_to_local_filesystem(
         fs_err::create_dir_all(&target_subdir).into_diagnostic()?;
         let target_path = target_subdir.join(package_name);
 
-        if target_path.exists() && !force {
-            return Err(miette::miette!(
-                "Package already exists at {}. Use --force to overwrite.",
-                target_path.display()
-            ));
+        if target_path.exists() {
+            if skip_existing {
+                pixi_progress::println!(
+                    "{}Skipping '{}' (already exists)",
+                    console::style(console::Emoji("⏭ ", "")).yellow(),
+                    package_name.to_string_lossy()
+                );
+                continue;
+            }
+            if !force {
+                return Err(miette::miette!(
+                    "Package already exists at {}. Use --force to overwrite.",
+                    target_path.display()
+                ));
+            }
         }
 
         tracing::info!(
@@ -646,4 +697,22 @@ async fn upload_to_local_filesystem(
     }
 
     Ok(())
+}
+
+/// Format a byte size into a human-readable string (e.g., "5.40 KiB").
+fn format_size(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = KIB * 1024.0;
+    const GIB: f64 = MIB * 1024.0;
+
+    let bytes_f = bytes as f64;
+    if bytes_f >= GIB {
+        format!("{:.2} GiB", bytes_f / GIB)
+    } else if bytes_f >= MIB {
+        format!("{:.2} MiB", bytes_f / MIB)
+    } else if bytes_f >= KIB {
+        format!("{:.2} KiB", bytes_f / KIB)
+    } else {
+        format!("{} B", bytes)
+    }
 }
