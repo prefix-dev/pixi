@@ -36,6 +36,7 @@ for further details on how to use the software.
 - [Rust](https://prefix-dev.github.io/pixi/dev/tutorials/rust/index.md)
 - [Conda/Mamba](https://prefix-dev.github.io/pixi/dev/switching_from/conda/index.md)
 - [Poetry](https://prefix-dev.github.io/pixi/dev/switching_from/poetry/index.md)
+- [uv](https://prefix-dev.github.io/pixi/dev/switching_from/uv/index.md)
 - [Global Tools](https://prefix-dev.github.io/pixi/dev/global_tools/introduction/index.md)
 
 ## Concepts documentation

@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/deployment/authentication/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/switching_from/uv/">
       
       
-        <link rel="prev" href="../pixi_pack/">
+        <link rel="prev" href="../../tutorials/rust/">
       
       
-        <link rel="next" href="../container/">
+        <link rel="next" href="../poetry/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Authentication - Pixi</title>
+        <title>uv - Pixi</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#examples" class="md-skip">
+        <a href="#why-pixi" class="md-skip">
           Skip to content
         </a>
       
@@ -119,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Authentication
+              uv
             
           </span>
         </div>
@@ -474,8 +474,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -497,11 +499,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
           <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
@@ -522,7 +524,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             
@@ -740,8 +742,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -755,11 +759,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" checked>
         
           
           <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
@@ -780,7 +784,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_3_4">
             <span class="md-nav__icon md-icon"></span>
             
@@ -795,10 +799,35 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../switching_from/uv/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    uv
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -814,6 +843,289 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#why-pixi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Pixi?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-look-at-the-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick look at the differences
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concepts-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concepts mapping
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Concepts mapping">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#python-version-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Python version management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#virtual-environments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Virtual environments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependency-groups-and-extras" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependency groups and extras
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workspaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workspaces
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#standalone-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Standalone scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ephemeral-tool-execution-uvx-vs-pixi-exec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ephemeral tool execution (uvx vs pixi exec)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#global-tools-uv-tool-vs-pixi-global" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global tools (uv tool vs pixi global)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#package-indexes-and-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Package indexes and channels
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lockfiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lockfiles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#building-and-publishing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building and publishing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ci-with-github-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI with GitHub Actions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-uv-pip-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The uv pip interface
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-the-conda-ecosystem-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the conda ecosystem matters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why the conda ecosystem matters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#system-dependencies-are-included" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System dependencies are included
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reproducibility-beyond-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproducibility beyond Python
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-docker-needed-for-environment-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No Docker needed for environment isolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forward-compatible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward-compatible
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migrating-a-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrating a project
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -826,7 +1138,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../switching_from/poetry/" class="md-nav__link">
+      <a href="../poetry/" class="md-nav__link">
         
   
   
@@ -854,7 +1166,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../switching_from/conda/" class="md-nav__link">
+      <a href="../conda/" class="md-nav__link">
         
   
   
@@ -2196,10 +2508,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -2219,11 +2529,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
           <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
@@ -2244,7 +2554,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2262,7 +2572,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../prefix/" class="md-nav__link">
+      <a href="../../deployment/prefix/" class="md-nav__link">
         
   
   
@@ -2290,7 +2600,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pixi_pack/" class="md-nav__link">
+      <a href="../../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -2315,35 +2625,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Authentication
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../deployment/authentication/" class="md-nav__link">
         
   
   
@@ -2359,107 +2644,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Examples
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#where-does-pixi-store-the-authentication-information" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Where does Pixi store the authentication information?
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#fallback-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Fallback storage
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#override-the-authentication-storage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Override the authentication storage
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pypi-authentication" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PyPI authentication
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="PyPI authentication">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#keyring-authentication" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Keyring authentication
-      
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#netrc-file" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        .netrc file
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2472,7 +2656,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../container/" class="md-nav__link">
+      <a href="../../deployment/container/" class="md-nav__link">
         
   
   
@@ -2500,7 +2684,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../s3/" class="md-nav__link">
+      <a href="../../deployment/s3/" class="md-nav__link">
         
   
   
@@ -2528,7 +2712,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../artifactory/" class="md-nav__link">
+      <a href="../../deployment/artifactory/" class="md-nav__link">
         
   
   
@@ -3177,7 +3361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pixi_pack/" class="md-nav__link">
+      <a href="../../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -4001,10 +4185,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
+  <a href="#why-pixi" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Examples
+        Why Pixi?
       
     </span>
   </a>
@@ -4012,10 +4196,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#where-does-pixi-store-the-authentication-information" class="md-nav__link">
+  <a href="#quick-look-at-the-differences" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Where does Pixi store the authentication information?
+        Quick look at the differences
       
     </span>
   </a>
@@ -4023,10 +4207,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#fallback-storage" class="md-nav__link">
+  <a href="#project-configuration" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Fallback storage
+        Project configuration
       
     </span>
   </a>
@@ -4034,33 +4218,22 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#override-the-authentication-storage" class="md-nav__link">
+  <a href="#concepts-mapping" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Override the authentication storage
+        Concepts mapping
       
     </span>
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#pypi-authentication" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        PyPI authentication
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="PyPI authentication">
+    <nav class="md-nav" aria-label="Concepts mapping">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#keyring-authentication" class="md-nav__link">
+  <a href="#python-version-management" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Keyring authentication
+        Python version management
       
     </span>
   </a>
@@ -4068,10 +4241,131 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#netrc-file" class="md-nav__link">
+  <a href="#virtual-environments" class="md-nav__link">
     <span class="md-ellipsis">
       
-        .netrc file
+        Virtual environments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependency-groups-and-extras" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependency groups and extras
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#workspaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workspaces
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#standalone-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Standalone scripts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ephemeral-tool-execution-uvx-vs-pixi-exec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ephemeral tool execution (uvx vs pixi exec)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#global-tools-uv-tool-vs-pixi-global" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Global tools (uv tool vs pixi global)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#package-indexes-and-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Package indexes and channels
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lockfiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lockfiles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#building-and-publishing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Building and publishing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ci-with-github-actions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CI with GitHub Actions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-uv-pip-interface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The uv pip interface
       
     </span>
   </a>
@@ -4080,6 +4374,78 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-the-conda-ecosystem-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the conda ecosystem matters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Why the conda ecosystem matters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#system-dependencies-are-included" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System dependencies are included
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reproducibility-beyond-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reproducibility beyond Python
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-docker-needed-for-environment-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No Docker needed for environment isolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#forward-compatible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward-compatible
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migrating-a-project" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrating a project
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4100,7 +4466,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/deployment/authentication.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/switching_from/uv.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -4108,189 +4474,448 @@
   
 
 
-  <h1>Authentication</h1>
+  <h1>uv</h1>
 
-<p>You can authenticate Pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
-Different servers use different authentication methods.
-In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Usage:<span class="w"> </span>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span>&lt;HOST&gt;
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Arguments:
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>&lt;HOST&gt;<span class="w">  </span>The<span class="w"> </span>host<span class="w"> </span>to<span class="w"> </span>authenticate<span class="w"> </span>with<span class="w"> </span><span class="o">(</span>e.g.<span class="w"> </span>repo.prefix.dev<span class="o">)</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>Options:
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span>--token<span class="w"> </span>&lt;TOKEN&gt;<span class="w">                                </span>The<span class="w"> </span>token<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>authentication<span class="w"> </span>with<span class="w"> </span>prefix.dev<span class="o">)</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span>--username<span class="w"> </span>&lt;USERNAME&gt;<span class="w">                          </span>The<span class="w"> </span>username<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>basic<span class="w"> </span>HTTP<span class="w"> </span>authentication<span class="o">)</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">      </span>--password<span class="w"> </span>&lt;PASSWORD&gt;<span class="w">                          </span>The<span class="w"> </span>password<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>basic<span class="w"> </span>HTTP<span class="w"> </span>authentication<span class="o">)</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">      </span>--conda-token<span class="w"> </span>&lt;CONDA_TOKEN&gt;<span class="w">                    </span>The<span class="w"> </span>token<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span>on<span class="w"> </span>anaconda.org<span class="w"> </span>/<span class="w"> </span>quetz<span class="w"> </span>authentication
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">      </span>--s3-access-key-id<span class="w"> </span>&lt;S3_ACCESS_KEY_ID&gt;<span class="w">          </span>The<span class="w"> </span>S3<span class="w"> </span>access<span class="w"> </span>key<span class="w"> </span>ID
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">      </span>--s3-secret-access-key<span class="w"> </span>&lt;S3_SECRET_ACCESS_KEY&gt;<span class="w">  </span>The<span class="w"> </span>S3<span class="w"> </span>secret<span class="w"> </span>access<span class="w"> </span>key
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span>--s3-session-token<span class="w"> </span>&lt;S3_SESSION_TOKEN&gt;<span class="w">          </span>The<span class="w"> </span>S3<span class="w"> </span>session<span class="w"> </span>token
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>-v,<span class="w"> </span>--verbose...<span class="w">                                   </span>Increase<span class="w"> </span>logging<span class="w"> </span>verbosity
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>-q,<span class="w"> </span>--quiet...<span class="w">                                     </span>Decrease<span class="w"> </span>logging<span class="w"> </span>verbosity
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span>--color<span class="w"> </span>&lt;COLOR&gt;<span class="w">                                </span>Whether<span class="w"> </span>the<span class="w"> </span>log<span class="w"> </span>needs<span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>colored<span class="w"> </span><span class="o">[</span>env:<span class="w"> </span><span class="nv">PIXI_COLOR</span><span class="o">=]</span><span class="w"> </span><span class="o">[</span>default:<span class="w"> </span>auto<span class="o">]</span><span class="w"> </span><span class="o">[</span>possible<span class="w"> </span>values:<span class="w"> </span>always,<span class="w"> </span>never,<span class="w"> </span>auto<span class="o">]</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span>--no-progress<span class="w">                                  </span>Hide<span class="w"> </span>all<span class="w"> </span>progress<span class="w"> </span>bars,<span class="w"> </span>always<span class="w"> </span>turned<span class="w"> </span>on<span class="w"> </span><span class="k">if</span><span class="w"> </span>stderr<span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>a<span class="w"> </span>terminal<span class="w"> </span><span class="o">[</span>env:<span class="w"> </span><span class="nv">PIXI_NO_PROGRESS</span><span class="o">=]</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>-h,<span class="w"> </span>--help<span class="w">                                         </span>Print<span class="w"> </span><span class="nb">help</span>
-</span></code></pre></div>
-<p>The different options are "token", "conda-token" and "username + password".</p>
-<p>The token variant implements a standard "Bearer Token" authentication as is used on the prefix.dev platform.
-A Bearer Token is sent with every request as an additional header of the form <code>Authentication: Bearer &lt;TOKEN&gt;</code>.</p>
-<p>The conda-token option is used on anaconda.org and can be used with a quetz server. With this option, the token is sent as part of the URL following this scheme: <code>conda.anaconda.org/t/&lt;TOKEN&gt;/conda-forge/linux-64/...</code>.</p>
-<p>The last option, username &amp; password, are used for "Basic HTTP Authentication". This is the equivalent of adding <code>http://user:password@myserver.com/...</code>. This authentication method can be configured quite easily with a reverse NGinx or Apache server and is thus commonly used in self-hosted systems.</p>
-<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
-<p>Login to prefix.dev:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_jj8WDzvnuTHEGdAhwRZMC1Ag8gSto8
-</span></code></pre></div>
-<p>Login to anaconda.org:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>xy-72b914cc-c105-4ec7-a969-ab21d23480ed
-</span></code></pre></div>
-<p>Login to a basic HTTP secured server:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>myserver.com<span class="w"> </span>--username<span class="w"> </span>user<span class="w"> </span>--password<span class="w"> </span>password
-</span></code></pre></div>
-<p>Login to an S3 bucket:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span>--s3-secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># if your key uses a session token, you can also use:</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span>--s3-secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;<span class="w"> </span>--s3-session-token<span class="w"> </span>&lt;session-token&gt;
-</span></code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>S3 authentication is also supported through AWS's typical <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> environment variables, see the <a href="../s3/">S3 section</a> for more details.</p>
-</div>
-<h2 id="where-does-pixi-store-the-authentication-information">Where does Pixi store the authentication information?<a class="headerlink" href="#where-does-pixi-store-the-authentication-information" title="Permanent link">#</a></h2>
-<p>The storage location for the authentication information is system-dependent. By default, Pixi tries to use the keychain to store this sensitive information securely on your machine.</p>
-<p>On Windows, the credentials are stored in the "credentials manager". Searching for <code>rattler</code> (the underlying library Pixi uses) you should find any credentials stored by Pixi (or other rattler-based programs).</p>
-<p>On macOS, the passwords are stored in the keychain. To access the password, you can use the <code>Keychain Access</code> program that comes pre-installed on macOS. Searching for <code>rattler</code> (the underlying library Pixi uses) you should find any credentials stored by Pixi (or other rattler-based programs).</p>
-<p>On Linux, one can use <code>GNOME Keyring</code> (or just Keyring) to access credentials that are securely stored by <code>libsecret</code>. Searching for <code>rattler</code> should list all the credentials stored by Pixi and other rattler-based programs.</p>
-<h2 id="fallback-storage">Fallback storage<a class="headerlink" href="#fallback-storage" title="Permanent link">#</a></h2>
-<p>If you run on a server with none of the aforementioned keychains available, then Pixi falls back to store the credentials in an <em>insecure</em> JSON file.
-This JSON file is located at <code>~/.rattler/credentials.json</code> and contains the credentials.</p>
-<h2 id="override-the-authentication-storage">Override the authentication storage<a class="headerlink" href="#override-the-authentication-storage" title="Permanent link">#</a></h2>
-<p>You can use the <code>RATTLER_AUTH_FILE</code> environment variable to override the default location of the credentials file.
-When this environment variable is set, it provides the only source of authentication data that is used by pixi.</p>
-<p>E.g.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">RATTLER_AUTH_FILE</span><span class="o">=</span><span class="nv">$HOME</span>/credentials.json
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># You can also specify the file in the command line</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--auth-file<span class="w"> </span><span class="nv">$HOME</span>/credentials.json<span class="w"> </span>...
-</span></code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p><code>RATTLER_AUTH_FILE</code> has higher precedence than the CLI argument.</p>
-</div>
-<p>The JSON should follow the following format:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">    </span><span class="nt">&quot;*.prefix.dev&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">        </span><span class="nt">&quot;BearerToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">&quot;otherhost.com&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">        </span><span class="nt">&quot;BasicHTTP&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">            </span><span class="nt">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_username&quot;</span><span class="p">,</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">            </span><span class="nt">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_password&quot;</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="nt">&quot;conda.anaconda.org&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">        </span><span class="nt">&quot;CondaToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="nt">&quot;s3://my-bucket&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">        </span><span class="nt">&quot;S3Credentials&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">            </span><span class="nt">&quot;access_key_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-access-key-id&quot;</span><span class="p">,</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">            </span><span class="nt">&quot;secret_access_key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-secret-access-key&quot;</span><span class="p">,</span>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">            </span><span class="nt">&quot;session_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="p">}</span>
-</span></code></pre></div>
-<p>Note: if you use a wildcard in the host, any subdomain will match (e.g. <code>*.prefix.dev</code> also matches <code>repo.prefix.dev</code>).</p>
-<p>Lastly you can set the authentication override file in the <a href="../../reference/pixi_configuration/">global configuration file</a>.</p>
-<h2 id="pypi-authentication">PyPI authentication<a class="headerlink" href="#pypi-authentication" title="Permanent link">#</a></h2>
-<p>Currently, we support the following methods for authenticating against PyPI:</p>
-<ol>
-<li><a href="https://pypi.org/project/keyring/">keyring</a> authentication.</li>
-<li><code>.netrc</code> file authentication.</li>
-</ol>
-<p>We want to add more methods in the future, so if you have a specific method you would like to see, please let us know.</p>
-<h3 id="keyring-authentication">Keyring authentication<a class="headerlink" href="#keyring-authentication" title="Permanent link">#</a></h3>
-<p>Currently, Pixi supports the uv method of authentication through the python <a href="https://pypi.org/project/keyring/">keyring</a> library.</p>
-<h4 id="installing-keyring">Installing keyring<a class="headerlink" href="#installing-keyring" title="Permanent link">#</a></h4>
-<p>To install keyring you can use <code>pixi global install</code>:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Basic Auth</label><label for="__tabbed_1_2">Google Artifact Registry</label><label for="__tabbed_1_3">Azure DevOps Artifacts</label><label for="__tabbed_1_4">AWS CodeArtifact</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.google-artifactregistry-auth
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.artifacts
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.codeartifact
-</span></code></pre></div>
-</div>
-</div>
-</div>
-<p>For other registries, you will need to adapt these instructions to add the right keyring backend.</p>
-<h4 id="configuring-your-workspace-to-use-keyring">Configuring your workspace to use keyring<a class="headerlink" href="#configuring-your-workspace-to-use-keyring" title="Permanent link">#</a></h4>
-<div class="tabbed-set tabbed-alternate" data-tabs="2:4"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><input id="__tabbed_2_4" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Basic Auth</label><label for="__tabbed_2_2">Google Artifact Registry</label><label for="__tabbed_2_3">Azure DevOps Artifacts</label><label for="__tabbed_2_4">AWS CodeArtifact</label></div>
-<div class="tabbed-content">
-<div class="tabbed-block">
-<p>Use keyring to store your credentials e.g:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>keyring<span class="w"> </span><span class="nb">set</span><span class="w"> </span>https://my-index/simple<span class="w"> </span>your_username
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># prompt will appear for your password</span>
-</span></code></pre></div>
-<p>Add the following configuration to your Pixi manifest, making sure to include <code>your_username@</code> in the URL of the registry:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://your_username@custom-registry.com/simple&quot;</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>After making sure you are logged in, for instance by running <code>gcloud auth login</code>, add the following configuration to your Pixi manifest:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://oauth2accesstoken@&lt;location&gt;-python.pkg.dev/&lt;project&gt;/&lt;repository&gt;/simple&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>To find this URL more easily, you can use the <code>gcloud</code> command:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>gcloud<span class="w"> </span>artifacts<span class="w"> </span>print-settings<span class="w"> </span>python<span class="w"> </span>--project<span class="o">=</span>&lt;project&gt;<span class="w"> </span>--repository<span class="o">=</span>&lt;repository&gt;<span class="w"> </span>--location<span class="o">=</span>&lt;location&gt;
-</span></code></pre></div>
-</div>
-</div>
-<div class="tabbed-block">
-<p>After following the <a href="https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage"><code>keyrings.artifacts</code> instructions</a> and making sure that keyring works correctly, add the following configuration to your Pixi manifest:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-</div>
-<div class="tabbed-block">
-<p>Ensure you are logged in e.g via <code>aws sso login</code> and add the following configuration to your Pixi manifest:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://aws@&lt;your-domain&gt;-&lt;your-account&gt;.d.codeartifact.&lt;your-region&gt;.amazonaws.com/pypi/&lt;your-repository&gt;/simple/&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-</div>
-</div>
-</div>
-<h4 id="installing-your-environment">Installing your environment<a class="headerlink" href="#installing-your-environment" title="Permanent link">#</a></h4>
-<p>Either configure your <a href="../../reference/pixi_configuration/#pypi-config">Global Config</a>, or use the flag <code>--pypi-keyring-provider</code> which can either be set to <code>subprocess</code> (activated) or <code>disabled</code>:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># From an existing pixi workspace</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
-</span></code></pre></div>
-<h3 id="netrc-file"><code>.netrc</code> file<a class="headerlink" href="#netrc-file" title="Permanent link">#</a></h3>
-<p><code>pixi</code> allows you to access private registries securely by authenticating with credentials stored in a <code>.netrc</code> file.</p>
+<p>This guide helps you transition from uv to Pixi.
+It compares commands and concepts between the two tools, and explains what Pixi adds on top: the full conda ecosystem for managing non-Python dependencies, system libraries, and multi-language projects.</p>
+<h2 id="why-pixi">Why Pixi?<a class="headerlink" href="#why-pixi" title="Permanent link">#</a></h2>
+<p>uv is a fast Python package manager, but it's limited to the PyPI ecosystem. Pixi builds on conda, which brings several fundamental advantages:</p>
 <ul>
-<li>The <code>.netrc</code> file can be stored in your home directory (<code>$HOME/.netrc</code> for Unix-like systems)</li>
-<li>or in the user profile directory on Windows (<code>%HOME%\_netrc</code>).</li>
-<li>You can also set up a different location for it using the <code>NETRC</code> variable (<code>export NETRC=/my/custom/location/.netrc</code>).
-  e.g <code>export NETRC=/my/custom/location/.netrc pixi install</code></li>
+<li><strong>System dependencies included.</strong> Need CUDA, OpenSSL, compilers, or C libraries? Conda packages bundle them. With uv, you have to install these yourself via <code>apt</code>, <code>brew</code>, Docker, or manual setup.</li>
+<li><strong>Multi-language support.</strong> A single Pixi workspace can manage Python, R, C/C++, Rust, Node.js, and more, while uv only handles Python.</li>
+<li><strong>Binary-first distribution.</strong> Conda packages are pre-compiled, so you rarely need a build toolchain on your machine. No waiting for source builds or debugging missing C headers.</li>
+<li><strong>Complete environment modeling.</strong> Conda environments contain everything (interpreters, libraries, headers, compilers, CLI tools), all managed by the solver. With uv, your Python environment depends on whatever your system happens to provide.</li>
+<li><strong>True cross-platform lockfiles.</strong> Pixi solves for all target platforms in a single lockfile, even platforms you're not currently running on.</li>
+<li><strong>Built-in task runner.</strong> Define and run tasks directly in your manifest, no need for <code>Makefile</code>, <code>just</code>, or shell scripts.</li>
 </ul>
-<p>In the <code>.netrc</code> file, you store authentication details like this:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>machine<span class="w"> </span>registry-name
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>login<span class="w"> </span>admin
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>password<span class="w"> </span>admin
+<div class="admonition tip">
+<p class="admonition-title">You can still use PyPI packages</p>
+<p>Pixi fully supports PyPI packages alongside conda packages, powered by uv under the hood.
+Use <code>pixi add --pypi &lt;package&gt;</code> to add PyPI dependencies, or define them in <code>[project.dependencies]</code> when using <code>pyproject.toml</code>.
+See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ecosystems work together.</p>
+</div>
+<h2 id="quick-look-at-the-differences">Quick look at the differences<a class="headerlink" href="#quick-look-at-the-differences" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>uv</th>
+<th>Pixi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Creating a project</td>
+<td><code>uv init myproject</code></td>
+<td><code>pixi init myproject</code></td>
+</tr>
+<tr>
+<td>Adding a dependency</td>
+<td><code>uv add numpy</code></td>
+<td><code>pixi add numpy</code> (conda) or <code>pixi add --pypi numpy</code> (PyPI)</td>
+</tr>
+<tr>
+<td>Removing a dependency</td>
+<td><code>uv remove numpy</code></td>
+<td><code>pixi remove numpy</code> (conda) or <code>pixi remove --pypi numpy</code> (PyPI)</td>
+</tr>
+<tr>
+<td>Installing/syncing</td>
+<td><code>uv sync</code></td>
+<td><code>pixi install</code></td>
+</tr>
+<tr>
+<td>Running a command</td>
+<td><code>uv run python main.py</code></td>
+<td><code>pixi run python main.py</code></td>
+</tr>
+<tr>
+<td>Running a standalone script</td>
+<td><code>uv run script.py</code> (PEP 723)</td>
+<td><code>pixi exec</code> via <a href="../../advanced/shebang/">shebang</a></td>
+</tr>
+<tr>
+<td>Running a task</td>
+<td><em>(no built-in task runner)</em></td>
+<td><code>pixi run my_task</code></td>
+</tr>
+<tr>
+<td>Locking dependencies</td>
+<td><code>uv lock</code></td>
+<td><code>pixi lock</code> (also runs automatically on <code>pixi add</code> / <code>pixi install</code>)</td>
+</tr>
+<tr>
+<td>Installing Python</td>
+<td><code>uv python install 3.12</code></td>
+<td><code>pixi add python=3.12</code> (managed as a regular dependency)</td>
+</tr>
+<tr>
+<td>Ephemeral tool execution</td>
+<td><code>uvx ruff check</code></td>
+<td><code>pixi exec ruff check</code></td>
+</tr>
+<tr>
+<td>Global tool install</td>
+<td><code>uv tool install ruff</code></td>
+<td><code>pixi global install ruff</code></td>
+</tr>
+<tr>
+<td>Building a package</td>
+<td><code>uv build</code></td>
+<td>Supported via <a href="../../build/getting_started/">pixi-build backends</a></td>
+</tr>
+<tr>
+<td>Publishing a package</td>
+<td><code>uv publish</code></td>
+<td>Upload to a <a href="../../deployment/prefix/">prefix.dev channel</a></td>
+</tr>
+<tr>
+<td>Exporting a lockfile</td>
+<td><code>uv export</code></td>
+<td><code>pixi workspace export conda-environment</code></td>
+</tr>
+<tr>
+<td>Virtual environments</td>
+<td><code>.venv/</code> (automatic)</td>
+<td><code>.pixi/envs/</code> (automatic, supports multiple environments)</td>
+</tr>
+<tr>
+<td>Cache management</td>
+<td><code>uv cache clean</code></td>
+<td><code>pixi clean cache</code></td>
+</tr>
+<tr>
+<td>Updating dependencies</td>
+<td><code>uv lock --upgrade</code></td>
+<td><code>pixi update</code></td>
+</tr>
+<tr>
+<td>GitHub Actions</td>
+<td><code>astral-sh/setup-uv</code></td>
+<td><code>prefix-dev/setup-pixi</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="project-configuration">Project configuration<a class="headerlink" href="#project-configuration" title="Permanent link">#</a></h2>
+<p>uv uses <code>pyproject.toml</code> for project configuration and <code>uv.toml</code> for tool-level settings. Pixi supports both <code>pixi.toml</code> (its native format) and <code>pyproject.toml</code> for project configuration, and uses a separate <a href="../../reference/pixi_configuration/">configuration file</a> for tool-level settings.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">uv (pyproject.toml)</label><label for="__tabbed_1_2">Pixi (pixi.toml)</label><label for="__tabbed_1_3">Pixi (pyproject.toml)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[project]</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject&quot;</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.12&quot;</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">    </span><span class="s2">&quot;numpy&gt;=1.26&quot;</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span><span class="s2">&quot;pandas&gt;=2.0&quot;</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">]</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">[dependency-groups]</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">dev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pytest&gt;=8.0&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<p>For more details, you can access the <a href="https://www.ibm.com/docs/en/aix/7.2?topic=formats-netrc-file-format-tcpip">.netrc docs</a>.</p>
+</div>
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject&quot;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">[dependencies]</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.12&quot;</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1.26&quot;</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">pandas</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.0&quot;</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="k">[feature.test.dependencies]</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=8.0&quot;</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="k">[environments]</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;myproject&quot;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">requires-python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.12&quot;</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="s2">&quot;numpy&gt;=1.26&quot;</span><span class="p">,</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">    </span><span class="s2">&quot;pandas&gt;=2.0&quot;</span><span class="p">,</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="p">]</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="k">[dependency-groups]</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pytest&gt;=8.0&quot;</span><span class="p">]</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="k">[tool.pixi.workspace]</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="k">[tool.pixi.environments]</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">features</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">],</span><span class="w"> </span><span class="n">solve-group</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<p>With <code>pyproject.toml</code>, Pixi reads <code>[project.dependencies]</code> as PyPI dependencies and <code>[tool.pixi.dependencies]</code> as conda dependencies. See the <a href="../../python/pyproject_toml/">pyproject.toml guide</a> for details.</p>
+<h2 id="concepts-mapping">Concepts mapping<a class="headerlink" href="#concepts-mapping" title="Permanent link">#</a></h2>
+<h3 id="python-version-management">Python version management<a class="headerlink" href="#python-version-management" title="Permanent link">#</a></h3>
+<p>uv manages Python installations separately with <code>uv python install</code>. In Pixi, Python is just another package:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12<span class="w">    </span><span class="c1"># add Python as a conda dependency</span>
+</span></code></pre></div>
+<p>Python gets version-locked in your lockfile alongside everything else, so there's no separate <code>.python-version</code> file to manage.</p>
+<h3 id="virtual-environments">Virtual environments<a class="headerlink" href="#virtual-environments" title="Permanent link">#</a></h3>
+<p>uv creates a single <code>.venv/</code> directory per project. Pixi creates environments under <code>.pixi/envs/</code>, and supports <strong>multiple named environments</strong> that exist simultaneously in one workspace:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[environments]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">default</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">docs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;docs&quot;</span><span class="p">]</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cuda&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+<p>Each environment can have completely different (even conflicting) dependencies, and Pixi keeps them all installed side by side. For example, you can have one environment with <code>numpy 1.x</code> and another with <code>numpy 2.x</code>, both ready to use without reinstalling anything.</p>
+<p>uv can resolve conflicting dependency groups separately in the lockfile via <code>tool.uv.conflicts</code>, but it still uses a single <code>.venv/</code> that you swap between with <code>uv sync --group &lt;name&gt;</code>. Pixi environments are independent directories, so switching is instant.</p>
+<p>See <a href="../../workspace/multi_environment/">Multi Environment</a>.</p>
+<h3 id="dependency-groups-and-extras">Dependency groups and extras<a class="headerlink" href="#dependency-groups-and-extras" title="Permanent link">#</a></h3>
+<p>uv uses <a href="https://peps.python.org/pep-0735/">PEP 735 dependency groups</a> and optional dependencies (extras) to organize dependencies. Pixi uses <strong>features</strong>, composable sets of dependencies that map to environments:</p>
+<table>
+<thead>
+<tr>
+<th>uv</th>
+<th>Pixi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[dependency-groups]</code></td>
+<td><code>[feature.&lt;name&gt;.dependencies]</code></td>
+</tr>
+<tr>
+<td><code>[project.optional-dependencies]</code></td>
+<td><code>[feature.&lt;name&gt;.dependencies]</code> mapped to environments</td>
+</tr>
+<tr>
+<td><code>uv sync --group dev</code></td>
+<td><code>pixi install -e dev</code></td>
+</tr>
+<tr>
+<td><code>uv sync --all-groups</code></td>
+<td><code>pixi install --all</code></td>
+</tr>
+</tbody>
+</table>
+<p>Features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, system requirements, and activation scripts.</p>
+<h3 id="workspaces">Workspaces<a class="headerlink" href="#workspaces" title="Permanent link">#</a></h3>
+<p>Both tools support multi-package workspaces. uv defines workspace members with a glob pattern in <code>pyproject.toml</code>:</p>
+<div class="language-toml highlight"><span class="filename">uv pyproject.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[tool.uv.workspace]</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">members</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;packages/*&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+<p>Pixi takes a different approach: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own <code>pixi.toml</code> (containing a <code>[package]</code> section) can be pulled in this way:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">[dependencies]</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">my_lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;packages/my_lib&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>Both tools share a single lockfile across the workspace. See <a href="../../build/workspace/">Building Multiple Packages</a>.</p>
+<h3 id="standalone-scripts">Standalone scripts<a class="headerlink" href="#standalone-scripts" title="Permanent link">#</a></h3>
+<p>uv supports <a href="https://peps.python.org/pep-0723/">PEP 723 inline script metadata</a> for standalone scripts that declare their own dependencies:</p>
+<div class="language-python highlight"><span class="filename">uv script</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># /// script</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># requires-python = &quot;&gt;=3.12&quot;</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="c1"># dependencies = [&quot;requests&quot;]</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># ///</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="nb">print</span><span class="p">(</span><span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;https://example.com&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">status_code</span><span class="p">)</span>
+</span></code></pre></div>
+<p>Pixi has a similar capability via <a href="../../advanced/shebang/">shebang scripts</a> using <code>pixi exec</code>, which creates a temporary environment with the specified dependencies:</p>
+<div class="language-python highlight"><span class="filename">pixi shebang script</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="ch">#!/usr/bin/env -S pixi exec --spec requests --spec python=3.12 -- python</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">requests</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="nb">print</span><span class="p">(</span><span class="n">requests</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;https://example.com&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">status_code</span><span class="p">)</span>
+</span></code></pre></div>
+<p>This works on Linux and macOS. A more complete scripting feature is under discussion in <a href="https://github.com/prefix-dev/pixi/issues/3751">#3751</a>.</p>
+<h3 id="tasks">Tasks<a class="headerlink" href="#tasks" title="Permanent link">#</a></h3>
+<p>uv has no built-in task runner. Pixi does:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python main.py&quot;</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="n">lint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ruff check .&quot;</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="n">check</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">depends-on</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;lint&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span><span class="w">  </span><span class="c1"># task dependencies</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">fmt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ruff format .&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">RUFF_LINE_LENGTH</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;120&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>check<span class="w">   </span><span class="c1"># runs lint then test</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>start
+</span></code></pre></div>
+<p>Tasks support inter-task dependencies, environment variables, working directory configuration, and cross-platform commands. See <a href="../../workspace/advanced_tasks/">Tasks</a>.</p>
+<h3 id="ephemeral-tool-execution-uvx-vs-pixi-exec">Ephemeral tool execution (<code>uvx</code> vs <code>pixi exec</code>)<a class="headerlink" href="#ephemeral-tool-execution-uvx-vs-pixi-exec" title="Permanent link">#</a></h3>
+<p><code>uvx</code> (short for <code>uv tool run</code>) runs a tool in a temporary environment without installing it permanently. <code>pixi exec</code> does the same thing:</p>
+<table>
+<thead>
+<tr>
+<th>uv</th>
+<th>Pixi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>uvx ruff check</code></td>
+<td><code>pixi exec ruff check</code></td>
+</tr>
+<tr>
+<td><code>uvx --from 'ruff&gt;=0.5' ruff check</code></td>
+<td><code>pixi exec --spec 'ruff&gt;=0.5' ruff check</code></td>
+</tr>
+<tr>
+<td><code>uvx --with numpy ruff check</code></td>
+<td><code>pixi exec --with numpy ruff check</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="global-tools-uv-tool-vs-pixi-global">Global tools (<code>uv tool</code> vs <code>pixi global</code>)<a class="headerlink" href="#global-tools-uv-tool-vs-pixi-global" title="Permanent link">#</a></h3>
+<p>Both tools install CLI tools globally in isolated environments:</p>
+<table>
+<thead>
+<tr>
+<th>uv</th>
+<th>Pixi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>uv tool install ruff</code></td>
+<td><code>pixi global install ruff</code></td>
+</tr>
+<tr>
+<td><code>uv tool list</code></td>
+<td><code>pixi global list</code></td>
+</tr>
+<tr>
+<td><code>uv tool uninstall ruff</code></td>
+<td><code>pixi global uninstall ruff</code></td>
+</tr>
+</tbody>
+</table>
+<p>Because Pixi global tools come from the conda ecosystem, you can install non-Python tools too:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>git<span class="w"> </span>bat<span class="w"> </span>ripgrep<span class="w"> </span>starship
+</span></code></pre></div>
+<p>See <a href="../../global_tools/introduction/">Global Tools</a>.</p>
+<h3 id="package-indexes-and-channels">Package indexes and channels<a class="headerlink" href="#package-indexes-and-channels" title="Permanent link">#</a></h3>
+<p>uv uses PyPI as its default package index, with support for custom indexes via <code>[[tool.uv.index]]</code>.</p>
+<p>Pixi uses <strong>conda channels</strong>, repositories of pre-compiled packages. The default is <a href="https://conda-forge.org/">conda-forge</a>, the largest community-maintained channel:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># Add additional channels:</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># channels = [&quot;conda-forge&quot;, &quot;pytorch&quot;, &quot;https://my-company.com/channel&quot;]</span>
+</span></code></pre></div>
+<p>For private packages, you can host your own channel on <a href="https://prefix.dev/">prefix.dev</a>, S3, or JFrog Artifactory. See <a href="../../deployment/authentication/">Authentication</a>.</p>
+<h3 id="lockfiles">Lockfiles<a class="headerlink" href="#lockfiles" title="Permanent link">#</a></h3>
+<p>Both tools generate lockfiles for reproducibility.</p>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>uv (<code>uv.lock</code>)</th>
+<th>Pixi (<code>pixi.lock</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Format</td>
+<td>TOML</td>
+<td>YAML</td>
+</tr>
+<tr>
+<td>Cross-platform</td>
+<td>Universal resolution</td>
+<td>Solves per-platform, stored in one file</td>
+</tr>
+<tr>
+<td>Multi-environment</td>
+<td>Single resolution</td>
+<td>Per-environment resolution</td>
+</tr>
+<tr>
+<td>Package types</td>
+<td>PyPI only</td>
+<td>Conda + PyPI</td>
+</tr>
+<tr>
+<td>Generate/update</td>
+<td><code>uv lock</code></td>
+<td><code>pixi lock</code> (also automatic on <code>pixi add</code> / <code>pixi install</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../../workspace/lockfile/">Lock File</a>.</p>
+<h3 id="building-and-publishing">Building and publishing<a class="headerlink" href="#building-and-publishing" title="Permanent link">#</a></h3>
+<p>uv builds Python packages with <code>uv build</code> (PEP 517 backends) and publishes to PyPI with <code>uv publish</code>.</p>
+<p>Pixi builds packages via <a href="../../build/getting_started/">pixi-build</a>, which produces conda packages from Python, C++, Rust, ROS, and more. You can publish them to a <a href="../../deployment/prefix/">prefix.dev channel</a> or any conda channel.</p>
+<h3 id="ci-with-github-actions">CI with GitHub Actions<a class="headerlink" href="#ci-with-github-actions" title="Permanent link">#</a></h3>
+<p>uv provides <a href="https://github.com/astral-sh/setup-uv"><code>astral-sh/setup-uv</code></a> for GitHub Actions. Pixi has <a href="https://github.com/prefix-dev/setup-pixi"><code>prefix-dev/setup-pixi</code></a>, which installs Pixi, sets up caching, and runs <code>pixi install</code> in your workflow:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.8</span>
+</span></code></pre></div>
+<p>See <a href="../../integration/ci/github_actions/">GitHub Actions</a> for more details.</p>
+<h3 id="the-uv-pip-interface">The <code>uv pip</code> interface<a class="headerlink" href="#the-uv-pip-interface" title="Permanent link">#</a></h3>
+<p>uv provides a <code>uv pip</code> compatibility layer (<code>uv pip install</code>, <code>uv pip compile</code>, etc.).</p>
+<p>Pixi has no pip compatibility layer, it manages all dependencies declaratively through the manifest file. If you need pip for a specific use case, you can install it as a dependency:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pip
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># not recommended, prefer pixi add --pypi</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>&lt;some-package&gt;
+</span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Prefer <code>pixi add --pypi</code></p>
+<p>Using <code>pip</code> inside a Pixi environment bypasses the solver and lockfile.
+Always prefer <code>pixi add --pypi &lt;package&gt;</code> to keep dependencies tracked and reproducible.</p>
+</div>
+<h2 id="why-the-conda-ecosystem-matters">Why the conda ecosystem matters<a class="headerlink" href="#why-the-conda-ecosystem-matters" title="Permanent link">#</a></h2>
+<p>If you're coming from uv, you might wonder why conda packages matter when PyPI already has everything you need.</p>
+<h3 id="system-dependencies-are-included">System dependencies are included<a class="headerlink" href="#system-dependencies-are-included" title="Permanent link">#</a></h3>
+<p>With uv, installing <code>scipy</code> or <code>pytorch</code> often requires system-level libraries (BLAS, LAPACK, CUDA) to already be on your machine. This leads to platform-specific setup instructions, Docker containers just for build deps, or cryptic build failures.</p>
+<p>With Pixi, these system dependencies are conda packages, managed by the solver like any other dependency:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># CUDA runtime, cuDNN, and all system libraries are resolved automatically</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>pytorch-gpu
+</span></code></pre></div>
+<h3 id="reproducibility-beyond-python">Reproducibility beyond Python<a class="headerlink" href="#reproducibility-beyond-python" title="Permanent link">#</a></h3>
+<p><code>uv.lock</code> captures your Python dependencies precisely, but your project also depends on the system's C compiler, CUDA version, OpenSSL build, and more, none of which are tracked.</p>
+<p><code>pixi.lock</code> captures <strong>everything</strong>: the Python interpreter, system libraries, compilers, and CLI tools. When a colleague clones your project and runs <code>pixi install</code>, they get the exact same environment. No "works on my machine" surprises.</p>
+<h3 id="no-docker-needed-for-environment-isolation">No Docker needed for environment isolation<a class="headerlink" href="#no-docker-needed-for-environment-isolation" title="Permanent link">#</a></h3>
+<p>A common pattern with uv is using Docker to get a reproducible environment with the right system dependencies. Pixi environments achieve the same isolation without containers: no root privileges required, dramatically smaller than container images, instant creation, and the same reproducibility guarantees via the lockfile.</p>
+<h3 id="forward-compatible">Forward-compatible<a class="headerlink" href="#forward-compatible" title="Permanent link">#</a></h3>
+<p>Conda packages compile against the oldest supported system baseline, so they work on newer OS versions too. Your lockfile from today will still install correctly on next year's OS release.</p>
+<p>For a deeper dive into the differences between the conda and PyPI ecosystems, see the <a href="https://conda.org/blog/conda-is-not-pypi">Conda != PyPI</a> blog post series.</p>
+<h2 id="migrating-a-project">Migrating a project<a class="headerlink" href="#migrating-a-project" title="Permanent link">#</a></h2>
+<p>To migrate an existing uv project to Pixi, start by initializing Pixi in your project directory:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">pixi.toml</label><label for="__tabbed_2_2">pyproject.toml</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--format<span class="w"> </span>pixi
+</span></code></pre></div>
+<p>This creates a <code>pixi.toml</code> alongside your <code>pyproject.toml</code>.</p>
+</div>
+<div class="tabbed-block">
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--format<span class="w"> </span>pyproject
+</span></code></pre></div>
+<p>This adds a <code>[tool.pixi.workspace]</code> section to your existing <code>pyproject.toml</code>, keeping your PyPI dependencies in place.</p>
+</div>
+</div>
+</div>
+<ol>
+<li>
+<p><strong>Where possible, use conda-forge packages instead of PyPI:</strong></p>
+<p>Conda packages bundle system libraries and pre-compiled binaries, so <code>pixi add numpy</code> gives you numpy with BLAS, LAPACK, and everything else included. Use <code>pixi add --pypi &lt;package&gt;</code> only for packages that aren't available on conda-forge. If a package you need is missing from conda-forge, consider <a href="https://github.com/pavelzw/skill-forge/blob/main/recipes/conda-forge/SKILL.md">adding it yourself</a>.</p>
+</li>
+<li>
+<p><strong>Set up tasks to replace your scripts:</strong></p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>lint<span class="w"> </span><span class="s2">&quot;ruff check .&quot;</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>serve<span class="w"> </span><span class="s2">&quot;python -m http.server&quot;</span>
+</span></code></pre></div>
+</li>
+<li>
+<p><strong>Run your project:</strong></p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>main.py
+</span></code></pre></div>
+</li>
+</ol>
+<p>Once everything works with <code>pixi.lock</code>, you can remove <code>uv.lock</code>.</p>
 
 
 
@@ -4359,9 +4984,9 @@ When this environment variable is set, it provides the only source of authentica
           
             
             <a
-              href="../pixi_pack/"
+              href="../../tutorials/rust/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Pixi Pack"
+              aria-label="Previous: Rust"
             >
               <div class="md-footer__button md-icon">
                 
@@ -4372,7 +4997,7 @@ When this environment variable is set, it provides the only source of authentica
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Pixi Pack
+                  Rust
                 </div>
               </div>
             </a>
@@ -4382,16 +5007,16 @@ When this environment variable is set, it provides the only source of authentica
           
             
             <a
-              href="../container/"
+              href="../poetry/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Container"
+              aria-label="Next: Poetry"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Container
+                  Poetry
                 </div>
               </div>
               <div class="md-footer__button md-icon">
