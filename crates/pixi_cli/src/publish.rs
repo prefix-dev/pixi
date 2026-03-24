@@ -251,24 +251,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let package_path = dunce::canonicalize(&built_package.output_file)
             .expect("failed to canonicalize output file which must now exist");
 
-        let file_name = package_path
-            .file_name()
-            .expect("built package should have a file name")
-            .to_string_lossy()
-            .to_string();
-
-        let file_size = std::fs::metadata(&package_path)
-            .map(|m| indicatif::HumanBytes(m.len()).to_string())
-            .unwrap_or_else(|_| "unknown size".to_string());
-
-        pixi_progress::println!(
-            "{}Successfully built '{}'",
-            console::style(console::Emoji("✔ ", "")).green(),
-            file_name,
-        );
-        pixi_progress::println!("  Size: {}", file_size);
-        pixi_progress::println!("  Path: {}", package_path.display());
-
         built_package_paths.push(package_path);
     }
 
