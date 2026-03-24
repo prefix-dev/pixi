@@ -149,6 +149,9 @@ pub struct CachedSourceRecord {
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
     pub sources: HashMap<String, SourceLocationSpec>,
+
+    /// The timestamp of the newest package that was present in the build/host dependencies.
+    pub newest_package_timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 impl CachedMetadata for CachedSourceMetadata {}

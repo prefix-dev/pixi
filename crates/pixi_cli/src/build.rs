@@ -320,6 +320,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .collect(),
 
                 output_directory: None,
+                exclude_newer: None,
                 source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),

@@ -1,10 +1,6 @@
 mod cycle;
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
-};
-
+use chrono::Utc;
 pub use cycle::{Cycle, CycleEnvironment};
 use futures::TryStreamExt;
 use itertools::{Either, Itertools};
@@ -18,6 +14,11 @@ use rattler_conda_types::{
     package::RunExportsJson,
 };
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
+use std::hash::Hash;
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -35,13 +36,34 @@ use crate::{
     executor::CancellationAwareFutures,
 };
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceMetadataSpec {
     /// The name of the package to retrieve metadata from.
     pub package: PackageName,
 
     /// Information about the build backend to request the information from.
     pub backend_metadata: BuildBackendMetadataSpec,
+
+    /// The timestamp exclusion to apply when retrieving the metadata.
+    pub exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+pub struct SourceMetadataSpecCacheKey {
+    /// The name of the package to retrieve metadata from.
+    pub package: PackageName,
+
+    /// Information about the build backend to request the information from.
+    pub backend_metadata: BuildBackendMetadataSpec,
+}
+
+impl SourceMetadataSpecCacheKey {
+    pub fn new(spec: &SourceMetadataSpec) -> Self {
+        Self {
+            package: spec.package.clone(),
+            backend_metadata: spec.backend_metadata.clone(),
+        }
+    }
 }
 
 /// The result of building a particular source record.
@@ -199,12 +221,14 @@ impl SourceMetadataSpec {
                      package_record,
                      variants,
                      sources,
+                     newest_package_timestamp,
                  }| SourceRecord {
                     data: FullSourceRecordData {
                         package_record,
                         sources,
                     },
                     variants,
+                    timestamp: newest_package_timestamp,
                     manifest_source: source.manifest_source().clone(),
                     build_source: source.build_source().cloned(),
                     identifier_hash: None,
@@ -241,6 +265,9 @@ impl SourceMetadataSpec {
         let manifest_source = source.manifest_source().clone();
         let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
 
+        // Create a common cut-off for the build and host environments.
+        let exclude_newer = self.exclude_newer.unwrap_or_else(Utc::now);
+
         // Solve the build environment for the output.
         let mut compatibility_map = HashMap::new();
         let build_dependencies = output
@@ -261,6 +288,7 @@ impl SourceMetadataSpec {
                 self.backend_metadata
                     .build_environment
                     .to_build_from_build(),
+                exclude_newer,
             )
             .await?;
 
@@ -302,6 +330,7 @@ impl SourceMetadataSpec {
                 command_dispatcher,
                 host_dependencies.clone(),
                 self.backend_metadata.build_environment.clone(),
+                exclude_newer,
             )
             .await?;
         let host_run_exports = host_dependencies
@@ -422,6 +451,19 @@ impl SourceMetadataSpec {
             strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
+        // Compute the timestamp of the newest package that was used in the build/host environment.
+        let newest_package_timestamp = host_records
+            .iter()
+            .chain(build_records.iter())
+            .filter_map(|record| {
+                record
+                    .package_record()
+                    .timestamp
+                    .map(|ts| chrono::DateTime::<chrono::Utc>::from(ts))
+            })
+            .max()
+            .unwrap_or_else(chrono::Utc::now);
+
         Ok(CachedSourceRecord {
             package_record: PackageRecord {
                 // We cannot now these values from the metadata because no actual package
@@ -475,6 +517,7 @@ impl SourceMetadataSpec {
                 // These are not important at this point.
                 experimental_extra_depends: Default::default(),
             },
+            newest_package_timestamp,
             sources: sources
                 .into_iter()
                 .map(|(name, source)| (name.as_source().to_string(), source))
@@ -495,6 +538,7 @@ impl SourceMetadataSpec {
         command_dispatcher: &CommandDispatcher,
         dependencies: Dependencies,
         build_environment: BuildEnvironment,
+        exclude_newer: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SourceMetadataError>> {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
@@ -524,7 +568,7 @@ impl SourceMetadataSpec {
                 channels: self.backend_metadata.channels.clone(),
                 strategy: Default::default(),
                 channel_priority: Default::default(),
-                exclude_newer: None,
+                exclude_newer: Some(exclude_newer),
                 channel_config: self.backend_metadata.channel_config.clone(),
                 variant_configuration: self.backend_metadata.variant_configuration.clone(),
                 variant_files: self.backend_metadata.variant_files.clone(),
