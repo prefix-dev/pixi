@@ -9,9 +9,11 @@ use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
+use rattler_conda_types::PackageName;
+
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    PackageIdentifier, SourceCheckoutError,
+    SourceCheckoutError,
     build::{BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, PinnedSourceCodeLocation},
     input_hash::{ConfigurationHash, ProjectModelHash},
 };
@@ -29,8 +31,8 @@ use crate::{
 /// 2. A build dependency changed.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct SourceBuildCacheStatusSpec {
-    /// Describes the package to query in the source build cache.
-    pub package: PackageIdentifier,
+    /// The name of the package to query in the source build cache.
+    pub name: PackageName,
 
     /// Describes the source location of the package to query.
     pub source: PinnedSourceCodeLocation,
@@ -140,10 +142,7 @@ impl SourceBuildCacheStatusSpec {
         BuildInput {
             build_source: self.source.source_code().into(),
             channel_urls: self.channels.clone(),
-            name: self.package.name.as_source().to_string(),
-            version: self.package.version.to_string(),
-            build: self.package.build.to_string(),
-            subdir: self.package.subdir.clone(),
+            name: self.name.clone(),
             host_platform: self.build_environment.host_platform,
             host_virtual_packages: self
                 .build_environment
@@ -162,7 +161,7 @@ impl SourceBuildCacheStatusSpec {
     }
 
     /// Creates a new query for the source build cache.
-    #[instrument(skip_all, fields(package = %self.package, source = %self.source))]
+    #[instrument(skip_all, fields(package = %self.name.as_source(), source = %self.source))]
     pub async fn query(
         self,
         command_dispatcher: CommandDispatcher,
@@ -189,7 +188,7 @@ impl SourceBuildCacheStatusSpec {
 
         tracing::debug!(
             "status of cached build for package '{}' is '{}'",
-            self.package,
+            self.name.as_source(),
             &cached_build
         );
 
@@ -276,12 +275,12 @@ impl SourceBuildCacheStatusSpec {
                 continue;
             };
 
-            let identifier = PackageIdentifier::from(&dep.repodata_record.package_record);
+            let dep_name = dep.repodata_record.package_record.name.clone();
 
             // Check the build cache to see if the source of that package is still fresh.
             match command_dispatcher
                 .source_build_cache_status(SourceBuildCacheStatusSpec {
-                    package: identifier.clone(),
+                    name: dep_name,
                     source: source.clone(),
                     channels: self.channels.clone(),
                     build_environment: self.build_environment.clone(),
@@ -305,7 +304,8 @@ impl SourceBuildCacheStatusSpec {
                     match &*entry.cached_build.lock().await {
                         CachedBuildStatus::Missing | CachedBuildStatus::Stale(_) => {
                             tracing::debug!(
-                                "package is stale because its build dependency '{identifier}' is missing or stale",
+                                "package is stale because its build dependency '{}' is missing or stale",
+                                dep.repodata_record.package_record.name.as_source(),
                             );
                             return Ok(CachedBuildStatus::Stale(cached_build));
                         }
@@ -320,7 +320,8 @@ impl SourceBuildCacheStatusSpec {
                                 != dep.repodata_record.package_record.sha256
                             {
                                 tracing::debug!(
-                                    "package is stale because its build dependency '{identifier}' has changed",
+                                    "package is stale because its build dependency '{}' has changed",
+                                    dep.repodata_record.package_record.name.as_source(),
                                 );
                                 return Ok(CachedBuildStatus::Stale(cached_build));
                             }

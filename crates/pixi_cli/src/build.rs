@@ -306,10 +306,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })?;
 
     // Build the individual packages
-    for package in packages {
+    for package_name in packages {
         let built_package = command_dispatcher
             .source_build(SourceBuildSpec {
-                package,
+                name: package_name,
                 output_directory: None,
                 source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),

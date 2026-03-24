@@ -16,19 +16,19 @@ use pixi_build_types::{
     procedures::conda_build_v1::{
         CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource,
         CondaBuildV1DependencySource, CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix,
-        CondaBuildV1PrefixPackage, CondaBuildV1Result, CondaBuildV1RunExports,
+        CondaBuildV1PrefixPackage, CondaBuildV1RunExports,
     },
 };
 use pixi_glob::GlobSet;
 use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord,
+    ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, VersionWithSource,
 };
 use serde::Serialize;
 use thiserror::Error;
 
 use crate::{
-    CommandDispatcherError, PackageIdentifier,
+    CommandDispatcherError,
     build::{Dependencies, DependencySource, PixiRunExports, WithSource},
 };
 
@@ -44,8 +44,17 @@ pub struct BackendSourceBuildSpec {
     #[serde(skip)]
     pub backend: Backend,
 
-    /// The package that we are building.
-    pub package: PackageIdentifier,
+    /// The name of the package that we are building.
+    pub name: PackageName,
+
+    /// The version of the package.
+    pub version: VersionWithSource,
+
+    /// The build string of the package.
+    pub build: String,
+
+    /// The subdirectory (platform) of the package.
+    pub subdir: String,
 
     /// The directory where the source code is located on disk.
     #[serde(skip)]
@@ -134,7 +143,10 @@ impl BackendSourceBuildSpec {
             BackendSourceBuildMethod::BuildV1(params) => {
                 Self::build_v1(
                     self.backend,
-                    self.package,
+                    self.name,
+                    self.version,
+                    self.build,
+                    self.subdir,
                     params,
                     self.source_dir,
                     self.work_directory,
@@ -150,7 +162,10 @@ impl BackendSourceBuildSpec {
     #[allow(clippy::too_many_arguments)]
     async fn build_v1(
         backend: Backend,
-        record: PackageIdentifier,
+        name: PackageName,
+        version: VersionWithSource,
+        build: String,
+        subdir: String,
         params: BackendSourceBuildV1Method,
         source_dir: PathBuf,
         work_directory: PathBuf,
@@ -253,11 +268,10 @@ impl BackendSourceBuildSpec {
                             .collect(),
                     }),
                     output: CondaBuildV1Output {
-                        name: record.name.clone(),
-                        version: Some(record.version.clone()),
-                        build: Some(record.build.clone()),
-                        subdir: record
-                            .subdir
+                        name: name.clone(),
+                        version: Some(version.clone()),
+                        build: Some(build.clone()),
+                        subdir: subdir
                             .parse()
                             .expect("found a package record with an unparsable subdir"),
                         variant: params.variant,
@@ -275,13 +289,17 @@ impl BackendSourceBuildSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         // Make sure that the built package matches the expected output.
-        if v1_built_package_matches_requested(&built_package, &record) {
+        if built_package.name != name.as_normalized()
+            || built_package.version != version
+            || built_package.build != build
+            || built_package.subdir.as_str() != subdir
+        {
             return Err(CommandDispatcherError::Failed(
                 BackendSourceBuildError::UnexpectedPackage(UnexpectedPackageError {
-                    subdir: record.subdir.clone(),
-                    name: record.name.as_normalized().to_string(),
-                    version: record.version.to_string(),
-                    build: record.build.clone(),
+                    subdir: subdir.clone(),
+                    name: name.as_normalized().to_string(),
+                    version: version.to_string(),
+                    build: build.clone(),
                     packages: vec![format!(
                         "{}/{}={}={}",
                         built_package.subdir,
@@ -315,18 +333,6 @@ impl BackendSourceBuildSpec {
             output_file: built_package.output_file,
         })
     }
-}
-
-/// Returns true if the requested package matches the one that was built by a
-/// backend.
-fn v1_built_package_matches_requested(
-    built_package: &CondaBuildV1Result,
-    record: &PackageIdentifier,
-) -> bool {
-    built_package.name != record.name.as_normalized()
-        || built_package.version != record.version
-        || built_package.build != record.build
-        || built_package.subdir.as_str() != record.subdir
 }
 
 fn dependencies_to_protocol(

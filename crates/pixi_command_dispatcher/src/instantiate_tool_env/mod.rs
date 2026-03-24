@@ -270,7 +270,7 @@ impl InstantiateToolEnvironmentSpec {
         command_queue
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name,
-                records: solved_environment,
+                records: solved_environment.into_iter().map(Into::into).collect(),
                 prefix: prefix.clone(),
                 installed: None,
                 build_environment: self.build_environment,

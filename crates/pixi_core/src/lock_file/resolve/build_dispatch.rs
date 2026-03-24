@@ -341,7 +341,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 let prefix = self
                     .prefix_updater
                     .update(
-                        repodata_records.to_vec(),
+                        repodata_records.into_iter().map(Into::into).collect(),
                         None,
                         self.ignore_packages.clone(),
                     )
