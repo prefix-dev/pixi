@@ -5638,7 +5638,7 @@ dependencies = [
  "uv-installer",
  "uv-normalize",
  "uv-python",
- "zip 2.4.2",
+ "zip 8.2.0",
 ]
 
 [[package]]
@@ -6065,7 +6065,7 @@ dependencies = [
  "uv-pypi-types",
  "uv-requirements-txt",
  "which",
- "zip 2.4.2",
+ "zip 8.2.0",
 ]
 
 [[package]]
@@ -6762,7 +6762,7 @@ dependencies = [
  "tracing",
  "url",
  "xz2",
- "zip 2.4.2",
+ "zip 8.2.0",
  "zstd",
 ]
 
@@ -13653,7 +13653,6 @@ dependencies = [
  "lzma-rs",
  "memchr",
  "thiserror 2.0.18",
- "time",
  "xz2",
  "zopfli",
  "zstd",
