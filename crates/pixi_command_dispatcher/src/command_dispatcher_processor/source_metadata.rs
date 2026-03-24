@@ -4,6 +4,7 @@ use futures::FutureExt;
 use tokio_util::sync::CancellationToken;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
+use crate::source_metadata::SourceMetadataSpecCacheKey;
 use crate::{
     CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
@@ -12,10 +13,14 @@ use crate::{
 
 impl CommandDispatcherProcessor {
     /// Constructs a new [`SourceBuildId`] for the given `task`.
-    fn gen_source_metadata_id(&mut self, task: &SourceMetadataTask) -> SourceMetadataId {
+    fn gen_source_metadata_id(
+        &mut self,
+        task: &SourceMetadataSpecCacheKey,
+        parent: Option<CommandDispatcherContext>,
+    ) -> SourceMetadataId {
         let id = SourceMetadataId(self.source_metadata_ids.len());
-        self.source_metadata_ids.insert(task.spec.clone(), id);
-        if let Some(parent) = task.parent {
+        self.source_metadata_ids.insert(task.clone(), id);
+        if let Some(parent) = parent {
             self.parent_contexts.insert(id.into(), parent);
         }
         id
@@ -28,9 +33,12 @@ impl CommandDispatcherProcessor {
             return;
         }
 
+        // Construct an in-memory cache key for the spec.
+        let cache_key = SourceMetadataSpecCacheKey::new(&task.spec);
+
         // Lookup the id of the source metadata to avoid deduplication.
         let source_metadata_id = {
-            match self.source_metadata_ids.get(&task.spec) {
+            match self.source_metadata_ids.get(&cache_key) {
                 Some(id) => {
                     // We already have a pending task for this source metadata. Let's make sure that
                     // we are not trying to resolve the same source metadata in a cycle.
@@ -43,7 +51,7 @@ impl CommandDispatcherProcessor {
 
                     *id
                 }
-                None => self.gen_source_metadata_id(&task),
+                None => self.gen_source_metadata_id(&cache_key, task.parent),
             }
         };
 

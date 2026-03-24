@@ -33,6 +33,7 @@ pub struct SourceMetadataCollector {
     variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
     variant_files: Option<Vec<PathBuf>>,
     preferred_build_sources: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
+    exclude_newer: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Default)]
@@ -79,6 +80,7 @@ impl SourceMetadataCollector {
         variant_files: Option<Vec<PathBuf>>,
         enabled_protocols: EnabledProtocols,
         preferred_build_sources: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
+        exclude_newer: chrono::DateTime<chrono::Utc>,
     ) -> Self {
         Self {
             command_queue,
@@ -90,6 +92,7 @@ impl SourceMetadataCollector {
             variant_configuration,
             variant_files,
             preferred_build_sources,
+            exclude_newer,
         }
     }
 
@@ -206,6 +209,7 @@ impl SourceMetadataCollector {
                     variant_files: self.variant_files.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
                 },
+                exclude_newer: Some(self.exclude_newer),
             })
             .await
         {

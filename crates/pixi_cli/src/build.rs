@@ -323,6 +323,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .collect(),
 
                 output_directory: None,
+                exclude_newer: None,
                 source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
                 // When running `pixi build`, the exclude_newer config will be ignored.
