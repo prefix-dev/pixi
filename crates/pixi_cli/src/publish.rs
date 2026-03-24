@@ -290,18 +290,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let target_url = parse_target_url(&args.to)?;
 
-    upload_packages(
-        &target_url,
-        &built_package_paths,
-        &auth_storage,
-        args.force,
-        args.skip_existing,
-        args.generate_attestation,
-    )
+    pixi_progress::await_in_progress("uploading packages", |_| {
+        upload_packages(
+            &target_url,
+            &built_package_paths,
+            &auth_storage,
+            args.force,
+            args.skip_existing,
+            args.generate_attestation,
+        )
+    })
     .await?;
-
-    // Clear any leftover progress bars from the upload
-    global_multi_progress().clear().ok();
 
     pixi_progress::println!(
         "{}Successfully published {} package(s) to {}",
@@ -309,6 +308,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         built_package_paths.len(),
         args.to
     );
+    for path in &built_package_paths {
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy())
+            .unwrap_or_default();
+        pixi_progress::println!("  - {}", name);
+    }
 
     Ok(())
 }
