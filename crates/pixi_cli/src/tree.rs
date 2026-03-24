@@ -140,9 +140,9 @@ pub(crate) fn extract_package_info(
             source: PackageSource::Conda,
         })
     } else if let Some(pypi_package_data) = package.as_pypi() {
-        let name = pypi_package_data.name.as_dist_info_name().into_owned();
+        let name = pypi_package_data.name().as_dist_info_name().into_owned();
         let dependencies = pypi_package_data
-            .requires_dist
+            .requires_dist()
             .iter()
             .filter_map(|p| {
                 if p.marker.is_true() {

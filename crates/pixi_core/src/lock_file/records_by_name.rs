@@ -33,7 +33,7 @@ impl HasNameVersion for LockedPypiRecord {
     type V = pep440_rs::Version;
 
     fn name(&self) -> &pep508_rs::PackageName {
-        &self.data.name
+        self.data.name()
     }
     fn version(&self) -> Option<&Self::V> {
         Some(&self.locked_version)
@@ -45,10 +45,10 @@ impl HasNameVersion for UnresolvedPypiRecord {
     type V = pep440_rs::Version;
 
     fn name(&self) -> &pep508_rs::PackageName {
-        &self.as_package_data().name
+        self.as_package_data().name()
     }
     fn version(&self) -> Option<&Self::V> {
-        self.as_package_data().version.as_ref()
+        self.as_package_data().version()
     }
 }
 
@@ -267,25 +267,12 @@ impl UnresolvedPixiRecordsByName {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rattler_lock::{PypiPackageData, UrlOrPath, Verbatim};
-    use std::str::FromStr;
-
-    fn make_pypi_package(name: &str, version: Option<&str>) -> PypiPackageData {
-        PypiPackageData {
-            name: name.parse().unwrap(),
-            version: version.map(|v| pep440_rs::Version::from_str(v).unwrap()),
-            location: Verbatim::new(UrlOrPath::Path(format!("./{name}").into())),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }
-    }
+    use crate::lock_file::tests::{make_source_package, make_wheel_package};
 
     #[test]
     fn from_iter_with_none_version_does_not_panic() {
         // A single package with no version should work fine.
-        let records = vec![make_pypi_package("dynamic-dep", None).into()];
+        let records = vec![make_source_package("dynamic-dep").into()];
         let by_name = PypiRecordsByName::from_iter(records);
         assert_eq!(by_name.len(), 1);
         assert!(by_name.records[0].version().is_none());
@@ -295,8 +282,8 @@ mod tests {
     fn from_iter_dedup_keeps_first_when_both_versions_none() {
         // Two packages with the same name and no version — should keep the first.
         let records = vec![
-            make_pypi_package("dynamic-dep", None).into(),
-            make_pypi_package("dynamic-dep", None).into(),
+            make_source_package("dynamic-dep").into(),
+            make_source_package("dynamic-dep").into(),
         ];
         let by_name = PypiRecordsByName::from_iter(records);
         assert_eq!(by_name.len(), 1);
@@ -308,8 +295,8 @@ mod tests {
         // First entry has no version, second has a version — keeps the first
         // because we can't compare None to Some.
         let records = vec![
-            make_pypi_package("pkg", None).into(),
-            make_pypi_package("pkg", Some("1.0.0")).into(),
+            make_source_package("pkg").into(),
+            make_wheel_package("pkg", "1.0.0").into(),
         ];
         let by_name = PypiRecordsByName::from_iter(records);
         assert_eq!(by_name.len(), 1);
@@ -320,8 +307,8 @@ mod tests {
     fn from_iter_dedup_keeps_first_when_new_has_no_version() {
         // First entry has a version, second has no version — keeps the first.
         let records = vec![
-            make_pypi_package("pkg", Some("1.0.0")).into(),
-            make_pypi_package("pkg", None).into(),
+            make_wheel_package("pkg", "1.0.0").into(),
+            make_source_package("pkg").into(),
         ];
         let by_name = PypiRecordsByName::from_iter(records);
         assert_eq!(by_name.len(), 1);
@@ -331,8 +318,8 @@ mod tests {
     #[test]
     fn from_iter_dedup_picks_higher_version() {
         let records = vec![
-            make_pypi_package("pkg", Some("1.0.0")).into(),
-            make_pypi_package("pkg", Some("2.0.0")).into(),
+            make_wheel_package("pkg", "1.0.0").into(),
+            make_wheel_package("pkg", "2.0.0").into(),
         ];
         let by_name = PypiRecordsByName::from_iter(records);
         assert_eq!(by_name.len(), 1);
@@ -342,7 +329,7 @@ mod tests {
     #[test]
     fn from_unique_iter_with_none_version() {
         // from_unique_iter should work fine with None version (it doesn't compare versions).
-        let records = vec![make_pypi_package("dynamic-dep", None).into()];
+        let records = vec![make_source_package("dynamic-dep").into()];
         let by_name = PypiRecordsByName::from_unique_iter(records).unwrap();
         assert_eq!(by_name.len(), 1);
         assert!(by_name.records[0].version().is_none());
@@ -351,8 +338,8 @@ mod tests {
     #[test]
     fn mixed_versioned_and_dynamic_packages() {
         let records = vec![
-            make_pypi_package("versioned-pkg", Some("1.0.0")).into(),
-            make_pypi_package("dynamic-pkg", None).into(),
+            make_wheel_package("versioned-pkg", "1.0.0").into(),
+            make_source_package("dynamic-pkg").into(),
         ];
         let by_name = PypiRecordsByName::from_iter(records);
         assert_eq!(by_name.len(), 2);

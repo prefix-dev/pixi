@@ -10,7 +10,7 @@ use std::{
     sync::LazyLock,
 };
 
-use crate::lock_file::records_by_name::HasNameVersion;
+use crate::lock_file::records_by_name::{HasNameVersion, LockedPypiRecordsByName};
 use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
@@ -25,7 +25,7 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::Config;
 use pixi_git::url::RepositoryUrl;
-use pixi_install_pypi::UnresolvedPypiRecord;
+use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
 use pixi_manifest::{
     FeaturesExt,
     pypi::pypi_options::{NoBuild, PrereleaseMode},
@@ -508,6 +508,9 @@ pub enum PlatformUnsat {
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
 
+    #[error("'{name}' is locked as a distribution but points to a local source directory")]
+    DistributionShouldBeSource { name: pep508_rs::PackageName },
+
     #[error(transparent)]
     InvalidChannel(#[from] ParseChannelError),
 
@@ -794,7 +797,7 @@ impl PypiWheelTagsCheck {
         package_data: &UnresolvedPypiRecord,
     ) -> Result<(), EnvironmentUnsat> {
         let package_data = package_data.as_package_data();
-        let Some(package_file_name) = package_data.location.file_name() else {
+        let Some(package_file_name) = package_data.location().file_name() else {
             return Ok(());
         };
         let Some(platform_tags) = self.platform_wheel_tags.get(&platform) else {
@@ -868,7 +871,7 @@ impl PypiNoBuildCheck {
             DistExtension::from_path(Path::new(path))
         }
 
-        let extension = match &*package_data.location {
+        let extension = match &**package_data.location() {
             // Get the extension from the url
             UrlOrPath::Url(url) => {
                 if url.scheme().starts_with("git+") {
@@ -910,12 +913,12 @@ impl PypiNoBuildCheck {
             // it could be that we are only disallowing for certain source packages
             DistExtension::Source(_) => match check {
                 Check::All => Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
-                    package_data.name.to_string(),
+                    package_data.name().to_string(),
                 )),
                 Check::Packages(hash_set) => {
-                    if hash_set.contains(&package_data.name) {
+                    if hash_set.contains(package_data.name()) {
                         Err(EnvironmentUnsat::NoBuildWithNonBinaryPackages(
-                            package_data.name.to_string(),
+                            package_data.name().to_string(),
                         ))
                     } else {
                         Ok(())
@@ -991,7 +994,10 @@ pub struct VerifySatisfiabilityContext<'a> {
 pub async fn verify_platform_satisfiability(
     ctx: &mut VerifySatisfiabilityContext<'_>,
     locked_environment: rattler_lock::Environment<'_>,
-) -> Result<VerifiedIndividualEnvironment, CommandDispatcherError<Box<PlatformUnsat>>> {
+) -> Result<
+    (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
+    CommandDispatcherError<Box<PlatformUnsat>>,
+> {
     // Convert the lock file into a list of conda and pypi packages.
     // Read as UnresolvedPixiRecord first, then resolve any partial source records.
     let mut unresolved_records: Vec<UnresolvedPixiRecord> = Vec::new();
@@ -1237,15 +1243,26 @@ impl Dependency {
     }
 }
 
+/// Returns `true` if the given URL is the default PyPI index
+/// (`https://pypi.org/simple`). The lock file always stores this
+/// explicitly, but manifests omit it, so we treat it as equivalent to
+/// "no index specified".
+fn is_default_pypi_index(url: &Url) -> bool {
+    url.as_str().trim_end_matches('/')
+        == pixi_consts::consts::DEFAULT_PYPI_INDEX_URL
+            .as_str()
+            .trim_end_matches('/')
+}
+
 /// Check satisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
 pub(crate) fn pypi_satisfies_editable(
     spec: &uv_distribution_types::Requirement,
-    locked_data: &UnresolvedPypiRecord,
+    locked_data: &LockedPypiRecord,
     project_root: &Path,
 ) -> Result<(), Box<PlatformUnsat>> {
-    let locked_data = locked_data.as_package_data();
+    let locked_data = &locked_data.data;
     // We dont match on spec.is_editable() != locked_data.editable
     // as it will happen later in verify_package_platform_satisfiability
     // TODO: could be a potential refactoring opportunity
@@ -1259,7 +1276,7 @@ pub(crate) fn pypi_satisfies_editable(
                 "editable requirement cannot be from registry, url, git or path (non-directory)"
             )
         }
-        RequirementSource::Directory { install_path, .. } => match &*locked_data.location {
+        RequirementSource::Directory { install_path, .. } => match &**locked_data.location() {
             // If we have an url requirement locked, but the editable is requested, this does not
             // satisfy
             UrlOrPath::Url(url) => Err(Box::new(PlatformUnsat::EditablePackageIsUrl(
@@ -1299,14 +1316,14 @@ pub(crate) fn pypi_satisfies_editable(
 /// references
 pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
-    locked_data: &UnresolvedPypiRecord,
+    locked_record: &LockedPypiRecord,
     project_root: &Path,
 ) -> Result<(), Box<PlatformUnsat>> {
-    let locked_data = locked_data.as_package_data();
-    if spec.name.to_string() != locked_data.name.to_string() {
+    let locked_data = &locked_record.data;
+    if spec.name.to_string() != locked_data.name().to_string() {
         return Err(PlatformUnsat::LockedPyPINamesMismatch {
             expected: spec.name.to_string(),
-            found: locked_data.name.to_string(),
+            found: locked_data.name().to_string(),
         }
         .into());
     }
@@ -1315,30 +1332,23 @@ pub(crate) fn pypi_satisfies_requirement(
         RequirementSource::Registry {
             specifier, index, ..
         } => {
-            // If the locked package has no version (e.g. a source dependency with
-            // dynamic version), it cannot satisfy a registry version specifier.
-            let Some(locked_version) = &locked_data.version else {
-                return Err(PlatformUnsat::LockedPyPIVersionsMismatch {
-                    name: spec.name.clone().to_string(),
-                    specifiers: specifier.clone().to_string(),
-                    version: locked_data.version_string(),
-                }
-                .into());
-            };
-            let version_string = locked_version.to_string();
+            let version_string = locked_record.locked_version.to_string();
             if !specifier.contains(
                 &uv_pep440::Version::from_str(&version_string).expect("could not parse version"),
             ) {
                 return Err(PlatformUnsat::LockedPyPIVersionsMismatch {
                     name: spec.name.clone().to_string(),
                     specifiers: specifier.clone().to_string(),
-                    version: version_string,
+                    version: version_string.to_owned(),
                 }
                 .into());
             }
 
             // Verify the index in the requirement matches the lock-file.
-            match (index, &locked_data.index_url) {
+            match (
+                index,
+                locked_data.as_wheel().and_then(|w| w.index_url.as_ref()),
+            ) {
                 (Some(required_index), locked_index) => {
                     let required_url: Url = required_index.url.url().clone().into();
                     match locked_index {
@@ -1355,7 +1365,7 @@ pub(crate) fn pypi_satisfies_requirement(
                         }
                     }
                 }
-                (None, Some(locked_url)) => {
+                (None, Some(locked_url)) if !is_default_pypi_index(locked_url) => {
                     return Err(PlatformUnsat::LockedPyPIIndexMismatch {
                         name: spec.name.to_string(),
                         expected_index: "<default>".to_string(),
@@ -1363,13 +1373,13 @@ pub(crate) fn pypi_satisfies_requirement(
                     }
                     .into());
                 }
-                (None, None) => {}
+                (None, _) => {}
             }
 
             Ok(())
         }
         RequirementSource::Url { url: spec_url, .. } => {
-            if let UrlOrPath::Url(locked_url) = &*locked_data.location {
+            if let UrlOrPath::Url(locked_url) = &**locked_data.location() {
                 // Url may not start with git, and must start with direct+
                 if locked_url.as_str().starts_with("git+")
                     || !locked_url.as_str().starts_with("direct+")
@@ -1400,7 +1410,7 @@ pub(crate) fn pypi_satisfies_requirement(
         } => {
             let repository = git.repository();
             let reference = git.reference();
-            match &*locked_data.location {
+            match &**locked_data.location() {
                 UrlOrPath::Url(url) => {
                     if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
                     {
@@ -1494,7 +1504,7 @@ pub(crate) fn pypi_satisfies_requirement(
         }
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
-            if let UrlOrPath::Path(locked_path) = &*locked_data.location {
+            if let UrlOrPath::Path(locked_path) = &**locked_data.location() {
                 let install_path =
                     Utf8TypedPathBuf::from(install_path.to_string_lossy().to_string());
                 let project_root =
@@ -2031,12 +2041,118 @@ async fn resolve_single_dev_dependency(
     Ok(dependencies)
 }
 
+// Resolve metadata for all path-based pypi source packages upfront, then
+// lock every pypi record with a concrete version.  Wheels already carry
+// their version; source packages get it from the source tree metadata.
+//
+// The metadata is read into `ctx.static_metadata_cache` so later calls to
+// `read_local_package_metadata` for the same path return instantly.
+async fn lock_pypi_packages(
+    ctx: &mut VerifySatisfiabilityContext<'_>,
+    locked_pixi_records: &PixiRecordsByName,
+    unresolved_pypi_environment: &PypiRecordsByName,
+    building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
+) -> Result<LockedPypiRecordsByName, CommandDispatcherError<Box<PlatformUnsat>>> {
+    let mut locked_pypi_records: Vec<LockedPypiRecord> =
+        Vec::with_capacity(unresolved_pypi_environment.len());
+    for record in &unresolved_pypi_environment.records {
+        let pkg = record.as_package_data();
+
+        // For path-based directories, read metadata from the source tree.
+        // The result is cached in ctx.static_metadata_cache for later use.
+        let metadata = if let UrlOrPath::Path(path) = &**pkg.location() {
+            let absolute_path = if path.is_absolute() {
+                Cow::Borrowed(Path::new(path.as_str()))
+            } else {
+                Cow::Owned(ctx.project_root.join(Path::new(path.as_str())))
+            };
+
+            if absolute_path.is_dir() {
+                let uv_ctx = ctx
+                    .uv_context
+                    .get_or_try_init(|| {
+                        UvResolutionContext::from_config(
+                            ctx.config,
+                            ctx.environment.workspace().client()?.clone(),
+                        )
+                    })
+                    .map_err(|e| {
+                        CommandDispatcherError::Failed(Box::new(
+                            PlatformUnsat::FailedToReadLocalMetadata(
+                                pkg.name().clone(),
+                                format!("failed to initialize UV context: {e}"),
+                            ),
+                        ))
+                    })?;
+
+                let mut build_ctx = BuildMetadataContext {
+                    environment: ctx.environment,
+                    locked_pixi_records,
+                    platform: ctx.platform,
+                    project_root: ctx.project_root,
+                    uv_context: uv_ctx,
+                    project_env_vars: &ctx.project_env_vars,
+                    command_dispatcher: ctx.command_dispatcher.clone(),
+                    build_caches: ctx.build_caches,
+                    building_pixi_records: &building_pixi_records,
+                    static_metadata_cache: ctx.static_metadata_cache,
+                };
+
+                match read_local_package_metadata(&absolute_path, pkg.name(), &mut build_ctx).await
+                {
+                    Ok(m) => Some(m),
+                    Err(e) => {
+                        return Err(CommandDispatcherError::Failed(Box::new(
+                            PlatformUnsat::FailedToReadLocalMetadata(
+                                pkg.name().clone(),
+                                format!("failed to read metadata: {e}"),
+                            ),
+                        )));
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // A path-based directory that was parsed as Distribution (e.g. a
+        // directory named `foo.tar.gz`) needs a re-solve — it should be a
+        // Source package.
+        if pkg.as_wheel().is_some() && metadata.is_some() {
+            return Err(CommandDispatcherError::Failed(Box::new(
+                PlatformUnsat::DistributionShouldBeSource {
+                    name: pkg.name().clone(),
+                },
+            )));
+        }
+
+        // Determine the version: prefer the wheel version from the lock file,
+        // fall back to the version read from the source tree metadata.
+        let version = pkg
+            .version()
+            .cloned()
+            .or_else(|| metadata.as_ref().and_then(|m| m.version.clone()))
+            .unwrap_or_else(|| pep440_rs::MIN_VERSION.clone());
+
+        locked_pypi_records.push(record.lock(version));
+    }
+
+    Ok(LockedPypiRecordsByName::from_iter(
+        locked_pypi_records.drain(..),
+    ))
+}
+
 pub(crate) async fn verify_package_platform_satisfiability(
     ctx: &mut VerifySatisfiabilityContext<'_>,
     locked_pixi_records: &PixiRecordsByName,
-    locked_pypi_environment: &PypiRecordsByName,
+    unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
-) -> Result<VerifiedIndividualEnvironment, CommandDispatcherError<Box<PlatformUnsat>>> {
+) -> Result<
+    (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
+    CommandDispatcherError<Box<PlatformUnsat>>,
+> {
     // Determine the dependencies requested by the environment
     let environment_dependencies = ctx
         .environment
@@ -2127,9 +2243,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .collect::<Result<Vec<_>, _>>()
         .map_err(CommandDispatcherError::Failed)?;
 
-    if pypi_requirements.is_empty() && !locked_pypi_environment.is_empty() {
+    if pypi_requirements.is_empty() && !unresolved_pypi_environment.is_empty() {
         return Err(CommandDispatcherError::Failed(Box::new(
-            PlatformUnsat::TooManyPypiPackages(locked_pypi_environment.names().cloned().collect()),
+            PlatformUnsat::TooManyPypiPackages(
+                unresolved_pypi_environment.names().cloned().collect(),
+            ),
         )));
     }
 
@@ -2286,6 +2404,14 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .by_pypi_name()
         .map_err(|e| CommandDispatcherError::Failed(Box::new(e.into())))?;
 
+    let locked_pypi_records = lock_pypi_packages(
+        ctx,
+        locked_pixi_records,
+        unresolved_pypi_environment,
+        building_pixi_records,
+    )
+    .await?;
+
     // Keep a list of all conda packages that we have already visited
     let mut conda_packages_visited = HashSet::new();
     let mut pypi_packages_visited = HashSet::new();
@@ -2302,7 +2428,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
     // packages first.
     let mut conda_stack = environment_dependencies
         .into_iter()
-        .chain(resolved_dev_dependencies.into_iter())
+        .chain(resolved_dev_dependencies)
         .collect_vec();
     let mut pypi_queue = pypi_requirements;
     let mut expected_conda_source_dependencies = HashSet::new();
@@ -2438,10 +2564,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     FoundPackage::Conda(pkg_idx)
                 } else {
                     match to_normalize(&requirement.name)
-                        .map(|name| locked_pypi_environment.index_by_name(&name))
+                        .map(|name| locked_pypi_records.index_by_name(&name))
                     {
                         Ok(Some(idx)) => {
-                            let record = &locked_pypi_environment.records[idx];
+                            let record = &locked_pypi_records.records[idx];
 
                             // use the overridden requirements if specified
                             let requirement = dependency_overrides
@@ -2549,8 +2675,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 }
             }
             FoundPackage::PyPi(idx, extras) => {
-                let record = &locked_pypi_environment.records[idx.0];
-                let pkg = record.as_package_data();
+                let record = &locked_pypi_records.records[idx.0];
+                let pkg = &record.data;
 
                 // If there is no marker environment there is no python version
                 let Some(marker_environment) = marker_environment.as_ref() else {
@@ -2560,102 +2686,46 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 };
 
                 if pypi_packages_visited.insert(idx) {
-                    // If this is path based package we need to check if the source tree hash still
-                    // matches. and if it is a directory
-                    if let UrlOrPath::Path(path) = &*pkg.location {
+                    // Compare cached metadata with locked metadata for
+                    // path-based source packages. The metadata was read into
+                    // static_metadata_cache during lock_pypi_packages().
+                    if let UrlOrPath::Path(path) = &**pkg.location() {
                         let absolute_path = if path.is_absolute() {
-                            Cow::Borrowed(Path::new(path.as_str()))
+                            PathBuf::from(path.as_str())
                         } else {
-                            Cow::Owned(ctx.project_root.join(Path::new(path.as_str())))
+                            ctx.project_root.join(Path::new(path.as_str()))
                         };
-
-                        if absolute_path.is_dir() {
-                            // Read metadata using UV's DistributionDatabase.
-                            // This first tries database.requires_dist() for static extraction,
-                            // then falls back to building the wheel if needed.
-                            let uv_ctx = ctx
-                                .uv_context
-                                .get_or_try_init(|| {
-                                    UvResolutionContext::from_config(
-                                        ctx.config,
-                                        ctx.environment.workspace().client()?.clone(),
-                                    )
-                                })
-                                .map_err(|e| {
-                                    CommandDispatcherError::Failed(Box::new(
-                                        PlatformUnsat::FailedToReadLocalMetadata(
-                                            pkg.name.clone(),
-                                            format!("failed to initialize UV context: {e}"),
-                                        ),
-                                    ))
-                                })?;
-
-                            let mut build_ctx = BuildMetadataContext {
-                                environment: ctx.environment,
-                                locked_pixi_records,
-                                platform: ctx.platform,
-                                project_root: ctx.project_root,
-                                uv_context: uv_ctx,
-                                project_env_vars: &ctx.project_env_vars,
-                                command_dispatcher: ctx.command_dispatcher.clone(),
-                                build_caches: ctx.build_caches,
-                                building_pixi_records: &building_pixi_records,
-                                static_metadata_cache: ctx.static_metadata_cache,
-                            };
-
-                            match read_local_package_metadata(
-                                &absolute_path,
-                                &pkg.name,
-                                &mut build_ctx,
-                            )
-                            .await
-                            {
-                                Ok(current_metadata) => {
-                                    // Compare metadata with locked metadata
-                                    if let Some(mismatch) =
-                                        pypi_metadata::compare_metadata(record, &current_metadata)
-                                    {
-                                        let local_mismatch = match mismatch {
-                                            pypi_metadata::MetadataMismatch::RequiresDist(diff) => {
-                                                LocalMetadataMismatch::RequiresDist {
-                                                    added: diff.added,
-                                                    removed: diff.removed,
-                                                }
-                                            }
-                                            pypi_metadata::MetadataMismatch::Version {
-                                                locked,
-                                                current,
-                                            } => LocalMetadataMismatch::Version { locked, current },
-                                            pypi_metadata::MetadataMismatch::RequiresPython {
-                                                locked,
-                                                current,
-                                            } => LocalMetadataMismatch::RequiresPython {
-                                                locked,
-                                                current,
-                                            },
-                                        };
-                                        delayed_pypi_error.get_or_insert_with(|| {
-                                            Box::new(PlatformUnsat::LocalPackageMetadataMismatch(
-                                                pkg.name.clone(),
-                                                local_mismatch,
-                                            ))
-                                        });
+                        if let Some(current_metadata) =
+                            ctx.static_metadata_cache.get(&absolute_path)
+                            && let Some(mismatch) =
+                                pypi_metadata::compare_metadata(record, current_metadata)
+                        {
+                            let local_mismatch = match mismatch {
+                                pypi_metadata::MetadataMismatch::RequiresDist(diff) => {
+                                    LocalMetadataMismatch::RequiresDist {
+                                        added: diff.added,
+                                        removed: diff.removed,
                                     }
                                 }
-                                Err(e) => {
-                                    delayed_pypi_error.get_or_insert_with(|| {
-                                        Box::new(PlatformUnsat::FailedToReadLocalMetadata(
-                                            pkg.name.clone(),
-                                            format!("failed to read metadata: {e}"),
-                                        ))
-                                    });
+                                pypi_metadata::MetadataMismatch::Version { locked, current } => {
+                                    LocalMetadataMismatch::Version { locked, current }
                                 }
-                            }
+                                pypi_metadata::MetadataMismatch::RequiresPython {
+                                    locked,
+                                    current,
+                                } => LocalMetadataMismatch::RequiresPython { locked, current },
+                            };
+                            delayed_pypi_error.get_or_insert_with(|| {
+                                Box::new(PlatformUnsat::LocalPackageMetadataMismatch(
+                                    pkg.name().clone(),
+                                    local_mismatch,
+                                ))
+                            });
                         }
                     }
 
                     // Ensure that the record matches the currently selected interpreter.
-                    if let Some(requires_python) = &pkg.requires_python {
+                    if let Some(requires_python) = pkg.requires_python() {
                         let uv_specifier_requires_python = to_uv_specifiers(requires_python)
                             .expect("pep440 conversion should never fail");
 
@@ -2673,7 +2743,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         if !marker_requires_python.is_contained_by(&uv_specifier_requires_python) {
                             delayed_pypi_error.get_or_insert_with(|| {
                                 Box::new(PlatformUnsat::PythonVersionMismatch(
-                                    pkg.name.clone(),
+                                    pkg.name().clone(),
                                     requires_python.clone(),
                                     marker_version.into(),
                                 ))
@@ -2683,7 +2753,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                 }
 
                 // Add all the requirements of the package to the queue.
-                for requirement in &pkg.requires_dist {
+                for requirement in pkg.requires_dist() {
                     let requirement =
                         match pep508_requirement_to_uv_requirement(requirement.clone()) {
                             Ok(requirement) => requirement,
@@ -2707,7 +2777,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
                     pypi_queue.push(Dependency::PyPi(
                         requirement.clone(),
-                        pkg.name.as_ref().to_string().into(),
+                        pkg.name().as_ref().to_string().into(),
                     ));
                 }
             }
@@ -2754,10 +2824,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
         return Err(CommandDispatcherError::Failed(err));
     }
 
-    if pypi_packages_visited.len() != locked_pypi_environment.len() {
+    if pypi_packages_visited.len() != locked_pypi_records.len() {
         return Err(CommandDispatcherError::Failed(Box::new(
             PlatformUnsat::TooManyPypiPackages(
-                locked_pypi_environment
+                locked_pypi_records
                     .names()
                     .enumerate()
                     .filter_map(|(idx, name)| {
@@ -2782,10 +2852,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
     verify_build_source_matches_manifest(ctx.environment, locked_pixi_records)
         .map_err(CommandDispatcherError::Failed)?;
 
-    Ok(VerifiedIndividualEnvironment {
-        expected_conda_packages,
-        conda_packages_used_by_pypi,
-    })
+    Ok((
+        VerifiedIndividualEnvironment {
+            expected_conda_packages,
+            conda_packages_used_by_pypi,
+        },
+        locked_pypi_records,
+    ))
 }
 
 enum FoundPackage {
@@ -3419,7 +3492,6 @@ mod tests {
     use insta::Settings;
     use miette::{IntoDiagnostic, NarratableReportHandler};
     use pep440_rs::{Operator, Version};
-    use pep508_rs::PackageName;
     use pixi_build_backend_passthrough::PassthroughBackend;
     use pixi_build_frontend::BackendOverride;
     use pixi_command_dispatcher::CacheDirs;
@@ -3428,7 +3500,20 @@ mod tests {
     use tracing_test::traced_test;
 
     use super::*;
-    use crate::Workspace;
+    use crate::{
+        Workspace,
+        lock_file::tests::{make_source_package_with, make_wheel_package_with},
+    };
+
+    /// Lock a `PypiPackageData` into a `LockedPypiRecord` for testing.
+    /// Uses the package version for wheels, a dummy version for source packages.
+    fn lock_for_test(data: PypiPackageData) -> LockedPypiRecord {
+        let version = data
+            .version()
+            .cloned()
+            .unwrap_or_else(|| Version::from_str("42.23").unwrap());
+        UnresolvedPypiRecord::from(data).lock(version)
+    }
 
     #[derive(Error, Debug, Diagnostic)]
     enum LockfileUnsat {
@@ -3511,16 +3596,17 @@ mod tests {
                     build_caches: &mut build_caches,
                     static_metadata_cache: &mut static_metadata_cache,
                 };
-                let verified_env = verify_platform_satisfiability(&mut ctx, locked_env)
-                    .await
-                    .map_err(|e| match e {
-                        CommandDispatcherError::Failed(e) => {
-                            LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
-                        }
-                        CommandDispatcherError::Cancelled => {
-                            panic!("operation was cancelled which should never happen here")
-                        }
-                    })?;
+                let (verified_env, _locked_pypi) =
+                    verify_platform_satisfiability(&mut ctx, locked_env)
+                        .await
+                        .map_err(|e| match e {
+                            CommandDispatcherError::Failed(e) => {
+                                LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
+                            }
+                            CommandDispatcherError::Cancelled => {
+                                panic!("operation was cancelled which should never happen here")
+                            }
+                        })?;
 
                 individual_verified_envs.insert((env.name(), platform), verified_env);
             }
@@ -3662,17 +3748,17 @@ mod tests {
     #[test]
     fn test_pypi_git_check_with_rev() {
         // Mock locked data
-        let locked_data = PypiPackageData {
-            name: "mypkg".parse().unwrap(),
-            version: Some(Version::from_str("0.1.0").unwrap()),
-            location: "git+https://github.com/mypkg@rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            "git+https://github.com/mypkg@rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
                 .parse()
                 .expect("failed to parse url"),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }.into();
+             None,
+             None,
+            vec![],
+            None,
+        ));
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993").unwrap(),
         )
@@ -3682,17 +3768,17 @@ mod tests {
         // resolved to the same one
         pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
 
-        let locked_data = PypiPackageData {
-            name: "mypkg".parse().unwrap(),
-            version: Some(Version::from_str("0.1.0").unwrap()),
-            location: "git+https://github.com/mypkg.git?rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            "git+https://github.com/mypkg.git?rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
                 .parse()
                 .expect("failed to parse url"),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }.into();
+            None,
+            None,
+            vec![],
+            None,
+        ));
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str(
                 "mypkg @ git+https://github.com/mypkg.git@29932f3915935d773dc8d52c292cadd81c81071d",
@@ -3720,19 +3806,18 @@ mod tests {
 
         // When lock has DefaultBranch (no explicit ref), removing rev from manifest
         // should satisfy
-        let locked_data_default_branch = PypiPackageData {
-            name: "mypkg".parse().unwrap(),
-            version: Some(Version::from_str("0.1.0").unwrap()),
-            // No ?rev= query param, only the fragment with commit hash
-            location: "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
+        // No ?rev= query param, only the fragment with commit hash
+        let locked_data_default_branch = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
                 .parse()
                 .expect("failed to parse url"),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+            None,
+            None,
+            vec![],
+            None,
+        ));
         pypi_satisfies_requirement(
             &spec_without_rev,
             &locked_data_default_branch,
@@ -3747,16 +3832,15 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_unix_absolute_path_handling() {
-        let locked_data = PypiPackageData {
-            name: "mypkg".parse().unwrap(),
-            version: Some(Version::from_str("0.1.0").unwrap()),
-            location: Verbatim::new(UrlOrPath::Path("/home/username/mypkg.tar.gz".into())),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            Verbatim::new(UrlOrPath::Path("/home/username/mypkg.tar.gz".into())),
+            None,
+            None,
+            vec![],
+            None,
+        ));
 
         let spec =
             pep508_rs::Requirement::from_str("mypkg @ file:///home/username/mypkg.tar.gz").unwrap();
@@ -3768,16 +3852,15 @@ mod tests {
 
     #[test]
     fn test_windows_absolute_path_handling() {
-        let locked_data = PypiPackageData {
-            name: "mypkg".parse().unwrap(),
-            version: Some(Version::from_str("0.1.0").unwrap()),
-            location: Verbatim::new(UrlOrPath::Path("C:\\Users\\username\\mypkg.tar.gz".into())),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            Verbatim::new(UrlOrPath::Path("C:\\Users\\username\\mypkg.tar.gz".into())),
+            None,
+            None,
+            vec![],
+            None,
+        ));
 
         let spec =
             pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
@@ -3810,15 +3893,12 @@ mod tests {
 
         pypi_no_build_check
             .check(
-                &PypiPackageData {
-                    name: PackageName::from_str("sdist").expect("invalid name"),
-                    version: Some(pep440_rs::Version::from_str("0.0.0").expect("invalid version")),
-                    location: UrlOrPath::from_str(".").expect("invalid path").into(),
-                    index_url: None,
-                    hash: None,
-                    requires_dist: vec![],
-                    requires_python: None,
-                }
+                &make_source_package_with(
+                    "sdist",
+                    UrlOrPath::from_str(".").expect("invalid path").into(),
+                    vec![],
+                    None,
+                )
                 .into(),
                 Some(&PixiPypiSource::Path {
                     path: PathBuf::from("").into(),
@@ -3834,16 +3914,12 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_pypi_satisfies_path_requirement_without_version() {
-        let locked_data = PypiPackageData {
-            name: "dynamic-dep".parse().unwrap(),
-            version: None,
-            location: Verbatim::new(UrlOrPath::Path("/home/user/project/dynamic-dep".into())),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+        let locked_data = lock_for_test(make_source_package_with(
+            "dynamic-dep",
+            Verbatim::new(UrlOrPath::Path("/home/user/project/dynamic-dep".into())),
+            vec![],
+            None,
+        ));
 
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("dynamic-dep @ file:///home/user/project/dynamic-dep")
@@ -3860,18 +3936,14 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn test_pypi_satisfies_path_requirement_without_version() {
-        let locked_data = PypiPackageData {
-            name: "dynamic-dep".parse().unwrap(),
-            version: None,
-            location: Verbatim::new(UrlOrPath::Path(
+        let locked_data = lock_for_test(make_source_package_with(
+            "dynamic-dep",
+            Verbatim::new(UrlOrPath::Path(
                 "C:\\Users\\user\\project\\dynamic-dep".into(),
             )),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+            vec![],
+            None,
+        ));
 
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str(
@@ -3890,18 +3962,14 @@ mod tests {
     /// requirement when the locked package has no version.
     #[test]
     fn test_pypi_satisfies_git_requirement_without_version() {
-        let locked_data = PypiPackageData {
-            name: "mypkg".parse().unwrap(),
-            version: None,
-            location: "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
+        let locked_data = lock_for_test(make_source_package_with(
+            "mypkg",
+            "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
                 .parse()
                 .expect("failed to parse url"),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+            vec![],
+            None,
+        ));
 
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
@@ -3921,18 +3989,17 @@ mod tests {
     #[test]
     fn test_pypi_index_removed_should_invalidate() {
         // Locked data: package was resolved from a custom index.
-        let locked_data = PypiPackageData {
-            name: "my-dep".parse().unwrap(),
-            version: Some(Version::from_str("1.0.0").unwrap()),
-            location: "https://custom.example.com/simple/packages/my_dep-1.0.0-py3-none-any.whl"
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://custom.example.com/simple/packages/my_dep-1.0.0-py3-none-any.whl"
                 .parse()
                 .expect("failed to parse url"),
-            hash: None,
-            index_url: Some(Url::parse("https://custom.example.com/simple").unwrap()),
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+            None,
+            Some(Url::parse("https://custom.example.com/simple").unwrap()),
+            vec![],
+            None,
+        ));
 
         // Requirement: no index specified (user removed the `index` field).
         let spec = pep508_requirement_to_uv_requirement(
@@ -3981,18 +4048,17 @@ mod tests {
     /// invalidates the lock-file.
     #[test]
     fn test_pypi_index_changed_should_invalidate() {
-        let locked_data = PypiPackageData {
-            name: "my-dep".parse().unwrap(),
-            version: Some(Version::from_str("1.0.0").unwrap()),
-            location: "https://old-index.example.com/packages/my_dep-1.0.0-py3-none-any.whl"
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://old-index.example.com/packages/my_dep-1.0.0-py3-none-any.whl"
                 .parse()
                 .expect("failed to parse url"),
-            hash: None,
-            index_url: Some(Url::parse("https://old-index.example.com/simple").unwrap()),
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+            None,
+            Some(Url::parse("https://old-index.example.com/simple").unwrap()),
+            vec![],
+            None,
+        ));
 
         let spec = registry_requirement_with_index(
             "my-dep",
@@ -4012,18 +4078,17 @@ mod tests {
     #[test]
     fn test_pypi_index_matching_should_satisfy() {
         let index_url = "https://custom.example.com/simple";
-        let locked_data = PypiPackageData {
-            name: "my-dep".parse().unwrap(),
-            version: Some(Version::from_str("1.0.0").unwrap()),
-            location: "https://custom.example.com/packages/my_dep-1.0.0-py3-none-any.whl"
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://custom.example.com/packages/my_dep-1.0.0-py3-none-any.whl"
                 .parse()
                 .expect("failed to parse url"),
-            hash: None,
-            index_url: Some(Url::parse(index_url).unwrap()),
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+            None,
+            Some(Url::parse(index_url).unwrap()),
+            vec![],
+            None,
+        ));
 
         let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
 
@@ -4040,18 +4105,17 @@ mod tests {
     /// invalidates the lock-file.
     #[test]
     fn test_pypi_index_added_should_invalidate() {
-        let locked_data = PypiPackageData {
-            name: "my-dep".parse().unwrap(),
-            version: Some(Version::from_str("1.0.0").unwrap()),
-            location: "https://pypi.org/packages/my_dep-1.0.0-py3-none-any.whl"
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://pypi.org/packages/my_dep-1.0.0-py3-none-any.whl"
                 .parse()
                 .expect("failed to parse url"),
-            hash: None,
-            index_url: None,
-            requires_dist: vec![],
-            requires_python: None,
-        }
-        .into();
+            None,
+            None,
+            vec![],
+            None,
+        ));
 
         let spec =
             registry_requirement_with_index("my-dep", ">=1.0", "https://custom.example.com/simple");

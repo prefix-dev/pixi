@@ -1,8 +1,8 @@
 ---
 source: crates/pixi_core/src/lock_file/satisfiability/mod.rs
-assertion_line: 2788
+assertion_line: 3710
 expression: s
 ---
 environment 'default' does not satisfy the requirements of the project for platform 'win-64'
     Diagnostic severity: error
-    Caused by: 'my-dep' with specifiers '>=1.0' does not match the locked version '<dynamic>'
+    Caused by: 'my-dep' with specifiers '>=1.0' does not match the locked version '0a0.dev0'

@@ -1,0 +1,13 @@
+[project]
+name = "foo"
+version = "23.42"
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["src"]
+targets.wheel.packages = ["src/foo"]

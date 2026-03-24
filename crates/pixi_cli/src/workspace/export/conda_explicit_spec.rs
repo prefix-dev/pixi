@@ -135,7 +135,7 @@ fn render_env_platform(
                 if ignore_pypi_errors {
                     tracing::warn!(
                         "ignoring PyPI package {} since PyPI packages are not supported",
-                        pypi.name
+                        pypi.name()
                     );
                 } else {
                     miette::bail!(

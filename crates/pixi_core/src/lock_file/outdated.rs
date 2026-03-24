@@ -12,7 +12,10 @@ use super::{
 };
 use crate::{
     Workspace,
-    lock_file::satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
+    lock_file::{
+        records_by_name::LockedPypiRecordsByName,
+        satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
+    },
     workspace::{Environment, SolveGroup},
 };
 use fancy_display::FancyDisplay;
@@ -81,6 +84,10 @@ pub struct OutdatedEnvironments<'p> {
     /// Cache for static metadata extracted from pyproject.toml files.
     /// This is shared across platforms since static metadata is platform-independent.
     pub static_metadata_cache: HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+
+    /// Locked pypi records with metadata, resolved during the satisfiability
+    /// check. Forwarded to the update path to avoid re-reading source trees.
+    pub locked_pypi_records: HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
 }
 
 /// A struct that stores whether the locked content of certain environments
@@ -123,6 +130,7 @@ impl<'p> OutdatedEnvironments<'p> {
             uv_context,
             build_caches,
             static_metadata_cache,
+            locked_pypi_records,
         ) = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file).await;
 
         // Extend the outdated targets to include the solve groups
@@ -180,6 +188,7 @@ impl<'p> OutdatedEnvironments<'p> {
             uv_context,
             build_caches,
             static_metadata_cache,
+            locked_pypi_records,
         }
     }
 
@@ -212,8 +221,10 @@ async fn find_unsatisfiable_targets<'p>(
     OnceCell<UvResolutionContext>,
     HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
     HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+    HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
 ) {
     let mut verified_environments = HashMap::new();
+    let mut locked_pypi_by_env_platform = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
 
     // Create UV context lazily for building dynamic metadata
@@ -321,8 +332,10 @@ async fn find_unsatisfiable_targets<'p>(
                 static_metadata_cache: &mut static_metadata_cache,
             };
             match verify_platform_satisfiability(&mut ctx, locked_environment).await {
-                Ok(verified_env) => {
+                Ok((verified_env, locked_pypi)) => {
                     verified_environments.insert((environment.clone(), platform), verified_env);
+                    locked_pypi_by_env_platform
+                        .insert((environment.clone(), platform), locked_pypi);
                 }
                 Err(CommandDispatcherError::Cancelled) => {
                     tracing::info!(
@@ -419,6 +432,7 @@ async fn find_unsatisfiable_targets<'p>(
         uv_context,
         build_caches,
         static_metadata_cache,
+        locked_pypi_by_env_platform,
     )
 }
 
@@ -533,11 +547,12 @@ fn find_inconsistent_solve_groups<'p>(
                         }
                         _ => {}
                     },
-                    LockedPackageRef::Pypi(pkg) => match pypi_packages_by_name.get(&pkg.name) {
+                    LockedPackageRef::Pypi(pkg) => match pypi_packages_by_name.get(pkg.name()) {
                         None => {
-                            pypi_packages_by_name.insert(pkg.name.clone(), pkg.location.clone());
+                            pypi_packages_by_name
+                                .insert(pkg.name().clone(), pkg.location().clone());
                         }
-                        Some(url) if &pkg.location != url => {
+                        Some(url) if pkg.location() != url => {
                             pypi_package_mismatch = true;
                         }
                         _ => {}

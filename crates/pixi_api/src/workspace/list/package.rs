@@ -80,8 +80,7 @@ impl Package {
                 },
             ),
             PackageExt::PyPI(record, name) => {
-                let p = record.as_package_data();
-                if p.hash.is_some() {
+                if let Some(p) = record.as_package_data().as_wheel() {
                     let url = p
                         .index_url
                         .clone()
@@ -99,11 +98,9 @@ impl Package {
                             }
                             if let Some(filename) = &wheel_filename {
                                 &entry.dist.filename == filename
-                            } else if let Some(version) = &p.version {
-                                Some(&entry.dist.filename.version)
-                                    == to_uv_version(version).ok().as_ref()
                             } else {
-                                false
+                                Some(&entry.dist.filename.version)
+                                    == to_uv_version(&p.version).ok().as_ref()
                             }
                         });
                         entry.and_then(|e| get_dir_size(&e.dist.path).ok())
@@ -112,7 +109,7 @@ impl Package {
                     };
                     (size, Some(index.to_string()))
                 } else {
-                    get_pypi_location_information(&p.location)
+                    get_pypi_location_information(record.as_package_data().location())
                 }
             }
         };
@@ -131,8 +128,8 @@ impl Package {
             PackageExt::Conda(pkg) => pkg.record().and_then(|r| r.md5.map(|h| format!("{h:x}"))),
             PackageExt::PyPI(record, _) => record
                 .as_package_data()
-                .hash
-                .as_ref()
+                .as_wheel()
+                .and_then(|w| w.hash.as_ref())
                 .and_then(|h| h.md5().map(|m| format!("{m:x}"))),
         };
 
@@ -142,8 +139,8 @@ impl Package {
                 .and_then(|r| r.sha256.map(|h| format!("{h:x}"))),
             PackageExt::PyPI(record, _) => record
                 .as_package_data()
-                .hash
-                .as_ref()
+                .as_wheel()
+                .and_then(|w| w.hash.as_ref())
                 .and_then(|h| h.sha256().map(|s| format!("{s:x}"))),
         };
 
@@ -196,9 +193,9 @@ impl Package {
                 (
                     None,
                     Some(
-                        p.location
+                        p.location()
                             .given()
-                            .map_or_else(|| p.location.to_string(), ToOwned::to_owned),
+                            .map_or_else(|| p.location().to_string(), ToOwned::to_owned),
                     ),
                 )
             }
@@ -207,8 +204,8 @@ impl Package {
         let index_url = match package {
             PackageExt::PyPI(record, _) => record
                 .as_package_data()
-                .index_url
-                .as_ref()
+                .as_wheel()
+                .and_then(|w| w.index_url.as_ref())
                 .map(|u| u.to_string()),
             PackageExt::Conda(_) => None,
         };
@@ -236,7 +233,7 @@ impl Package {
             PackageExt::Conda(pkg) => pkg.record().map(|r| r.depends.clone()).unwrap_or_default(),
             PackageExt::PyPI(record, _) => record
                 .as_package_data()
-                .requires_dist
+                .requires_dist()
                 .iter()
                 .map(|r| r.to_string())
                 .collect(),

@@ -234,7 +234,7 @@ mod tests {
     use std::{path::PathBuf, str::FromStr};
 
     use pep440_rs::Version;
-    use rattler_lock::{PypiPackageData, UrlOrPath};
+    use rattler_lock::{PypiDistributionData, UrlOrPath};
     use uv_distribution_types::RemoteSource;
 
     use super::convert_to_dist;
@@ -248,9 +248,9 @@ mod tests {
         let version = Version::from_str("2.3.0+cu121").unwrap();
         // Pass into locked data
         let locked = crate::InstallablePypiRecord::new(
-            &PypiPackageData {
+            &PypiDistributionData {
                 name: "torch".parse().unwrap(),
-                version: Some(version.clone()),
+                version: version.clone(),
                 location: UrlOrPath::Url(url).into(),
                 hash: None,
                 index_url: None,

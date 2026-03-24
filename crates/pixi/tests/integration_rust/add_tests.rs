@@ -1095,13 +1095,13 @@ platforms = ["{platform}"]
         .unwrap()
         .pypi_packages(p)
         .unwrap()
-        .find(|p| p.name.to_string() == "boltons")
+        .find(|p| p.name().to_string() == "boltons")
         .unwrap();
 
     insta::with_settings!( {filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(boltons.location);
+        insta::assert_snapshot!(boltons.location());
     });
 }
 

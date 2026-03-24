@@ -639,9 +639,8 @@ impl WorkspaceMut {
                 pypi_records
                     .iter()
                     .filter_map(|data| {
-                        if &data.name == name.as_normalized() {
-                            data.version
-                                .as_ref()
+                        if data.name() == name.as_normalized() {
+                            data.version()
                                 .and_then(|v| Version::from_str(&v.to_string()).ok())
                         } else {
                             None

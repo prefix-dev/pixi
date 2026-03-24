@@ -116,7 +116,7 @@ pub(crate) fn get_required_virtual_packages_from_depends(
 fn get_wheels_from_pypi_package_data(pypi_packages: Vec<PypiPackageData>) -> Vec<WheelFilename> {
     pypi_packages
         .into_iter()
-        .map(|package| package.location.clone())
+        .map(|package| package.location().clone())
         .flat_map(|location| {
             if let Some(file_name) = location.file_name() {
                 WheelFilename::from_str(file_name).ok()
