@@ -201,12 +201,30 @@ impl CachedCondaMetadata {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
-pub struct CachedCondaMetadataId(u64);
+pub struct CachedCondaMetadataId(String);
+
+impl Default for CachedCondaMetadataId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl CachedCondaMetadataId {
-    pub fn random() -> Self {
-        Self(rand::random())
+    /// Generates a new unique identifier.
+    pub fn new() -> Self {
+        Self(nanoid::nanoid!())
+    }
+
+    /// Returns the identifier as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for CachedCondaMetadataId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
     }
 }

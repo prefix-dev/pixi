@@ -230,8 +230,10 @@ impl BuildBackendMetadataSpec {
             discovered_backend.init_params.target_configuration.as_ref(),
         );
 
-        if !skip_cache {
-            if let Some(cache_entry) = Self::verify_cache_freshness(
+        // Check if the cached metadata is still fresh. The stale metadata is
+        // kept around so we can compare outputs and reuse the ID if unchanged.
+        let stale_cached_metadata = if !skip_cache {
+            match Self::verify_cache_freshness(
                 cached_metadata,
                 &build_source_checkout,
                 project_model_hash,
@@ -240,19 +242,23 @@ impl BuildBackendMetadataSpec {
             )
             .await?
             {
-                tracing::debug!("Using cached source metadata for package",);
-                return Ok(BuildBackendMetadata {
-                    source: manifest_source_location.clone(),
-                    metadata: cache_entry,
-                    skip_cache,
-                });
+                Ok(fresh) => {
+                    tracing::debug!("Using cached build backend metadata");
+                    return Ok(BuildBackendMetadata {
+                        source: manifest_source_location.clone(),
+                        metadata: fresh,
+                        skip_cache,
+                    });
+                }
+                Err(stale) => stale,
             }
         } else {
             let backend_name = match &discovered_backend.backend_spec {
                 BackendSpec::JsonRpc(spec) => &spec.name,
             };
             warn_once_per_backend(backend_name);
-        }
+            None
+        };
 
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
@@ -295,19 +301,47 @@ impl BuildBackendMetadataSpec {
             "Using `{}` procedure to get metadata information",
             pixi_build_types::procedures::conda_outputs::METHOD_NAME
         );
-        let mut metadata = self
+        let raw = self
             .call_conda_outputs(
-                command_dispatcher.clone(),
-                manifest_source_location.manifest_source().into(),
-                build_source_checkout,
-                project_model_hash,
-                configuration_hash,
+                &command_dispatcher,
+                &build_source_checkout,
                 backend,
                 log_sink,
             )
             .await?;
 
-        metadata.cache_version = cache_version;
+        // Determine the metadata ID: reuse the previous one if the outputs
+        // haven't changed, otherwise generate a new one. This ensures downstream
+        // caches keyed by the metadata ID remain valid when inputs change but
+        // outputs stay the same.
+        let id = match &stale_cached_metadata {
+            Some(prev) if prev.outputs == raw.outputs => prev.id.clone(),
+            _ => CachedCondaMetadataId::new(),
+        };
+
+        let canonical_manifest_source: CanonicalSourceLocation =
+            manifest_source_location.manifest_source().into();
+        let canonical_build_source =
+            CanonicalSourceLocation::from(build_source_checkout.pinned.clone());
+        let canonical_build_source_opt =
+            (canonical_manifest_source != canonical_build_source).then_some(canonical_build_source);
+
+        let metadata = CachedCondaMetadata {
+            id,
+            cache_version,
+            outputs: raw.outputs,
+            build_variants: self.variant_configuration.unwrap_or_default(),
+            build_variant_files: self.variant_files.into_iter().flatten().collect(),
+            input_globs: raw.input_globs,
+            input_files: raw.input_files,
+            source: CanonicalSourceCodeLocation::new(
+                canonical_manifest_source,
+                canonical_build_source_opt,
+            ),
+            project_model_hash,
+            configuration_hash,
+            timestamp: raw.timestamp,
+        };
 
         // Try to store the metadata in the cache with version checking.
         // If another process updated the cache while we were computing, we get a conflict.
@@ -390,16 +424,25 @@ impl BuildBackendMetadataSpec {
         skip_cache
     }
 
+    /// Verifies if the cached metadata is still fresh.
+    ///
+    /// Returns:
+    /// - `Ok(Ok(metadata))` if the cache is fresh and can be used as-is.
+    /// - `Ok(Err(Some(metadata)))` if the cache is stale but the metadata is
+    ///   returned for comparison (e.g. to reuse the ID if outputs match).
+    /// - `Ok(Err(None))` if no cache entry exists.
     async fn verify_cache_freshness(
         cache_entry: Option<CachedCondaMetadata>,
         build_source_checkout: &SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
         configuration_hash: ConfigurationHash,
         requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
-    ) -> Result<Option<CachedCondaMetadata>, CommandDispatcherError<BuildBackendMetadataError>>
-    {
+    ) -> Result<
+        Result<CachedCondaMetadata, Option<CachedCondaMetadata>>,
+        CommandDispatcherError<BuildBackendMetadataError>,
+    > {
         let Some(cache_entry) = cache_entry else {
-            return Ok(None);
+            return Ok(Err(None));
         };
 
         // Check the project model
@@ -407,7 +450,7 @@ impl BuildBackendMetadataSpec {
             tracing::info!(
                 "found cached outputs with different project model, invalidating cache."
             );
-            return Ok(None);
+            return Ok(Err(Some(cache_entry)));
         }
 
         // Check the build configuration
@@ -415,18 +458,18 @@ impl BuildBackendMetadataSpec {
             tracing::info!(
                 "found cached outputs with different build configuration, invalidating cache."
             );
-            return Ok(None);
+            return Ok(Err(Some(cache_entry)));
         }
 
         // Check if the build variants match
         if Some(&cache_entry.build_variants) != requested_variants.as_ref() {
             tracing::info!("found cached outputs with different variants, invalidating cache.");
-            return Ok(None);
+            return Ok(Err(Some(cache_entry)));
         }
 
         // If the build source is immutable, we don't check the contents of the files.
         if build_source_checkout.is_immutable() {
-            return Ok(Some(cache_entry));
+            return Ok(Ok(cache_entry));
         }
 
         let build_source_dir = build_source_checkout.path.as_dir_or_file_parent();
@@ -445,7 +488,7 @@ impl BuildBackendMetadataSpec {
                             "found cached outputs but '{}' has been modified, invalidating cache.",
                             source_file_path.display()
                         );
-                        return Ok(None);
+                        return Ok(Err(Some(cache_entry)));
                     }
                 }
                 Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
@@ -453,7 +496,7 @@ impl BuildBackendMetadataSpec {
                         "found cached outputs but '{}' has been deleted, invalidating cache.",
                         source_file_path.display()
                     );
-                    return Ok(None);
+                    return Ok(Err(Some(cache_entry)));
                 }
                 Err(err) => {
                     tracing::info!(
@@ -461,7 +504,7 @@ impl BuildBackendMetadataSpec {
                         source_file_path.display(),
                         err
                     );
-                    return Ok(None);
+                    return Ok(Err(Some(cache_entry)));
                 }
             };
         }
@@ -478,11 +521,11 @@ impl BuildBackendMetadataSpec {
                     "found cached outputs but a new matching file at '{}' has been detected, invalidating cache.",
                     path.display()
                 );
-                return Ok(None);
+                return Ok(Err(Some(cache_entry)));
             }
         }
 
-        Ok(Some(cache_entry))
+        Ok(Ok(cache_entry))
     }
 
     /// Validates that outputs with the same name have unique variants.
@@ -534,20 +577,16 @@ impl BuildBackendMetadataSpec {
 
     /// Use the `conda/outputs` procedure to get the metadata for the source
     /// checkout.
-    #[allow(clippy::too_many_arguments)]
     async fn call_conda_outputs(
-        self,
-        command_dispatcher: CommandDispatcher,
-        canonical_manifest_source: CanonicalSourceLocation,
-        build_source_checkout: SourceCheckout,
-        project_model_hash: Option<ProjectModelHash>,
-        configuration_hash: ConfigurationHash,
+        &self,
+        command_dispatcher: &CommandDispatcher,
+        build_source_checkout: &SourceCheckout,
         backend: Backend,
         mut log_sink: UnboundedSender<String>,
-    ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
+    ) -> Result<RawCondaOutputs, CommandDispatcherError<BuildBackendMetadataError>> {
         let backend_identifier = backend.identifier().to_string();
         let params = CondaOutputsParams {
-            channels: self.channels,
+            channels: self.channels.clone(),
             host_platform: self.build_environment.host_platform,
             build_platform: self.build_environment.build_platform,
             variant_configuration: self.variant_configuration.clone().map(|variants| {
@@ -624,27 +663,27 @@ impl BuildBackendMetadataSpec {
             })
             .collect();
 
-        let canonical_build_source = CanonicalSourceLocation::from(build_source_checkout.pinned);
-        let canonical_build_source_opt =
-            (canonical_manifest_source != canonical_build_source).then_some(canonical_build_source);
-
-        Ok(CachedCondaMetadata {
-            id: CachedCondaMetadataId::random(),
-            cache_version: 0,
+        Ok(RawCondaOutputs {
             outputs: outputs.outputs,
-            build_variants: self.variant_configuration.unwrap_or_default(),
-            build_variant_files: self.variant_files.into_iter().flatten().collect(),
             input_globs: outputs.input_globs.into_iter().collect(),
             input_files: input_glob_files,
-            source: CanonicalSourceCodeLocation::new(
-                canonical_manifest_source,
-                canonical_build_source_opt,
-            ),
-            project_model_hash,
-            configuration_hash,
             timestamp,
         })
     }
+}
+
+/// Raw result from calling the build backend's `conda/outputs` procedure.
+/// This contains only what the backend returns plus derived file information.
+/// The caller is responsible for constructing the full `CachedCondaMetadata`.
+struct RawCondaOutputs {
+    /// The outputs as reported by the build backend.
+    outputs: Vec<pixi_build_types::procedures::conda_outputs::CondaOutput>,
+    /// Globs of files from which the metadata was derived.
+    input_globs: std::collections::BinaryHeap<String>,
+    /// Paths of files that match the input globs.
+    input_files: std::collections::BTreeSet<PathBuf>,
+    /// The timestamp of when the metadata was computed.
+    timestamp: SystemTime,
 }
 
 #[derive(Debug, Clone, Error, Diagnostic)]
