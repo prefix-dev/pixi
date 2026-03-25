@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 from pathlib import Path
 
@@ -67,7 +67,7 @@ class ProcessResult:
     modified: bool = False
     ignored_file: bool = False
     skipped_marker: bool = False
-    errors: list[str] | None = None
+    errors: list[str] = field(default_factory=list)
 
 
 def collect_markdown_files(docs_root: Path) -> list[Path]:
@@ -320,7 +320,7 @@ def is_already_tabbed(lines: list[str], block_start_index: int) -> bool:
 
 def process_markdown_file(filepath: Path) -> ProcessResult:
     """Process one markdown file and rewrite pixi snippets as dual tabs."""
-    result = ProcessResult(errors=[])
+    result = ProcessResult()
     rel_path = to_repo_relative_posix(filepath)
 
     if rel_path in IGNORE_FILES:
@@ -388,9 +388,11 @@ def process_markdown_file(filepath: Path) -> ProcessResult:
                 new_lines.append(line)
                 new_lines.extend(block_lines)
                 new_lines.append(closing_line)
-                result.errors.append(
-                    f"Missing include or snippet in {rel_path}: {include_path}:{include_snippet or ''}".rstrip(":")
+                snippet_part = include_snippet or ""
+                message = f"Missing include or snippet in {rel_path}: {include_path}:{snippet_part}".rstrip(
+                    ":"
                 )
+                result.errors.append(message)
                 index += 1
                 continue
 
@@ -462,14 +464,15 @@ def main() -> int:
             error_count += 1
             print(f"ERROR: {error}")
 
-    print(
-        "SUMMARY: "
-        f"modified={modified_count}, "
+    summary = (
+        f"SUMMARY: modified={modified_count}, "
         f"unchanged={unchanged_count}, "
         f"ignored={ignored_count}, "
         f"marker_skips={marker_skip_count}, "
         f"errors={error_count}"
     )
+
+    print(summary)
 
     return 1 if error_count else 0
 
