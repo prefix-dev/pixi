@@ -172,6 +172,7 @@ For other registries, you will need to adapt these instructions to add the right
 
     Add the following configuration to your Pixi manifest, making sure to include `your_username@` in the URL of the registry:
 
+    <!-- no-pyproject -->
     ```toml
     [pypi-options]
     index-url = "https://your_username@custom-registry.com/simple"
@@ -180,6 +181,7 @@ For other registries, you will need to adapt these instructions to add the right
 === "Google Artifact Registry"
     After making sure you are logged in, for instance by running `gcloud auth login`, add the following configuration to your Pixi manifest:
 
+    <!-- no-pyproject -->
     ```toml
     [pypi-options]
     extra-index-urls = ["https://oauth2accesstoken@<location>-python.pkg.dev/<project>/<repository>/simple"]
@@ -195,6 +197,7 @@ For other registries, you will need to adapt these instructions to add the right
 === "Azure DevOps Artifacts"
     After following the [`keyrings.artifacts` instructions](https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage) and making sure that keyring works correctly, add the following configuration to your Pixi manifest:
 
+    <!-- no-pyproject -->
     ```toml
     [pypi-options]
     extra-index-urls = ["https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/"]
@@ -203,6 +206,7 @@ For other registries, you will need to adapt these instructions to add the right
 === "AWS CodeArtifact"
     Ensure you are logged in e.g via `aws sso login` and add the following configuration to your Pixi manifest:
 
+    <!-- no-pyproject -->
     ```toml
     [pypi-options]
     extra-index-urls = ["https://aws@<your-domain>-<your-account>.d.codeartifact.<your-region>.amazonaws.com/pypi/<your-repository>/simple/"]
@@ -235,3 +239,4 @@ password admin
 ```
 
 For more details, you can access the [.netrc docs](https://www.ibm.com/docs/en/aix/7.2?topic=formats-netrc-file-format-tcpip).
+

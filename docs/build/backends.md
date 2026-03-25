@@ -25,11 +25,13 @@ For the latest backend versions, you can prepend the channel list with the [pref
 
 Install a certain build backend by adding it to the `package.build` section of the manifest file.:
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
 ```
 
 For custom backend channels, you can add the channel to the `channels` section of the manifest file:
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-build-backend-channel.toml:build"
 ```
@@ -118,3 +120,4 @@ We store:
 - Project model: `project_model.json`
 - Requests: `*_params.json`
 - Responses: `*_response.json`
+

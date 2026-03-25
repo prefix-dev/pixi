@@ -3,6 +3,7 @@ that dependency will be available in all environments that include that feature.
 The dependencies of a package that is being built are a bit more granular.
 Here you can see the three types of dependencies for a simple C++ package.
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/dependency_types.toml:dependencies"
 ```
@@ -54,6 +55,7 @@ But for now, you will need to add these dependencies to the `host-dependencies` 
 So as an example, say we want to use `hatchling` and `uv` as to build a python package.
 You need to use, something like this in your manifest file:
 
+<!-- no-pyproject -->
 ```toml
 [host-dependencies]
 hatchling = "*"
@@ -83,6 +85,7 @@ As the machine running `Awesome` will have a different host architecture than th
 
 Giving you something like this in your manifest file:
 
+<!-- no-pyproject -->
 ```toml
  # in our example these dependencies will use the aarch64 binaries
 [host-dependencies]
@@ -101,3 +104,4 @@ When using something like `zlib`, you would only need to specify it in the `host
 
 These are the dependencies that are required to when running the package, they are the most common dependencies.
 And are what you would usually use in a `workspace`.
+

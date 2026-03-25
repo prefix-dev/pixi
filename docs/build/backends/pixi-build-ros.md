@@ -27,6 +27,7 @@ This backend automatically generates conda packages from ROS projects by:
 
 To use the ROS backend in your `pixi.toml`, add it to your package's build configuration:
 
+<!-- no-pyproject -->
 ```toml
 [workspace]
 preview = ["pixi-build"]
@@ -96,6 +97,7 @@ This includes:
 
 It would be equivalent to the following `pixi.toml`:
 
+<!-- no-pyproject -->
 ```toml
 [package]
 name = "my_ros_package"
@@ -166,6 +168,7 @@ You can customize the ROS backend behavior using the `[package.build.config]` se
 The ROS distribution to build for. This affects dependency mapping and build configuration.
 If set the package name will be prefixed with `ros-<distro>-` automatically, otherwise the package name from `pixi.toml` or `package.xml` is used.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 distro = "jazzy"  # or "humble", "noetic", "iron", etc.
@@ -179,6 +182,7 @@ distro = "jazzy"  # or "humble", "noetic", "iron", etc.
 
 Environment variables to set during the build process. These variables are available during compilation.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { AMENT_CMAKE_ENVIRONMENT_HOOKS_ENABLED = "1" }
@@ -281,6 +285,7 @@ Or using a toml array of tables:
 
 Or you can use a file directly in the list:
 
+<!-- no-pyproject -->
 ```toml title="pixi.toml"
 [package.build.config]
 extra-package-mappings = ["mapping.yml"]
@@ -366,4 +371,5 @@ For ROS1 packages using catkin build system:
 - [RoboStack](https://robostack.github.io/) - Conda packages for the Robot Operating System
 - [ament Build System](https://docs.ros.org/en/rolling/Concepts/Build-System-Development/ament.html) - ROS2 build system
 - [catkin Build System](http://wiki.ros.org/catkin) - ROS1 build system
+
 

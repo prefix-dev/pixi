@@ -69,6 +69,7 @@ The following reference describes all available configuration options.
 The default channels to select when running `pixi init` or `pixi global install`.
 This defaults to only conda-forge.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:default-channels"
 ```
@@ -87,6 +88,7 @@ workspace manifest.
 - `source-completion-scripts`: When set to `false`, Pixi will not source the autocompletion scripts of the environment
   when going into the shell.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:shell"
 ```
@@ -111,6 +113,7 @@ If you only need to bypass TLS verification for specific PyPI hosts, consider us
     In these cases, you *must* manually add the download host to [`pypi-config.allow-insecure-host`](#pypi-config).
 
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-no-verify"
 ```
@@ -133,6 +136,7 @@ You can override this from the CLI with `--tls-root-certs`.
     For `native-tls` builds (conda-forge packages), the system's TLS library is used, which always uses system certificates.
     In this case, the setting is accepted but has no effect.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tls-root-certs"
 ```
@@ -144,6 +148,7 @@ Usually, we try to use the keyring to load authentication data from, and only us
 file as a fallback. This option allows you to force the use of a JSON file.
 Read more in the authentication section.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:authentication-override-file"
 ```
@@ -175,12 +180,14 @@ This field can consist of two types of input.
   this is read as `false`)
 - A string value, which will be the absolute path to the directory where the environments will be stored.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:detached-environments"
 ```
 
 or:
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/detached_environments_path_config.toml:detached-environments-path"
 ```
@@ -214,6 +221,7 @@ The default is `semver` but you can set the following:
 - `minor`: Pinning to the minor version, `1.2.3` -> `>=1.2.3, <1.3`.
 - `latest-up`: Pinning to the latest version, `1.2.3` -> `>=1.2.3`.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:pinning-strategy"
 ```
@@ -222,6 +230,7 @@ The default is `semver` but you can set the following:
 
 Configuration for conda channel-mirrors, more info [below](#mirror-configuration).
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:mirrors"
 ```
@@ -237,6 +246,7 @@ Now `proxy-config` table supports the following options:
 - `non-proxy-hosts`: A list of domains which should bypass proxies.
 
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:proxy-config"
 ```
@@ -246,12 +256,14 @@ Now `proxy-config` table supports the following options:
 
 Configuration for repodata fetching.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:repodata-config"
 ```
 
 The above settings can be overridden on a per-channel basis by specifying a channel prefix in the configuration.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:prefix-repodata-config"
 ```
@@ -267,6 +279,7 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
   retrieve credentials.
 - `allow-insecure-host`: A list of host names (without protocol or port) for which TLS certificate verification should be disabled when accessing PyPI registries. This is useful when working with internal PyPI mirrors that use self-signed certificates. For disabling TLS verification globally for all connections, use [`tls-no-verify`](#tls-no-verify) instead.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:pypi-config"
 ```
@@ -281,6 +294,7 @@ This is because we want to keep the manifest file as complete and reproducible a
 Configuration for S3 authentication. This will lead to Pixi not using AWS's default credentials but instead use the
 credentials from the Pixi authentication storage, see the [S3 section](../deployment/s3.md) for more information.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:s3-options"
 ```
@@ -289,6 +303,7 @@ credentials from the Pixi authentication storage, see the [S3 section](../deploy
 
 Configure multiple settings to limit or extend the concurrency of pixi.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:concurrency"
 ```
@@ -314,6 +329,7 @@ However, you can opt-in on a global (or workspace) basis by setting the value to
 
 In the future we are planning to add a `sandbox` mode to execute these scripts in a controlled environment.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:run-post-link-scripts"
 ```
@@ -324,6 +340,7 @@ Defines the platform used when installing "tools" like build backends. By defaul
 system, but you can override it to use a different platform. This can be useful if you are running pixi on an
 architecture for which there is fewer support for certain build backends.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:tool-platform"
 ```
@@ -378,6 +395,7 @@ pixi run/shell/shell-hook --force-activate
 
 Set the configuration with:
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:experimental"
 ```
@@ -402,6 +420,7 @@ important to get this file from a trusted source.
 
 You can also specify mirrors for an entire "host", e.g.
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/mirror_prefix_config.toml:mirrors"
 ```
@@ -417,6 +436,7 @@ You can also specify mirrors on the OCI registry. There is a public mirror on
 the Github container registry (ghcr.io) that is maintained by the conda-forge
 team. You can use it like this:
 
+<!-- no-pyproject -->
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/oci_config.toml:oci-mirrors"
 ```
@@ -432,3 +452,4 @@ downloading urls may vary from their index urls. For example, the default pypi i
 is `https://pypi.org/simple`, and the package downloading urls are in the form of
 `https://files.pythonhosted.org/packages/<h1>/<h2>/<hash>/<package>.whl`. You need two mirror
 config entries for `https://pypi.org/simple` and `https://files.pythonhosted.org/packages`.
+

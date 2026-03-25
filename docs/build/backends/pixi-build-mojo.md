@@ -58,6 +58,7 @@ With the project structure above, pixi-build-mojo will automatically discover:
 
 Here's a minimal configuration that leverages auto-derive:
 
+<!-- no-pyproject -->
 ```toml
 [workspace]
 authors = ["J. Doe <jdoe@mail.com>"]
@@ -153,6 +154,7 @@ You can customize the Mojo backend behavior using the `[package.build.config]` s
 
 Environment variables to set during the build process.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { ASSERT = "all" }
@@ -169,6 +171,7 @@ The backend always writes JSON-RPC request/response logs and the generated inter
 
 Additional globs to pass to pixi to discover if the package should be rebuilt.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-input-globs = ["**/*.c", "assets/**/*", "*.md"]
@@ -182,6 +185,7 @@ extra-input-globs = ["**/*.c", "assets/**/*", "*.md"]
 
 List of compilers to use for the build. Compilers use conda-forge's standard compiler infrastructure.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 compilers = ["c", "cxx"]
@@ -189,6 +193,7 @@ compilers = ["c", "cxx"]
 
 For target-specific configuration, platform compilers completely replace the base configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 compilers = []
@@ -276,6 +281,7 @@ Package configuration for creating Mojo package. The created Mojo package will b
 
 The name to give the Mojo package. The `.mojopkg` suffix will be added automatically. If not specified, defaults to the project name.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config.pkg]
 name = "greetings"
@@ -288,6 +294,7 @@ name = "greetings"
 
 The path to the directory that constitutes the package. If not specified, searches for a directory with `__init__.mojo` or `__init__.🔥` as described above.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config.pkg]
 path = "greetings"
@@ -300,6 +307,7 @@ path = "greetings"
 
 Additional command-line arguments to pass to the Mojo compiler when building this package.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config.pkg]
 extra-args = ["-I", "special-thing"]
@@ -330,3 +338,4 @@ cxx_compiler = ["vs2019"]
 
 - [Mojo Pixi Basic](https://docs.modular.com/pixi/)
 - [Modular Community Packages](https://github.com/modular/modular-community)
+
