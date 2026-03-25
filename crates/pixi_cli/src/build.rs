@@ -4,7 +4,7 @@ use clap::Parser;
 use fs_err::tokio as tokio_fs;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::BackendOverride;
+use pixi_build_frontend::{BackendOverride, types::procedures::conda_outputs::CondaOutput};
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
     build::PinnedSourceCodeLocation,
@@ -44,7 +44,8 @@ pub struct Args {
     #[clap(long, short, default_value_t = Platform::current())]
     pub target_platform: Platform,
 
-    /// The build platform to use for building (defaults to the current platform)
+    /// The build platform to use for building (defaults to the current
+    /// platform)
     #[clap(long, default_value_t = Platform::current())]
     pub build_platform: Platform,
 
@@ -60,17 +61,21 @@ pub struct Args {
     #[clap(long, short)]
     pub clean: bool,
 
-    /// The path to a directory containing a package manifest, or to a specific manifest file.
+    /// The path to a directory containing a package manifest, or to a specific
+    /// manifest file.
     ///
-    /// Supported manifest files: `package.xml`, `recipe.yaml`, `pixi.toml`, `pyproject.toml`, or `mojoproject.toml`.
+    /// Supported manifest files: `package.xml`, `recipe.yaml`, `pixi.toml`,
+    /// `pyproject.toml`, or `mojoproject.toml`.
     ///
-    /// When a directory is provided, the command will search for supported manifest files within it.
+    /// When a directory is provided, the command will search for supported
+    /// manifest files within it.
     #[arg(long)]
     pub path: Option<PathBuf>,
 }
 
-/// Validate that the full path of package manifest exists and is a supported format.
-/// Directories are allowed (for discovery), and specific manifest files must be supported formats.
+/// Validate that the full path of package manifest exists and is a supported
+/// format. Directories are allowed (for discovery), and specific manifest files
+/// must be supported formats.
 pub(crate) async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
     let supported_file_names: Vec<&str> = [
         // backend-specific build files
@@ -261,7 +266,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })?;
 
     // Store the manifest directory relative to the workspace root when possible to
-    // keep the pinned path relocatable and avoid double-prefixing during resolution.
+    // keep the pinned path relocatable and avoid double-prefixing during
+    // resolution.
     let manifest_path_spec =
         pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
             .unwrap_or_else(|| package_manifest_path_canonical.to_path_buf());
@@ -295,9 +301,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .build_backend_metadata(backend_metadata_spec.clone())
         .await?;
 
-    // Determine all the outputs available from the build backend.
-    let packages = backend_metadata.metadata.outputs();
-
     // Ensure the final output directory exists
     fs_err::create_dir_all(&args.output_dir)
         .into_diagnostic()
@@ -309,10 +312,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })?;
 
     // Build the individual packages
-    for package_name in packages {
+    for CondaOutput { metadata, .. } in &backend_metadata.metadata.outputs {
         let built_package = command_dispatcher
             .source_build(SourceBuildSpec {
-                name: package_name,
+                name: metadata.name.clone(),
+                variants: metadata
+                    .variant
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.clone().into()))
+                    .collect(),
+
                 output_directory: None,
                 source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
@@ -321,15 +330,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 exclude_newer: None,
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
-                variant_configuration: Some(variant_configuration.clone()),
-                variant_files: Some(variant_files.clone()),
-                // Fresh builds don't have pre-existing variants to match against
-                variants: Default::default(),
                 enabled_protocols: Default::default(),
                 work_directory: None,
                 clean: args.clean,
                 force: false,
                 build_profile: BuildProfile::Release,
+
+                // Is this actually useful? Shouldn't that already be captured in the `variants` itself?
+                variant_configuration: Some(variant_configuration.clone()),
+                variant_files: Some(variant_files.clone()),
             })
             .await?;
 

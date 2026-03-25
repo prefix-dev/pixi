@@ -1443,7 +1443,7 @@ impl Project {
 
         // Get the available outputs and use exactly_one to handle the single output
         // case
-        let packages = metadata.metadata.outputs();
+        let packages = metadata.metadata.output_names();
 
         match packages.len() {
             0 => Err(InferPackageNameError::NoPackageOutputs),
