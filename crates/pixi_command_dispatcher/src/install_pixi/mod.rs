@@ -11,7 +11,10 @@ use futures::StreamExt;
 use miette::Diagnostic;
 
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
+use pixi_record::{
+    FullSourceRecordData, PartialSourceRecordData, SourceRecordData, UnresolvedPixiRecord,
+    UnresolvedSourceRecord, VariantValue,
+};
 use pixi_spec::ResolvedExcludeNewer;
 use rattler::install::{
     InstallationResultRecord, Installer, InstallerError, Transaction,
@@ -139,8 +142,8 @@ impl InstallPixiEnvironmentSpec {
     {
         // Split into source and binary records.
         // Source records may be fully resolved or partial (unresolved).
-        let mut source_records = Vec::new();
-        let mut binary_records = Vec::new();
+        let mut source_records = Vec::with_capacity(self.records.len() / 2);
+        let mut binary_records = Vec::with_capacity(self.records.len());
         for record in std::mem::take(&mut self.records) {
             match record {
                 UnresolvedPixiRecord::Source(record) => source_records.push(record),
@@ -150,22 +153,20 @@ impl InstallPixiEnvironmentSpec {
 
         // Build all the source packages concurrently.
         // Filter out ignored packages upfront.
-        let source_records: Vec<_> = source_records
-            .into_iter()
-            .filter(|source_record| {
-                !self
-                    .ignore_packages
-                    .as_ref()
-                    .is_some_and(|ignore| ignore.contains(source_record.name()))
-            })
-            .collect();
-        binary_records.reserve(source_records.len());
+        let source_records = source_records.into_iter().filter(|source_record| {
+            !self
+                .ignore_packages
+                .as_ref()
+                .is_some_and(|ignore| ignore.contains(source_record.name()))
+        });
         let mut build_futures = CancellationAwareFutures::new(command_dispatcher.executor());
-        for source_record in &source_records {
-            let name = source_record.name().clone();
-            let manifest_source = source_record.manifest_source().clone();
-            build_futures.push(async {
-                self.build_unresolved_source(&command_dispatcher, source_record)
+        for source_record in source_records {
+            let this = &self;
+            let command_dispatcher = &command_dispatcher;
+            build_futures.push(async move {
+                let name = source_record.name().clone();
+                let manifest_source = source_record.manifest_source().clone();
+                this.build_unresolved_source(command_dispatcher, source_record)
                     .await
                     .map_err_with(move |build_err| {
                         InstallPixiEnvironmentError::BuildUnresolvedSourceError(
@@ -229,26 +230,34 @@ impl InstallPixiEnvironmentSpec {
     async fn build_unresolved_source(
         &self,
         command_dispatcher: &CommandDispatcher,
-        source_record: &UnresolvedSourceRecord,
+        UnresolvedSourceRecord {
+            variants,
+            data,
+            manifest_source,
+            build_source,
+            ..
+        }: UnresolvedSourceRecord,
     ) -> Result<RepoDataRecord, CommandDispatcherError<SourceBuildError>> {
-        let name = source_record.name().clone();
+        let (name,) = match data {
+            SourceRecordData::Partial(PartialSourceRecordData { name, .. }) => (name,),
+            SourceRecordData::Full(FullSourceRecordData { package_record, .. }) => {
+                (package_record.name,)
+            }
+        };
 
         // Verify if we need to force the build even if the cache is up to date.
         let force = self.force_reinstall.contains(&name);
 
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
-                source: PinnedSourceCodeLocation::new(
-                    source_record.manifest_source().clone(),
-                    source_record.build_source().cloned(),
-                ),
+                source: PinnedSourceCodeLocation::new(manifest_source, build_source),
                 name,
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
                 variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
-                variants: source_record.variants().clone(),
+                variants,
                 exclude_newer: self.exclude_newer.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: None,
