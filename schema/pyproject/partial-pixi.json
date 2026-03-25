@@ -227,7 +227,8 @@
         }
       },
       "propertyNames": {
-        "description": "A valid task name."
+        "description": "A valid task name.",
+        "minLength": 1
       }
     },
     "tool": {
@@ -636,6 +637,7 @@
           "title": "Task",
           "description": "the name of the task to depend on",
           "type": "string",
+          "minLength": 1,
           "pattern": "^[^\\s\\$]+$"
         }
       }
@@ -903,7 +905,8 @@
             }
           },
           "propertyNames": {
-            "description": "A valid task name."
+            "description": "A valid task name.",
+            "minLength": 1
           }
         }
       }
@@ -2156,7 +2159,8 @@
             }
           },
           "propertyNames": {
-            "description": "A valid task name."
+            "description": "A valid task name.",
+            "minLength": 1
           }
         }
       }
@@ -2298,6 +2302,7 @@
                   {
                     "description": "A valid task name.",
                     "type": "string",
+                    "minLength": 1,
                     "pattern": "^[^\\s\\$]+$"
                   }
                 ]
@@ -2309,6 +2314,7 @@
             {
               "description": "A valid task name.",
               "type": "string",
+              "minLength": 1,
               "pattern": "^[^\\s\\$]+$"
             }
           ]
@@ -2322,12 +2328,14 @@
               "items": {
                 "description": "A valid task name.",
                 "type": "string",
+                "minLength": 1,
                 "pattern": "^[^\\s\\$]+$"
               }
             },
             {
               "description": "A valid task name.",
               "type": "string",
+              "minLength": 1,
               "pattern": "^[^\\s\\$]+$"
             }
           ]

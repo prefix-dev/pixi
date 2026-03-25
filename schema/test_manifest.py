@@ -186,3 +186,22 @@ def test_real_manifests(
     if error_count:
         pprint.pprint(all_errors)
     assert not error_count
+
+
+def test_gh_1089_fastjsonschema(manifest_schemata: TRawSchemata) -> None:
+    import fastjsonschema  # pyright: ignore [reportMissingTypeStubs]
+
+    for manifest_name, schemata in manifest_schemata.items():
+        for schema_name, schema in schemata.items():
+            print(manifest_name, schema_name)
+            fastjsonschema.compile(schema)  # pyright: ignore [reportUnknownMemberType]
+
+
+def test_gh_1089_python_jsonschema(manifest_schemata: TRawSchemata) -> None:
+    import jsonschema.validators
+
+    for manifest_name, schemata in manifest_schemata.items():
+        for schema_name, schema in schemata.items():
+            print(manifest_name, schema_name)
+            cls = jsonschema.validators.validator_for(schema)
+            cls.check_schema(schema)

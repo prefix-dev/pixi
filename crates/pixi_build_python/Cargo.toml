@@ -1,12 +1,8 @@
 [package]
 edition.workspace = true
 license.workspace = true
-name = "pixi_build_python"
-version = "0.4.7"
-
-[[bin]]
 name = "pixi-build-python"
-path = "src/main.rs"
+version = "0.4.7"
 
 [package.metadata.dist]
 dist = false

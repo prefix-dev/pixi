@@ -117,10 +117,10 @@ To install `pixi`, run:
 
 === "Python"
     1. **Initialize a workspace:**
-    ```
-    pixi init hello-world
-    cd hello-world
-    ```
+        ```
+        pixi init hello-world
+        cd hello-world
+        ```
     2. **Add dependencies into the default environment:**
         ```
         pixi add cowpy python
@@ -162,7 +162,7 @@ To install `pixi`, run:
         ```
         pixi init pixi-rust
         cd pixi-rust
-    ```
+        ```
     2. **Add dependencies:**
         ```
         pixi add rust

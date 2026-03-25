@@ -172,7 +172,7 @@ text_trees = "0.1.2"
 thiserror = "2.0.12"
 tokio = "1.43.0"
 tokio-util = "0.7.13"
-toml = "0.9.8"
+toml = "1.0.0"
 toml-span = "0.7.0"
 toml_edit = "0.23.0"
 tracing = "0.1.41"
@@ -214,7 +214,7 @@ uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 which = "8.0.0"
 xxhash-rust = "0.8.15"
-zip = { version = "2.4.2", default-features = false }
+zip = { version = "8.0.0", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
 
 # Rattler crates

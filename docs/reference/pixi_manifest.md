@@ -1649,10 +1649,9 @@ More documentation on the backends can be found in the [build backend documentat
 
 For platform-specific build configuration, use the `[package.build.target.<platform>]` table:
 
-=== "pixi.toml"
-    ```toml
-    [package.build]
-    backend = { name = "pixi-build-cmake", version = "0.3.*" }
+```toml
+[package.build]
+backend = { name = "pixi-build-cmake", version = "0.*" }
 
     [package.build.config]
     # Base configuration applied to all platforms
