@@ -193,7 +193,7 @@ impl VersionedMetadata for CachedCondaMetadata {
 impl CachedCondaMetadata {
     /// Returns the unique package identifiers for the packages in this
     /// metadata.
-    pub fn outputs(&self) -> Vec<PackageName> {
+    pub fn output_names(&self) -> Vec<PackageName> {
         self.outputs
             .iter()
             .map(|output| output.metadata.name.clone())
