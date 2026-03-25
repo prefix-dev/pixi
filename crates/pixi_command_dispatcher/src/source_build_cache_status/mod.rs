@@ -52,6 +52,9 @@ pub struct SourceBuildCacheStatusSpec {
     /// The specific variant values for this build. Different variants result
     /// in different cache keys to ensure they are cached separately.
     pub variants: BTreeMap<String, VariantValue>,
+
+    /// The timestamp of newest package in the build or host environment.
+    pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug)]
@@ -157,6 +160,7 @@ impl SourceBuildCacheStatusSpec {
                 .cloned()
                 .collect(),
             variants: self.variants.clone(),
+            timestamp: self.timestamp,
         }
     }
 
@@ -287,6 +291,7 @@ impl SourceBuildCacheStatusSpec {
                     channel_config: self.channel_config.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
                     variants: self.variants.clone(),
+                    timestamp: self.timestamp
                 })
                 .await
                 .try_into_failed()?
