@@ -107,7 +107,7 @@ impl SourceMetadataSpec {
 
         // Get the skip_cache flag from the build backend metadata
         let skip_read_cache = build_backend_metadata.skip_cache;
-        
+
         let shard = SourceMetadataCacheShard {
             package: self.package.clone(),
             channel_urls: self.backend_metadata.channels.clone(),
@@ -129,9 +129,11 @@ impl SourceMetadataSpec {
         };
 
         if !skip_read_cache
-            && let Some(cached_metadata) =
-                Self::verify_cache_freshness(cached_metadata, build_backend_metadata.metadata.id)
-                    .await?
+            && let Some(cached_metadata) = Self::verify_cache_freshness(
+                cached_metadata,
+                build_backend_metadata.metadata.id.clone(),
+            )
+            .await?
         {
             tracing::debug!("Using cached source metadata for package",);
 
@@ -181,7 +183,7 @@ impl SourceMetadataSpec {
             id: CachedSourceMetadataId::random(),
             cache_version,
             records: records.clone(),
-            cached_conda_metadata_id: build_backend_metadata.metadata.id,
+            cached_conda_metadata_id: build_backend_metadata.metadata.id.clone(),
         };
 
         // Try to store the metadata in the cache with version checking
@@ -459,7 +461,7 @@ impl SourceMetadataSpec {
                 record
                     .package_record()
                     .timestamp
-                    .map(|ts| chrono::DateTime::<chrono::Utc>::from(ts))
+                    .map(chrono::DateTime::<chrono::Utc>::from)
             })
             .max()
             .unwrap_or_else(chrono::Utc::now);
