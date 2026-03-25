@@ -50,6 +50,7 @@ libc = "2.33"
 scripts = ["activate.sh"]
 ```
 
+<!-- no-pyproject -->
 ```toml title="Different dependencies per feature"
 [feature.py39.dependencies]
 python = "~=3.9.0"
@@ -59,6 +60,7 @@ python = "~=3.10.0"
 pytest = "*"
 ```
 
+<!-- no-pyproject -->
 ```toml title="Full set of environment modification in one feature"
 [feature.cuda]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
@@ -74,6 +76,7 @@ tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
 
+<!-- no-pyproject -->
 ```toml title="Define tasks as defaults of an environment"
 [feature.test.tasks]
 test = "pytest"
@@ -91,6 +94,7 @@ The environment definition should contain the following fields:
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
 
+<!-- no-pyproject -->
 ```toml title="Creating environments from features"
 [environments]
 # implicit: default = ["default"]
@@ -100,6 +104,7 @@ test = ["test"] # implicit: test = ["test", "default"]
 test39 = ["test", "py39"] # implicit: test39 = ["test", "py39", "default"]
 ```
 
+<!-- no-pyproject -->
 ```toml title="Testing a production environment with additional dependencies"
 [environments]
 # Creating a `prod` environment which is the minimal set of dependencies used for production.
@@ -110,6 +115,7 @@ test_prod = {features = ["py39", "test"], solve-group = "prod"}
 # Which makes sure the tested environment has the same version of the dependencies as the production environment.
 ```
 
+<!-- no-pyproject -->
 ```toml title="Creating environments without including the default feature"
 [dependencies]
 python = "*"
@@ -666,4 +672,5 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     ```shell title="Executing on a machine without cuda or mlx"
     pixi run train-model
     ```
+
 

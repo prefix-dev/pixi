@@ -3,6 +3,7 @@ They ensure that the dependencies match the operating system and hardware of you
 
 !!! note "Think of it like this:"
     You're defining what "kind of machines" your environment can run on.
+    <!-- no-pyproject -->
     ```toml
     [system-requirements]
     linux  = "4.18"
@@ -63,6 +64,7 @@ __cuda >=12
 The following configurations outline the default system requirements for different operating systems:
 
 === "Linux"
+    <!-- no-pyproject -->
     ```toml
     # Default system requirements for Linux
     [system-requirements]
@@ -73,12 +75,14 @@ The following configurations outline the default system requirements for differe
     Windows currently has no minimal system requirements defined. If your workspace requires specific Windows configurations,
     you should define them accordingly.
 === "osx-64"
+    <!-- no-pyproject -->
     ```toml
     # Default system requirements for macOS
     [system-requirements]
     macos = "13.0"
     ```
 === "osx-arm64"
+    <!-- no-pyproject -->
     ```toml
     # Default system requirements for macOS ARM64
     [system-requirements]
@@ -178,3 +182,4 @@ You can override virtual packages by setting the following environment variables
 
 For more detailed information on managing `virtual packages` and overriding system requirements, refer to
 the [Conda Documentation](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
+

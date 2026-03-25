@@ -48,18 +48,21 @@ The minimally required information in the `workspace` table is:
 This is a list that defines the channels used to fetch the packages from.
 If you want to use channels hosted on `anaconda.org` you only need to use the name of the channel directly.
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/lots_of_channels.toml:project_channels_long"
 ```
 
 Channels situated on the file system are also supported with **absolute** file paths:
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/lots_of_channels.toml:project_channels_path"
 ```
 
 To access private or public channels on [prefix.dev](https://prefix.dev/channels) or [Quetz](https://github.com/mamba-org/quetz) use the url including the hostname:
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_channels"
 ```
@@ -69,6 +72,7 @@ To access private or public channels on [prefix.dev](https://prefix.dev/channels
 Defines the list of platforms that the workspace supports.
 Pixi solves the dependencies for all these platforms and puts them in the lock file (`pixi.lock`).
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
@@ -98,6 +102,7 @@ The available platforms (except `noarch` and `unknown`) are listed [here](https:
 The name of the workspace.
 If the name is not specified, the name of the directory that contains the workspace is used.
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_name"
 ```
@@ -108,6 +113,7 @@ The version of the workspace.
 This should be a valid version based on the conda Version Spec.
 See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_version"
 ```
@@ -116,6 +122,7 @@ See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattl
 
 This is a list of authors of the workspace.
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_authors"
 ```
@@ -124,6 +131,7 @@ This is a list of authors of the workspace.
 
 This should contain a short description of the workspace.
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_description"
 ```
@@ -132,6 +140,7 @@ This should contain a short description of the workspace.
 
 The license as a valid [SPDX](https://spdx.org/licenses/) string (e.g. MIT AND Apache-2.0)
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_license"
 ```
@@ -156,6 +165,7 @@ readme = "README.md"
 
 URL of the workspace homepage.
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_homepage"
 ```
@@ -164,6 +174,7 @@ URL of the workspace homepage.
 
 URL of the workspace source repository.
 
+<!-- no-pyproject -->
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_repository"
 ```
@@ -172,6 +183,7 @@ URL of the workspace source repository.
 
 URL of the workspace documentation.
 
+<!-- no-pyproject -->
 ```toml
     --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_documentation"
 ```
@@ -990,6 +1002,7 @@ openssl = { channel = "conda-forge", version = ">=3.0" }
 Like `[dependencies]`, constraints can be made platform-specific using the
 [`[target]`](#the-target-table) table:
 
+<!-- no-pyproject -->
 ```toml
 [constraints]
 openssl = ">=3.0"
@@ -1007,6 +1020,7 @@ concatenated**, exactly like `[dependencies]`.
 This means each feature can independently constrain transitive dependencies, and the resulting
 environment must satisfy all of them simultaneously.
 
+<!-- no-pyproject -->
 ```toml
 [dependencies]
 python = ">=3.11"
@@ -1426,41 +1440,25 @@ The `feature` table allows you to define the following fields per feature.
 These tables are all also available without the `feature` prefix.
 When those are used we call them the `default` feature. This is a protected name you can not use for your own feature.
 
-=== "pixi.toml"
-    ```toml title="Cuda feature table example"
-    [feature.cuda]
-    activation = {scripts = ["cuda_activation.sh"]}
-    # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
-    channels = ["nvidia"]
-    dependencies = {cuda = "x.y.z", cudnn = "12.0"}
-    constraints = {cuda = ">=12.0"}
-    pypi-dependencies = {torch = "==1.9.0"}
-    platforms = ["linux-64", "osx-arm64"]
-    system-requirements = {cuda = "12"}
-    tasks = { warmup = "python warmup.py" }
-    target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
-    ```
-=== "pyproject.toml"
-    ```toml title="Cuda feature table example"
-    [tool.pixi.feature.cuda]
-    activation = {scripts = ["cuda_activation.sh"]}
-    # Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
-    channels = ["nvidia"]
-    dependencies = {cuda = "x.y.z", cudnn = "12.0"}
-    constraints = {cuda = ">=12.0"}
-    pypi-dependencies = {torch = "==1.9.0"}
-    platforms = ["linux-64", "osx-arm64"]
-    system-requirements = {cuda = "12"}
-    tasks = { warmup = "python warmup.py" }
-    target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
-    ```
+<!-- no-pyproject -->
+```toml title="Cuda feature table example"
+[feature.cuda]
+activation = {scripts = ["cuda_activation.sh"]}
+# Results in:  ["nvidia", "conda-forge"] when the default is `conda-forge`
+channels = ["nvidia"]
+dependencies = {cuda = "x.y.z", cudnn = "12.0"}
+constraints = {cuda = ">=12.0"}
+pypi-dependencies = {torch = "==1.9.0"}
+platforms = ["linux-64", "osx-arm64"]
+system-requirements = {cuda = "12"}
+tasks = { warmup = "python warmup.py" }
+target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
+```
 
-Or:
-
-=== "pixi.toml"
-    ```toml title="Cuda feature table example but written as separate tables"
-    [feature.cuda.activation]
-    scripts = ["cuda_activation.sh"]
+<!-- no-pyproject -->
+```toml title="Cuda feature table example but written as separate tables"
+[feature.cuda.activation]
+scripts = ["cuda_activation.sh"]
 
     [feature.cuda.dependencies]
     cuda = "x.y.z"
@@ -1678,6 +1676,7 @@ And to extend the basics, it can also contain the following fields:
 !!! note "Workspace inheritance"
     Most extra fields can be inherited from the workspace manifest.
     This means that you can define the `description`, `authors`, `license` in the workspace manifest, and they will be inherited by the package manifest.
+    <!-- no-pyproject -->
     ```toml
     [workspace]
     name = "my-workspace"
@@ -1834,3 +1833,4 @@ The `run-dependencies` are the packages that will be installed in the environmen
     ```toml
     --8<-- "docs/source_files/pyproject_tomls/pixi-package-manifest.toml:run-dependencies"
     ```
+
