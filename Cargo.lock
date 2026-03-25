@@ -6037,6 +6037,7 @@ dependencies = [
  "rattler_lock",
  "rattler_networking",
  "rattler_package_streaming",
+ "rattler_repodata_gateway",
  "rattler_s3",
  "rattler_shell",
  "rattler_solve",
@@ -6069,6 +6070,7 @@ dependencies = [
  "uv-requirements-txt",
  "which",
  "zip 2.4.2",
+ "zstd",
 ]
 
 [[package]]

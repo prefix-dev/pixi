@@ -65,6 +65,7 @@ rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true, default-features = false }
+rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 rattler_index = { workspace = true }
@@ -95,6 +96,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 typed-path = { workspace = true }
 url = { workspace = true }
+zstd = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-pep508 = { workspace = true }

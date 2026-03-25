@@ -1,4 +1,6 @@
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::io::{Cursor, Read as _};
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use indicatif::ProgressBar;
@@ -16,10 +18,15 @@ use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
+use pixi_utils::reqwest::build_reqwest_clients;
 use pixi_utils::variants::VariantConfig;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{
+    Channel, GenericVirtualPackage, MatchSpec, PackageName, PackageNameMatcher, Platform,
+    package::IndexJson,
+};
 use rattler_networking::AuthenticationStorage;
 use rattler_package_streaming::seek::read_package_file;
+use rattler_conda_types::compression_level::CompressionLevel;
 
 use crate::build::{determine_discovery_start, validate_package_manifest};
 use crate::cli_config::LockAndInstallConfig;
@@ -92,6 +99,14 @@ pub struct Args {
     /// Generate sigstore attestation (prefix.dev only)
     #[arg(long)]
     pub generate_attestation: bool,
+
+    /// Override the build number for all outputs.
+    ///
+    /// Use an absolute value (e.g., `--build-number=12`) to set the build
+    /// number directly, or a relative bump (e.g., `--build-number=+1`) to
+    /// increment from the highest build number currently on the target channel.
+    #[arg(long)]
+    pub build_number: Option<String>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -258,6 +273,41 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("No packages were built. Nothing to publish.");
     }
 
+    // === Phase 1.5: Apply build number override if requested ===
+
+    let config = Config::load_global();
+    let target_url = parse_target_url(&args.to)?;
+
+    if let Some(ref build_number_arg) = args.build_number {
+        let build_number_override = BuildNumberOverride::parse(build_number_arg)?;
+
+        let highest_build_numbers = match &build_number_override {
+            BuildNumberOverride::Relative(_) => {
+                pixi_progress::await_in_progress(
+                    "fetching channel repodata for build number bump",
+                    |_| {
+                        fetch_highest_build_numbers(
+                            &config,
+                            &target_url,
+                            &built_package_paths,
+                        )
+                    },
+                )
+                .await?
+            }
+            BuildNumberOverride::Absolute(num) => {
+                tracing::info!("Setting build number to {} for all outputs", num);
+                HashMap::new()
+            }
+        };
+
+        built_package_paths = apply_build_number_override(
+            &built_package_paths,
+            &build_number_override,
+            &highest_build_numbers,
+        )?;
+    }
+
     // === Phase 2: Upload the built packages ===
 
     pixi_progress::println!(
@@ -267,10 +317,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.to
     );
 
-    let config = Config::load_global();
     let auth_storage = get_auth_store(&config).into_diagnostic()?;
-
-    let target_url = parse_target_url(&args.to)?;
 
     pixi_progress::await_in_progress("uploading packages", |_| {
         upload_packages(
@@ -595,6 +642,327 @@ async fn upload_to_s3(
             .map_err(|e| miette::miette!("Failed to index S3 channel: {}", e))?;
     }
 
+    Ok(())
+}
+
+// === Build Number Override ===
+
+/// Specifies how to override the build number.
+#[derive(Debug, Clone)]
+enum BuildNumberOverride {
+    /// Set an absolute build number (e.g., `12`).
+    Absolute(u64),
+    /// Apply a relative bump from the highest existing build number (e.g., `+1`).
+    Relative(i64),
+}
+
+impl BuildNumberOverride {
+    fn parse(s: &str) -> miette::Result<Self> {
+        let s = s.trim();
+        if let Some(stripped) = s.strip_prefix('+') {
+            let bump: i64 = stripped
+                .parse()
+                .map_err(|e| miette::miette!("Invalid relative build number '{}': {}", s, e))?;
+            Ok(BuildNumberOverride::Relative(bump))
+        } else if s.starts_with('-') {
+            let bump: i64 = s
+                .parse()
+                .map_err(|e| miette::miette!("Invalid relative build number '{}': {}", s, e))?;
+            Ok(BuildNumberOverride::Relative(bump))
+        } else {
+            let num: u64 = s
+                .parse()
+                .map_err(|e| miette::miette!("Invalid absolute build number '{}': {}", s, e))?;
+            Ok(BuildNumberOverride::Absolute(num))
+        }
+    }
+}
+
+/// Update a build string's trailing build number.
+///
+/// The build string format is typically `{hash}_{build_number}`, e.g.
+/// `h1234abc_0`. This replaces the number after the last `_` with the new
+/// build number.
+fn update_build_string(build_string: &str, new_build_number: u64) -> String {
+    if let Some(pos) = build_string.rfind('_') {
+        format!("{}_{}", &build_string[..pos], new_build_number)
+    } else {
+        format!("{}_{}", build_string, new_build_number)
+    }
+}
+
+/// Fetch the highest build numbers for packages from the target channel's
+/// repodata.
+async fn fetch_highest_build_numbers(
+    config: &Config,
+    target_url: &url::Url,
+    package_paths: &[PathBuf],
+) -> miette::Result<HashMap<(PackageName, String), u64>> {
+    // Read metadata from each built package
+    let mut package_infos = Vec::new();
+    let mut platforms = std::collections::HashSet::new();
+    let mut match_specs = Vec::new();
+    let mut seen_names = std::collections::HashSet::new();
+
+    for package_path in package_paths {
+        let index_json: IndexJson = read_package_file(package_path)
+            .map_err(|e| miette::miette!("Failed to read package '{}': {}", package_path.display(), e))?;
+        let platform_str = index_json.subdir.as_deref().unwrap_or("noarch");
+        let platform: Platform = platform_str
+            .parse()
+            .map_err(|e| miette::miette!("Invalid platform '{}': {}", platform_str, e))?;
+        platforms.insert(platform);
+        platforms.insert(Platform::NoArch);
+
+        if seen_names.insert(index_json.name.clone()) {
+            match_specs.push(MatchSpec {
+                name: PackageNameMatcher::Exact(index_json.name.clone()),
+                ..Default::default()
+            });
+        }
+        package_infos.push((index_json.name.clone(), index_json.version.to_string()));
+    }
+
+    let platforms_vec: Vec<Platform> = platforms.into_iter().collect();
+
+    // Convert the target URL to a channel URL suitable for repodata queries
+    let channel_url = target_channel_to_repodata_url(target_url)?;
+    let channel = Channel::from_url(channel_url);
+
+    let (_, client) = build_reqwest_clients(Some(config), None)?;
+    let gateway = config.gateway().with_client(client).finish();
+
+    let repo_data = match gateway
+        .query([channel], platforms_vec, match_specs)
+        .recursive(false)
+        .execute()
+        .await
+    {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::debug!("Failed to fetch repodata from target channel: {e}. Using 0 as base build number.");
+            return Ok(HashMap::new());
+        }
+    };
+
+    let mut highest: HashMap<(PackageName, String), u64> = HashMap::new();
+    for repo in &repo_data {
+        for record in repo.iter() {
+            let key = (
+                record.package_record.name.clone(),
+                record.package_record.version.version().to_string(),
+            );
+            let build_number = record.package_record.build_number;
+            highest
+                .entry(key)
+                .and_modify(|current| *current = (*current).max(build_number))
+                .or_insert(build_number);
+        }
+    }
+
+    Ok(highest)
+}
+
+/// Convert a target publish URL to a channel URL suitable for repodata queries.
+///
+/// For prefix.dev and anaconda.org URLs, the publish URL is already the channel
+/// URL. For `prefix://` scheme, it's converted to `https://`.
+fn target_channel_to_repodata_url(target_url: &url::Url) -> miette::Result<url::Url> {
+    let mut url = target_url.clone();
+    match url.scheme() {
+        "prefix" => {
+            url.set_scheme("https")
+                .map_err(|_| miette::miette!("Failed to convert prefix:// URL to https://"))?;
+            Ok(url)
+        }
+        "http" | "https" => Ok(url),
+        "file" => Ok(url),
+        scheme => Err(miette::miette!(
+            "Relative build number override (e.g., +1) is not supported with '{}://' channels. \
+             Use an absolute build number instead (e.g., --build-number=0).",
+            scheme
+        )),
+    }
+}
+
+/// Apply a build number override to all built packages, repacking them with the
+/// new build number and build string.
+fn apply_build_number_override(
+    package_paths: &[PathBuf],
+    build_number_override: &BuildNumberOverride,
+    highest_build_numbers: &HashMap<(PackageName, String), u64>,
+) -> miette::Result<Vec<PathBuf>> {
+    let mut new_paths = Vec::with_capacity(package_paths.len());
+
+    for package_path in package_paths {
+        let index_json: IndexJson = read_package_file(package_path)
+            .map_err(|e| miette::miette!("Failed to read package '{}': {}", package_path.display(), e))?;
+
+        let new_build_number = match build_number_override {
+            BuildNumberOverride::Absolute(num) => *num,
+            BuildNumberOverride::Relative(bump) => {
+                let key = (
+                    index_json.name.clone(),
+                    index_json.version.to_string(),
+                );
+                let current_highest = highest_build_numbers.get(&key).copied().unwrap_or(0);
+                let result = current_highest as i64 + bump;
+                let clamped = result.max(0) as u64;
+                tracing::info!(
+                    "Bumping build number for {} v{}: {} + ({}) = {}",
+                    index_json.name.as_normalized(),
+                    index_json.version,
+                    current_highest,
+                    bump,
+                    clamped
+                );
+                clamped
+            }
+        };
+
+        let new_build_string = update_build_string(&index_json.build, new_build_number);
+
+        pixi_progress::println!(
+            "  {} v{}: build {} -> {} ({})",
+            index_json.name.as_normalized(),
+            index_json.version,
+            index_json.build,
+            new_build_string,
+            new_build_number
+        );
+
+        let new_path = repack_with_build_number(
+            package_path,
+            &index_json,
+            new_build_number,
+            &new_build_string,
+        )?;
+        new_paths.push(new_path);
+    }
+
+    Ok(new_paths)
+}
+
+/// Repack a `.conda` package with a new build number and build string.
+///
+/// This extracts the package contents, modifies `info/index.json`, and repacks
+/// everything into a new `.conda` file. The original file is removed if the
+/// output path differs.
+fn repack_with_build_number(
+    package_path: &Path,
+    index_json: &IndexJson,
+    new_build_number: u64,
+    new_build_string: &str,
+) -> miette::Result<PathBuf> {
+    if !package_path
+        .extension()
+        .is_some_and(|ext| ext == "conda")
+    {
+        miette::bail!(
+            "Build number override is only supported for .conda packages, got: {}",
+            package_path.display()
+        );
+    }
+
+    let temp_dir = tempfile::tempdir().into_diagnostic()?;
+    let extract_dir = temp_dir.path();
+
+    // Extract the .conda file (a ZIP containing .tar.zst members)
+    extract_conda_package(package_path, extract_dir)?;
+
+    // Modify info/index.json
+    let index_json_path = extract_dir.join("info").join("index.json");
+    let index_content = fs_err::read_to_string(&index_json_path).into_diagnostic()?;
+    let mut index: serde_json::Value =
+        serde_json::from_str(&index_content).into_diagnostic()?;
+    index["build_number"] = serde_json::Value::from(new_build_number);
+    index["build"] = serde_json::Value::from(new_build_string);
+    let new_index_content = serde_json::to_string_pretty(&index).into_diagnostic()?;
+    fs_err::write(&index_json_path, new_index_content).into_diagnostic()?;
+
+    // Collect all file paths for repacking
+    let mut all_paths = Vec::new();
+    collect_files_recursive(extract_dir, &mut all_paths)?;
+
+    // Create the new package file
+    let out_name = format!(
+        "{}-{}-{}",
+        index_json.name.as_normalized(),
+        index_json.version,
+        new_build_string
+    );
+    let output_filename = format!("{}.conda", out_name);
+    let output_dir = package_path
+        .parent()
+        .ok_or_else(|| miette::miette!("Package path has no parent directory"))?;
+    let output_path = output_dir.join(&output_filename);
+
+    let output_file = fs_err::File::create(&output_path).into_diagnostic()?;
+
+    rattler_package_streaming::write::write_conda_package(
+        output_file,
+        extract_dir,
+        &all_paths,
+        CompressionLevel::Default,
+        None,
+        &out_name,
+        None,
+        None,
+    )
+    .into_diagnostic()
+    .with_context(|| format!("Failed to repack package as '{}'", output_path.display()))?;
+
+    // Remove the original package if the path changed
+    if output_path != package_path {
+        fs_err::remove_file(package_path).into_diagnostic()?;
+    }
+
+    Ok(output_path)
+}
+
+/// Extract a `.conda` package (ZIP with `.tar.zst` members) to a directory.
+fn extract_conda_package(package_path: &Path, dest: &Path) -> miette::Result<()> {
+    let file = fs_err::File::open(package_path).into_diagnostic()?;
+    let mut zip = zip::ZipArchive::new(file).into_diagnostic()?;
+
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i).into_diagnostic()?;
+        let name = entry.name().to_string();
+
+        if name.ends_with(".tar.zst") {
+            // Read the compressed entry into memory
+            let mut compressed_data = Vec::new();
+            entry
+                .read_to_end(&mut compressed_data)
+                .into_diagnostic()?;
+
+            // Decompress zstd
+            let decompressed = zstd::decode_all(Cursor::new(&compressed_data))
+                .into_diagnostic()
+                .with_context(|| format!("Failed to decompress '{}'", name))?;
+
+            // Extract tar
+            let mut tar = tar::Archive::new(Cursor::new(decompressed));
+            tar.unpack(dest)
+                .into_diagnostic()
+                .with_context(|| format!("Failed to untar '{}'", name))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Recursively collect all file paths in a directory.
+fn collect_files_recursive(dir: &Path, paths: &mut Vec<PathBuf>) -> miette::Result<()> {
+    for entry in fs_err::read_dir(dir).into_diagnostic()? {
+        let entry = entry.into_diagnostic()?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_files_recursive(&path, paths)?;
+        } else {
+            paths.push(path);
+        }
+    }
     Ok(())
 }
 
