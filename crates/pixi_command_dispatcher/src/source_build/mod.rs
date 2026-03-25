@@ -1,4 +1,3 @@
-use chrono::Utc;
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
@@ -57,7 +56,7 @@ pub struct SourceBuildSpec {
     pub source: PinnedSourceCodeLocation,
 
     /// The exclude-newer timestamp to use
-    pub exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
+    pub exclude_newer: chrono::DateTime<chrono::Utc>,
 
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
@@ -167,6 +166,7 @@ impl SourceBuildSpec {
                     channel_config: self.channel_config.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
                     variants: self.variants.clone(),
+                    timestamp: self.exclude_newer,
                 })
                 .await
                 .map_err_with(SourceBuildError::from)?;
@@ -647,7 +647,7 @@ impl SourceBuildSpec {
                 &command_dispatcher,
                 build_dependencies.clone(),
                 self.build_environment.to_build_from_build(),
-                exclude_newer,
+                exclude_newer.clone(),
             )
             .await
             .map_err_with(Box::new)
@@ -690,7 +690,7 @@ impl SourceBuildSpec {
                 &command_dispatcher,
                 host_dependencies.clone(),
                 self.build_environment.clone(),
-                exclude_newer,
+                exclude_newer.clone(),
             )
             .await
             .map_err_with(Box::new)

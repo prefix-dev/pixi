@@ -64,6 +64,9 @@ pub struct BuildInput {
     /// The specific variant values for this build. Different variants result
     /// in different cache keys to ensure they are cached separately.
     pub variants: BTreeMap<String, VariantValue>,
+
+    /// The timestamp of newest package in the build or host environment.
+    pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 impl BuildInput {
@@ -80,6 +83,7 @@ impl BuildInput {
             host_virtual_packages,
             build_virtual_packages,
             variants,
+            timestamp,
         } = self;
 
         // Hash some of the keys
@@ -90,6 +94,7 @@ impl BuildInput {
         host_platform.hash(&mut hasher);
         host_virtual_packages.hash(&mut hasher);
         build_virtual_packages.hash(&mut hasher);
+        timestamp.hash(&mut hasher);
 
         // Include variants in the hash to ensure different variant values
         // get different cache keys. BTreeMap is already sorted by key, so we

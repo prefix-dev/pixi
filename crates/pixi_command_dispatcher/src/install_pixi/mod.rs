@@ -253,7 +253,7 @@ impl InstallPixiEnvironmentSpec {
             .source_build(SourceBuildSpec {
                 source: PinnedSourceCodeLocation::new(manifest_source, build_source),
                 name,
-                exclude_newer: Some(timestamp),
+                exclude_newer: timestamp,
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
