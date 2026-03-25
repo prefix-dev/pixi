@@ -166,7 +166,6 @@ impl SourceBuildSpec {
                     channel_config: self.channel_config.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
                     variants: self.variants.clone(),
-                    timestamp: self.exclude_newer,
                 })
                 .await
                 .map_err_with(SourceBuildError::from)?;
