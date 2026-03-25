@@ -106,8 +106,8 @@ impl SourceMetadataSpec {
         );
 
         // Get the skip_cache flag from the build backend metadata
-        let skip_cache = build_backend_metadata.skip_cache;
-
+        let skip_read_cache = build_backend_metadata.skip_cache;
+        
         let shard = SourceMetadataCacheShard {
             package: self.package.clone(),
             channel_urls: self.backend_metadata.channels.clone(),
@@ -128,7 +128,7 @@ impl SourceMetadataSpec {
             None => (None, 0),
         };
 
-        if !skip_cache
+        if !skip_read_cache
             && let Some(cached_metadata) =
                 Self::verify_cache_freshness(cached_metadata, build_backend_metadata.metadata.id)
                     .await?

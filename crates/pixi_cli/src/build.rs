@@ -308,6 +308,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
+    let exclude_newer = chrono::Utc::now();
+
     // Build the individual packages
     for CondaOutput { metadata, .. } in &backend_metadata.metadata.outputs {
         let built_package = command_dispatcher
@@ -320,7 +322,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .collect(),
 
                 output_directory: None,
-                exclude_newer: None,
+                exclude_newer,
                 source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
