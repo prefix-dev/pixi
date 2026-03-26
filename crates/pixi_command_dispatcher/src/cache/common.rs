@@ -1,29 +1,70 @@
+//! Common abstractions for file-backed metadata caches.
+//!
+//! This module provides a trait-based framework for caching serializable
+//! metadata to JSON files on disk. It is used to avoid expensive recomputation
+//! (e.g. invoking build backends) when the inputs have not changed.
+//!
+//! # Core concepts
+//!
+//! * [`MetadataCache`]: the main trait. Each implementation represents a
+//!   distinct cache with its own directory, key space, and entry type. Default
+//!   methods handle file I/O, locking, and serialization.
+//!
+//! * [`MetadataCacheKey`]: implemented by key types that produce a unique
+//!   string used as the cache file name.
+//!
+//! * [`MetadataCacheEntry`]: implemented by the data stored in each cache
+//!   file. Every entry carries a [`CacheRevision`] that identifies its
+//!   content.
+//!
+//! * [`CacheRevision`]: an opaque, type-safe identifier that changes when
+//!   the meaningful content of a cache entry changes. Downstream caches store
+//!   an upstream revision to detect staleness without re-reading the upstream
+//!   entry.
+//!
+//! * [`VersionedCacheEntry`]: extends [`MetadataCacheEntry`] with a
+//!   monotonically increasing version counter used for optimistic locking
+//!   across processes.
+//!
+//! # Type aliases
+//!
+//! [`CacheKey<C>`] and [`CacheEntry<C>`] are convenience aliases that let
+//! you refer to a cache's associated types through the cache type itself
+//! (e.g. `CacheKey<SourceMetadataCache>` instead of `SourceMetadataCacheKey`).
+
+use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 
 use async_fd_lock::{LockRead, LockWrite};
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 /// Core trait that defines the contract for a metadata cache.
 ///
-/// This trait provides a default implementation for the `entry()` method that
-/// handles the common caching logic, while allowing implementations to customize
-/// the cache file name and error handling.
+/// Implementations specify the key, entry, and error types along with the
+/// cache root directory. The default [`Self::read`] and [`Self::try_write`]
+/// methods handle file I/O, locking, and JSON (de)serialization so that
+/// implementations only need to provide the associated types and [`Self::root`].
 #[allow(async_fn_in_trait)]
 pub trait MetadataCache: Clone + Sized {
-    /// The version identifier for the cache directory
+    /// A version suffix appended to the cache directory path. Bump this when
+    /// the on-disk format changes in a backwards-incompatible way so that old
+    /// cache files are not read by new code.
     const CACHE_SUFFIX: &'static str;
 
-    /// The type of the cache key
-    type Key: CacheKey;
+    /// The key type used to look up entries. Each key maps to a single JSON
+    /// file on disk.
+    type Key: MetadataCacheKey<Self>;
 
-    /// The type of the cached metadata
-    type Metadata: CachedMetadata;
+    /// The entry type stored in each cache file. Must be serializable and
+    /// must carry a [`CacheRevision`] so downstream caches can track
+    /// staleness.
+    type Entry: MetadataCacheEntry<Self>;
 
-    /// The error type for cache operations
+    /// The error type returned by cache operations.
     type Error: CacheError;
 
-    /// Returns the root directory for this cache
+    /// Returns the root directory where cache files are stored.
     fn root(&self) -> &Path;
 
     /// Reads the cached metadata for the given key without holding the lock.
@@ -32,9 +73,9 @@ pub trait MetadataCache: Clone + Sized {
     /// The lock is released immediately after reading, so the metadata may
     /// become stale. Use `try_write` with version checking to detect if the
     /// cache was updated by another process.
-    async fn read(&self, input: &Self::Key) -> Result<Option<(Self::Metadata, u64)>, Self::Error>
+    async fn read(&self, input: &Self::Key) -> Result<Option<(Self::Entry, u64)>, Self::Error>
     where
-        Self::Metadata: VersionedMetadata,
+        Self::Entry: VersionedCacheEntry<Self>,
     {
         let cache_file_path = self.cache_file_path(input);
 
@@ -79,7 +120,7 @@ pub trait MetadataCache: Clone + Sized {
         drop(locked_cache_file);
 
         // Parse after lock is released
-        let metadata: Self::Metadata = match serde_json::from_str(&cache_file_contents) {
+        let metadata: Self::Entry = match serde_json::from_str(&cache_file_contents) {
             Ok(m) => m,
             Err(err) => {
                 tracing::debug!(
@@ -106,11 +147,11 @@ pub trait MetadataCache: Clone + Sized {
     async fn try_write(
         &self,
         input: &Self::Key,
-        metadata: Self::Metadata,
+        metadata: Self::Entry,
         expected_version: u64,
-    ) -> Result<WriteResult<Self::Metadata>, Self::Error>
+    ) -> Result<WriteResult<Self::Entry>, Self::Error>
     where
-        Self::Metadata: VersionedMetadata,
+        Self::Entry: VersionedCacheEntry<Self>,
     {
         let cache_file_path = self.cache_file_path(input);
         if let Some(parent) = cache_file_path.parent() {
@@ -163,7 +204,7 @@ pub trait MetadataCache: Clone + Sized {
 
         // If cache exists and has different version, return conflict
         if !current_contents.is_empty()
-            && let Ok(current_metadata) = serde_json::from_str::<Self::Metadata>(&current_contents)
+            && let Ok(current_metadata) = serde_json::from_str::<Self::Entry>(&current_contents)
             && current_metadata.cache_version() != expected_version
         {
             // Cache was updated by another process
@@ -222,46 +263,216 @@ pub trait MetadataCache: Clone + Sized {
     /// Returns the path to the cache entry with the given key.
     fn cache_file_path(&self, input: &Self::Key) -> PathBuf {
         // Use string concatenation instead of `with_extension` to avoid issues
-        // with dots in the hash key (e.g., from package names like "my.package").
+        // with dots in the key (e.g., from package names like "my.package").
         // `with_extension` replaces everything after the last dot, which would
         // truncate the file name.
-        self.root().join(format!("{}.json", input.hash_key()))
+        self.root().join(format!("{}.json", input.key()))
     }
 }
 
-/// Trait for cache keys that can compute a unique hash
-pub trait CacheKey {
-    /// Computes a unique semi-human-readable hash for this key.
-    fn hash_key(&self) -> String;
+/// Trait for cache keys that can produce a unique string used as the file name.
+///
+/// Implementations typically hash a subset of fields and combine them with
+/// human-readable components (e.g. platform, package name) so that cache
+/// files are easy to identify on disk.
+pub trait MetadataCacheKey<C: MetadataCache> {
+    /// Returns a unique, semi-human-readable key string.
+    ///
+    /// The returned value is used directly as the stem of the cache file
+    /// name (with `.json` appended). It may contain path separators to
+    /// create subdirectories.
+    fn key(&self) -> CacheKeyString<C>;
 }
 
-/// Trait for cached metadata types.
+/// Convenience alias for the key type of a [`MetadataCache`].
 ///
-/// Implementors must be serializable and deserializable.
-pub trait CachedMetadata: Serialize + DeserializeOwned {}
+/// Allows writing `CacheKey<SourceMetadataCache>` instead of the concrete
+/// `SourceMetadataCacheKey`.
+pub type CacheKey<C> = <C as MetadataCache>::Key;
 
-/// Trait for cached metadata that supports versioning for optimistic locking.
-pub trait VersionedMetadata: CachedMetadata {
-    /// Gets the current cache version
+/// Convenience alias for the entry type of a [`MetadataCache`].
+///
+/// Allows writing `CacheEntry<BuildBackendMetadataCache>` instead of the
+/// concrete `BuildBackendMetadataCacheEntry`.
+pub type CacheEntry<C> = <C as MetadataCache>::Entry;
+
+/// Trait for the data stored in a cache file.
+///
+/// Every cache entry must be serializable (for writing to disk) and carry a
+/// [`CacheRevision`] that identifies its content. The revision allows
+/// downstream caches to detect when the upstream data they depend on has
+/// changed without needing to re-read and compare the full entry.
+pub trait MetadataCacheEntry<C: MetadataCache>: Serialize + DeserializeOwned {
+    /// Returns the revision of this cache entry.
+    fn revision(&self) -> &CacheRevision<C>;
+}
+
+/// Extension of [`MetadataCacheEntry`] that adds optimistic locking.
+///
+/// The version is a monotonically increasing counter that is bumped on every
+/// write. It is separate from [`CacheRevision`]: the version tracks *how
+/// many times* the file was written (for conflict detection between
+/// concurrent processes), while the revision tracks *what content* is stored
+/// (for cross-cache staleness detection).
+pub trait VersionedCacheEntry<C: MetadataCache>: MetadataCacheEntry<C> {
+    /// Returns the current version counter.
     fn cache_version(&self) -> u64;
 
-    /// Sets the cache version
+    /// Sets the version counter. Called by [`MetadataCache::try_write`]
+    /// before persisting the entry.
     fn set_cache_version(&mut self, version: u64);
 }
 
-/// Result of attempting to write to the cache with version checking.
+/// The outcome of a [`MetadataCache::try_write`] call.
 #[derive(Debug)]
 pub enum WriteResult<M> {
-    /// The cache was successfully written.
+    /// The entry was successfully written to disk.
     Written,
-    /// The cache was updated by another process during computation.
-    /// Contains the metadata that was written by the other process.
+    /// Another process updated the cache file between our read and write.
+    /// Contains the entry that was written by the other process.
     Conflict(M),
 }
 
-/// Error trait to ensure consistent error handling across cache implementations.
+/// An opaque identifier representing a specific revision of a cache entry.
+///
+/// A revision changes only when the meaningful content of an entry changes,
+/// allowing downstream caches to detect when their upstream data is stale.
+/// For example, the source metadata cache stores the revision of the build
+/// backend metadata it was derived from; if that revision no longer matches
+/// the current build backend entry, the source metadata is stale.
+///
+/// The type parameter `C` prevents accidentally comparing revisions from
+/// different caches at compile time.
+pub struct CacheRevision<C: ?Sized>(String, PhantomData<C>);
+
+impl<C: ?Sized> CacheRevision<C> {
+    /// Generates a new unique revision.
+    pub fn new() -> Self {
+        Self(nanoid::nanoid!(), PhantomData)
+    }
+}
+
+impl<C: ?Sized> Default for CacheRevision<C> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<C: ?Sized> Clone for CacheRevision<C> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<C: ?Sized> PartialEq for CacheRevision<C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<C: ?Sized> Eq for CacheRevision<C> {}
+
+impl<C: ?Sized> std::hash::Hash for CacheRevision<C> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<C: ?Sized> std::fmt::Debug for CacheRevision<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CacheRevision").field(&self.0).finish()
+    }
+}
+
+impl<C: ?Sized> std::fmt::Display for CacheRevision<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<C: ?Sized> Serialize for CacheRevision<C> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de, C: ?Sized> Deserialize<'de> for CacheRevision<C> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(|s| Self(s, PhantomData))
+    }
+}
+
+/// The string representation of a [`MetadataCacheKey`], as returned by
+/// [`MetadataCacheKey::key`]. This is the stem of the cache file name and
+/// can be used to locate the file on disk.
+///
+/// The type parameter `C` prevents accidentally mixing key strings from
+/// different caches.
+pub struct CacheKeyString<C: ?Sized>(String, PhantomData<C>);
+
+impl<C: ?Sized> CacheKeyString<C> {
+    /// Wraps a key string.
+    pub fn new(key: String) -> Self {
+        Self(key, PhantomData)
+    }
+
+    /// Returns the key string as a str.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<C: ?Sized> Clone for CacheKeyString<C> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<C: ?Sized> PartialEq for CacheKeyString<C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<C: ?Sized> Eq for CacheKeyString<C> {}
+
+impl<C: ?Sized> std::fmt::Debug for CacheKeyString<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("CacheKeyString").field(&self.0).finish()
+    }
+}
+
+impl<C: ?Sized> std::fmt::Display for CacheKeyString<C> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<C: ?Sized> Serialize for CacheKeyString<C> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de, C: ?Sized> Deserialize<'de> for CacheKeyString<C> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(|s| Self(s, PhantomData))
+    }
+}
+
+/// A reference to a specific entry in an upstream cache, combining the
+/// cache key string (to locate the file) with the revision (to check
+/// staleness).
+pub type UpstreamCacheRef<C> = (CacheKeyString<C>, CacheRevision<C>);
+
+/// Trait for cache-specific error types.
+///
+/// Each [`MetadataCache`] implementation defines its own error enum. This
+/// trait provides a common constructor so that the default `read`/`try_write`
+/// implementations can produce errors without knowing the concrete type.
 pub trait CacheError: std::error::Error + Sized {
-    /// Creates an error from an I/O error with context about the operation
+    /// Wraps an I/O error with the name of the operation that failed and the
+    /// path that was being accessed.
     fn from_io_error(operation: String, path: PathBuf, error: std::io::Error) -> Self;
 }
 
@@ -271,20 +482,25 @@ mod tests {
 
     struct DummyKey(String);
 
-    impl CacheKey for DummyKey {
-        fn hash_key(&self) -> String {
-            self.0.clone()
+    impl MetadataCacheKey<DummyCache> for DummyKey {
+        fn key(&self) -> CacheKeyString<DummyCache> {
+            CacheKeyString::new(self.0.clone())
         }
     }
 
     #[derive(Clone, serde::Serialize, serde::Deserialize)]
     struct DummyMetadata {
+        revision: CacheRevision<DummyCache>,
         version: u64,
     }
 
-    impl CachedMetadata for DummyMetadata {}
+    impl MetadataCacheEntry<DummyCache> for DummyMetadata {
+        fn revision(&self) -> &CacheRevision<DummyCache> {
+            &self.revision
+        }
+    }
 
-    impl VersionedMetadata for DummyMetadata {
+    impl VersionedCacheEntry<DummyCache> for DummyMetadata {
         fn cache_version(&self) -> u64 {
             self.version
         }
@@ -310,7 +526,7 @@ mod tests {
 
     impl MetadataCache for DummyCache {
         type Key = DummyKey;
-        type Metadata = DummyMetadata;
+        type Entry = DummyMetadata;
         type Error = DummyError;
         const CACHE_SUFFIX: &'static str = "v0";
         fn root(&self) -> &Path {

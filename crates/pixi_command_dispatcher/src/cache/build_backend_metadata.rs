@@ -1,6 +1,6 @@
 use super::common::{
-    CacheError, CacheKey, CachedMetadata, MetadataCache, VersionedMetadata,
-    WriteResult as CommonWriteResult,
+    CacheError, CacheKeyString, CacheRevision, MetadataCache, MetadataCacheEntry, MetadataCacheKey,
+    VersionedCacheEntry, WriteResult as CommonWriteResult,
 };
 use crate::build::CanonicalSourceCodeLocation;
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
@@ -24,7 +24,7 @@ use std::{
 use thiserror::Error;
 
 // Re-export WriteResult with the correct type
-pub type WriteResult = CommonWriteResult<CachedCondaMetadata>;
+pub type WriteResult = CommonWriteResult<BuildBackendMetadataCacheEntry>;
 
 /// A cache for caching the metadata of a source checkout.
 ///
@@ -49,7 +49,7 @@ pub enum BuildBackendMetadataCacheError {
 /// Defines additional input besides the source files that are used to compute
 /// the metadata of a source checkout. This is used to bucket the metadata.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct BuildBackendMetadataCacheShard {
+pub struct BuildBackendMetadataCacheKey {
     /// The URLs of the channels that were used.
     pub channel_urls: Vec<ChannelUrl>,
 
@@ -74,8 +74,8 @@ impl BuildBackendMetadataCache {
 }
 
 impl MetadataCache for BuildBackendMetadataCache {
-    type Key = BuildBackendMetadataCacheShard;
-    type Metadata = CachedCondaMetadata;
+    type Key = BuildBackendMetadataCacheKey;
+    type Entry = BuildBackendMetadataCacheEntry;
     type Error = BuildBackendMetadataCacheError;
 
     fn root(&self) -> &Path {
@@ -85,9 +85,10 @@ impl MetadataCache for BuildBackendMetadataCache {
     const CACHE_SUFFIX: &'static str = "v0";
 }
 
-impl CacheKey for BuildBackendMetadataCacheShard {
-    /// Computes a unique semi-human-readable hash for this key.
-    fn hash_key(&self) -> String {
+impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKey {
+    /// Computes a unique semi-human-readable string representation of the key.
+    /// This is what is used as the cache file name.
+    fn key(&self) -> CacheKeyString<BuildBackendMetadataCache> {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
         self.build_environment.build_platform.hash(&mut hasher);
@@ -102,11 +103,11 @@ impl CacheKey for BuildBackendMetadataCacheShard {
 
         self.enabled_protocols.hash(&mut hasher);
         let source_dir = self.source.cache_unique_key();
-        format!(
+        CacheKeyString::new(format!(
             "{source_dir}/{}-{}",
             self.build_environment.host_platform,
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
-        )
+        ))
     }
 }
 
@@ -119,10 +120,11 @@ impl CacheError for BuildBackendMetadataCacheError {
 /// Cached result of calling `conda/outputs` on a build backend. This is
 /// returned by [`MetadataCache::read`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedCondaMetadata {
-    /// A randomly generated identifier that is generated for each metadata
-    /// file.
-    pub id: CachedCondaMetadataId,
+pub struct BuildBackendMetadataCacheEntry {
+    /// A revision identifier for this cache entry. Changes when the
+    /// meaningful content of the entry changes. Downstream caches store
+    /// this to detect when their data is stale.
+    pub revision: CacheRevision<BuildBackendMetadataCache>,
 
     /// Version number for optimistic locking. Incremented with each cache
     /// update. Used to detect when another process has updated the cache
@@ -178,9 +180,13 @@ pub struct CachedCondaMetadata {
     pub outputs: Vec<CondaOutput>,
 }
 
-impl CachedMetadata for CachedCondaMetadata {}
+impl MetadataCacheEntry<BuildBackendMetadataCache> for BuildBackendMetadataCacheEntry {
+    fn revision(&self) -> &CacheRevision<BuildBackendMetadataCache> {
+        &self.revision
+    }
+}
 
-impl VersionedMetadata for CachedCondaMetadata {
+impl VersionedCacheEntry<BuildBackendMetadataCache> for BuildBackendMetadataCacheEntry {
     fn cache_version(&self) -> u64 {
         self.cache_version
     }
@@ -190,7 +196,7 @@ impl VersionedMetadata for CachedCondaMetadata {
     }
 }
 
-impl CachedCondaMetadata {
+impl BuildBackendMetadataCacheEntry {
     /// Returns the unique package identifiers for the packages in this
     /// metadata.
     pub fn output_names(&self) -> Vec<PackageName> {
@@ -198,33 +204,5 @@ impl CachedCondaMetadata {
             .iter()
             .map(|output| output.metadata.name.clone())
             .collect()
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(transparent)]
-pub struct CachedCondaMetadataId(String);
-
-impl Default for CachedCondaMetadataId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl CachedCondaMetadataId {
-    /// Generates a new unique identifier.
-    pub fn new() -> Self {
-        Self(nanoid::nanoid!())
-    }
-
-    /// Returns the identifier as a string slice.
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Display for CachedCondaMetadataId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
     }
 }

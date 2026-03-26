@@ -22,16 +22,19 @@ use std::{
 use thiserror::Error;
 use tracing::instrument;
 
-use crate::cache::build_backend_metadata::CachedCondaMetadataId;
-use crate::cache::source_metadata::{CachedSourceMetadataId, CachedSourceRecord};
+use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
+use crate::cache::common::CacheRevision;
+use crate::cache::source_metadata::CachedSourceRecord;
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PackageNotProvidedError,
     PixiEnvironmentSpec, SolvePixiEnvironmentError,
     build::{Dependencies, DependenciesError, PinnedSourceCodeLocation, PixiRunExports},
     cache::{
-        common::MetadataCache,
-        source_metadata::{self, CachedSourceMetadata, SourceMetadataCacheShard},
+        common::{CacheEntry, CacheKey, MetadataCache},
+        source_metadata::{
+            self, SourceMetadataCache, SourceMetadataCacheEntry, SourceMetadataCacheKey,
+        },
     },
     executor::CancellationAwareFutures,
 };
@@ -108,7 +111,7 @@ impl SourceMetadataSpec {
         // Get the skip_cache flag from the build backend metadata
         let skip_read_cache = build_backend_metadata.skip_cache;
 
-        let shard = SourceMetadataCacheShard {
+        let cache_key: CacheKey<SourceMetadataCache> = SourceMetadataCacheKey {
             package: self.package.clone(),
             channel_urls: self.backend_metadata.channels.clone(),
             build_environment: self.backend_metadata.build_environment.clone(),
@@ -117,7 +120,7 @@ impl SourceMetadataSpec {
         };
         let cache_read_result = command_dispatcher
             .source_metadata_cache()
-            .read(&shard)
+            .read(&cache_key)
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
@@ -131,7 +134,7 @@ impl SourceMetadataSpec {
         if !skip_read_cache
             && let Some(cached_metadata) = Self::verify_cache_freshness(
                 cached_metadata,
-                build_backend_metadata.metadata.id.clone(),
+                &build_backend_metadata.metadata.revision,
             )
             .await?
         {
@@ -179,17 +182,20 @@ impl SourceMetadataSpec {
             ));
         }
 
-        let cached_source_metadata = CachedSourceMetadata {
-            id: CachedSourceMetadataId::random(),
+        let cached_source_metadata = SourceMetadataCacheEntry {
+            revision: CacheRevision::new(),
             cache_version,
             records: records.clone(),
-            cached_conda_metadata_id: build_backend_metadata.metadata.id.clone(),
+            build_backend: (
+                build_backend_metadata.cache_key.clone(),
+                build_backend_metadata.metadata.revision.clone(),
+            ),
         };
 
         // Try to store the metadata in the cache with version checking
         match command_dispatcher
             .source_metadata_cache()
-            .try_write(&shard, cached_source_metadata, cache_version)
+            .try_write(&cache_key, cached_source_metadata, cache_version)
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?
@@ -240,15 +246,16 @@ impl SourceMetadataSpec {
     }
 
     async fn verify_cache_freshness(
-        cached_metadata: Option<CachedSourceMetadata>,
-        current_conda_metadata_id: CachedCondaMetadataId,
-    ) -> Result<Option<CachedSourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
+        cached_metadata: Option<CacheEntry<SourceMetadataCache>>,
+        current_build_backend_revision: &CacheRevision<BuildBackendMetadataCache>,
+    ) -> Result<Option<CacheEntry<SourceMetadataCache>>, CommandDispatcherError<SourceMetadataError>>
+    {
         let Some(cached_metadata) = cached_metadata else {
             tracing::debug!("no cached metadata passed.");
             return Ok(None);
         };
 
-        if cached_metadata.cached_conda_metadata_id != current_conda_metadata_id {
+        if cached_metadata.build_backend.1 != *current_build_backend_revision {
             // Not adding tracing here because the backend metadata would already have done that.
             tracing::info!("Cached metadata is stale, skipping cache");
             return Ok(None);
