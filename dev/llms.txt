@@ -131,6 +131,7 @@ for further details on how to use the software.
 - [pixi install](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/install/index.md)
 - [pixi list](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/list/index.md)
 - [pixi lock](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/lock/index.md)
+- [pixi publish](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/publish/index.md)
 - [pixi reinstall](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/reinstall/index.md)
 - [pixi remove](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/remove/index.md)
 - [pixi run](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/run/index.md)

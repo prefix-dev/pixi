@@ -27,6 +27,7 @@ pixi [OPTIONS] [COMMAND]
 | [`list`](list/)               | List the packages of the current workspace                                                                                                |
 | [`lock`](lock/)               | Solve environment and update the lock file without installing the environments                                                            |
 | [`reinstall`](reinstall/)     | Re-install an environment, both updating the lockfile and re-installing the environment                                                   |
+| [`publish`](publish/)         | Build a conda package and publish it to a channel.                                                                                        |
 | [`remove`](remove/)           | Removes dependencies from the workspace                                                                                                   |
 | [`run`](run/)                 | Runs task in the pixi environment                                                                                                         |
 | [`search`](search/)           | Search a conda package                                                                                                                    |

@@ -1,0 +1,126 @@
+
+--8<-- [start:description]
+
+`pixi publish` is a convenience command that **builds** a conda package from your workspace and **uploads** it to a channel in a single step. It combines the functionality of [`pixi build`](build.md) and [`pixi upload`](upload.md).
+
+The `--to` flag determines the target channel. The upload backend is automatically detected from the URL:
+
+| URL pattern | Backend |
+|-------------|---------|
+| `https://prefix.dev/<channel>` | [prefix.dev](https://prefix.dev) |
+| `https://anaconda.org/<owner>` | [Anaconda.org](https://anaconda.org) |
+| `s3://bucket-name/channel` | S3-compatible storage |
+| `file:///path/to/channel` | Local filesystem |
+| `quetz://server/<channel>` | [Quetz](https://github.com/mamba-org/quetz) |
+| `artifactory://server/<channel>` | [JFrog Artifactory](https://jfrog.com/artifactory/) |
+
+--8<-- [end:description]
+
+--8<-- [start:example]
+
+## Examples
+
+### Publishing to prefix.dev
+
+The most common use case is publishing packages to a channel on [prefix.dev](https://prefix.dev).
+
+```shell
+# Build and publish to your prefix.dev channel
+pixi publish --to https://prefix.dev/my-channel
+
+# Build for a specific target platform and publish
+pixi publish --to https://prefix.dev/my-channel --target-platform linux-64
+
+# Publish with sigstore attestation for supply chain security
+pixi publish --to https://prefix.dev/my-channel --generate-attestation
+
+# Force overwrite existing packages
+pixi publish --to https://prefix.dev/my-channel --force
+```
+
+For authentication, either log in first with `pixi auth login`, or set the `PREFIX_API_KEY` environment variable:
+
+```shell
+# Option 1: Log in (credentials are stored in the keychain)
+pixi auth login --token $MY_TOKEN https://prefix.dev
+pixi publish --to https://prefix.dev/my-channel
+
+# Option 2: Use trusted publishing in CI (no credentials needed)
+pixi publish --to https://prefix.dev/my-channel
+```
+
+See the [prefix.dev deployment guide](../../../deployment/prefix.md) for more details on setting up channels and trusted publishing.
+
+### Publishing to Anaconda.org
+
+```shell
+# Build and publish to your Anaconda.org account
+pixi publish --to https://anaconda.org/my-username
+
+# Publish to a specific label/channel
+pixi publish --to https://anaconda.org/my-username/dev
+```
+
+### Publishing to S3
+
+When publishing to S3, the channel is automatically initialized (if new) and indexed after the upload.
+
+```shell
+# Build and publish to an S3 bucket (using AWS credentials from environment)
+pixi publish --to s3://my-bucket/my-channel
+```
+
+S3 credentials are resolved from the standard AWS credential chain (environment variables, shared credentials file, instance profiles, etc.).
+
+### Publishing to a local filesystem channel
+
+Local channels are useful for development and testing. The channel directory is automatically created and indexed.
+
+```shell
+# Build and publish to a local channel
+pixi publish --to file:///path/to/my-channel
+
+# Force overwrite if the package already exists
+pixi publish --to file:///path/to/my-channel --force
+```
+
+### Publishing from a specific manifest
+
+```shell
+# Publish a package from a specific recipe
+pixi publish --to https://prefix.dev/my-channel --path ./my-recipe/recipe.yaml
+
+# Publish from a different workspace
+pixi publish --to https://prefix.dev/my-channel --path ./my-project/
+```
+
+### Clean rebuild and publish
+
+```shell
+# Clean the build directory before building and publishing
+pixi publish --to https://prefix.dev/my-channel --clean
+```
+
+## Authentication
+
+`pixi publish` uses the same authentication system as other pixi commands. Credentials can be configured in three ways:
+
+1. **Keychain / auth-file**: Use `pixi auth login` to store credentials
+   ```shell
+   pixi auth login --token $MY_TOKEN https://prefix.dev
+   ```
+
+2. **Trusted publishing (CI)**: On GitHub Actions, GitLab CI, or Google Cloud, prefix.dev supports OIDC-based trusted publishing — no stored secrets required. See the [prefix.dev trusted publishing guide](../../../deployment/prefix.md#trusted-publishing).
+
+3. **Environment variables**:
+   - `PREFIX_API_KEY` for prefix.dev
+   - `ANACONDA_API_KEY` for Anaconda.org
+   - `QUETZ_API_KEY` for Quetz
+   - `ARTIFACTORY_TOKEN` for Artifactory
+   - Standard AWS environment variables for S3
+
+## Comparison with `pixi build` + `pixi upload`
+
+`pixi publish` is a shorthand for running `pixi build` followed by `pixi upload`. Use it when you want a single command to build and deploy. If you need more control over the build output before uploading (e.g., testing the package locally), use `pixi build` and `pixi upload` separately.
+
+--8<-- [end:example]
