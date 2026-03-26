@@ -244,7 +244,20 @@ impl MetadataProvider for PyprojectMetadataProvider {
         if license_files.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(license_files))
+            // Resolve relative paths to absolute using manifest_root. rattler-build
+            // requires absolute paths when there is no source directory in the recipe.
+            let resolved = license_files
+                .into_iter()
+                .map(|f| {
+                    let p = std::path::Path::new(&f);
+                    if p.is_relative() {
+                        self.manifest_root.join(p).to_string_lossy().into_owned()
+                    } else {
+                        f
+                    }
+                })
+                .collect();
+            Ok(Some(resolved))
         }
     }
 
