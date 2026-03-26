@@ -129,14 +129,14 @@ pub struct SourceBuildCacheEntry {
 /// If two `SourceBuildCacheStatusSpec` have the same key, it means their
 /// entries in the on disk cache would also be the same.
 #[derive(Clone, Hash, Eq, PartialEq)]
-pub struct SourceBuildCacheKey {
+pub struct SourceBuildDeduplicationKey {
     manifest_source: CanonicalSourceLocation,
     input: BuildInput,
 }
 
 impl SourceBuildCacheStatusSpec {
-    pub fn key(&self) -> SourceBuildCacheKey {
-        SourceBuildCacheKey {
+    pub fn key(&self) -> SourceBuildDeduplicationKey {
+        SourceBuildDeduplicationKey {
             manifest_source: self.source.manifest_source().into(),
             input: self.build_input(),
         }

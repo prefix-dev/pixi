@@ -8,7 +8,7 @@ use url::Url;
 
 use crate::{
     BackendSourceBuildSpec, BuildBackendMetadataSpec, PixiEnvironmentSpec,
-    SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
+    SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec, SourceRecordSpec,
     install_pixi::InstallPixiEnvironmentSpec, instantiate_tool_env::InstantiateToolEnvironmentSpec,
 };
 
@@ -172,6 +172,25 @@ pub trait BuildBackendMetadataReporter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
+pub struct SourceRecordId(pub usize);
+
+pub trait SourceRecordReporter {
+    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        spec: &SourceRecordSpec,
+    ) -> SourceRecordId;
+
+    /// Called when the operation has started.
+    fn on_started(&mut self, id: SourceRecordId);
+
+    /// Called when the operation has finished.
+    fn on_finished(&mut self, id: SourceRecordId);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct SourceMetadataId(pub usize);
 
 pub trait SourceMetadataReporter {
@@ -179,7 +198,7 @@ pub trait SourceMetadataReporter {
     fn on_queued(
         &mut self,
         reason: Option<ReporterContext>,
-        env: &SourceMetadataSpec,
+        spec: &SourceMetadataSpec,
     ) -> SourceMetadataId;
 
     /// Called when the operation has started.
@@ -297,8 +316,14 @@ pub trait Reporter: Send {
     }
 
     /// Returns a mutable reference to a reporter that reports on the progress
-    /// of fetching source metadata.
+    /// of resolving source metadata (all variants for a package).
     fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
+        None
+    }
+
+    /// Returns a mutable reference to a reporter that reports on the progress
+    /// of resolving source records.
+    fn as_source_record_reporter(&mut self) -> Option<&mut dyn SourceRecordReporter> {
         None
     }
 
@@ -346,6 +371,7 @@ pub enum ReporterContext {
     SolveConda(CondaSolveId),
     InstallPixi(PixiInstallId),
     SourceMetadata(SourceMetadataId),
+    SourceRecord(SourceRecordId),
     BuildBackendMetadata(BuildBackendMetadataId),
     InstantiateToolEnv(InstantiateToolEnvId),
     SourceBuild(SourceBuildId),

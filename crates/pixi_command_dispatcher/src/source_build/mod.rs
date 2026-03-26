@@ -6,6 +6,7 @@ use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_path::AbsPath;
 use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, VariantValue};
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
+use pixi_variant::VariantSelector;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageName,
     PackageRecord, Platform, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
@@ -601,8 +602,14 @@ impl SourceBuildSpec {
 
         // Find the output that we want to build by matching on name and
         // variants.
-        let output =
-            find_matching_output(outputs.outputs, &self.name, &self.variants).ok_or_else(|| {
+        let selector = VariantSelector::new(self.variants.clone());
+        let package_outputs = outputs
+            .outputs
+            .into_iter()
+            .filter(|o| o.metadata.name == self.name);
+        let output = selector
+            .find(package_outputs, |o| &o.metadata.variant)
+            .ok_or_else(|| {
                 CommandDispatcherError::Failed(SourceBuildError::MissingOutput {
                     name: self.name.as_normalized().to_string(),
                     variants: self.variants.clone(),
@@ -1092,25 +1099,6 @@ impl From<SourceBuildCacheStatusError> for SourceBuildError {
     }
 }
 
-/// Find the output that matches the given package name and variants.
-///
-/// When `variants` is non-empty, an output must match on name *and* contain
-/// all the requested variant key/value pairs (subset match). When `variants`
-/// is empty, the first output with a matching name is returned.
-pub(crate) fn find_matching_output(
-    outputs: Vec<pixi_build_types::procedures::conda_outputs::CondaOutput>,
-    name: &PackageName,
-    variants: &BTreeMap<String, VariantValue>,
-) -> Option<pixi_build_types::procedures::conda_outputs::CondaOutput> {
-    outputs.into_iter().find(|output| {
-        output.metadata.name == *name
-            && (variants.is_empty()
-                || variants
-                    .iter()
-                    .all(|(k, v)| output.metadata.variant.get(k).is_some_and(|ov| ov == v)))
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1118,6 +1106,7 @@ mod tests {
         VariantValue as BuildVariantValue,
         procedures::conda_outputs::{CondaOutput, CondaOutputMetadata},
     };
+    use pixi_variant::VariantSelector;
     use rattler_conda_types::VersionWithSource;
     use std::str::FromStr;
 
@@ -1148,11 +1137,22 @@ mod tests {
         }
     }
 
+    fn find_output<'a>(
+        outputs: &'a [CondaOutput],
+        name: &PackageName,
+        variants: &BTreeMap<String, VariantValue>,
+    ) -> Option<&'a CondaOutput> {
+        let selector = VariantSelector::new(variants.clone());
+        selector.find(outputs.iter().filter(|o| o.metadata.name == *name), |o| {
+            &o.metadata.variant
+        })
+    }
+
     #[test]
     fn test_find_matching_output_by_name_only() {
         let outputs = vec![make_output("foo", &[]), make_output("bar", &[])];
         let name = PackageName::try_from("bar").unwrap();
-        let result = find_matching_output(outputs, &name, &BTreeMap::new());
+        let result = find_output(&outputs, &name, &BTreeMap::new());
         assert_eq!(result.unwrap().metadata.name, name);
     }
 
@@ -1160,7 +1160,7 @@ mod tests {
     fn test_find_matching_output_no_match() {
         let outputs = vec![make_output("foo", &[])];
         let name = PackageName::try_from("bar").unwrap();
-        let result = find_matching_output(outputs, &name, &BTreeMap::new());
+        let result = find_output(&outputs, &name, &BTreeMap::new());
         assert!(result.is_none());
     }
 
@@ -1173,7 +1173,7 @@ mod tests {
         let name = PackageName::try_from("foo").unwrap();
         let variants: BTreeMap<_, _> =
             [("python".to_string(), VariantValue::from("3.12".to_string()))].into();
-        let result = find_matching_output(outputs, &name, &variants).unwrap();
+        let result = find_output(&outputs, &name, &variants).unwrap();
         assert_eq!(
             result.metadata.variant.get("python").unwrap(),
             &VariantValue::from("3.12".to_string())
@@ -1182,12 +1182,12 @@ mod tests {
 
     #[test]
     fn test_find_matching_output_variant_subset() {
-        // Output has more variants than the query — should still match
+        // Output has more variants than the query -- should still match
         let outputs = vec![make_output("foo", &[("python", "3.12"), ("numpy", "1.26")])];
         let name = PackageName::try_from("foo").unwrap();
         let variants: BTreeMap<_, _> =
             [("python".to_string(), VariantValue::from("3.12".to_string()))].into();
-        let result = find_matching_output(outputs, &name, &variants);
+        let result = find_output(&outputs, &name, &variants);
         assert!(result.is_some());
     }
 
@@ -1197,7 +1197,7 @@ mod tests {
         let name = PackageName::try_from("foo").unwrap();
         let variants: BTreeMap<_, _> =
             [("python".to_string(), VariantValue::from("3.12".to_string()))].into();
-        let result = find_matching_output(outputs, &name, &variants);
+        let result = find_output(&outputs, &name, &variants);
         assert!(result.is_none());
     }
 }

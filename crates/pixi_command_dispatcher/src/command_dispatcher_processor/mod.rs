@@ -9,21 +9,22 @@ use std::{
     sync::Arc,
 };
 
-use crate::source_build_cache_status::SourceBuildCacheKey;
-use crate::source_metadata::SourceMetadataSpecCacheKey;
+use crate::source_build_cache_status::SourceBuildDeduplicationKey;
+use crate::source_record::SourceRecordDeduplicationKey;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, DevSourceMetadata,
     DevSourceMetadataError, DevSourceMetadataSpec, InstallPixiEnvironmentResult, Reporter,
-    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
-    SourceBuildCacheStatusError, SourceBuildError, SourceBuildResult, SourceBuildSpec,
-    SourceMetadata, SourceMetadataError,
+    ResolvedSourceRecord, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
+    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildError, SourceBuildResult,
+    SourceBuildSpec, SourceMetadata, SourceMetadataError, SourceRecordError,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
         CommandDispatcherContext, CommandDispatcherData, DevSourceMetadataId, ForegroundMessage,
         InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
         SolvePixiEnvironmentId, SourceBuildCacheStatusId, SourceBuildId, SourceMetadataId,
+        SourceRecordId,
         url::{UrlCheckout, UrlError},
     },
     executor::ExecutorFutures,
@@ -51,6 +52,7 @@ mod solve_pixi;
 mod source_build;
 mod source_build_cache_status;
 mod source_metadata;
+mod source_record;
 mod url;
 
 /// Runs the command_dispatcher background task
@@ -102,13 +104,22 @@ pub(crate) struct CommandDispatcherProcessor {
         HashMap<BuildBackendMetadataId, reporter::BuildBackendMetadataId>,
     build_backend_metadata_ids: HashMap<BuildBackendMetadataSpec, BuildBackendMetadataId>,
 
-    /// A mapping of source metadata to the metadata id that
+    /// Source metadata tasks (not deduplicated; fans out to deduplicated
+    /// SourceRecord tasks).
     source_metadata: HashMap<
         SourceMetadataId,
         PendingDeduplicatingTask<Arc<SourceMetadata>, SourceMetadataError>,
     >,
     source_metadata_reporters: HashMap<SourceMetadataId, reporter::SourceMetadataId>,
-    source_metadata_ids: HashMap<SourceMetadataSpecCacheKey, SourceMetadataId>,
+    source_metadata_id_counter: usize,
+
+    /// Source record requests (per name+variant) that are currently being processed.
+    source_record: HashMap<
+        SourceRecordId,
+        PendingDeduplicatingTask<Arc<ResolvedSourceRecord>, SourceRecordError>,
+    >,
+    source_record_reporters: HashMap<SourceRecordId, reporter::SourceRecordId>,
+    source_record_ids: HashMap<SourceRecordDeduplicationKey, SourceRecordId>,
 
     /// A mapping of instantiated tool environments
     instantiated_tool_envs: HashMap<
@@ -138,7 +149,7 @@ pub(crate) struct CommandDispatcherProcessor {
         SourceBuildCacheStatusId,
         PendingDeduplicatingTask<Arc<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
     >,
-    source_build_cache_status_ids: HashMap<SourceBuildCacheKey, SourceBuildCacheStatusId>,
+    source_build_cache_status_ids: HashMap<SourceBuildDeduplicationKey, SourceBuildCacheStatusId>,
 
     /// Dev source metadata requests that are currently being processed.
     dev_source_metadata: HashMap<
@@ -184,6 +195,10 @@ enum TaskResult {
     SourceMetadata(
         SourceMetadataId,
         BoxedDispatcherResult<Arc<SourceMetadata>, SourceMetadataError>,
+    ),
+    SourceRecord(
+        SourceRecordId,
+        BoxedDispatcherResult<Arc<ResolvedSourceRecord>, SourceRecordError>,
     ),
     GitCheckedOut(RepositoryReference, BoxedDispatcherResult<Fetch, GitError>),
     UrlCheckedOut(::url::Url, BoxedDispatcherResult<UrlCheckout, UrlError>),
@@ -361,7 +376,10 @@ impl CommandDispatcherProcessor {
                 build_backend_metadata_ids: HashMap::default(),
                 source_metadata: HashMap::default(),
                 source_metadata_reporters: HashMap::default(),
-                source_metadata_ids: HashMap::default(),
+                source_metadata_id_counter: 0,
+                source_record: HashMap::default(),
+                source_record_reporters: HashMap::default(),
+                source_record_ids: HashMap::default(),
                 instantiated_tool_envs: HashMap::default(),
                 instantiated_tool_envs_reporters: HashMap::default(),
                 instantiated_tool_cache_keys: HashMap::default(),
@@ -441,6 +459,7 @@ impl CommandDispatcherProcessor {
                 self.clear_filesystem_caches(sender)
             }
             ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
+            ForegroundMessage::SourceRecord(task) => self.on_source_record(task),
             ForegroundMessage::BackendSourceBuild(task) => self.on_backend_source_build(task),
         }
     }
@@ -467,6 +486,7 @@ impl CommandDispatcherProcessor {
             }
             TaskResult::SourceBuild(id, result) => self.on_source_build_result(id, *result),
             TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, *result),
+            TaskResult::SourceRecord(id, result) => self.on_source_record_result(id, *result),
             TaskResult::BackendSourceBuild(id, result) => {
                 self.on_backend_source_build_result(id, *result)
             }
@@ -538,6 +558,21 @@ impl CommandDispatcherProcessor {
                     }
 
                     self.source_metadata.get(&id).map(|pending| match pending {
+                        PendingDeduplicatingTask::Pending(_, context)
+                        | PendingDeduplicatingTask::Completed(_, context) => *context,
+                    })?
+                }
+                CommandDispatcherContext::SourceRecord(id) => {
+                    if let Some(context) = self
+                        .source_record_reporters
+                        .get(&id)
+                        .copied()
+                        .map(reporter::ReporterContext::SourceRecord)
+                    {
+                        return Some(context);
+                    }
+
+                    self.source_record.get(&id).map(|pending| match pending {
                         PendingDeduplicatingTask::Pending(_, context)
                         | PendingDeduplicatingTask::Completed(_, context) => *context,
                     })?
