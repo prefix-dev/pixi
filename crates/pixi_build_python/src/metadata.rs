@@ -437,7 +437,11 @@ license = {file = "LICENSE.txt"}
         assert_eq!(
             provider.license_files().unwrap(),
             Some(vec![
-                temp_dir.path().join("LICENSE.txt").to_string_lossy().into_owned()
+                temp_dir
+                    .path()
+                    .join("LICENSE.txt")
+                    .to_string_lossy()
+                    .into_owned()
             ])
         );
     }
@@ -458,8 +462,16 @@ license-files = ["LICENSE.txt", "COPYING.txt"]
         assert_eq!(
             provider.license_files().unwrap(),
             Some(vec![
-                temp_dir.path().join("LICENSE.txt").to_string_lossy().into_owned(),
-                temp_dir.path().join("COPYING.txt").to_string_lossy().into_owned(),
+                temp_dir
+                    .path()
+                    .join("LICENSE.txt")
+                    .to_string_lossy()
+                    .into_owned(),
+                temp_dir
+                    .path()
+                    .join("COPYING.txt")
+                    .to_string_lossy()
+                    .into_owned(),
             ])
         );
     }
@@ -481,9 +493,21 @@ license-files = ["NOTICE.txt", "AUTHORS.txt"]
         assert_eq!(
             provider.license_files().unwrap(),
             Some(vec![
-                temp_dir.path().join("LICENSE").to_string_lossy().into_owned(),
-                temp_dir.path().join("NOTICE.txt").to_string_lossy().into_owned(),
-                temp_dir.path().join("AUTHORS.txt").to_string_lossy().into_owned(),
+                temp_dir
+                    .path()
+                    .join("LICENSE")
+                    .to_string_lossy()
+                    .into_owned(),
+                temp_dir
+                    .path()
+                    .join("NOTICE.txt")
+                    .to_string_lossy()
+                    .into_owned(),
+                temp_dir
+                    .path()
+                    .join("AUTHORS.txt")
+                    .to_string_lossy()
+                    .into_owned(),
             ])
         );
     }
@@ -504,7 +528,11 @@ license-files = ["LICENSE"]
         assert_eq!(
             provider.license_files().unwrap(),
             Some(vec![
-                temp_dir.path().join("LICENSE").to_string_lossy().into_owned()
+                temp_dir
+                    .path()
+                    .join("LICENSE")
+                    .to_string_lossy()
+                    .into_owned()
             ])
         );
     }
