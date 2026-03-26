@@ -19,15 +19,18 @@ use thiserror::Error;
 use tracing::instrument;
 
 use crate::build::CanonicalSourceCodeLocation;
-use crate::cache::build_backend_metadata::CachedCondaMetadataId;
+use crate::cache::common::CacheRevision;
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
     cache::{
-        build_backend_metadata::{self, BuildBackendMetadataCacheShard, CachedCondaMetadata},
-        common::MetadataCache,
+        build_backend_metadata::{
+            self, BuildBackendMetadataCache, BuildBackendMetadataCacheEntry,
+            BuildBackendMetadataCacheKey,
+        },
+        common::{CacheEntry, CacheKey, CacheKeyString, MetadataCache, MetadataCacheKey},
     },
 };
 use pixi_build_discovery::BackendSpec;
@@ -92,8 +95,11 @@ pub struct BuildBackendMetadata {
     /// The manifest and optional build source location for this metadata.
     pub source: PinnedSourceCodeLocation,
 
+    /// The cache key string that was used to store/look up this metadata.
+    pub cache_key: CacheKeyString<BuildBackendMetadataCache>,
+
     /// The metadata that was acquired from the build backend.
-    pub metadata: CachedCondaMetadata,
+    pub metadata: CacheEntry<BuildBackendMetadataCache>,
 
     /// Whether caching should be skipped for this backend.
     ///
@@ -200,7 +206,7 @@ impl BuildBackendMetadataSpec {
 
         // Check the source metadata cache, short circuit if there is a cache hit that
         // is still fresh.
-        let cache_key = BuildBackendMetadataCacheShard {
+        let cache_key: CacheKey<BuildBackendMetadataCache> = BuildBackendMetadataCacheKey {
             channel_urls: self.channels.clone(),
             build_environment: self.build_environment.clone(),
             enabled_protocols: self.enabled_protocols.clone(),
@@ -246,6 +252,7 @@ impl BuildBackendMetadataSpec {
                     tracing::debug!("Using cached build backend metadata");
                     return Ok(BuildBackendMetadata {
                         source: manifest_source_location.clone(),
+                        cache_key: cache_key.key(),
                         metadata: fresh,
                         skip_cache,
                     });
@@ -310,13 +317,13 @@ impl BuildBackendMetadataSpec {
             )
             .await?;
 
-        // Determine the metadata ID: reuse the previous one if the outputs
+        // Determine the revision: reuse the previous one if the outputs
         // haven't changed, otherwise generate a new one. This ensures downstream
-        // caches keyed by the metadata ID remain valid when inputs change but
+        // caches keyed by the revision remain valid when inputs change but
         // outputs stay the same.
-        let id = match &stale_cached_metadata {
-            Some(prev) if prev.outputs == raw.outputs => prev.id.clone(),
-            _ => CachedCondaMetadataId::new(),
+        let revision = match &stale_cached_metadata {
+            Some(prev) if prev.outputs == raw.outputs => prev.revision.clone(),
+            _ => CacheRevision::new(),
         };
 
         let canonical_manifest_source: CanonicalSourceLocation =
@@ -326,8 +333,8 @@ impl BuildBackendMetadataSpec {
         let canonical_build_source_opt =
             (canonical_manifest_source != canonical_build_source).then_some(canonical_build_source);
 
-        let metadata = CachedCondaMetadata {
-            id,
+        let metadata = BuildBackendMetadataCacheEntry {
+            revision,
             cache_version,
             outputs: raw.outputs,
             build_variants: self.variant_configuration.unwrap_or_default(),
@@ -366,6 +373,7 @@ impl BuildBackendMetadataSpec {
 
         Ok(BuildBackendMetadata {
             source: manifest_source_location,
+            cache_key: cache_key.key(),
             metadata,
             skip_cache,
         })
@@ -432,13 +440,16 @@ impl BuildBackendMetadataSpec {
     ///   returned for comparison (e.g. to reuse the ID if outputs match).
     /// - `Ok(Err(None))` if no cache entry exists.
     async fn verify_cache_freshness(
-        cache_entry: Option<CachedCondaMetadata>,
+        cache_entry: Option<CacheEntry<BuildBackendMetadataCache>>,
         build_source_checkout: &SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
         configuration_hash: ConfigurationHash,
         requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
     ) -> Result<
-        Result<CachedCondaMetadata, Option<CachedCondaMetadata>>,
+        Result<
+            CacheEntry<BuildBackendMetadataCache>,
+            Option<CacheEntry<BuildBackendMetadataCache>>,
+        >,
         CommandDispatcherError<BuildBackendMetadataError>,
     > {
         let Some(cache_entry) = cache_entry else {
@@ -674,7 +685,7 @@ impl BuildBackendMetadataSpec {
 
 /// Raw result from calling the build backend's `conda/outputs` procedure.
 /// This contains only what the backend returns plus derived file information.
-/// The caller is responsible for constructing the full `CachedCondaMetadata`.
+/// The caller is responsible for constructing the full `BuildBackendMetadataCacheEntry`.
 struct RawCondaOutputs {
     /// The outputs as reported by the build backend.
     outputs: Vec<pixi_build_types::procedures::conda_outputs::CondaOutput>,

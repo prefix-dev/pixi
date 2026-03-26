@@ -1,9 +1,10 @@
 use super::common::{
-    CacheError, CacheKey, CachedMetadata, MetadataCache, WriteResult as CommonWriteResult,
+    CacheError, CacheKeyString, CacheRevision, MetadataCache, MetadataCacheEntry, MetadataCacheKey,
+    UpstreamCacheRef, VersionedCacheEntry, WriteResult as CommonWriteResult,
 };
+use crate::BuildEnvironment;
 use crate::build::CanonicalSourceCodeLocation;
-use crate::cache::build_backend_metadata::CachedCondaMetadataId;
-use crate::{BuildEnvironment, cache::common::VersionedMetadata};
+use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_path::AbsPathBuf;
@@ -20,7 +21,7 @@ use std::{
 use thiserror::Error;
 
 // Re-export WriteResult with the correct type
-pub type WriteResult = CommonWriteResult<CachedSourceMetadata>;
+pub type WriteResult = CommonWriteResult<SourceMetadataCacheEntry>;
 
 /// A cache for caching the metadata of a source checkout.
 ///
@@ -45,7 +46,7 @@ pub enum SourceMetadataCacheError {
 /// Defines additional input besides the source files that are used to compute
 /// the metadata of a source checkout. This is used to bucket the metadata.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct SourceMetadataCacheShard {
+pub struct SourceMetadataCacheKey {
     /// The name of the package to retrieve metadata from.
     pub package: PackageName,
 
@@ -73,8 +74,8 @@ impl SourceMetadataCache {
 }
 
 impl MetadataCache for SourceMetadataCache {
-    type Key = SourceMetadataCacheShard;
-    type Metadata = CachedSourceMetadata;
+    type Key = SourceMetadataCacheKey;
+    type Entry = SourceMetadataCacheEntry;
     type Error = SourceMetadataCacheError;
 
     fn root(&self) -> &Path {
@@ -84,9 +85,10 @@ impl MetadataCache for SourceMetadataCache {
     const CACHE_SUFFIX: &'static str = "v0";
 }
 
-impl CacheKey for SourceMetadataCacheShard {
-    /// Computes a unique semi-human-readable hash for this key.
-    fn hash_key(&self) -> String {
+impl MetadataCacheKey<SourceMetadataCache> for SourceMetadataCacheKey {
+    /// Computes a unique semi-human-readable string representation of the key.
+    /// This is what is used as the cache file name.
+    fn key(&self) -> CacheKeyString<SourceMetadataCache> {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
         self.build_environment.build_platform.hash(&mut hasher);
@@ -102,12 +104,12 @@ impl CacheKey for SourceMetadataCacheShard {
         self.enabled_protocols.hash(&mut hasher);
 
         let source_dir = self.source.cache_unique_key();
-        format!(
+        CacheKeyString::new(format!(
             "{source_dir}/{}-{}-{}",
             self.package.as_normalized(),
             self.build_environment.host_platform,
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
-        )
+        ))
     }
 }
 
@@ -120,18 +122,20 @@ impl CacheError for SourceMetadataCacheError {
 /// Cached result of calling `conda/getMetadata` on a build backend. This is
 /// returned by [`MetadataCache::read`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedSourceMetadata {
-    /// A randomly generated identifier that is generated for each metadata
-    /// file.
-    pub id: CachedSourceMetadataId,
+pub struct SourceMetadataCacheEntry {
+    /// A revision identifier for this cache entry. Changes when the
+    /// meaningful content of the entry changes.
+    pub revision: CacheRevision<SourceMetadataCache>,
 
     /// Version number for optimistic locking. Incremented with each cache update.
     /// Used to detect when another process has updated the cache during computation.
     #[serde(default)]
     pub cache_version: u64,
 
-    /// The id of the backend metadata that was used to compute this metadata.
-    pub cached_conda_metadata_id: CachedCondaMetadataId,
+    /// Reference to the build backend metadata entry this was derived from.
+    /// Contains the cache key (to locate the file) and the revision (to
+    /// detect staleness).
+    pub build_backend: UpstreamCacheRef<BuildBackendMetadataCache>,
 
     /// The source records
     pub records: Vec<CachedSourceRecord>,
@@ -154,24 +158,18 @@ pub struct CachedSourceRecord {
     pub newest_package_timestamp: chrono::DateTime<chrono::Utc>,
 }
 
-impl CachedMetadata for CachedSourceMetadata {}
+impl MetadataCacheEntry<SourceMetadataCache> for SourceMetadataCacheEntry {
+    fn revision(&self) -> &CacheRevision<SourceMetadataCache> {
+        &self.revision
+    }
+}
 
-impl VersionedMetadata for CachedSourceMetadata {
+impl VersionedCacheEntry<SourceMetadataCache> for SourceMetadataCacheEntry {
     fn cache_version(&self) -> u64 {
         self.cache_version
     }
 
     fn set_cache_version(&mut self, version: u64) {
         self.cache_version = version;
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct CachedSourceMetadataId(u64);
-
-impl CachedSourceMetadataId {
-    pub fn random() -> Self {
-        Self(rand::random())
     }
 }
