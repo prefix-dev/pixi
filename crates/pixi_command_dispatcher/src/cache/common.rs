@@ -30,7 +30,7 @@
 //!
 //! [`CacheKey<C>`] and [`CacheEntry<C>`] are convenience aliases that let
 //! you refer to a cache's associated types through the cache type itself
-//! (e.g. `CacheKey<SourceMetadataCache>` instead of `SourceMetadataCacheKey`).
+//! (e.g. `CacheKey<SourceRecordCache>` instead of `SourceRecordCacheKey`).
 
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
@@ -286,8 +286,8 @@ pub trait MetadataCacheKey<C: MetadataCache> {
 
 /// Convenience alias for the key type of a [`MetadataCache`].
 ///
-/// Allows writing `CacheKey<SourceMetadataCache>` instead of the concrete
-/// `SourceMetadataCacheKey`.
+/// Allows writing `CacheKey<SourceRecordCache>` instead of the concrete
+/// `SourceRecordCacheKey`.
 pub type CacheKey<C> = <C as MetadataCache>::Key;
 
 /// Convenience alias for the entry type of a [`MetadataCache`].

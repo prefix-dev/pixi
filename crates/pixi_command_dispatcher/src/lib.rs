@@ -53,6 +53,7 @@ mod source_build;
 mod source_build_cache_status;
 mod source_checkout;
 mod source_metadata;
+mod source_record;
 
 pub use backend_source_build::{
     BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
@@ -66,7 +67,7 @@ pub use cache::build_backend_metadata::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry,
 };
 pub use cache::common::{CacheEntry, CacheRevision, MetadataCache};
-pub use cache::source_metadata::{SourceMetadataCache, SourceMetadataCacheEntry};
+pub use cache::source_record::{SourceRecordCache, SourceRecordCacheEntry};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
@@ -95,6 +96,7 @@ pub use source_build_cache_status::{
 };
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
+pub use source_record::{ResolvedSourceRecord, SourceRecordError, SourceRecordSpec};
 
 /// A helper function to check if a value is the default value for its type.
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {

@@ -8,12 +8,13 @@ use pixi_command_dispatcher::{
     BackendSourceBuildSpec, BuildBackendMetadataSpec, CondaSolveReporter, GitCheckoutReporter,
     InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
     PixiInstallReporter, PixiSolveReporter, Reporter, ReporterContext, SolveCondaEnvironmentSpec,
-    SourceBuildSpec, SourceMetadataSpec,
+    SourceBuildSpec, SourceMetadataSpec, SourceRecordSpec,
     reporter::{
         BackendSourceBuildId, BackendSourceBuildReporter, BuildBackendMetadataId,
         BuildBackendMetadataReporter, CondaSolveId, GitCheckoutId, InstantiateToolEnvId,
         InstantiateToolEnvironmentReporter, PixiInstallId, PixiSolveId, SourceBuildId,
-        SourceBuildReporter, SourceMetadataId, SourceMetadataReporter,
+        SourceBuildReporter, SourceMetadataId, SourceMetadataReporter, SourceRecordId,
+        SourceRecordReporter,
     },
 };
 use pixi_git::resolver::RepositoryReference;
@@ -105,6 +106,20 @@ pub enum Event {
     },
     SourceMetadataFinished {
         id: SourceMetadataId,
+    },
+
+    SourceRecordQueued {
+        id: SourceRecordId,
+        #[serde(flatten)]
+        spec: SourceRecordSpec,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        context: Option<ReporterContext>,
+    },
+    SourceRecordStarted {
+        id: SourceRecordId,
+    },
+    SourceRecordFinished {
+        id: SourceRecordId,
     },
 
     SourceBuildQueued {
@@ -438,6 +453,38 @@ impl SourceMetadataReporter for EventReporter {
     }
 }
 
+impl SourceRecordReporter for EventReporter {
+    fn on_queued(
+        &mut self,
+        context: Option<ReporterContext>,
+        spec: &SourceRecordSpec,
+    ) -> SourceRecordId {
+        let next_id = SourceRecordId(self.next_source_metadata_id);
+        self.next_source_metadata_id += 1;
+
+        let event = Event::SourceRecordQueued {
+            id: next_id,
+            spec: spec.clone(),
+            context,
+        };
+        eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.push(event);
+        next_id
+    }
+
+    fn on_started(&mut self, id: SourceRecordId) {
+        let event = Event::SourceRecordStarted { id };
+        eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.push(event);
+    }
+
+    fn on_finished(&mut self, id: SourceRecordId) {
+        let event = Event::SourceRecordFinished { id };
+        eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.push(event);
+    }
+}
+
 impl InstantiateToolEnvironmentReporter for EventReporter {
     fn on_queued(
         &mut self,
@@ -585,6 +632,9 @@ impl Reporter for EventReporter {
         Some(self)
     }
     fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
+        Some(self)
+    }
+    fn as_source_record_reporter(&mut self) -> Option<&mut dyn SourceRecordReporter> {
         Some(self)
     }
     fn as_source_build_reporter(&mut self) -> Option<&mut dyn SourceBuildReporter> {
