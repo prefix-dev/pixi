@@ -743,6 +743,7 @@ where
             // This indicates that the environments are externally managed, e.g. they are already
             // prepared.
             .with_environments_externally_managed(true)
+            .with_allow_absolute_license_paths(true)
             .finish();
 
         let output = Output {
