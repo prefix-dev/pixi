@@ -64,9 +64,9 @@ pub struct SourceRecordCacheKey {
     /// The pinned source location
     pub source: CanonicalSourceCodeLocation,
 
-    /// The exclude-newer timestamp that was used when resolving dependencies.
+    /// The timestamp of the newest dependency that was used when resolving.
     /// Different timestamps can yield different dependency sets.
-    pub exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
 }
 
 impl SourceRecordCache {
@@ -111,10 +111,7 @@ impl MetadataCacheKey<SourceRecordCache> for SourceRecordCacheKey {
         self.variants.hash(&mut hasher);
 
         let source_dir = self.source.cache_unique_key();
-        let exclude_newer_ms = self
-            .exclude_newer
-            .map(|ts| ts.timestamp_millis().to_string())
-            .unwrap_or_default();
+        let timestamp_ms = self.timestamp.timestamp_millis();
         CacheKeyString::new(format!(
             "{source_dir}/{}-{}-{}-{}",
             self.package.as_normalized(),
@@ -123,7 +120,7 @@ impl MetadataCacheKey<SourceRecordCache> for SourceRecordCacheKey {
                 .to_string()
                 .replace('-', "_"),
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes()),
-            exclude_newer_ms,
+            timestamp_ms,
         ))
     }
 }
@@ -162,7 +159,7 @@ pub struct SourceRecordCacheEntry {
 
 /// A cached version of a `SourceRecord` but with a few elements removed
 /// because they can be derived from the input instead (like the manifest source).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CachedSourceRecord {
     pub package_record: PackageRecord,
 

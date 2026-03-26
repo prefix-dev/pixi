@@ -224,12 +224,6 @@ impl BuildBackendMetadataSpec {
             .map_err(BuildBackendMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
 
-        let (cached_metadata, cache_version) = match cache_read_result {
-            Some((metadata, version)) => (Some(metadata), version),
-            // Start at cache version 0 if no cache exists
-            None => (None, 0),
-        };
-
         let project_model_hash = discovered_backend
             .init_params
             .project_model
@@ -245,7 +239,7 @@ impl BuildBackendMetadataSpec {
         // kept around so we can compare outputs and reuse the ID if unchanged.
         let stale_cached_metadata = if !skip_cache {
             match Self::verify_cache_freshness(
-                cached_metadata,
+                cache_read_result,
                 &build_source_checkout,
                 project_model_hash,
                 configuration_hash,
@@ -339,9 +333,12 @@ impl BuildBackendMetadataSpec {
         let canonical_build_source_opt =
             (canonical_manifest_source != canonical_build_source).then_some(canonical_build_source);
 
+        let prev_cache_version = stale_cached_metadata
+            .as_ref()
+            .map(|cache| cache.cache_version);
         let metadata = BuildBackendMetadataCacheEntry {
             revision,
-            cache_version,
+            cache_version: prev_cache_version.map_or(0, |version| version + 1),
             outputs: raw.outputs,
             build_variants: self.variant_configuration.unwrap_or_default(),
             build_variant_files: self.variant_files.into_iter().flatten().collect(),
@@ -360,7 +357,11 @@ impl BuildBackendMetadataSpec {
         // If another process updated the cache while we were computing, we get a conflict.
         match command_dispatcher
             .build_backend_metadata_cache()
-            .try_write(&cache_key, metadata.clone(), cache_version)
+            .try_write(
+                &cache_key,
+                metadata.clone(),
+                prev_cache_version.unwrap_or(0),
+            )
             .await
             .map_err(BuildBackendMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?

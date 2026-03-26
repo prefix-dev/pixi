@@ -73,7 +73,7 @@ pub trait MetadataCache: Clone + Sized {
     /// The lock is released immediately after reading, so the metadata may
     /// become stale. Use `try_write` with version checking to detect if the
     /// cache was updated by another process.
-    async fn read(&self, input: &Self::Key) -> Result<Option<(Self::Entry, u64)>, Self::Error>
+    async fn read(&self, input: &Self::Key) -> Result<Option<Self::Entry>, Self::Error>
     where
         Self::Entry: VersionedCacheEntry<Self>,
     {
@@ -133,8 +133,7 @@ pub trait MetadataCache: Clone + Sized {
             }
         };
 
-        let version = metadata.cache_version();
-        Ok(Some((metadata, version)))
+        Ok(Some(metadata))
     }
 
     /// Tries to write metadata to the cache with optimistic locking.
