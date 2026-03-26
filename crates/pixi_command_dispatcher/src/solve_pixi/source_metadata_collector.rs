@@ -131,7 +131,7 @@ impl SourceMetadataCollector {
                     SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
                 for depend in &record.package_record.depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
-                        let (Some(PackageNameMatcher::Exact(name)), nameless_spec) =
+                        let (PackageNameMatcher::Exact(name), nameless_spec) =
                             spec.clone().into_nameless()
                         else {
                             unimplemented!(

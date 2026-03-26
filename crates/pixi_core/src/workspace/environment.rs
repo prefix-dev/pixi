@@ -127,61 +127,21 @@ impl<'p> Environment<'p> {
             return current;
         }
 
-        static WARN_ONCE: Once = Once::new();
-
         // If the current platform is osx-arm64 and the environment supports osx-64,
         // return osx-64.
         if current.is_osx() && self.platforms().contains(&Platform::Osx64) {
-            WARN_ONCE.call_once(|| {
-                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
-                let emulation_warn = warn_folder.join("macos-emulation-warn");
-                if !emulation_warn.exists() {
-                    tracing::warn!(
-                        "osx-arm64 (Apple Silicon) is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
-                    );
-                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
-                }
-            });
             return Platform::Osx64;
         }
 
         // If the current platform is win-arm64 and the environment supports win-64,
         // return win-64.
         if current.is_windows() && self.platforms().contains(&Platform::Win64) {
-            WARN_ONCE.call_once(|| {
-                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
-                let emulation_warn = warn_folder.join("windows-emulation-warn");
-                if !emulation_warn.exists() {
-                    tracing::warn!(
-                        "win-arm64 is not supported by the pixi.toml, falling back to win-64 (emulation)"
-                    );
-                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
-                }
-            });
             return Platform::Win64;
         }
 
         // If the current platform is win-64 and the environment supports win-32,
         // return win-32.
         if current == Platform::Win64 && self.platforms().contains(&Platform::Win32) {
-            WARN_ONCE.call_once(|| {
-                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
-                let emulation_warn = warn_folder.join("windows-32-emulation-warn");
-                if !emulation_warn.exists() {
-                    tracing::warn!(
-                        "win-64 is not supported by the pixi.toml, falling back to win-32 (emulation)"
-                    );
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
-                }
-            });
             return Platform::Win32;
         }
 
@@ -195,6 +155,63 @@ impl<'p> Environment<'p> {
         }
 
         current
+    }
+
+    /// Emits a one-time warning if this environment requires platform emulation
+    /// (e.g. Rosetta on Apple Silicon Macs).
+    ///
+    /// This should only be called when the environment is actually being
+    /// installed or activated — not during lock file solving, which is
+    /// cross-platform and does not use emulation.
+    pub fn emit_emulation_warning(&self) {
+        let current = Platform::current();
+        let best = self.best_platform();
+        if current == best {
+            return;
+        }
+
+        static WARN_ONCE: Once = Once::new();
+
+        if current.is_osx() && best == Platform::Osx64 {
+            WARN_ONCE.call_once(|| {
+                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let emulation_warn = warn_folder.join("macos-emulation-warn");
+                if !emulation_warn.exists() {
+                    tracing::warn!(
+                        "osx-arm64 (Apple Silicon) is not supported by the current environment, falling back to osx-64 (emulated with Rosetta)"
+                    );
+                    fs_err::create_dir_all(warn_folder)
+                        .and_then(|_| fs_err::File::create(emulation_warn))
+                        .ok();
+                }
+            });
+        } else if current.is_windows() && best == Platform::Win64 {
+            WARN_ONCE.call_once(|| {
+                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let emulation_warn = warn_folder.join("windows-emulation-warn");
+                if !emulation_warn.exists() {
+                    tracing::warn!(
+                        "win-arm64 is not supported by the current environment, falling back to win-64 (emulation)"
+                    );
+                    fs_err::create_dir_all(warn_folder)
+                        .and_then(|_| fs_err::File::create(emulation_warn))
+                        .ok();
+                }
+            });
+        } else if current == Platform::Win64 && best == Platform::Win32 {
+            WARN_ONCE.call_once(|| {
+                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let emulation_warn = warn_folder.join("windows-32-emulation-warn");
+                if !emulation_warn.exists() {
+                    tracing::warn!(
+                        "win-64 is not supported by the current environment, falling back to win-32 (emulation)"
+                    );
+                    fs_err::create_dir_all(warn_folder)
+                        .and_then(|_| fs_err::File::create(emulation_warn))
+                        .ok();
+                }
+            });
+        }
     }
 
     /// Returns the tasks defined for this environment.
@@ -302,7 +319,7 @@ impl<'p> Environment<'p> {
     ///
     /// The activation scripts of all features are combined in the order they
     /// are defined for the environment.
-    pub(crate) fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
+    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
         self.features()
             .filter_map(|f| f.activation_scripts(platform))
             .flatten()

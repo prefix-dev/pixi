@@ -290,13 +290,9 @@ async fn sync_exposed_names(
         .with
         .iter()
         .map(|spec| {
-            let name_matcher = spec.name.clone().ok_or_else(|| {
-                miette::miette!("could not find package name in MatchSpec {}", spec)
-            })?;
-            name_matcher
-                .as_exact()
-                .cloned()
-                .ok_or_else(|| miette::miette!("wildcard package names are not supported"))
+            spec.name.as_exact().cloned().ok_or_else(|| {
+                miette::miette!("could not find exact package name in MatchSpec {}", spec)
+            })
         })
         .collect::<miette::Result<Vec<_>>>()?;
     let expose_type = if args.expose.is_empty().not() {

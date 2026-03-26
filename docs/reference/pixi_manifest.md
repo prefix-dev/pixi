@@ -1297,7 +1297,7 @@ For platform-specific build configuration, use the `[package.build.target.<platf
 
 ```toml
 [package.build]
-backend = { name = "pixi-build-cmake", version = "0.3.*" }
+backend = { name = "pixi-build-cmake", version = "0.*" }
 
 [package.build.config]
 # Base configuration applied to all platforms

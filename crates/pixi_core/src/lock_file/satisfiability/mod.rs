@@ -933,7 +933,7 @@ impl Dependency {
     pub fn conda_package_name(&self) -> Option<PackageName> {
         match self {
             Dependency::Input(name, _, _) => Some(name.clone()),
-            Dependency::Conda(spec, _) => spec.name.as_ref().and_then(|m| m.as_exact().cloned()),
+            Dependency::Conda(spec, _) => spec.name.as_exact().cloned(),
             Dependency::CondaSource(name, _, _) => Some(name.clone()),
             Dependency::PyPi(_, _) => None,
         }
@@ -1685,7 +1685,7 @@ async fn resolve_single_dev_dependency(
                 ))
             })?;
 
-        let spec = MatchSpec::from_nameless(nameless_spec, Some(dep_name.clone().into()));
+        let spec = MatchSpec::from_nameless(nameless_spec, dep_name.clone().into());
 
         dependencies.push(Dependency::Conda(
             spec,
@@ -1997,7 +1997,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         match find_matching_package(
                             locked_pixi_records,
                             &virtual_packages,
-                            MatchSpec::from_nameless(spec, Some(name.into())),
+                            MatchSpec::from_nameless(spec, name.into()),
                             source,
                         )? {
                             Some(pkg) => pkg,
@@ -2163,19 +2163,15 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         ),
                     };
 
-                    if let Some((source, package_name)) = record
-                        .as_source()
-                        .and_then(|record| Some((record, name.as_ref()?)))
-                        .and_then(|(record, package_name_matcher)| {
-                            let package_name = package_name_matcher
-                                .as_exact()
-                                .expect("depends can only contain exact package names");
-                            Some((
-                                record.sources.get(package_name.as_normalized())?,
-                                package_name,
-                            ))
-                        })
-                    {
+                    if let Some((source, package_name)) = record.as_source().and_then(|record| {
+                        let package_name = name
+                            .as_exact()
+                            .expect("depends can only contain exact package names");
+                        Some((
+                            record.sources.get(package_name.as_normalized())?,
+                            package_name,
+                        ))
+                    }) {
                         let anchored_location = anchor.resolve(source.clone());
                         let source_spec = SourceSpec::new(anchored_location, spec);
                         conda_queue.push(Dependency::CondaSource(
@@ -2387,9 +2383,9 @@ fn find_matching_package(
     spec: MatchSpec,
     source: Cow<str>,
 ) -> Result<Option<CondaPackageIdx>, Box<PlatformUnsat>> {
-    let found_package = match &spec.name {
+    let found_package = match spec.name.as_exact() {
         None => {
-            // No name means we have to find any package that matches the spec.
+            // No exact name means we have to find any package that matches the spec.
             match locked_pixi_records
                 .records
                 .iter()
@@ -2405,10 +2401,7 @@ fn find_matching_package(
                 Some(idx) => idx,
             }
         }
-        Some(name_matcher) => {
-            let name = name_matcher
-                .as_exact()
-                .expect("depends can only contain exact package names");
+        Some(name) => {
             match locked_pixi_records
                 .index_by_name(name)
                 .map(|idx| (idx, &locked_pixi_records.records[idx]))
@@ -2487,7 +2480,7 @@ fn find_matching_source_package(
     let match_spec = source_spec.to_nameless_match_spec();
     if !match_spec.matches(package) {
         return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
-            Box::new(MatchSpec::from_nameless(match_spec, Some(name.into()))),
+            Box::new(MatchSpec::from_nameless(match_spec, name.into())),
             source.into_owned(),
         )));
     }
@@ -2501,9 +2494,7 @@ trait MatchesMatchspec {
 
 impl MatchesMatchspec for GenericVirtualPackage {
     fn matches(&self, spec: &MatchSpec) -> bool {
-        if let Some(name) = &spec.name
-            && !name.matches(&self.name)
-        {
+        if !spec.name.matches(&self.name) {
             return false;
         }
 

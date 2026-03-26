@@ -109,6 +109,7 @@ nav:
       - Installation: installation.md
       - First Workspace: first_workspace.md
       - Basic Usage: getting_started.md
+      - The Conda Ecosystem: conda_ecosystem.md
   - Tutorials:
       - Python:
           - Basic Usage: python/tutorial.md
@@ -117,6 +118,7 @@ nav:
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
       - Switching From...:
+          - uv: switching_from/uv.md
           - Poetry: switching_from/poetry.md
           - Conda/Mamba: switching_from/conda.md
       - Multi Environment: tutorials/multi_environment.md

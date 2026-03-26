@@ -187,7 +187,8 @@ impl GlobalSpecs {
                 .map(|spec_str| {
                     let name = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?
                         .name
-                        .and_then(|matcher| matcher.as_exact().cloned())
+                        .as_exact()
+                        .cloned()
                         .ok_or(GlobalSpecsConversionError::NameRequired)?;
                     Ok(pixi_global::project::GlobalSpec::new(
                         name,
