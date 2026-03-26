@@ -77,6 +77,12 @@ fn trampoline() -> miette::Result<()> {
         .into_diagnostic()
         .wrap_err("Couldn't get the `env::current_exe`")?;
 
+    // Resolve symlinks so that config lookup works even when the trampoline is
+    // invoked via a symlink from a different directory (e.g. on macOS,
+    // `current_exe()` returns the symlink path rather than the target).
+    // Hardlinks are unaffected since they are not symlinks.
+    let current_exe = current_exe.canonicalize().unwrap_or(current_exe);
+
     // ignore any ctrl-c signals
     ctrlc::set_handler(move || {})
         .into_diagnostic()
