@@ -446,7 +446,7 @@ impl From<CollectSourceMetadataError> for SolvePixiEnvironmentError {
     fn from(err: CollectSourceMetadataError) -> Self {
         match err {
             CollectSourceMetadataError::SourceMetadataError {
-                error: SourceMetadataError::Cycle(cycle),
+                error: SourceMetadataError::SourceRecord(crate::SourceRecordError::Cycle(cycle)),
                 ..
             } => SolvePixiEnvironmentError::Cycle(cycle),
             _ => SolvePixiEnvironmentError::CollectSourceMetadataError(err),

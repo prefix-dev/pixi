@@ -105,7 +105,10 @@ impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKe
         let source_dir = self.source.cache_unique_key();
         CacheKeyString::new(format!(
             "{source_dir}/{}-{}",
-            self.build_environment.host_platform,
+            self.build_environment
+                .host_platform
+                .to_string()
+                .replace('-', "_"),
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
         ))
     }

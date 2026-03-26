@@ -16,7 +16,7 @@ use thiserror::Error;
 
 use crate::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
-    PackageNotProvidedError, SourceCheckoutError, SourceMetadataSpec,
+    PackageNotProvidedError, SourceCheckoutError, SourceMetadataSpec, SourceRecordError,
     executor::CancellationAwareFutures,
     source_metadata::{CycleEnvironment, SourceMetadata, SourceMetadataError},
 };
@@ -212,7 +212,9 @@ impl SourceMetadataCollector {
             Err(CommandDispatcherError::Cancelled) => {
                 return Err(CommandDispatcherError::Cancelled);
             }
-            Err(CommandDispatcherError::Failed(SourceMetadataError::Cycle(mut cycle))) => {
+            Err(CommandDispatcherError::Failed(SourceMetadataError::SourceRecord(
+                SourceRecordError::Cycle(mut cycle),
+            ))) => {
                 // Push the packages that led up to this cycle onto the cycle stack.
                 cycle
                     .stack
@@ -220,7 +222,7 @@ impl SourceMetadataCollector {
                 return Err(CommandDispatcherError::Failed(
                     CollectSourceMetadataError::SourceMetadataError {
                         name,
-                        error: SourceMetadataError::Cycle(cycle),
+                        error: SourceMetadataError::SourceRecord(SourceRecordError::Cycle(cycle)),
                     },
                 ));
             }

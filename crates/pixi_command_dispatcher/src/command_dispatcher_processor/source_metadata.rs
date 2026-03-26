@@ -1,105 +1,66 @@
-use std::{collections::hash_map::Entry, sync::Arc};
+use std::sync::Arc;
 
 use futures::FutureExt;
-use tokio_util::sync::CancellationToken;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
-use crate::source_metadata::SourceMetadataSpecCacheKey;
 use crate::{
     CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
-    source_metadata::Cycle,
 };
 
 impl CommandDispatcherProcessor {
-    /// Constructs a new [`SourceBuildId`] for the given `task`.
-    fn gen_source_metadata_id(
-        &mut self,
-        task: &SourceMetadataSpecCacheKey,
-        parent: Option<CommandDispatcherContext>,
-    ) -> SourceMetadataId {
-        let id = SourceMetadataId(self.source_metadata_ids.len());
-        self.source_metadata_ids.insert(task.clone(), id);
-        if let Some(parent) = parent {
-            self.parent_contexts.insert(id.into(), parent);
-        }
-        id
-    }
-
     /// Called when a [`crate::command_dispatcher::SourceMetadataTask`]
     /// task was received.
+    ///
+    /// `SourceMetadata` is not deduplicated at this level. Its underlying
+    /// work fans out to deduplicated `SourceRecord` tasks.
     pub(crate) fn on_source_metadata(&mut self, task: SourceMetadataTask) {
         if self.is_parent_cancelled(task.parent) {
             return;
         }
 
-        // Construct an in-memory cache key for the spec.
-        let cache_key = SourceMetadataSpecCacheKey::new(&task.spec);
+        // Generate a unique id for this task (no deduplication).
+        let source_metadata_id = SourceMetadataId(self.source_metadata_id_counter);
+        self.source_metadata_id_counter += 1;
 
-        // Lookup the id of the source metadata to avoid deduplication.
-        let source_metadata_id = {
-            match self.source_metadata_ids.get(&cache_key) {
-                Some(id) => {
-                    // We already have a pending task for this source metadata. Let's make sure that
-                    // we are not trying to resolve the same source metadata in a cycle.
-                    if self.contains_cycle(*id, task.parent) {
-                        let _ = task
-                            .tx
-                            .send(Err(SourceMetadataError::Cycle(Cycle::default())));
-                        return;
-                    }
-
-                    *id
-                }
-                None => self.gen_source_metadata_id(&cache_key, task.parent),
-            }
-        };
-
-        match self.source_metadata.entry(source_metadata_id) {
-            Entry::Occupied(mut entry) => match entry.get_mut() {
-                PendingDeduplicatingTask::Pending(pending, _) => {
-                    pending.push(task.tx);
-                }
-                PendingDeduplicatingTask::Completed(result, _) => {
-                    let _ = task.tx.send(result.clone());
-                }
-            },
-            Entry::Vacant(entry) => {
-                entry.insert(PendingDeduplicatingTask::Pending(
-                    vec![task.tx],
-                    task.parent,
-                ));
-
-                // Notify the reporter that a new solve has been queued and started.
-                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_source_metadata_reporter)
-                    .map(|reporter| reporter.on_queued(parent_context, &task.spec));
-
-                if let Some(reporter_id) = reporter_id {
-                    self.source_metadata_reporters
-                        .insert(source_metadata_id, reporter_id);
-                }
-
-                if let Some((reporter, reporter_id)) = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_source_metadata_reporter)
-                    .zip(reporter_id)
-                {
-                    reporter.on_started(reporter_id)
-                }
-
-                self.queue_source_metadata_task(
-                    source_metadata_id,
-                    task.spec,
-                    task.cancellation_token,
-                    task.parent,
-                );
-            }
+        if let Some(parent) = task.parent {
+            self.parent_contexts
+                .insert(source_metadata_id.into(), parent);
         }
+
+        self.source_metadata.insert(
+            source_metadata_id,
+            PendingDeduplicatingTask::Pending(vec![task.tx], task.parent),
+        );
+
+        // Notify the reporter.
+        let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
+        let reporter_id = self
+            .reporter
+            .as_deref_mut()
+            .and_then(Reporter::as_source_metadata_reporter)
+            .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+
+        if let Some(reporter_id) = reporter_id {
+            self.source_metadata_reporters
+                .insert(source_metadata_id, reporter_id);
+        }
+
+        if let Some((reporter, reporter_id)) = self
+            .reporter
+            .as_deref_mut()
+            .and_then(Reporter::as_source_metadata_reporter)
+            .zip(reporter_id)
+        {
+            reporter.on_started(reporter_id)
+        }
+
+        self.queue_source_metadata_task(
+            source_metadata_id,
+            task.spec,
+            task.cancellation_token,
+            task.parent,
+        );
     }
 
     /// Queues a source metadata task to be executed.
@@ -107,17 +68,11 @@ impl CommandDispatcherProcessor {
         &mut self,
         source_metadata_id: SourceMetadataId,
         spec: SourceMetadataSpec,
-        cancellation_token: CancellationToken,
+        cancellation_token: tokio_util::sync::CancellationToken,
         parent: Option<CommandDispatcherContext>,
     ) {
         let dispatcher_context = CommandDispatcherContext::SourceMetadata(source_metadata_id);
         let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
-
-        let reporter_context = self.reporter_context(dispatcher_context);
-        let run_exports_reporter = self
-            .reporter
-            .as_mut()
-            .and_then(|reporter| reporter.create_run_exports_reporter(reporter_context));
 
         // Create a child cancellation token linked to parent's token (if any).
         let cancellation_token = self.get_child_cancellation_token(parent, cancellation_token);
@@ -127,7 +82,7 @@ impl CommandDispatcherProcessor {
 
         self.pending_futures.push(
             cancellation_token
-                .run_until_cancelled_owned(spec.request(dispatcher, run_exports_reporter))
+                .run_until_cancelled_owned(spec.request(dispatcher))
                 .map(move |result| {
                     TaskResult::SourceMetadata(
                         source_metadata_id,
@@ -144,9 +99,6 @@ impl CommandDispatcherProcessor {
 
     /// Called when a [`super::TaskResult::SourceMetadata`] task was
     /// received.
-    ///
-    /// This function will relay the result of the task back to the
-    /// [`super::CommandDispatcher`] that issues it.
     pub(crate) fn on_source_metadata_result(
         &mut self,
         id: SourceMetadataId,
@@ -171,9 +123,6 @@ impl CommandDispatcherProcessor {
             .expect("cannot find pending task")
             .on_pending_result(result)
         {
-            // Task was cancelled. Remove the task entry so future requests
-            // re-trigger it instead of hitting a stale cancellation.
-            // Keep the spec-to-ID mapping so that ID generation remains stable.
             self.source_metadata.remove(&id);
         }
     }
