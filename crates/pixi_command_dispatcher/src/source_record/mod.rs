@@ -80,6 +80,17 @@ pub struct ResolvedSourceRecord {
     pub record: SourceRecord,
 }
 
+enum CacheFreshness {
+    /// The cache entry is missing
+    Missing,
+
+    /// The backend metadata that this was computed from is not the same,
+    MismatchedBackendMetadata(CacheEntry<SourceRecordCache>),
+
+    /// The cache entry is fresh
+    Fresh(CacheEntry<SourceRecordCache>),
+}
+
 impl SourceRecordSpec {
     #[instrument(
         skip_all,
@@ -110,74 +121,106 @@ impl SourceRecordSpec {
             self.variants,
         );
 
-        // Get the skip_cache flag from the build backend metadata
-        let skip_read_cache = build_backend_metadata.skip_cache;
+        // Skip the cache entirely when exclude_newer is not set, because
+        // without a fixed timestamp the resolved dependencies are
+        // non-deterministic.
+        // Check the cache. The stale entry is kept around so we can
+        // compare the record and reuse the revision if nothing changed.
+        let stale_cached_entry = if let Some(exclude_newer) = self.exclude_newer
+            && !build_backend_metadata.skip_cache
+        {
+            let cache_key: CacheKey<SourceRecordCache> = SourceRecordCacheKey {
+                package: self.package.clone(),
+                variants: self.variants.clone(),
+                channel_urls: self.backend_metadata.channels.clone(),
+                build_environment: self.backend_metadata.build_environment.clone(),
+                enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+                source: build_backend_metadata.source.clone().into(),
+                timestamp: exclude_newer,
+            };
+            let cached_metadata = command_dispatcher
+                .source_record_cache()
+                .read(&cache_key)
+                .await
+                .map_err(SourceRecordError::Cache)
+                .map_err(CommandDispatcherError::Failed)?;
 
-        let cache_key: CacheKey<SourceRecordCache> = SourceRecordCacheKey {
-            package: self.package.clone(),
-            variants: self.variants.clone(),
-            channel_urls: self.backend_metadata.channels.clone(),
-            build_environment: self.backend_metadata.build_environment.clone(),
-            enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
-            source: build_backend_metadata.source.clone().into(),
-            exclude_newer: self.exclude_newer,
-        };
-        let cache_read_result = command_dispatcher
-            .source_record_cache()
-            .read(&cache_key)
-            .await
-            .map_err(SourceRecordError::Cache)
-            .map_err(CommandDispatcherError::Failed)?;
-
-        let (cached_metadata, cache_version) = match cache_read_result {
-            Some((metadata, version)) => (Some(metadata), version),
-            // Start at cache version 0 if no cache exists
-            None => (None, 0),
-        };
-
-        if !skip_read_cache
-            && let Some(cached_metadata) = Self::verify_cache_freshness(
+            match Self::verify_cache_freshness(
                 cached_metadata,
                 &build_backend_metadata.metadata.revision,
             )
             .await?
-        {
-            tracing::debug!("Using cached source record");
+            {
+                CacheFreshness::Fresh(entry) => {
+                    tracing::debug!("Using cached source record");
+                    return Ok(ResolvedSourceRecord {
+                        source: build_backend_metadata.source.clone(),
+                        record: Self::amend_cached_source_record(
+                            &build_backend_metadata.source,
+                            entry.record,
+                        ),
+                    });
+                }
+                CacheFreshness::MismatchedBackendMetadata(entry) => {
+                    tracing::info!(
+                        "Cached source record is stale due to backend metadata change, will recompute"
+                    );
+                    Some(entry)
+                }
+                CacheFreshness::Missing => {
+                    tracing::debug!("No cache entry found for source record");
+                    None
+                }
+            }
+        } else {
+            None
+        };
 
-            return Ok(ResolvedSourceRecord {
-                source: build_backend_metadata.source.clone(),
-                record: Self::amend_cached_source_record(
-                    &build_backend_metadata.source,
-                    cached_metadata.record,
-                ),
-            });
+        // Find the outputs with the matching name
+        let outputs_matching_name: Vec<_> = build_backend_metadata
+            .metadata
+            .outputs
+            .iter()
+            .filter(|o| o.metadata.name == self.package)
+            .collect();
+        if outputs_matching_name.is_empty() {
+            let available_names = build_backend_metadata
+                .metadata
+                .outputs
+                .iter()
+                .map(|output| output.metadata.name.clone());
+            return Err(CommandDispatcherError::Failed(
+                PackageNotProvidedError::new(
+                    self.package.clone(),
+                    build_backend_metadata.source.manifest_source().clone(),
+                    available_names,
+                )
+                .into(),
+            ));
         }
 
-        // Find the matching output by name + variants
+        // Find the matching output by variants
         let selector = VariantSelector::new(self.variants.clone());
         let output = selector
-            .find(
-                build_backend_metadata
-                    .metadata
-                    .outputs
-                    .iter()
-                    .filter(|o| o.metadata.name == self.package),
-                |o| &o.metadata.variant,
-            )
+            .find(&outputs_matching_name, |o| &o.metadata.variant)
             .ok_or_else(|| {
-                let available_names = build_backend_metadata
-                    .metadata
-                    .outputs
+                let available = outputs_matching_name
                     .iter()
-                    .map(|output| output.metadata.name.clone());
-                CommandDispatcherError::Failed(
-                    PackageNotProvidedError::new(
-                        self.package.clone(),
-                        build_backend_metadata.source.manifest_source().clone(),
-                        available_names,
-                    )
-                    .into(),
-                )
+                    .map(|o| {
+                        let variant_str = o
+                            .metadata
+                            .variant
+                            .iter()
+                            .map(|(k, v)| format!("{k}={v}"))
+                            .join(", ");
+                        format!("{}[{variant_str}]", o.metadata.name.as_source())
+                    })
+                    .join(", ");
+                CommandDispatcherError::Failed(SourceRecordError::NoMatchingVariant {
+                    package: self.package.as_source().to_string(),
+                    manifest_path: build_backend_metadata.source.manifest_source().to_string(),
+                    available,
+                })
             })?;
 
         let record = self
@@ -189,31 +232,89 @@ impl SourceRecordSpec {
             )
             .await?;
 
-        let cached_entry = SourceRecordCacheEntry {
-            revision: CacheRevision::new(),
-            cache_version,
-            record: record.clone(),
-            build_backend: (
-                build_backend_metadata.cache_key.clone(),
-                build_backend_metadata.metadata.revision.clone(),
-            ),
-        };
+        // Write back to cache using the record's resolved timestamp as key.
+        if !build_backend_metadata.skip_cache {
+            let write_cache_key: CacheKey<SourceRecordCache> = SourceRecordCacheKey {
+                package: self.package.clone(),
+                variants: self.variants.clone(),
+                channel_urls: self.backend_metadata.channels.clone(),
+                build_environment: self.backend_metadata.build_environment.clone(),
+                enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+                source: build_backend_metadata.source.clone().into(),
+                timestamp: record.timestamp,
+            };
 
-        // Try to store the metadata in the cache with version checking
-        match command_dispatcher
-            .source_record_cache()
-            .try_write(&cache_key, cached_entry, cache_version)
-            .await
-            .map_err(SourceRecordError::Cache)
-            .map_err(CommandDispatcherError::Failed)?
-        {
-            source_record_cache::WriteResult::Written => {
-                tracing::trace!("Cache updated successfully");
-            }
-            source_record_cache::WriteResult::Conflict(_) => {
-                tracing::warn!(
-                    "Cache was updated by another process during computation (version conflict), using our computed result"
-                );
+            // If we previously did not read the right cache entry
+            let (is_stale, cached_entry) = if Some(record.timestamp) != self.exclude_newer {
+                let prev_cached_entry = command_dispatcher
+                    .source_record_cache()
+                    .read(&write_cache_key)
+                    .await
+                    .map_err(SourceRecordError::Cache)
+                    .map_err(CommandDispatcherError::Failed)?;
+
+                match Self::verify_cache_freshness(
+                    prev_cached_entry,
+                    &build_backend_metadata.metadata.revision,
+                )
+                .await?
+                {
+                    CacheFreshness::Fresh(prev) => (false, Some(prev)),
+                    CacheFreshness::MismatchedBackendMetadata(prev) => (true, Some(prev)),
+                    CacheFreshness::Missing => (true, None),
+                }
+            } else {
+                (true, stale_cached_entry)
+            };
+
+            // Reuse the previous revision if the record content hasn't
+            // changed. This keeps downstream caches valid when inputs
+            // change but the resolved output stays the same.
+            let cache_version_metadata = match (is_stale, cached_entry) {
+                (true, Some(prev)) if prev.record == record => {
+                    // Entry is stale, but the record is up-to-date, keep the revision
+                    Some((Some(prev.cache_version), prev.revision))
+                }
+                (false, Some(prev)) if prev.record == record => {
+                    // Entry is not stale, and the record is up-to-date, dont write.
+                    None
+                }
+                (_, Some(prev)) => {
+                    // Record doesnt match, write with a new revision
+                    Some((Some(prev.cache_version), CacheRevision::new()))
+                }
+                (_, None) => Some((None, CacheRevision::new())),
+            };
+
+            if let Some((cache_revision, content_revision)) = cache_version_metadata {
+                let cached_entry = SourceRecordCacheEntry {
+                    revision: content_revision,
+                    cache_version: cache_revision.map_or(0, |version| version + 1),
+                    record: record.clone(),
+                    build_backend: (
+                        build_backend_metadata.cache_key.clone(),
+                        build_backend_metadata.metadata.revision.clone(),
+                    ),
+                };
+
+                let expected_cache_version = cache_revision.unwrap_or(0);
+                match command_dispatcher
+                    .source_record_cache()
+                    .try_write(&write_cache_key, cached_entry, expected_cache_version)
+                    .await
+                    .map_err(SourceRecordError::Cache)
+                    .map_err(CommandDispatcherError::Failed)?
+                {
+                    source_record_cache::WriteResult::Written => {
+                        tracing::trace!("Cache updated successfully");
+                    }
+                    source_record_cache::WriteResult::Conflict(other) => {
+                        let other_cache_version = other.cache_version;
+                        tracing::warn!(
+                            "Cache was updated by another process during computation (version conflict {other_cache_version} != {expected_cache_version}), using our computed result"
+                        );
+                    }
+                }
             }
         }
 
@@ -248,22 +349,27 @@ impl SourceRecordSpec {
         }
     }
 
+    /// Verifies if the cached source record is still fresh.
+    ///
+    /// Returns:
+    /// - `Ok(Ok(entry))` if the cache is fresh and can be used as-is.
+    /// - `Ok(Err(Some(entry)))` if the cache is stale but the entry is
+    ///   returned for comparison (to reuse the revision if the record
+    ///   content hasn't changed).
+    /// - `Ok(Err(None))` if no cache entry exists.
     async fn verify_cache_freshness(
         cached_metadata: Option<CacheEntry<SourceRecordCache>>,
         current_build_backend_revision: &CacheRevision<BuildBackendMetadataCache>,
-    ) -> Result<Option<CacheEntry<SourceRecordCache>>, CommandDispatcherError<SourceRecordError>>
-    {
+    ) -> Result<CacheFreshness, CommandDispatcherError<SourceRecordError>> {
         let Some(cached_metadata) = cached_metadata else {
-            tracing::debug!("no cached metadata passed.");
-            return Ok(None);
+            return Ok(CacheFreshness::Missing);
         };
 
         if cached_metadata.build_backend.1 != *current_build_backend_revision {
-            tracing::info!("Cached metadata is stale, skipping cache");
-            return Ok(None);
+            return Ok(CacheFreshness::MismatchedBackendMetadata(cached_metadata));
         }
 
-        Ok(Some(cached_metadata))
+        Ok(CacheFreshness::Fresh(cached_metadata))
     }
 
     async fn resolve_output(
@@ -691,6 +797,15 @@ pub enum SourceRecordError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageNotProvided(#[from] PackageNotProvidedError),
+
+    #[error(
+        "no output with matching variants found for package '{package}' at '{manifest_path}', available outputs: {available}"
+    )]
+    NoMatchingVariant {
+        package: String,
+        manifest_path: String,
+        available: String,
+    },
 }
 
 impl From<SpecConversionError> for SourceRecordError {

@@ -278,7 +278,7 @@ impl VariantSelector {
             let extra = item_variants.len() - self.variants.len();
             if best
                 .as_ref()
-                .map_or(true, |(_, best_extra)| extra < *best_extra)
+                .is_none_or(|(_, best_extra)| extra < *best_extra)
             {
                 best = Some((item, extra));
                 if extra == 0 {
