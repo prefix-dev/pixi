@@ -1306,6 +1306,8 @@ dependencies:
         (["upgrade"], [], "pixi upgrade"),
         # Pixi build (can lock its source)
         (["build"], [], "pixi build"),
+        # Pixi publish (builds and uploads)
+        (["publish", "--to", "https://prefix.dev/test-channel"], [], "pixi publish"),
     ]
     # This command needs to stay last so we always have something that requires a re-solve
     # Dont move this!
@@ -1329,6 +1331,21 @@ dependencies:
             # Special case: build uses --path instead of --manifest-path
             verify_cli_command(
                 [pixi, "build", "--path", manifest_path, "--locked", "--no-install"],
+            )
+        elif command_name == "pixi publish":
+            # Special case: publish uses --path instead of --manifest-path
+            verify_cli_command(
+                [
+                    pixi,
+                    "publish",
+                    "--to",
+                    "https://prefix.dev/test-channel",
+                    "--path",
+                    manifest_path,
+                    "--frozen",
+                    "--no-install",
+                ],
+                expected_exit_code=ExitCode.FAILURE,
             )
         else:
             verify_cli_command([pixi, *command_parts, *frozen_no_install_flags, *additional_args])
