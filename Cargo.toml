@@ -172,7 +172,7 @@ text_trees = "0.1.2"
 thiserror = "2.0.12"
 tokio = "1.43.0"
 tokio-util = "0.7.13"
-toml = "0.9.8"
+toml = "1.0.0"
 toml-span = "0.7.0"
 toml_edit = "0.23.0"
 tracing = "0.1.41"
@@ -214,7 +214,7 @@ uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
 which = "8.0.0"
 xxhash-rust = "0.8.15"
-zip = { version = "2.4.2", default-features = false }
+zip = { version = "8.0.0", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
 
 # Rattler crates
@@ -226,6 +226,9 @@ rattler_conda_types = { version = "0.44.0", default-features = false, features =
   "rayon",
 ] }
 rattler_digest = { version = "1.2.2", default-features = false }
+rattler_index = { version = "0.27.17", default-features = false, features = [
+  "s3",
+] }
 rattler_lock = { version = "0.27.0", default-features = false }
 rattler_menuinst = { version = "0.2.49", default-features = false }
 rattler_networking = { version = "0.26.2", default-features = false, features = [
@@ -234,6 +237,7 @@ rattler_networking = { version = "0.26.2", default-features = false, features = 
 ] }
 rattler_package_streaming = { version = "0.24.2", default-features = false }
 rattler_repodata_gateway = { version = "0.27.0", default-features = false }
+rattler_s3 = { version = "0.1.26", default-features = false }
 rattler_shell = { version = "0.26.2", default-features = false }
 rattler_solve = { version = "5.0.0", default-features = false }
 rattler_upload = { version = "0.5.0", default-features = false, features = [

@@ -25,7 +25,7 @@ This is useful if you need a specific version of a library that is not compatibl
 ### Override a dependency version in a specific feature
 it can also be specified in feature level,
 ```toml
-[features.dev.pypi-options.dependency-overrides]
+[feature.dev.pypi-options.dependency-overrides]
 numpy = ">=2.0.0"
 ```
 This will override the version of `numpy` used by all dependencies in the `dev` feature to be at least `2.0.0`, regardless of what the dependencies specify when the `dev` feature is enabled.
