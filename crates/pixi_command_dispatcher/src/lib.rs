@@ -62,9 +62,11 @@ pub use build::BuildEnvironment;
 pub use build_backend_metadata::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
 };
-pub use cache::build_backend_metadata::{BuildBackendMetadataCache, CachedCondaMetadata};
-pub use cache::common::MetadataCache;
-pub use cache::source_metadata::{CachedSourceMetadata, SourceMetadataCache};
+pub use cache::build_backend_metadata::{
+    BuildBackendMetadataCache, BuildBackendMetadataCacheEntry,
+};
+pub use cache::common::{CacheEntry, CacheRevision, MetadataCache};
+pub use cache::source_metadata::{SourceMetadataCache, SourceMetadataCacheEntry};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
