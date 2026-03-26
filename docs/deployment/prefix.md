@@ -31,9 +31,30 @@ You can upload packages directly through the web interface. Navigate to **Upload
 
 ![Upload a package](../assets/prefix_upload_package.png)
 
-Alternatively, you can upload packages using the `pixi` (or `rattler-build`) CLI tool. To do so locally, you need to generate an API key for your user account (User -> Settings -> Api Keys).
+Alternatively, you can build and publish packages using the `pixi` CLI. To do so locally, you need to generate an API key for your user account (User -> Settings -> Api Keys).
+
+The easiest way is to use `pixi publish`, which builds the package and uploads it in one step:
 
 ```bash
+# Build and publish in one step
+pixi publish --to https://prefix.dev/<channel-name>
+```
+
+You can also build and upload separately for more control:
+
+```bash
+# Build first, then upload the artifact
+pixi build --output-dir ./output
+pixi upload prefix --channel <channel-name> ./output/my-package-1.0.0-h123_0.conda
+```
+
+For authentication, log in with `pixi auth login` or pass an API key:
+
+```bash
+# Store credentials in the keychain
+pixi auth login --token $PREFIX_API_KEY https://prefix.dev
+
+# Or pass the API key directly when uploading
 pixi upload prefix --channel <channel-name> <package-file> --api-key $PREFIX_API_KEY
 ```
 
@@ -93,8 +114,11 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@v0.8.0
 
-      - run: pixi run build
-      - run: pixi upload prefix --channel <channel-name> ./my-pkg*.conda
+      # Build and publish in one step — no stored secrets needed!
+      - run: pixi publish --to https://prefix.dev/<channel-name>
+
+      # Or with sigstore attestation for supply chain security:
+      # - run: pixi publish --to https://prefix.dev/<channel-name> --generate-attestation
 ```
 
-The `rattler-build-action` automatically handles the OIDC token exchange with prefix.dev when trusted publishing is configured for the repository and workflow.
+With trusted publishing configured, pixi automatically handles the OIDC token exchange with prefix.dev — no stored API keys required.
