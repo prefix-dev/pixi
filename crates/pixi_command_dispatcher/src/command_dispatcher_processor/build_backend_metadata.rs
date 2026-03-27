@@ -51,7 +51,9 @@ impl CommandDispatcherProcessor {
 
             if let Some(reporter_id) = reporter_id {
                 self.build_backend_metadata_reporters
-                    .insert(id, reporter_id);
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             // Open a channel to receive build output.
@@ -94,7 +96,9 @@ impl CommandDispatcherProcessor {
 
             if let Some(reporter_id) = reporter_id {
                 self.build_backend_metadata_reporters
-                    .insert(id, reporter_id);
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             // Subscribers don't get the output stream.
@@ -124,16 +128,17 @@ impl CommandDispatcherProcessor {
         self.parent_contexts
             .remove(&CommandDispatcherContext::BuildBackendMetadata(id));
 
-        if let Some((reporter, reporter_id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_build_backend_metadata_reporter)
-            .zip(self.build_backend_metadata_reporters.remove(&id))
-        {
-            let failed = result.is_err();
-            reporter.on_finished(reporter_id, failed);
-        }
-
+        let failed = result.is_err();
         self.build_backend_metadata.on_result(id, result);
+        if let Some(reporter_ids) = self.build_backend_metadata_reporters.remove(&id)
+            && let Some(reporter) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_build_backend_metadata_reporter)
+        {
+            for reporter_id in reporter_ids {
+                reporter.on_finished(reporter_id, failed);
+            }
+        }
     }
 }

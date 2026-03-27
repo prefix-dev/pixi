@@ -49,7 +49,10 @@ impl CommandDispatcherProcessor {
                 .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
 
             if let Some(reporter_id) = reporter_id {
-                self.source_build_reporters.insert(id, reporter_id);
+                self.source_build_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
@@ -59,9 +62,12 @@ impl CommandDispatcherProcessor {
             let mut run_exports_reporter: Option<Arc<dyn RunExportsReporter>> = None;
             if let Some(reporter) = self.reporter.as_mut() {
                 let created = reporter.create_run_exports_reporter(reporter_context);
-                if let Some((source_reporter, reporter_id)) = reporter
-                    .as_source_build_reporter()
-                    .zip(self.source_build_reporters.get(&id).copied())
+                if let Some((source_reporter, reporter_id)) =
+                    reporter.as_source_build_reporter().zip(
+                        self.source_build_reporters
+                            .get(&id)
+                            .and_then(|ids| ids.first().copied()),
+                    )
                 {
                     source_reporter.on_started(reporter_id, Box::new(rx));
                 }
@@ -93,7 +99,10 @@ impl CommandDispatcherProcessor {
                 .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
 
             if let Some(reporter_id) = reporter_id {
-                self.source_build_reporters.insert(id, reporter_id);
+                self.source_build_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             // Subscribers don't get the output stream.
@@ -119,16 +128,17 @@ impl CommandDispatcherProcessor {
         self.parent_contexts
             .remove(&CommandDispatcherContext::SourceBuild(id));
 
-        if let Some((reporter, reporter_id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_source_build_reporter)
-            .zip(self.source_build_reporters.remove(&id))
-        {
-            let failed = result.as_ref().is_err();
-            reporter.on_finished(reporter_id, failed);
-        }
-
+        let failed = result.is_err();
         self.source_build.on_result(id, result);
+        if let Some(reporter_ids) = self.source_build_reporters.remove(&id)
+            && let Some(reporter) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_source_build_reporter)
+        {
+            for reporter_id in reporter_ids {
+                reporter.on_finished(reporter_id, failed);
+            }
+        }
     }
 }

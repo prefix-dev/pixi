@@ -63,7 +63,10 @@ impl CommandDispatcherProcessor {
                 .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
 
             if let Some(reporter_id) = reporter_id {
-                self.source_record_reporters.insert(id, reporter_id);
+                self.source_record_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             if let Some((reporter, reporter_id)) = self
@@ -107,7 +110,10 @@ impl CommandDispatcherProcessor {
                 .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
 
             if let Some(reporter_id) = reporter_id {
-                self.source_record_reporters.insert(id, reporter_id);
+                self.source_record_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             if let Some((reporter, reporter_id)) = self
@@ -132,15 +138,16 @@ impl CommandDispatcherProcessor {
         self.parent_contexts
             .remove(&CommandDispatcherContext::SourceRecord(id));
 
-        if let Some((reporter, reporter_id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_source_record_reporter)
-            .zip(self.source_record_reporters.remove(&id))
-        {
-            reporter.on_finished(reporter_id);
-        }
-
         self.source_record.on_result(id, result);
+        if let Some(reporter_ids) = self.source_record_reporters.remove(&id)
+            && let Some(reporter) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_source_record_reporter)
+        {
+            for reporter_id in reporter_ids {
+                reporter.on_finished(reporter_id);
+            }
+        }
     }
 }
