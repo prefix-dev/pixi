@@ -149,6 +149,16 @@ extra-input-globs = ["*.yaml", "*.md", "*.sh", "patches-linux/**/*"]
 # Result for linux-64: ["*.yaml", "*.md", "*.sh", "patches-linux/**/*"]
 ```
 
+## Version specification
+By default, the version needs to be specified in `recipe.yaml` and can be a duplication of the version specified in `pixi.toml`.
+
+To avoid this duplication, you can use the `${{ PIXI_PACKAGE_VERSION }}` Jinja2 variable in your recipe — it is automatically set to the version defined in `pixi.toml`.
+
+```yaml title="recipe.yaml"
+package:
+  name: my-package
+  version: ${{ PIXI_PACKAGE_VERSION }}
+
 ## Build Process
 
 The rattler-build backend follows this build process:
