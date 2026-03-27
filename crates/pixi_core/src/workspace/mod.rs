@@ -67,6 +67,7 @@ pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
+static CUSTOM_WORKSPACE_CACHE_DIR_WARN: OnceCell<()> = OnceCell::new();
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -381,7 +382,11 @@ impl Workspace {
                 }
 
                 #[cfg(windows)]
-                write_warning_file(&default_envs_dir, &detached_environments_path);
+                write_warning_file(
+                    &default_envs_dir,
+                    &detached_environments_path,
+                    consts::ENVIRONMENTS_DIR,
+                );
             });
 
             return detached_environments_path;
@@ -409,6 +414,72 @@ impl Workspace {
             return detached_environments_path.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR);
         }
         self.default_solve_group_environments_dir()
+    }
+
+    /// Returns the default workspace build cache directory, without
+    /// interacting with config.
+    pub fn default_workspace_cache_dir(&self) -> PathBuf {
+        self.pixi_dir().join(consts::WORKSPACE_CACHE_DIR)
+    }
+
+    /// Returns the workspace build cache directory.
+    ///
+    /// When `detached-environments` is enabled this path is moved outside the
+    /// workspace and `.pixi/build` is symlinked to the detached location when
+    /// possible.
+    pub fn workspace_cache_dir(&self) -> PathBuf {
+        let default_workspace_cache_dir = self.default_workspace_cache_dir();
+
+        // Early out if detached-environments is not set.
+        if self.config().detached_environments().is_false() {
+            return default_workspace_cache_dir;
+        }
+
+        if let Some(detached_environments_path) = self.detached_environments_path() {
+            let detached_workspace_cache_dir =
+                detached_environments_path.join(consts::WORKSPACE_CACHE_DIR);
+
+            let _ = CUSTOM_WORKSPACE_CACHE_DIR_WARN.get_or_init(|| {
+                if !default_workspace_cache_dir.is_symlink() && default_workspace_cache_dir.exists()
+                {
+                    tracing::warn!(
+                        "Build cache found in '{}', this will be ignored and pixi-build artifacts will be stored in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
+                        default_workspace_cache_dir.display(),
+                        detached_workspace_cache_dir.display(),
+                        format!("{}/{}", consts::PIXI_DIR, consts::WORKSPACE_CACHE_DIR),
+                        if cfg!(windows) { "" } else { " as a symlink can be made, please re-run after removal." }
+                    );
+                } else {
+                    #[cfg(not(windows))]
+                    create_symlink(&detached_workspace_cache_dir, &default_workspace_cache_dir);
+                }
+
+                #[cfg(windows)]
+                write_warning_file(
+                    &default_workspace_cache_dir,
+                    &detached_workspace_cache_dir,
+                    consts::WORKSPACE_CACHE_DIR,
+                );
+            });
+
+            return detached_workspace_cache_dir;
+        }
+
+        tracing::debug!(
+            "Using default root directory: `{}` as workspace cache directory.",
+            default_workspace_cache_dir.display()
+        );
+
+        default_workspace_cache_dir
+    }
+
+    /// Returns the workspace cache root directory that should be passed to
+    /// `CacheDirs::with_workspace`.
+    pub fn workspace_cache_root_dir(&self) -> PathBuf {
+        self.workspace_cache_dir()
+            .parent()
+            .expect("workspace cache dir should have parent")
+            .to_path_buf()
     }
 
     /// Returns the path to the lock file of the project
@@ -567,8 +638,8 @@ impl Workspace {
         let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
             .expect("cache dir is not absolute")
             .into_assume_dir();
-        let workspace_dir = AbsPathBuf::new(self.pixi_dir())
-            .expect("pixi dir is not absolute")
+        let workspace_dir = AbsPathBuf::new(self.workspace_cache_root_dir())
+            .expect("workspace cache root dir is not absolute")
             .into_assume_dir();
         let cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
 
@@ -891,8 +962,8 @@ fn create_symlink(target_dir: &Path, symlink_dir: &Path) {
 /// Write a warning file to the default pixi directory to inform the user that
 /// symlinks are not supported on this platform (Windows).
 #[cfg(windows)]
-fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
-    let warning_file = default_envs_dir.join("README.txt");
+fn write_warning_file(default_dir: &Path, detached_dir: &Path, default_relative_dir: &str) {
+    let warning_file = default_dir.join("README.txt");
     if warning_file.exists() {
         tracing::debug!(
             "Symlink warning file already exists at '{}', skipping writing warning file.",
@@ -901,16 +972,17 @@ fn write_warning_file(default_envs_dir: &PathBuf, envs_dir_name: &Path) {
         return;
     }
     let warning_message = format!(
-        "Environments are installed in a custom detached-environments directory: {}.\n\
-        Symlinks are not supported on this platform so environments will not be reachable from the default ('.pixi/envs') directory.",
-        envs_dir_name.display()
+        "Data is stored in a custom detached-environments directory: {}.\n\
+        Symlinks are not supported on this platform so data will not be reachable from the default ('.pixi/{}') directory.",
+        detached_dir.display(),
+        default_relative_dir
     );
 
     // Create directory if it doesn't exist
-    if let Err(e) = fs_err::create_dir_all(default_envs_dir) {
+    if let Err(e) = fs_err::create_dir_all(default_dir) {
         tracing::error!(
             "Failed to create directory '{}': {}",
-            default_envs_dir.display(),
+            default_dir.display(),
             e
         );
         return;
@@ -1041,6 +1113,112 @@ mod tests {
         )
         .unwrap();
         assert_eq!(workspace.display_name(), "workspace");
+    }
+
+    #[test]
+    fn test_workspace_cache_dir_default_location() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            PROJECT_BOILERPLATE,
+        )
+        .unwrap();
+
+        assert_eq!(
+            workspace.workspace_cache_dir(),
+            workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR)
+        );
+        assert_eq!(workspace.workspace_cache_root_dir(), workspace.pixi_dir());
+    }
+
+    #[test]
+    fn test_workspace_cache_dir_detached_location() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let detached_root = temp_dir.path().join("detached");
+
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            PROJECT_BOILERPLATE,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            detached_environments: Some(pixi_config::DetachedEnvironments::Path(
+                detached_root.clone(),
+            )),
+            ..Default::default()
+        });
+
+        let expected = workspace
+            .detached_environments_path()
+            .expect("detached environments path should be set")
+            .join(consts::WORKSPACE_CACHE_DIR);
+
+        assert_eq!(workspace.workspace_cache_dir(), expected);
+        assert_eq!(
+            workspace.workspace_cache_root_dir(),
+            expected
+                .parent()
+                .expect("workspace cache dir should have parent")
+                .to_path_buf()
+        );
+    }
+
+    #[test]
+    fn test_workspace_cache_dir_detached_existing_default_dir() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let detached_root = temp_dir.path().join("detached");
+
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            PROJECT_BOILERPLATE,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            detached_environments: Some(pixi_config::DetachedEnvironments::Path(detached_root)),
+            ..Default::default()
+        });
+
+        let default_workspace_cache_dir = workspace.default_workspace_cache_dir();
+        fs_err::create_dir_all(&default_workspace_cache_dir).unwrap();
+        let marker_file = default_workspace_cache_dir.join("marker.txt");
+        fs_err::write(&marker_file, "keep").unwrap();
+
+        let expected_detached_cache_dir = workspace
+            .detached_environments_path()
+            .expect("detached environments path should be set")
+            .join(consts::WORKSPACE_CACHE_DIR);
+
+        assert_eq!(workspace.workspace_cache_dir(), expected_detached_cache_dir);
+        assert_eq!(
+            workspace.workspace_cache_root_dir(),
+            expected_detached_cache_dir.parent().unwrap()
+        );
+        assert!(default_workspace_cache_dir.exists());
+        assert!(!default_workspace_cache_dir.is_symlink());
+        assert!(marker_file.exists());
+    }
+
+    #[test]
+    fn test_workspace_cache_root_dir_detached_boolean_true() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            PROJECT_BOILERPLATE,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            detached_environments: Some(pixi_config::DetachedEnvironments::Boolean(true)),
+            ..Default::default()
+        });
+
+        let detached_workspace_root = workspace
+            .detached_environments_path()
+            .expect("detached environments path should be set");
+
+        assert_eq!(
+            workspace.workspace_cache_root_dir(),
+            detached_workspace_root
+        );
     }
 
     fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {

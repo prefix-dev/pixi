@@ -151,22 +151,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
         remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
         remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
-        remove_folder_with_progress(
-            workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR),
-            false,
-        )
-        .await?;
+        if !workspace
+            .workspace_cache_dir()
+            .starts_with(workspace.pixi_dir())
+            && workspace.default_workspace_cache_dir().exists()
+        {
+            remove_folder_with_progress(workspace.default_workspace_cache_dir(), false).await?;
+        }
+        remove_folder_with_progress(workspace.workspace_cache_dir(), false).await?;
         prune_workspace_registry().await?;
     } else {
         if args.activation_cache {
             remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
         }
         if args.build {
-            remove_folder_with_progress(
-                workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR),
-                true,
-            )
-            .await?;
+            if !workspace
+                .workspace_cache_dir()
+                .starts_with(workspace.pixi_dir())
+                && workspace.default_workspace_cache_dir().exists()
+            {
+                remove_folder_with_progress(workspace.default_workspace_cache_dir(), false).await?;
+            }
+            remove_folder_with_progress(workspace.workspace_cache_dir(), true).await?;
             eprintln!(
                 "{}When issues persist, you can remove all build related global cache with: {}",
                 console::style("Hint: ").blue(),
