@@ -3,6 +3,7 @@ They ensure that the dependencies match the operating system and hardware of you
 
 !!! note "Think of it like this:"
     You're defining what "kind of machines" your environment can run on.
+    <!-- no-pyproject -->
     ```toml
     [system-requirements]
     linux  = "4.18"
@@ -63,6 +64,7 @@ __cuda >=12
 The following configurations outline the default system requirements for different operating systems:
 
 === "Linux"
+    <!-- no-pyproject -->
     ```toml
     # Default system requirements for Linux
     [system-requirements]
@@ -73,12 +75,14 @@ The following configurations outline the default system requirements for differe
     Windows currently has no minimal system requirements defined. If your workspace requires specific Windows configurations,
     you should define them accordingly.
 === "osx-64"
+    <!-- no-pyproject -->
     ```toml
     # Default system requirements for macOS
     [system-requirements]
     macos = "13.0"
     ```
 === "osx-arm64"
+    <!-- no-pyproject -->
     ```toml
     # Default system requirements for macOS ARM64
     [system-requirements]
@@ -100,10 +104,17 @@ If you're encountering an error like:
 This indicates that the environment's system requirements are higher than your current system's specifications.
 To resolve this, you can lower the system requirements in your configuration:
 
-```toml
-[system-requirements]
-linux = "4.12.14"
-```
+=== "pixi.toml"
+    ```toml
+    [system-requirements]
+    linux = "4.12.14"
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.system-requirements]
+    linux = "4.12.14"
+    ```
 
 This adjustment informs the dependency resolver to accommodate the older system version.
 
@@ -114,10 +125,17 @@ This ensures that CUDA is recognized and appropriately locked into the lock file
 
 Example Configuration
 
-```toml
-[system-requirements]
-cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
-```
+=== "pixi.toml"
+    ```toml
+    [system-requirements]
+    cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.system-requirements]
+    cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
+    ```
 
 1. Can `system-requirements` enforce a specific CUDA runtime version?
     - No. The `system-requirements` field is used to specify the supported CUDA version based on the host’s NVIDIA driver API.
@@ -126,13 +144,23 @@ Adding this field ensures that packages depending on `__cuda >= {version}` are r
 ### Setting System Requirements environment specific
 This can be set per `feature` in the `the manifest` file.
 
-```toml
-[feature.cuda.system-requirements]
-cuda = "12"
+=== "pixi.toml"
+    ```toml
+    [feature.cuda.system-requirements]
+    cuda = "12"
 
-[environments]
-cuda = ["cuda"]
-```
+    [environments]
+    cuda = ["cuda"]
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.feature.cuda.system-requirements]
+    cuda = "12"
+
+    [tool.pixi.environments]
+    cuda = ["cuda"]
+    ```
 
 ### Available Override Options
 In certain scenarios, you might need to override the system requirements detected on your machine.
@@ -154,3 +182,4 @@ You can override virtual packages by setting the following environment variables
 
 For more detailed information on managing `virtual packages` and overriding system requirements, refer to
 the [Conda Documentation](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
+

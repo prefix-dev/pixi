@@ -19,9 +19,17 @@ In this tutorial we will continue with the result of the [workspace tutorial](wo
 As a reminder, we ended up with a top-level `pixi.toml` containing the workspace and the Python package `python_rich`.
 Our workspace then depended on `python_rich` and `cpp_math`.
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:dependencies"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:dependencies"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/workspace_variants_pixi.toml:dependencies"
+    ```
 
 The file tree looks like this:
 
@@ -43,27 +51,48 @@ The file tree looks like this:
 
 In order to allow multiple Python versions we first have to change the Python version requirement of `cpp_math` from `3.12.*` to `*`.
 
-```toml title="packages/cpp_math/pixi.toml" hl_lines="4"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/packages/cpp_math/pixi.toml:host-dependencies"
-```
+=== "pixi.toml"
+    ```toml title="packages/cpp_math/pixi.toml" hl_lines="4"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/packages/cpp_math/pixi.toml:host-dependencies"
+    ```
+=== "pyproject.toml"
+    ```toml title="packages/cpp_math/pixi.toml" hl_lines="4"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/packages/cpp_math/pixi.toml:host-dependencies"
+    ```
 
 1. Used to be "3.12.*"
 
 Now, we have to specify the Python versions we want to allow.
 We do that in `workspace.build-variants`:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:variants"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:variants"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/workspace_variants_pixi.toml:variants"
+    ```
 
 If we'd run `pixi install` now, we'd leave it up to Pixi whether to use Python 3.11 or 3.12.
 In practice, you'll want to create multiple environments specifying a different dependency version.
 In our case this allows us to test our setup against both Python 3.11 and 3.12.
 
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:environments"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace_variants/pixi.toml:environments"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/workspace_variants_pixi.toml:environments"
+    ```
 
 By running `pixi list` we can see the Python version used in each environment.
 You can also see that the `Build` string of `cpp_math` differ between `py311` and `py312`.
@@ -101,3 +130,4 @@ On top of adding variants inline, they can also be included as files. Check out 
 Thanks for reading! Happy Coding 🚀
 
 Any questions? Feel free to reach out or share this tutorial on [X](https://twitter.com/prefix_dev), [join our Discord](https://discord.gg/kKV8ZxyzY4), send us an [e-mail](mailto:hi@prefix.dev) or follow our [GitHub](https://github.com/prefix-dev).
+

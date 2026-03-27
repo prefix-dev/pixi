@@ -27,9 +27,14 @@ To get started, please recreate the structure of the workspace from the previous
 
 We are now using the `pixi-build-rattler-build` backend instead of the `pixi-build-cmake` backend.
 
-```toml hl_lines="20-21"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/advanced_cpp/pixi.toml"
-```
+=== "pixi.toml"
+    ```toml hl_lines="20-21"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/advanced_cpp/pixi.toml"
+    ```
+=== "pyproject.toml"
+    ```toml hl_lines="20-21"
+    --8<-- "docs/source_files/pyproejct_tomls_advanced_cpp/pixi.toml"
+    ```
 
 ## The `recipe.yaml` file
 
@@ -50,10 +55,16 @@ You can find the reference on the `rattler-build` documentation [web page](https
 
 Now that we've defined a `pixi` task which allows us to check that our package can properly add `1` and `2`:
 
-```toml
-[tasks]
-start = "python -c 'import cpp_math as b; print(b.add(1, 2))'"
-```
+=== "pixi.toml"
+    ```toml
+    [tasks]
+    start = "python -c 'import cpp_math as b; print(b.add(1, 2))'"
+    ```
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.tasks]
+    start = "python -c 'import cpp_math as b; print(b.add(1, 2))'"
+    ```
 
 Executing the tasks works as expected
 

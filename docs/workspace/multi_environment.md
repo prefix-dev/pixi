@@ -50,6 +50,7 @@ libc = "2.33"
 scripts = ["activate.sh"]
 ```
 
+<!-- no-pyproject -->
 ```toml title="Different dependencies per feature"
 [feature.py39.dependencies]
 python = "~=3.9.0"
@@ -59,6 +60,7 @@ python = "~=3.10.0"
 pytest = "*"
 ```
 
+<!-- no-pyproject -->
 ```toml title="Full set of environment modification in one feature"
 [feature.cuda]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
@@ -74,6 +76,7 @@ tasks = { warmup = "python warmup.py" }
 target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
 
+<!-- no-pyproject -->
 ```toml title="Define tasks as defaults of an environment"
 [feature.test.tasks]
 test = "pytest"
@@ -91,6 +94,7 @@ The environment definition should contain the following fields:
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
 
+<!-- no-pyproject -->
 ```toml title="Creating environments from features"
 [environments]
 # implicit: default = ["default"]
@@ -100,6 +104,7 @@ test = ["test"] # implicit: test = ["test", "default"]
 test39 = ["test", "py39"] # implicit: test39 = ["test", "py39", "default"]
 ```
 
+<!-- no-pyproject -->
 ```toml title="Testing a production environment with additional dependencies"
 [environments]
 # Creating a `prod` environment which is the minimal set of dependencies used for production.
@@ -110,6 +115,7 @@ test_prod = {features = ["py39", "test"], solve-group = "prod"}
 # Which makes sure the tested environment has the same version of the dependencies as the production environment.
 ```
 
+<!-- no-pyproject -->
 ```toml title="Creating environments without including the default feature"
 [dependencies]
 python = "*"
@@ -183,28 +189,57 @@ It's possible to define tasks in multiple environments, in this case the user sh
 
 Here is a simple example of a task only manifest:
 
-```toml title="pixi.toml"
-[workspace]
-name = "test_ambiguous_env"
-channels = []
-platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+=== "pixi.toml"
 
-[tasks]
-default = "echo Default"
-ambi = "echo Ambi::Default"
-[feature.test.tasks]
-test = "echo Test"
-ambi = "echo Ambi::Test"
+    ```toml
+    [workspace]
+    name = "test_ambiguous_env"
+    channels = []
+    platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+    
+    [tasks]
+    default = "echo Default"
+    ambi = "echo Ambi::Default"
+    [feature.test.tasks]
+    test = "echo Test"
+    ambi = "echo Ambi::Test"
+    
+    [feature.dev.tasks]
+    dev = "echo Dev"
+    ambi = "echo Ambi::Dev"
+    
+    [environments]
+    default = ["test", "dev"]
+    test = ["test"]
+    dev = ["dev"]
+    ```
 
-[feature.dev.tasks]
-dev = "echo Dev"
-ambi = "echo Ambi::Dev"
+=== "pyproject.toml"
 
-[environments]
-default = ["test", "dev"]
-test = ["test"]
-dev = ["dev"]
-```
+    ```toml
+    [project]
+    name = "test_ambiguous_env"
+    
+    [tool.pixi.workspace]
+    channels = []
+    platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+    
+    [tool.pixi.tasks]
+    default = "echo Default"
+    ambi = "echo Ambi::Default"
+    [tool.pixi.feature.test.tasks]
+    test = "echo Test"
+    ambi = "echo Ambi::Test"
+    
+    [tool.pixi.feature.dev.tasks]
+    dev = "echo Dev"
+    ambi = "echo Ambi::Dev"
+    
+    [tool.pixi.environments]
+    default = ["test", "dev"]
+    test = ["test"]
+    dev = ["dev"]
+    ```
 Trying to run the `ambi` task will prompt the user to select the environment.
 As it is available in all environments.
 
@@ -259,61 +294,123 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     This is currently done by using a matrix in GitHub actions.
     This can be replaced by using multiple environments.
 
-    ```toml title="pixi.toml"
-    [workspace]
-    name = "polarify"
-    # ...
-    channels = ["conda-forge"]
-    platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+    === "pixi.toml"
 
-    [tasks]
-    postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
+        ```toml
+            [workspace]
+            name = "polarify"
+            # ...
+            channels = ["conda-forge"]
+            platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+        
+            [tasks]
+            postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
+        
+            [dependencies]
+            python = ">=3.9"
+            pip = "*"
+            polars = ">=0.14.24,<0.21"
+        
+            [feature.py39.dependencies]
+            python = "3.9.*"
+            [feature.py310.dependencies]
+            python = "3.10.*"
+            [feature.py311.dependencies]
+            python = "3.11.*"
+            [feature.py312.dependencies]
+            python = "3.12.*"
+            [feature.pl017.dependencies]
+            polars = "0.17.*"
+            [feature.pl018.dependencies]
+            polars = "0.18.*"
+            [feature.pl019.dependencies]
+            polars = "0.19.*"
+            [feature.pl020.dependencies]
+            polars = "0.20.*"
+        
+            [feature.test.dependencies]
+            pytest = "*"
+            pytest-md = "*"
+            pytest-emoji = "*"
+            hypothesis = "*"
+            [feature.test.tasks]
+            test = "pytest"
+        
+            [feature.lint.dependencies]
+            pre-commit = "*"
+            [feature.lint.tasks]
+            lint = "pre-commit run --all"
+        
+            [environments]
+            pl017 = ["pl017", "py39", "test"]
+            pl018 = ["pl018", "py39", "test"]
+            pl019 = ["pl019", "py39", "test"]
+            pl020 = ["pl020", "py39", "test"]
+            py39 = ["py39", "test"]
+            py310 = ["py310", "test"]
+            py311 = ["py311", "test"]
+            py312 = ["py312", "test"]
+        ```
 
-    [dependencies]
-    python = ">=3.9"
-    pip = "*"
-    polars = ">=0.14.24,<0.21"
+    === "pyproject.toml"
 
-    [feature.py39.dependencies]
-    python = "3.9.*"
-    [feature.py310.dependencies]
-    python = "3.10.*"
-    [feature.py311.dependencies]
-    python = "3.11.*"
-    [feature.py312.dependencies]
-    python = "3.12.*"
-    [feature.pl017.dependencies]
-    polars = "0.17.*"
-    [feature.pl018.dependencies]
-    polars = "0.18.*"
-    [feature.pl019.dependencies]
-    polars = "0.19.*"
-    [feature.pl020.dependencies]
-    polars = "0.20.*"
-
-    [feature.test.dependencies]
-    pytest = "*"
-    pytest-md = "*"
-    pytest-emoji = "*"
-    hypothesis = "*"
-    [feature.test.tasks]
-    test = "pytest"
-
-    [feature.lint.dependencies]
-    pre-commit = "*"
-    [feature.lint.tasks]
-    lint = "pre-commit run --all"
-
-    [environments]
-    pl017 = ["pl017", "py39", "test"]
-    pl018 = ["pl018", "py39", "test"]
-    pl019 = ["pl019", "py39", "test"]
-    pl020 = ["pl020", "py39", "test"]
-    py39 = ["py39", "test"]
-    py310 = ["py310", "test"]
-    py311 = ["py311", "test"]
-    py312 = ["py312", "test"]
-    ```
+        ```toml
+            [project]
+            name = "polarify"
+        
+            [tool.pixi.workspace]
+            # ...
+            channels = ["conda-forge"]
+            platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+        
+            [tool.pixi.tasks]
+            postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
+        
+            [tool.pixi.dependencies]
+            python = ">=3.9"
+            pip = "*"
+            polars = ">=0.14.24,<0.21"
+        
+            [tool.pixi.feature.py39.dependencies]
+            python = "3.9.*"
+            [tool.pixi.feature.py310.dependencies]
+            python = "3.10.*"
+            [tool.pixi.feature.py311.dependencies]
+            python = "3.11.*"
+            [tool.pixi.feature.py312.dependencies]
+            python = "3.12.*"
+            [tool.pixi.feature.pl017.dependencies]
+            polars = "0.17.*"
+            [tool.pixi.feature.pl018.dependencies]
+            polars = "0.18.*"
+            [tool.pixi.feature.pl019.dependencies]
+            polars = "0.19.*"
+            [tool.pixi.feature.pl020.dependencies]
+            polars = "0.20.*"
+        
+            [tool.pixi.feature.test.dependencies]
+            pytest = "*"
+            pytest-md = "*"
+            pytest-emoji = "*"
+            hypothesis = "*"
+            [tool.pixi.feature.test.tasks]
+            test = "pytest"
+        
+            [tool.pixi.feature.lint.dependencies]
+            pre-commit = "*"
+            [tool.pixi.feature.lint.tasks]
+            lint = "pre-commit run --all"
+        
+            [tool.pixi.environments]
+            pl017 = ["pl017", "py39", "test"]
+            pl018 = ["pl018", "py39", "test"]
+            pl019 = ["pl019", "py39", "test"]
+            pl020 = ["pl020", "py39", "test"]
+            py39 = ["py39", "test"]
+            py310 = ["py310", "test"]
+            py311 = ["py311", "test"]
+            py312 = ["py312", "test"]
+        ```
 
     ```yaml title=".github/workflows/test.yml"
     jobs:
@@ -349,40 +446,81 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     The `test` feature is a set of dependencies and tasks that we want to put on top of the previously solved `prod` environment.
     This is a common use case where we want to test the production environment with additional dependencies.
 
-    ```toml title="pixi.toml"
-    [workspace]
-    name = "my-app"
-    # ...
-    channels = ["conda-forge"]
-    platforms = ["osx-arm64", "linux-64"]
+    === "pixi.toml"
 
-    [tasks]
-    postinstall-e = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
-    postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check ."
-    dev = "uvicorn my_app.app:main --reload"
-    serve = "uvicorn my_app.app:main"
+        ```toml
+            [workspace]
+            name = "my-app"
+            # ...
+            channels = ["conda-forge"]
+            platforms = ["osx-arm64", "linux-64"]
+        
+            [tasks]
+            postinstall-e = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
+            postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check ."
+            dev = "uvicorn my_app.app:main --reload"
+            serve = "uvicorn my_app.app:main"
+        
+            [dependencies]
+            python = ">=3.12"
+            pip = "*"
+            pydantic = ">=2"
+            fastapi = ">=0.105.0"
+            sqlalchemy = ">=2,<3"
+            uvicorn = "*"
+            aiofiles = "*"
+        
+            [feature.test.dependencies]
+            pytest = "*"
+            pytest-md = "*"
+            pytest-asyncio = "*"
+            [feature.test.tasks]
+            test = "pytest --md=report.md"
+        
+            [environments]
+            # both default and prod will have exactly the same dependency versions when they share a dependency
+            default = {features = ["test"], solve-group = "prod-group"}
+            prod = {features = [], solve-group = "prod-group"}
+        ```
 
-    [dependencies]
-    python = ">=3.12"
-    pip = "*"
-    pydantic = ">=2"
-    fastapi = ">=0.105.0"
-    sqlalchemy = ">=2,<3"
-    uvicorn = "*"
-    aiofiles = "*"
+    === "pyproject.toml"
 
-    [feature.test.dependencies]
-    pytest = "*"
-    pytest-md = "*"
-    pytest-asyncio = "*"
-    [feature.test.tasks]
-    test = "pytest --md=report.md"
-
-    [environments]
-    # both default and prod will have exactly the same dependency versions when they share a dependency
-    default = {features = ["test"], solve-group = "prod-group"}
-    prod = {features = [], solve-group = "prod-group"}
-    ```
+        ```toml
+            [project]
+            name = "my-app"
+        
+            [tool.pixi.workspace]
+            # ...
+            channels = ["conda-forge"]
+            platforms = ["osx-arm64", "linux-64"]
+        
+            [tool.pixi.tasks]
+            postinstall-e = "pip install --no-build-isolation --no-deps --disable-pip-version-check -e ."
+            postinstall = "pip install --no-build-isolation --no-deps --disable-pip-version-check ."
+            dev = "uvicorn my_app.app:main --reload"
+            serve = "uvicorn my_app.app:main"
+        
+            [tool.pixi.dependencies]
+            python = ">=3.12"
+            pip = "*"
+            pydantic = ">=2"
+            fastapi = ">=0.105.0"
+            sqlalchemy = ">=2,<3"
+            uvicorn = "*"
+            aiofiles = "*"
+        
+            [tool.pixi.feature.test.dependencies]
+            pytest = "*"
+            pytest-md = "*"
+            pytest-asyncio = "*"
+            [tool.pixi.feature.test.tasks]
+            test = "pytest --md=report.md"
+        
+            [tool.pixi.environments]
+            # both default and prod will have exactly the same dependency versions when they share a dependency
+            default = {features = ["test"], solve-group = "prod-group"}
+            prod = {features = [], solve-group = "prod-group"}
+        ```
     In ci you would run the following commands:
     ```shell
     pixi run postinstall-e && pixi run test
@@ -405,59 +543,119 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
 ??? tip "Multiple machines from one workspace"
     This is an example for an ML workspace that should be executable on a machine that supports `cuda` and `mlx`. It should also be executable on machines that don't support `cuda` or `mlx`, we use the `cpu` feature for this.
 
-    ```toml title="pixi.toml"
-    [workspace]
-    name = "my-ml-workspace"
-    description = "A workspace that does ML stuff"
-    authors = ["Your Name <your.name@gmail.com>"]
-    channels = ["conda-forge", "pytorch"]
-    # All platforms that are supported by the workspace as the features will take the intersection of the platforms defined there.
-    platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+    === "pixi.toml"
 
-    [tasks]
-    train-model = "python train.py"
-    evaluate-model = "python test.py"
+        ```toml
+            [workspace]
+            name = "my-ml-workspace"
+            description = "A workspace that does ML stuff"
+            authors = ["Your Name <your.name@gmail.com>"]
+            channels = ["conda-forge", "pytorch"]
+            # All platforms that are supported by the workspace as the features will take the intersection of the platforms defined there.
+            platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+        
+            [tasks]
+            train-model = "python train.py"
+            evaluate-model = "python test.py"
+        
+            [dependencies]
+            python = "3.11.*"
+            pytorch = {version = ">=2.0.1", channel = "pytorch"}
+            torchvision = {version = ">=0.15", channel = "pytorch"}
+            polars = ">=0.20,<0.21"
+            matplotlib-base = ">=3.8.2,<3.9"
+            ipykernel = ">=6.28.0,<6.29"
+        
+            [feature.cuda]
+            platforms = ["win-64", "linux-64"]
+            channels = ["nvidia", {channel = "pytorch", priority = -1}]
+            system-requirements = {cuda = "12.1"}
+        
+            [feature.cuda.tasks]
+            train-model = "python train.py --cuda"
+            evaluate-model = "python test.py --cuda"
+        
+            [feature.cuda.dependencies]
+            pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
+        
+            [feature.mlx]
+            platforms = ["osx-arm64"]
+            # MLX is only available on macOS >=13.5 (>14.0 is recommended)
+            system-requirements = {macos = "13.5"}
+        
+            [feature.mlx.tasks]
+            train-model = "python train.py --mlx"
+            evaluate-model = "python test.py --mlx"
+        
+            [feature.mlx.dependencies]
+            mlx = ">=0.16.0,<0.17.0"
+        
+            [feature.cpu]
+            platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+        
+            [environments]
+            cuda = ["cuda"]
+            mlx = ["mlx"]
+            default = ["cpu"]
+        ```
 
-    [dependencies]
-    python = "3.11.*"
-    pytorch = {version = ">=2.0.1", channel = "pytorch"}
-    torchvision = {version = ">=0.15", channel = "pytorch"}
-    polars = ">=0.20,<0.21"
-    matplotlib-base = ">=3.8.2,<3.9"
-    ipykernel = ">=6.28.0,<6.29"
+    === "pyproject.toml"
 
-    [feature.cuda]
-    platforms = ["win-64", "linux-64"]
-    channels = ["nvidia", {channel = "pytorch", priority = -1}]
-    system-requirements = {cuda = "12.1"}
-
-    [feature.cuda.tasks]
-    train-model = "python train.py --cuda"
-    evaluate-model = "python test.py --cuda"
-
-    [feature.cuda.dependencies]
-    pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
-
-    [feature.mlx]
-    platforms = ["osx-arm64"]
-    # MLX is only available on macOS >=13.5 (>14.0 is recommended)
-    system-requirements = {macos = "13.5"}
-
-    [feature.mlx.tasks]
-    train-model = "python train.py --mlx"
-    evaluate-model = "python test.py --mlx"
-
-    [feature.mlx.dependencies]
-    mlx = ">=0.16.0,<0.17.0"
-
-    [feature.cpu]
-    platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
-
-    [environments]
-    cuda = ["cuda"]
-    mlx = ["mlx"]
-    default = ["cpu"]
-    ```
+        ```toml
+            [project]
+            name = "my-ml-workspace"
+            description = "A workspace that does ML stuff"
+            authors = ["Your Name <your.name@gmail.com>"]
+        
+            [tool.pixi.workspace]
+            channels = ["conda-forge", "pytorch"]
+            # All platforms that are supported by the workspace as the features will take the intersection of the platforms defined there.
+            platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+        
+            [tool.pixi.tasks]
+            train-model = "python train.py"
+            evaluate-model = "python test.py"
+        
+            [tool.pixi.dependencies]
+            python = "3.11.*"
+            pytorch = {version = ">=2.0.1", channel = "pytorch"}
+            torchvision = {version = ">=0.15", channel = "pytorch"}
+            polars = ">=0.20,<0.21"
+            matplotlib-base = ">=3.8.2,<3.9"
+            ipykernel = ">=6.28.0,<6.29"
+        
+            [tool.pixi.feature.cuda]
+            platforms = ["win-64", "linux-64"]
+            channels = ["nvidia", {channel = "pytorch", priority = -1}]
+            system-requirements = {cuda = "12.1"}
+        
+            [tool.pixi.feature.cuda.tasks]
+            train-model = "python train.py --cuda"
+            evaluate-model = "python test.py --cuda"
+        
+            [tool.pixi.feature.cuda.dependencies]
+            pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
+        
+            [tool.pixi.feature.mlx]
+            platforms = ["osx-arm64"]
+            # MLX is only available on macOS >=13.5 (>14.0 is recommended)
+            system-requirements = {macos = "13.5"}
+        
+            [tool.pixi.feature.mlx.tasks]
+            train-model = "python train.py --mlx"
+            evaluate-model = "python test.py --mlx"
+        
+            [tool.pixi.feature.mlx.dependencies]
+            mlx = ">=0.16.0,<0.17.0"
+        
+            [tool.pixi.feature.cpu]
+            platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+        
+            [tool.pixi.environments]
+            cuda = ["cuda"]
+            mlx = ["mlx"]
+            default = ["cpu"]
+        ```
 
     ```shell title="Executing on a cuda machine"
     pixi run train-model --environment cuda
@@ -474,3 +672,5 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     ```shell title="Executing on a machine without cuda or mlx"
     pixi run train-model
     ```
+
+

@@ -49,9 +49,14 @@ Shell used for activation:
 This affects both `[activation.env]` and `activation.scripts`: they are applied by the platform's shell during activation, before any task runs.
 
 You can modify the activation with the `activation` table in the manifest, you can add more activation scripts or inject environment variables into the activation scripts.
-```toml
---8<-- "docs/source_files/pixi_tomls/activation.toml:activation"
-```
+=== "pixi.toml"
+  ```toml
+  --8<-- "docs/source_files/pixi_tomls/activation.toml:activation"
+  ```
+=== "pyproject.toml"
+  ```toml
+  --8<-- "docs/source_files/pyproject_tomls/activation.toml:activation"
+  ```
 Find the reference for the `activation` table [here](../reference/pixi_manifest.md#the-activation-table).
 
 --8<-- "docs/partials/conda-style-activation.md"

@@ -28,12 +28,14 @@ my_package
         └── my_code.h
 ```
 You can specify the location of the source like this:
+<!-- no-pyproject -->
 ```toml
 [package.build.source]
 path = "source"
 ```
 
 This will also work with relative paths:
+<!-- no-pyproject -->
 ```toml
 [package.build.source]
 path = "../my_other_source_directory"
@@ -45,24 +47,28 @@ This works great in combination with git submodules.
 
 If your source is hosted in a git repository, you can specify the repository URL using the `package.build.source.git` field.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.source]
 git = "https://github.com/user/repo.git"
 ```
 
 You can pin to a specific branch, tag, or revision:
+<!-- no-pyproject -->
 ```toml
 [package.build.source]
 git = "https://github.com/user/repo.git"
 branch = "main"
 ```
 
+<!-- no-pyproject -->
 ```toml
 [package.build.source]
 git = "https://github.com/user/repo.git"
 tag = "v1.0.0"
 ```
 
+<!-- no-pyproject -->
 ```toml
 [package.build.source]
 git = "https://github.com/user/repo.git"
@@ -70,9 +76,11 @@ rev = "abc123"
 ```
 
 If the source is located in a subdirectory of the repository, you can specify that as well:
+<!-- no-pyproject -->
 ```toml
 [package.build.source]
 git = "https://github.com/user/repo.git"
 tag = "v1.0.0"
 subdirectory = "packages/mypackage"
 ```
+

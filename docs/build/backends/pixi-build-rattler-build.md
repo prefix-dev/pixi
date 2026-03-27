@@ -26,6 +26,7 @@ The rattler-build backend:
 
 To use the rattler-build backend in your `pixi.toml`, specify it in your build system configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package]
 name = "rattler_build_package"
@@ -78,10 +79,19 @@ model only provides the workspace structure information that the recipe cannot k
 
 To specify source dependencies, add them to `build-dependencies`, `host-dependencies` or `run-dependencies` in the package manifest:
 
-```toml title="pixi.toml"
-[package.build-dependencies]
-a = { path = "../a" }
-```
+=== "pixi.toml"
+
+    ```toml
+    [package.build-dependencies]
+    a = { path = "../a" }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.package.build-dependencies]
+    a = { path = "../a" }
+    ```
 
 ## Configuration Options
 
@@ -95,6 +105,7 @@ The rattler-build backend supports the following TOML configuration options:
 
 Enables experimental features in rattler-build. This is required for certain advanced features like the `cache:` functionality for multi-output recipes.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 experimental = true
@@ -110,6 +121,7 @@ Note: This option cannot be set in target-specific configurations. It must be se
 
 Path to the recipe YAML file.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 recipe = "../template/recipe.yaml"
@@ -129,6 +141,7 @@ The backend always writes JSON-RPC request/response logs and the generated inter
 
 Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that are determined from the recipe sources and package directory structure.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-input-globs = [
@@ -140,6 +153,7 @@ extra-input-globs = [
 
 For target-specific configuration, platform-specific globs completely replace the base:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-input-globs = ["*.yaml", "*.md"]
@@ -165,3 +179,5 @@ The rattler-build backend follows this build process:
 - Requires an existing rattler-build recipe file - cannot infer build instructions automatically
 - Build configuration is primarily controlled through the recipe file rather than `pixi.toml`
 - Cannot specify binary dependencies in the manifest
+
+

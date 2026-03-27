@@ -22,14 +22,24 @@ pixi add ros-jazzy-ros2run
 This adds the `ros2` cli command to your Pixi environment.
 
 In all examples below, ensure the [build preview](../reference/pixi_manifest.md#preview-features) is enabled in your workspace manifest:
-```toml title="ros_ws/pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:preview"
-```
+=== "pixi.toml"
+    ```toml title="ros_ws/pixi.toml"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:preview"
+    ```
+=== "pyproject.toml"
+    ```toml title="ros_ws/pixi.toml"
+    --8<-- "docs/source_files/pyproject_tomls/ros_ws_pixi.toml:preview"
+    ```
 
 Resulting workspace manifest:
-```toml title="ros_ws/pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:base"
-```
+=== "pixi.toml"
+    ```toml title="ros_ws/pixi.toml"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:base"
+    ```
+=== "pixi.toml"
+    ```toml title="ros_ws/pixi.toml"
+    --8<-- "docs/source_files/pyproject_tomls/ros_ws_pixi.toml:base"
+    ```
 
 ## Creating a Python ROS package
 We'll be creating a normal ROS2 package using `ament_python` and then adding Pixi support to it.
@@ -64,9 +74,14 @@ ros_ws/
 
 Create a `pixi.toml` inside `src/my_python_ros_pkg` so Pixi can build it using the ROS backend. The backend reads most metadata from `package.xml`, so you only need to specify the backend and distro.
 
-```toml title="src/my_python_ros_pkg/pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/src/my_python_ros_pkg/pixi.toml"
-```
+=== "pixi.toml"
+    ```toml title="src/my_python_ros_pkg/pixi.toml"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/src/my_python_ros_pkg/pixi.toml"
+    ```
+=== "pyproject.toml"
+    ```toml title="src/my_python_ros_pkg/pixi.toml"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/src/my_python_ros_pkg/pixi.toml"
+    ```
 
 Notes:
 
@@ -78,9 +93,14 @@ Notes:
 
 Tell the root workspace to depend on the package via a path dependency that matches the ROS-prefixed name:
 
-```toml title="ros_ws/pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:python-pkg"
-```
+=== "pixi.toml"
+    ```toml title="ros_ws/pixi.toml"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:python-pkg"
+    ```
+=== "pyproject.toml"
+    ```toml title="ros_ws/pixi.toml"
+    --8<-- "docs/source_files/pyproject_tomls/ros_ws_pixi.toml:python-pkg"
+    ```
 
 ### Testing your package
 Now install and run:
@@ -108,17 +128,27 @@ pixi run ros2 pkg create --build-type ament_cmake --destination-directory src --
 Create a `pixi.toml` inside `src/my_cmake_ros_pkg` so Pixi can build it using the ROS backend.
 The backend reads most metadata from `package.xml`, so you only need to specify the `backend` and `distro`.
 
-```toml title="src/my_cmake_ros_pkg/pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/src/my_cmake_ros_pkg/pixi.toml"
-```
+=== "pixi.toml"
+    ```toml title="src/my_cmake_ros_pkg/pixi.toml"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/src/my_cmake_ros_pkg/pixi.toml"
+    ```
+=== "pyproject.toml"
+    ```toml title="src/my_cmake_ros_pkg/pixi.toml"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/src/my_cmake_ros_pkg/pixi.toml"
+    ```
 
 ### Add the package to the pixi workspace
 
 Tell the root workspace to depend on the package via a path dependency that matches the ROS-prefixed name:
 
-```toml title="ros_ws/pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:cmake-pkg"
-```
+=== "pixi.toml"
+    ```toml title="ros_ws/pixi.toml"
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:cmake-pkg"
+    ```
+=== "pyproject.toml"
+    ```toml title="ros_ws/pixi.toml"
+    --8<-- "docs/source_files/pyproject_tomls/ros_ws_pixi.toml:cmake-pkg"
+    ```
 
 ### Testing your package
 Now install and run:

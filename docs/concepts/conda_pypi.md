@@ -60,14 +60,27 @@ Then it runs the PyPI (`uv`) solver, which will resolve the remaining PyPI depen
 The consequence is that Pixi will install the conda package (and not the PyPI package) if both are available and specified as dependencies.
 
 Here is an example of how this works in practice:
-```toml title="pixi.toml"
-[dependencies]
-python = ">=3.8"
-numpy = ">=1.21.0"
+=== "pixi.toml"
 
-[pypi-dependencies]
-numpy = ">=1.21.0"
-```
+    ```toml
+    [dependencies]
+    python = ">=3.8"
+    numpy = ">=1.21.0"
+    
+    [pypi-dependencies]
+    numpy = ">=1.21.0"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies]
+    python = ">=3.8"
+    numpy = ">=1.21.0"
+    
+    [tool.pixi.pypi-dependencies]
+    numpy = ">=1.21.0"
+    ```
 
 Which results in the following output:
 ```output
@@ -82,13 +95,25 @@ Then it will map the `numpy` conda package to the `numpy` PyPI package and resol
 Since there are no remaining PyPI dependencies (as `numpy` was already installed as a conda package), no PyPI packages will be installed.
 
 Another example is when you have a PyPI package dependency that is not specified as a conda package dependency:
-```toml title="pixi.toml"
-[dependencies]
-python = ">=3.8"
+=== "pixi.toml"
 
-[pypi-dependencies]
-numpy = ">=1.21.0"
-```
+    ```toml
+    [dependencies]
+    python = ">=3.8"
+    
+    [pypi-dependencies]
+    numpy = ">=1.21.0"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies]
+    python = ">=3.8"
+    
+    [tool.pixi.pypi-dependencies]
+    numpy = ">=1.21.0"
+    ```
 Which results in the following output:
 ```output
 > pixi list --explicit
@@ -106,13 +131,25 @@ To override or change the mapping of conda packages to PyPI packages, you can us
 When trying to install conda and PyPI dependencies,
 such as with the following `pixi.toml` manifest:
 
-```toml title="pixi.toml"
-[dependencies]
-typing_extensions = "*"
+=== "pixi.toml"
 
-[pypi-dependencies]
-typing_extensions = "==4.14"
-```
+    ```toml
+    [dependencies]
+    typing_extensions = "*"
+    
+    [pypi-dependencies]
+    typing_extensions = "==4.14"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies]
+    typing_extensions = "*"
+    
+    [tool.pixi.pypi-dependencies]
+    typing_extensions = "==4.14"
+    ```
 
 you might encounter the following error message:
 
@@ -135,13 +172,25 @@ These two dependencies are incompatible and the solve fails.
 While this might be a trivial case,
 it is less obvious when the packages are not explicit dependencies:
 
-```toml title="pixi.toml"
-[dependencies]
-some-conda-package = "*"  #  depends on any typing-extensions
+=== "pixi.toml"
 
-[pypi-dependencies]
-some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.14
-```
+    ```toml
+    [dependencies]
+    some-conda-package = "*"  #  depends on any typing-extensions
+    
+    [pypi-dependencies]
+    some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.14
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies]
+    some-conda-package = "*"  #  depends on any typing-extensions
+    
+    [tool.pixi.pypi-dependencies]
+    some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.14
+    ```
 
 which produces the following solve error:
 
@@ -158,11 +207,25 @@ Error:   × failed to solve the pypi requirements of environment 'default' for p
 A solution in this case would be to add to the conda dependencies `typing-extensions < 4.15`,
 that is, the same constraint imposed by the PyPI package(s):
 
-```toml title="pixi.toml"
-[dependencies]
-some-conda-package = "*"  #  depends on any typing-extensions
-typing_extensions = "<4.15"
+=== "pixi.toml"
 
-[pypi-dependencies]
-some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.14
-```
+    ```toml
+    [dependencies]
+    some-conda-package = "*"  #  depends on any typing-extensions
+    typing_extensions = "<4.15"
+    
+    [pypi-dependencies]
+    some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.14
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies]
+    some-conda-package = "*"  #  depends on any typing-extensions
+    typing_extensions = "<4.15"
+    
+    [tool.pixi.pypi-dependencies]
+    some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.14
+    ```
+

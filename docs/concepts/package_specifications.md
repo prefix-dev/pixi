@@ -26,9 +26,17 @@ A MatchSpec allows you to precisely define which package version, build, and cha
 
 The simplest way to specify a package is by name and [optional version operators](#version-operators):
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/package_specifications.toml:basic-version"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_tomls/package_specifications.toml:basic-version"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/package_specifications.toml:basic-version"
+    ```
 
 ## Full MatchSpec Syntax
 
@@ -62,9 +70,17 @@ Both syntaxes are equivalent and can be used interchangeably.
 
 In your `pixi.toml`, use the mapping syntax for complete control:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/package_specifications.toml:mapping-syntax-full"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_tomls/package_specifications.toml:mapping-syntax-full"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/package_specifications.toml:mapping-syntax-full"
+    ```
 
 This syntax allows you to specify:
 
@@ -136,11 +152,21 @@ pixi add "python [version='3.11.0', build_number='1']"
 pixi add "numpy [build_number='>=5']"
 ```
 
-```toml title="pixi.toml"
-[dependencies.python]
-version = "3.11.0"
-build-number = ">=1"
-```
+=== "pixi.toml"
+
+    ```toml
+    [dependencies.python]
+    version = "3.11.0"
+    build-number = ">=1"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies.python]
+    version = "3.11.0"
+    build-number = ">=1"
+    ```
 
 Build numbers are useful when:
 
@@ -165,20 +191,41 @@ pixi add pytorch::pytorch
 pixi add https://prefix.dev/my-channel::custom-package
 ```
 
-```toml title="pixi.toml"
-[dependencies.pytorch]
-channel = "pytorch"
+=== "pixi.toml"
 
-[dependencies.custom-package]
-channel = "https://prefix.dev/my-channel"
-```
+    ```toml
+    [dependencies.pytorch]
+    channel = "pytorch"
+    
+    [dependencies.custom-package]
+    channel = "https://prefix.dev/my-channel"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies.pytorch]
+    channel = "pytorch"
+    
+    [tool.pixi.dependencies.custom-package]
+    channel = "https://prefix.dev/my-channel"
+    ```
 
 Note that for `pixi add`, channels must also be listed in your workspace configuration:
 
-```toml title="pixi.toml"
-[workspace]
-channels = ["conda-forge", "pytorch", "nvidia"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace]
+    channels = ["conda-forge", "pytorch", "nvidia"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    channels = ["conda-forge", "pytorch", "nvidia"]
+    ```
 
 You can also add these using the command line:
 
@@ -191,12 +238,23 @@ pixi workspace channel add conda-forge
 Checksums verify package integrity and authenticity.
 Use them for reproducibility and security:
 
-```toml title="pixi.toml"
-[dependencies.numpy]
-version = "1.21.0"
-sha256 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-md5 = "abcdef1234567890abcdef1234567890"
-```
+=== "pixi.toml"
+
+    ```toml
+    [dependencies.numpy]
+    version = "1.21.0"
+    sha256 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    md5 = "abcdef1234567890abcdef1234567890"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies.numpy]
+    version = "1.21.0"
+    sha256 = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+    md5 = "abcdef1234567890abcdef1234567890"
+    ```
 
 When specified, Pixi will:
 
@@ -215,11 +273,21 @@ This is useful for:
 - Filtering packages by license type
 - Documentation purposes
 
-```toml title="pixi.toml"
-[dependencies.pytorch]
-version = "2.0.*"
-license = "BSD-3-Clause"
-```
+=== "pixi.toml"
+
+    ```toml
+    [dependencies.pytorch]
+    version = "2.0.*"
+    license = "BSD-3-Clause"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies.pytorch]
+    version = "2.0.*"
+    license = "BSD-3-Clause"
+    ```
 
 ### File Name
 
@@ -230,10 +298,19 @@ This is rarely needed but useful for:
 - Ensuring a specific package artifact
 - Advanced use cases with custom package builds
 
-```toml title="pixi.toml"
-[dependencies.pytorch]
-file-name = "pytorch-2.0.0-cuda.tar.bz2"
-```
+=== "pixi.toml"
+
+    ```toml
+    [dependencies.pytorch]
+    file-name = "pytorch-2.0.0-cuda.tar.bz2"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies.pytorch]
+    file-name = "pytorch-2.0.0-cuda.tar.bz2"
+    ```
 
 ## Source Packages
 
@@ -245,17 +322,65 @@ For these packages to be recognized they need to be understood by Pixi as source
 Look at the [Pixi Manifest Reference](../reference/pixi_manifest.md#the-package-section) for more information on how to declare source packages in your `pixi.toml`.
 
 ### Path-based Source Packages
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/package_specifications.toml:path-fields"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_tomls/package_specifications.toml:path-fields"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/package_specifications.toml:path-fields"
+    ```
 
 The path should be relative to the workspace root or an absolute path, but absolute paths are discouraged for portability.
 
 
 ### Git-based Source Packages
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/package_specifications.toml:git-fields"
-```
+=== "pixi.toml"
+    ```toml
+    # Git repository of a Pixi package
+    [dependencies.git-package]
+    # Git repository
+    git = "https://github.com/org/repo"
+    # Git branch
+    branch = "main"
+    # Subdirectory within repo
+    subdirectory = "packages/mypackage"
+
+    [dependencies.tagged-git-package]
+    # Git with specific tag
+    git = "https://github.com/org/repo"
+    tag = "v1.0.0"
+
+    [dependencies.rev-git-package]
+    # Git with specific revision
+    git = "https://github.com/org/repo"
+    rev = "abc123def"
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    # Git repository of a Pixi package
+    [tool.pixi.dependencies.git-package]
+    # Git repository
+    git = "https://github.com/org/repo"
+    # Git branch
+    branch = "main"
+    # Subdirectory within repo
+    subdirectory = "packages/mypackage"
+
+    [tool.pixi.dependencies.tagged-git-package]
+    # Git with specific tag
+    git = "https://github.com/org/repo"
+    tag = "v1.0.0"
+
+    [tool.pixi.dependencies.rev-git-package]
+    # Git with specific revision
+    git = "https://github.com/org/repo"
+    rev = "abc123def"
+    ```
 
 For git repositories, you can specify:
 
@@ -300,12 +425,21 @@ pixi add --pypi requests --git https://github.com/psf/requests.git --rev 7029833
 ### TOML Mapping Syntax
 In your `pixi.toml` or `pyproject.toml` (under `[tool.pixi.pypi-dependencies]`), you can specify PyPI packages like this:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/package_specifications.toml:pypi-fields"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_tomls/package_specifications.toml:pypi-fields"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/package_specifications.toml:pypi-fields"
+    ```
 
 ## Further Reading
 
 - [Pixi Manifest Reference](../reference/pixi_manifest.md#dependencies) - Complete dependency specification options
 - [Multi-Platform Configuration](../workspace/multi_platform_configuration.md) - Platform-specific dependencies
 - [Conda Package Specification](https://conda.io/projects/conda/en/latest/user-guide/concepts/pkg-specs.html) - Conda's package specification docs
+

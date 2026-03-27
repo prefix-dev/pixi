@@ -28,19 +28,39 @@ my_rust_project
 
 The `pixi.toml` file is the manifest file for your workspace. It should look like this:
 
-```toml  title="pixi.toml"
-[workspace]
-name = "my_rust_project"
-version = "0.1.0"
-description = "Add a short description here"
-authors = ["User Name <user.name@email.url>"]
-channels = ["conda-forge"]
-platforms = ["linux-64"] # (1)!
+=== "pixi.toml"
 
-[tasks]
+    ```toml
+    [workspace]
+    name = "my_rust_project"
+    version = "0.1.0"
+    description = "Add a short description here"
+    authors = ["User Name <user.name@email.url>"]
+    channels = ["conda-forge"]
+    platforms = ["linux-64"] # (1)!
+    
+    [tasks]
+    
+    [dependencies]
+    ```
 
-[dependencies]
-```
+=== "pyproject.toml"
+
+    ```toml
+    [project]
+    name = "my_rust_project"
+    version = "0.1.0"
+    description = "Add a short description here"
+    authors = ["User Name <user.name@email.url>"]
+    
+    [tool.pixi.workspace]
+    channels = ["conda-forge"]
+    platforms = ["linux-64"] # (1)!
+    
+    [tool.pixi.tasks]
+    
+    [tool.pixi.dependencies]
+    ```
 
 1. The `platforms` is set to your system's platform by default. You can change it to any platform you want to support. e.g. `["linux-64", "osx-64", "osx-arm64", "win-64"]`.
 
@@ -73,10 +93,19 @@ To simplify the build process, you can add a `build` task to your `pixi.toml` fi
 pixi task add build "cargo build"
 ```
 Which creates this field in the `pixi.toml` file:
-```toml title="pixi.toml"
-[tasks]
-build = "cargo build"
-```
+=== "pixi.toml"
+
+    ```toml
+    [tasks]
+    build = "cargo build"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.tasks]
+    build = "cargo build"
+    ```
 
 And now you can build your project using:
 ```shell
@@ -188,3 +217,4 @@ Finished with your project?
 We'd love to see what you've created!
 Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
 Let's inspire the community together!
+

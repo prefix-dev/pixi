@@ -157,6 +157,7 @@ Compiler configuration is only available in backends that have specifically impl
 
 ### Basic Compiler Configuration
 
+<!-- no-pyproject -->
 ```toml
 # Use default compilers for the backend
 [package.build.config]
@@ -169,6 +170,7 @@ compilers = ["c", "cxx", "fortran"]
 
 ### Platform-Specific Compiler Configuration
 
+<!-- no-pyproject -->
 ```toml
 # Base configuration for most platforms
 [package.build.config]
@@ -182,3 +184,4 @@ compilers = ["cxx", "cuda"]
 [package.build.target.win-64.config]
 compilers = ["c", "cxx"]
 ```
+

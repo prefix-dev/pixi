@@ -3,7 +3,7 @@ On this page, you will learn what you can configure to align better with the pla
 
 Here is an example manifest file that highlights some of the features:
 
-=== "`pixi.toml`"
+=== "pixi.toml"
     ```toml title="pixi.toml"
     [workspace]
     # Default workspace info....
@@ -25,7 +25,7 @@ Here is an example manifest file that highlights some of the features:
     # Overwrite activation scripts only for windows
     scripts = ["setup.bat"]
     ```
-=== "`pyproject.toml`"
+=== "pyproject.toml"
     ```toml title="pyproject.toml"
     [tool.pixi.workspace]
     # Default workspace info....
@@ -70,14 +70,27 @@ If you are targeting a specific platform in your target specifier that was not s
 
 It might happen that you want to install a certain dependency only on a specific platform, or you might want to use a different version on different platforms.
 
-```toml title="pixi.toml"
-[dependencies]
-python = ">=3.8"
+=== "pixi.toml"
 
-[target.win-64.dependencies]
-msmpi = "*"
-python = "3.8"
-```
+    ```toml
+    [dependencies]
+    python = ">=3.8"
+    
+    [target.win-64.dependencies]
+    msmpi = "*"
+    python = "3.8"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies]
+    python = ">=3.8"
+    
+    [tool.pixi.target.win-64.dependencies]
+    msmpi = "*"
+    python = "3.8"
+    ```
 
 In the above example, we specify that we depend on `msmpi` only on Windows.
 We also specifically want `python` on `3.8` when installing on Windows.
@@ -99,13 +112,25 @@ pixi add --build --platform osx-64 clang
 
 Which results in this.
 
-```toml title="pixi.toml"
-[target.win-64.host-dependencies]
-posix = "1.0.0.*"
+=== "pixi.toml"
 
-[target.osx-64.build-dependencies]
-clang = "16.0.6.*"
-```
+    ```toml
+    [target.win-64.host-dependencies]
+    posix = "1.0.0.*"
+    
+    [target.osx-64.build-dependencies]
+    clang = "16.0.6.*"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.target.win-64.host-dependencies]
+    posix = "1.0.0.*"
+    
+    [tool.pixi.target.osx-64.build-dependencies]
+    clang = "16.0.6.*"
+    ```
 
 ### Activation
 
@@ -114,11 +139,24 @@ Generated activation scripts are often in this category, default scripts in unix
 
 To deal with this, you can define your activation scripts using the target definition.
 
-```toml title="pixi.toml"
-[activation]
-scripts = ["setup.sh", "local_setup.bash"]
+=== "pixi.toml"
 
-[target.win-64.activation]
-scripts = ["setup.bat", "local_setup.bat"]
-```
+    ```toml
+    [activation]
+    scripts = ["setup.sh", "local_setup.bash"]
+    
+    [target.win-64.activation]
+    scripts = ["setup.bat", "local_setup.bat"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.activation]
+    scripts = ["setup.sh", "local_setup.bash"]
+    
+    [tool.pixi.target.win-64.activation]
+    scripts = ["setup.bat", "local_setup.bat"]
+    ```
 When this workspace is used on `win-64` it will only execute the target scripts not the scripts specified in the default `activation.scripts`
+

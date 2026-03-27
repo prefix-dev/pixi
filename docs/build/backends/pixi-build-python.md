@@ -5,11 +5,16 @@ The `pixi-build-python` backend is designed for building Python projects using s
 !!! warning
     `pixi-build` is a preview feature, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
-
-    ```toml
-    [workspace]
-    preview = ["pixi-build"]
-    ```
+    === "pixi.toml"
+        ```toml
+        [workspace]
+        preview = ["pixi-build"]
+        ```
+    === "pyproject.toml"
+        ```toml
+        [tool.pixi.workspace]
+        preview = ["pixi-build"]
+        ```
 
 
 ## Overview
@@ -26,6 +31,7 @@ This backend automatically generates conda packages from Python projects by:
 
 To use the Python backend in your `pixi.toml`, add it to your package's build configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package]
 name = "python_package"
@@ -46,6 +52,7 @@ The backend automatically includes the following build tools:
 
 You can add these to your [`host-dependencies`](https://pixi.sh/latest/build/dependency_types/) if you need specific versions:
 
+<!-- no-pyproject -->
 ```toml
 [package.build-dependencies]
 python = "3.11"
@@ -53,6 +60,7 @@ python = "3.11"
 
 The backend will be automatically selected by the automatic PyPI dependency mapping feature if you have `pyproject.toml` in your source directory.
 Otherwise, you need to explicitly add it to your package definition in the `[host-dependencies]`:
+<!-- no-pyproject -->
 ```toml
 [package.host-dependencies]
 hatchling = "*"
@@ -74,6 +82,7 @@ If compilers are specified, the backend assume that native extensions are build 
 Most of the time these are platform-specific, so the package will be built as a platform-specific package.
 If no compilers are specified, the default value for `noarch` is `true`, meaning the package will be built as a noarch python package.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 noarch = false  # Build platform-specific package
@@ -81,6 +90,7 @@ noarch = false  # Build platform-specific package
 
 For target-specific configuration, platform-specific noarch setting overrides the base:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 noarch = true
@@ -98,6 +108,7 @@ noarch = false  # Windows needs platform build
 
 Environment variables to set during the build process. These variables are available during package installation.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { SETUPTOOLS_SCM_PRETEND_VERSION = "1.0.0" }
@@ -105,6 +116,7 @@ env = { SETUPTOOLS_SCM_PRETEND_VERSION = "1.0.0" }
 
 For target-specific configuration, platform environment variables are merged with base variables:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { PYTHONPATH = "/base/path", COMMON_VAR = "base" }
@@ -125,6 +137,7 @@ The backend always writes JSON-RPC request/response logs and the generated inter
 
 Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include Python source files, configuration files (`setup.py`, `pyproject.toml`, etc.), and other build-related files.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-input-globs = [
@@ -136,6 +149,7 @@ extra-input-globs = [
 
 For target-specific configuration, platform-specific globs completely replace the base:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-input-globs = ["*.py"]
@@ -153,6 +167,7 @@ extra-input-globs = ["*.py", "*.dll", "*.pyd", "windows-resources/**/*"]
 
 List of compilers to use for the build. Most pure Python packages don't need compilers, but this is useful for packages with C extensions or other compiled components. The backend automatically generates appropriate compiler dependencies using conda-forge's compiler infrastructure.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 compilers = ["c", "cxx"]
@@ -160,6 +175,7 @@ compilers = ["c", "cxx"]
 
 For target-specific configuration, platform compilers completely replace the base configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 compilers = []
@@ -172,6 +188,7 @@ compilers = ["c", "cxx"]
 !!! info "Pure Python vs. Extension Packages"
     The Python backend defaults to no compilers (`[]`) since most Python packages are pure Python and don't need compilation. This is different from other backends like CMake which default to `["cxx"]`. Only specify compilers if your package has C extensions or other compiled components:
 
+    <!-- no-pyproject -->
     ```toml
     # Pure Python package (default behavior)
     [package.build.config]
@@ -203,6 +220,7 @@ Controls whether the package uses the [Python Stable ABI (abi3)](https://docs.py
 
 The `python_abi` package has `run_exports` that automatically propagate the ABI constraint to the run environment, so only a host dependency is needed.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 abi3 = true
@@ -227,6 +245,7 @@ The version bounds are computed from the lower bound of `requires-python`:
 Extra arguments to pass to `pip`.
 A use-case could be [`pip`'s `--config-settings` parameter](https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-C).
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-args = ["-Cbuilddir=mybuilddir"]
@@ -234,6 +253,7 @@ extra-args = ["-Cbuilddir=mybuilddir"]
 
 For target-specific configuration, platform-specific globs completely replace the base:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-args = ["-Cbuilddir=mybuilddir"]
@@ -251,6 +271,7 @@ extra-args = ["-Cbuilddir=foo"]
 
 Controls whether to ignore the `pyproject.toml` manifest file and rely solely on the project model for package metadata. When set to `true`, the backend will not extract metadata (name, version, description, license, URLs) from `pyproject.toml` and will use only the information provided in the Pixi project model.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 ignore-pyproject-manifest = true  # Ignore pyproject.toml metadata
@@ -260,6 +281,7 @@ This option is useful when you want complete control over package metadata throu
 
 For target-specific configuration, platform-specific setting overrides the base:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 ignore-pyproject-manifest = false
@@ -292,6 +314,7 @@ Controls whether to ignore the automatic PyPI-to-conda dependency mapping featur
 When set to `true` (the default), dependencies from `pyproject.toml` will not be automatically mapped to conda packages. 
 Set to `false` to enable automatic mapping.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 ignore-pypi-mapping = false  # Enable automatic PyPI-to-conda mapping
@@ -304,6 +327,7 @@ ignore-pypi-mapping = false  # Enable automatic PyPI-to-conda mapping
 
 For target-specific configuration, platform-specific setting overrides the base:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 ignore-pypi-mapping = false
@@ -321,6 +345,7 @@ This means you don't need to manually duplicate your dependencies in both `pypro
 !!! warning "Opt-in Feature"
     This feature is currently disabled by default. To enable automatic PyPI-to-conda dependency mapping, set `ignore-pypi-mapping = false` in your build configuration:
 
+    <!-- no-pyproject -->
     ```toml
     [package.build.config]
     ignore-pypi-mapping = false
@@ -399,6 +424,7 @@ The backend automatically detects which Python installer to use:
 
 To use `uv` for faster installations, add it to your dependencies:
 
+<!-- no-pyproject -->
 ```toml
 [package.host-dependencies]
 uv = "*"
@@ -446,3 +472,4 @@ cxx_compiler = ["vs2019"]
 - [Building Python Packages](https://pixi.sh/latest/build/python/) - Tutorial for building Python packages with Pixi
 - [Python Packaging User Guide](https://packaging.python.org/) - Official Python packaging documentation
 - [PEP 517](https://peps.python.org/pep-0517/) - A build-system independent format for source trees
+

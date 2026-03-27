@@ -145,6 +145,7 @@ Pixi detects your system's virtual packages automatically. You
 can also declare them explicitly in your workspace — for example, to
 tell the solver that your deployment target has CUDA 12:
 
+<!-- no-pyproject -->
 ```toml title="pixi.toml"
 [system-requirements]
 cuda = "12"
@@ -237,3 +238,4 @@ can build, test, and publish packages from within a Pixi workspace.
 
 For a deeper comparison of the conda and PyPI ecosystems and how Pixi
 bridges them, see [Conda & PyPI](concepts/conda_pypi.md).
+
