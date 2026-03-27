@@ -6,7 +6,8 @@ use parking_lot::Mutex;
 use pixi_command_dispatcher::{
     BackendSourceBuildSpec, ReporterContext, SourceBuildSpec,
     reporter::{
-        BackendSourceBuildId, BackendSourceBuildReporter, SourceBuildId, SourceBuildReporter,
+        BackendSourceBuildId, BackendSourceBuildReporter, DedupGroupId, SourceBuildId,
+        SourceBuildReporter,
     },
 };
 use pixi_progress::ProgressBarPlacement;
@@ -147,6 +148,7 @@ impl SourceBuildReporter for SyncReporter {
         &mut self,
         _reason: Option<ReporterContext>,
         env: &SourceBuildSpec,
+        _dedup_id: DedupGroupId,
     ) -> SourceBuildId {
         let mut inner = self.combined_inner.lock();
         let id = inner.preparing_progress_bar.on_build_queued(env);
