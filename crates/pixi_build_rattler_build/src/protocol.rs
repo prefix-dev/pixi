@@ -90,7 +90,11 @@ impl Protocol for RattlerBuildBackend {
         // Apply build number override before rendering so the build string is
         // automatically updated.
         if let Some(build_number) = params.build_number_override {
-            stage0_recipe.build.number = Some(Stage0Value::new_concrete(build_number, None));
+            if let rattler_build_recipe::stage0::Recipe::SingleOutput(ref mut single) =
+                stage0_recipe
+            {
+                single.build.number = Some(Stage0Value::new_concrete(build_number, None));
+            }
         }
 
         // Build render config
@@ -354,7 +358,11 @@ impl Protocol for RattlerBuildBackend {
         // Apply build number override before rendering so the build string is
         // automatically updated.
         if let Some(build_number) = params.output.build_number_override {
-            stage0_recipe.build.number = Some(Stage0Value::new_concrete(build_number, None));
+            if let rattler_build_recipe::stage0::Recipe::SingleOutput(ref mut single) =
+                stage0_recipe
+            {
+                single.build.number = Some(Stage0Value::new_concrete(build_number, None));
+            }
         }
 
         // Build render config
