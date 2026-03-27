@@ -58,6 +58,17 @@ pub struct CondaOutputsParams {
     ///
     /// The directory may not yet exist.
     pub work_directory: PathBuf,
+
+    /// Override the build number for all outputs. If `None`, the build number
+    /// from the recipe is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_number_override: Option<u64>,
+
+    /// A string to prepend to the build string of all outputs (e.g., a git
+    /// hash or PR identifier). If set, the build string will be
+    /// `<prefix>_<original_build_string>`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_string_prefix: Option<String>,
 }
 
 /// Contains the result of the `conda/outputs` request.

@@ -177,6 +177,17 @@ pub struct CondaBuildV1Output {
 
     /// The variant configuration for the package.
     pub variant: BTreeMap<String, VariantValue>,
+
+    /// Override the build number for the output. If `None`, the build number
+    /// from the recipe is used.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_number_override: Option<u64>,
+
+    /// A string to prepend to the build string (e.g., a git hash or PR
+    /// identifier). If set, the build string will be
+    /// `<prefix>_<original_build_string>`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_string_prefix: Option<String>,
 }
 
 /// Contains the result of the `conda/build_v1` request.
