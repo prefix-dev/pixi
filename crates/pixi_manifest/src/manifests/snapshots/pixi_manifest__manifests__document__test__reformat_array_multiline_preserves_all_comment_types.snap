@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/manifests/document.rs
+expression: doc.to_string()
+---
+
+[project]
+dependencies = [
+    # own-line comment
+    "numpy>=1.0",     # end-of-line comment
+    # second own-line comment
+    "pandas>=2.0",
+    # comment before closing
+] # actual trailing comment

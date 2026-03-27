@@ -1530,11 +1530,7 @@ dependencies = []
                 .expect("dependencies array"),
         );
 
-        assert!(
-            doc.to_string().contains("dependencies = []"),
-            "empty array should remain unchanged:\n{}",
-            doc
-        );
+        insta::assert_snapshot!(doc.to_string());
     }
 
     /// Tests that calling `reformat_array_multiline` twice produces identical
@@ -1587,28 +1583,8 @@ dependencies = [
                 .as_array_mut()
                 .expect("dependencies array"),
         );
-        let result = doc.to_string();
 
-        assert!(
-            result.contains("# own-line comment"),
-            "own-line comment should be preserved:\n{result}"
-        );
-        assert!(
-            result.contains("\"numpy>=1.0\",     # end-of-line comment"),
-            "end-of-line comment spacing should be preserved:\n{result}"
-        );
-        assert!(
-            result.contains("# second own-line comment"),
-            "second own-line comment should be preserved:\n{result}"
-        );
-        assert!(
-            result.contains("# comment before closing"),
-            "comment before closing bracket should be preserved:\n{result}"
-        );
-        assert!(
-            result.contains("# actual trailing comment"),
-            "trailing comment after bracket should be preserved:\n{result}"
-        );
+        insta::assert_snapshot!(doc.to_string());
     }
 
     /// Tests that inline comment with no padding before `#` is preserved.
@@ -1619,7 +1595,10 @@ dependencies = [
 [project]
 dependencies = [
     "attrs>=25.4.0",#comment
+    "numpy>=1.0",
+    "requests>=2.0",#another inline comment
 ]
+
 "#
         .parse()
         .unwrap();
@@ -1630,10 +1609,6 @@ dependencies = [
                 .expect("dependencies array"),
         );
 
-        assert!(
-            doc.to_string().contains("\"attrs>=25.4.0\",#comment"),
-            "inline comment without padding should be preserved:\n{}",
-            doc
-        );
+        insta::assert_snapshot!(doc.to_string());
     }
 }
