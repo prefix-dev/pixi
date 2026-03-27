@@ -188,7 +188,6 @@ impl TomlProject {
             .map(|deps| {
                 deps.into_iter()
                     .map(|s| parse_requirement_with_dir(&s, working_dir))
-                    .inspect(|v| eprintln!("Debug VersionOrUrl: {v:?}"))
                     .collect::<Result<Vec<_>, _>>()
             })
             .transpose()?;
