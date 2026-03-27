@@ -13,18 +13,18 @@ use crate::source_build_cache_status::SourceBuildDeduplicationKey;
 use crate::source_record::SourceRecordDeduplicationKey;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
-    CommandDispatcherError, CommandDispatcherErrorResultExt, DevSourceMetadata,
-    DevSourceMetadataError, DevSourceMetadataSpec, InstallPixiEnvironmentResult, Reporter,
-    ResolvedSourceRecord, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildError, SourceBuildResult,
-    SourceBuildSpec, SourceMetadata, SourceMetadataError, SourceRecordError,
+    CommandDispatcherError, DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec,
+    InstallPixiEnvironmentResult, Reporter, ResolvedSourceRecord, SolveCondaEnvironmentSpec,
+    SolvePixiEnvironmentError, SourceBuildCacheEntry, SourceBuildCacheStatusError,
+    SourceBuildError, SourceBuildResult, SourceBuildSpec, SourceMetadata, SourceMetadataError,
+    SourceRecordError,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
         CommandDispatcherContext, CommandDispatcherData, DevSourceMetadataId, ForegroundMessage,
-        InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
+        GitCheckoutId, InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
         SolvePixiEnvironmentId, SourceBuildCacheStatusId, SourceBuildId, SourceMetadataId,
-        SourceRecordId,
+        SourceRecordId, UrlCheckoutId,
         url::{UrlCheckout, UrlError},
     },
     executor::ExecutorFutures,
@@ -43,6 +43,7 @@ use tokio_util::sync::CancellationToken;
 
 mod backend_source_build;
 mod build_backend_metadata;
+pub(crate) mod dedup;
 mod dev_source_metadata;
 mod git;
 mod install_pixi;
@@ -95,68 +96,77 @@ pub(crate) struct CommandDispatcherProcessor {
     install_pixi_environment:
         slotmap::SlotMap<InstallPixiEnvironmentId, PendingInstallPixiEnvironment>,
 
-    /// A mapping of build backend metadata to the metadata id that
-    build_backend_metadata: HashMap<
+    /// Build backend metadata tasks that are currently being processed.
+    build_backend_metadata: dedup::DedupTaskRegistry<
+        BuildBackendMetadataSpec,
         BuildBackendMetadataId,
-        PendingDeduplicatingTask<Arc<BuildBackendMetadata>, BuildBackendMetadataError>,
+        Arc<BuildBackendMetadata>,
+        BuildBackendMetadataError,
     >,
     build_backend_metadata_reporters:
         HashMap<BuildBackendMetadataId, reporter::BuildBackendMetadataId>,
-    build_backend_metadata_ids: HashMap<BuildBackendMetadataSpec, BuildBackendMetadataId>,
 
     /// Source metadata tasks (not deduplicated; fans out to deduplicated
-    /// SourceRecord tasks).
-    source_metadata: HashMap<
-        SourceMetadataId,
-        PendingDeduplicatingTask<Arc<SourceMetadata>, SourceMetadataError>,
-    >,
+    /// SourceRecord tasks). Uses a unique counter as key so every request
+    /// creates a new task.
+    source_metadata:
+        dedup::DedupTaskRegistry<usize, SourceMetadataId, Arc<SourceMetadata>, SourceMetadataError>,
     source_metadata_reporters: HashMap<SourceMetadataId, reporter::SourceMetadataId>,
     source_metadata_id_counter: usize,
 
     /// Source record requests (per name+variant) that are currently being processed.
-    source_record: HashMap<
+    source_record: dedup::DedupTaskRegistry<
+        SourceRecordDeduplicationKey,
         SourceRecordId,
-        PendingDeduplicatingTask<Arc<ResolvedSourceRecord>, SourceRecordError>,
+        Arc<ResolvedSourceRecord>,
+        SourceRecordError,
     >,
     source_record_reporters: HashMap<SourceRecordId, reporter::SourceRecordId>,
-    source_record_ids: HashMap<SourceRecordDeduplicationKey, SourceRecordId>,
 
     /// A mapping of instantiated tool environments
-    instantiated_tool_envs: HashMap<
+    instantiated_tool_envs: dedup::DedupTaskRegistry<
+        String,
         InstantiatedToolEnvId,
-        PendingDeduplicatingTask<InstantiateToolEnvironmentResult, InstantiateToolEnvironmentError>,
+        InstantiateToolEnvironmentResult,
+        InstantiateToolEnvironmentError,
     >,
     instantiated_tool_envs_reporters:
         HashMap<InstantiatedToolEnvId, reporter::InstantiateToolEnvId>,
-    instantiated_tool_cache_keys: HashMap<String, InstantiatedToolEnvId>,
 
-    /// Git checkouts in the process of being checked out, or already checked
-    /// out.
-    git_checkouts: HashMap<RepositoryReference, PendingGitCheckout>,
+    /// Git checkouts in the process of being checked out, or already
+    /// checked out.
+    git_checkouts: dedup::DedupTaskRegistry<RepositoryReference, GitCheckoutId, Fetch, GitError>,
+    git_checkout_reporters: HashMap<GitCheckoutId, reporter::GitCheckoutId>,
 
     /// Url checkouts in the process of being checked out, or already
     /// checked out.
-    url_checkouts: HashMap<::url::Url, PendingUrlCheckout>,
+    url_checkouts: dedup::DedupTaskRegistry<UrlSpec, UrlCheckoutId, UrlCheckout, UrlError>,
+    url_checkout_reporters: HashMap<UrlCheckoutId, reporter::UrlCheckoutId>,
 
     /// Source builds that are currently being processed.
-    source_build:
-        HashMap<SourceBuildId, PendingDeduplicatingTask<SourceBuildResult, SourceBuildError>>,
+    source_build: dedup::DedupTaskRegistry<
+        SourceBuildSpec,
+        SourceBuildId,
+        SourceBuildResult,
+        SourceBuildError,
+    >,
     source_build_reporters: HashMap<SourceBuildId, reporter::SourceBuildId>,
-    source_build_ids: HashMap<SourceBuildSpec, SourceBuildId>,
 
     /// Queries of source builds cache that are currently being processed.
-    source_build_cache_status: HashMap<
+    source_build_cache_status: dedup::DedupTaskRegistry<
+        SourceBuildDeduplicationKey,
         SourceBuildCacheStatusId,
-        PendingDeduplicatingTask<Arc<SourceBuildCacheEntry>, SourceBuildCacheStatusError>,
+        Arc<SourceBuildCacheEntry>,
+        SourceBuildCacheStatusError,
     >,
-    source_build_cache_status_ids: HashMap<SourceBuildDeduplicationKey, SourceBuildCacheStatusId>,
 
     /// Dev source metadata requests that are currently being processed.
-    dev_source_metadata: HashMap<
+    dev_source_metadata: dedup::DedupTaskRegistry<
+        DevSourceMetadataSpec,
         DevSourceMetadataId,
-        PendingDeduplicatingTask<DevSourceMetadata, DevSourceMetadataError>,
+        DevSourceMetadata,
+        DevSourceMetadataError,
     >,
-    dev_source_metadata_ids: HashMap<DevSourceMetadataSpec, DevSourceMetadataId>,
 
     /// Backend source builds that are currently being processed.
     backend_source_builds: slotmap::SlotMap<BackendSourceBuildId, PendingBackendSourceBuild>,
@@ -170,6 +180,11 @@ pub(crate) struct CommandDispatcherProcessor {
     /// spawning them so they can be `!Send` and because they are dropped when
     /// this instance is dropped.
     pending_futures: ExecutorFutures<LocalBoxFuture<'static, TaskResult>>,
+
+    /// Monitoring futures for subscriber cancellation of deduplicated tasks.
+    /// Kept separate from `pending_futures` so they never block task futures
+    /// in Serial executor mode.
+    monitor_futures: ExecutorFutures<LocalBoxFuture<'static, CommandDispatcherContext>>,
 
     /// The reporter to use for reporting progress
     reporter: Option<Box<dyn Reporter>>,
@@ -200,8 +215,8 @@ enum TaskResult {
         SourceRecordId,
         BoxedDispatcherResult<Arc<ResolvedSourceRecord>, SourceRecordError>,
     ),
-    GitCheckedOut(RepositoryReference, BoxedDispatcherResult<Fetch, GitError>),
-    UrlCheckedOut(::url::Url, BoxedDispatcherResult<UrlCheckout, UrlError>),
+    GitCheckedOut(GitCheckoutId, BoxedDispatcherResult<Fetch, GitError>),
+    UrlCheckedOut(UrlCheckoutId, BoxedDispatcherResult<UrlCheckout, UrlError>),
     InstallPixiEnvironment(
         InstallPixiEnvironmentId,
         BoxedDispatcherResult<InstallPixiEnvironmentResult, InstallPixiEnvironmentError>,
@@ -226,44 +241,6 @@ enum TaskResult {
         BackendSourceBuildId,
         BoxedDispatcherResult<BackendBuiltSource, BackendSourceBuildError>,
     ),
-}
-
-/// An either pending or already checked out git repository.
-enum PendingGitCheckout {
-    /// The checkout is still ongoing.
-    Pending(
-        Option<reporter::GitCheckoutId>,
-        Vec<oneshot::Sender<Result<Fetch, GitError>>>,
-    ),
-
-    /// The repository was checked out and the result is available.
-    CheckedOut(Fetch),
-
-    /// A previous attempt failed, error is stored for future requests.
-    Errored(GitError),
-
-    /// The checkout was cancelled.
-    Cancelled,
-}
-
-// We store spec here to double-check that hashes are correct.
-struct PendingUrlWaiter {
-    spec: UrlSpec,
-    tx: oneshot::Sender<Result<UrlCheckout, UrlError>>,
-}
-
-enum PendingUrlCheckout {
-    /// The checkout is still ongoing.
-    Pending(Option<reporter::UrlCheckoutId>, Vec<PendingUrlWaiter>),
-
-    /// The URL was checked out and the result is available.
-    CheckedOut(UrlCheckout),
-
-    /// A previous attempt failed, error is stored for future requests.
-    Errored(UrlError),
-
-    /// The checkout was cancelled.
-    Cancelled,
 }
 
 /// Information about a pending conda environment solve. This is used by the
@@ -295,53 +272,6 @@ struct PendingInstallPixiEnvironment {
     reporter_id: Option<reporter::PixiInstallId>,
 }
 
-/// Describes information a pending task that is being deduplicated. Multiple
-/// tasks can come in which are deduplicated, every task is returned the result
-/// when available.
-enum PendingDeduplicatingTask<T, E> {
-    /// Task is currently executing, contains channels to notify when complete
-    Pending(
-        Vec<oneshot::Sender<Result<T, E>>>,
-        Option<CommandDispatcherContext>,
-    ),
-
-    /// Task has completed (either successfully or with an error), result is cached
-    Completed(Result<T, E>, Option<CommandDispatcherContext>),
-}
-
-impl<T: Clone, E: Clone> PendingDeduplicatingTask<T, E> {
-    /// The result was received and all pending tasks can be notified.
-    ///
-    /// Both success and error results are cloned and sent to all waiting
-    /// channels. Returns `true` if the result was a real outcome (success or
-    /// failure) and `false` if the task was cancelled. When cancelled, the
-    /// entry is left in the `Pending` state with an empty waiter list; the
-    /// caller should remove the entry so that future requests can re-trigger
-    /// the task.
-    pub fn on_pending_result(&mut self, result: Result<T, CommandDispatcherError<E>>) -> bool {
-        let Self::Pending(pending, context) = self else {
-            unreachable!("cannot get a result for a task that is not pending");
-        };
-
-        let Some(result) = result.into_ok_or_failed() else {
-            // The task was cancelled. Drop all pending senders (they will
-            // observe a `Cancelled` error) but do NOT cache the cancellation
-            // It is not a real outcome and future requests should be able
-            // to re-trigger the task.
-            pending.clear();
-            return false;
-        };
-
-        // Clone and send the result to all waiting channels
-        for tx in std::mem::take(pending) {
-            let _ = tx.send(result.clone());
-        }
-
-        *self = Self::Completed(result, *context);
-        true
-    }
-}
-
 impl CommandDispatcherProcessor {
     /// Spawns a new background task that will handle the orchestration of all
     /// the dispatchers.
@@ -371,30 +301,27 @@ impl CommandDispatcherProcessor {
                 pending_conda_solves: VecDeque::new(),
                 solve_pixi_environments: slotmap::SlotMap::default(),
                 install_pixi_environment: slotmap::SlotMap::default(),
-                build_backend_metadata: HashMap::default(),
+                build_backend_metadata: Default::default(),
                 build_backend_metadata_reporters: HashMap::default(),
-                build_backend_metadata_ids: HashMap::default(),
-                source_metadata: HashMap::default(),
+                source_metadata: Default::default(),
                 source_metadata_reporters: HashMap::default(),
                 source_metadata_id_counter: 0,
-                source_record: HashMap::default(),
+                source_record: Default::default(),
                 source_record_reporters: HashMap::default(),
-                source_record_ids: HashMap::default(),
-                instantiated_tool_envs: HashMap::default(),
+                instantiated_tool_envs: Default::default(),
                 instantiated_tool_envs_reporters: HashMap::default(),
-                instantiated_tool_cache_keys: HashMap::default(),
-                git_checkouts: HashMap::default(),
-                url_checkouts: HashMap::default(),
-                source_build: HashMap::default(),
+                git_checkouts: Default::default(),
+                git_checkout_reporters: HashMap::default(),
+                url_checkouts: Default::default(),
+                url_checkout_reporters: HashMap::default(),
+                source_build: Default::default(),
                 source_build_reporters: HashMap::default(),
-                source_build_ids: HashMap::default(),
                 source_build_cache_status: Default::default(),
-                source_build_cache_status_ids: Default::default(),
                 dev_source_metadata: Default::default(),
-                dev_source_metadata_ids: Default::default(),
                 backend_source_builds: Default::default(),
                 pending_backend_source_builds: Default::default(),
                 pending_futures: ExecutorFutures::new(inner.executor),
+                monitor_futures: ExecutorFutures::new(inner.executor),
                 inner,
                 reporter,
             };
@@ -425,6 +352,9 @@ impl CommandDispatcherProcessor {
                 }
                 Some(result) = self.pending_futures.next() => {
                     self.on_result(result);
+                }
+                Some(context) = self.monitor_futures.next() => {
+                    self.on_subscriber_cancelled(context);
                 }
             }
         }
@@ -479,8 +409,8 @@ impl CommandDispatcherProcessor {
             TaskResult::BuildBackendMetadata(id, result) => {
                 self.on_build_backend_metadata_result(id, *result)
             }
-            TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, *result),
-            TaskResult::UrlCheckedOut(url, result) => self.on_url_checked_out(url, *result),
+            TaskResult::GitCheckedOut(id, result) => self.on_git_checked_out(id, *result),
+            TaskResult::UrlCheckedOut(id, result) => self.on_url_checked_out(id, *result),
             TaskResult::InstantiateToolEnv(id, result) => {
                 self.on_instantiate_tool_environment_result(id, *result)
             }
@@ -540,12 +470,9 @@ impl CommandDispatcherProcessor {
                         return Some(context);
                     }
 
-                    self.build_backend_metadata
-                        .get(&id)
-                        .map(|pending| match pending {
-                            PendingDeduplicatingTask::Pending(_, context)
-                            | PendingDeduplicatingTask::Completed(_, context) => *context,
-                        })?
+                    self.parent_contexts
+                        .get(&CommandDispatcherContext::BuildBackendMetadata(id))
+                        .copied()
                 }
                 CommandDispatcherContext::SourceMetadata(id) => {
                     if let Some(context) = self
@@ -557,10 +484,9 @@ impl CommandDispatcherProcessor {
                         return Some(context);
                     }
 
-                    self.source_metadata.get(&id).map(|pending| match pending {
-                        PendingDeduplicatingTask::Pending(_, context)
-                        | PendingDeduplicatingTask::Completed(_, context) => *context,
-                    })?
+                    self.parent_contexts
+                        .get(&CommandDispatcherContext::SourceMetadata(id))
+                        .copied()
                 }
                 CommandDispatcherContext::SourceRecord(id) => {
                     if let Some(context) = self
@@ -572,10 +498,9 @@ impl CommandDispatcherProcessor {
                         return Some(context);
                     }
 
-                    self.source_record.get(&id).map(|pending| match pending {
-                        PendingDeduplicatingTask::Pending(_, context)
-                        | PendingDeduplicatingTask::Completed(_, context) => *context,
-                    })?
+                    self.parent_contexts
+                        .get(&CommandDispatcherContext::SourceRecord(id))
+                        .copied()
                 }
                 CommandDispatcherContext::InstallPixiEnvironment(id) => {
                     return self.install_pixi_environment[id]
@@ -592,12 +517,9 @@ impl CommandDispatcherProcessor {
                         return Some(context);
                     }
 
-                    self.instantiated_tool_envs
-                        .get(&id)
-                        .map(|pending| match pending {
-                            PendingDeduplicatingTask::Pending(_, context)
-                            | PendingDeduplicatingTask::Completed(_, context) => *context,
-                        })?
+                    self.parent_contexts
+                        .get(&CommandDispatcherContext::InstantiateToolEnv(id))
+                        .copied()
                 }
                 CommandDispatcherContext::SourceBuild(id) => {
                     if let Some(context) = self
@@ -609,10 +531,9 @@ impl CommandDispatcherProcessor {
                         return Some(context);
                     }
 
-                    self.source_build.get(&id).map(|pending| match pending {
-                        PendingDeduplicatingTask::Pending(_, context)
-                        | PendingDeduplicatingTask::Completed(_, context) => *context,
-                    })?
+                    self.parent_contexts
+                        .get(&CommandDispatcherContext::SourceBuild(id))
+                        .copied()
                 }
                 CommandDispatcherContext::BackendSourceBuild(id) => {
                     return self.backend_source_builds[id]
@@ -623,6 +544,12 @@ impl CommandDispatcherProcessor {
                     return None;
                 }
                 CommandDispatcherContext::DevSourceMetadata(_id) => {
+                    return None;
+                }
+                CommandDispatcherContext::GitCheckout(_id) => {
+                    return None;
+                }
+                CommandDispatcherContext::UrlCheckout(_id) => {
                     return None;
                 }
             };
@@ -644,8 +571,7 @@ impl CommandDispatcherProcessor {
         self.inner.glob_hash_cache.clear();
 
         // Clear source build cache status, preserving in-flight tasks.
-        self.source_build_cache_status
-            .retain(|_, v| matches!(v, PendingDeduplicatingTask::Pending(_, _)));
+        self.source_build_cache_status.clear_completed();
 
         let _ = sender.send(());
     }
@@ -687,26 +613,96 @@ impl CommandDispatcherProcessor {
         self.cancellation_tokens.insert(context, token);
     }
 
-    /// Removes and cancels the cancellation token for the given context.
+    /// Handles the cancellation token for a completed task based on its result.
     ///
-    /// Cancelling the token ensures that any child tasks that were spawned
-    /// with a child token linked to this context are also cancelled.
-    fn remove_cancellation_token(&mut self, context: CommandDispatcherContext) {
-        if let Some(token) = self.cancellation_tokens.remove(&context) {
-            token.cancel();
+    /// - On **cancellation**: removes and cancels the token, propagating
+    ///   cancellation to any child tasks.
+    /// - On **success or error**: removes the token without cancelling it,
+    ///   allowing child tasks to continue running and report their own results.
+    fn complete_task_token<T, E>(
+        &mut self,
+        context: CommandDispatcherContext,
+        result: &Result<T, CommandDispatcherError<E>>,
+    ) {
+        match result {
+            Err(CommandDispatcherError::Cancelled) => {
+                // Truly cancelled -- propagate to children
+                if let Some(token) = self.cancellation_tokens.remove(&context) {
+                    token.cancel();
+                }
+            }
+            _ => {
+                // Success or error -- remove token, do NOT cancel children
+                self.cancellation_tokens.remove(&context);
+            }
         }
     }
 
-    /// Returns true if the parent context has been cancelled or cleaned up.
+    /// Returns true if the parent context has been explicitly cancelled.
     ///
-    /// Since `remove_cancellation_token` cancels tokens when removing them,
-    /// a missing or cancelled token means the parent is done and any child
-    /// task should be skipped.
+    /// A missing token means the parent completed (success or error) and
+    /// new child tasks should still be allowed to proceed. Only an
+    /// explicitly cancelled token blocks new children.
     fn is_parent_cancelled(&self, parent: Option<CommandDispatcherContext>) -> bool {
         parent.is_some_and(|ctx| {
             self.cancellation_tokens
                 .get(&ctx)
-                .is_none_or(|token| token.is_cancelled())
+                .is_some_and(|token| token.is_cancelled())
         })
+    }
+
+    /// Dispatches a subscriber cancellation event to the appropriate
+    /// dedup task registry.
+    fn on_subscriber_cancelled(&mut self, context: CommandDispatcherContext) {
+        match context {
+            CommandDispatcherContext::QuerySourceBuildCache(id) => {
+                self.source_build_cache_status.on_subscriber_cancelled(id);
+            }
+            CommandDispatcherContext::DevSourceMetadata(id) => {
+                self.dev_source_metadata.on_subscriber_cancelled(id);
+            }
+            CommandDispatcherContext::InstantiateToolEnv(id) => {
+                self.instantiated_tool_envs.on_subscriber_cancelled(id);
+            }
+            CommandDispatcherContext::SourceRecord(id) => {
+                self.source_record.on_subscriber_cancelled(id);
+            }
+            CommandDispatcherContext::SourceMetadata(id) => {
+                self.source_metadata.on_subscriber_cancelled(id);
+            }
+            CommandDispatcherContext::BuildBackendMetadata(id) => {
+                self.build_backend_metadata.on_subscriber_cancelled(id);
+            }
+            CommandDispatcherContext::SourceBuild(id) => {
+                self.source_build.on_subscriber_cancelled(id);
+            }
+            CommandDispatcherContext::GitCheckout(id) => {
+                self.git_checkouts.on_subscriber_cancelled(id);
+            }
+            CommandDispatcherContext::UrlCheckout(id) => {
+                self.url_checkouts.on_subscriber_cancelled(id);
+            }
+            _ => {}
+        }
+    }
+
+    /// Pushes a monitoring future that fires when the given caller token is
+    /// cancelled (i.e. the caller dropped their future). The resulting
+    /// [`TaskResult::SubscriberCancelled`] event triggers the registry to
+    /// check whether all subscribers are gone.
+    fn push_subscriber_monitor(
+        &mut self,
+        context: CommandDispatcherContext,
+        caller_token: CancellationToken,
+    ) {
+        use futures::FutureExt;
+
+        self.monitor_futures.push(
+            async move {
+                caller_token.cancelled().await;
+                context
+            }
+            .boxed_local(),
+        );
     }
 }

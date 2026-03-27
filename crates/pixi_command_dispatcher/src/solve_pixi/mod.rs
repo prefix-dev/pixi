@@ -316,11 +316,25 @@ impl PixiEnvironmentSpec {
             });
         }
 
-        // Collect all dev source records
+        // Collect all dev source records, letting all futures complete
+        // before returning any error.
         let mut all_records = Vec::new();
+        let mut first_error: Option<CommandDispatcherError<SolvePixiEnvironmentError>> = None;
         while let Some(result) = dev_source_futures.next().await {
-            let metadata = result?;
-            all_records.extend(metadata.records);
+            match result {
+                Ok(metadata) => all_records.extend(metadata.records),
+                Err(CommandDispatcherError::Cancelled) => {
+                    return Err(CommandDispatcherError::Cancelled);
+                }
+                Err(err) if first_error.is_none() => {
+                    first_error = Some(err);
+                }
+                Err(_) => {}
+            }
+        }
+
+        if let Some(err) = first_error {
+            return Err(err);
         }
 
         Ok(all_records)

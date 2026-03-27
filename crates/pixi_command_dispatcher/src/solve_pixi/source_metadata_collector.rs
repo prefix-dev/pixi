@@ -107,6 +107,7 @@ impl SourceMetadataCollector {
             .collect::<Vec<_>>();
         let mut result = CollectedSourceMetadata::default();
         let mut already_encountered_specs = HashSet::new();
+        let mut collected_errors: Vec<CollectSourceMetadataError> = Vec::new();
 
         loop {
             // Create futures for all encountered specs.
@@ -120,15 +121,27 @@ impl SourceMetadataCollector {
             }
 
             // Wait for the next future to finish. Cancelled results are
-            // transparently skipped by the `CancellationAwareFutures` adapter
+            // transparently skipped by the `CancellationAwareFutures` adapter.
             // Only real errors or successes arrive here.
             let Some(source_metadata) = source_futures.next().await else {
                 // No more pending futures, we are done.
+                if let Some(err) = collected_errors.into_iter().next() {
+                    return Err(CommandDispatcherError::Failed(err));
+                }
                 return Ok(result);
             };
 
-            // Handle any potential error
-            let (source_metadata, mut chain) = source_metadata?;
+            // Collect errors but let remaining futures complete.
+            let (source_metadata, mut chain) = match source_metadata {
+                Ok(v) => v,
+                Err(CommandDispatcherError::Cancelled) => {
+                    return Err(CommandDispatcherError::Cancelled);
+                }
+                Err(CommandDispatcherError::Failed(err)) => {
+                    collected_errors.push(err);
+                    continue;
+                }
+            };
 
             // Process transitive dependencies
             for record in &source_metadata.records {
