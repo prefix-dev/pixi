@@ -147,6 +147,7 @@ Config {
                 compression_level: Highest,
             },
         ),
+        compiler_cache: None,
     },
     tool_platform: None,
     change_ps1: None,

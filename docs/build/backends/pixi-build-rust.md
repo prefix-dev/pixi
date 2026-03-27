@@ -19,7 +19,7 @@ This backend automatically generates conda packages from Rust projects by:
 - **Using Cargo**: Leverages Rust's native build system for compilation and installation
 - **Cargo.toml Integration**: Automatically reads package metadata (name, version, description, license, etc.) from your `Cargo.toml` file when not specified in `pixi.toml`
 - **Cross-platform support**: Works consistently across Linux, macOS, and Windows
-- **Optimization support**: Automatically detects and integrates with `sccache` for faster compilation
+- **Compiler cache support**: Integrates with `sccache` for faster compilation when configured
 - **OpenSSL integration**: Handles OpenSSL linking when available in the environment
 
 ## Basic Usage
@@ -266,7 +266,7 @@ binaries = ["my-cli"]
 The Rust backend follows this build process:
 
 1. **Environment Setup**: Configures OpenSSL paths if available in the environment
-2. **Compiler Caching**: Sets up `sccache` as `RUSTC_WRAPPER` if available for faster compilation
+2. **Compiler Caching**: Sets `RUSTC_WRAPPER=sccache` when `compiler-cache = "sccache"` is configured (see below)
 3. **Build and Install**: Executes `cargo install` with the following default options:
    - `--locked`: Use the exact versions from `Cargo.lock`
    - `--root "$PREFIX"`: Install to the conda package prefix
@@ -274,7 +274,28 @@ The Rust backend follows this build process:
    - `--no-track`: Don't track installation metadata
    - `--force`: Force installation even if already installed
    - `--bin <name>` (optional, repeated): Added for each entry in [`[package.build.config.binaries]`](#binaries)
-4. **Cache Statistics**: Displays `sccache` statistics if available
+4. **Cache Statistics**: Displays `sccache` statistics if sccache is enabled
+
+## Compiler Cache
+
+You can speed up builds significantly by enabling a compiler cache. Configure it globally in
+`~/.config/pixi/config.toml` or per-project in `.pixi/config.toml`:
+
+```toml title="config.toml"
+[build]
+compiler-cache = "sccache"
+```
+
+Or per-package in `pixi.toml`:
+
+```toml title="pixi.toml"
+[package.build.config]
+compiler-cache = "sccache"
+```
+
+When enabled, `sccache` is added to the build dependencies automatically and `RUSTC_WRAPPER` is
+set to `sccache`. Any `SCCACHE_*` environment variables (e.g. for remote S3 cache configuration)
+are picked up from the environment and treated as secrets.
 
 ## Default Variants
 

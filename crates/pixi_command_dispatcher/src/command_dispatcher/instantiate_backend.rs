@@ -9,6 +9,7 @@ use crate::{
 use miette::Diagnostic;
 use ordermap::OrderMap;
 use pixi_build_discovery::{BackendSpec, CommandSpec, EnabledProtocols};
+use pixi_config;
 use pixi_build_frontend::{
     Backend, BackendOverride, json_rpc,
     json_rpc::{CommunicationError, JsonRpcBackend},
@@ -79,6 +80,12 @@ impl CommandDispatcher {
             )))
         })?;
 
+        // Merge the global compiler cache setting into the backend configuration as a
+        // default. The package's own `pixi.toml` config takes precedence because we
+        // only insert if the key is absent.
+        let configuration =
+            inject_compiler_cache(spec.configuration, &self.data.compiler_cache);
+
         let command_spec = match self.build_backend_overrides() {
             BackendOverride::System(overridden_backends) => overridden_backends
                 .named_backend_override(&backend_spec.name)
@@ -94,7 +101,7 @@ impl CommandDispatcher {
                             workspace_directory: Some(spec.workspace_root.to_std_path_buf()),
                             cache_directory: Some(self.cache_dirs().root().to_owned().into()),
                             project_model: spec.project_model,
-                            configuration: spec.configuration,
+                            configuration: configuration.clone(),
                             target_configuration: spec.target_configuration,
                         })
                         .map_err(InstantiateBackendError::from)
@@ -196,7 +203,7 @@ impl CommandDispatcher {
             spec.manifest_path.to_std_path_buf(),
             spec.workspace_root.to_std_path_buf(),
             spec.project_model,
-            spec.configuration,
+            configuration,
             spec.target_configuration,
             Some(self.cache_dirs().root().to_owned().into()),
             tool,
@@ -206,6 +213,28 @@ impl CommandDispatcher {
         .map_err(CommandDispatcherError::Failed)
         .map(|backend| Backend::new(backend.into(), api_version))
     }
+}
+
+/// Injects the compiler cache setting into the backend configuration JSON as a
+/// default. If `compiler_cache` is `None`, the configuration is returned
+/// unchanged. If the configuration already contains a `compiler-cache` key
+/// (set by the package's own `pixi.toml`), it is not overwritten.
+fn inject_compiler_cache(
+    configuration: Option<serde_json::Value>,
+    compiler_cache: &Option<pixi_config::CompilerCache>,
+) -> Option<serde_json::Value> {
+    let Some(compiler_cache) = compiler_cache else {
+        return configuration;
+    };
+
+    let compiler_cache_value =
+        serde_json::to_value(compiler_cache).expect("CompilerCache serialization cannot fail");
+
+    let mut config = configuration.unwrap_or(serde_json::Value::Object(Default::default()));
+    if let Some(obj) = config.as_object_mut() {
+        obj.entry("compiler-cache").or_insert(compiler_cache_value);
+    }
+    Some(config)
 }
 
 #[derive(Debug, Clone, Error, Diagnostic)]

@@ -11,6 +11,7 @@ use crate::{
     limits::ResolvedLimits,
 };
 use pixi_build_frontend::BackendOverride;
+use pixi_config::CompilerCache;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
@@ -36,6 +37,7 @@ pub struct CommandDispatcherBuilder {
     executor: Executor,
     tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
     execute_link_scripts: bool,
+    compiler_cache: Option<CompilerCache>,
 }
 
 impl CommandDispatcherBuilder {
@@ -143,6 +145,16 @@ impl CommandDispatcherBuilder {
         }
     }
 
+    /// Sets the compiler cache to use for all builds dispatched through this
+    /// instance. This acts as a default that can be overridden per-package in
+    /// `pixi.toml` under `[package.build.config]`.
+    pub fn with_compiler_cache(self, compiler_cache: Option<CompilerCache>) -> Self {
+        Self {
+            compiler_cache,
+            ..self
+        }
+    }
+
     /// Completes the builder and returns a new [`CommandDispatcher`].
     pub fn finish(self) -> CommandDispatcher {
         let root_dir = self.root_dir.unwrap_or_else(|| {
@@ -203,6 +215,7 @@ impl CommandDispatcherBuilder {
             tool_platform,
             execute_link_scripts: self.execute_link_scripts,
             executor: self.executor,
+            compiler_cache: self.compiler_cache,
         });
 
         let (sender, join_handle) = CommandDispatcherProcessor::spawn(data.clone(), self.reporter);

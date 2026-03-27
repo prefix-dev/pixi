@@ -38,6 +38,19 @@ run-post-link-scripts = "false" # set to "insecure" to allow running post-link s
 tool-platform = "win-64" # force tools like build backends to be installed for a specific platform
 #  --8<-- [end:tool-platform]
 
+#  --8<-- [start:build]
+[build]
+# The compiler cache to use for all builds (cmake, rust, …).
+# Supported values: "sccache"
+compiler-cache = "sccache"
+
+# The package format and compression level to use when building conda packages.
+# Format: "<format>" or "<format>:<level>"
+# Formats: "conda" (default), "tar-bz2"
+# Levels: "default", "max", "fast", or a numeric level (e.g. "conda:max", "tar-bz2:9")
+package-format = "conda"
+#  --8<-- [end:build]
+
 #  --8<-- [start:repodata-config]
 [repodata-config]
 # disable fetching of jlap, bz2 or zstd repodata files.

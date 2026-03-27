@@ -4,12 +4,23 @@ use indexmap::IndexMap;
 use pixi_build_backend::generated_recipe::BackendConfig;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+/// The compiler cache to use during builds.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompilerCache {
+    /// Use sccache as the compiler cache.
+    Sccache,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CMakeBackendConfig {
     /// Extra args for CMake invocation
     #[serde(default)]
     pub extra_args: Vec<String>,
+    /// System environment variables (not serialized, populated at runtime)
+    #[serde(skip)]
+    pub system_env: IndexMap<String, String>,
     /// Environment Variables
     #[serde(default)]
     pub env: IndexMap<String, String>,
@@ -23,6 +34,37 @@ pub struct CMakeBackendConfig {
     /// List of compilers to use (e.g., ["c", "cxx", "cuda"])
     /// If not specified, a default will be used
     pub compilers: Option<Vec<String>>,
+    /// The compiler cache to use. If set, the build will use the specified
+    /// compiler cache. Can also be set globally in `~/.config/pixi/config.toml`
+    /// or per-project in `.pixi/config.toml`.
+    pub compiler_cache: Option<CompilerCache>,
+}
+
+fn collect_system_env() -> IndexMap<String, String> {
+    std::env::vars().collect()
+}
+
+impl CMakeBackendConfig {
+    /// Create a new `CMakeBackendConfig` with the current system environment.
+    pub fn new_with_system_environment() -> Self {
+        Self {
+            system_env: collect_system_env(),
+            ..Self::new_with_clean_environment()
+        }
+    }
+
+    /// Create a new `CMakeBackendConfig` with an empty system environment.
+    pub fn new_with_clean_environment() -> Self {
+        Self {
+            system_env: Default::default(),
+            extra_args: Default::default(),
+            env: Default::default(),
+            debug_dir: Default::default(),
+            extra_input_globs: Default::default(),
+            compilers: Default::default(),
+            compiler_cache: Default::default(),
+        }
+    }
 }
 
 impl BackendConfig for CMakeBackendConfig {
@@ -48,6 +90,7 @@ impl BackendConfig for CMakeBackendConfig {
             } else {
                 target_config.extra_args.clone()
             },
+            system_env: collect_system_env(),
             env: {
                 let mut merged_env = self.env.clone();
                 merged_env.extend(target_config.env.clone());
@@ -63,6 +106,10 @@ impl BackendConfig for CMakeBackendConfig {
                 .compilers
                 .clone()
                 .or_else(|| self.compilers.clone()),
+            compiler_cache: target_config
+                .compiler_cache
+                .clone()
+                .or_else(|| self.compiler_cache.clone()),
         })
     }
 }
@@ -89,10 +136,12 @@ mod tests {
 
         let base_config = CMakeBackendConfig {
             extra_args: vec!["--base-arg".to_string()],
+            system_env: Default::default(),
             env: base_env,
             debug_dir: Some(PathBuf::from("/base/debug")),
             extra_input_globs: vec!["*.base".to_string()],
             compilers: Some(vec!["cxx".to_string()]),
+            compiler_cache: None,
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -101,10 +150,12 @@ mod tests {
 
         let target_config = CMakeBackendConfig {
             extra_args: vec!["--target-arg".to_string()],
+            system_env: Default::default(),
             env: target_env,
             debug_dir: None,
             extra_input_globs: vec!["*.target".to_string()],
             compilers: Some(vec!["c".to_string(), "cuda".to_string()]),
+            compiler_cache: None,
         };
 
         let merged = base_config
@@ -145,13 +196,15 @@ mod tests {
 
         let base_config = CMakeBackendConfig {
             extra_args: vec!["--base-arg".to_string()],
+            system_env: Default::default(),
             env: base_env,
             debug_dir: Some(PathBuf::from("/base/debug")),
             extra_input_globs: vec!["*.base".to_string()],
             compilers: Some(vec!["cxx".to_string()]),
+            compiler_cache: None,
         };
 
-        let empty_target_config = CMakeBackendConfig::default();
+        let empty_target_config = CMakeBackendConfig::new_with_clean_environment();
 
         let merged = base_config
             .merge_with_target_config(&empty_target_config)
@@ -169,12 +222,12 @@ mod tests {
     fn test_merge_target_debug_dir_error() {
         let base_config = CMakeBackendConfig {
             debug_dir: Some(PathBuf::from("/base/debug")),
-            ..Default::default()
+            ..CMakeBackendConfig::new_with_clean_environment()
         };
 
         let target_config = CMakeBackendConfig {
             debug_dir: Some(PathBuf::from("/target/debug")),
-            ..Default::default()
+            ..CMakeBackendConfig::new_with_clean_environment()
         };
 
         let result = base_config.merge_with_target_config(&target_config);
