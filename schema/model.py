@@ -50,7 +50,13 @@ GitUrl = Annotated[
 ]
 ExcludeNewer = Annotated[
     str,
-    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$"),
+    StringConstraints(
+        # Matches either:
+        # - A date: YYYY-MM-DD
+        # - A datetime: YYYY-MM-DDTHH:MM:SSZ or YYYY-MM-DD HH:MM:SS+00:00
+        # - A duration: e.g. 7d, 1h, 30m, 1h30m, 7days, 1hour 30minutes
+        pattern=r"^(\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?|(\d+\s*(years?|months?|weeks?|days?|hours?|h|minutes?|mins?|m|seconds?|secs?|s)\s*)+)$"
+    ),
 ]
 
 
@@ -170,8 +176,8 @@ class Workspace(StrictBaseModel):
     )
     exclude_newer: ExcludeNewer | None = Field(
         None,
-        examples=["2023-11-03", "2023-11-03T03:33:12Z"],
-        description="Exclude any package newer than this date",
+        examples=["2023-11-03", "2023-11-03T03:33:12Z", "7days", "1h30m"],
+        description="Exclude any package newer than this date or duration. Can be an absolute date/datetime or a relative duration (e.g. '7days', '1h30m').",
     )
     platforms: list[Platform] | None = Field(
         None, description="The platforms that the project supports"

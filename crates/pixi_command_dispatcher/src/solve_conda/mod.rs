@@ -299,7 +299,9 @@ impl SolveCondaEnvironmentSpec {
                 locked_packages: installed,
                 virtual_packages: self.virtual_packages,
                 channel_priority: self.channel_priority,
-                exclude_newer: self.exclude_newer,
+                exclude_newer: self
+                    .exclude_newer
+                    .map(rattler_solve::ExcludeNewer::from_datetime),
                 strategy: self.strategy,
                 constraints: constrains_match_specs,
                 ..rattler_solve::SolverTask::from_iter(solvable_records)

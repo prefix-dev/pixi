@@ -89,7 +89,15 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         Ok(channel_priority)
     }
 
-    /// Returns whether packages should be excluded newer than a certain date.
+    /// Returns the raw exclude-newer configuration.
+    fn exclude_newer_raw(&self) -> Option<crate::exclude_newer::ExcludeNewer> {
+        self.workspace_manifest().workspace.exclude_newer
+    }
+
+    /// Returns the resolved exclude-newer timestamp.
+    ///
+    /// For absolute timestamps, returns the timestamp directly.
+    /// For durations, resolves to `now - duration`.
     fn exclude_newer(&self) -> Option<DateTime<Utc>> {
         self.workspace_manifest()
             .workspace
