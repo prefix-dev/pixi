@@ -130,7 +130,6 @@ pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 nanoid = "0.4.0"
-rand = { version = "0.10.0", default-features = false }
 
 rayon = "1.10.0"
 regex = "1.11.1"
