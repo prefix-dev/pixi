@@ -1530,7 +1530,13 @@ dependencies = []
                 .expect("dependencies array"),
         );
 
-        insta::assert_snapshot!(doc.to_string());
+        insta::assert_snapshot!(
+            doc.to_string(),
+            @r###"
+[project]
+dependencies = []
+"###
+        );
     }
 
     /// Tests that calling `reformat_array_multiline` twice produces identical
@@ -1584,7 +1590,19 @@ dependencies = [
                 .expect("dependencies array"),
         );
 
-        insta::assert_snapshot!(doc.to_string());
+        insta::assert_snapshot!(
+            doc.to_string(),
+            @r###"
+[project]
+dependencies = [
+    # own-line comment
+    "numpy>=1.0",     # end-of-line comment
+    # second own-line comment
+    "pandas>=2.0",
+    # comment before closing
+] # actual trailing comment
+"###
+        );
     }
 
     /// Tests that inline comment with no padding before `#` is preserved.
@@ -1609,6 +1627,16 @@ dependencies = [
                 .expect("dependencies array"),
         );
 
-        insta::assert_snapshot!(doc.to_string());
+        insta::assert_snapshot!(
+            doc.to_string(),
+            @r###"
+[project]
+dependencies = [
+    "attrs>=25.4.0",#comment
+    "numpy>=1.0",
+    "requests>=2.0",#another inline comment
+]
+"###
+        );
     }
 }

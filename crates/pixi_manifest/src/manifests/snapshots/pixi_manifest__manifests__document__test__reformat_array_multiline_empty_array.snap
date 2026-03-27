@@ -1,7 +1,0 @@
----
-source: crates/pixi_manifest/src/manifests/document.rs
-expression: doc.to_string()
----
-
-[project]
-dependencies = []
