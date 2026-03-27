@@ -7,7 +7,16 @@ from dataclasses import dataclass, field
 import re
 from pathlib import Path
 
-REPO_ROOT = Path("/home/bastard/Desktop/OpenSource/ESOC/pixi")
+
+def find_repo_root(start: Path) -> Path:
+    """Find repository root by walking upward from the given path."""
+    for candidate in (start, *start.parents):
+        if (candidate / "pixi.toml").is_file() and (candidate / "docs").is_dir():
+            return candidate
+    raise RuntimeError("Unable to locate repository root from script location")
+
+
+REPO_ROOT = find_repo_root(Path(__file__).resolve())
 DOCS_ROOT = REPO_ROOT / "docs"
 
 PROJECT_FIELDS = {"name", "version", "description", "authors", "license", "readme"}
@@ -206,7 +215,7 @@ def read_mkdocs_snippet(filepath: str, snippet: str | None = None) -> str | None
     if not full_path.exists() or not full_path.is_file():
         return None
 
-    content = full_path.read_text()
+    content = full_path.read_text(encoding="utf-8")
     if snippet is None:
         return _strip_snippet_markers(content)
 
@@ -327,7 +336,7 @@ def process_markdown_file(filepath: Path) -> ProcessResult:
         result.ignored_file = True
         return result
 
-    content = filepath.read_text()
+    content = filepath.read_text(encoding="utf-8")
     lines = content.split("\n")
     new_lines: list[str] = []
 
@@ -427,7 +436,7 @@ def process_markdown_file(filepath: Path) -> ProcessResult:
         index += 1
 
     if result.modified:
-        filepath.write_text("\n".join(new_lines) + "\n")
+        filepath.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
 
     return result
 
