@@ -177,6 +177,7 @@ for further details on how to use the software.
 - [pixi task remove](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/task/remove/index.md)
 - [pixi upload anaconda](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/anaconda/index.md)
 - [pixi upload artifactory](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/artifactory/index.md)
+- [pixi upload cloudsmith](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/cloudsmith/index.md)
 - [pixi upload conda-forge](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/conda-forge/index.md)
 - [pixi upload prefix](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/prefix/index.md)
 - [pixi upload quetz](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/quetz/index.md)
