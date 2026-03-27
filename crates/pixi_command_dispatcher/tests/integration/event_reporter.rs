@@ -11,10 +11,10 @@ use pixi_command_dispatcher::{
     SourceBuildSpec, SourceMetadataSpec, SourceRecordSpec,
     reporter::{
         BackendSourceBuildId, BackendSourceBuildReporter, BuildBackendMetadataId,
-        BuildBackendMetadataReporter, CondaSolveId, GitCheckoutId, InstantiateToolEnvId,
-        InstantiateToolEnvironmentReporter, PixiInstallId, PixiSolveId, SourceBuildId,
-        SourceBuildReporter, SourceMetadataId, SourceMetadataReporter, SourceRecordId,
-        SourceRecordReporter,
+        BuildBackendMetadataReporter, CondaSolveId, DedupGroupId, GitCheckoutId,
+        InstantiateToolEnvId, InstantiateToolEnvironmentReporter, PixiInstallId, PixiSolveId,
+        SourceBuildId, SourceBuildReporter, SourceMetadataId, SourceMetadataReporter,
+        SourceRecordId, SourceRecordReporter,
     },
 };
 use pixi_git::resolver::RepositoryReference;
@@ -352,6 +352,7 @@ impl GitCheckoutReporter for EventReporter {
         &mut self,
         context: Option<ReporterContext>,
         env: &RepositoryReference,
+        _dedup_id: DedupGroupId,
     ) -> GitCheckoutId {
         let next_id = GitCheckoutId(self.next_git_checkout_id);
         self.next_git_checkout_id += 1;
@@ -384,6 +385,7 @@ impl BuildBackendMetadataReporter for EventReporter {
         &mut self,
         context: Option<ReporterContext>,
         spec: &BuildBackendMetadataSpec,
+        _dedup_id: DedupGroupId,
     ) -> BuildBackendMetadataId {
         let next_id = BuildBackendMetadataId(self.next_source_metadata_id);
         self.next_source_metadata_id += 1;
@@ -426,6 +428,7 @@ impl SourceMetadataReporter for EventReporter {
         &mut self,
         context: Option<ReporterContext>,
         spec: &SourceMetadataSpec,
+        _dedup_id: DedupGroupId,
     ) -> SourceMetadataId {
         let next_id = SourceMetadataId(self.next_source_metadata_id);
         self.next_source_metadata_id += 1;
@@ -458,6 +461,7 @@ impl SourceRecordReporter for EventReporter {
         &mut self,
         context: Option<ReporterContext>,
         spec: &SourceRecordSpec,
+        _dedup_id: DedupGroupId,
     ) -> SourceRecordId {
         let next_id = SourceRecordId(self.next_source_metadata_id);
         self.next_source_metadata_id += 1;
@@ -490,6 +494,7 @@ impl InstantiateToolEnvironmentReporter for EventReporter {
         &mut self,
         context: Option<ReporterContext>,
         spec: &InstantiateToolEnvironmentSpec,
+        _dedup_id: DedupGroupId,
     ) -> InstantiateToolEnvId {
         let next_id = InstantiateToolEnvId(self.next_instantiate_tool_env_id);
         self.next_instantiate_tool_env_id += 1;
@@ -522,6 +527,7 @@ impl SourceBuildReporter for EventReporter {
         &mut self,
         context: Option<ReporterContext>,
         spec: &SourceBuildSpec,
+        _dedup_id: DedupGroupId,
     ) -> SourceBuildId {
         let next_id = SourceBuildId(self.next_source_metadata_id);
         self.next_source_metadata_id += 1;

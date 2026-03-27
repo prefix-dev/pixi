@@ -10,7 +10,7 @@ use std::{collections::HashMap, hash::Hash};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
-use crate::{CommandDispatcherError, CommandDispatcherErrorResultExt};
+use crate::{CommandDispatcherError, CommandDispatcherErrorResultExt, reporter::DedupGroupId};
 
 /// A shared, deduplicated computation.
 ///
@@ -29,6 +29,10 @@ pub(crate) enum SharedTask<T, E> {
         /// Number of active (non-cancelled) subscribers. When this reaches
         /// zero the task's cancellation token is cancelled.
         active_subscribers: usize,
+
+        /// Stable identifier for this dedup group, shared across all
+        /// subscribers for reporter correlation.
+        dedup_group_id: DedupGroupId,
     },
 
     /// Task completed (success or domain error). Result is cached for future
@@ -43,10 +47,14 @@ pub(crate) enum DedupAction<Id> {
     New {
         id: Id,
         cancellation_token: CancellationToken,
+        dedup_group_id: DedupGroupId,
     },
 
     /// Deduplicated — added as a subscriber to an existing pending task.
-    Subscribed { id: Id },
+    Subscribed {
+        id: Id,
+        dedup_group_id: DedupGroupId,
+    },
 
     /// Result was already cached — sent immediately to the caller.
     AlreadyCompleted,
@@ -104,18 +112,21 @@ where
                 self.key_to_id.insert(key, id);
 
                 let cancellation_token = CancellationToken::new();
+                let dedup_group_id = DedupGroupId(self.next_id - 1);
                 self.tasks.insert(
                     id,
                     SharedTask::Pending {
                         waiters: vec![tx],
                         cancellation_token: cancellation_token.clone(),
                         active_subscribers: 1,
+                        dedup_group_id,
                     },
                 );
 
                 return DedupAction::New {
                     id,
                     cancellation_token,
+                    dedup_group_id,
                 };
             }
         };
@@ -124,17 +135,21 @@ where
             // The key exists but the task was removed (e.g. cancelled).
             // Re-create as a new task.
             let cancellation_token = CancellationToken::new();
+            let dedup_group_id = DedupGroupId(self.next_id);
+            self.next_id += 1;
             self.tasks.insert(
                 id,
                 SharedTask::Pending {
                     waiters: vec![tx],
                     cancellation_token: cancellation_token.clone(),
                     active_subscribers: 1,
+                    dedup_group_id,
                 },
             );
             return DedupAction::New {
                 id,
                 cancellation_token,
+                dedup_group_id,
             };
         };
 
@@ -142,11 +157,15 @@ where
             SharedTask::Pending {
                 waiters,
                 active_subscribers,
+                dedup_group_id,
                 ..
             } => {
                 waiters.push(tx);
                 *active_subscribers += 1;
-                DedupAction::Subscribed { id }
+                DedupAction::Subscribed {
+                    id,
+                    dedup_group_id: *dedup_group_id,
+                }
             }
             SharedTask::Completed(result) => {
                 let _ = tx.send(result.clone());

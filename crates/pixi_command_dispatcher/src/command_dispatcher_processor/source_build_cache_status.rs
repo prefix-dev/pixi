@@ -38,7 +38,7 @@ impl CommandDispatcherProcessor {
         );
 
         let id = match &action {
-            DedupAction::New { id, .. } | DedupAction::Subscribed { id } => *id,
+            DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,
             DedupAction::AlreadyCompleted => return,
         };
 

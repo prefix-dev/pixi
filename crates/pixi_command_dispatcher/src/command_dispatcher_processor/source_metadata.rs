@@ -36,6 +36,7 @@ impl CommandDispatcherProcessor {
         let DedupAction::New {
             id,
             cancellation_token,
+            dedup_group_id,
         } = action
         else {
             unreachable!("source metadata tasks use unique keys");
@@ -54,7 +55,7 @@ impl CommandDispatcherProcessor {
             .reporter
             .as_deref_mut()
             .and_then(Reporter::as_source_metadata_reporter)
-            .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+            .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
 
         if let Some(reporter_id) = reporter_id {
             self.source_metadata_reporters.insert(id, reporter_id);
