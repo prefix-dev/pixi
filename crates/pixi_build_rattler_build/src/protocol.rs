@@ -493,8 +493,10 @@ fn inject_pixi_version_into_context(source_code: &str, version: &str) -> miette:
         source_code.find('\n').map(|i| i + 1).unwrap_or(source_code.len())
     } else if let Some(pos) = source_code.find("\ncontext:") {
         let after = pos + "\ncontext:".len();
-        let eol = source_code[after..].find('\n').map(|i| after + i + 1).unwrap_or(source_code.len());
-        eol
+        source_code[after..]
+            .find('\n')
+            .map(|i| after + i + 1)
+            .unwrap_or(source_code.len())
     } else {
         // No context: block — prepend one
         return Ok(format!("context:\n{injected_line}\n{source_code}"));
