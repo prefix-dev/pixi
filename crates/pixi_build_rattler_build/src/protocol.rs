@@ -1380,22 +1380,22 @@ numpy:
         use pixi_build_types::ProjectModel;
         use rattler_conda_types::Version;
         use std::str::FromStr;
-    
+
         let temp_dir = tempdir().unwrap();
         let recipe_path = temp_dir.path().join("recipe.yaml");
-    
+
         // Recipe using ${{ PIXI_PACKAGE_VERSION }} directly — no hardcoded version
         let recipe = "package:\n  name: my-pkg\n  version: ${{ PIXI_PACKAGE_VERSION }}\n\nbuild:\n  number: 0\n";
         tokio::fs::write(&recipe_path, recipe)
             .await
             .expect("Failed to write recipe");
-    
+
         let project_model = ProjectModel {
             name: Some("my-pkg".to_string()),
             version: Some(Version::from_str("1.2.3").unwrap()),
             ..Default::default()
         };
-    
+
         let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
             .initialize(InitializeParams {
                 workspace_directory: None,
@@ -1408,7 +1408,7 @@ numpy:
             })
             .await
             .unwrap();
-    
+
         let result = factory
             .0
             .conda_outputs(CondaOutputsParams {
@@ -1421,7 +1421,7 @@ numpy:
             })
             .await
             .unwrap();
-    
+
         assert_eq!(result.outputs.len(), 1);
         assert_eq!(
             result.outputs[0].metadata.version.to_string(),
@@ -1459,7 +1459,8 @@ numpy:
 
     #[test]
     fn test_inject_version_existing_context_other_keys_preserved() {
-        let recipe = "context:\n  lib_version: \"2.0\"\n  suffix: \"-dev\"\npackage:\n  name: foo\n";
+        let recipe =
+            "context:\n  lib_version: \"2.0\"\n  suffix: \"-dev\"\npackage:\n  name: foo\n";
         let result = super::inject_pixi_version_into_context(recipe, "3.0.0").unwrap();
         assert!(result.contains("PIXI_PACKAGE_VERSION: \"3.0.0\""));
         assert!(result.contains("lib_version: \"2.0\""));
