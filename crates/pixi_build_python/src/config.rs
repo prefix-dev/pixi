@@ -35,7 +35,9 @@ pub struct PythonBackendConfig {
     #[serde(default)]
     pub ignore_pypi_mapping: Option<bool>,
     /// Whether the package uses the Python Stable ABI (abi3).
-    /// When true, adds `python_abi` to host requirements.
+    /// When true, marks the package as version-independent, adds `python-abi3`
+    /// to the host requirements, and suppresses CPython ABI run exports from
+    /// `host: python`.
     /// Only meaningful for packages with compiled extensions (non-noarch).
     #[serde(default)]
     pub abi3: Option<bool>,

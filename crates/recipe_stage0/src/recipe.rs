@@ -569,6 +569,20 @@ pub struct ResolvedRequirements {
     pub run_constraints: Vec<PackageDependency>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq, Eq)]
+pub struct IgnoreRunExports {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub by_name: Vec<PackageName>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub from_package: Vec<PackageName>,
+}
+
+impl IgnoreRunExports {
+    pub fn is_empty(&self) -> bool {
+        self.by_name.is_empty() && self.from_package.is_empty()
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 pub enum Target {
     Default,
@@ -586,6 +600,8 @@ pub struct ConditionalRequirements {
     pub run: ConditionalList<PackageDependency>,
     #[serde(default)]
     pub run_constraints: ConditionalList<PackageDependency>,
+    #[serde(default, skip_serializing_if = "IgnoreRunExports::is_empty")]
+    pub ignore_run_exports: IgnoreRunExports,
 }
 
 impl ConditionalRequirements {
@@ -656,12 +672,31 @@ impl Display for ConditionalRequirements {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{{ build: {}, host: {}, run: {}, run_constraints: {} }}",
+            "{{ build: {}, host: {}, run: {}, run_constraints: {}",
             self.build.iter().format(", "),
             self.host.iter().format(", "),
             self.run.iter().format(", "),
             self.run_constraints.iter().format(", "),
-        )
+        )?;
+
+        if !self.ignore_run_exports.is_empty() {
+            write!(
+                f,
+                ", ignore_run_exports: {{ by_name: {}, from_package: {} }}",
+                self.ignore_run_exports
+                    .by_name
+                    .iter()
+                    .map(|name| name.as_normalized())
+                    .format(", "),
+                self.ignore_run_exports
+                    .from_package
+                    .iter()
+                    .map(|name| name.as_normalized())
+                    .format(", "),
+            )?;
+        }
+
+        write!(f, " }}")
     }
 }
 
@@ -854,6 +889,7 @@ mod tests {
                 ],
                 run: vec!["xtl >=0.7,<0.8".parse().unwrap()],
                 run_constraints: vec!["xsimd >=8.0.3,<10".parse().unwrap()],
+                ..Default::default()
             },
             about: Some(About {
                 homepage: Some(Value::Concrete(
