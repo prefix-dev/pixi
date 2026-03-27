@@ -1,32 +1,18 @@
-use std::{collections::hash_map::Entry, sync::Arc};
+use std::sync::Arc;
 
-use futures::{FutureExt, channel::mpsc::UnboundedSender};
-use tokio_util::sync::CancellationToken;
+use futures::FutureExt;
 
-use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
+use super::CommandDispatcherProcessor;
+use super::TaskResult;
+use super::dedup::DedupAction;
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
-    CommandDispatcherError, Reporter,
+    BuildBackendMetadata, BuildBackendMetadataError, CommandDispatcherError, Reporter,
     command_dispatcher::{
         BuildBackendMetadataId, BuildBackendMetadataTask, CommandDispatcherContext,
     },
 };
 
 impl CommandDispatcherProcessor {
-    /// Constructs a new [`BuildBackendMetadataId`] for the given `task`.
-    fn gen_build_backend_metadata_id(
-        &mut self,
-        task: &BuildBackendMetadataTask,
-    ) -> BuildBackendMetadataId {
-        let id = BuildBackendMetadataId(self.build_backend_metadata_ids.len());
-        self.build_backend_metadata_ids
-            .insert(task.spec.clone(), id);
-        if let Some(parent) = task.parent {
-            self.parent_contexts.insert(id.into(), parent);
-        }
-        id
-    }
-
     /// Called when a [`crate::command_dispatcher::BuildBackendMetadataTask`]
     /// task was received.
     pub(crate) fn on_build_backend_metadata(&mut self, task: BuildBackendMetadataTask) {
@@ -34,105 +20,75 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        // Lookup the id of the source metadata to avoid duplication.
-        let source_metadata_id = {
-            match self.build_backend_metadata_ids.get(&task.spec) {
-                Some(id) => *id,
-                None => self.gen_build_backend_metadata_id(&task),
-            }
+        let action = self.build_backend_metadata.on_task(
+            task.spec.clone(),
+            task.tx,
+            BuildBackendMetadataId,
+        );
+
+        let id = match &action {
+            DedupAction::New { id, .. } | DedupAction::Subscribed { id } => *id,
+            DedupAction::AlreadyCompleted => return,
         };
 
-        match self.build_backend_metadata.entry(source_metadata_id) {
-            Entry::Occupied(mut entry) => match entry.get_mut() {
-                PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
-                PendingDeduplicatingTask::Completed(result, _) => {
-                    let _ = task.tx.send(result.clone());
-                }
-            },
-            Entry::Vacant(entry) => {
-                entry.insert(PendingDeduplicatingTask::Pending(
-                    vec![task.tx],
-                    task.parent,
-                ));
+        let dispatcher_context = CommandDispatcherContext::BuildBackendMetadata(id);
 
-                // Notify the reporter that a new solve has been queued and started.
-                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_build_backend_metadata_reporter)
-                    .map(|reporter| reporter.on_queued(parent_context, &task.spec));
-
-                if let Some(reporter_id) = reporter_id {
-                    self.build_backend_metadata_reporters
-                        .insert(source_metadata_id, reporter_id);
-                }
-
-                // Open a channel to receive build output.
-                let (log_sink, rx) = futures::channel::mpsc::unbounded();
-
-                if let Some((reporter, reporter_id)) = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_build_backend_metadata_reporter)
-                    .zip(reporter_id)
-                {
-                    reporter.on_started(reporter_id, Box::new(rx))
-                }
-
-                self.queue_build_backend_metadata_task(
-                    source_metadata_id,
-                    task.spec,
-                    task.cancellation_token,
-                    log_sink,
-                    task.parent,
-                );
+        if let DedupAction::New {
+            cancellation_token, ..
+        } = action
+        {
+            if let Some(parent) = task.parent {
+                self.parent_contexts
+                    .insert(dispatcher_context, parent);
             }
+
+            // Notify the reporter that a new task has been queued.
+            let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
+            let reporter_id = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_build_backend_metadata_reporter)
+                .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+
+            if let Some(reporter_id) = reporter_id {
+                self.build_backend_metadata_reporters.insert(id, reporter_id);
+            }
+
+            // Open a channel to receive build output.
+            let (log_sink, rx) = futures::channel::mpsc::unbounded();
+
+            if let Some((reporter, reporter_id)) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_build_backend_metadata_reporter)
+                .zip(reporter_id)
+            {
+                reporter.on_started(reporter_id, Box::new(rx))
+            }
+
+            let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+
+            self.pending_futures.push(
+                cancellation_token
+                    .run_until_cancelled_owned(task.spec.request(dispatcher, log_sink))
+                    .map(move |result| {
+                        TaskResult::BuildBackendMetadata(
+                            id,
+                            Box::new(result.map_or(
+                                Err(CommandDispatcherError::Cancelled),
+                                |result| result.map(Arc::new),
+                            )),
+                        )
+                    })
+                    .boxed_local(),
+            );
         }
-    }
 
-    /// Queues a [`BuildBackendMetadata`] task to be processed.
-    fn queue_build_backend_metadata_task(
-        &mut self,
-        build_backend_metadata_id: BuildBackendMetadataId,
-        spec: BuildBackendMetadataSpec,
-        cancellation_token: CancellationToken,
-        log_sink: UnboundedSender<String>,
-        parent: Option<CommandDispatcherContext>,
-    ) {
-        let dispatcher_context =
-            CommandDispatcherContext::BuildBackendMetadata(build_backend_metadata_id);
-        let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
-
-        // Create a child cancellation token linked to parent's token (if any).
-        let cancellation_token = self.get_child_cancellation_token(parent, cancellation_token);
-
-        // Store the cancellation token for this context so child tasks can link to it.
-        self.store_cancellation_token(dispatcher_context, cancellation_token.clone());
-
-        // Open a channel to receive build output.
-        self.pending_futures.push(
-            cancellation_token
-                .run_until_cancelled_owned(spec.request(dispatcher, log_sink))
-                .map(move |result| {
-                    TaskResult::BuildBackendMetadata(
-                        build_backend_metadata_id,
-                        Box::new(
-                            result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
-                                result.map(Arc::new)
-                            }),
-                        ),
-                    )
-                })
-                .boxed_local(),
-        );
+        self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
     }
 
     /// Called when a [`super::TaskResult::BuildBackendMetadata`] task was
     /// received.
-    ///
-    /// This function will relay the result of the task back to the
-    /// [`super::CommandDispatcher`] that issues it.
     pub(crate) fn on_build_backend_metadata_result(
         &mut self,
         id: BuildBackendMetadataId,
@@ -141,9 +97,8 @@ impl CommandDispatcherProcessor {
             CommandDispatcherError<BuildBackendMetadataError>,
         >,
     ) {
-        let context = CommandDispatcherContext::BuildBackendMetadata(id);
-        self.parent_contexts.remove(&context);
-        self.remove_cancellation_token(context);
+        self.parent_contexts
+            .remove(&CommandDispatcherContext::BuildBackendMetadata(id));
 
         if let Some((reporter, reporter_id)) = self
             .reporter
@@ -155,13 +110,6 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id, failed);
         }
 
-        if !self
-            .build_backend_metadata
-            .get_mut(&id)
-            .expect("cannot find pending build backend metadata task")
-            .on_pending_result(result)
-        {
-            self.build_backend_metadata.remove(&id);
-        }
+        self.build_backend_metadata.on_result(id, result);
     }
 }

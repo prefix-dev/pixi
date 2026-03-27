@@ -110,7 +110,7 @@ impl CommandDispatcherProcessor {
 
         let context = CommandDispatcherContext::SolveCondaEnvironment(id);
         self.parent_contexts.remove(&context);
-        self.remove_cancellation_token(context);
+        self.complete_task_token(context, &result);
         let env = self
             .conda_solves
             .remove(id)

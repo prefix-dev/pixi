@@ -1994,6 +1994,7 @@ impl<'p> UpdateContext<'p> {
         //    broadcasted before a task subscribes to it.
         // 2. The futures stored in `pending_futures` do not necessarily have to be
         //    `'static`. Which makes them easier to work with.
+        let mut collected_errors: Vec<Report> = Vec::new();
         while let Some(result) = pending_futures.next().await {
             top_level_progress.inc(1);
             let task_result = match result {
@@ -2003,7 +2004,10 @@ impl<'p> UpdateContext<'p> {
                         "If we get a cancellation error here it means the error that caused the cancellation did not propagate."
                     );
                 }
-                Err(CommandDispatcherError::Failed(report)) => return Err(report),
+                Err(CommandDispatcherError::Failed(report)) => {
+                    collected_errors.push(report);
+                    continue;
+                }
             };
             match task_result {
                 TaskResult::CondaGroupSolved(group_name, platform, records, duration) => {
@@ -2128,6 +2132,12 @@ impl<'p> UpdateContext<'p> {
                     }
                 }
             }
+        }
+
+        // Return the first collected error (if any). All tasks had a chance
+        // to complete so the user sees all side effects and diagnostics.
+        if let Some(err) = collected_errors.into_iter().next() {
+            return Err(err);
         }
 
         // Construct a new lock-file containing all the updated or old records.

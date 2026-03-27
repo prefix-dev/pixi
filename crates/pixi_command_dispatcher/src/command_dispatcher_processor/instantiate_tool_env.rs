@@ -1,8 +1,8 @@
-use std::collections::hash_map::Entry;
-
 use futures::FutureExt;
 
-use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
+use super::CommandDispatcherProcessor;
+use super::TaskResult;
+use super::dedup::DedupAction;
 use crate::{
     CommandDispatcherError, Reporter,
     command_dispatcher::{CommandDispatcherContext, InstantiatedToolEnvId, Task},
@@ -13,7 +13,7 @@ use crate::{
 };
 
 impl CommandDispatcherProcessor {
-    /// Called when a [`super::ForegroundMessage::InstallPixiEnvironment`]
+    /// Called when a [`super::ForegroundMessage::InstantiateToolEnvironment`]
     /// task was received.
     pub(crate) fn on_instantiate_tool_environment(
         &mut self,
@@ -23,85 +23,68 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        let cache_key = task.spec.cache_key();
-        let new_id = self.instantiated_tool_cache_keys.len();
-        let id = *self
-            .instantiated_tool_cache_keys
-            .entry(cache_key)
-            .or_insert_with(|| InstantiatedToolEnvId(new_id));
+        let action = self.instantiated_tool_envs.on_task(
+            task.spec.cache_key(),
+            task.tx,
+            InstantiatedToolEnvId,
+        );
 
-        if let Some(parent) = task.parent {
-            // Store the parent context for the task.
-            self.parent_contexts.insert(id.into(), parent);
-        }
+        let id = match &action {
+            DedupAction::New { id, .. } | DedupAction::Subscribed { id } => *id,
+            DedupAction::AlreadyCompleted => return,
+        };
 
-        match self.instantiated_tool_envs.entry(id) {
-            Entry::Occupied(mut entry) => match entry.get_mut() {
-                PendingDeduplicatingTask::Pending(pending, _) => {
-                    pending.push(task.tx);
-                }
-                PendingDeduplicatingTask::Completed(result, _) => {
-                    let _ = task.tx.send(result.clone());
-                }
-            },
-            Entry::Vacant(entry) => {
-                entry.insert(PendingDeduplicatingTask::Pending(
-                    vec![task.tx],
-                    task.parent,
-                ));
+        let dispatcher_context = CommandDispatcherContext::InstantiateToolEnv(id);
 
-                // Notify the reporter that a new solve has been queued and started.
-                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_instantiate_tool_environment_reporter)
-                    .map(|reporter| reporter.on_queued(parent_context, &task.spec));
-
-                if let Some(reporter_id) = reporter_id {
-                    self.instantiated_tool_envs_reporters
-                        .insert(id, reporter_id);
-                }
-
-                if let Some((reporter, reporter_id)) = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_instantiate_tool_environment_reporter)
-                    .zip(reporter_id)
-                {
-                    reporter.on_started(reporter_id)
-                }
-
-                let dispatcher_context = CommandDispatcherContext::InstantiateToolEnv(id);
-
-                // Create a child cancellation token linked to parent's token (if any).
-                let cancellation_token =
-                    self.get_child_cancellation_token(task.parent, task.cancellation_token);
-
-                // Store the cancellation token for this context so child tasks can link to it.
-                self.store_cancellation_token(dispatcher_context, cancellation_token.clone());
-
-                let command_queue = self.create_task_command_dispatcher(dispatcher_context);
-                self.pending_futures.push(
-                    cancellation_token
-                        .run_until_cancelled_owned(task.spec.instantiate(command_queue))
-                        .map(move |result| {
-                            TaskResult::InstantiateToolEnv(
-                                id,
-                                Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
-                            )
-                        })
-                        .boxed_local(),
-                )
+        if let DedupAction::New {
+            cancellation_token, ..
+        } = action
+        {
+            if let Some(parent) = task.parent {
+                self.parent_contexts
+                    .insert(dispatcher_context, parent);
             }
+
+            // Notify the reporter that a new task has been queued and started.
+            let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
+            let reporter_id = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_instantiate_tool_environment_reporter)
+                .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+
+            if let Some(reporter_id) = reporter_id {
+                self.instantiated_tool_envs_reporters
+                    .insert(id, reporter_id);
+            }
+
+            if let Some((reporter, reporter_id)) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_instantiate_tool_environment_reporter)
+                .zip(reporter_id)
+            {
+                reporter.on_started(reporter_id)
+            }
+
+            let command_queue = self.create_task_command_dispatcher(dispatcher_context);
+            self.pending_futures.push(
+                cancellation_token
+                    .run_until_cancelled_owned(task.spec.instantiate(command_queue))
+                    .map(move |result| {
+                        TaskResult::InstantiateToolEnv(
+                            id,
+                            Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
+                        )
+                    })
+                    .boxed_local(),
+            );
         }
+
+        self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
     }
 
-    /// Called when a [`TaskResult::InstallPixiEnvironment`] task was
-    /// received.
-    ///
-    /// This function will relay the result of the task back to the
-    /// [`CommandDispatcher`] that issues it.
+    /// Called when a [`TaskResult::InstantiateToolEnv`] task was received.
     pub(crate) fn on_instantiate_tool_environment_result(
         &mut self,
         id: InstantiatedToolEnvId,
@@ -110,9 +93,8 @@ impl CommandDispatcherProcessor {
             CommandDispatcherError<InstantiateToolEnvironmentError>,
         >,
     ) {
-        let context = CommandDispatcherContext::InstantiateToolEnv(id);
-        self.parent_contexts.remove(&context);
-        self.remove_cancellation_token(context);
+        self.parent_contexts
+            .remove(&CommandDispatcherContext::InstantiateToolEnv(id));
 
         if let Some((reporter, reporter_id)) = self
             .reporter
@@ -123,13 +105,6 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id);
         }
 
-        if !self
-            .instantiated_tool_envs
-            .get_mut(&id)
-            .expect("cannot find instantiated tool env")
-            .on_pending_result(result)
-        {
-            self.instantiated_tool_envs.remove(&id);
-        }
+        self.instantiated_tool_envs.on_result(id, result);
     }
 }
