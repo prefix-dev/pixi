@@ -11,6 +11,7 @@ use std::{
 };
 
 use crate::lock_file::records_by_name::{HasNameVersion, LockedPypiRecordsByName};
+use dashmap::DashMap;
 use futures::TryStreamExt;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
@@ -1009,10 +1010,10 @@ pub struct VerifySatisfiabilityContext<'a> {
     pub uv_context: &'a OnceCell<UvResolutionContext>,
     pub config: &'a Config,
     pub project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
-    pub build_caches: &'a mut HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
+    pub build_caches: &'a DashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
     /// Cache for static metadata extracted from pyproject.toml files.
     /// This is shared across platforms since static metadata is platform-independent.
-    pub static_metadata_cache: &'a mut HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+    pub static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
 /// Verifies that the package requirements of the specified `environment` can be
@@ -1028,7 +1029,7 @@ pub struct VerifySatisfiabilityContext<'a> {
 /// the user and developer to figure out what went wrong.
 ///
 pub async fn verify_platform_satisfiability(
-    ctx: &mut VerifySatisfiabilityContext<'_>,
+    ctx: &VerifySatisfiabilityContext<'_>,
     locked_environment: rattler_lock::Environment<'_>,
 ) -> Result<
     (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
@@ -2007,7 +2008,7 @@ async fn resolve_single_dev_dependency(
 // The metadata is read into `ctx.static_metadata_cache` so later calls to
 // `read_local_package_metadata` for the same path return instantly.
 async fn lock_pypi_packages(
-    ctx: &mut VerifySatisfiabilityContext<'_>,
+    ctx: &VerifySatisfiabilityContext<'_>,
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
@@ -2044,7 +2045,7 @@ async fn lock_pypi_packages(
                         ))
                     })?;
 
-                let mut build_ctx = BuildMetadataContext {
+                let build_ctx = BuildMetadataContext {
                     environment: ctx.environment,
                     locked_pixi_records,
                     platform: ctx.platform,
@@ -2057,8 +2058,7 @@ async fn lock_pypi_packages(
                     static_metadata_cache: ctx.static_metadata_cache,
                 };
 
-                match read_local_package_metadata(&absolute_path, pkg.name(), &mut build_ctx).await
-                {
+                match read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx).await {
                     Ok(m) => Some(m),
                     Err(e) => {
                         return Err(CommandDispatcherError::Failed(Box::new(
@@ -2104,7 +2104,7 @@ async fn lock_pypi_packages(
 }
 
 pub(crate) async fn verify_package_platform_satisfiability(
-    ctx: &mut VerifySatisfiabilityContext<'_>,
+    ctx: &VerifySatisfiabilityContext<'_>,
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
@@ -2657,7 +2657,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         if let Some(current_metadata) =
                             ctx.static_metadata_cache.get(&absolute_path)
                             && let Some(mismatch) =
-                                pypi_metadata::compare_metadata(record, current_metadata)
+                                pypi_metadata::compare_metadata(record, &current_metadata)
                         {
                             let local_mismatch = match mismatch {
                                 pypi_metadata::MetadataMismatch::RequiresDist(diff) => {
@@ -2844,9 +2844,9 @@ struct BuildMetadataContext<'a> {
     uv_context: &'a UvResolutionContext,
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
     command_dispatcher: CommandDispatcher,
-    build_caches: &'a mut HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
+    build_caches: &'a DashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
     building_pixi_records: &'a Result<PixiRecordsByName, PlatformUnsat>,
-    static_metadata_cache: &'a mut HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+    static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
 /// Read metadata for a local directory package using UV's DistributionDatabase.
@@ -2859,12 +2859,12 @@ struct BuildMetadataContext<'a> {
 async fn read_local_package_metadata(
     directory: &Path,
     package_name: &pep508_rs::PackageName,
-    ctx: &mut BuildMetadataContext<'_>,
+    ctx: &BuildMetadataContext<'_>,
 ) -> Result<pypi_metadata::LocalPackageMetadata, PlatformUnsat> {
     // Check if we already have static metadata cached for this directory
     if let Some(cached_metadata) = ctx.static_metadata_cache.get(directory) {
         tracing::debug!("Package {} - using cached static metadata", package_name);
-        return Ok(cached_metadata.clone());
+        return Ok(cached_metadata.value().clone());
     }
 
     let pypi_options = ctx.environment.pypi_options();
@@ -2907,7 +2907,7 @@ async fn read_local_package_metadata(
     // We use best_platform() since the build prefix is shared across all target platforms
     let best_platform = ctx.environment.best_platform();
     let cache_key = BuildCacheKey::new(ctx.environment.name().clone(), best_platform);
-    let cache = ctx.build_caches.entry(cache_key).or_default();
+    let cache = ctx.build_caches.entry(cache_key).or_default().clone();
 
     let index_locations = pypi_options_to_index_locations(&pypi_options, ctx.project_root)
         .map_err(|e| {
@@ -3528,12 +3528,11 @@ mod tests {
         let uv_context: OnceCell<UvResolutionContext> = OnceCell::new();
 
         // Create build caches for sharing between satisfiability and resolution
-        let mut build_caches: HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>> =
-            HashMap::new();
+        let build_caches: DashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>> = DashMap::new();
 
         // Create static metadata cache for sharing across platforms
-        let mut static_metadata_cache: HashMap<PathBuf, pypi_metadata::LocalPackageMetadata> =
-            HashMap::new();
+        let static_metadata_cache: DashMap<PathBuf, pypi_metadata::LocalPackageMetadata> =
+            DashMap::new();
 
         // Verify individual environment satisfiability
         for env in project.environments() {
@@ -3544,7 +3543,7 @@ mod tests {
                 .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
             for platform in env.platforms() {
-                let mut ctx = VerifySatisfiabilityContext {
+                let ctx = VerifySatisfiabilityContext {
                     environment: &env,
                     command_dispatcher: command_dispatcher.clone(),
                     platform,
@@ -3552,20 +3551,19 @@ mod tests {
                     uv_context: &uv_context,
                     config: project.config(),
                     project_env_vars: project.env_vars().clone(),
-                    build_caches: &mut build_caches,
-                    static_metadata_cache: &mut static_metadata_cache,
+                    build_caches: &build_caches,
+                    static_metadata_cache: &static_metadata_cache,
                 };
-                let (verified_env, _locked_pypi) =
-                    verify_platform_satisfiability(&mut ctx, locked_env)
-                        .await
-                        .map_err(|e| match e {
-                            CommandDispatcherError::Failed(e) => {
-                                LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
-                            }
-                            CommandDispatcherError::Cancelled => {
-                                panic!("operation was cancelled which should never happen here")
-                            }
-                        })?;
+                let (verified_env, _locked_pypi) = verify_platform_satisfiability(&ctx, locked_env)
+                    .await
+                    .map_err(|e| match e {
+                        CommandDispatcherError::Failed(e) => {
+                            LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
+                        }
+                        CommandDispatcherError::Cancelled => {
+                            panic!("operation was cancelled which should never happen here")
+                        }
+                    })?;
 
                 individual_verified_envs.insert((env.name(), platform), verified_env);
             }
