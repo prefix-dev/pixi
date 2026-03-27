@@ -5,7 +5,7 @@ use pixi_build_types::{
     ProjectModel, Target as PbtTarget, TargetSelector as PbtTargetSelector, Targets as PbtTargets,
 };
 
-use rattler_conda_types::{ParseStrictness, Version, VersionSpec};
+use rattler_conda_types::{PackageName, ParseStrictness, Version, VersionSpec};
 
 use fs_err as fs;
 use serde::{Deserialize, Serialize};
@@ -143,21 +143,33 @@ fn convert_target_to_v1(target: &Target) -> PbtTarget {
             target
                 .build_dependencies
                 .iter()
-                .map(|(name, spec)| (name.clone(), convert_package_spec_to_v1(spec)))
+                .map(|(name, spec)| {
+                    let source_name =
+                        pixi_build_types::SourcePackageName::from(PackageName::new_unchecked(name));
+                    (source_name, convert_package_spec_to_v1(spec))
+                })
                 .collect(),
         ),
         host_dependencies: Some(
             target
                 .host_dependencies
                 .iter()
-                .map(|(name, spec)| (name.clone(), convert_package_spec_to_v1(spec)))
+                .map(|(name, spec)| {
+                    let source_name =
+                        pixi_build_types::SourcePackageName::from(PackageName::new_unchecked(name));
+                    (source_name, convert_package_spec_to_v1(spec))
+                })
                 .collect(),
         ),
         run_dependencies: Some(
             target
                 .run_dependencies
                 .iter()
-                .map(|(name, spec)| (name.clone(), convert_package_spec_to_v1(spec)))
+                .map(|(name, spec)| {
+                    let source_name =
+                        pixi_build_types::SourcePackageName::from(PackageName::new_unchecked(name));
+                    (source_name, convert_package_spec_to_v1(spec))
+                })
                 .collect(),
         ),
     }
