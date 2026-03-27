@@ -3,7 +3,7 @@ mod config;
 mod metadata;
 mod pypi_mapping;
 
-use build_script::{BuildPlatform, BuildScriptContext, Installer};
+use build_script::{BuildPlatform, BuildScriptContext};
 use config::PythonBackendConfig;
 use fs_err as fs;
 use miette::IntoDiagnostic;
@@ -156,8 +156,7 @@ impl GenerateRecipe for PythonGenerator {
         // are added to the `host` requirements, while for cmake/rust they are
         // added to the `build` requirements.
         // We only check build and host dependencies for the installer.
-        let installer =
-            Installer::determine_installer_from_names(model_dependencies.build_and_host_names());
+        let installer = config.installer.clone().unwrap_or_default();
 
         let installer_name = installer.package_name().to_string();
         let installer_pkg = pixi_build_types::SourcePackageName::from(installer_name.as_str());
@@ -651,7 +650,9 @@ version = "0.1.0"
         let generated_recipe = PythonGenerator::default()
             .generate_recipe(
                 &project_model,
-                &PythonBackendConfig::default_with_ignore_pyproject_manifest(),
+                &PythonBackendConfig::default_with_ignore_pyproject_manifest(Some(
+                    build_script::Installer::Pip,
+                )),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -696,7 +697,7 @@ version = "0.1.0"
         let generated_recipe = PythonGenerator::default()
             .generate_recipe(
                 &project_model,
-                &PythonBackendConfig::default_with_ignore_pyproject_manifest(),
+                &PythonBackendConfig::default_with_ignore_pyproject_manifest(None),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
@@ -1089,8 +1090,8 @@ build-backend = "hatchling.build"
 
         assert_eq!(
             host_deps,
-            vec!["pip", "python"],
-            "host deps should only contain pip and python when ignore_pypi_mapping=true"
+            vec!["uv", "python"],
+            "host deps should only contain uv and python when ignore_pypi_mapping=true"
         );
     }
 
@@ -1255,6 +1256,29 @@ build-backend = "setuptools.build_meta"
         assert!(
             config.ignore_pypi_mapping(),
             "ignore_pypi_mapping should default to true"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_uv_is_default_installer_in_host_requirements() {
+        let config = PythonBackendConfig::default_with_ignore_pyproject_manifest(None);
+        let recipe = generate_test_recipe(&config)
+            .await
+            .expect("Failed to generate recipe");
+        let host_deps: Vec<String> = recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|item| item.to_string())
+            .collect();
+        assert!(
+            host_deps.contains(&"uv".to_string()),
+            "uv should be in host deps when installer not specified, got: {host_deps:?}"
+        );
+        assert!(
+            !host_deps.contains(&"pip".to_string()),
+            "pip should NOT be in host deps when installer not specified, got: {host_deps:?}"
         );
     }
 }

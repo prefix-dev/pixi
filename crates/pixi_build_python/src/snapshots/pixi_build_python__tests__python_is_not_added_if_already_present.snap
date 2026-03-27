@@ -14,7 +14,7 @@ requirements:
   build: []
   host:
     - python
-    - pip
+    - uv
   run:
     - boltons
     - python
