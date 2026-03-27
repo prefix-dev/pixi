@@ -1,7 +1,6 @@
 pub(crate) mod cycle;
 
 pub use cycle::{Cycle, CycleEnvironment};
-use futures::TryStreamExt;
 use miette::Diagnostic;
 use pixi_record::SourceRecord;
 use pixi_variant::VariantValue;
@@ -116,10 +115,15 @@ impl SourceMetadataSpec {
             });
         }
 
-        let records: Vec<_> = futures
-            .map_ok(|resolved| resolved.record.clone())
-            .try_collect()
-            .await?;
+        let (resolved, errors) = futures.collect_all().await?;
+
+        // If any source record resolutions failed, return the first error.
+        // All tasks ran to completion so the user sees all side effects.
+        if let Some(err) = errors.into_iter().next() {
+            return Err(CommandDispatcherError::Failed(err));
+        }
+
+        let records = resolved.iter().map(|r| r.record.clone()).collect();
 
         Ok(SourceMetadata {
             source: build_backend_metadata.source.clone(),

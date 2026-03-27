@@ -2,9 +2,11 @@ use std::sync::Arc;
 
 use futures::FutureExt;
 
-use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
+use super::CommandDispatcherProcessor;
+use super::TaskResult;
+use super::dedup::DedupAction;
 use crate::{
-    CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
 };
 
@@ -13,25 +15,38 @@ impl CommandDispatcherProcessor {
     /// task was received.
     ///
     /// `SourceMetadata` is not deduplicated at this level. Its underlying
-    /// work fans out to deduplicated `SourceRecord` tasks.
+    /// work fans out to deduplicated `SourceRecord` tasks. Each request
+    /// uses a unique counter as key so it always creates a new task.
     pub(crate) fn on_source_metadata(&mut self, task: SourceMetadataTask) {
         if self.is_parent_cancelled(task.parent) {
             return;
         }
 
-        // Generate a unique id for this task (no deduplication).
-        let source_metadata_id = SourceMetadataId(self.source_metadata_id_counter);
+        // Use a unique counter as key — no deduplication at this level.
+        let unique_key = self.source_metadata_id_counter;
         self.source_metadata_id_counter += 1;
+
+        let action = self.source_metadata.on_task(
+            unique_key,
+            task.tx,
+            SourceMetadataId,
+        );
+
+        // Since the key is always unique, this is always New.
+        let DedupAction::New {
+            id,
+            cancellation_token,
+        } = action
+        else {
+            unreachable!("source metadata tasks use unique keys");
+        };
+
+        let dispatcher_context = CommandDispatcherContext::SourceMetadata(id);
 
         if let Some(parent) = task.parent {
             self.parent_contexts
-                .insert(source_metadata_id.into(), parent);
+                .insert(dispatcher_context, parent);
         }
-
-        self.source_metadata.insert(
-            source_metadata_id,
-            PendingDeduplicatingTask::Pending(vec![task.tx], task.parent),
-        );
 
         // Notify the reporter.
         let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
@@ -42,8 +57,7 @@ impl CommandDispatcherProcessor {
             .map(|reporter| reporter.on_queued(parent_context, &task.spec));
 
         if let Some(reporter_id) = reporter_id {
-            self.source_metadata_reporters
-                .insert(source_metadata_id, reporter_id);
+            self.source_metadata_reporters.insert(id, reporter_id);
         }
 
         if let Some((reporter, reporter_id)) = self
@@ -55,37 +69,14 @@ impl CommandDispatcherProcessor {
             reporter.on_started(reporter_id)
         }
 
-        self.queue_source_metadata_task(
-            source_metadata_id,
-            task.spec,
-            task.cancellation_token,
-            task.parent,
-        );
-    }
-
-    /// Queues a source metadata task to be executed.
-    fn queue_source_metadata_task(
-        &mut self,
-        source_metadata_id: SourceMetadataId,
-        spec: SourceMetadataSpec,
-        cancellation_token: tokio_util::sync::CancellationToken,
-        parent: Option<CommandDispatcherContext>,
-    ) {
-        let dispatcher_context = CommandDispatcherContext::SourceMetadata(source_metadata_id);
         let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
-
-        // Create a child cancellation token linked to parent's token (if any).
-        let cancellation_token = self.get_child_cancellation_token(parent, cancellation_token);
-
-        // Store the cancellation token for this context so child tasks can link to it.
-        self.store_cancellation_token(dispatcher_context, cancellation_token.clone());
 
         self.pending_futures.push(
             cancellation_token
-                .run_until_cancelled_owned(spec.request(dispatcher))
+                .run_until_cancelled_owned(task.spec.request(dispatcher))
                 .map(move |result| {
                     TaskResult::SourceMetadata(
-                        source_metadata_id,
+                        id,
                         Box::new(
                             result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
                                 result.map(Arc::new)
@@ -95,18 +86,18 @@ impl CommandDispatcherProcessor {
                 })
                 .boxed_local(),
         );
+
+        self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
     }
 
-    /// Called when a [`super::TaskResult::SourceMetadata`] task was
-    /// received.
+    /// Called when a [`super::TaskResult::SourceMetadata`] task was received.
     pub(crate) fn on_source_metadata_result(
         &mut self,
         id: SourceMetadataId,
         result: Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ) {
-        let context = CommandDispatcherContext::SourceMetadata(id);
-        self.parent_contexts.remove(&context);
-        self.remove_cancellation_token(context);
+        self.parent_contexts
+            .remove(&CommandDispatcherContext::SourceMetadata(id));
 
         if let Some((reporter, reporter_id)) = self
             .reporter
@@ -117,13 +108,6 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id);
         }
 
-        if !self
-            .source_metadata
-            .get_mut(&id)
-            .expect("cannot find pending task")
-            .on_pending_result(result)
-        {
-            self.source_metadata.remove(&id);
-        }
+        self.source_metadata.on_result(id, result);
     }
 }

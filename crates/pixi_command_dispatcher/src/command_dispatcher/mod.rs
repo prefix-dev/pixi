@@ -198,6 +198,8 @@ pub(crate) enum CommandDispatcherContext {
     DevSourceMetadata(DevSourceMetadataId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
+    GitCheckout(GitCheckoutId),
+    UrlCheckout(UrlCheckoutId),
 }
 
 slotmap::new_key_type! {
@@ -213,8 +215,6 @@ slotmap::new_key_type! {
     /// An id that uniquely identifies an installation of an environment.
     pub(crate) struct InstallPixiEnvironmentId;
 
-    /// A unique id that identifies a git source checkout.
-    pub(crate) struct GitCheckoutId;
 }
 
 /// An id that uniquely identifies a build backend metadata request.
@@ -244,6 +244,14 @@ pub(crate) struct DevSourceMetadataId(pub usize);
 /// An id that uniquely identifies a tool environment.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct InstantiatedToolEnvId(pub usize);
+
+/// An id that uniquely identifies a git checkout request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct GitCheckoutId(pub usize);
+
+/// An id that uniquely identifies a URL checkout request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct UrlCheckoutId(pub usize);
 
 /// A message send to the dispatch task.
 #[allow(clippy::large_enum_variant)]
