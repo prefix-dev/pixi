@@ -102,8 +102,6 @@ fn pixi_build_backend(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<recipe_stage0::requirements::PyPackageDependency>()?;
     m.add_class::<recipe_stage0::requirements::PySourceMatchSpec>()?;
     m.add_class::<recipe_stage0::requirements::PySerializableMatchSpec>()?;
-    m.add_class::<recipe_stage0::requirements::PySelector>()?;
-
     // Add conditional types
     m.add_class::<recipe_stage0::conditional::PyItemString>()?;
     m.add_class::<recipe_stage0::conditional::PyItemPackageDependency>()?;

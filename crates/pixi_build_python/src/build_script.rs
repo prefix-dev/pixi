@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use minijinja::Environment;
+use pixi_build_types::SourcePackageName;
 use serde::Serialize;
 
 const UV: &str = "uv";
@@ -22,10 +23,10 @@ pub enum Installer {
 }
 
 impl Installer {
-    pub fn package_name(&self) -> &str {
+    pub fn package_name(&self) -> SourcePackageName {
         match self {
-            Installer::Uv => "uv",
-            Installer::Pip => "pip",
+            Installer::Uv => rattler_conda_types::PackageName::new_unchecked("uv").into(),
+            Installer::Pip => rattler_conda_types::PackageName::new_unchecked("pip").into(),
         }
     }
 

@@ -77,16 +77,36 @@
 # ---
 # name: test_recipe_includes_project_run_dependency
   '''
-  context: {}
+  schema_version: 1
   package:
     name: custom_ros
     version: 0.0.1
-  source: []
   build:
-    script:
-      content: ''
-      env: {}
-      secrets: []
+    script: {}
+    python:
+      entry_points: []
+      skip_pyc_compilation: []
+      use_python_app_entrypoint: false
+    skip: []
+    always_copy_files: []
+    always_include_files: []
+    merge_build_and_host_envs: false
+    files: []
+    dynamic_linking:
+      rpaths: []
+      binary_relocation: true
+      missing_dso_allowlist: []
+      rpath_allowlist: []
+    variant:
+      use_keys: []
+      ignore_keys: []
+    prefix_detection:
+      force_file_type:
+        text: []
+        binary: []
+      ignore: false
+      ignore_binary_files: false
+    post_process: []
   requirements:
     build:
     - ros-noetic-catkin
@@ -118,14 +138,12 @@
     - ros-noetic-ros-package
     - ros-noetic-multi-package
     - ros-distro-mutex
-    run_constraints: []
-  tests: []
   about:
     homepage: https://test.io/custom_ros
-    license: LicenseRef-Apache License 2.0
     summary: Demo
     description: Demo
     repository: https://github.com/test/custom_ros
+  extra: {}
   
   '''
 # ---

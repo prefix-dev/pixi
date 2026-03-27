@@ -231,7 +231,7 @@ fn apply_variant_and_convert(
         .map_err(|e| ConvertDependencyError::VariantSpecParseError(variant.clone(), e))?;
 
     Ok(Some(pbt::NamedSpec {
-        name: name.as_source().to_owned(),
+        name: pbt::SourcePackageName::from(name.clone()),
         spec: convert_nameless_matchspec(spec),
     }))
 }
@@ -253,7 +253,7 @@ fn convert_dependency(
                     return Err(ConvertDependencyError::MissingName);
                 };
                 return Ok(pbt::NamedSpec {
-                    name: name.as_source().into(),
+                    name: pbt::SourcePackageName::from(name.clone()),
                     spec: pbt::PackageSpec::Source(source_package),
                 });
             }
@@ -281,7 +281,7 @@ fn convert_dependency(
             let name = &pin.name;
             let args = &pin.args;
             return Ok(pbt::NamedSpec {
-                name: name.as_source().to_owned(),
+                name: pbt::SourcePackageName::from(name.clone()),
                 spec: pbt::PackageSpec::PinCompatible(pbt::PinCompatibleSpec {
                     lower_bound: args.lower_bound.clone().map(convert_pin_bound),
                     upper_bound: args.upper_bound.clone().map(convert_pin_bound),
@@ -310,12 +310,12 @@ fn convert_dependency(
         source_spec.license = spec.license.or(source_spec.license);
 
         Ok(pbt::NamedSpec {
-            name: name.as_source().to_owned(),
+            name: pbt::SourcePackageName::from(name.clone()),
             spec: pbt::PackageSpec::Source(source_spec),
         })
     } else {
         Ok(pbt::NamedSpec {
-            name: name.as_source().to_owned(),
+            name: pbt::SourcePackageName::from(name.clone()),
             spec: pbt::PackageSpec::Binary(convert_nameless_matchspec(spec)),
         })
     }
@@ -373,7 +373,7 @@ fn convert_constraint_dependency(
     };
 
     Ok(pbt::NamedSpec {
-        name: name.as_source().to_owned(),
+        name: pbt::SourcePackageName::from(name.clone()),
         spec: pbt::ConstraintSpec::Binary(convert_nameless_matchspec(spec)),
     })
 }

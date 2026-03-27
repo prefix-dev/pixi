@@ -211,7 +211,7 @@ impl DevSourceMetadataSpec {
                 if let Some(deps) = deps {
                     // Process depends
                     for depend in &deps.depends {
-                        let name = PackageName::new_unchecked(&depend.name);
+                        let name = PackageName::new_unchecked(depend.name.as_str());
 
                         // Match directly on PackageSpec
                         let resolved_spec = match &depend.spec {
@@ -237,7 +237,7 @@ impl DevSourceMetadataSpec {
 
                     // Process constraints
                     for constraint in &deps.constraints {
-                        let name = PackageName::new_unchecked(&constraint.name);
+                        let name = PackageName::new_unchecked(constraint.name.as_str());
 
                         // Match on ConstraintSpec enum
                         let spec = match &constraint.spec {

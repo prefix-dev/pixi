@@ -31,7 +31,7 @@ serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 
-recipe_stage0 = { workspace = true }
+rattler_build_recipe = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
