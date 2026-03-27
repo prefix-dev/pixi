@@ -36,7 +36,7 @@ impl CommandDispatcherProcessor {
                 .on_task(cache_key, task.tx, SourceBuildCacheStatusId);
 
         let id = match &action {
-            DedupAction::New { id, .. } | DedupAction::Subscribed { id } => *id,
+            DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,
             DedupAction::AlreadyCompleted => return,
         };
 

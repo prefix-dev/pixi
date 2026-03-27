@@ -23,14 +23,16 @@ impl CommandDispatcherProcessor {
                 .on_task(repository_reference.clone(), task.tx, GitCheckoutId);
 
         let id = match &action {
-            DedupAction::New { id, .. } | DedupAction::Subscribed { id } => *id,
+            DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,
             DedupAction::AlreadyCompleted => return,
         };
 
         let dispatcher_context = CommandDispatcherContext::GitCheckout(id);
 
         if let DedupAction::New {
-            cancellation_token, ..
+            cancellation_token,
+            dedup_group_id,
+            ..
         } = action
         {
             if let Some(parent) = task.parent {
@@ -43,7 +45,9 @@ impl CommandDispatcherProcessor {
                 .reporter
                 .as_deref_mut()
                 .and_then(Reporter::as_git_reporter)
-                .map(|reporter| reporter.on_queued(parent_context, &repository_reference));
+                .map(|reporter| {
+                    reporter.on_queued(parent_context, &repository_reference, dedup_group_id)
+                });
 
             if let Some(reporter_id) = reporter_id {
                 self.git_checkout_reporters.insert(id, reporter_id);
@@ -77,6 +81,29 @@ impl CommandDispatcherProcessor {
                     })
                     .boxed_local(),
             );
+        } else if let DedupAction::Subscribed { dedup_group_id, .. } = action {
+            // Notify the reporter for the subscriber as well.
+            let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
+            let reporter_id = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_git_reporter)
+                .map(|reporter| {
+                    reporter.on_queued(parent_context, &repository_reference, dedup_group_id)
+                });
+
+            if let Some(reporter_id) = reporter_id {
+                self.git_checkout_reporters.insert(id, reporter_id);
+            }
+
+            if let Some((reporter, reporter_id)) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_git_reporter)
+                .zip(reporter_id)
+            {
+                reporter.on_start(reporter_id)
+            }
         }
 
         self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);

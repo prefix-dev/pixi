@@ -12,6 +12,15 @@ use crate::{
     install_pixi::InstallPixiEnvironmentSpec, instantiate_tool_env::InstantiateToolEnvironmentSpec,
 };
 
+/// An opaque identifier for a group of deduplicated tasks.
+///
+/// When multiple callers request the same computation, they share a single
+/// execution. All callers in the same group receive the same `DedupGroupId`
+/// so reporter implementations can correlate them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(transparent)]
+pub struct DedupGroupId(pub usize);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
 pub struct PixiInstallId(pub usize);
@@ -103,6 +112,7 @@ pub trait GitCheckoutReporter {
         &mut self,
         reason: Option<ReporterContext>,
         env: &RepositoryReference,
+        dedup_id: DedupGroupId,
     ) -> GitCheckoutId;
 
     /// Called when the git checkout has started.
@@ -119,7 +129,12 @@ pub struct UrlCheckoutId(pub usize);
 pub trait UrlCheckoutReporter {
     /// Called when a url checkout was queued on the
     /// [`crate::CommandDispatcher`].
-    fn on_queued(&mut self, reason: Option<ReporterContext>, env: &Url) -> UrlCheckoutId;
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &Url,
+        dedup_id: DedupGroupId,
+    ) -> UrlCheckoutId;
 
     /// Called when the url checkout has started.
     fn on_start(&mut self, checkout_id: UrlCheckoutId);
@@ -138,6 +153,7 @@ pub trait InstantiateToolEnvironmentReporter {
         &mut self,
         reason: Option<ReporterContext>,
         env: &InstantiateToolEnvironmentSpec,
+        dedup_id: DedupGroupId,
     ) -> InstantiateToolEnvId;
 
     /// Called when the operation has started.
@@ -157,6 +173,7 @@ pub trait BuildBackendMetadataReporter {
         &mut self,
         reason: Option<ReporterContext>,
         env: &BuildBackendMetadataSpec,
+        dedup_id: DedupGroupId,
     ) -> BuildBackendMetadataId;
 
     /// Called when the operation has started.
@@ -180,6 +197,7 @@ pub trait SourceRecordReporter {
         &mut self,
         reason: Option<ReporterContext>,
         spec: &SourceRecordSpec,
+        dedup_id: DedupGroupId,
     ) -> SourceRecordId;
 
     /// Called when the operation has started.
@@ -199,6 +217,7 @@ pub trait SourceMetadataReporter {
         &mut self,
         reason: Option<ReporterContext>,
         spec: &SourceMetadataSpec,
+        dedup_id: DedupGroupId,
     ) -> SourceMetadataId;
 
     /// Called when the operation has started.
@@ -220,6 +239,7 @@ pub trait SourceBuildReporter {
         &mut self,
         reason: Option<ReporterContext>,
         env: &SourceBuildSpec,
+        dedup_id: DedupGroupId,
     ) -> SourceBuildId;
 
     /// Called when the operation has started.
