@@ -77,6 +77,14 @@ fn trampoline() -> miette::Result<()> {
         .into_diagnostic()
         .wrap_err("Couldn't get the `env::current_exe`")?;
 
+    // Resolve symlinks so that config lookup works even when the trampoline is
+    // invoked via a symlink from a different directory. On Linux,
+    // `current_exe()` reads /proc/self/exe which auto-resolves symlinks, but
+    // on macOS (_NSGetExecutablePath) and Windows (GetModuleFileNameW) it
+    // returns the symlink path rather than the target.
+    // https://doc.rust-lang.org/std/env/fn.current_exe.html#platform-specific-behavior
+    let current_exe = current_exe.canonicalize().unwrap_or(current_exe);
+
     // ignore any ctrl-c signals
     ctrlc::set_handler(move || {})
         .into_diagnostic()
