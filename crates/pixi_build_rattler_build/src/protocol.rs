@@ -490,7 +490,10 @@ fn inject_pixi_version_into_context(source_code: &str, version: &str) -> miette:
 
     // Find context: as a top-level key (at start of line, not indented)
     let insert_after = if source_code.starts_with("context:") {
-        source_code.find('\n').map(|i| i + 1).unwrap_or(source_code.len())
+        source_code
+            .find('\n')
+            .map(|i| i + 1)
+            .unwrap_or(source_code.len())
     } else if let Some(pos) = source_code.find("\ncontext:") {
         let after = pos + "\ncontext:".len();
         source_code[after..]
