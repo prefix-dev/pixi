@@ -104,7 +104,7 @@ pub(crate) struct CommandDispatcherProcessor {
         BuildBackendMetadataError,
     >,
     build_backend_metadata_reporters:
-        HashMap<BuildBackendMetadataId, reporter::BuildBackendMetadataId>,
+        HashMap<BuildBackendMetadataId, Vec<reporter::BuildBackendMetadataId>>,
 
     /// Source metadata tasks (not deduplicated; fans out to deduplicated
     /// SourceRecord tasks). Uses a unique counter as key so every request
@@ -115,7 +115,7 @@ pub(crate) struct CommandDispatcherProcessor {
         Arc<SourceMetadata>,
         SourceMetadataError,
     >,
-    source_metadata_reporters: HashMap<SourceMetadataId, reporter::SourceMetadataId>,
+    source_metadata_reporters: HashMap<SourceMetadataId, Vec<reporter::SourceMetadataId>>,
     source_metadata_id_counter: usize,
 
     /// Source record requests (per name+variant) that are currently being processed.
@@ -125,7 +125,7 @@ pub(crate) struct CommandDispatcherProcessor {
         Arc<ResolvedSourceRecord>,
         SourceRecordError,
     >,
-    source_record_reporters: HashMap<SourceRecordId, reporter::SourceRecordId>,
+    source_record_reporters: HashMap<SourceRecordId, Vec<reporter::SourceRecordId>>,
 
     /// A mapping of instantiated tool environments
     instantiated_tool_envs: dedup::DedupTaskRegistry<
@@ -135,7 +135,7 @@ pub(crate) struct CommandDispatcherProcessor {
         InstantiateToolEnvironmentError,
     >,
     instantiated_tool_envs_reporters:
-        HashMap<InstantiatedToolEnvId, reporter::InstantiateToolEnvId>,
+        HashMap<InstantiatedToolEnvId, Vec<reporter::InstantiateToolEnvId>>,
 
     /// Git checkouts in the process of being checked out, or already
     /// checked out.
@@ -145,7 +145,7 @@ pub(crate) struct CommandDispatcherProcessor {
         Fetch,
         GitError,
     >,
-    git_checkout_reporters: HashMap<GitCheckoutId, reporter::GitCheckoutId>,
+    git_checkout_reporters: HashMap<GitCheckoutId, Vec<reporter::GitCheckoutId>>,
 
     /// Url checkouts in the process of being checked out, or already
     /// checked out.
@@ -155,7 +155,7 @@ pub(crate) struct CommandDispatcherProcessor {
         UrlCheckout,
         UrlError,
     >,
-    url_checkout_reporters: HashMap<UrlCheckoutId, reporter::UrlCheckoutId>,
+    url_checkout_reporters: HashMap<UrlCheckoutId, Vec<reporter::UrlCheckoutId>>,
 
     /// Source builds that are currently being processed.
     source_build: dedup::DedupTaskRegistry<
@@ -164,7 +164,7 @@ pub(crate) struct CommandDispatcherProcessor {
         SourceBuildResult,
         SourceBuildError,
     >,
-    source_build_reporters: HashMap<SourceBuildId, reporter::SourceBuildId>,
+    source_build_reporters: HashMap<SourceBuildId, Vec<reporter::SourceBuildId>>,
 
     /// Queries of source builds cache that are currently being processed.
     source_build_cache_status: dedup::DedupTaskRegistry<
@@ -479,7 +479,7 @@ impl CommandDispatcherProcessor {
                     if let Some(context) = self
                         .build_backend_metadata_reporters
                         .get(&id)
-                        .copied()
+                        .and_then(|ids| ids.first().copied())
                         .map(reporter::ReporterContext::BuildBackendMetadata)
                     {
                         return Some(context);
@@ -493,7 +493,7 @@ impl CommandDispatcherProcessor {
                     if let Some(context) = self
                         .source_metadata_reporters
                         .get(&id)
-                        .copied()
+                        .and_then(|ids| ids.first().copied())
                         .map(reporter::ReporterContext::SourceMetadata)
                     {
                         return Some(context);
@@ -507,7 +507,7 @@ impl CommandDispatcherProcessor {
                     if let Some(context) = self
                         .source_record_reporters
                         .get(&id)
-                        .copied()
+                        .and_then(|ids| ids.first().copied())
                         .map(reporter::ReporterContext::SourceRecord)
                     {
                         return Some(context);
@@ -526,7 +526,7 @@ impl CommandDispatcherProcessor {
                     if let Some(context) = self
                         .instantiated_tool_envs_reporters
                         .get(&id)
-                        .copied()
+                        .and_then(|ids| ids.first().copied())
                         .map(reporter::ReporterContext::InstantiateToolEnv)
                     {
                         return Some(context);
@@ -540,7 +540,7 @@ impl CommandDispatcherProcessor {
                     if let Some(context) = self
                         .source_build_reporters
                         .get(&id)
-                        .copied()
+                        .and_then(|ids| ids.first().copied())
                         .map(reporter::ReporterContext::SourceBuild)
                     {
                         return Some(context);
@@ -697,14 +697,15 @@ impl CommandDispatcherProcessor {
             CommandDispatcherContext::UrlCheckout(id) => {
                 self.url_checkouts.on_subscriber_cancelled(id);
             }
-            _ => {}
+            // Non-dedup tasks never push subscriber monitors.
+            _ => unreachable!("subscriber cancellation for non-dedup context: {context:?}")
         }
     }
 
     /// Pushes a monitoring future that fires when the given caller token is
     /// cancelled (i.e. the caller dropped their future). The resulting
-    /// [`TaskResult::SubscriberCancelled`] event triggers the registry to
-    /// check whether all subscribers are gone.
+    /// event on `monitor_futures` triggers the registry to check whether
+    /// all subscribers are gone.
     fn push_subscriber_monitor(
         &mut self,
         context: CommandDispatcherContext,
