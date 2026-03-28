@@ -203,6 +203,10 @@ async fn find_unsatisfiable_targets<'p>(
                     // the lock file's channel list without re-solving.
                     // Don't add to disregard_locked_content.
                 }
+                EnvironmentUnsat::ExcludeNewerOptionMismatch(..) => {
+                    // The stored solve option metadata is stale, but the locked content can
+                    // still be reused while we rewrite the lock file.
+                }
                 EnvironmentUnsat::ChannelsMismatch
                 | EnvironmentUnsat::InvalidChannel(_)
                 | EnvironmentUnsat::ChannelPriorityMismatch { .. }

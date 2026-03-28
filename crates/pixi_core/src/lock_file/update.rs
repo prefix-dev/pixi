@@ -2058,7 +2058,7 @@ impl<'p> UpdateContext<'p> {
                         .unwrap_or_default()
                         .unwrap_or_default()
                         .into(),
-                    exclude_newer: grouped_env.exclude_newer(),
+                    exclude_newer: grouped_env.exclude_newer_raw().map(Into::into),
                     pypi_prerelease_mode: Some(pypi_prerelease_mode.into()),
                 },
             );

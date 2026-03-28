@@ -256,6 +256,13 @@ rattler_build_variant_config = { version = "0.1.3" }
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
+file_url = { git = "https://github.com/pavelzw/rattler", branch = "exclude-newer" }
+rattler_conda_types = { git = "https://github.com/pavelzw/rattler", branch = "exclude-newer" }
+rattler_digest = { git = "https://github.com/pavelzw/rattler", branch = "exclude-newer" }
+rattler_lock = { git = "https://github.com/pavelzw/rattler", branch = "exclude-newer" }
+rattler_macros = { git = "https://github.com/pavelzw/rattler", branch = "exclude-newer" }
+rattler_redaction = { git = "https://github.com/pavelzw/rattler", branch = "exclude-newer" }
+rattler_solve = { git = "https://github.com/pavelzw/rattler", branch = "exclude-newer" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
 [profile.ci]

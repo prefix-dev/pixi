@@ -20,7 +20,7 @@ use pixi_command_dispatcher::{
 };
 use pixi_git::url::RepositoryUrl;
 use pixi_manifest::{
-    FeaturesExt,
+    ExcludeNewer as ManifestExcludeNewer, FeaturesExt,
     pypi::pypi_options::{NoBuild, PrereleaseMode},
 };
 use pixi_record::{
@@ -119,6 +119,9 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
+
+    #[error(transparent)]
+    ExcludeNewerOptionMismatch(#[from] ExcludeNewerOptionMismatch),
 }
 
 fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
@@ -151,6 +154,54 @@ impl Display for ExcludeNewerMismatch {
             self.package, self.timestamp, self.exclude_newer
         )
     }
+}
+
+#[derive(Debug, Error)]
+pub struct ExcludeNewerOptionMismatch {
+    locked: Option<String>,
+    expected: Option<String>,
+}
+
+impl Display for ExcludeNewerOptionMismatch {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match (&self.locked, &self.expected) {
+            (Some(locked), Some(expected)) => write!(
+                f,
+                "the lock-file was solved with exclude-newer set to {locked}, but the environment has this option set to {expected}"
+            ),
+            (None, Some(expected)) => write!(
+                f,
+                "the lock-file was solved without exclude-newer, but the environment has this option set to {expected}"
+            ),
+            (Some(locked), None) => write!(
+                f,
+                "the lock-file was solved with exclude-newer set to {locked}, but the environment does not have this option set"
+            ),
+            (None, None) => unreachable!("mismatch requires at least one side to be set"),
+        }
+    }
+}
+
+fn map_locked_exclude_newer(value: &rattler_lock::ExcludeNewer) -> ManifestExcludeNewer {
+    match value {
+        rattler_lock::ExcludeNewer::Timestamp(dt) => ManifestExcludeNewer::Timestamp(*dt),
+        rattler_lock::ExcludeNewer::Duration(duration) => ManifestExcludeNewer::Duration(*duration),
+    }
+}
+
+fn verify_exclude_newer_option(
+    locked_exclude_newer: Option<&rattler_lock::ExcludeNewer>,
+    expected_exclude_newer: Option<ManifestExcludeNewer>,
+) -> Result<(), ExcludeNewerOptionMismatch> {
+    let locked = locked_exclude_newer.map(map_locked_exclude_newer);
+    if locked == expected_exclude_newer {
+        return Ok(());
+    }
+
+    Err(ExcludeNewerOptionMismatch {
+        locked: locked.map(|value| value.to_string()),
+        expected: expected_exclude_newer.map(|value| value.to_string()),
+    })
 }
 
 fn verify_exclude_newer(
@@ -638,6 +689,13 @@ pub fn verify_environment_satisfiability(
     if let Err(err) = verify_exclude_newer(&locked_environment, environment.exclude_newer_config())
     {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
+    }
+
+    if let Err(err) = verify_exclude_newer_option(
+        locked_environment.solve_options().exclude_newer.as_ref(),
+        environment.exclude_newer_raw(),
+    ) {
+        return Err(EnvironmentUnsat::ExcludeNewerOptionMismatch(err));
     }
 
     Ok(())

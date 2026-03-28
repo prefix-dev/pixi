@@ -18,11 +18,55 @@ pub enum ExcludeNewer {
     Duration(std::time::Duration),
 }
 
+fn format_duration(duration: std::time::Duration) -> String {
+    let mut remaining = duration.as_secs();
+    let mut formatted = String::new();
+
+    for (unit, suffix) in [(86_400, "d"), (3_600, "h"), (60, "m"), (1, "s")] {
+        let count = remaining / unit;
+        if count > 0 {
+            formatted.push_str(&format!("{count}{suffix}"));
+            remaining %= unit;
+        }
+    }
+
+    let nanos = duration.subsec_nanos();
+    let millis = nanos / 1_000_000;
+    let micros = (nanos % 1_000_000) / 1_000;
+    let nanos = nanos % 1_000;
+
+    if millis > 0 {
+        formatted.push_str(&format!("{millis}ms"));
+    }
+    if micros > 0 {
+        formatted.push_str(&format!("{micros}us"));
+    }
+    if nanos > 0 {
+        formatted.push_str(&format!("{nanos}ns"));
+    }
+
+    if formatted.is_empty() {
+        formatted.push_str("0s");
+    }
+
+    formatted
+}
+
 impl From<ExcludeNewer> for rattler_solve::ExcludeNewer {
     fn from(value: ExcludeNewer) -> Self {
         match value {
             ExcludeNewer::Timestamp(dt) => Self::from_datetime(dt),
             ExcludeNewer::Duration(dur) => Self::from_duration(dur),
+        }
+    }
+}
+
+#[cfg(feature = "rattler_lock")]
+impl From<ExcludeNewer> for rattler_lock::ExcludeNewer {
+    fn from(value: ExcludeNewer) -> Self {
+        match value {
+            ExcludeNewer::Timestamp(dt) => Self::Timestamp(dt),
+            ExcludeNewer::Duration(dur) => Self::Duration(dur),
         }
     }
 }
@@ -63,9 +107,7 @@ impl std::fmt::Display for ExcludeNewer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExcludeNewer::Timestamp(dt) => dt.fmt(f),
-            ExcludeNewer::Duration(dur) => {
-                write!(f, "{}", humantime::format_duration(*dur))
-            }
+            ExcludeNewer::Duration(dur) => write!(f, "{}", format_duration(*dur)),
         }
     }
 }
@@ -121,7 +163,7 @@ mod test {
     fn test_display_duration() {
         let d = ExcludeNewer::Duration(std::time::Duration::from_secs(7 * 24 * 60 * 60));
         let display = format!("{d}");
-        assert!(display.contains("7days"), "got: {display}");
+        assert_eq!(display, "7d");
     }
 
     #[test]
