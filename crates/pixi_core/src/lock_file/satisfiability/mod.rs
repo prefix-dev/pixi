@@ -155,7 +155,7 @@ impl Display for ExcludeNewerMismatch {
 
 fn verify_exclude_newer(
     locked_environment: &rattler_lock::Environment<'_>,
-    exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
+    exclude_newer: Option<rattler_solve::ExcludeNewer>,
 ) -> Result<(), ExcludeNewerMismatch> {
     let Some(exclude_newer) = exclude_newer else {
         return Ok(());
@@ -164,13 +164,18 @@ fn verify_exclude_newer(
     for (_, packages) in locked_environment.conda_packages_by_platform() {
         for package in packages {
             let record = package.record();
-            if let Some(timestamp) = record.timestamp
-                && timestamp > exclude_newer
+            let channel = package
+                .as_binary()
+                .and_then(|binary| binary.channel.as_ref())
+                .map(ToString::to_string);
+
+            if let Some(timestamp) = record.timestamp.as_ref()
+                && exclude_newer.is_excluded(&record.name, channel.as_deref(), Some(timestamp))
             {
                 return Err(ExcludeNewerMismatch {
                     package: record.name.as_source().to_string(),
-                    timestamp: timestamp.into(),
-                    exclude_newer,
+                    timestamp: (*timestamp).into(),
+                    exclude_newer: exclude_newer.cutoff_for_channel(channel.as_deref()),
                 });
             }
         }
@@ -630,7 +635,8 @@ pub fn verify_environment_satisfiability(
         });
     }
 
-    if let Err(err) = verify_exclude_newer(&locked_environment, environment.exclude_newer()) {
+    if let Err(err) = verify_exclude_newer(&locked_environment, environment.exclude_newer_config())
+    {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
     }
 

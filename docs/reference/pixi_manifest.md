@@ -302,7 +302,7 @@ The value may be specified in the following formats:
 * As a date in the format `YYYY-MM-DD` (e.g. `2023-10-01`) in the systems time zone.
 * As a relative duration (e.g. `7days`, `1h30m`, `30m`). The duration is relative to the current time at solve time.
 
-When using a relative duration, the lock file will be re-solved each time since the effective cutoff shifts forward.
+When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
 Both PyPi and conda packages are considered.
 

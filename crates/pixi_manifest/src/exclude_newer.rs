@@ -18,31 +18,12 @@ pub enum ExcludeNewer {
     Duration(std::time::Duration),
 }
 
-impl ExcludeNewer {
-    /// Resolve to an absolute timestamp.
-    ///
-    /// For `Timestamp` variants, returns the timestamp directly.
-    /// For `Duration` variants, computes `now - duration`.
-    pub fn resolve(&self) -> DateTime<Utc> {
-        match self {
-            ExcludeNewer::Timestamp(dt) => *dt,
-            ExcludeNewer::Duration(dur) => {
-                let chrono_dur =
-                    chrono::Duration::from_std(*dur).expect("duration is too large to represent");
-                Utc::now() - chrono_dur
-            }
-        }
-    }
-
-    /// Returns `true` if this is a duration-based exclude-newer.
-    pub fn is_duration(&self) -> bool {
-        matches!(self, ExcludeNewer::Duration(_))
-    }
-}
-
-impl From<ExcludeNewer> for DateTime<Utc> {
+impl From<ExcludeNewer> for rattler_solve::ExcludeNewer {
     fn from(value: ExcludeNewer) -> Self {
-        value.resolve()
+        match value {
+            ExcludeNewer::Timestamp(dt) => Self::from_datetime(dt),
+            ExcludeNewer::Duration(dur) => Self::from_duration(dur),
+        }
     }
 }
 
@@ -151,11 +132,11 @@ mod test {
     }
 
     #[test]
-    fn test_resolve_timestamp() {
+    fn test_into_rattler_solve_timestamp() {
         let t = ExcludeNewer::from_str("2006-12-02T02:07:43Z").unwrap();
-        let resolved = t.resolve();
+        let config: rattler_solve::ExcludeNewer = t.into();
         assert_eq!(
-            resolved,
+            config.cutoff_for_channel(None),
             DateTime::parse_from_rfc3339("2006-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&Utc)
@@ -163,21 +144,16 @@ mod test {
     }
 
     #[test]
-    fn test_resolve_duration() {
+    fn test_into_rattler_solve_duration() {
         let before = Utc::now();
         let d = ExcludeNewer::Duration(std::time::Duration::from_secs(3600));
-        let resolved = d.resolve();
+        let config: rattler_solve::ExcludeNewer = d.into();
+        let resolved = config.cutoff_for_channel(None);
         let after = Utc::now();
 
         // resolved should be approximately 1 hour ago
         let one_hour = chrono::Duration::seconds(3600);
         assert!(resolved >= before - one_hour);
         assert!(resolved <= after - one_hour + chrono::Duration::seconds(1));
-    }
-
-    #[test]
-    fn test_is_duration() {
-        assert!(ExcludeNewer::from_str("7d").unwrap().is_duration());
-        assert!(!ExcludeNewer::from_str("2006-12-02").unwrap().is_duration());
     }
 }

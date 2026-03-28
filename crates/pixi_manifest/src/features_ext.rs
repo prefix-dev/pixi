@@ -94,15 +94,18 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         self.workspace_manifest().workspace.exclude_newer
     }
 
-    /// Returns the resolved exclude-newer timestamp.
-    ///
-    /// For absolute timestamps, returns the timestamp directly.
-    /// For durations, resolves to `now - duration`.
-    fn exclude_newer(&self) -> Option<DateTime<Utc>> {
+    /// Returns the exclude-newer solver configuration.
+    fn exclude_newer_config(&self) -> Option<rattler_solve::ExcludeNewer> {
         self.workspace_manifest()
             .workspace
             .exclude_newer
             .map(Into::into)
+    }
+
+    /// Returns the resolved default exclude-newer cutoff.
+    fn exclude_newer(&self) -> Option<DateTime<Utc>> {
+        self.exclude_newer_config()
+            .map(|config| config.cutoff_for_channel(None))
     }
 
     /// Returns the strategy for solving packages.
