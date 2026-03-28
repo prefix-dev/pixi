@@ -123,4 +123,25 @@ mod tests {
             .await
             .unwrap();
     }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_atomic_write_sync_falls_back() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("pixi.toml");
+        let contents = b"[project]\nname = \"test\"";
+
+        fs_err::write(&target, b"").unwrap();
+        fs_err::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        atomic_write_sync(&target, contents).unwrap();
+
+        let written = fs_err::read(&target).unwrap();
+        assert_eq!(written, contents);
+
+        // Reset permissions for clean up
+        fs_err::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
 }
