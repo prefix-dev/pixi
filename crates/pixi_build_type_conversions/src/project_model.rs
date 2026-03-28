@@ -131,7 +131,7 @@ fn to_pbt_dependencies<'a>(
 ) -> Result<OrderMap<pbt::SourcePackageName, pbt::PackageSpec>, SpecConversionError> {
     iter.map(|(name, spec)| {
         let converted = to_pixi_spec_v1(spec, channel_config)?;
-        Ok((name.as_normalized().to_string(), converted))
+        Ok((pbt::SourcePackageName::from(name.clone()), converted))
     })
     .collect()
 }

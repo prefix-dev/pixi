@@ -28,7 +28,11 @@ pyo3-async-runtimes = { version = "0.26.0", features = ["tokio-runtime"] }
 
 # Core pixi-build dependencies (local crates)
 pixi_build_backend = { path = "../../crates/pixi_build_backend" }
-recipe_stage0 = { path = "../../crates/recipe_stage0" }
+rattler_build_jinja = { version = "0.1.3" }
+rattler_build_recipe = { version = "0.1.3" }
+rattler_digest = { version = "1.2.3", default-features = false, features = [
+  "serde",
+] }
 
 # Pixi types
 pixi_build_types = { path = "../../crates/pixi_build_types" }
@@ -37,11 +41,13 @@ pixi_build_types = { path = "../../crates/pixi_build_types" }
 async-trait = "0.1"
 
 # Core serialization and async support
-rattler_conda_types = { version = "0.44.0", default-features = false }
+rattler_conda_types = { version = "0.44.3", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
+serde-value = "0.7.0"
 serde_json = "1.0"
 serde_yaml = "0.9"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "rt"] }
+url = "2"
 
 # Error handling
 miette = "7.5.0"

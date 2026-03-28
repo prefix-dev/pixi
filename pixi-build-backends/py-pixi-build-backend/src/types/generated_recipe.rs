@@ -20,8 +20,8 @@ use pyo3::{
     pyclass, pymethods,
     types::{PyAnyMethods, PyList, PyString},
 };
+use rattler_build_recipe::stage0::SingleOutputRecipe;
 use rattler_conda_types::{ChannelUrl, Platform};
-use recipe_stage0::recipe::IntermediateRecipe;
 
 create_py_wrap!(PyVecString, Vec<String>, |v: &Vec<String>,
                                            f: &mut std::fmt::Formatter<
@@ -57,7 +57,7 @@ impl PyGeneratedRecipe {
 
         let py_recipe = Py::new(
             py,
-            PyIntermediateRecipe::from_intermediate_recipe(generated_recipe.recipe, py),
+            PyIntermediateRecipe::from_single_output_recipe(generated_recipe.recipe, py),
         )?;
         let py_metadata_globs = Py::new(
             py,
@@ -102,7 +102,7 @@ impl PyGeneratedRecipe {
 
         let py_recipe = Py::new(
             py,
-            PyIntermediateRecipe::from_intermediate_recipe(generated_recipe.recipe, py),
+            PyIntermediateRecipe::from_single_output_recipe(generated_recipe.recipe, py),
         )?;
         let py_metadata_globs = Py::new(
             py,
@@ -128,7 +128,7 @@ impl PyGeneratedRecipe {
 
 impl PyGeneratedRecipe {
     pub fn to_generated_recipe(&self, py: Python) -> GeneratedRecipe {
-        let recipe: IntermediateRecipe = self.recipe.borrow(py).to_intermediate_recipe(py);
+        let recipe: SingleOutputRecipe = self.recipe.borrow(py).to_single_output_recipe(py);
         let metadata_input_globs: BTreeSet<String> =
             (*self.metadata_input_globs.borrow(py).clone())
                 .clone()
