@@ -17,20 +17,7 @@ fn temp_file_for(path: &Path) -> std::io::Result<tempfile::NamedTempFile> {
         path.file_name().and_then(|n| n.to_str()).unwrap_or("tmp")
     );
 
-    let target_dir = if fs_err::metadata(dir)?.permissions().readonly() {
-        tracing::warn!(
-            path = %path.display(),
-            "parent directory is read-only; temp file will be created in the system temp dir. \
-             Write will not be atomic."
-        );
-        std::env::temp_dir()
-    } else {
-        dir.to_path_buf()
-    };
-
-    tempfile::Builder::new()
-        .prefix(&prefix)
-        .tempfile_in(target_dir)
+    tempfile::Builder::new().prefix(&prefix).tempfile_in(dir)
 }
 /// Atomically write contents to a file by first writing to a temporary file and
 /// then renaming it to the target path.
@@ -39,45 +26,43 @@ fn temp_file_for(path: &Path) -> std::io::Result<tempfile::NamedTempFile> {
 /// If the write fails (e.g., due to disk full), the original file remains
 /// untouched.
 pub async fn atomic_write(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-    let temp_file = temp_file_for(path)?;
-    let temp_path = temp_file.into_temp_path();
-
-    let contents_ref = contents.as_ref();
-    tokio_fs::write(&temp_path, contents_ref).await?;
-
-    match temp_path.persist(path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.error.kind() == std::io::ErrorKind::PermissionDenied => {
+    let temp_file = match temp_file_for(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             tracing::warn!(
                 path = %path.display(),
-                "atomic rename failed due to permissions; falling back to direct write. \
-                 Write will not be atomic."
+                "cannot create temp file in parent directory; falling back to direct write. \
+                Write will not be atomic."
             );
-            tokio_fs::write(path, contents_ref).await
+            return tokio_fs::write(path, contents.as_ref()).await;
         }
-        Err(e) => Err(e.error),
-    }
+        Err(e) => return Err(e),
+    };
+
+    let temp_path = temp_file.into_temp_path();
+    tokio_fs::write(&temp_path, contents.as_ref()).await?;
+    temp_path.persist(path).map_err(|e| e.error)?;
+
+    Ok(())
 }
 
 /// Synchronous version of [`atomic_write`].
 pub fn atomic_write_sync(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
-    let mut temp_file = temp_file_for(path)?;
-
-    let contents_ref = contents.as_ref();
-    std::io::Write::write_all(&mut temp_file, contents_ref)?;
-
-    match temp_file.persist(path) {
-        Ok(_) => Ok(()),
-        Err(e) if e.error.kind() == std::io::ErrorKind::PermissionDenied => {
+    let mut temp_file = match temp_file_for(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             tracing::warn!(
                 path = %path.display(),
-                "atomic rename failed due to permissions; falling back to direct write. \
-                 Write will not be atomic."
+                "cannot create temp file in parent directory; falling back to direct write. \
+                Write will not be atomic."
             );
-            fs_err::write(path, contents_ref)
+            return fs_err::write(path, contents.as_ref());
         }
-        Err(e) => Err(e.error),
-    }
+        Err(e) => return Err(e),
+    };
+    std::io::Write::write_all(&mut temp_file, contents.as_ref())?;
+    temp_file.persist(path).map_err(|e| e.error)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -108,25 +93,6 @@ mod tests {
         );
     }
 
-    #[test]
-    #[cfg(unix)]
-    fn test_temp_file_falls_back_to_tmp_when_parent_not_writable() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let dir = tempfile::tempdir().unwrap();
-        let target = dir.path().join("pixi.toml");
-        fs_err::write(&target, b"[project]").unwrap();
-
-        fs_err::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o555)).unwrap();
-
-        let temp = temp_file_for(&target).unwrap();
-
-        assert_eq!(temp.path().parent().unwrap(), std::env::temp_dir());
-
-        // resetting the permissions for cleanup
-        fs_err::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
-
     /// Integration test: when the parent directory is read-only, `atomic_write`
     /// should fall back to a direct write and the file contents must be correct.
     ///
@@ -135,7 +101,7 @@ mod tests {
     /// fallback `tokio_fs::write` succeeds even though rename cannot.
     #[tokio::test]
     #[cfg(unix)]
-    async fn test_temp_atomic_write_falls_back_when_dir_not_writable() {
+    async fn test_atomic_write_falls_back() {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().unwrap();
