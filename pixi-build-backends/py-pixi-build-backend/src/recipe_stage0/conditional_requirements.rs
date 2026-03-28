@@ -2,8 +2,9 @@ use std::fmt::{Display, Formatter};
 
 use crate::{create_py_wrap, recipe_stage0::conditional::PyItemPackageDependency};
 
+use pixi_build_backend::package_dependency::PackageDependency;
 use pyo3::{prelude::*, types::PyList};
-use recipe_stage0::{matchspec::PackageDependency, recipe::Item};
+use rattler_build_recipe::stage0::Item;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Default, Deserialize, Serialize)]

@@ -278,9 +278,7 @@ where
         let named_source = Source {
             name: self.manifest_rel_path.display().to_string(),
             code: Arc::from(
-                generated_recipe
-                    .recipe
-                    .to_yaml_pretty()
+                serde_yaml::to_string(&generated_recipe.recipe)
                     .into_diagnostic()?
                     .as_str(),
             ),
@@ -395,7 +393,7 @@ where
                 .await
                 .into_diagnostic()?;
 
-            let recipe_yaml = generated_recipe.recipe.to_yaml_pretty().into_diagnostic()?;
+            let recipe_yaml = serde_yaml::to_string(&generated_recipe.recipe).into_diagnostic()?;
 
             tokio_fs::write(&package_recipe_path, &recipe_yaml)
                 .await
@@ -613,8 +611,11 @@ where
         // immediately use the intermediate recipe for some of this rattler-build
         // functions.
         let recipe_path = self.source_dir.join(&self.manifest_rel_path);
-        let recipe_code: Arc<str> =
-            Arc::from(recipe.recipe.to_yaml_pretty().into_diagnostic()?.as_str());
+        let recipe_code: Arc<str> = Arc::from(
+            serde_yaml::to_string(&recipe.recipe)
+                .into_diagnostic()?
+                .as_str(),
+        );
 
         // Parse the recipe into stage0
         // Create source for error reporting
@@ -707,7 +708,7 @@ where
             .await
             .into_diagnostic()?;
 
-        let recipe_yaml = recipe.recipe.to_yaml_pretty().into_diagnostic()?;
+        let recipe_yaml = serde_yaml::to_string(&recipe.recipe).into_diagnostic()?;
 
         tokio_fs::write(&package_recipe_path, &recipe_yaml)
             .await
@@ -743,6 +744,7 @@ where
             // This indicates that the environments are externally managed, e.g. they are already
             // prepared.
             .with_environments_externally_managed(true)
+            .with_allow_absolute_license_paths(true)
             .finish();
 
         let output = Output {

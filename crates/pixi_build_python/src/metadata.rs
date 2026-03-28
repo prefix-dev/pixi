@@ -244,7 +244,20 @@ impl MetadataProvider for PyprojectMetadataProvider {
         if license_files.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(license_files))
+            // Resolve relative paths to absolute using manifest_root. rattler-build
+            // requires absolute paths when there is no source directory in the recipe.
+            let resolved = license_files
+                .into_iter()
+                .map(|f| {
+                    let p = std::path::Path::new(&f);
+                    if p.is_relative() {
+                        self.manifest_root.join(p).to_string_lossy().into_owned()
+                    } else {
+                        f
+                    }
+                })
+                .collect();
+            Ok(Some(resolved))
         }
     }
 
@@ -423,7 +436,13 @@ license = {file = "LICENSE.txt"}
         assert_eq!(provider.license().unwrap(), None);
         assert_eq!(
             provider.license_files().unwrap(),
-            Some(vec!["LICENSE.txt".to_string()])
+            Some(vec![
+                temp_dir
+                    .path()
+                    .join("LICENSE.txt")
+                    .to_string_lossy()
+                    .into_owned()
+            ])
         );
     }
 
@@ -442,7 +461,18 @@ license-files = ["LICENSE.txt", "COPYING.txt"]
         assert_eq!(provider.license().unwrap(), None);
         assert_eq!(
             provider.license_files().unwrap(),
-            Some(vec!["LICENSE.txt".to_string(), "COPYING.txt".to_string()])
+            Some(vec![
+                temp_dir
+                    .path()
+                    .join("LICENSE.txt")
+                    .to_string_lossy()
+                    .into_owned(),
+                temp_dir
+                    .path()
+                    .join("COPYING.txt")
+                    .to_string_lossy()
+                    .into_owned(),
+            ])
         );
     }
 
@@ -463,9 +493,21 @@ license-files = ["NOTICE.txt", "AUTHORS.txt"]
         assert_eq!(
             provider.license_files().unwrap(),
             Some(vec![
-                "LICENSE".to_string(),
-                "NOTICE.txt".to_string(),
-                "AUTHORS.txt".to_string()
+                temp_dir
+                    .path()
+                    .join("LICENSE")
+                    .to_string_lossy()
+                    .into_owned(),
+                temp_dir
+                    .path()
+                    .join("NOTICE.txt")
+                    .to_string_lossy()
+                    .into_owned(),
+                temp_dir
+                    .path()
+                    .join("AUTHORS.txt")
+                    .to_string_lossy()
+                    .into_owned(),
             ])
         );
     }
@@ -485,7 +527,42 @@ license-files = ["LICENSE"]
         assert_eq!(provider.license().unwrap(), None);
         assert_eq!(
             provider.license_files().unwrap(),
-            Some(vec!["LICENSE".to_string()])
+            Some(vec![
+                temp_dir
+                    .path()
+                    .join("LICENSE")
+                    .to_string_lossy()
+                    .into_owned()
+            ])
+        );
+    }
+
+    #[test]
+    fn test_license_files_are_absolute_for_out_of_source_builds() {
+        // When the source code lives outside the build directory (out-of-source build),
+        // `source: []` is empty in the recipe so rattler-build has no source directory
+        // to resolve relative license file paths against. The metadata provider must
+        // return absolute paths so rattler-build can find them.
+        let pyproject_toml_content = r#"
+[project]
+name = "ruff"
+version = "0.15.7"
+license-files = ["LICENSE"]
+"#;
+
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+        let mut provider = create_metadata_provider(temp_dir.path());
+
+        let license_files = provider.license_files().unwrap().unwrap();
+        assert_eq!(license_files.len(), 1);
+        assert!(
+            std::path::Path::new(&license_files[0]).is_absolute(),
+            "license file path must be absolute, got: {}",
+            license_files[0]
+        );
+        assert_eq!(
+            license_files[0],
+            temp_dir.path().join("LICENSE").to_string_lossy()
         );
     }
 

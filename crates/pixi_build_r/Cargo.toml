@@ -29,7 +29,7 @@ tokio = { workspace = true, features = ["macros"] }
 pixi_build_backend = { workspace = true }
 pixi_build_types = { workspace = true }
 
-recipe_stage0 = { workspace = true }
+rattler_build_recipe = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
