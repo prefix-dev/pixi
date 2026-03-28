@@ -236,7 +236,7 @@ rattler_package_streaming = { version = "0.24.6", default-features = false }
 rattler_repodata_gateway = { version = "0.27.3", default-features = false }
 rattler_s3 = { version = "0.1.29", default-features = false }
 rattler_shell = { version = "0.26.6", default-features = false }
-rattler_solve = { version = "5.0.3", default-features = false }
+rattler_solve = { version = "5.1.0", default-features = false }
 rattler_upload = { version = "0.5.3", default-features = false, features = [
   "s3",
 ] }
