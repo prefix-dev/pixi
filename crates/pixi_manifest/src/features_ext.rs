@@ -144,10 +144,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
 
     /// Returns the resolved default exclude-newer cutoff.
     fn exclude_newer(&self) -> Option<DateTime<Utc>> {
-        self.exclude_newer_raw().map(|config| {
-            let config: rattler_solve::ExcludeNewer = config.into();
-            config.cutoff_for_channel(None)
-        })
+        self.exclude_newer_raw().map(|config| config.cutoff())
     }
 
     /// Returns the strategy for solving packages.

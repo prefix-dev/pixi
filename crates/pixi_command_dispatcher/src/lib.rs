@@ -128,9 +128,6 @@ fn with_package_exclude_newer(
         .unwrap_or_else(|| rattler_solve::ExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
 
     for (package, cutoff) in package_cutoffs_by_name {
-        let cutoff = config
-            .package_cutoff(&package)
-            .map_or(cutoff, |existing| existing.min(cutoff));
         config = config.with_package_cutoff(package, cutoff);
     }
 
