@@ -3511,7 +3511,7 @@ openssl = { exclude-newer = "0d" }
     }
 
     #[test]
-    fn test_exclude_newer_config_does_not_apply_package_overrides() {
+    fn test_exclude_newer_config_applies_package_overrides() {
         struct TestFeatures<'a> {
             manifest: &'a WorkspaceManifest,
             features: Vec<&'a Feature>,
@@ -3540,6 +3540,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
 polars = { version = "*", exclude-newer = "0d" }
 "#;
 
+        let before = chrono::Utc::now();
         let manifest = parse_pixi_toml(contents).manifest;
         let default_feature = manifest.default_feature();
         let features = TestFeatures {
@@ -3550,12 +3551,11 @@ polars = { version = "*", exclude-newer = "0d" }
             .exclude_newer_config(&ChannelConfig::default_with_root_dir(PathBuf::new()), None)
             .unwrap()
             .unwrap();
+        let after = chrono::Utc::now();
         let package = PackageName::from_str("polars").unwrap();
+        let package_cutoff = config.cutoff_for_package(&package, None);
 
-        assert_eq!(config.package_cutoff(&package), None);
-        assert_eq!(
-            config.cutoff_for_channel(None).to_rfc3339(),
-            "2015-12-02T02:07:43+00:00"
-        );
+        assert!(package_cutoff >= before);
+        assert!(package_cutoff <= after + chrono::Duration::seconds(1));
     }
 }

@@ -282,35 +282,12 @@ fn verify_exclude_newer(
     locked_environment: &rattler_lock::Environment<'_>,
 ) -> Result<(), ExcludeNewerMismatch> {
     for (platform, packages) in locked_environment.conda_packages_by_platform() {
-        let Some(mut exclude_newer) = environment
+        let Some(exclude_newer) = environment
             .exclude_newer_config(channel_config, Some(platform))
             .expect("environment channels were already validated")
         else {
             continue;
         };
-
-        for (name, spec) in environment
-            .combined_dependencies(Some(platform))
-            .iter_specs()
-            .chain(
-                environment
-                    .combined_constraints(Some(platform))
-                    .iter_specs(),
-            )
-        {
-            let Some(package_exclude_newer) = spec.exclude_newer() else {
-                continue;
-            };
-
-            exclude_newer = match package_exclude_newer {
-                ManifestExcludeNewer::Timestamp(dt) => {
-                    exclude_newer.with_package_cutoff(name.clone(), dt)
-                }
-                ManifestExcludeNewer::Duration(duration) => {
-                    exclude_newer.with_package_duration(name.clone(), duration)
-                }
-            };
-        }
 
         for package in packages {
             let record = package.record();

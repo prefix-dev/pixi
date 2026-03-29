@@ -118,19 +118,7 @@ impl SolveCondaEnvironmentSpec {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
-            let exclude_newer = crate::with_package_exclude_newer(
-                self.exclude_newer.clone(),
-                self.binary_specs
-                    .iter_specs()
-                    .filter_map(|(name, spec)| {
-                        spec.exclude_newer()
-                            .map(|exclude_newer| (name.clone(), exclude_newer))
-                    })
-                    .chain(self.constraints.iter_specs().filter_map(|(name, spec)| {
-                        spec.exclude_newer()
-                            .map(|exclude_newer| (name.clone(), exclude_newer))
-                    })),
-            );
+            let exclude_newer = self.exclude_newer.clone();
 
             // Determine for which records we have source records because those records should only
             //  be installed as source records.
