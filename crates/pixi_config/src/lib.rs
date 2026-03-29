@@ -706,7 +706,7 @@ impl FromStr for RunPostLinkScripts {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
     #[serde(alias = "default_channels")] // BREAK: remove to stop supporting snake_case alias
@@ -2024,10 +2024,11 @@ tls-root-certs = "native"
 detached-environments = "{}"
 pinning-strategy = "no-pin"
 concurrency.solves = 5
+UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
         );
-        let (config, _unused) = Config::from_toml(toml.as_str(), None).unwrap();
+        let (config, unused) = Config::from_toml(toml.as_str(), None).unwrap();
         assert_eq!(
             config.default_channels,
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
@@ -2039,6 +2040,7 @@ concurrency.solves = 5
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
+        assert!(unused.contains("UNUSED"));
 
         let toml = r"detached-environments = true";
         let (config, _) = Config::from_toml(toml, None).unwrap();
@@ -2052,23 +2054,17 @@ concurrency.solves = 5
     }
 
     #[test]
-    fn test_config_rejects_unknown_fields() {
-        let toml = r#"
-default-channels = ["conda-forge"]
-UNUSED = "unused"
-        "#;
-        assert!(
-            Config::from_toml(toml, None).is_err(),
-            "Config should reject unknown top-level fields"
-        );
-
+    fn test_config_rejects_unknown_fields_in_nested_structs() {
         let toml = r#"
 [pypi-config]
 unknown-option = true
         "#;
+        let err = Config::from_toml(toml, None)
+            .expect_err("Config should reject unknown fields in nested structs");
+        let err_msg = format!("{err:?}");
         assert!(
-            Config::from_toml(toml, None).is_err(),
-            "Config should reject unknown fields in nested structs"
+            err_msg.contains("unknown-option"),
+            "Error should mention the unknown field 'unknown-option', got: {err_msg}"
         );
     }
 
