@@ -908,7 +908,7 @@ mod tests {
     use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
     use rattler_conda_types::{
-        MatchSpec, NamedChannelOrUrl, PackageName, ParseStrictness,
+        ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, ParseStrictness,
         ParseStrictness::{Lenient, Strict},
         Platform, Version, VersionSpec,
     };
@@ -917,8 +917,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
-        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
+        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, Feature, FeatureName,
+        FeaturesExt, HasFeaturesIter, HasWorkspaceManifest, PrioritizedChannel, SpecType,
+        TargetSelector, Task, TomlError, WorkspaceManifest,
         manifests::document::ManifestDocument,
         pyproject::PyProjectManifest,
         task::TaskRenderContext,
@@ -3494,10 +3495,7 @@ openssl = { exclude-newer = "0d" }
 
         let polars = PackageName::from_str("polars").unwrap();
         let run_dependencies = feature.run_dependencies(None).unwrap();
-        let polars_spec = run_dependencies
-            .get_single(&polars)
-            .unwrap()
-            .unwrap();
+        let polars_spec = run_dependencies.get_single(&polars).unwrap().unwrap();
         assert_eq!(
             polars_spec.exclude_newer().map(|value| value.to_string()),
             Some("0s".to_string())
@@ -3505,13 +3503,59 @@ openssl = { exclude-newer = "0d" }
 
         let openssl = PackageName::from_str("openssl").unwrap();
         let constraints = feature.constraints(None).unwrap();
-        let openssl_spec = constraints
-            .get_single(&openssl)
-            .unwrap()
-            .unwrap();
+        let openssl_spec = constraints.get_single(&openssl).unwrap().unwrap();
         assert_eq!(
             openssl_spec.exclude_newer().map(|value| value.to_string()),
             Some("0s".to_string())
+        );
+    }
+
+    #[test]
+    fn test_exclude_newer_config_does_not_apply_package_overrides() {
+        struct TestFeatures<'a> {
+            manifest: &'a WorkspaceManifest,
+            features: Vec<&'a Feature>,
+        }
+
+        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
+            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+                self.manifest
+            }
+        }
+
+        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
+            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+                self.features.clone().into_iter()
+            }
+        }
+
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+
+[dependencies]
+polars = { version = "*", exclude-newer = "0d" }
+"#;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+        let features = TestFeatures {
+            manifest: &manifest,
+            features: vec![default_feature],
+        };
+        let config = features
+            .exclude_newer_config(&ChannelConfig::default_with_root_dir(PathBuf::new()), None)
+            .unwrap()
+            .unwrap();
+        let package = PackageName::from_str("polars").unwrap();
+
+        assert_eq!(config.package_cutoff(&package), None);
+        assert_eq!(
+            config.cutoff_for_channel(None).to_rfc3339(),
+            "2015-12-02T02:07:43+00:00"
         );
     }
 }

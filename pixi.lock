@@ -4,7 +4,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -200,7 +199,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -894,7 +892,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -988,7 +985,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -1802,7 +1798,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -1844,7 +1839,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -2208,7 +2202,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -2256,7 +2249,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -2561,7 +2553,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -2908,7 +2899,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -3256,7 +3246,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -3504,7 +3493,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit
@@ -3541,7 +3529,6 @@ environments:
     channels:
     - url: https://prefix.dev/conda-forge/
     - url: https://conda.anaconda.org/bioconda/
-      exclude-newer: 0d
     options:
       exclude-newer: 7d
       pypi-prerelease-mode: if-necessary-or-explicit

@@ -9,8 +9,8 @@ authors = [
 ]
 channels = [
   "https://prefix.dev/conda-forge",
-  # "bioconda",
-  { channel = "bioconda", exclude-newer = "0d" },
+  "bioconda",
+  # { channel = "bioconda", exclude-newer = "1d" },
 ]
 description = "Package management made easy!"
 exclude-newer = "7d"

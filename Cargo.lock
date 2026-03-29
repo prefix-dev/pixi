@@ -2743,7 +2743,7 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 [[package]]
 name = "file_url"
 version = "0.2.7"
-source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#00f01fd93c065f5fe7a9ca399adae585bca2660d"
+source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#469cde8bbe951bdede691b4713bd15891536d68b"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -7799,7 +7799,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.44.3"
-source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#00f01fd93c065f5fe7a9ca399adae585bca2660d"
+source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#469cde8bbe951bdede691b4713bd15891536d68b"
 dependencies = [
  "ahash",
  "chrono",
@@ -7859,7 +7859,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.2.3"
-source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#00f01fd93c065f5fe7a9ca399adae585bca2660d"
+source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#469cde8bbe951bdede691b4713bd15891536d68b"
 dependencies = [
  "blake2",
  "digest",
@@ -7936,7 +7936,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.27.4"
-source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#00f01fd93c065f5fe7a9ca399adae585bca2660d"
+source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#469cde8bbe951bdede691b4713bd15891536d68b"
 dependencies = [
  "ahash",
  "chrono",
@@ -7962,7 +7962,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.12"
-source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#00f01fd93c065f5fe7a9ca399adae585bca2660d"
+source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#469cde8bbe951bdede691b4713bd15891536d68b"
 dependencies = [
  "quote",
  "syn",
@@ -8101,7 +8101,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.13"
-source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#00f01fd93c065f5fe7a9ca399adae585bca2660d"
+source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#469cde8bbe951bdede691b4713bd15891536d68b"
 dependencies = [
  "reqwest 0.12.28",
  "reqwest-middleware",
@@ -8212,7 +8212,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "5.1.0"
-source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#00f01fd93c065f5fe7a9ca399adae585bca2660d"
+source = "git+https://github.com/pavelzw/rattler?branch=exclude-newer#469cde8bbe951bdede691b4713bd15891536d68b"
 dependencies = [
  "chrono",
  "futures",

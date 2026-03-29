@@ -54,8 +54,8 @@ ExcludeNewer = Annotated[
         # Matches either:
         # - A date: YYYY-MM-DD
         # - A datetime: YYYY-MM-DDTHH:MM:SSZ or YYYY-MM-DD HH:MM:SS+00:00
-        # - A duration: e.g. 7d, 1h, 30m, 1h30m, 7days, 1hour 30minutes
-        pattern=r"^(\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?|(\d+\s*(years?|months?|weeks?|days?|hours?|h|minutes?|mins?|m|seconds?|secs?|s)\s*)+)$"
+        # - A duration token sequence accepted by humantime, e.g. 7d, 1h, 30m, 1h30m, 1ms
+        pattern=r"^(\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?|(\d+\s*[A-Za-z]+\s*)+)$"
     ),
 ]
 
@@ -116,8 +116,12 @@ class ChannelInlineTable(StrictBaseModel):
         None,
         description="The explicit channel URL to fetch packages from",
     )
+    path: NonEmptyStr | None = Field(
+        None,
+        description="The explicit local channel path to fetch packages from",
+    )
     priority: int | None = Field(None, description="The priority of the channel")
-    exclude_newer: NonEmptyStr | None = Field(
+    exclude_newer: ExcludeNewer | None = Field(
         None,
         alias="exclude-newer",
         description="Override the workspace-level `exclude-newer` cutoff for this channel only",
