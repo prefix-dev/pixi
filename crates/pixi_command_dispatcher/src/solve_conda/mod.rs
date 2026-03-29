@@ -6,7 +6,7 @@ use std::{
 
 use itertools::Itertools;
 use pixi_record::{PixiRecord, SourceRecord};
-use pixi_spec::{BinarySpec, SourceSpec};
+use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
@@ -81,8 +81,8 @@ pub struct SolveCondaEnvironmentSpec {
     pub channel_priority: ChannelPriority,
 
     /// Exclude packages newer than the configured default and per-channel cutoffs.
-    #[serde(skip)]
-    pub exclude_newer: Option<rattler_solve::ExcludeNewer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
@@ -118,7 +118,7 @@ impl SolveCondaEnvironmentSpec {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
-            let exclude_newer = self.exclude_newer.clone();
+            let exclude_newer = self.exclude_newer.clone().map(Into::into);
 
             // Determine for which records we have source records because those records should only
             //  be installed as source records.

@@ -6,7 +6,7 @@ use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_glob::GlobSet;
 use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
-use pixi_spec::{SourceAnchor, SourceLocationSpec};
+use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use std::time::SystemTime;
 use std::{
@@ -67,6 +67,10 @@ pub struct BuildBackendMetadataSpec {
 
     /// The channel configuration to use for the build backend.
     pub channel_config: ChannelConfig,
+
+    /// Exclude packages newer than the configured cutoffs when solving backend environments.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// The channels to use for solving.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -203,6 +207,7 @@ impl BuildBackendMetadataSpec {
         let cache_key = BuildBackendMetadataCacheShard {
             channel_urls: self.channels.clone(),
             build_environment: self.build_environment.clone(),
+            exclude_newer: self.exclude_newer.clone(),
             enabled_protocols: self.enabled_protocols.clone(),
             source: manifest_source_location.clone().into(),
         };
@@ -266,6 +271,7 @@ impl BuildBackendMetadataSpec {
                     .as_dir_or_file_parent()
                     .to_path_buf(),
                 channel_config: self.channel_config.clone(),
+                exclude_newer: self.exclude_newer.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 workspace_root: AbsPath::new(&discovered_backend.init_params.workspace_root)
                     .expect("workspace root is not absolute")

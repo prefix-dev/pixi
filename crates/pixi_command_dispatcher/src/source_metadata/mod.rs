@@ -90,6 +90,7 @@ impl SourceMetadataSpec {
             package: self.package.clone(),
             channel_urls: self.backend_metadata.channels.clone(),
             build_environment: self.backend_metadata.build_environment.clone(),
+            exclude_newer: self.backend_metadata.exclude_newer.clone(),
             enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
             source: build_backend_metadata.source.clone().into(),
         };
@@ -523,7 +524,7 @@ impl SourceMetadataSpec {
                 channels: self.backend_metadata.channels.clone(),
                 strategy: Default::default(),
                 channel_priority: Default::default(),
-                exclude_newer: None,
+                exclude_newer: self.backend_metadata.exclude_newer.clone(),
                 channel_config: self.backend_metadata.channel_config.clone(),
                 variant_configuration: self.backend_metadata.variant_configuration.clone(),
                 variant_files: self.backend_metadata.variant_files.clone(),

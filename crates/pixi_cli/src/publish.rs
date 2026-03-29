@@ -184,6 +184,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .default_environment()
         .channel_urls(&channel_config)
         .into_diagnostic()?;
+    let exclude_newer = workspace
+        .default_environment()
+        .exclude_newer_config_resolved(&channel_config, Some(build_environment.host_platform))
+        .into_diagnostic()?;
 
     let manifest_source: PinnedSourceSpec = PinnedPathSpec {
         path: manifest_path_spec.to_string_lossy().into_owned().into(),
@@ -195,6 +199,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         preferred_build_source: None,
         channels: channels.clone(),
         channel_config: channel_config.clone(),
+        exclude_newer: exclude_newer.clone(),
         build_environment: build_environment.clone(),
         variant_configuration: Some(variant_configuration.clone()),
         variant_files: Some(variant_files.clone()),
@@ -233,6 +238,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 output_directory: None,
                 source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
+                exclude_newer: exclude_newer.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
                 variant_configuration: Some(variant_configuration.clone()),

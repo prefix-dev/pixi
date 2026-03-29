@@ -174,6 +174,7 @@ pub async fn simple_test() {
             build_environment: build_env,
             ignore_packages: None,
             force_reinstall: Default::default(),
+            exclude_newer: None,
             channels: vec![channel_url],
             channel_config: default_channel_config(),
             variant_configuration: None,
@@ -722,6 +723,7 @@ pub async fn test_dev_source_metadata() {
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             channel_config: default_channel_config(),
+            exclude_newer: None,
             channels: vec![],
             build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
             variant_configuration: None,
@@ -813,6 +815,7 @@ pub async fn test_dev_source_metadata_package_not_provided() {
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             channel_config: default_channel_config(),
+            exclude_newer: None,
             channels: vec![],
             build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
             variant_configuration: None,
@@ -888,6 +891,7 @@ pub async fn test_dev_source_metadata_with_variants() {
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             channel_config: default_channel_config(),
+            exclude_newer: None,
             channels: vec![],
             build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
             variant_configuration: Some(variant_config),
@@ -1644,6 +1648,7 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             channel_config: default_channel_config(),
+            exclude_newer: None,
             channels: vec![],
             build_environment: BuildEnvironment::simple(
                 tool_platform,
@@ -1744,6 +1749,7 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
         backend_metadata: BuildBackendMetadataSpec {
             manifest_source: pinned_source,
             channel_config: default_channel_config(),
+            exclude_newer: None,
             channels: vec![],
             build_environment: BuildEnvironment::simple(
                 tool_platform,

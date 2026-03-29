@@ -1,5 +1,6 @@
 use chrono::{DateTime, Days, NaiveDate, NaiveTime, Utc};
-use std::str::FromStr;
+use rattler_conda_types::PackageName;
+use std::{collections::BTreeMap, str::FromStr};
 
 /// Specifies how to exclude newer packages from the solve.
 ///
@@ -13,6 +14,28 @@ pub enum ExcludeNewer {
     /// A relative duration. At solve time, packages newer than `now - duration`
     /// are excluded.
     Duration(std::time::Duration),
+}
+
+/// A fully resolved exclude-newer configuration with absolute cutoffs.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ResolvedExcludeNewer {
+    /// The default cutoff date. Packages uploaded after this date are excluded.
+    pub cutoff: DateTime<Utc>,
+
+    /// Channel-specific cutoff dates that override [`Self::cutoff`] for
+    /// records from matching channels.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub channel_cutoffs: BTreeMap<String, DateTime<Utc>>,
+
+    /// Package-specific cutoff dates that override both [`Self::cutoff`] and
+    /// [`Self::channel_cutoffs`] for matching package names.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub package_cutoffs: BTreeMap<PackageName, DateTime<Utc>>,
+
+    /// Whether to include packages that don't have a timestamp.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub include_unknown_timestamp: bool,
 }
 
 fn format_duration(duration: std::time::Duration) -> String {
@@ -63,12 +86,57 @@ impl ExcludeNewer {
     }
 }
 
+impl ResolvedExcludeNewer {
+    /// Creates a new configuration from an absolute cutoff date.
+    pub fn from_datetime(cutoff: DateTime<Utc>) -> Self {
+        Self {
+            cutoff,
+            channel_cutoffs: BTreeMap::new(),
+            package_cutoffs: BTreeMap::new(),
+            include_unknown_timestamp: false,
+        }
+    }
+
+    /// Adds a channel-specific cutoff override.
+    pub fn with_channel_cutoff(
+        mut self,
+        channel: impl Into<String>,
+        cutoff: DateTime<Utc>,
+    ) -> Self {
+        self.channel_cutoffs.insert(channel.into(), cutoff);
+        self
+    }
+
+    /// Adds a package-specific cutoff override.
+    pub fn with_package_cutoff(mut self, package: PackageName, cutoff: DateTime<Utc>) -> Self {
+        self.package_cutoffs.insert(package, cutoff);
+        self
+    }
+}
+
 impl From<ExcludeNewer> for rattler_solve::ExcludeNewer {
     fn from(value: ExcludeNewer) -> Self {
         match value {
             ExcludeNewer::Timestamp(dt) => Self::from_datetime(dt),
             ExcludeNewer::Duration(dur) => Self::from_duration(dur),
         }
+    }
+}
+
+impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
+    fn from(value: ResolvedExcludeNewer) -> Self {
+        let mut config = rattler_solve::ExcludeNewer::from_datetime(value.cutoff)
+            .with_include_unknown_timestamp(value.include_unknown_timestamp);
+
+        for (channel, cutoff) in value.channel_cutoffs {
+            config = config.with_channel_cutoff(channel, cutoff);
+        }
+
+        for (package, cutoff) in value.package_cutoffs {
+            config = config.with_package_cutoff(package, cutoff);
+        }
+
+        config
     }
 }
 
@@ -215,7 +283,7 @@ mod test {
         let t = ExcludeNewer::from_str("2006-12-02T02:07:43Z").unwrap();
         let config: rattler_solve::ExcludeNewer = t.into();
         assert_eq!(
-            config.cutoff_for_channel(None),
+            config.cutoff_for_package(&PackageName::new_unchecked("foo"), None),
             DateTime::parse_from_rfc3339("2006-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&Utc)
@@ -227,11 +295,49 @@ mod test {
         let before = Utc::now();
         let d = ExcludeNewer::Duration(std::time::Duration::from_secs(3600));
         let config: rattler_solve::ExcludeNewer = d.into();
-        let resolved = config.cutoff_for_channel(None);
+        let resolved = config.cutoff_for_package(&PackageName::new_unchecked("foo"), None);
         let after = Utc::now();
 
         let one_hour = chrono::Duration::seconds(3600);
         assert!(resolved >= before - one_hour);
         assert!(resolved <= after - one_hour + chrono::Duration::seconds(1));
+    }
+
+    #[test]
+    fn test_resolved_into_rattler_solve_preserves_overrides() {
+        let default_cutoff = DateTime::parse_from_rfc3339("2006-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let channel_cutoff = DateTime::parse_from_rfc3339("2006-12-03T02:07:43Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let package_cutoff = DateTime::parse_from_rfc3339("2006-12-04T02:07:43Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let config: rattler_solve::ExcludeNewer =
+            ResolvedExcludeNewer::from_datetime(default_cutoff)
+                .with_channel_cutoff("https://prefix.dev/conda-forge", channel_cutoff)
+                .with_package_cutoff(PackageName::new_unchecked("foo"), package_cutoff)
+                .into();
+
+        assert_eq!(
+            config.cutoff_for_package(&PackageName::new_unchecked("baz"), None),
+            default_cutoff
+        );
+        assert_eq!(
+            config.cutoff_for_package(
+                &PackageName::new_unchecked("bar"),
+                Some("https://prefix.dev/conda-forge"),
+            ),
+            channel_cutoff
+        );
+        assert_eq!(
+            config.cutoff_for_package(
+                &PackageName::new_unchecked("foo"),
+                Some("https://prefix.dev/conda-forge"),
+            ),
+            package_cutoff
+        );
     }
 }

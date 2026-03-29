@@ -6,7 +6,6 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD, prelude::BASE64_URL_SAFE_NO_PAD};
-use chrono::{DateTime, Utc};
 use futures::TryFutureExt;
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -15,7 +14,7 @@ use pixi_build_types::{
     PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion,
 };
 use pixi_record::VariantValue;
-use pixi_spec::{BinarySpec, PixiSpec};
+use pixi_spec::{BinarySpec, PixiSpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
 use rattler_conda_types::{
@@ -53,9 +52,9 @@ pub struct InstantiateToolEnvironmentSpec {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub channels: Vec<ChannelUrl>,
 
-    /// Exclude any packages after the first cut-off date.
+    /// Exclude packages newer than the configured cutoffs.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub exclude_newer: Option<DateTime<Utc>>,
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
@@ -210,9 +209,7 @@ impl InstantiateToolEnvironmentSpec {
                 constraints,
                 dev_sources: Default::default(),
                 build_environment: self.build_environment.clone(),
-                exclude_newer: self
-                    .exclude_newer
-                    .map(rattler_solve::ExcludeNewer::from_datetime),
+                exclude_newer: self.exclude_newer.clone(),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
@@ -278,6 +275,7 @@ impl InstantiateToolEnvironmentSpec {
                 build_environment: self.build_environment,
                 ignore_packages: None,
                 force_reinstall: Default::default(),
+                exclude_newer: self.exclude_newer,
                 channels: self.channels,
                 channel_config: self.channel_config,
                 variant_configuration: self.variant_configuration,

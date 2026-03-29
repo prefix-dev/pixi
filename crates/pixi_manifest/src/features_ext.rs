@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use chrono::{DateTime, Utc};
 use indexmap::IndexSet;
 use miette::Diagnostic;
+use pixi_spec::ResolvedExcludeNewer;
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
@@ -115,7 +116,19 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         channel_config: &ChannelConfig,
         platform: Option<Platform>,
     ) -> Result<Option<rattler_solve::ExcludeNewer>, ParseChannelError> {
-        let mut exclude_newer = self.exclude_newer_raw().map(Into::into);
+        self.exclude_newer_config_resolved(channel_config, platform)
+            .map(|exclude_newer| exclude_newer.map(Into::into))
+    }
+
+    /// Returns the effective exclude-newer solver configuration with absolute cutoffs.
+    fn exclude_newer_config_resolved(
+        &self,
+        channel_config: &ChannelConfig,
+        platform: Option<Platform>,
+    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
+        let mut exclude_newer = self
+            .exclude_newer_raw()
+            .map(|config| ResolvedExcludeNewer::from_datetime(config.cutoff()));
 
         for channel in self.prioritized_channels() {
             let Some(channel_exclude_newer) = channel.exclude_newer else {
@@ -124,16 +137,19 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
 
             let channel = channel.channel.clone().into_base_url(channel_config)?;
             let config = exclude_newer.get_or_insert_with(|| {
-                rattler_solve::ExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
+                ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
             });
 
             *config = match channel_exclude_newer {
                 crate::exclude_newer::ExcludeNewer::Timestamp(dt) => {
                     config.clone().with_channel_cutoff(channel.to_string(), dt)
                 }
-                crate::exclude_newer::ExcludeNewer::Duration(duration) => config
-                    .clone()
-                    .with_channel_duration(channel.to_string(), duration),
+                crate::exclude_newer::ExcludeNewer::Duration(duration) => {
+                    config.clone().with_channel_cutoff(
+                        channel.to_string(),
+                        crate::exclude_newer::ExcludeNewer::Duration(duration).cutoff(),
+                    )
+                }
             };
         }
 
@@ -147,7 +163,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             };
 
             let config = exclude_newer.get_or_insert_with(|| {
-                rattler_solve::ExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
+                ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
             });
 
             *config = match package_exclude_newer {
@@ -155,7 +171,10 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
                     config.clone().with_package_cutoff(name.clone(), dt)
                 }
                 crate::exclude_newer::ExcludeNewer::Duration(duration) => {
-                    config.clone().with_package_duration(name.clone(), duration)
+                    config.clone().with_package_cutoff(
+                        name.clone(),
+                        crate::exclude_newer::ExcludeNewer::Duration(duration).cutoff(),
+                    )
                 }
             };
         }

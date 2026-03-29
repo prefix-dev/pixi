@@ -13,6 +13,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use itertools::Itertools;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
 use pixi_record::{CanonicalSourceLocation, VariantValue};
+use pixi_spec::ResolvedExcludeNewer;
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -44,6 +45,9 @@ pub struct BuildInput {
 
     /// The URL channels used in the build.
     pub channel_urls: Vec<ChannelUrl>,
+
+    /// Exclude packages newer than the configured cutoffs when solving build environments.
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// The name of the package
     pub name: String,
@@ -79,6 +83,7 @@ impl BuildInput {
         let BuildInput {
             build_source,
             channel_urls,
+            exclude_newer,
             name,
             version,
             build,
@@ -94,6 +99,7 @@ impl BuildInput {
         build_source.hash(&mut hasher);
         build.hash(&mut hasher);
         channel_urls.hash(&mut hasher);
+        exclude_newer.hash(&mut hasher);
         host_platform.hash(&mut hasher);
         host_virtual_packages.hash(&mut hasher);
         build_virtual_packages.hash(&mut hasher);

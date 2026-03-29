@@ -1400,6 +1400,7 @@ async fn verify_source_metadata(
                         .clone()
                         .map(PinnedBuildSourceSpec::into_pinned),
                     channel_config,
+                    exclude_newer: None,
                     channels: channel_urls,
                     build_environment: BuildEnvironment {
                         host_platform: platform,
@@ -1788,6 +1789,7 @@ async fn resolve_single_dev_dependency(
             manifest_source: pinned_source.pinned,
             preferred_build_source: None,
             channel_config: channel_config.clone(),
+            exclude_newer: None,
             channels,
             build_environment,
             variant_configuration: Some(variants),

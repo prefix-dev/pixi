@@ -647,6 +647,7 @@ impl Project {
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
+                exclude_newer: None,
                 channels,
                 channel_config: self.config.global_channel_config().clone(),
                 enabled_protocols: EnabledProtocols::default(),
@@ -1420,6 +1421,7 @@ impl Project {
             manifest_source: pinned_source_spec,
             preferred_build_source: None,
             channel_config: self.global_channel_config().clone(),
+            exclude_newer: None,
             channels: self
                 .config()
                 .default_channels()

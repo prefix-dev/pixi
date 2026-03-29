@@ -8,7 +8,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::VariantValue;
 use pixi_record::{DevSourceRecord, PixiRecord};
-use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
+use pixi_spec::{BinarySpec, PixiSpec, ResolvedExcludeNewer, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, ParseChannelError, Platform};
 use rattler_repodata_gateway::RepoData;
@@ -76,8 +76,8 @@ pub struct PixiEnvironmentSpec {
     pub channel_priority: ChannelPriority,
 
     /// Exclude packages newer than the configured default and per-channel cutoffs.
-    #[serde(skip)]
-    pub exclude_newer: Option<rattler_solve::ExcludeNewer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
@@ -163,6 +163,7 @@ impl PixiEnvironmentSpec {
             self.channels.clone(),
             self.channel_config.clone(),
             self.build_environment.clone(),
+            self.exclude_newer.clone(),
             self.variant_configuration.clone(),
             self.variant_files.clone(),
             self.enabled_protocols.clone(),
@@ -271,6 +272,7 @@ impl PixiEnvironmentSpec {
             let channel_config = self.channel_config.clone();
             let channels = self.channels.clone();
             let build_environment = self.build_environment.clone();
+            let exclude_newer = self.exclude_newer.clone();
             let variant_configuration = self.variant_configuration.clone();
             let variant_files = self.variant_files.clone();
             let enabled_protocols = self.enabled_protocols.clone();
@@ -294,6 +296,7 @@ impl PixiEnvironmentSpec {
                         channel_config,
                         channels,
                         build_environment,
+                        exclude_newer,
                         variant_configuration,
                         variant_files,
                         enabled_protocols,
