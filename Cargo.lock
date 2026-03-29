@@ -6258,6 +6258,7 @@ dependencies = [
  "serde",
  "serde_ignored",
  "serde_json",
+ "serde_yaml",
  "strsim",
  "tabwriter",
  "temp-env",

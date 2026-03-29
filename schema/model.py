@@ -106,10 +106,22 @@ ChannelName = NonEmptyStr | AnyHttpUrl
 
 
 class ChannelInlineTable(StrictBaseModel):
-    """A precise description of a `conda` channel, with an optional priority."""
+    """A precise description of a `conda` channel, with optional priority and exclude-newer override."""
 
-    channel: ChannelName = Field(description="The channel the packages needs to be fetched from")
+    channel: ChannelName | None = Field(
+        None,
+        description="The named channel to fetch packages from",
+    )
+    url: AnyHttpUrl | None = Field(
+        None,
+        description="The explicit channel URL to fetch packages from",
+    )
     priority: int | None = Field(None, description="The priority of the channel")
+    exclude_newer: NonEmptyStr | None = Field(
+        None,
+        alias="exclude-newer",
+        description="Override the workspace-level `exclude-newer` cutoff for this channel only",
+    )
 
 
 Channel = ChannelName | ChannelInlineTable
@@ -157,7 +169,7 @@ class Workspace(StrictBaseModel):
         None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
     )
     channels: list[Channel] = Field(
-        description="The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred.",
+        description="The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred. Inline tables can also override `exclude-newer` per channel.",
     )
     channel_priority: ChannelPriority | None = Field(
         None,

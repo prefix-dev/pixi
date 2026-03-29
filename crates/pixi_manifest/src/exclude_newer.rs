@@ -9,7 +9,7 @@ use std::str::FromStr;
 ///
 /// When a duration is specified, it is interpreted as "exclude packages newer
 /// than `now - duration`" at solve time.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ExcludeNewer {
     /// An absolute point in time. Packages newer than this are excluded.
     Timestamp(DateTime<Utc>),

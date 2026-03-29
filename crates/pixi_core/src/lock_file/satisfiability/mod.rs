@@ -53,7 +53,9 @@ use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
 
 use super::{
-    PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
+    PixiRecordsByName, PypiRecord, PypiRecordsByName,
+    metadata::{LockFileChannelMetadata, expected_lock_file_channels},
+    package_identifier::ConversionError,
 };
 use crate::workspace::{
     Environment, HasWorkspaceRef, errors::VariantsError, grouped_environment::GroupedEnvironment,
@@ -122,6 +124,9 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     ExcludeNewerOptionMismatch(#[from] ExcludeNewerOptionMismatch),
+
+    #[error(transparent)]
+    ExcludeNewerChannelMismatch(#[from] ExcludeNewerChannelMismatch),
 }
 
 fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
@@ -182,6 +187,36 @@ impl Display for ExcludeNewerOptionMismatch {
     }
 }
 
+#[derive(Debug, Error)]
+pub struct ExcludeNewerChannelMismatch {
+    channel: String,
+    locked: Option<String>,
+    expected: Option<String>,
+}
+
+impl Display for ExcludeNewerChannelMismatch {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match (&self.locked, &self.expected) {
+            (Some(locked), Some(expected)) => write!(
+                f,
+                "the lock-file stores exclude-newer {locked} for channel {}, but the environment expects {expected}",
+                self.channel
+            ),
+            (None, Some(expected)) => write!(
+                f,
+                "the lock-file stores no channel exclude-newer for {}, but the environment expects {expected}",
+                self.channel
+            ),
+            (Some(locked), None) => write!(
+                f,
+                "the lock-file stores exclude-newer {locked} for channel {}, but the environment does not",
+                self.channel
+            ),
+            (None, None) => unreachable!("mismatch requires at least one side to be set"),
+        }
+    }
+}
+
 fn map_locked_exclude_newer(value: &rattler_lock::ExcludeNewer) -> ManifestExcludeNewer {
     match value {
         rattler_lock::ExcludeNewer::Timestamp(dt) => ManifestExcludeNewer::Timestamp(*dt),
@@ -202,6 +237,42 @@ fn verify_exclude_newer_option(
         locked: locked.map(|value| value.to_string()),
         expected: expected_exclude_newer.map(|value| value.to_string()),
     })
+}
+
+fn verify_exclude_newer_channel_metadata(
+    locked_channels: Option<&[crate::lock_file::metadata::LockFileChannel]>,
+    expected_channels: &[crate::lock_file::metadata::LockFileChannel],
+) -> Result<(), ExcludeNewerChannelMismatch> {
+    for (idx, expected_channel) in expected_channels.iter().enumerate() {
+        let locked = locked_channels
+            .and_then(|channels| channels.get(idx))
+            .and_then(|channel| channel.exclude_newer);
+        if locked == expected_channel.exclude_newer {
+            continue;
+        }
+
+        return Err(ExcludeNewerChannelMismatch {
+            channel: expected_channel.url.clone(),
+            locked: locked.map(|value| value.to_string()),
+            expected: expected_channel
+                .exclude_newer
+                .map(|value| value.to_string()),
+        });
+    }
+
+    if let Some(locked_channels) = locked_channels
+        && locked_channels.len() > expected_channels.len()
+        && let Some(locked_channel) = locked_channels.get(expected_channels.len())
+        && locked_channel.exclude_newer.is_some()
+    {
+        return Err(ExcludeNewerChannelMismatch {
+            channel: locked_channel.url.clone(),
+            locked: locked_channel.exclude_newer.map(|value| value.to_string()),
+            expected: None,
+        });
+    }
+
+    Ok(())
 }
 
 fn verify_exclude_newer(
@@ -577,6 +648,14 @@ pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
     locked_environment: rattler_lock::Environment<'_>,
 ) -> Result<(), EnvironmentUnsat> {
+    verify_environment_satisfiability_with_lock_file_metadata(environment, locked_environment, None)
+}
+
+pub(crate) fn verify_environment_satisfiability_with_lock_file_metadata(
+    environment: &Environment<'_>,
+    locked_environment: rattler_lock::Environment<'_>,
+    lock_file_channel_metadata: Option<&LockFileChannelMetadata>,
+) -> Result<(), EnvironmentUnsat> {
     let grouped_env = GroupedEnvironment::from(environment.clone());
 
     // Check if the channels in the lock file match our current configuration. Note
@@ -611,6 +690,16 @@ pub fn verify_environment_satisfiability(
     } else {
         // Channels were removed, reordered, or prepended - need full re-solve
         return Err(EnvironmentUnsat::ChannelsMismatch);
+    }
+
+    let expected_lock_file_channels =
+        expected_lock_file_channels(environment).map_err(EnvironmentUnsat::InvalidChannel)?;
+    if let Err(err) = verify_exclude_newer_channel_metadata(
+        lock_file_channel_metadata
+            .and_then(|metadata| metadata.environment(environment.name().as_str())),
+        &expected_lock_file_channels,
+    ) {
+        return Err(EnvironmentUnsat::ExcludeNewerChannelMismatch(err));
     }
 
     let platforms = environment.platforms();
@@ -686,8 +775,13 @@ pub fn verify_environment_satisfiability(
         });
     }
 
-    if let Err(err) = verify_exclude_newer(&locked_environment, environment.exclude_newer_config())
-    {
+    let channel_config = environment.workspace().channel_config();
+    if let Err(err) = verify_exclude_newer(
+        &locked_environment,
+        environment
+            .exclude_newer_config(&channel_config)
+            .map_err(EnvironmentUnsat::InvalidChannel)?,
+    ) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
     }
 

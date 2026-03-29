@@ -3,7 +3,6 @@ mod source_metadata_collector;
 
 use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, sync::Arc, time::Instant};
 
-use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
@@ -76,9 +75,9 @@ pub struct PixiEnvironmentSpec {
     #[serde(skip_serializing_if = "crate::is_default")]
     pub channel_priority: ChannelPriority,
 
-    /// Exclude any packages after the first cut-off date.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub exclude_newer: Option<DateTime<Utc>>,
+    /// Exclude packages newer than the configured default and per-channel cutoffs.
+    #[serde(skip)]
+    pub exclude_newer: Option<rattler_solve::ExcludeNewer>,
 
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,

@@ -8,11 +8,11 @@ authors = [
   "Julian Hofer <julian@prefix.dev>",
 ]
 channels = [
-  # { url = "bioconda", exclude-newer = "0d" },
   "https://prefix.dev/conda-forge",
+  # "bioconda",
+  { channel = "bioconda", exclude-newer = "0d" },
 ]
 description = "Package management made easy!"
-# exclude-newer = "2026-03-27"
 exclude-newer = "3d"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 preview = ["pixi-build"]
@@ -25,6 +25,7 @@ c_stdlib_version = ["2.17"]
 c_compiler_version = ["19"]
 
 [dependencies]
+# pdbecif = ">=1.5"
 # polars = "*"
 # rattler = ">=0.1.2"
 rattler = "*"

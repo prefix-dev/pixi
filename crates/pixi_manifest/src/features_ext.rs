@@ -44,7 +44,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ///
     /// If a feature does not specify any channel the default channels from the
     /// project metadata are used instead.
-    fn channels(&self) -> IndexSet<&'source NamedChannelOrUrl> {
+    fn prioritized_channels(&self) -> Vec<&'source PrioritizedChannel> {
         // Collect all the channels from the features in one set,
         // deduplicate them and sort them on feature index, default feature comes last.
         let channels = self.features().flat_map(|feature| match &feature.channels {
@@ -52,7 +52,22 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             None => &self.workspace_manifest().workspace.channels,
         });
 
-        PrioritizedChannel::sort_channels_by_priority(channels).collect()
+        let mut seen = HashSet::new();
+        let mut prioritized = Vec::new();
+        for channel in PrioritizedChannel::sort_prioritized_channels_by_priority(channels) {
+            if seen.insert(&channel.channel) {
+                prioritized.push(channel);
+            }
+        }
+
+        prioritized
+    }
+
+    fn channels(&self) -> IndexSet<&'source NamedChannelOrUrl> {
+        self.prioritized_channels()
+            .into_iter()
+            .map(|channel| &channel.channel)
+            .collect()
     }
 
     /// Returns the channels associated with this collection.
@@ -95,17 +110,41 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     }
 
     /// Returns the exclude-newer solver configuration.
-    fn exclude_newer_config(&self) -> Option<rattler_solve::ExcludeNewer> {
-        self.workspace_manifest()
-            .workspace
-            .exclude_newer
-            .map(Into::into)
+    fn exclude_newer_config(
+        &self,
+        channel_config: &ChannelConfig,
+    ) -> Result<Option<rattler_solve::ExcludeNewer>, ParseChannelError> {
+        let mut exclude_newer = self.exclude_newer_raw().map(Into::into);
+
+        for channel in self.prioritized_channels() {
+            let Some(channel_exclude_newer) = channel.exclude_newer else {
+                continue;
+            };
+
+            let channel = channel.channel.clone().into_base_url(channel_config)?;
+            let config = exclude_newer.get_or_insert_with(|| {
+                rattler_solve::ExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
+            });
+
+            *config = match channel_exclude_newer {
+                crate::exclude_newer::ExcludeNewer::Timestamp(dt) => {
+                    config.clone().with_channel_cutoff(channel.to_string(), dt)
+                }
+                crate::exclude_newer::ExcludeNewer::Duration(duration) => config
+                    .clone()
+                    .with_channel_duration(channel.to_string(), duration),
+            };
+        }
+
+        Ok(exclude_newer)
     }
 
     /// Returns the resolved default exclude-newer cutoff.
     fn exclude_newer(&self) -> Option<DateTime<Utc>> {
-        self.exclude_newer_config()
-            .map(|config| config.cutoff_for_channel(None))
+        self.exclude_newer_raw().map(|config| {
+            let config: rattler_solve::ExcludeNewer = config.into();
+            config.cutoff_for_channel(None)
+        })
     }
 
     /// Returns the strategy for solving packages.

@@ -1565,6 +1565,125 @@ async fn test_exclude_newer_duration_is_preserved_in_lockfile() {
 }
 
 #[tokio::test]
+async fn test_exclude_newer_per_channel_override() {
+    setup_tracing();
+
+    let mut private_packages = MockRepoData::default();
+    private_packages.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let mut public_packages = MockRepoData::default();
+    public_packages.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+
+    let private_channel = private_packages.into_channel().await.unwrap();
+    let public_channel = public_packages.into_channel().await.unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-per-channel-override"
+    channels = [
+      {{ url = "{private_channel}", exclude-newer = "2030-01-01" }},
+      "{public_channel}",
+    ]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    "#,
+        private_channel = private_channel.url(),
+        public_channel = public_channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==2"
+    ));
+
+    let lockfile = fs_err::read_to_string(pixi.workspace_path().join("pixi.lock")).unwrap();
+    assert!(
+        lockfile.contains("exclude-newer: 2030-01-02 00:00:00 UTC"),
+        "lockfile was:\n{lockfile}"
+    );
+    assert!(
+        lockfile.contains("exclude-newer: 2015-12-02T02:07:43Z"),
+        "lockfile was:\n{lockfile}"
+    );
+}
+
+#[tokio::test]
+async fn test_exclude_newer_per_channel_override_rewrites_stale_lockfile_channel() {
+    setup_tracing();
+
+    let mut private_packages = MockRepoData::default();
+    private_packages.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let mut public_packages = MockRepoData::default();
+    public_packages.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+
+    let private_channel = private_packages.into_channel().await.unwrap();
+    let public_channel = public_packages.into_channel().await.unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-per-channel-override-stale-lock"
+    channels = [
+      {{ url = "{private_channel}", exclude-newer = "2030-01-01" }},
+      "{public_channel}",
+    ]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    "#,
+        private_channel = private_channel.url(),
+        public_channel = public_channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock_path = pixi.workspace_path().join("pixi.lock");
+    let stale_lockfile = fs_err::read_to_string(&lock_path)
+        .unwrap()
+        .replace("      exclude-newer: 2030-01-02 00:00:00 UTC\n", "");
+    fs_err::write(&lock_path, stale_lockfile).unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lockfile = fs_err::read_to_string(lock_path).unwrap();
+    assert!(
+        lockfile.contains("exclude-newer: 2030-01-02 00:00:00 UTC"),
+        "lockfile was:\n{lockfile}"
+    );
+}
+
+#[tokio::test]
 async fn test_exclude_newer_duration_rewrites_stale_lockfile_option() {
     setup_tracing();
 

@@ -4,7 +4,6 @@ use std::{
     sync::Arc,
 };
 
-use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use pixi_record::{PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, SourceSpec};
@@ -81,9 +80,9 @@ pub struct SolveCondaEnvironmentSpec {
     #[serde(skip_serializing_if = "crate::is_default")]
     pub channel_priority: ChannelPriority,
 
-    /// Exclude any packages after the first cut-off date.
-    #[serde(skip_serializing_if = "crate::is_default")]
-    pub exclude_newer: Option<DateTime<Utc>>,
+    /// Exclude packages newer than the configured default and per-channel cutoffs.
+    #[serde(skip)]
+    pub exclude_newer: Option<rattler_solve::ExcludeNewer>,
 
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
@@ -299,9 +298,7 @@ impl SolveCondaEnvironmentSpec {
                 locked_packages: installed,
                 virtual_packages: self.virtual_packages,
                 channel_priority: self.channel_priority,
-                exclude_newer: self
-                    .exclude_newer
-                    .map(rattler_solve::ExcludeNewer::from_datetime),
+                exclude_newer: self.exclude_newer,
                 strategy: self.strategy,
                 constraints: constrains_match_specs,
                 ..rattler_solve::SolverTask::from_iter(solvable_records)

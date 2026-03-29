@@ -50,7 +50,8 @@ use uv_normalize::ExtraName;
 
 use super::{
     CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName,
-    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
+    metadata::persist_channel_exclude_newer, outdated::OutdatedEnvironments,
+    utils::IoConcurrencyLimit,
 };
 use crate::{
     Workspace,
@@ -522,7 +523,8 @@ impl<'p> LockFileDerivedData<'p> {
         self.lock_file
             .to_path(&lock_file_path)
             .into_diagnostic()
-            .context("failed to write lock-file to disk")
+            .context("failed to write lock-file to disk")?;
+        persist_channel_exclude_newer(&lock_file_path, self.workspace)
     }
 
     /// Consumes this instance, dropping any resources that are not needed
@@ -2227,7 +2229,6 @@ async fn spawn_solve_conda_environment_task(
     };
 
     // Get solve options
-    let exclude_newer = group.exclude_newer();
     let strategy = group.solve_strategy().into();
 
     // Get the environment name
@@ -2265,6 +2266,10 @@ async fn spawn_solve_conda_environment_task(
 
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
+    let exclude_newer = group
+        .exclude_newer_config(&channel_config)
+        .map_err(SolveCondaEnvironmentError::from)
+        .map_err(CommandDispatcherError::Failed)?;
 
     // Resolve the channel URLs for the channels we need.
     let channels = channels

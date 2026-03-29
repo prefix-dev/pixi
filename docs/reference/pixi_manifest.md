@@ -58,6 +58,17 @@ To access private or public channels on [prefix.dev](https://prefix.dev/channels
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_channels"
 ```
 
+Inline channel tables can be used to set additional metadata such as priority or a channel-specific
+`exclude-newer` override:
+
+```toml
+channels = [
+  { url = "https://my.private/channel", exclude-newer = "0d" },
+  "https://prefix.dev/conda-forge",
+]
+exclude-newer = "7d"
+```
+
 ### `platforms`
 
 Defines the list of platforms that the workspace supports.
@@ -305,6 +316,16 @@ The value may be specified in the following formats:
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
 Both PyPi and conda packages are considered.
+
+You can override the workspace cutoff for a specific conda channel by using an inline channel table:
+
+```toml
+channels = [
+  { url = "https://my.private/channel", exclude-newer = "0d" },
+  "https://prefix.dev/conda-forge",
+]
+exclude-newer = "7d"
+```
 
 !!! note
     Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).

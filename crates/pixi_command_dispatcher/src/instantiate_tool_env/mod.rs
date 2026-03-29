@@ -210,7 +210,9 @@ impl InstantiateToolEnvironmentSpec {
                 constraints,
                 dev_sources: Default::default(),
                 build_environment: self.build_environment.clone(),
-                exclude_newer: self.exclude_newer,
+                exclude_newer: self
+                    .exclude_newer
+                    .map(rattler_solve::ExcludeNewer::from_datetime),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),

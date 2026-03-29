@@ -6,6 +6,7 @@ use rattler_conda_types::NamedChannelOrUrl;
 use serde::{Serialize, Serializer};
 use toml_span::de_helpers::expected;
 use toml_span::{DeserError, ErrorKind, Value, de_helpers::TableHelper, value::ValueInner};
+use url::Url;
 
 /// Layout of a prioritized channel in a toml file.
 ///
@@ -14,7 +15,9 @@ use toml_span::{DeserError, ErrorKind, Value, de_helpers::TableHelper, value::Va
 /// ```toml
 /// channel = "some-channel"
 /// channel = "https://prefix.dev/some-channel"
+/// channel = "/absolute/path/to/channel"
 /// channel = { channel = "some-channel", priority = 10 }
+/// channel = { url = "https://prefix.dev/some-channel", exclude-newer = "7d" }
 /// ```
 #[derive(Debug)]
 pub enum TomlPrioritizedChannel {
@@ -29,6 +32,7 @@ impl From<TomlPrioritizedChannel> for PrioritizedChannel {
             TomlPrioritizedChannel::Str(channel) => PrioritizedChannel {
                 channel,
                 priority: None,
+                exclude_newer: None,
             },
         }
     }
@@ -36,10 +40,11 @@ impl From<TomlPrioritizedChannel> for PrioritizedChannel {
 
 impl From<PrioritizedChannel> for TomlPrioritizedChannel {
     fn from(channel: PrioritizedChannel) -> Self {
-        if let Some(priority) = channel.priority {
+        if channel.priority.is_some() || channel.exclude_newer.is_some() {
             TomlPrioritizedChannel::Map(PrioritizedChannel {
                 channel: channel.channel,
-                priority: Some(priority),
+                priority: channel.priority,
+                exclude_newer: channel.exclude_newer,
             })
         } else {
             TomlPrioritizedChannel::Str(channel.channel)
@@ -81,12 +86,53 @@ impl<'de> toml_span::Deserialize<'de> for TomlPrioritizedChannel {
             }
             inner @ ValueInner::Table(_) => {
                 let mut th = TableHelper::new(&mut toml_span::Value::with_span(inner, value.span))?;
-                let channel = th.required::<TomlFromStr<_>>("channel")?;
+                let channel = th.optional::<TomlFromStr<NamedChannelOrUrl>>("channel");
+                let url = th
+                    .optional::<TomlFromStr<Url>>("url")
+                    .map(|url| NamedChannelOrUrl::Url(url.into_inner()));
+                let path = th
+                    .optional::<TomlFromStr<NamedChannelOrUrl>>("path")
+                    .map(TomlFromStr::into_inner);
                 let priority = th.optional("priority");
+                let exclude_newer = th
+                    .optional::<pixi_toml::TomlWith<_, TomlFromStr<_>>>("exclude-newer")
+                    .map(pixi_toml::TomlWith::into_inner);
                 th.finalize(None)?;
+
+                let channel = match (channel.map(TomlFromStr::into_inner), url, path) {
+                    (Some(channel), None, None) => channel,
+                    (None, Some(url), None) => url,
+                    (None, None, Some(path)) => path,
+                    (Some(_), Some(_), None)
+                    | (Some(_), None, Some(_))
+                    | (None, Some(_), Some(_))
+                    | (Some(_), Some(_), Some(_)) => {
+                        return Err(toml_span::Error {
+                            kind: ErrorKind::Custom(
+                                "a channel entry may specify only one of 'channel', 'url', or 'path'"
+                                    .into(),
+                            ),
+                            span: value.span,
+                            line_info: None,
+                        }
+                        .into());
+                    }
+                    (None, None, None) => {
+                        return Err(toml_span::Error {
+                            kind: ErrorKind::Custom(
+                                "missing field 'channel', 'url', or 'path' in table".into(),
+                            ),
+                            span: value.span,
+                            line_info: None,
+                        }
+                        .into());
+                    }
+                };
+
                 Ok(TomlPrioritizedChannel::Map(PrioritizedChannel {
-                    channel: channel.into_inner(),
+                    channel,
                     priority,
+                    exclude_newer,
                 }))
             }
             other => Err(expected("a string or table", other, value.span).into()),
@@ -139,6 +185,7 @@ mod test {
                         "some-channel",
                     ),
                     priority: None,
+                    exclude_newer: None,
                 },
             ),
         }
@@ -163,6 +210,48 @@ mod test {
                     priority: Some(
                         10,
                     ),
+                    exclude_newer: None,
+                },
+            ),
+        }
+        "###);
+    }
+
+    #[test]
+    fn test_with_exclude_newer() {
+        let channel = TopLevel::from_toml_str(
+            r#"
+        channel = { url = "https://prefix.dev/some-channel", exclude-newer = "7d" }
+        "#,
+        )
+        .unwrap();
+        assert_debug_snapshot!(channel, @r###"
+        TopLevel {
+            channel: Map(
+                PrioritizedChannel {
+                    channel: Url(
+                        Url {
+                            scheme: "https",
+                            cannot_be_a_base: false,
+                            username: "",
+                            password: None,
+                            host: Some(
+                                Domain(
+                                    "prefix.dev",
+                                ),
+                            ),
+                            port: None,
+                            path: "/some-channel",
+                            query: None,
+                            fragment: None,
+                        },
+                    ),
+                    priority: None,
+                    exclude_newer: Some(
+                        Duration(
+                            604800s,
+                        ),
+                    ),
                 },
             ),
         }
@@ -176,7 +265,7 @@ mod test {
         "#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         assert_snapshot!(format_parse_error(input, error), @r###"
-         × missing field 'channel' in table
+         × missing field 'channel', 'url', or 'path' in table
           ╭─[pixi.toml:2:19]
         1 │
         2 │         channel = { priority = 10 }

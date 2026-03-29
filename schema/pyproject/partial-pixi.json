@@ -549,16 +549,13 @@
     },
     "ChannelInlineTable": {
       "title": "ChannelInlineTable",
-      "description": "A precise description of a `conda` channel, with an optional priority.",
+      "description": "A precise description of a `conda` channel, with optional priority and exclude-newer override.",
       "type": "object",
-      "required": [
-        "channel"
-      ],
       "additionalProperties": false,
       "properties": {
         "channel": {
           "title": "Channel",
-          "description": "The channel the packages needs to be fetched from",
+          "description": "The named channel to fetch packages from",
           "anyOf": [
             {
               "type": "string",
@@ -571,10 +568,23 @@
             }
           ]
         },
+        "exclude-newer": {
+          "title": "Exclude-Newer",
+          "description": "Override the workspace-level `exclude-newer` cutoff for this channel only",
+          "type": "string",
+          "minLength": 1
+        },
         "priority": {
           "title": "Priority",
           "description": "The priority of the channel",
           "type": "integer"
+        },
+        "url": {
+          "title": "Url",
+          "description": "The explicit channel URL to fetch packages from",
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
         }
       }
     },
@@ -2440,7 +2450,7 @@
         },
         "channels": {
           "title": "Channels",
-          "description": "The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred.",
+          "description": "The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred. Inline tables can also override `exclude-newer` per channel.",
           "type": "array",
           "items": {
             "anyOf": [

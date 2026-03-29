@@ -2234,6 +2234,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2249,6 +2250,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2266,6 +2268,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2288,6 +2291,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2306,10 +2310,12 @@ platforms = ["linux-64", "win-64"]
                 PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test")),
                     priority: None,
+                    exclude_newer: None,
                 },
                 PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test2")),
                     priority: None,
+                    exclude_newer: None,
                 },
             ]
             .into_iter()
@@ -2320,6 +2326,7 @@ platforms = ["linux-64", "win-64"]
         let custom_channel = PrioritizedChannel {
             channel: NamedChannelOrUrl::Url("https://custom.com/channel".parse().unwrap()),
             priority: None,
+            exclude_newer: None,
         };
         manifest
             .add_channels([custom_channel.clone()], &FeatureName::DEFAULT, false)
@@ -2338,6 +2345,7 @@ platforms = ["linux-64", "win-64"]
         let prioritized_channel1 = PrioritizedChannel {
             channel: NamedChannelOrUrl::Name(String::from("prioritized")),
             priority: Some(12i32),
+            exclude_newer: None,
         };
         manifest
             .add_channels([prioritized_channel1.clone()], &FeatureName::DEFAULT, false)
@@ -2355,6 +2363,7 @@ platforms = ["linux-64", "win-64"]
         let prioritized_channel2 = PrioritizedChannel {
             channel: NamedChannelOrUrl::Name(String::from("prioritized2")),
             priority: Some(-12i32),
+            exclude_newer: None,
         };
         manifest
             .add_channels([prioritized_channel2.clone()], &FeatureName::DEFAULT, false)
@@ -2405,6 +2414,7 @@ platforms = ["linux-64", "win-64"]
                 [PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                     priority: None,
+                    exclude_newer: None,
                 }],
                 &FeatureName::DEFAULT,
             )
@@ -2417,6 +2427,7 @@ platforms = ["linux-64", "win-64"]
                 [PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test_channel")),
                     priority: None,
+                    exclude_newer: None,
                 }],
                 &FeatureName::from("test"),
             )
@@ -2438,6 +2449,7 @@ platforms = ["linux-64", "win-64"]
                     [PrioritizedChannel {
                         channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                         priority: None,
+                        exclude_newer: None,
                     }],
                     &FeatureName::DEFAULT,
                 )
@@ -2621,10 +2633,12 @@ platforms = ["linux-64", "win-64"]
                 &PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("pytorch")),
                     priority: None,
+                    exclude_newer: None,
                 },
                 &PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                     priority: Some(-1),
+                    exclude_newer: None,
                 },
             ]
         );
