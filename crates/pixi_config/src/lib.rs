@@ -339,7 +339,7 @@ pub enum KeyringProvider {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct PyPIConfig {
     /// The default index URL for PyPI packages.
     #[serde(default)]
@@ -360,7 +360,7 @@ pub struct PyPIConfig {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct S3Options {
     /// S3 endpoint URL
     pub endpoint_url: Url,
@@ -448,7 +448,7 @@ impl Default for DetachedEnvironments {
 }
 
 #[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ExperimentalConfig {
     /// The option to opt into the environment activation cache feature.
     /// This is an experimental feature and may be removed in the future or made
@@ -491,7 +491,7 @@ fn default_max_concurrent_downloads() -> usize {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ConcurrencyConfig {
     /// The maximum number of concurrent solves that can be run at once.
     // Needing to set this default next to the default of the full struct to avoid serde defaulting
@@ -706,7 +706,7 @@ impl FromStr for RunPostLinkScripts {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Config {
     #[serde(default)]
     #[serde(alias = "default_channels")] // BREAK: remove to stop supporting snake_case alias
@@ -920,7 +920,7 @@ impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ShellConfig {
     /// The option to disable the environment activation cache
     #[serde(default)]
@@ -962,7 +962,7 @@ impl ShellConfig {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ProxyConfig {
     /// https proxy.
     #[serde(default)]
@@ -1091,7 +1091,7 @@ impl Serialize for PackageFormatAndCompression {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct BuildConfig {
     /// package format and compression level
     #[serde(default)]
@@ -2024,11 +2024,10 @@ tls-root-certs = "native"
 detached-environments = "{}"
 pinning-strategy = "no-pin"
 concurrency.solves = 5
-UNUSED = "unused"
         "#,
             env!("CARGO_MANIFEST_DIR").replace('\\', "\\\\").as_str()
         );
-        let (config, unused) = Config::from_toml(toml.as_str(), None).unwrap();
+        let (config, _unused) = Config::from_toml(toml.as_str(), None).unwrap();
         assert_eq!(
             config.default_channels,
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
@@ -2040,7 +2039,6 @@ UNUSED = "unused"
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
-        assert!(unused.contains("UNUSED"));
 
         let toml = r"detached-environments = true";
         let (config, _) = Config::from_toml(toml, None).unwrap();
@@ -2050,6 +2048,27 @@ UNUSED = "unused"
                 .unwrap()
                 .join(consts::ENVIRONMENTS_DIR)
                 .as_path()
+        );
+    }
+
+    #[test]
+    fn test_config_rejects_unknown_fields() {
+        let toml = r#"
+default-channels = ["conda-forge"]
+UNUSED = "unused"
+        "#;
+        assert!(
+            Config::from_toml(toml, None).is_err(),
+            "Config should reject unknown top-level fields"
+        );
+
+        let toml = r#"
+[pypi-config]
+unknown-option = true
+        "#;
+        assert!(
+            Config::from_toml(toml, None).is_err(),
+            "Config should reject unknown fields in nested structs"
         );
     }
 
