@@ -267,6 +267,11 @@ class MatchspecTable(StrictBaseModel):
         None, description="The subdir of the package, also known as platform"
     )
     license: NonEmptyStr | None = Field(None, description="The license of the package")
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        alias="exclude-newer",
+        description="Override the workspace-level `exclude-newer` cutoff for this package only",
+    )
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 

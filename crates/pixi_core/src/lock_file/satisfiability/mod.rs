@@ -37,8 +37,9 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::{Tags, pypi_marker_env::determine_marker_environment};
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
-    PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl,
+    PackageName, PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient,
+    Platform,
 };
 use rattler_lock::{
     LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
@@ -276,14 +277,18 @@ fn verify_exclude_newer_channel_metadata(
 }
 
 fn verify_exclude_newer(
+    environment: &Environment<'_>,
+    channel_config: &ChannelConfig,
     locked_environment: &rattler_lock::Environment<'_>,
-    exclude_newer: Option<rattler_solve::ExcludeNewer>,
 ) -> Result<(), ExcludeNewerMismatch> {
-    let Some(exclude_newer) = exclude_newer else {
-        return Ok(());
-    };
+    for (platform, packages) in locked_environment.conda_packages_by_platform() {
+        let Some(exclude_newer) = environment
+            .exclude_newer_config(channel_config, Some(platform))
+            .expect("environment channels were already validated")
+        else {
+            continue;
+        };
 
-    for (_, packages) in locked_environment.conda_packages_by_platform() {
         for package in packages {
             let record = package.record();
             let channel = package
@@ -297,7 +302,8 @@ fn verify_exclude_newer(
                 return Err(ExcludeNewerMismatch {
                     package: record.name.as_source().to_string(),
                     timestamp: (*timestamp).into(),
-                    exclude_newer: exclude_newer.cutoff_for_channel(channel.as_deref()),
+                    exclude_newer: exclude_newer
+                        .cutoff_for_package(&record.name, channel.as_deref()),
                 });
             }
         }
@@ -776,12 +782,7 @@ pub(crate) fn verify_environment_satisfiability_with_lock_file_metadata(
     }
 
     let channel_config = environment.workspace().channel_config();
-    if let Err(err) = verify_exclude_newer(
-        &locked_environment,
-        environment
-            .exclude_newer_config(&channel_config)
-            .map_err(EnvironmentUnsat::InvalidChannel)?,
-    ) {
+    if let Err(err) = verify_exclude_newer(environment, &channel_config, &locked_environment) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
     }
 

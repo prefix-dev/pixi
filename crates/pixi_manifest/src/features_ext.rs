@@ -113,6 +113,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn exclude_newer_config(
         &self,
         channel_config: &ChannelConfig,
+        platform: Option<Platform>,
     ) -> Result<Option<rattler_solve::ExcludeNewer>, ParseChannelError> {
         let mut exclude_newer = self.exclude_newer_raw().map(Into::into);
 
@@ -134,6 +135,26 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
                     .clone()
                     .with_channel_duration(channel.to_string(), duration),
             };
+        }
+
+        for (name, spec) in self
+            .combined_dependencies(platform)
+            .iter_specs()
+            .chain(self.combined_constraints(platform).iter_specs())
+        {
+            let Some(package_exclude_newer) = spec.exclude_newer() else {
+                continue;
+            };
+
+            let config = exclude_newer.get_or_insert_with(|| {
+                rattler_solve::ExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
+            });
+
+            let cutoff = config.package_cutoff(name).map_or_else(
+                || package_exclude_newer.cutoff(),
+                |existing| existing.min(package_exclude_newer.cutoff()),
+            );
+            *config = config.clone().with_package_cutoff(name.clone(), cutoff);
         }
 
         Ok(exclude_newer)

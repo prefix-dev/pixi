@@ -118,6 +118,20 @@ impl SolveCondaEnvironmentSpec {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
+            let exclude_newer = crate::with_package_exclude_newer(
+                self.exclude_newer.clone(),
+                self.binary_specs
+                    .iter_specs()
+                    .filter_map(|(name, spec)| {
+                        spec.exclude_newer()
+                            .map(|exclude_newer| (name.clone(), exclude_newer))
+                    })
+                    .chain(self.constraints.iter_specs().filter_map(|(name, spec)| {
+                        spec.exclude_newer()
+                            .map(|exclude_newer| (name.clone(), exclude_newer))
+                    })),
+            );
+
             // Determine for which records we have source records because those records should only
             //  be installed as source records.
             let package_names_from_source = self
@@ -298,7 +312,7 @@ impl SolveCondaEnvironmentSpec {
                 locked_packages: installed,
                 virtual_packages: self.virtual_packages,
                 channel_priority: self.channel_priority,
-                exclude_newer: self.exclude_newer,
+                exclude_newer,
                 strategy: self.strategy,
                 constraints: constrains_match_specs,
                 ..rattler_solve::SolverTask::from_iter(solvable_records)

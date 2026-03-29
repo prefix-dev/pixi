@@ -3471,4 +3471,47 @@ openssl = "<2"
             .to_string();
         assert_eq!(linux_spec, "<2");
     }
+
+    #[test]
+    fn test_package_exclude_newer_in_dependencies_and_constraints() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+
+[dependencies]
+polars = { version = "*", exclude-newer = "0d" }
+
+[constraints]
+openssl = { exclude-newer = "0d" }
+"#;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let feature = manifest.default_feature();
+
+        let polars = PackageName::from_str("polars").unwrap();
+        let run_dependencies = feature.run_dependencies(None).unwrap();
+        let polars_spec = run_dependencies
+            .get_single(&polars)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            polars_spec.exclude_newer().map(|value| value.to_string()),
+            Some("0s".to_string())
+        );
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+        let constraints = feature.constraints(None).unwrap();
+        let openssl_spec = constraints
+            .get_single(&openssl)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            openssl_spec.exclude_newer().map(|value| value.to_string()),
+            Some("0s".to_string())
+        );
+    }
 }

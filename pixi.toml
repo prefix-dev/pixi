@@ -13,7 +13,7 @@ channels = [
   { channel = "bioconda", exclude-newer = "0d" },
 ]
 description = "Package management made easy!"
-exclude-newer = "3d"
+exclude-newer = "7d"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 preview = ["pixi-build"]
 requires-pixi = ">=0.45"
@@ -27,9 +27,9 @@ c_compiler_version = ["19"]
 [dependencies]
 # pdbecif = ">=1.5"
 # polars = "*"
-# rattler = ">=0.1.2"
-rattler = "*"
+rattler = { version = ">=0.1.2", exclude-newer = "0d" }
 # polars = ">=1.39.3"
+# rattler = "*"
 
 #
 # Shared feature for C/C++ compilers and build tools

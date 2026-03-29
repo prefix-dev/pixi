@@ -139,6 +139,20 @@ impl PixiEnvironmentSpec {
         // Process dev sources to get their metadata (before dependencies are moved)
         let dev_source_records = self.process_dev_sources(&command_queue).await?;
 
+        let exclude_newer = crate::with_package_exclude_newer(
+            self.exclude_newer.clone(),
+            self.dependencies
+                .iter_specs()
+                .filter_map(|(name, spec)| {
+                    spec.exclude_newer()
+                        .map(|exclude_newer| (name.clone(), exclude_newer))
+                })
+                .chain(self.constraints.iter_specs().filter_map(|(name, spec)| {
+                    spec.exclude_newer()
+                        .map(|exclude_newer| (name.clone(), exclude_newer))
+                })),
+        );
+
         // Split the requirements into source and binary requirements.
         let (dev_source_source_specs, dev_source_binary_specs) =
             DevSourceRecord::split_into_source_and_binary_requirements(
@@ -237,7 +251,7 @@ impl PixiEnvironmentSpec {
                 virtual_packages: self.build_environment.host_virtual_packages,
                 strategy: self.strategy,
                 channel_priority: self.channel_priority,
-                exclude_newer: self.exclude_newer,
+                exclude_newer,
                 channel_config: self.channel_config,
             })
             .await

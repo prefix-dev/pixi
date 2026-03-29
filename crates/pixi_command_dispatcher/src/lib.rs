@@ -32,6 +32,12 @@
 //! created and awaited concurrently. This enables parallel execution while
 //! maintaining a simple API surface.
 
+use std::collections::HashMap;
+
+use chrono::{DateTime, Utc};
+use pixi_spec::ExcludeNewer as SpecExcludeNewer;
+use rattler_conda_types::PackageName;
+
 mod backend_source_build;
 pub mod build;
 mod build_backend_metadata;
@@ -99,6 +105,36 @@ pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMeta
 /// A helper function to check if a value is the default value for its type.
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {
     T::default() == *value
+}
+
+fn with_package_exclude_newer(
+    config: Option<rattler_solve::ExcludeNewer>,
+    package_cutoffs: impl IntoIterator<Item = (PackageName, SpecExcludeNewer)>,
+) -> Option<rattler_solve::ExcludeNewer> {
+    let mut package_cutoffs_by_name = HashMap::<PackageName, DateTime<Utc>>::new();
+    for (package, exclude_newer) in package_cutoffs {
+        let cutoff = exclude_newer.cutoff();
+        package_cutoffs_by_name
+            .entry(package)
+            .and_modify(|existing| *existing = (*existing).min(cutoff))
+            .or_insert(cutoff);
+    }
+
+    if package_cutoffs_by_name.is_empty() {
+        return config;
+    }
+
+    let mut config = config
+        .unwrap_or_else(|| rattler_solve::ExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
+
+    for (package, cutoff) in package_cutoffs_by_name {
+        let cutoff = config
+            .package_cutoff(&package)
+            .map_or(cutoff, |existing| existing.min(cutoff));
+        config = config.with_package_cutoff(package, cutoff);
+    }
+
+    Some(config)
 }
 
 /// A build profile indicates the type of build that should happen. Dependencies
