@@ -9,19 +9,19 @@ If you haven't read it yet, we recommend you to do so before continuing, as the 
 However, a typical [nanobind](https://github.com/wjakob/nanobind) project, as described in the [Building a C++ Package tutorial](cpp.md), doesn't cross-compile out of the box.
 There are a couple of issues:
 
-#### 1. Finding python and nanobind
-The `find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)` (note the `Interpreter` component) tries to find a usable python interpreter on the host. 
+#### 1. Finding Python and nanobind
+The `find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)` (note the `Interpreter` component) tries to find a usable Python interpreter on the host. 
 When cross-compiling, the python from the `host-dependencies` is the `target-platform` python, which can not be executed.
 
 The `cross-python_${{ host_platform }}` package can usually be used to circumvent this issue, as [documented by conda-forge](https://conda-forge.org/docs/how-to/advanced/cross-compilation/#details-about-cross-compiled-python-packages).
-However, the `find_package` search logic for the `Interpreter` is still not able to correctly determine the python path in this case.
+However, the `find_package` search logic for the `Interpreter` is still not able to correctly determine the Python path in this case.
 
 #### 2. Generating stubs requires importing the wrapper library
-The `stub_gen.py` script that produces the python stubs (that provide type hints for wrapped objects) _imports_ the library of the wrapped objects.
-When cross-compiling, the library is built for the target platform, so it can not be imported with a python executable on the host.
+The `stub_gen.py` script that produces the Python stubs (that provide type hints for wrapped objects) _imports_ the library of the wrapped objects.
+When cross-compiling, the library is built for the target platform, so it can not be imported with a Python executable on the host.
 
 ## Multi-output recipe solution
-When using Pixi, the python path can be determined based on the `$PREFIX` and the `$PY_VER` variables available during the build: for instance `$ENV{PREFIX}/lib/python$ENV{PY_VER}/site-packages` gives the path to the site-packages directory for installation.
+When using Pixi, the Python path can be determined based on the `$PREFIX` and the `$PY_VER` variables available during the build: for instance `$ENV{PREFIX}/lib/python$ENV{PY_VER}/site-packages` gives the path to the site-packages directory for installation.
 Using these paths allows to not rely on the `find_package`, solving the first issue.
 
 Python stubs only provide type hints about the wrapped objects, they do not link to the compiled library.
@@ -68,7 +68,7 @@ NB_MODULE(cpp_math, m)
 
 The CMake file needs to handle three scenarios:
 
-1. **Cross-compiling using pixi**: Python is not executable on the host, so we locate python and nanobind directly based on `$PREFIX`.
+1. **Cross-compiling using pixi**: Python is not executable on the host, so we locate Python and nanobind directly based on `$PREFIX`.
 2. **Native build with or without pixi**: we can use the typical nanobind configuration.
 3. **Stubs-only build** (`STUBS_ONLY=ON`): the `.so` is assumed already installed; we only call `nanobind_add_stub` to generate the platform independent stub file.
 
@@ -138,6 +138,7 @@ endif()
 **Key points:**
 
 Cross-compilation:
+
 - `find_package(Python … Development.Module)` (no `Interpreter` component) finds the *target* headers in `$PREFIX` without needing a runnable interpreter.
 - `nanobind_ROOT` is set manually to the nanobind CMake helpers bundled in the target `$PREFIX`
 Stub-generation:
