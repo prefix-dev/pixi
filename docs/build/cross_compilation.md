@@ -193,7 +193,7 @@ outputs:
     build:
       number: 0
       script:
-        - if: unix
+        - if: true
           then: |
             mkdir -p build && rm -rf build/*
             cmake -GNinja -Bbuild -S .    \
@@ -223,16 +223,16 @@ outputs:
       noarch: python    # (4)
       skip:
         - build_platform == "linux-aarch64"   # (5)
-      script:
-        - if: unix
-          then: |
-            mkdir -p build && rm -rf build/*
-            cmake -GNinja -Bbuild -S .    \
-              ${CMAKE_ARGS}               \
-              -DSTUBS_ONLY=ON             \
-              -DCMAKE_INSTALL_PREFIX=$PREFIX \
-              -DCMAKE_BUILD_TYPE=Release
-            ninja -C build cpp_math_stub
+      script: |
+        mkdir -p build && rm -rf build/*
+        cmake -GNinja -Bbuild -S . \
+          ${CMAKE_ARGS} \
+          -DSTUBS_ONLY=ON \
+          -DCMAKE_INSTALL_PREFIX=$PREFIX \
+          -DCMAKE_PREFIX_PATH=$PREFIX \
+          -DCMAKE_MODULE_PATH=$PREFIX/share/cmake/Modules \
+          -DCMAKE_BUILD_TYPE=Release
+        ninja -C build py_phoenix_socket_backend_stub
     requirements:
       build:
         - cmake
