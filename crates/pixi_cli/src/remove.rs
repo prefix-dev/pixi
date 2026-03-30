@@ -2,7 +2,7 @@ use clap::Parser;
 use pixi_api::{WorkspaceContext, workspace::DependencyOptions};
 use pixi_config::ConfigCli;
 use pixi_core::{DependencyType, WorkspaceLocator};
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, SpecType};
 
 use crate::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
@@ -62,7 +62,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut dep_type = args.dependency_config.dependency_type();
 
     // Fall back to pypi removal if deps aren't found in conda.
-    if let DependencyType::CondaDependency(spec_type) = dep_type {
+    // Only when no explicit type flag (--host, --build) was passed.
+    if matches!(dep_type, DependencyType::CondaDependency(SpecType::Run)) {
+        let spec_type = SpecType::Run;
         let specs = args.dependency_config.specs()?;
         let env = workspace.default_environment();
         let conda_deps = env.dependencies(spec_type, None);
