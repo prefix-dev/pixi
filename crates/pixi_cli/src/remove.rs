@@ -69,9 +69,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let env = workspace.default_environment();
         let conda_deps = env.dependencies(spec_type, None);
 
-        let all_missing_from_conda = specs
-            .keys()
-            .all(|name| !conda_deps.contains_key(name));
+        let all_missing_from_conda = specs.keys().all(|name| !conda_deps.contains_key(name));
 
         if all_missing_from_conda {
             let pypi_deps = env.pypi_dependencies(None);
