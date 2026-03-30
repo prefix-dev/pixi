@@ -61,9 +61,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut dep_type = args.dependency_config.dependency_type();
 
-    // If the user didn't explicitly pass --pypi and the dependency type is conda,
-    // check whether the packages actually exist as conda deps. If not, fall back
-    // to pypi removal when the packages exist there instead.
+    // Fall back to pypi removal if deps aren't found in conda.
     if let DependencyType::CondaDependency(spec_type) = dep_type {
         let specs = args.dependency_config.specs()?;
         let env = workspace.default_environment();
