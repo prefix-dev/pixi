@@ -274,7 +274,7 @@ output/
 ### Cross-compilation build on linux-64 host
 
 ```bash
-pixi build --target-platform linux-aarch64
+pixi build --target-platform linux-aarch64 --output-dir output
 ```
 
 A third package is added:
@@ -293,10 +293,20 @@ The stubs package is **not** rebuilt: since it is `noarch`, the one produced dur
 To check that the packages have the correct architecture, run :
 
 ```bash
-unzip -q output/YOUR_PACKAGE.conda -d tmp && \
-tar --use-compress-program=unzstd -xf tmp/info-*.tar.zst -C tmp && \
-jq '.platform, .subdir' tmp/info/index.json && \
-rm -rf tmp
+cd output && \
+rattler-build package extract YOUR_PACKAGE_NAME
+jq '.platform, .subdir' YOUR_PACKAGE_DIR/info/index.json && \
+rm -rf YOUR_PACKAGE_DIR && \
+cd ..
+```
+
+Example using `cpp_math` project :
+```bash
+cd output && \
+rattler-build package extract cpp_math-0.1.0-hb0f4dca_0.conda
+jq '.platform, .subdir' cpp_math-0.1.0-hb0f4dca_0/info/index.json && \
+rm -rf cpp_math-0.1.0-hb0f4dca_0 && \
+cd ..
 ```
 
 For the `linux-64` package, output should be
