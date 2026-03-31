@@ -1,12 +1,9 @@
 use futures::FutureExt;
-use pixi_record::PixiRecord;
 
 use super::{CommandDispatcherProcessor, PendingSolveCondaEnvironment, TaskResult};
 use crate::{
-    CommandDispatcherError, CommandDispatcherErrorResultExt, SolveCondaEnvironmentSpec,
-    command_dispatcher::{SolveCondaEnvironmentId, SolveCondaEnvironmentTask},
-    reporter::Reportable,
-    solve_conda::SolveCondaEnvironmentError,
+    CommandDispatcherError, SolveCondaEnvironmentSpec,
+    command_dispatcher::SolveCondaEnvironmentTask, reporter::Reportable,
 };
 
 impl CommandDispatcherProcessor {
@@ -49,7 +46,7 @@ impl CommandDispatcherProcessor {
     }
 
     /// Queue as many solves as possible within the allowed limits.
-    fn start_next_conda_environment_solves(&mut self) {
+    pub(super) fn start_next_conda_environment_solves(&mut self) {
         use crate::command_dispatcher::CommandDispatcherContext;
 
         let limit = self
@@ -88,40 +85,5 @@ impl CommandDispatcherProcessor {
                     .boxed_local(),
             );
         }
-    }
-
-    /// Called when a [`TaskResult::SolveCondaEnvironment`] task was
-    /// received.
-    ///
-    /// This function will relay the result of the task back to the
-    /// [`super::CommandDispatcher`] that issues it.
-    pub(crate) fn on_solve_conda_environment_result(
-        &mut self,
-        id: SolveCondaEnvironmentId,
-        result: Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
-    ) {
-        use crate::command_dispatcher::CommandDispatcherContext;
-
-        let context = CommandDispatcherContext::SolveCondaEnvironment(id);
-        self.parent_contexts.remove(&context);
-        self.complete_task_token(context, &result);
-        let env = self
-            .conda_solves
-            .remove(id)
-            .expect("got a result for a conda environment that was not pending");
-
-        // Notify the reporter that the solve finished.
-        if let Some(id) = env.reporter_id {
-            SolveCondaEnvironmentSpec::report_finished(&mut self.reporter, id, result.is_err());
-        }
-
-        // Notify the command dispatcher that the result is available.
-        if let Some(result) = result.into_ok_or_failed() {
-            // We can silently ignore the result if the task was cancelled.
-            let _ = env.tx.send(result);
-        };
-
-        // Queue the next pending solve
-        self.start_next_conda_environment_solves();
     }
 }

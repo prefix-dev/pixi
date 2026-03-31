@@ -6,7 +6,7 @@ use super::CommandDispatcherProcessor;
 use super::TaskResult;
 use super::dedup::DedupAction;
 use crate::{
-    CommandDispatcherError, SourceBuildCacheEntry, SourceBuildCacheStatusError,
+    CommandDispatcherError, SourceBuildCacheStatusError,
     command_dispatcher::{
         CommandDispatcherContext, SourceBuildCacheStatusId, SourceBuildCacheStatusTask,
     },
@@ -74,21 +74,5 @@ impl CommandDispatcherProcessor {
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
         };
-    }
-
-    /// Called when a [`TaskResult::QuerySourceBuildCache`] task was
-    /// received.
-    pub(crate) fn on_source_build_cache_status_result(
-        &mut self,
-        id: SourceBuildCacheStatusId,
-        result: Result<
-            Arc<SourceBuildCacheEntry>,
-            CommandDispatcherError<SourceBuildCacheStatusError>,
-        >,
-    ) {
-        self.parent_contexts
-            .remove(&CommandDispatcherContext::QuerySourceBuildCache(id));
-
-        self.source_build_cache_status.on_result(id, result);
     }
 }

@@ -1,13 +1,9 @@
 use futures::FutureExt;
-use pixi_record::PixiRecord;
 
 use super::{CommandDispatcherProcessor, PendingPixiEnvironment, TaskResult};
 use crate::{
-    CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError,
-    command_dispatcher::{
-        CommandDispatcherContext, SolvePixiEnvironmentId, SolvePixiEnvironmentTask,
-    },
+    CommandDispatcherError, PixiEnvironmentSpec,
+    command_dispatcher::{CommandDispatcherContext, SolvePixiEnvironmentTask},
     reporter::Reportable,
 };
 
@@ -71,38 +67,5 @@ impl CommandDispatcherProcessor {
                 })
                 .boxed_local(),
         );
-    }
-
-    /// Called when a [`TaskResult::SolvePixiEnvironment`] task was
-    /// received.
-    ///
-    /// This function will relay the result of the task back to the
-    /// [`crate::CommandDispatcher`] that issues it.
-    pub(crate) fn on_solve_pixi_environment_result(
-        &mut self,
-        id: SolvePixiEnvironmentId,
-        result: Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>>,
-    ) {
-        let context = CommandDispatcherContext::SolvePixiEnvironment(id);
-        self.parent_contexts.remove(&context);
-        self.complete_task_token(context, &result);
-        let env = self
-            .solve_pixi_environments
-            .remove(id)
-            .expect("got a result for a conda environment that was not pending");
-
-        // Notify the reporter that the solve finished.
-        if let Some(id) = env.reporter_id {
-            PixiEnvironmentSpec::report_finished(&mut self.reporter, id, result.is_err());
-        }
-
-        let Some(result) = result.into_ok_or_failed() else {
-            // If the job was canceled, we can just drop the sending end
-            // which will also cause a cancel on the receiving end.
-            return;
-        };
-
-        // We can silently ignore the result if the task was cancelled.
-        let _ = env.tx.send(result);
     }
 }

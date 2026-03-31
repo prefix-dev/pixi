@@ -1,5 +1,5 @@
 use futures::FutureExt;
-use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
+use pixi_git::resolver::RepositoryReference;
 
 use super::CommandDispatcherProcessor;
 use super::TaskResult;
@@ -100,23 +100,5 @@ impl CommandDispatcherProcessor {
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
         };
-    }
-
-    /// Called when a git checkout task has completed.
-    pub(crate) fn on_git_checked_out(
-        &mut self,
-        id: GitCheckoutId,
-        result: Result<Fetch, CommandDispatcherError<GitError>>,
-    ) {
-        self.parent_contexts
-            .remove(&CommandDispatcherContext::GitCheckout(id));
-
-        let failed = result.is_err();
-        self.git_checkouts.on_result(id, result);
-        if let Some(reporter_ids) = self.git_checkout_reporters.remove(&id) {
-            for reporter_id in reporter_ids {
-                pixi_git::GitUrl::report_finished(&mut self.reporter, reporter_id, failed);
-            }
-        }
     }
 }

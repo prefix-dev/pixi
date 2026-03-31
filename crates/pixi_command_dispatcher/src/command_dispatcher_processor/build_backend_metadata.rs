@@ -6,8 +6,7 @@ use super::CommandDispatcherProcessor;
 use super::TaskResult;
 use super::dedup::DedupAction;
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
-    CommandDispatcherError, Reporter,
+    BuildBackendMetadataSpec, CommandDispatcherError, Reporter,
     command_dispatcher::{
         BuildBackendMetadataId, BuildBackendMetadataTask, CommandDispatcherContext,
     },
@@ -107,27 +106,5 @@ impl CommandDispatcherProcessor {
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
         };
-    }
-
-    /// Called when a [`super::TaskResult::BuildBackendMetadata`] task was
-    /// received.
-    pub(crate) fn on_build_backend_metadata_result(
-        &mut self,
-        id: BuildBackendMetadataId,
-        result: Result<
-            Arc<BuildBackendMetadata>,
-            CommandDispatcherError<BuildBackendMetadataError>,
-        >,
-    ) {
-        self.parent_contexts
-            .remove(&CommandDispatcherContext::BuildBackendMetadata(id));
-
-        let failed = result.is_err();
-        self.build_backend_metadata.on_result(id, result);
-        if let Some(reporter_ids) = self.build_backend_metadata_reporters.remove(&id) {
-            for reporter_id in reporter_ids {
-                BuildBackendMetadataSpec::report_finished(&mut self.reporter, reporter_id, failed);
-            }
-        }
     }
 }

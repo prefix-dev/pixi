@@ -9,6 +9,8 @@ use std::{
     sync::Arc,
 };
 
+use crate::CommandDispatcherErrorResultExt;
+use crate::command_dispatcher::TaskSpec;
 use crate::source_build_cache_status::SourceBuildDeduplicationKey;
 use crate::source_record::SourceRecordDeduplicationKey;
 use crate::{
@@ -16,8 +18,8 @@ use crate::{
     CommandDispatcherError, DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec,
     InstallPixiEnvironmentResult, Reporter, ResolvedSourceRecord, SolveCondaEnvironmentSpec,
     SolvePixiEnvironmentError, SourceBuildCacheEntry, SourceBuildCacheStatusError,
-    SourceBuildError, SourceBuildResult, SourceBuildSpec, SourceMetadata, SourceMetadataError,
-    SourceRecordError,
+    SourceBuildCacheStatusSpec, SourceBuildError, SourceBuildResult, SourceBuildSpec,
+    SourceMetadata, SourceMetadataError, SourceMetadataSpec, SourceRecordError, SourceRecordSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
@@ -29,6 +31,7 @@ use crate::{
     },
     executor::ExecutorFutures,
     install_pixi::InstallPixiEnvironmentError,
+    instantiate_tool_env::InstantiateToolEnvironmentSpec,
     instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult},
     reporter,
     solve_conda::SolveCondaEnvironmentError,
@@ -243,9 +246,109 @@ enum TaskResult {
     ),
 }
 
-/// Information about a pending conda environment solve. This is used by the
-/// background task to keep track of which command_dispatcher is awaiting the
-/// result.
+/// Maps a slot-map based task spec to its pending entry on
+/// [`CommandDispatcherProcessor`].
+///
+/// Each implementation knows which slotmap field holds its pending entries
+/// and how to extract the `oneshot::Sender` and reporter ID.
+trait HasSlotmapTaskFields: TaskSpec + reporter::Reportable {
+    type Id: slotmap::Key;
+
+    /// Removes the pending entry from the processor's slotmap and returns
+    /// the sender and reporter ID.
+    fn remove_pending(
+        proc: &mut CommandDispatcherProcessor,
+        id: Self::Id,
+    ) -> (
+        oneshot::Sender<Result<Self::Output, Self::Error>>,
+        Option<Self::ReporterId>,
+    );
+
+    /// Constructs the context variant for this task's ID.
+    fn context(id: Self::Id) -> CommandDispatcherContext;
+}
+
+impl HasSlotmapTaskFields for SolveCondaEnvironmentSpec {
+    type Id = SolveCondaEnvironmentId;
+    fn remove_pending(
+        proc: &mut CommandDispatcherProcessor,
+        id: Self::Id,
+    ) -> (
+        oneshot::Sender<Result<Self::Output, Self::Error>>,
+        Option<Self::ReporterId>,
+    ) {
+        let entry = proc
+            .conda_solves
+            .remove(id)
+            .expect("got a result for a conda environment that was not pending");
+        (entry.tx, entry.reporter_id)
+    }
+    fn context(id: Self::Id) -> CommandDispatcherContext {
+        CommandDispatcherContext::SolveCondaEnvironment(id)
+    }
+}
+
+impl HasSlotmapTaskFields for crate::PixiEnvironmentSpec {
+    type Id = SolvePixiEnvironmentId;
+    fn remove_pending(
+        proc: &mut CommandDispatcherProcessor,
+        id: Self::Id,
+    ) -> (
+        oneshot::Sender<Result<Self::Output, Self::Error>>,
+        Option<Self::ReporterId>,
+    ) {
+        let entry = proc
+            .solve_pixi_environments
+            .remove(id)
+            .expect("got a result for a pixi environment that was not pending");
+        (entry.tx, entry.reporter_id)
+    }
+    fn context(id: Self::Id) -> CommandDispatcherContext {
+        CommandDispatcherContext::SolvePixiEnvironment(id)
+    }
+}
+
+impl HasSlotmapTaskFields for crate::install_pixi::InstallPixiEnvironmentSpec {
+    type Id = InstallPixiEnvironmentId;
+    fn remove_pending(
+        proc: &mut CommandDispatcherProcessor,
+        id: Self::Id,
+    ) -> (
+        oneshot::Sender<Result<Self::Output, Self::Error>>,
+        Option<Self::ReporterId>,
+    ) {
+        let entry = proc
+            .install_pixi_environment
+            .remove(id)
+            .expect("got a result for a pixi environment install that was not pending");
+        (entry.tx, entry.reporter_id)
+    }
+    fn context(id: Self::Id) -> CommandDispatcherContext {
+        CommandDispatcherContext::InstallPixiEnvironment(id)
+    }
+}
+
+impl HasSlotmapTaskFields for Box<BackendSourceBuildSpec> {
+    type Id = BackendSourceBuildId;
+    fn remove_pending(
+        proc: &mut CommandDispatcherProcessor,
+        id: Self::Id,
+    ) -> (
+        oneshot::Sender<Result<Self::Output, Self::Error>>,
+        Option<Self::ReporterId>,
+    ) {
+        let entry = proc
+            .backend_source_builds
+            .remove(id)
+            .expect("got a result for a source build that was not pending");
+        (entry.tx, entry.reporter_id)
+    }
+    fn context(id: Self::Id) -> CommandDispatcherContext {
+        CommandDispatcherContext::BackendSourceBuild(id)
+    }
+}
+
+/// Information about a pending conda environment solve.
 struct PendingSolveCondaEnvironment {
     tx: oneshot::Sender<Result<Vec<PixiRecord>, SolveCondaEnvironmentError>>,
     reporter_id: Option<reporter::CondaSolveId>,
@@ -256,6 +359,17 @@ struct PendingBackendSourceBuild {
     reporter_id: Option<reporter::BackendSourceBuildId>,
 }
 
+impl PendingTask<Box<BackendSourceBuildSpec>> for PendingBackendSourceBuild {
+    fn into_parts(
+        self,
+    ) -> (
+        oneshot::Sender<Result<BackendBuiltSource, BackendSourceBuildError>>,
+        Option<reporter::BackendSourceBuildId>,
+    ) {
+        (self.tx, self.reporter_id)
+    }
+}
+
 /// Information about a pending pixi environment solve. This is used by the
 /// background task to keep track of which command_dispatcher is awaiting the
 /// result.
@@ -264,9 +378,6 @@ struct PendingPixiEnvironment {
     reporter_id: Option<reporter::PixiSolveId>,
 }
 
-/// Information about a pending pixi environment installation. This is used by
-/// the background task to keep track of which command_dispatcher is awaiting
-/// the result.
 struct PendingInstallPixiEnvironment {
     tx: oneshot::Sender<Result<InstallPixiEnvironmentResult, InstallPixiEnvironmentError>>,
     reporter_id: Option<reporter::PixiInstallId>,
@@ -398,33 +509,83 @@ impl CommandDispatcherProcessor {
     fn on_result(&mut self, result: TaskResult) {
         match result {
             TaskResult::SolveCondaEnvironment(id, result) => {
-                self.on_solve_conda_environment_result(id, *result)
+                self.complete_slotmap_task::<SolveCondaEnvironmentSpec>(id, *result);
+                self.start_next_conda_environment_solves();
             }
             TaskResult::SolvePixiEnvironment(id, result) => {
-                self.on_solve_pixi_environment_result(id, *result)
+                self.complete_slotmap_task::<crate::PixiEnvironmentSpec>(id, *result);
             }
             TaskResult::InstallPixiEnvironment(id, result) => {
-                self.on_install_pixi_environment_result(id, *result)
+                self.complete_slotmap_task::<crate::install_pixi::InstallPixiEnvironmentSpec>(
+                    id, *result,
+                );
             }
             TaskResult::BuildBackendMetadata(id, result) => {
-                self.on_build_backend_metadata_result(id, *result)
+                self.complete_dedup_task::<BuildBackendMetadataSpec>(
+                    CommandDispatcherContext::BuildBackendMetadata(id),
+                    id,
+                    *result,
+                );
             }
-            TaskResult::GitCheckedOut(id, result) => self.on_git_checked_out(id, *result),
-            TaskResult::UrlCheckedOut(id, result) => self.on_url_checked_out(id, *result),
+            TaskResult::GitCheckedOut(id, result) => {
+                self.complete_dedup_task::<pixi_git::GitUrl>(
+                    CommandDispatcherContext::GitCheckout(id),
+                    id,
+                    *result,
+                );
+            }
+            TaskResult::UrlCheckedOut(id, result) => {
+                self.complete_dedup_task::<pixi_spec::UrlSpec>(
+                    CommandDispatcherContext::UrlCheckout(id),
+                    id,
+                    *result,
+                );
+            }
             TaskResult::InstantiateToolEnv(id, result) => {
-                self.on_instantiate_tool_environment_result(id, *result)
+                self.complete_dedup_task::<InstantiateToolEnvironmentSpec>(
+                    CommandDispatcherContext::InstantiateToolEnv(id),
+                    id,
+                    *result,
+                );
             }
-            TaskResult::SourceBuild(id, result) => self.on_source_build_result(id, *result),
-            TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, *result),
-            TaskResult::SourceRecord(id, result) => self.on_source_record_result(id, *result),
+            TaskResult::SourceBuild(id, result) => {
+                self.complete_dedup_task::<SourceBuildSpec>(
+                    CommandDispatcherContext::SourceBuild(id),
+                    id,
+                    *result,
+                );
+            }
+            TaskResult::SourceMetadata(id, result) => {
+                self.complete_dedup_task::<SourceMetadataSpec>(
+                    CommandDispatcherContext::SourceMetadata(id),
+                    id,
+                    *result,
+                );
+            }
+            TaskResult::SourceRecord(id, result) => {
+                self.complete_dedup_task::<SourceRecordSpec>(
+                    CommandDispatcherContext::SourceRecord(id),
+                    id,
+                    *result,
+                );
+            }
             TaskResult::BackendSourceBuild(id, result) => {
-                self.on_backend_source_build_result(id, *result)
+                self.complete_slotmap_task::<Box<BackendSourceBuildSpec>>(id, *result);
+                self.start_next_backend_source_build();
             }
             TaskResult::QuerySourceBuildCache(id, result) => {
-                self.on_source_build_cache_status_result(id, *result)
+                self.complete_dedup_task::<SourceBuildCacheStatusSpec>(
+                    CommandDispatcherContext::QuerySourceBuildCache(id),
+                    id,
+                    *result,
+                );
             }
             TaskResult::DevSourceMetadata(id, result) => {
-                self.on_dev_source_metadata_result(id, *result)
+                self.complete_dedup_task::<DevSourceMetadataSpec>(
+                    CommandDispatcherContext::DevSourceMetadata(id),
+                    id,
+                    *result,
+                );
             }
         }
     }
@@ -613,6 +774,26 @@ impl CommandDispatcherProcessor {
         self.cancellation_tokens.insert(context, token);
     }
 
+    /// Handles the result of a slot-map based (non-deduplicated) task:
+    /// removes the pending entry, parent context, cancellation token,
+    /// notifies the reporter, and sends the result to the waiting caller.
+    fn complete_slotmap_task<S: HasSlotmapTaskFields>(
+        &mut self,
+        id: S::Id,
+        result: Result<S::Output, CommandDispatcherError<S::Error>>,
+    ) {
+        let context = S::context(id);
+        let (tx, reporter_id) = S::remove_pending(self, id);
+        self.parent_contexts.remove(&context);
+        self.complete_task_token(context, &result);
+        if let Some(reporter_id) = reporter_id {
+            S::report_finished(&mut self.reporter, reporter_id, result.is_err());
+        }
+        if let Some(result) = result.into_ok_or_failed() {
+            let _ = tx.send(result);
+        }
+    }
+
     /// Handles the cancellation token for a completed task based on its result.
     ///
     /// - On **cancellation**: removes and cancels the token, propagating
@@ -643,6 +824,27 @@ impl CommandDispatcherProcessor {
     /// A missing token means the parent completed (success or error) and
     /// new child tasks should still be allowed to proceed. Only an
     /// explicitly cancelled token blocks new children.
+    ///
+    /// Handles the result of a deduplicated task: removes the parent context,
+    /// forwards the result to the dedup registry, and notifies reporters.
+    fn complete_dedup_task<S: HasDedupTaskFields>(
+        &mut self,
+        context: CommandDispatcherContext,
+        id: S::Id,
+        result: Result<S::Ok, CommandDispatcherError<S::Err>>,
+    ) {
+        let fields = S::dedup_task_fields(self);
+        fields.parent_contexts.remove(&context);
+        let failed = result.is_err();
+        let reporter_ids = fields.reporter_map.remove(&id);
+        fields.dedup.on_result(id, result);
+        if let Some(reporter_ids) = reporter_ids {
+            for reporter_id in reporter_ids {
+                S::report_finished(fields.reporter, reporter_id, failed);
+            }
+        }
+    }
+
     fn is_parent_cancelled(&self, parent: Option<CommandDispatcherContext>) -> bool {
         parent.is_some_and(|ctx| {
             self.cancellation_tokens
