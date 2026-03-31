@@ -90,9 +90,9 @@ python_rich        0.1.0       pyhbf21a9e_0                   conda  python_rich
 ```
 
 
-## Custom Variant Keys as Environment Variables
+## Custom Variant Keys as Environment Variables (rattler-build backend)
 
-Build variants are not limited to dependency versions and compiler selection.
+When using the `pixi-build-rattler-build` backend, build variants are not limited to dependency versions and compiler selection.
 Any variant key that is not a recognized language key (like `python`, `numpy`, `r`, etc.) is automatically exported as an **environment variable** during the build.
 
 This is useful for passing configuration to build scripts without modifying the recipe itself.
@@ -104,7 +104,10 @@ CONDA_BUILD_SYSROOT = ["/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk"
 ```
 
 During the build, `CONDA_BUILD_SYSROOT` will be set as an environment variable and available to the build script.
-This works because the `rattler-build` backend converts all non-language variant keys into environment variables via its `env_vars_from_variant` function.
+This works because `rattler-build` converts all non-language variant keys into environment variables.
+
+!!! note
+    This behavior is specific to the `pixi-build-rattler-build` backend. Other backends may handle custom variant keys differently.
 
 Custom variant keys can also be used in recipe templates via Jinja:
 
