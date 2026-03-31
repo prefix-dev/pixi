@@ -2,10 +2,7 @@ use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingBackendSourceBuild, TaskResult};
 use crate::{
-    BackendBuiltSource, BackendSourceBuildSpec, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, Reporter,
-    backend_source_build::BackendSourceBuildError,
-    command_dispatcher::{BackendSourceBuildId, BackendSourceBuildTask},
+    CommandDispatcherError, Reporter, command_dispatcher::BackendSourceBuildTask,
     reporter::Reportable,
 };
 
@@ -49,7 +46,7 @@ impl CommandDispatcherProcessor {
         self.start_next_backend_source_build();
     }
 
-    fn start_next_backend_source_build(&mut self) {
+    pub(super) fn start_next_backend_source_build(&mut self) {
         use crate::command_dispatcher::CommandDispatcherContext;
 
         let limit = self
@@ -96,44 +93,5 @@ impl CommandDispatcherProcessor {
                     .boxed_local(),
             );
         }
-    }
-
-    /// Called when a [`TaskResult::BackendSourceBuild`] task was
-    /// received.
-    ///
-    /// This function will relay the result of the task back to the
-    /// [`crate::CommandDispatcher`] that issues it.
-    pub(crate) fn on_backend_source_build_result(
-        &mut self,
-        id: BackendSourceBuildId,
-        result: Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>>,
-    ) {
-        use crate::command_dispatcher::CommandDispatcherContext;
-
-        let context = CommandDispatcherContext::BackendSourceBuild(id);
-        self.parent_contexts.remove(&context);
-        self.complete_task_token(context, &result);
-
-        let env = self
-            .backend_source_builds
-            .remove(id)
-            .expect("got a result for a source build that was not pending");
-
-        let result = result.into_ok_or_failed();
-
-        // Notify the reporter that the solve finished.
-        if let Some(id) = env.reporter_id {
-            let failed = matches!(result, Some(Err(_)));
-            BackendSourceBuildSpec::report_finished(&mut self.reporter, id, failed);
-        }
-
-        // Notify the command dispatcher that the result is available.
-        if let Some(result) = result {
-            // We can silently ignore the result if the task was cancelled.
-            let _ = env.tx.send(result);
-        };
-
-        // Queue the next pending solve
-        self.start_next_backend_source_build();
     }
 }

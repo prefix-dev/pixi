@@ -6,7 +6,7 @@ use super::CommandDispatcherProcessor;
 use super::TaskResult;
 use super::dedup::DedupAction;
 use crate::{
-    CommandDispatcherError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    CommandDispatcherError, SourceMetadataSpec,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
     reporter::Reportable,
 };
@@ -83,23 +83,5 @@ impl CommandDispatcherProcessor {
         );
 
         self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
-    }
-
-    /// Called when a [`super::TaskResult::SourceMetadata`] task was received.
-    pub(crate) fn on_source_metadata_result(
-        &mut self,
-        id: SourceMetadataId,
-        result: Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
-    ) {
-        self.parent_contexts
-            .remove(&CommandDispatcherContext::SourceMetadata(id));
-
-        let failed = result.is_err();
-        self.source_metadata.on_result(id, result);
-        if let Some(reporter_ids) = self.source_metadata_reporters.remove(&id) {
-            for reporter_id in reporter_ids {
-                SourceMetadataSpec::report_finished(&mut self.reporter, reporter_id, failed);
-            }
-        }
     }
 }

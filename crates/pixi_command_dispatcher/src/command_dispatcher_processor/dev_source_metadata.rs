@@ -4,7 +4,7 @@ use super::CommandDispatcherProcessor;
 use super::TaskResult;
 use super::dedup::DedupAction;
 use crate::{
-    CommandDispatcherError, DevSourceMetadata, DevSourceMetadataError,
+    CommandDispatcherError, DevSourceMetadataError,
     command_dispatcher::{CommandDispatcherContext, DevSourceMetadataId, DevSourceMetadataTask},
 };
 
@@ -60,17 +60,5 @@ impl CommandDispatcherProcessor {
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
         };
-    }
-
-    /// Called when a [`TaskResult::DevSourceMetadata`] task was received.
-    pub(crate) fn on_dev_source_metadata_result(
-        &mut self,
-        id: DevSourceMetadataId,
-        result: Result<DevSourceMetadata, CommandDispatcherError<DevSourceMetadataError>>,
-    ) {
-        self.parent_contexts
-            .remove(&CommandDispatcherContext::DevSourceMetadata(id));
-
-        self.dev_source_metadata.on_result(id, result);
     }
 }
