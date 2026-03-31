@@ -555,7 +555,7 @@
     },
     "ChannelInlineTable": {
       "title": "ChannelInlineTable",
-      "description": "A precise description of a `conda` channel, with optional priority and exclude-newer override.",
+      "description": "A precise description of a `conda` channel, with an optional priority.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -573,12 +573,6 @@
               "minLength": 1
             }
           ]
-        },
-        "exclude-newer": {
-          "title": "Exclude-Newer",
-          "description": "Override the workspace-level `exclude-newer` cutoff for this channel only",
-          "type": "string",
-          "pattern": "^(\\d{4}-\\d{2}-\\d{2}([T ]\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))?|(\\d+\\s*[A-Za-z]+\\s*)+)$"
         },
         "path": {
           "title": "Path",
@@ -598,7 +592,24 @@
           "format": "uri",
           "minLength": 1
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "channel"
+          ]
+        },
+        {
+          "required": [
+            "url"
+          ]
+        },
+        {
+          "required": [
+            "path"
+          ]
+        }
+      ]
     },
     "ChannelPriority": {
       "title": "ChannelPriority",
@@ -2468,7 +2479,7 @@
         },
         "channels": {
           "title": "Channels",
-          "description": "The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred. Inline tables can also override `exclude-newer` per channel.",
+          "description": "The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred.",
           "type": "array",
           "items": {
             "anyOf": [

@@ -73,7 +73,7 @@ impl CondaPrefixUpdaterBuilder<'_> {
         let variant_config = self.group.workspace().variants(self.platform)?;
         let exclude_newer = self
             .group
-            .exclude_newer_config_resolved(&self.group.channel_config(), Some(self.platform))
+            .exclude_newer_config_resolved(Some(self.platform))
             .into_diagnostic()?;
 
         Ok(CondaPrefixUpdater::new(

@@ -186,7 +186,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
     let exclude_newer = workspace
         .default_environment()
-        .exclude_newer_config_resolved(&channel_config, Some(build_environment.host_platform))
+        .exclude_newer_config_resolved(Some(build_environment.host_platform))
         .into_diagnostic()?;
 
     let manifest_source: PinnedSourceSpec = PinnedPathSpec {

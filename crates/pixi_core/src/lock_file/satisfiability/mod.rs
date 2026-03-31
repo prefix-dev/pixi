@@ -37,9 +37,8 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::{Tags, pypi_marker_env::determine_marker_environment};
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl,
-    PackageName, PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient,
-    Platform,
+    ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
+    PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{
     LockedPackageRef, PackageHashes, PypiIndexes, PypiPackageData, PypiSourceTreeHashable,
@@ -157,12 +156,11 @@ impl Display for ExcludeNewerMismatch {
 
 fn verify_exclude_newer(
     environment: &Environment<'_>,
-    channel_config: &ChannelConfig,
     locked_environment: &rattler_lock::Environment<'_>,
 ) -> Result<(), ExcludeNewerMismatch> {
     for (platform, packages) in locked_environment.conda_packages_by_platform() {
         let Some(exclude_newer) = environment
-            .exclude_newer_config(channel_config, Some(platform))
+            .exclude_newer_config(Some(platform))
             .expect("environment channels were already validated")
         else {
             continue;
@@ -642,8 +640,7 @@ pub fn verify_environment_satisfiability(
         });
     }
 
-    let channel_config = environment.workspace().channel_config();
-    if let Err(err) = verify_exclude_newer(environment, &channel_config, &locked_environment) {
+    if let Err(err) = verify_exclude_newer(environment, &locked_environment) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
     }
 

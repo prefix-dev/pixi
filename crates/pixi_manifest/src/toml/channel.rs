@@ -17,7 +17,6 @@ use url::Url;
 /// channel = "https://prefix.dev/some-channel"
 /// channel = "/absolute/path/to/channel"
 /// channel = { channel = "some-channel", priority = 10 }
-/// channel = { url = "https://prefix.dev/some-channel", exclude-newer = "7d" }
 /// ```
 #[derive(Debug)]
 pub enum TomlPrioritizedChannel {
@@ -32,7 +31,6 @@ impl From<TomlPrioritizedChannel> for PrioritizedChannel {
             TomlPrioritizedChannel::Str(channel) => PrioritizedChannel {
                 channel,
                 priority: None,
-                exclude_newer: None,
             },
         }
     }
@@ -40,11 +38,10 @@ impl From<TomlPrioritizedChannel> for PrioritizedChannel {
 
 impl From<PrioritizedChannel> for TomlPrioritizedChannel {
     fn from(channel: PrioritizedChannel) -> Self {
-        if channel.priority.is_some() || channel.exclude_newer.is_some() {
+        if channel.priority.is_some() {
             TomlPrioritizedChannel::Map(PrioritizedChannel {
                 channel: channel.channel,
                 priority: channel.priority,
-                exclude_newer: channel.exclude_newer,
             })
         } else {
             TomlPrioritizedChannel::Str(channel.channel)
@@ -94,9 +91,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlPrioritizedChannel {
                     .optional::<TomlFromStr<NamedChannelOrUrl>>("path")
                     .map(TomlFromStr::into_inner);
                 let priority = th.optional("priority");
-                let exclude_newer = th
-                    .optional::<pixi_toml::TomlWith<_, TomlFromStr<_>>>("exclude-newer")
-                    .map(pixi_toml::TomlWith::into_inner);
                 th.finalize(None)?;
 
                 let channel = match (channel.map(TomlFromStr::into_inner), url, path) {
@@ -132,7 +126,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlPrioritizedChannel {
                 Ok(TomlPrioritizedChannel::Map(PrioritizedChannel {
                     channel,
                     priority,
-                    exclude_newer,
                 }))
             }
             other => Err(expected("a string or table", other, value.span).into()),
@@ -185,7 +178,6 @@ mod test {
                         "some-channel",
                     ),
                     priority: None,
-                    exclude_newer: None,
                 },
             ),
         }
@@ -209,48 +201,6 @@ mod test {
                     ),
                     priority: Some(
                         10,
-                    ),
-                    exclude_newer: None,
-                },
-            ),
-        }
-        "###);
-    }
-
-    #[test]
-    fn test_with_exclude_newer() {
-        let channel = TopLevel::from_toml_str(
-            r#"
-        channel = { url = "https://prefix.dev/some-channel", exclude-newer = "7d" }
-        "#,
-        )
-        .unwrap();
-        assert_debug_snapshot!(channel, @r###"
-        TopLevel {
-            channel: Map(
-                PrioritizedChannel {
-                    channel: Url(
-                        Url {
-                            scheme: "https",
-                            cannot_be_a_base: false,
-                            username: "",
-                            password: None,
-                            host: Some(
-                                Domain(
-                                    "prefix.dev",
-                                ),
-                            ),
-                            port: None,
-                            path: "/some-channel",
-                            query: None,
-                            fragment: None,
-                        },
-                    ),
-                    priority: None,
-                    exclude_newer: Some(
-                        Duration(
-                            604800s,
-                        ),
                     ),
                 },
             ),

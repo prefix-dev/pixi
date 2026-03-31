@@ -2,8 +2,6 @@ use itertools::Itertools;
 use rattler_conda_types::NamedChannelOrUrl;
 use toml_edit::{Table, Value};
 
-use crate::ExcludeNewer;
-
 /// A channel with an optional priority.
 /// If the priority is not specified, it is assumed to be 0.
 /// The higher the priority, the more important the channel is.
@@ -11,7 +9,6 @@ use crate::ExcludeNewer;
 pub struct PrioritizedChannel {
     pub channel: NamedChannelOrUrl,
     pub priority: Option<i32>,
-    pub exclude_newer: Option<ExcludeNewer>,
 }
 
 impl PrioritizedChannel {
@@ -47,7 +44,6 @@ impl From<NamedChannelOrUrl> for PrioritizedChannel {
         Self {
             channel: value,
             priority: None,
-            exclude_newer: None,
         }
     }
 }
@@ -57,7 +53,6 @@ impl From<(NamedChannelOrUrl, Option<i32>)> for PrioritizedChannel {
         Self {
             channel: value,
             priority: prio,
-            exclude_newer: None,
         }
     }
 }
@@ -70,23 +65,14 @@ impl From<PrioritizedChannel> for Value {
             NamedChannelOrUrl::Path(path) => ("path", path.to_string()),
         };
 
-        match (channel.priority, channel.exclude_newer) {
-            (Some(priority), exclude_newer) => {
+        match channel.priority {
+            Some(priority) => {
                 let mut table = Table::new().into_inline_table();
                 table.insert(channel_key, channel_value.into());
                 table.insert("priority", i64::from(priority).into());
-                if let Some(exclude_newer) = exclude_newer {
-                    table.insert("exclude-newer", exclude_newer.to_string().into());
-                }
                 Value::InlineTable(table)
             }
-            (None, Some(exclude_newer)) => {
-                let mut table = Table::new().into_inline_table();
-                table.insert(channel_key, channel_value.into());
-                table.insert("exclude-newer", exclude_newer.to_string().into());
-                Value::InlineTable(table)
-            }
-            (None, None) => Value::String(toml_edit::Formatted::new(channel.channel.to_string())),
+            None => Value::String(toml_edit::Formatted::new(channel.channel.to_string())),
         }
     }
 }

@@ -113,45 +113,20 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// Returns the effective exclude-newer solver configuration.
     fn exclude_newer_config(
         &self,
-        channel_config: &ChannelConfig,
         platform: Option<Platform>,
     ) -> Result<Option<rattler_solve::ExcludeNewer>, ParseChannelError> {
-        self.exclude_newer_config_resolved(channel_config, platform)
+        self.exclude_newer_config_resolved(platform)
             .map(|exclude_newer| exclude_newer.map(Into::into))
     }
 
     /// Returns the effective exclude-newer solver configuration with absolute cutoffs.
     fn exclude_newer_config_resolved(
         &self,
-        channel_config: &ChannelConfig,
         platform: Option<Platform>,
     ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
         let mut exclude_newer = self
             .exclude_newer_raw()
             .map(|config| ResolvedExcludeNewer::from_datetime(config.cutoff()));
-
-        for channel in self.prioritized_channels() {
-            let Some(channel_exclude_newer) = channel.exclude_newer else {
-                continue;
-            };
-
-            let channel = channel.channel.clone().into_base_url(channel_config)?;
-            let config = exclude_newer.get_or_insert_with(|| {
-                ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
-            });
-
-            *config = match channel_exclude_newer {
-                crate::exclude_newer::ExcludeNewer::Timestamp(dt) => {
-                    config.clone().with_channel_cutoff(channel.to_string(), dt)
-                }
-                crate::exclude_newer::ExcludeNewer::Duration(duration) => {
-                    config.clone().with_channel_cutoff(
-                        channel.to_string(),
-                        crate::exclude_newer::ExcludeNewer::Duration(duration).cutoff(),
-                    )
-                }
-            };
-        }
 
         for (name, spec) in self
             .combined_dependencies(platform)

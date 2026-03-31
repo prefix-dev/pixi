@@ -10,7 +10,7 @@ authors = [
 channels = [
   "https://prefix.dev/conda-forge",
   "bioconda",
-  # { channel = "bioconda", exclude-newer = "1d" },
+  { channel = "bioconda", exclude-newer = "1d" },
 ]
 description = "Package management made easy!"
 exclude-newer = "7d"
@@ -24,7 +24,7 @@ c_stdlib_version = ["2.17"]
 [workspace.target.osx.build-variants]
 c_compiler_version = ["19"]
 
-[dependencies]
+[target.linux.dependencies]
 # pdbecif = ">=1.5"
 # polars = "*"
 rattler = { version = ">=0.1.2", exclude-newer = "0d" }

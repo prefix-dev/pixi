@@ -2264,7 +2264,7 @@ async fn spawn_solve_conda_environment_task(
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
     let exclude_newer = group
-        .exclude_newer_config_resolved(&channel_config, Some(platform))
+        .exclude_newer_config_resolved(Some(platform))
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
 

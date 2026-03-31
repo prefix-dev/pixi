@@ -17,6 +17,7 @@ from pydantic import (
     Field,
     PositiveFloat,
     StringConstraints,
+    model_validator,
 )
 
 if TYPE_CHECKING:
@@ -93,6 +94,15 @@ class StrictBaseModel(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", alias_generator=hyphenize)
 
 
+CHANNEL_INLINE_ONE_OF: JsonDict = {
+    "oneOf": [
+        {"required": ["channel"]},
+        {"required": ["url"]},
+        {"required": ["path"]},
+    ]
+}
+
+
 class WorkspaceInheritance(StrictBaseModel):
     """Indicates that a field should inherit its value from the workspace."""
 
@@ -106,7 +116,13 @@ ChannelName = NonEmptyStr | AnyHttpUrl
 
 
 class ChannelInlineTable(StrictBaseModel):
-    """A precise description of a `conda` channel, with optional priority and exclude-newer override."""
+    """A precise description of a `conda` channel, with an optional priority."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="forbid",
+        alias_generator=hyphenize,
+        json_schema_extra=CHANNEL_INLINE_ONE_OF,
+    )
 
     channel: ChannelName | None = Field(
         None,
@@ -121,11 +137,13 @@ class ChannelInlineTable(StrictBaseModel):
         description="The explicit local channel path to fetch packages from",
     )
     priority: int | None = Field(None, description="The priority of the channel")
-    exclude_newer: ExcludeNewer | None = Field(
-        None,
-        alias="exclude-newer",
-        description="Override the workspace-level `exclude-newer` cutoff for this channel only",
-    )
+
+    @model_validator(mode="after")
+    def validate_channel_source(self) -> "ChannelInlineTable":
+        present = sum(value is not None for value in (self.channel, self.url, self.path))
+        if present != 1:
+            raise ValueError("exactly one of 'channel', 'url', or 'path' must be set")
+        return self
 
 
 Channel = ChannelName | ChannelInlineTable
@@ -173,7 +191,7 @@ class Workspace(StrictBaseModel):
         None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
     )
     channels: list[Channel] = Field(
-        description="The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred. Inline tables can also override `exclude-newer` per channel.",
+        description="The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred.",
     )
     channel_priority: ChannelPriority | None = Field(
         None,
