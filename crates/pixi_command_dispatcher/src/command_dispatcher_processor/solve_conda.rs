@@ -14,13 +14,8 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        // Notify the reporter that a new solve has been queued.
-        let parent_context = task
-            .parent
-            .and_then(|context| self.reporter_context(context));
-        let reporter_id = task
-            .spec
-            .report_queued(&mut self.reporter, parent_context, None);
+        let (reporter_id, cancellation_token) =
+            self.start_slotmap_task(&task.spec, task.parent, task.cancellation_token);
 
         // Store information about the pending environment.
         let environment_id = self.conda_solves.insert(PendingSolveCondaEnvironment {
@@ -32,10 +27,6 @@ impl CommandDispatcherProcessor {
             // Store the parent context for the task.
             self.parent_contexts.insert(environment_id.into(), parent);
         }
-
-        // Create a child cancellation token linked to parent's token (if any).
-        let cancellation_token =
-            self.get_child_cancellation_token(task.parent, task.cancellation_token);
 
         // Add the environment to the list of pending environments.
         self.pending_conda_solves
