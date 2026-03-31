@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use futures::FutureExt;
 
-use super::CommandDispatcherProcessor;
-use super::TaskResult;
-use super::dedup::DedupAction;
+use super::{CommandDispatcherProcessor, NewDedupTask, TaskResult};
 use crate::{
     CommandDispatcherError, SourceRecordError, SourceRecordSpec,
     command_dispatcher::{CommandDispatcherContext, SourceRecordId, SourceRecordTask},
@@ -34,92 +32,57 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        match self
+        let action = self
             .source_record
-            .on_task(cache_key, task.tx, SourceRecordId)
-        {
-            DedupAction::AlreadyCompleted => {}
-            DedupAction::New {
-                cancellation_token,
-                dedup_group_id,
-                id,
-                ..
-            } => {
-                let dispatcher_context = CommandDispatcherContext::SourceRecord(id);
-                if let Some(parent) = task.parent {
-                    self.parent_contexts.insert(dispatcher_context, parent);
-                }
+            .on_task(cache_key, task.tx, SourceRecordId);
+        let parent_reporter_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
 
-                // Notify the reporter.
-                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = task.spec.report_queued(
-                    &mut self.reporter,
-                    parent_context,
-                    Some(dedup_group_id),
-                );
-
-                if let Some(reporter_id) = reporter_id {
-                    self.source_record_reporters
-                        .entry(id)
-                        .or_default()
-                        .push(reporter_id);
-                }
-
-                if let Some(reporter_id) = reporter_id {
-                    SourceRecordSpec::report_started(&mut self.reporter, reporter_id);
-                }
-
-                let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
-                let reporter_context = self.reporter_context(dispatcher_context);
-                let run_exports_reporter = self
-                    .reporter
-                    .as_mut()
-                    .and_then(|reporter| reporter.create_run_exports_reporter(reporter_context));
-
-                self.pending_futures.push(
-                    cancellation_token
-                        .run_until_cancelled_owned(
-                            task.spec.request(dispatcher, run_exports_reporter),
-                        )
-                        .map(move |result| {
-                            TaskResult::SourceRecord(
-                                id,
-                                Box::new(
-                                    result
-                                        .map_or(Err(CommandDispatcherError::Cancelled), |result| {
-                                            result.map(Arc::new)
-                                        }),
-                                ),
-                            )
-                        })
-                        .boxed_local(),
-                );
-                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
-            }
-            DedupAction::Subscribed {
-                dedup_group_id, id, ..
-            } => {
-                let dispatcher_context = CommandDispatcherContext::SourceRecord(id);
-                // Notify the reporter for the subscriber as well.
-                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = task.spec.report_queued(
-                    &mut self.reporter,
-                    parent_context,
-                    Some(dedup_group_id),
-                );
-
-                if let Some(reporter_id) = reporter_id {
-                    self.source_record_reporters
-                        .entry(id)
-                        .or_default()
-                        .push(reporter_id);
-                }
-
-                if let Some(reporter_id) = reporter_id {
-                    SourceRecordSpec::report_started(&mut self.reporter, reporter_id);
-                }
-                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
-            }
+        let Some(NewDedupTask {
+            id,
+            cancellation_token,
+            context,
+        }) = Self::start_dedup_task(
+            self,
+            action,
+            &task.spec,
+            task.parent,
+            task.cancellation_token,
+            parent_reporter_context,
+            CommandDispatcherContext::SourceRecord,
+        )
+        else {
+            return;
         };
+
+        if let Some(reporter_id) = self
+            .source_record_reporters
+            .get(&id)
+            .and_then(|ids| ids.last().copied())
+        {
+            SourceRecordSpec::report_started(&mut self.reporter, reporter_id);
+        }
+
+        let dispatcher = self.create_task_command_dispatcher(context);
+        let reporter_context = self.reporter_context(context);
+        let run_exports_reporter = self
+            .reporter
+            .as_mut()
+            .and_then(|reporter| reporter.create_run_exports_reporter(reporter_context));
+
+        self.pending_futures.push(
+            cancellation_token
+                .run_until_cancelled_owned(task.spec.request(dispatcher, run_exports_reporter))
+                .map(move |result| {
+                    TaskResult::SourceRecord(
+                        id,
+                        Box::new(
+                            result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
+                                result.map(Arc::new)
+                            }),
+                        ),
+                    )
+                })
+                .boxed_local(),
+        );
     }
 }

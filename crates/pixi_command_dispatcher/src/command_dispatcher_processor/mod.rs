@@ -748,6 +748,301 @@ impl CommandDispatcherProcessor {
             .filter_map(|context| T::try_from(context).ok())
             .contains(&id)
     }
+}
+
+/// Maps a task spec type to its corresponding fields on
+/// [`CommandDispatcherProcessor`].
+pub(crate) trait HasDedupTaskFields: reporter::Reportable {
+    type Id: Copy + Eq + std::hash::Hash;
+    type Ok: Clone;
+    type Err: Clone;
+
+    fn dedup_task_fields(
+        proc: &mut CommandDispatcherProcessor,
+    ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err>;
+}
+
+impl HasDedupTaskFields for BuildBackendMetadataSpec {
+    type Id = BuildBackendMetadataId;
+    type Ok = Arc<BuildBackendMetadata>;
+    type Err = BuildBackendMetadataError;
+    fn dedup_task_fields(
+        proc: &mut CommandDispatcherProcessor,
+    ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
+        DedupTaskFields {
+            parent_contexts: &mut proc.parent_contexts,
+            reporter: &mut proc.reporter,
+            reporter_map: &mut proc.build_backend_metadata_reporters,
+            monitor_futures: &mut proc.monitor_futures,
+            dedup: &mut proc.build_backend_metadata,
+        }
+    }
+}
+
+impl HasDedupTaskFields for SourceBuildSpec {
+    type Id = SourceBuildId;
+    type Ok = SourceBuildResult;
+    type Err = SourceBuildError;
+    fn dedup_task_fields(
+        proc: &mut CommandDispatcherProcessor,
+    ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
+        DedupTaskFields {
+            parent_contexts: &mut proc.parent_contexts,
+            reporter: &mut proc.reporter,
+            reporter_map: &mut proc.source_build_reporters,
+            monitor_futures: &mut proc.monitor_futures,
+            dedup: &mut proc.source_build,
+        }
+    }
+}
+
+impl HasDedupTaskFields for pixi_git::GitUrl {
+    type Id = GitCheckoutId;
+    type Ok = Fetch;
+    type Err = GitError;
+    fn dedup_task_fields(
+        proc: &mut CommandDispatcherProcessor,
+    ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
+        DedupTaskFields {
+            parent_contexts: &mut proc.parent_contexts,
+            reporter: &mut proc.reporter,
+            reporter_map: &mut proc.git_checkout_reporters,
+            monitor_futures: &mut proc.monitor_futures,
+            dedup: &mut proc.git_checkouts,
+        }
+    }
+}
+
+impl HasDedupTaskFields for pixi_spec::UrlSpec {
+    type Id = UrlCheckoutId;
+    type Ok = UrlCheckout;
+    type Err = UrlError;
+    fn dedup_task_fields(
+        proc: &mut CommandDispatcherProcessor,
+    ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
+        DedupTaskFields {
+            parent_contexts: &mut proc.parent_contexts,
+            reporter: &mut proc.reporter,
+            reporter_map: &mut proc.url_checkout_reporters,
+            monitor_futures: &mut proc.monitor_futures,
+            dedup: &mut proc.url_checkouts,
+        }
+    }
+}
+
+impl HasDedupTaskFields for SourceRecordSpec {
+    type Id = SourceRecordId;
+    type Ok = Arc<ResolvedSourceRecord>;
+    type Err = SourceRecordError;
+    fn dedup_task_fields(
+        proc: &mut CommandDispatcherProcessor,
+    ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
+        DedupTaskFields {
+            parent_contexts: &mut proc.parent_contexts,
+            reporter: &mut proc.reporter,
+            reporter_map: &mut proc.source_record_reporters,
+            monitor_futures: &mut proc.monitor_futures,
+            dedup: &mut proc.source_record,
+        }
+    }
+}
+
+impl HasDedupTaskFields for InstantiateToolEnvironmentSpec {
+    type Id = InstantiatedToolEnvId;
+    type Ok = InstantiateToolEnvironmentResult;
+    type Err = InstantiateToolEnvironmentError;
+    fn dedup_task_fields(
+        proc: &mut CommandDispatcherProcessor,
+    ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
+        DedupTaskFields {
+            parent_contexts: &mut proc.parent_contexts,
+            reporter: &mut proc.reporter,
+            reporter_map: &mut proc.instantiated_tool_envs_reporters,
+            monitor_futures: &mut proc.monitor_futures,
+            dedup: &mut proc.instantiated_tool_envs,
+        }
+    }
+}
+
+impl HasDedupTaskFields for SourceMetadataSpec {
+    type Id = SourceMetadataId;
+    type Ok = Arc<SourceMetadata>;
+    type Err = SourceMetadataError;
+    fn dedup_task_fields(
+        proc: &mut CommandDispatcherProcessor,
+    ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
+        DedupTaskFields {
+            parent_contexts: &mut proc.parent_contexts,
+            reporter: &mut proc.reporter,
+            reporter_map: &mut proc.source_metadata_reporters,
+            monitor_futures: &mut proc.monitor_futures,
+            dedup: &mut proc.source_metadata,
+        }
+    }
+}
+
+impl HasDedupTaskFields for DevSourceMetadataSpec {
+    type Id = DevSourceMetadataId;
+    type Ok = DevSourceMetadata;
+    type Err = DevSourceMetadataError;
+    fn dedup_task_fields(
+        proc: &mut CommandDispatcherProcessor,
+    ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
+        DedupTaskFields {
+            parent_contexts: &mut proc.parent_contexts,
+            reporter: &mut proc.reporter,
+            reporter_map: &mut proc.dev_source_metadata_reporters,
+            monitor_futures: &mut proc.monitor_futures,
+            dedup: &mut proc.dev_source_metadata,
+        }
+    }
+}
+
+impl HasDedupTaskFields for SourceBuildCacheStatusSpec {
+    type Id = SourceBuildCacheStatusId;
+    type Ok = Arc<SourceBuildCacheEntry>;
+    type Err = SourceBuildCacheStatusError;
+    fn dedup_task_fields(
+        proc: &mut CommandDispatcherProcessor,
+    ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
+        DedupTaskFields {
+            parent_contexts: &mut proc.parent_contexts,
+            reporter: &mut proc.reporter,
+            reporter_map: &mut proc.source_build_cache_status_reporters,
+            monitor_futures: &mut proc.monitor_futures,
+            dedup: &mut proc.source_build_cache_status,
+        }
+    }
+}
+
+/// Returned by [`CommandDispatcherProcessor::start_dedup_task`] when a new
+/// task was created and needs work spawned by the caller.
+struct NewDedupTask<Id> {
+    id: Id,
+    cancellation_token: CancellationToken,
+    context: CommandDispatcherContext,
+}
+
+/// Mutable processor fields for a specific dedup task type.
+///
+/// Returned by [`HasDedupTaskFields::dedup_task_fields`] to split borrows on
+/// [`CommandDispatcherProcessor`]. Used by both `start_dedup_task` and
+/// `complete_dedup_task`.
+pub(crate) struct DedupTaskFields<'a, Id, ReporterId, Ok, Err> {
+    parent_contexts: &'a mut HashMap<CommandDispatcherContext, CommandDispatcherContext>,
+    reporter: &'a mut Option<Box<dyn Reporter>>,
+    reporter_map: &'a mut HashMap<Id, Vec<ReporterId>>,
+    monitor_futures: &'a mut ExecutorFutures<LocalBoxFuture<'static, CommandDispatcherContext>>,
+    dedup: &'a mut dyn ErasedDedupRegistry<Id, Ok, Err>,
+}
+
+/// Type-erased dedup registry so `DedupTaskFields` doesn't need the `Key`
+/// type parameter.
+pub(crate) trait ErasedDedupRegistry<Id, T, E> {
+    fn on_result(&mut self, id: Id, result: Result<T, CommandDispatcherError<E>>);
+}
+
+impl<Key, Id, T, E> ErasedDedupRegistry<Id, T, E> for dedup::DedupTaskRegistry<Key, Id, T, E>
+where
+    Key: Clone + Eq + std::hash::Hash,
+    Id: Copy + Eq + std::hash::Hash,
+    T: Clone,
+    E: Clone,
+{
+    fn on_result(&mut self, id: Id, result: Result<T, CommandDispatcherError<E>>) {
+        dedup::DedupTaskRegistry::on_result(self, id, result);
+    }
+}
+
+impl CommandDispatcherProcessor {
+    /// Handles the common `DedupAction` dispatch for a deduplicated task.
+    ///
+    /// The caller first obtains the `action` from the dedup registry, then
+    /// passes it here along with the relevant processor fields. This handles:
+    /// - `AlreadyCompleted` → returns `None`
+    /// - `Subscribed` → reporter queued + started, subscriber monitor,
+    ///   reporter map storage. Returns `None`.
+    /// - `New` → parent context, reporter queued, subscriber monitor,
+    ///   reporter map storage. Returns `Some` so the caller can spawn work.
+    fn start_dedup_task<S: HasDedupTaskFields>(
+        proc: &mut CommandDispatcherProcessor,
+        action: dedup::DedupAction<S::Id>,
+        spec: &S,
+        task_parent: Option<CommandDispatcherContext>,
+        task_cancellation_token: CancellationToken,
+        parent_reporter_context: Option<reporter::ReporterContext>,
+        make_context: impl Fn(S::Id) -> CommandDispatcherContext,
+    ) -> Option<NewDedupTask<S::Id>> {
+        let fields = S::dedup_task_fields(proc);
+        match action {
+            dedup::DedupAction::AlreadyCompleted => None,
+            dedup::DedupAction::New {
+                cancellation_token,
+                dedup_group_id,
+                id,
+            } => {
+                let context = make_context(id);
+                if let Some(parent) = task_parent {
+                    fields.parent_contexts.insert(context, parent);
+                }
+                let reporter_id = spec.report_queued(
+                    fields.reporter,
+                    parent_reporter_context,
+                    Some(dedup_group_id),
+                );
+                if let Some(reporter_id) = reporter_id {
+                    fields.reporter_map.entry(id).or_default().push(reporter_id);
+                }
+                Self::push_subscriber_monitor(
+                    fields.monitor_futures,
+                    context,
+                    task_cancellation_token,
+                );
+                Some(NewDedupTask {
+                    id,
+                    cancellation_token,
+                    context,
+                })
+            }
+            dedup::DedupAction::Subscribed {
+                dedup_group_id, id, ..
+            } => {
+                let context = make_context(id);
+                let reporter_id = spec.report_queued(
+                    fields.reporter,
+                    parent_reporter_context,
+                    Some(dedup_group_id),
+                );
+                if let Some(reporter_id) = reporter_id {
+                    fields.reporter_map.entry(id).or_default().push(reporter_id);
+                    S::report_started(fields.reporter, reporter_id);
+                }
+                Self::push_subscriber_monitor(
+                    fields.monitor_futures,
+                    context,
+                    task_cancellation_token,
+                );
+                None
+            }
+        }
+    }
+
+    /// Pushes a subscriber monitoring future that fires when the caller's
+    /// cancellation token is dropped.
+    fn push_subscriber_monitor(
+        monitor_futures: &mut ExecutorFutures<LocalBoxFuture<'static, CommandDispatcherContext>>,
+        context: CommandDispatcherContext,
+        caller_token: CancellationToken,
+    ) {
+        use futures::FutureExt;
+        monitor_futures.push(
+            async move {
+                caller_token.cancelled().await;
+                context
+            }
+            .boxed_local(),
+        );
+    }
 
     /// Creates a child cancellation token linked to the parent's token.
     ///
@@ -887,25 +1182,5 @@ impl CommandDispatcherProcessor {
             // Non-dedup tasks never push subscriber monitors.
             _ => unreachable!("subscriber cancellation for non-dedup context: {context:?}"),
         }
-    }
-
-    /// Pushes a monitoring future that fires when the given caller token is
-    /// cancelled (i.e. the caller dropped their future). The resulting
-    /// event on `monitor_futures` triggers the registry to check whether
-    /// all subscribers are gone.
-    fn push_subscriber_monitor(
-        &mut self,
-        context: CommandDispatcherContext,
-        caller_token: CancellationToken,
-    ) {
-        use futures::FutureExt;
-
-        self.monitor_futures.push(
-            async move {
-                caller_token.cancelled().await;
-                context
-            }
-            .boxed_local(),
-        );
     }
 }
