@@ -1,11 +1,11 @@
-use chrono::{DateTime, Days, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, Utc};
 use rattler_conda_types::PackageName;
 use std::{collections::BTreeMap, str::FromStr};
 
 /// Specifies how to exclude newer packages from the solve.
 ///
 /// Can be either:
-/// - An absolute timestamp (RFC 3339 or YYYY-MM-DD date)
+/// - An absolute timestamp
 /// - A relative duration (e.g., `7d`, `1h`, `30m`, `1h30m`)
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ExcludeNewer {
@@ -36,40 +36,6 @@ pub struct ResolvedExcludeNewer {
     /// Whether to include packages that don't have a timestamp.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include_unknown_timestamp: bool,
-}
-
-fn format_duration(duration: std::time::Duration) -> String {
-    let mut remaining = duration.as_secs();
-    let mut formatted = String::new();
-
-    for (unit, suffix) in [(86_400, "d"), (3_600, "h"), (60, "m"), (1, "s")] {
-        let count = remaining / unit;
-        if count > 0 {
-            formatted.push_str(&format!("{count}{suffix}"));
-            remaining %= unit;
-        }
-    }
-
-    let nanos = duration.subsec_nanos();
-    let millis = nanos / 1_000_000;
-    let micros = (nanos % 1_000_000) / 1_000;
-    let nanos = nanos % 1_000;
-
-    if millis > 0 {
-        formatted.push_str(&format!("{millis}ms"));
-    }
-    if micros > 0 {
-        formatted.push_str(&format!("{micros}us"));
-    }
-    if nanos > 0 {
-        formatted.push_str(&format!("{nanos}ns"));
-    }
-
-    if formatted.is_empty() {
-        formatted.push_str("0s");
-    }
-
-    formatted
 }
 
 impl ExcludeNewer {
@@ -144,26 +110,17 @@ impl FromStr for ExcludeNewer {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(duration) = humantime::parse_duration(s) {
-            return Ok(ExcludeNewer::Duration(duration));
+        if let Ok(duration) = s.parse::<humantime::Duration>() {
+            return Ok(ExcludeNewer::Duration(duration.into()));
         }
 
-        let date_err = match NaiveDate::from_str(s) {
-            Ok(date) => {
-                return Ok(ExcludeNewer::Timestamp(
-                    (date + Days::new(1)).and_time(NaiveTime::MIN).and_utc(),
-                ));
-            }
-            Err(err) => err,
-        };
-
-        let datetime_err = match DateTime::parse_from_rfc3339(s) {
-            Ok(datetime) => return Ok(ExcludeNewer::Timestamp(datetime.with_timezone(&Utc))),
+        let timestamp_err = match DateTime::parse_from_rfc3339(s) {
+            Ok(timestamp) => return Ok(ExcludeNewer::Timestamp(timestamp.with_timezone(&Utc))),
             Err(err) => err,
         };
 
         Err(format!(
-            "`{s}` is neither a valid duration, date ({date_err}), nor datetime ({datetime_err})"
+            "`{s}` is neither a valid duration nor timestamp ({timestamp_err})"
         ))
     }
 }
@@ -172,7 +129,7 @@ impl std::fmt::Display for ExcludeNewer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ExcludeNewer::Timestamp(dt) => dt.fmt(f),
-            ExcludeNewer::Duration(dur) => write!(f, "{}", format_duration(*dur)),
+            ExcludeNewer::Duration(dur) => humantime::format_duration(*dur).fmt(f),
         }
     }
 }
@@ -184,7 +141,7 @@ impl serde::Serialize for ExcludeNewer {
     {
         match self {
             Self::Timestamp(cutoff) => cutoff.serialize(serializer),
-            Self::Duration(duration) => serializer.serialize_str(&format_duration(*duration)),
+            Self::Duration(duration) => serializer.collect_str(&humantime::Duration::from(*duration)),
         }
     }
 }
@@ -203,7 +160,9 @@ impl<'de> serde::Deserialize<'de> for ExcludeNewer {
 
         match RawExcludeNewer::deserialize(deserializer)? {
             RawExcludeNewer::Timestamp(cutoff) => Ok(ExcludeNewer::Timestamp(cutoff)),
-            RawExcludeNewer::Duration(duration) => humantime::parse_duration(&duration)
+            RawExcludeNewer::Duration(duration) => duration
+                .parse::<humantime::Duration>()
+                .map(Into::into)
                 .map(ExcludeNewer::Duration)
                 .map_err(serde::de::Error::custom),
         }
@@ -217,13 +176,13 @@ mod test {
     #[test]
     fn test_from_str_timestamp() {
         assert_eq!(
-            ExcludeNewer::from_str("2006-12-02").unwrap(),
-            ExcludeNewer::from_str("2006-12-03T00:00:00Z").unwrap(),
+            ExcludeNewer::from_str("2006-12-02T00:00:00Z").unwrap(),
+            ExcludeNewer::from_str("2006-12-02T00:00:00+00:00").unwrap(),
         );
 
         match (
             ExcludeNewer::from_str("2006-12-02T00:00:00Z").unwrap(),
-            ExcludeNewer::from_str("2006-12-02 00:00:00Z").unwrap(),
+            ExcludeNewer::from_str("2006-12-02T00:00:00+00:00").unwrap(),
         ) {
             (ExcludeNewer::Timestamp(a), ExcludeNewer::Timestamp(b)) => assert_eq!(a, b),
             _ => panic!("expected timestamps"),
@@ -258,7 +217,7 @@ mod test {
     fn test_display_duration() {
         let d = ExcludeNewer::Duration(std::time::Duration::from_secs(7 * 24 * 60 * 60));
         let display = format!("{d}");
-        assert_eq!(display, "7d");
+        assert_eq!(display, "7days");
     }
 
     #[test]

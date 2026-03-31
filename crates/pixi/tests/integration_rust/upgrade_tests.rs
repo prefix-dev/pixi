@@ -122,7 +122,7 @@ async fn upgrade_command_updates_platform_specific_version() {
         [workspace]
         channels = ["{channel}"]
         platforms = ["{platform}"]
-        exclude-newer = "2025-05-19"
+        exclude-newer = "2025-05-20T00:00:00Z"
 
         [dependencies]
 
@@ -168,7 +168,7 @@ async fn upgrade_command_updates_all_platform_specific_targets() {
         [workspace]
         channels = ["{channel}"]
         platforms = ["linux-64", "win-64"]
-        exclude-newer = "2025-05-19"
+        exclude-newer = "2025-05-20T00:00:00Z"
 
         [target.linux-64.dependencies]
         python = "==3.12"

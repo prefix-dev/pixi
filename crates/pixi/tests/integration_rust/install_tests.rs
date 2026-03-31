@@ -984,7 +984,7 @@ async fn test_setuptools_override_failure() {
         channels = ["https://prefix.dev/conda-forge"]
         name = "pixi-source-problem"
         platforms = ["{platform}"]
-        exclude-newer = "2024-08-29"
+        exclude-newer = "2024-08-30T00:00:00Z"
 
         [dependencies]
         pip = ">=24.0,<25"
@@ -1720,7 +1720,7 @@ async fn test_exclude_newer_pypi() {
     name = "test-channel-change"
     channels = ["https://prefix.dev/conda-forge"]
     platforms = ["{platform}"]
-    exclude-newer = "2020-12-02"
+    exclude-newer = "2020-12-03T00:00:00Z"
 
     [dependencies]
     python = "*"

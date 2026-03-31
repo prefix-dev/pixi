@@ -301,14 +301,13 @@ requires-pixi = ">=0.40,<1.0"
 
 ### `exclude-newer` (optional)
 
-When specified this will exclude any package from consideration that is newer than the specified date or duration.
+When specified this will exclude any package from consideration that is newer than the specified timestamp or duration.
 This is useful to reproduce installations regardless of new package releases, or to reduce the risk of
 installing recently published (and potentially compromised) packages.
 
 The value may be specified in the following formats:
 
 * As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
-* As a date in the format `YYYY-MM-DD` (e.g. `2023-10-01`) in the systems time zone.
 * As a relative duration (e.g. `7days`, `1h30m`, `30m`). The duration is relative to the current time at solve time.
 
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
