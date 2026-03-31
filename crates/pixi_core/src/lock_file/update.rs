@@ -32,10 +32,10 @@ use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
-use pixi_uv_context::{UvResolutionContext, convert_extra_build_dependencies};
+use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
-    to_uv_normalize,
+    ConversionError, convert_extra_build_dependencies, to_extra_name, to_marker_environment,
+    to_normalize, to_uv_extra_name, to_uv_normalize,
 };
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;

@@ -6860,6 +6860,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dunce",
+ "indexmap 2.13.0",
  "jiff",
  "miette 7.6.0",
  "pep440_rs",

@@ -8,7 +8,7 @@ use std::{
 use thiserror::Error;
 use url::Url;
 use uv_distribution_filename::DistExtension;
-use uv_distribution_types::RequirementSource;
+use uv_distribution_types::{ExtraBuildRequirement, ExtraBuildRequires, RequirementSource};
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep440::VersionSpecifiers;
 use uv_pep508::VerbatimUrl;
@@ -311,9 +311,51 @@ pub fn pep508_requirement_to_uv_requirement(
     Ok(converted.into())
 }
 
+/// Convert manifest-defined extra build dependencies into uv's
+/// [`ExtraBuildRequires`] structure.
+///
+/// Each manifest requirement is converted to a uv requirement and wrapped in an
+/// [`ExtraBuildRequirement`] with `match_runtime = false` for v1 behavior.
+///
+/// The `workspace_root` parameter is currently unused but kept in the API to
+/// preserve call-site intent and future conversion support for path-based
+/// requirement forms.
+pub fn convert_extra_build_dependencies(
+    deps: &Option<indexmap::IndexMap<pixi_pypi_spec::PypiPackageName, Vec<pep508_rs::Requirement>>>,
+    _workspace_root: &Path,
+) -> Result<ExtraBuildRequires, ConversionError> {
+    let mut extra_build_requires = ExtraBuildRequires::default();
+
+    for (package, specs) in deps.iter().flatten() {
+        let requirements = specs
+            .iter()
+            .map(|spec| {
+                pep508_requirement_to_uv_requirement(spec.clone()).map(|requirement| {
+                    ExtraBuildRequirement {
+                        requirement,
+                        match_runtime: false,
+                    }
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if requirements.is_empty() {
+            continue;
+        }
+
+        let package_name = uv_normalize::PackageName::from_str(package.as_normalized().as_ref())
+            .expect("pypi package names in manifest should always be valid");
+        extra_build_requires.insert(package_name, requirements);
+    }
+
+    Ok(extra_build_requires)
+}
+
 #[cfg(test)]
 mod tests {
+    use indexmap::IndexMap;
     use pep508_rs::MarkerTree;
+    use pixi_pypi_spec::PypiPackageName;
     use uv_redacted::DisplaySafeUrl;
 
     use super::*;
@@ -443,5 +485,30 @@ mod tests {
         } else {
             panic!("Expected RequirementSource::Url");
         }
+    }
+
+    #[test]
+    fn converts_extra_build_dependencies() {
+        let mut deps: IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>> = IndexMap::new();
+        deps.insert(
+            PypiPackageName::from_str("fused-ssim").unwrap(),
+            vec![pep508_rs::Requirement::from_str("torch>=2").unwrap()],
+        );
+
+        let converted =
+            convert_extra_build_dependencies(&Some(deps), std::path::Path::new("."))
+                .expect("conversion should succeed");
+
+        let pkg_name = uv_normalize::PackageName::from_str("fused-ssim").unwrap();
+        let requirements = converted.get(&pkg_name).expect("package should be present");
+        assert_eq!(requirements.len(), 1);
+        assert_eq!(requirements[0].requirement.name.as_ref(), "torch");
+        assert!(!requirements[0].match_runtime);
+    }
+
+    #[test]
+    fn empty_extra_build_dependencies_is_noop() {
+        let converted = convert_extra_build_dependencies(&None, std::path::Path::new(".")).unwrap();
+        assert!(converted.is_empty());
     }
 }
