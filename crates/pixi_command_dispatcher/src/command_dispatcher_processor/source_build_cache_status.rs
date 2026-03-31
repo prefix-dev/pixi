@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use futures::FutureExt;
 
-use super::CommandDispatcherProcessor;
-use super::TaskResult;
-use super::dedup::DedupAction;
+use super::{CommandDispatcherProcessor, NewDedupTask, TaskResult};
 use crate::{
     CommandDispatcherError, SourceBuildCacheStatusError,
     command_dispatcher::{
@@ -31,48 +29,44 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        match self
-            .source_build_cache_status
-            .on_task(cache_key, task.tx, SourceBuildCacheStatusId)
-        {
-            DedupAction::AlreadyCompleted => {}
-            DedupAction::New {
-                cancellation_token,
-                id,
-                ..
-            } => {
-                let dispatcher_context = CommandDispatcherContext::QuerySourceBuildCache(id);
-                if let Some(parent) = task.parent {
-                    self.parent_contexts.insert(dispatcher_context, parent);
-                }
+        let action =
+            self.source_build_cache_status
+                .on_task(cache_key, task.tx, SourceBuildCacheStatusId);
+        let parent_reporter_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
 
-                let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
-
-                self.pending_futures.push(
-                    cancellation_token
-                        .run_until_cancelled_owned(task.spec.query(dispatcher))
-                        .map(move |result| {
-                            TaskResult::QuerySourceBuildCache(
-                                id,
-                                Box::new(
-                                    result
-                                        .unwrap_or(Err(CommandDispatcherError::Cancelled))
-                                        .map(Arc::new),
-                                ),
-                            )
-                        })
-                        .boxed_local(),
-                );
-                // Push a monitoring future for this subscriber so the task is
-                // cancelled when all callers drop their futures.
-                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
-            }
-            DedupAction::Subscribed { id, .. } => {
-                let dispatcher_context = CommandDispatcherContext::QuerySourceBuildCache(id);
-                // Push a monitoring future for this subscriber so the task is
-                // cancelled when all callers drop their futures.
-                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
-            }
+        let Some(NewDedupTask {
+            id,
+            cancellation_token,
+            context,
+        }) = Self::start_dedup_task(
+            self,
+            action,
+            &task.spec,
+            task.parent,
+            task.cancellation_token,
+            parent_reporter_context,
+            CommandDispatcherContext::QuerySourceBuildCache,
+        )
+        else {
+            return;
         };
+
+        let dispatcher = self.create_task_command_dispatcher(context);
+
+        self.pending_futures.push(
+            cancellation_token
+                .run_until_cancelled_owned(task.spec.query(dispatcher))
+                .map(move |result| {
+                    TaskResult::QuerySourceBuildCache(
+                        id,
+                        Box::new(
+                            result
+                                .unwrap_or(Err(CommandDispatcherError::Cancelled))
+                                .map(Arc::new),
+                        ),
+                    )
+                })
+                .boxed_local(),
+        );
     }
 }

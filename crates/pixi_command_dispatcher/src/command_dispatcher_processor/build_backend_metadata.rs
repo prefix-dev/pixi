@@ -2,15 +2,12 @@ use std::sync::Arc;
 
 use futures::FutureExt;
 
-use super::CommandDispatcherProcessor;
-use super::TaskResult;
-use super::dedup::DedupAction;
+use super::{CommandDispatcherProcessor, NewDedupTask, TaskResult};
 use crate::{
-    BuildBackendMetadataSpec, CommandDispatcherError, Reporter,
+    CommandDispatcherError, Reporter,
     command_dispatcher::{
         BuildBackendMetadataId, BuildBackendMetadataTask, CommandDispatcherContext,
     },
-    reporter::Reportable,
 };
 
 impl CommandDispatcherProcessor {
@@ -21,90 +18,60 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        match self.build_backend_metadata.on_task(
-            task.spec.clone(),
-            task.tx,
-            BuildBackendMetadataId,
-        ) {
-            DedupAction::AlreadyCompleted => {}
-            DedupAction::New {
-                cancellation_token,
-                dedup_group_id,
-                id,
-                ..
-            } => {
-                let dispatcher_context = CommandDispatcherContext::BuildBackendMetadata(id);
-                if let Some(parent) = task.parent {
-                    self.parent_contexts.insert(dispatcher_context, parent);
-                }
+        let action =
+            self.build_backend_metadata
+                .on_task(task.spec.clone(), task.tx, BuildBackendMetadataId);
+        let parent_reporter_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
 
-                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = task.spec.report_queued(
-                    &mut self.reporter,
-                    parent_context,
-                    Some(dedup_group_id),
-                );
-                if let Some(reporter_id) = reporter_id {
-                    self.build_backend_metadata_reporters
-                        .entry(id)
-                        .or_default()
-                        .push(reporter_id);
-                }
-
-                // Open a channel to receive build output.
-                let (log_sink, rx) = futures::channel::mpsc::unbounded();
-
-                if let Some((reporter, reporter_id)) = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_build_backend_metadata_reporter)
-                    .zip(reporter_id)
-                {
-                    reporter.on_started(reporter_id, Box::new(rx))
-                }
-
-                let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
-
-                self.pending_futures.push(
-                    cancellation_token
-                        .run_until_cancelled_owned(task.spec.request(dispatcher, log_sink))
-                        .map(move |result| {
-                            TaskResult::BuildBackendMetadata(
-                                id,
-                                Box::new(
-                                    result
-                                        .map_or(Err(CommandDispatcherError::Cancelled), |result| {
-                                            result.map(Arc::new)
-                                        }),
-                                ),
-                            )
-                        })
-                        .boxed_local(),
-                );
-                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
-            }
-            DedupAction::Subscribed {
-                dedup_group_id, id, ..
-            } => {
-                let dispatcher_context = CommandDispatcherContext::BuildBackendMetadata(id);
-                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = task.spec.report_queued(
-                    &mut self.reporter,
-                    parent_context,
-                    Some(dedup_group_id),
-                );
-                if let Some(reporter_id) = reporter_id {
-                    self.build_backend_metadata_reporters
-                        .entry(id)
-                        .or_default()
-                        .push(reporter_id);
-                }
-                // Subscribers don't get the output stream.
-                if let Some(reporter_id) = reporter_id {
-                    BuildBackendMetadataSpec::report_started(&mut self.reporter, reporter_id);
-                }
-                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
-            }
+        let Some(NewDedupTask {
+            id,
+            cancellation_token,
+            context,
+        }) = Self::start_dedup_task(
+            self,
+            action,
+            &task.spec,
+            task.parent,
+            task.cancellation_token,
+            parent_reporter_context,
+            CommandDispatcherContext::BuildBackendMetadata,
+        )
+        else {
+            return;
         };
+
+        // Open a channel to receive build output.
+        let (log_sink, rx) = futures::channel::mpsc::unbounded();
+
+        if let Some((reporter, reporter_id)) = self
+            .reporter
+            .as_deref_mut()
+            .and_then(Reporter::as_build_backend_metadata_reporter)
+            .zip(
+                self.build_backend_metadata_reporters
+                    .get(&id)
+                    .and_then(|ids| ids.last().copied()),
+            )
+        {
+            reporter.on_started(reporter_id, Box::new(rx))
+        }
+
+        let dispatcher = self.create_task_command_dispatcher(context);
+
+        self.pending_futures.push(
+            cancellation_token
+                .run_until_cancelled_owned(task.spec.request(dispatcher, log_sink))
+                .map(move |result| {
+                    TaskResult::BuildBackendMetadata(
+                        id,
+                        Box::new(
+                            result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
+                                result.map(Arc::new)
+                            }),
+                        ),
+                    )
+                })
+                .boxed_local(),
+        );
     }
 }

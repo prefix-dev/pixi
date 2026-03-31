@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use futures::FutureExt;
 
-use super::CommandDispatcherProcessor;
-use super::TaskResult;
-use super::dedup::DedupAction;
+use super::{CommandDispatcherProcessor, NewDedupTask, TaskResult};
 use crate::{
     CommandDispatcherError, SourceMetadataSpec,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
@@ -30,41 +28,34 @@ impl CommandDispatcherProcessor {
         let action = self
             .source_metadata
             .on_task(unique_key, task.tx, SourceMetadataId);
+        let parent_reporter_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
 
-        // Since the key is always unique, this is always New.
-        let DedupAction::New {
+        let Some(NewDedupTask {
             id,
             cancellation_token,
-            dedup_group_id,
-        } = action
+            context,
+        }) = Self::start_dedup_task(
+            self,
+            action,
+            &task.spec,
+            task.parent,
+            task.cancellation_token,
+            parent_reporter_context,
+            CommandDispatcherContext::SourceMetadata,
+        )
         else {
             unreachable!("source metadata tasks use unique keys");
         };
 
-        let dispatcher_context = CommandDispatcherContext::SourceMetadata(id);
-
-        if let Some(parent) = task.parent {
-            self.parent_contexts.insert(dispatcher_context, parent);
-        }
-
-        // Notify the reporter.
-        let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-        let reporter_id =
-            task.spec
-                .report_queued(&mut self.reporter, parent_context, Some(dedup_group_id));
-
-        if let Some(reporter_id) = reporter_id {
-            self.source_metadata_reporters
-                .entry(id)
-                .or_default()
-                .push(reporter_id);
-        }
-
-        if let Some(reporter_id) = reporter_id {
+        if let Some(reporter_id) = self
+            .source_metadata_reporters
+            .get(&id)
+            .and_then(|ids| ids.last().copied())
+        {
             SourceMetadataSpec::report_started(&mut self.reporter, reporter_id);
         }
 
-        let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+        let dispatcher = self.create_task_command_dispatcher(context);
 
         self.pending_futures.push(
             cancellation_token
@@ -81,7 +72,5 @@ impl CommandDispatcherProcessor {
                 })
                 .boxed_local(),
         );
-
-        self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
     }
 }
