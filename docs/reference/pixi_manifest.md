@@ -355,12 +355,25 @@ c_compiler = ["gcc"]
 c_compiler_version = ["11.4", "13.0"]
 ```
 
+#### Custom Variant Keys as Environment Variables
+
+Variant keys that are not recognized as language keys (like `python`, `numpy`, `r`, etc.) are automatically exported as environment variables during the build.
+This allows you to pass arbitrary configuration to build scripts:
+
+```toml
+[workspace.target.osx.build-variants]
+CONDA_BUILD_SYSROOT = ["/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk"]
+```
+
+For more details, see the [build variants tutorial](../build/variants.md#custom-variant-keys-as-environment-variables).
+
 #### Common Use Cases
 
 - **Multi-version Python packages**: Build against Python 3.11 and 3.12
 - **Compiler variants**: Test with different compiler versions for C/C++ packages
 - **Dependency compatibility**: Ensure packages work with different versions of key dependencies
 - **Cross-platform builds**: Different build configurations per operating system
+- **Build environment configuration**: Pass arbitrary environment variables like `CONDA_BUILD_SYSROOT` to the build process
 
 For detailed examples and tutorials, see the [build variants documentation](../build/variants.md).
 
