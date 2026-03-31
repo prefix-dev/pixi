@@ -2,9 +2,11 @@ use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingBackendSourceBuild, TaskResult};
 use crate::{
-    BackendBuiltSource, CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
+    BackendBuiltSource, BackendSourceBuildSpec, CommandDispatcherError,
+    CommandDispatcherErrorResultExt, Reporter,
     backend_source_build::BackendSourceBuildError,
     command_dispatcher::{BackendSourceBuildId, BackendSourceBuildTask},
+    reporter::Reportable,
 };
 
 impl CommandDispatcherProcessor {
@@ -18,11 +20,9 @@ impl CommandDispatcherProcessor {
         let parent_context = task
             .parent
             .and_then(|context| self.reporter_context(context));
-        let reporter_id = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_backend_source_build_reporter)
-            .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+        let reporter_id = task
+            .spec
+            .report_queued(&mut self.reporter, parent_context, None);
 
         // Store information about the pending environment.
         let pending_id = self
@@ -122,14 +122,9 @@ impl CommandDispatcherProcessor {
         let result = result.into_ok_or_failed();
 
         // Notify the reporter that the solve finished.
-        if let Some((reporter, id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_backend_source_build_reporter)
-            .zip(env.reporter_id)
-        {
+        if let Some(id) = env.reporter_id {
             let failed = matches!(result, Some(Err(_)));
-            reporter.on_finished(id, failed)
+            BackendSourceBuildSpec::report_finished(&mut self.reporter, id, failed);
         }
 
         // Notify the command dispatcher that the result is available.
