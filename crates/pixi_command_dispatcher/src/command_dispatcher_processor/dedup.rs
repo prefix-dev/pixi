@@ -156,8 +156,11 @@ where
 
         let Some(task) = self.tasks.get_mut(&id) else {
             // The key exists but the task was removed (e.g. cancelled).
-            // Re-create as a new task, reusing the existing id.
-            return self.create_new_task(id, key, tx);
+            // Allocate a fresh id so stale results from the old task
+            // are safely ignored.
+            let new_id = make_id(self.next_id);
+            self.key_to_id.insert(key.clone(), new_id);
+            return self.create_new_task(new_id, key, tx);
         };
 
         match task {
@@ -173,9 +176,15 @@ where
                 // don't join a doomed task — create a fresh one.
                 if cancellation_token.is_cancelled() {
                     // Drop the old entry; the cancelled future will see
-                    // the task is gone when it completes.
+                    // the task is gone when it completes (stale result
+                    // is ignored because old_id is no longer in tasks).
                     self.tasks.remove(&id);
-                    return self.create_new_task(id, key, tx);
+                    // Allocate a fresh id so that stale results and
+                    // subscriber monitors from the old task don't
+                    // interfere with the replacement.
+                    let new_id = make_id(self.next_id);
+                    self.key_to_id.insert(key.clone(), new_id);
+                    return self.create_new_task(new_id, key, tx);
                 }
 
                 waiters.push(tx);
