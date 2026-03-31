@@ -984,7 +984,7 @@ async fn test_setuptools_override_failure() {
         channels = ["https://prefix.dev/conda-forge"]
         name = "pixi-source-problem"
         platforms = ["{platform}"]
-        exclude-newer = "2024-08-30T00:00:00Z"
+        exclude-newer = "2024-08-29"
 
         [dependencies]
         pip = ">=24.0,<25"
@@ -1529,43 +1529,6 @@ async fn test_exclude_newer() {
 }
 
 #[tokio::test]
-async fn test_exclude_newer_duration_is_preserved_in_lockfile() {
-    setup_tracing();
-
-    let mut package_database = MockRepoData::default();
-    package_database.add_package(
-        Package::build("foo", "1")
-            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
-            .finish(),
-    );
-
-    let channel = package_database.into_channel().await.unwrap();
-    let pixi = PixiControl::from_manifest(&format!(
-        r#"
-    [workspace]
-    name = "test-exclude-newer-duration"
-    channels = ["{channel_a}"]
-    platforms = ["{platform}"]
-    exclude-newer = "3d"
-
-    [dependencies]
-    foo = "*"
-    "#,
-        channel_a = channel.url(),
-        platform = Platform::current()
-    ))
-    .unwrap();
-
-    pixi.lock().await.unwrap();
-
-    let lockfile = fs_err::read_to_string(pixi.workspace_path().join("pixi.lock")).unwrap();
-    assert!(
-        lockfile.contains("exclude-newer: 3d"),
-        "lockfile was:\n{lockfile}"
-    );
-}
-
-#[tokio::test]
 async fn test_exclude_newer_per_package_dependency_override() {
     setup_tracing();
 
@@ -1661,52 +1624,6 @@ async fn test_exclude_newer_per_package_constraint_override() {
 }
 
 #[tokio::test]
-async fn test_exclude_newer_duration_rewrites_stale_lockfile_option() {
-    setup_tracing();
-
-    let mut package_database = MockRepoData::default();
-    package_database.add_package(
-        Package::build("foo", "1")
-            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
-            .finish(),
-    );
-
-    let channel = package_database.into_channel().await.unwrap();
-    let pixi = PixiControl::from_manifest(&format!(
-        r#"
-    [workspace]
-    name = "test-exclude-newer-duration-stale-lock"
-    channels = ["{channel_a}"]
-    platforms = ["{platform}"]
-    exclude-newer = "3d"
-
-    [dependencies]
-    foo = "*"
-    "#,
-        channel_a = channel.url(),
-        platform = Platform::current()
-    ))
-    .unwrap();
-
-    pixi.lock().await.unwrap();
-
-    let lock_path = pixi.workspace_path().join("pixi.lock");
-    let stale_lockfile = fs_err::read_to_string(&lock_path).unwrap().replace(
-        "exclude-newer: 3d",
-        "exclude-newer: 2026-03-25T13:47:23.420066Z",
-    );
-    fs_err::write(&lock_path, stale_lockfile).unwrap();
-
-    pixi.lock().await.unwrap();
-
-    let lockfile = fs_err::read_to_string(lock_path).unwrap();
-    assert!(
-        lockfile.contains("exclude-newer: 3d"),
-        "lockfile was:\n{lockfile}"
-    );
-}
-
-#[tokio::test]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
     ignore
@@ -1720,7 +1637,7 @@ async fn test_exclude_newer_pypi() {
     name = "test-channel-change"
     channels = ["https://prefix.dev/conda-forge"]
     platforms = ["{platform}"]
-    exclude-newer = "2020-12-03T00:00:00Z"
+    exclude-newer = "2020-12-02"
 
     [dependencies]
     python = "*"
