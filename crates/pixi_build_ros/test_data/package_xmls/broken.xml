@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+    <name>custom_ros<name> <!-- Missing closing tag -->
+    <version>0.0.1</version>
+    <description>
+        Demo
+    </description>
+    <url>https://test.io/custom_ros</url>
+    <url type="repository">https://github.com/test/custom_ros</url>
+
+    <maintainer email="test@test.io">Tester the Tester</maintainer>
+
+    <license>Apache License 2.0</license>
+    <buildtool_depend>catkin</buildtool_depend>
+    <export>
+    </export>
+</package>
