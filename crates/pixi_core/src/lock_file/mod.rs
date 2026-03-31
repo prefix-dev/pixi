@@ -1,5 +1,4 @@
 mod install_subset;
-mod metadata;
 mod outdated;
 mod package_identifier;
 mod records_by_name;

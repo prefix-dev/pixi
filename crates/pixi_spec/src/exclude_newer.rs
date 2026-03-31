@@ -140,16 +140,6 @@ impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
     }
 }
 
-#[cfg(feature = "rattler_lock")]
-impl From<ExcludeNewer> for rattler_lock::ExcludeNewer {
-    fn from(value: ExcludeNewer) -> Self {
-        match value {
-            ExcludeNewer::Timestamp(dt) => Self::Timestamp(dt),
-            ExcludeNewer::Duration(dur) => Self::Duration(dur),
-        }
-    }
-}
-
 impl FromStr for ExcludeNewer {
     type Err = String;
 

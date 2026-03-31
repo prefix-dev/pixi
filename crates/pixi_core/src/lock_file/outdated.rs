@@ -1,7 +1,5 @@
 use super::{
-    metadata::LockFileChannelMetadata,
-    satisfiability::verify_environment_satisfiability_with_lock_file_metadata,
-    verify_platform_satisfiability,
+    satisfiability::verify_environment_satisfiability, verify_platform_satisfiability,
 };
 use crate::{
     Workspace,
@@ -154,8 +152,6 @@ async fn find_unsatisfiable_targets<'p>(
     command_dispatcher: CommandDispatcher,
     lock_file: &LockFile,
 ) -> UnsatisfiableTargets<'p> {
-    let lock_file_channel_metadata =
-        LockFileChannelMetadata::from_path_lossy(&project.lock_file_path());
     let mut verified_environments = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
     for environment in project.environments() {
@@ -178,11 +174,7 @@ async fn find_unsatisfiable_targets<'p>(
         };
 
         // The locked environment exists, but does it match our project environment?
-        if let Err(unsat) = verify_environment_satisfiability_with_lock_file_metadata(
-            &environment,
-            locked_environment,
-            Some(&lock_file_channel_metadata),
-        ) {
+        if let Err(unsat) = verify_environment_satisfiability(&environment, locked_environment) {
             tracing::info!(
                 "environment '{0}' is out of date because {unsat}",
                 environment.name().fancy_display()
@@ -212,14 +204,6 @@ async fn find_unsatisfiable_targets<'p>(
                     // since they came from higher-priority channels. We just need to update
                     // the lock file's channel list without re-solving.
                     // Don't add to disregard_locked_content.
-                }
-                EnvironmentUnsat::ExcludeNewerOptionMismatch(..) => {
-                    // The stored solve option metadata is stale, but the locked content can
-                    // still be reused while we rewrite the lock file.
-                }
-                EnvironmentUnsat::ExcludeNewerChannelMismatch(..) => {
-                    // The stored per-channel exclude-newer metadata is stale, but the locked
-                    // content can still be reused while we rewrite the lock file.
                 }
                 EnvironmentUnsat::ChannelsMismatch
                 | EnvironmentUnsat::InvalidChannel(_)

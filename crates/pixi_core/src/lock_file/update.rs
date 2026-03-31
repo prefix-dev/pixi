@@ -50,8 +50,7 @@ use uv_normalize::ExtraName;
 
 use super::{
     CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName,
-    metadata::persist_channel_exclude_newer, outdated::OutdatedEnvironments,
-    utils::IoConcurrencyLimit,
+    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
 };
 use crate::{
     Workspace,
@@ -523,8 +522,7 @@ impl<'p> LockFileDerivedData<'p> {
         self.lock_file
             .to_path(&lock_file_path)
             .into_diagnostic()
-            .context("failed to write lock-file to disk")?;
-        persist_channel_exclude_newer(&lock_file_path, self.workspace)
+            .context("failed to write lock-file to disk")
     }
 
     /// Consumes this instance, dropping any resources that are not needed
@@ -2060,7 +2058,6 @@ impl<'p> UpdateContext<'p> {
                         .unwrap_or_default()
                         .unwrap_or_default()
                         .into(),
-                    exclude_newer: grouped_env.exclude_newer_raw().map(Into::into),
                     pypi_prerelease_mode: Some(pypi_prerelease_mode.into()),
                 },
             );
