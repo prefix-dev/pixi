@@ -3,8 +3,9 @@ use pixi_record::PixiRecord;
 
 use super::{CommandDispatcherProcessor, PendingSolveCondaEnvironment, TaskResult};
 use crate::{
-    CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, SolveCondaEnvironmentSpec,
     command_dispatcher::{SolveCondaEnvironmentId, SolveCondaEnvironmentTask},
+    reporter::Reportable,
     solve_conda::SolveCondaEnvironmentError,
 };
 
@@ -20,11 +21,9 @@ impl CommandDispatcherProcessor {
         let parent_context = task
             .parent
             .and_then(|context| self.reporter_context(context));
-        let reporter_id = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_conda_solve_reporter)
-            .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+        let reporter_id = task
+            .spec
+            .report_queued(&mut self.reporter, parent_context, None);
 
         // Store information about the pending environment.
         let environment_id = self.conda_solves.insert(PendingSolveCondaEnvironment {
@@ -68,13 +67,8 @@ impl CommandDispatcherProcessor {
             let reporter_id = self.conda_solves[environment_id].reporter_id;
 
             // Notify the reporter that the solve has started.
-            if let Some((reporter, id)) = self
-                .reporter
-                .as_deref_mut()
-                .and_then(Reporter::as_conda_solve_reporter)
-                .zip(reporter_id)
-            {
-                reporter.on_started(id)
+            if let Some(id) = reporter_id {
+                SolveCondaEnvironmentSpec::report_started(&mut self.reporter, id);
             }
 
             // Store the cancellation token for this context so child tasks can link to it.
@@ -117,13 +111,8 @@ impl CommandDispatcherProcessor {
             .expect("got a result for a conda environment that was not pending");
 
         // Notify the reporter that the solve finished.
-        if let Some((reporter, id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_conda_solve_reporter)
-            .zip(env.reporter_id)
-        {
-            reporter.on_finished(id)
+        if let Some(id) = env.reporter_id {
+            SolveCondaEnvironmentSpec::report_finished(&mut self.reporter, id, result.is_err());
         }
 
         // Notify the command dispatcher that the result is available.

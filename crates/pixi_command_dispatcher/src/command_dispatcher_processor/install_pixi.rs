@@ -3,11 +3,11 @@ use futures::FutureExt;
 use super::{CommandDispatcherProcessor, PendingInstallPixiEnvironment, TaskResult};
 use crate::{
     CommandDispatcherError, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult,
-    Reporter,
     command_dispatcher::{
         CommandDispatcherContext, InstallPixiEnvironmentId, InstallPixiEnvironmentTask,
     },
-    install_pixi::InstallPixiEnvironmentError,
+    install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec},
+    reporter::Reportable,
 };
 
 impl CommandDispatcherProcessor {
@@ -20,11 +20,9 @@ impl CommandDispatcherProcessor {
 
         // Notify the reporter that a new solve has been queued.
         let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-        let reporter_id = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_pixi_install_reporter)
-            .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+        let reporter_id = task
+            .spec
+            .report_queued(&mut self.reporter, parent_context, None);
 
         // Store information about the pending environment.
         let pending_env_id = self
@@ -40,13 +38,8 @@ impl CommandDispatcherProcessor {
         }
 
         // Notify the reporter that the solve has started.
-        if let Some((reporter, id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_pixi_install_reporter)
-            .zip(reporter_id)
-        {
-            reporter.on_started(id)
+        if let Some(id) = reporter_id {
+            InstallPixiEnvironmentSpec::report_started(&mut self.reporter, id);
         }
 
         // Create a reporter for the installation task.
@@ -101,13 +94,8 @@ impl CommandDispatcherProcessor {
             .expect("got a result for a conda environment install that was not pending");
 
         // Notify the reporter that the solve finished.
-        if let Some((reporter, id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_pixi_install_reporter)
-            .zip(env.reporter_id)
-        {
-            reporter.on_finished(id)
+        if let Some(id) = env.reporter_id {
+            InstallPixiEnvironmentSpec::report_finished(&mut self.reporter, id, result.is_err());
         }
 
         let Some(result) = result.into_ok_or_failed() else {
