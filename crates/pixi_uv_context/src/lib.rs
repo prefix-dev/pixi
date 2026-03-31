@@ -1,4 +1,4 @@
-use std::{sync::Arc};
+use std::sync::Arc;
 
 use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};

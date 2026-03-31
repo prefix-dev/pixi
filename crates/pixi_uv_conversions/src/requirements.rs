@@ -495,9 +495,8 @@ mod tests {
             vec![pep508_rs::Requirement::from_str("torch>=2").unwrap()],
         );
 
-        let converted =
-            convert_extra_build_dependencies(&Some(deps), std::path::Path::new("."))
-                .expect("conversion should succeed");
+        let converted = convert_extra_build_dependencies(&Some(deps), std::path::Path::new("."))
+            .expect("conversion should succeed");
 
         let pkg_name = uv_normalize::PackageName::from_str("fused-ssim").unwrap();
         let requirements = converted.get(&pkg_name).expect("package should be present");

@@ -6832,12 +6832,9 @@ name = "pixi_uv_context"
 version = "0.1.0"
 dependencies = [
  "fs-err",
- "indexmap 2.13.0",
  "miette 7.6.0",
- "pep508_rs",
  "pixi_config",
  "pixi_consts",
- "pixi_pypi_spec",
  "pixi_utils",
  "pixi_uv_conversions",
  "reqwest 0.12.28",
