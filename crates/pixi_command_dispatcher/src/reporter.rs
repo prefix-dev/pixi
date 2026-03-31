@@ -7,7 +7,7 @@ use serde::Serialize;
 use url::Url;
 
 use crate::{
-    BackendSourceBuildSpec, BuildBackendMetadataSpec, PixiEnvironmentSpec,
+    BackendSourceBuildSpec, BuildBackendMetadataSpec, DevSourceMetadataSpec, PixiEnvironmentSpec,
     SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec, SourceRecordSpec,
     install_pixi::InstallPixiEnvironmentSpec, instantiate_tool_env::InstantiateToolEnvironmentSpec,
 };
@@ -751,6 +751,59 @@ impl Reportable for BackendSourceBuildSpec {
             r.on_finished(id, failed);
         }
     }
+}
+
+/// Delegate to the inner type for boxed specs.
+impl Reportable for Box<BackendSourceBuildSpec> {
+    type ReporterId = BackendSourceBuildId;
+    fn report_queued(
+        &self,
+        reporter: &mut Option<Box<dyn Reporter>>,
+        parent: Option<ReporterContext>,
+        dedup_group_id: Option<DedupGroupId>,
+    ) -> Option<Self::ReporterId> {
+        (**self).report_queued(reporter, parent, dedup_group_id)
+    }
+    fn report_started(reporter: &mut Option<Box<dyn Reporter>>, id: Self::ReporterId) {
+        BackendSourceBuildSpec::report_started(reporter, id);
+    }
+    fn report_finished(
+        reporter: &mut Option<Box<dyn Reporter>>,
+        id: Self::ReporterId,
+        failed: bool,
+    ) {
+        BackendSourceBuildSpec::report_finished(reporter, id, failed);
+    }
+}
+
+/// No-op reportable for tasks that have no reporter.
+impl Reportable for DevSourceMetadataSpec {
+    type ReporterId = ();
+    fn report_queued(
+        &self,
+        _: &mut Option<Box<dyn Reporter>>,
+        _: Option<ReporterContext>,
+        _: Option<DedupGroupId>,
+    ) -> Option<()> {
+        None
+    }
+    fn report_started(_: &mut Option<Box<dyn Reporter>>, _: ()) {}
+    fn report_finished(_: &mut Option<Box<dyn Reporter>>, _: (), _: bool) {}
+}
+
+/// No-op reportable for tasks that have no reporter.
+impl Reportable for crate::source_build_cache_status::SourceBuildCacheStatusSpec {
+    type ReporterId = ();
+    fn report_queued(
+        &self,
+        _: &mut Option<Box<dyn Reporter>>,
+        _: Option<ReporterContext>,
+        _: Option<DedupGroupId>,
+    ) -> Option<()> {
+        None
+    }
+    fn report_started(_: &mut Option<Box<dyn Reporter>>, _: ()) {}
+    fn report_finished(_: &mut Option<Box<dyn Reporter>>, _: (), _: bool) {}
 }
 
 #[derive(Debug, Clone, Copy, Serialize, derive_more::From)]

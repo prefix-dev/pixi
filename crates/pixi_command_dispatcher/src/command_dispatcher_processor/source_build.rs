@@ -7,7 +7,7 @@ use super::CommandDispatcherProcessor;
 use super::TaskResult;
 use super::dedup::DedupAction;
 use crate::{
-    CommandDispatcherError, SourceBuildError, SourceBuildResult, SourceBuildSpec,
+    CommandDispatcherError, SourceBuildSpec,
     command_dispatcher::{CommandDispatcherContext, SourceBuildId, SourceBuildTask},
     reporter::Reportable,
 };
@@ -113,23 +113,5 @@ impl CommandDispatcherProcessor {
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
         };
-    }
-
-    /// Called when a [`TaskResult::SourceBuild`] task was received.
-    pub(crate) fn on_source_build_result(
-        &mut self,
-        id: SourceBuildId,
-        result: Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>>,
-    ) {
-        self.parent_contexts
-            .remove(&CommandDispatcherContext::SourceBuild(id));
-
-        let failed = result.is_err();
-        self.source_build.on_result(id, result);
-        if let Some(reporter_ids) = self.source_build_reporters.remove(&id) {
-            for reporter_id in reporter_ids {
-                SourceBuildSpec::report_finished(&mut self.reporter, reporter_id, failed);
-            }
-        }
     }
 }

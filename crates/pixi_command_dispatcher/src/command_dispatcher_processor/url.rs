@@ -9,7 +9,7 @@ use crate::{
     CommandDispatcherError,
     command_dispatcher::{
         CommandDispatcherContext, UrlCheckoutId,
-        url::{UrlCheckout, UrlCheckoutTask, UrlError},
+        url::{UrlCheckout, UrlCheckoutTask},
     },
     reporter::Reportable,
 };
@@ -108,23 +108,5 @@ impl CommandDispatcherProcessor {
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
         };
-    }
-
-    /// Called when a url checkout task has completed.
-    pub(crate) fn on_url_checked_out(
-        &mut self,
-        id: UrlCheckoutId,
-        result: Result<UrlCheckout, CommandDispatcherError<UrlError>>,
-    ) {
-        self.parent_contexts
-            .remove(&CommandDispatcherContext::UrlCheckout(id));
-
-        let failed = result.is_err();
-        self.url_checkouts.on_result(id, result);
-        if let Some(reporter_ids) = self.url_checkout_reporters.remove(&id) {
-            for reporter_id in reporter_ids {
-                UrlSpec::report_finished(&mut self.reporter, reporter_id, failed);
-            }
-        }
     }
 }

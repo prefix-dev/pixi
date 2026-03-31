@@ -6,10 +6,7 @@ use super::dedup::DedupAction;
 use crate::{
     CommandDispatcherError,
     command_dispatcher::{CommandDispatcherContext, InstantiatedToolEnvId, Task},
-    instantiate_tool_env::{
-        InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
-        InstantiateToolEnvironmentSpec,
-    },
+    instantiate_tool_env::InstantiateToolEnvironmentSpec,
     reporter::Reportable,
 };
 
@@ -99,30 +96,5 @@ impl CommandDispatcherProcessor {
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
         };
-    }
-
-    /// Called when a [`TaskResult::InstantiateToolEnv`] task was received.
-    pub(crate) fn on_instantiate_tool_environment_result(
-        &mut self,
-        id: InstantiatedToolEnvId,
-        result: Result<
-            InstantiateToolEnvironmentResult,
-            CommandDispatcherError<InstantiateToolEnvironmentError>,
-        >,
-    ) {
-        self.parent_contexts
-            .remove(&CommandDispatcherContext::InstantiateToolEnv(id));
-
-        let failed = result.is_err();
-        self.instantiated_tool_envs.on_result(id, result);
-        if let Some(reporter_ids) = self.instantiated_tool_envs_reporters.remove(&id) {
-            for reporter_id in reporter_ids {
-                InstantiateToolEnvironmentSpec::report_finished(
-                    &mut self.reporter,
-                    reporter_id,
-                    failed,
-                );
-            }
-        }
     }
 }
