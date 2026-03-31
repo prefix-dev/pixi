@@ -2,7 +2,10 @@ use std::{collections::HashMap, time::Duration};
 
 use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar};
-use pixi_command_dispatcher::{ReporterContext, reporter::{DedupGroupId, GitCheckoutId}};
+use pixi_command_dispatcher::{
+    ReporterContext,
+    reporter::{DedupGroupId, GitCheckoutId},
+};
 use pixi_git::{GIT_SSH_CLONING_WARNING_MSG, resolver::RepositoryReference, url::RepositoryUrl};
 use pixi_progress::style_warning_pb;
 

@@ -24,20 +24,18 @@ impl CommandDispatcherProcessor {
 
         // Cycle detection: if we already have a pending task for this key,
         // check whether following the parent chain would create a cycle.
-        if let Some(id) = self.source_record.get_id(&cache_key) {
-            if self.contains_cycle(id, task.parent) {
-                let _ = task
-                    .tx
-                    .send(Err(SourceRecordError::Cycle(Cycle::default())));
-                return;
-            }
+        if let Some(id) = self.source_record.get_id(&cache_key)
+            && self.contains_cycle(id, task.parent)
+        {
+            let _ = task
+                .tx
+                .send(Err(SourceRecordError::Cycle(Cycle::default())));
+            return;
         }
 
-        let action = self.source_record.on_task(
-            cache_key,
-            task.tx,
-            SourceRecordId,
-        );
+        let action = self
+            .source_record
+            .on_task(cache_key, task.tx, SourceRecordId);
 
         let id = match &action {
             DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,
@@ -53,8 +51,7 @@ impl CommandDispatcherProcessor {
         } = action
         {
             if let Some(parent) = task.parent {
-                self.parent_contexts
-                    .insert(dispatcher_context, parent);
+                self.parent_contexts.insert(dispatcher_context, parent);
             }
 
             // Notify the reporter.
@@ -66,7 +63,10 @@ impl CommandDispatcherProcessor {
                 .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
 
             if let Some(reporter_id) = reporter_id {
-                self.source_record_reporters.entry(id).or_default().push(reporter_id);
+                self.source_record_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             if let Some((reporter, reporter_id)) = self
@@ -87,16 +87,15 @@ impl CommandDispatcherProcessor {
 
             self.pending_futures.push(
                 cancellation_token
-                    .run_until_cancelled_owned(
-                        task.spec.request(dispatcher, run_exports_reporter),
-                    )
+                    .run_until_cancelled_owned(task.spec.request(dispatcher, run_exports_reporter))
                     .map(move |result| {
                         TaskResult::SourceRecord(
                             id,
-                            Box::new(result.map_or(
-                                Err(CommandDispatcherError::Cancelled),
-                                |result| result.map(Arc::new),
-                            )),
+                            Box::new(
+                                result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
+                                    result.map(Arc::new)
+                                }),
+                            ),
                         )
                     })
                     .boxed_local(),
@@ -111,7 +110,10 @@ impl CommandDispatcherProcessor {
                 .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
 
             if let Some(reporter_id) = reporter_id {
-                self.source_record_reporters.entry(id).or_default().push(reporter_id);
+                self.source_record_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             if let Some((reporter, reporter_id)) = self
@@ -138,7 +140,10 @@ impl CommandDispatcherProcessor {
 
         self.source_record.on_result(id, result);
         if let Some(reporter_ids) = self.source_record_reporters.remove(&id)
-            && let Some(reporter) = self.reporter.as_deref_mut().and_then(Reporter::as_source_record_reporter)
+            && let Some(reporter) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_source_record_reporter)
         {
             for reporter_id in reporter_ids {
                 reporter.on_finished(reporter_id);

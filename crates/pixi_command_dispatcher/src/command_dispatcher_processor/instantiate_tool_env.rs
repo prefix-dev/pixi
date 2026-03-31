@@ -43,8 +43,7 @@ impl CommandDispatcherProcessor {
         } = action
         {
             if let Some(parent) = task.parent {
-                self.parent_contexts
-                    .insert(dispatcher_context, parent);
+                self.parent_contexts.insert(dispatcher_context, parent);
             }
 
             // Notify the reporter that a new task has been queued and started.
@@ -57,7 +56,9 @@ impl CommandDispatcherProcessor {
 
             if let Some(reporter_id) = reporter_id {
                 self.instantiated_tool_envs_reporters
-                    .entry(id).or_default().push(reporter_id);
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             if let Some((reporter, reporter_id)) = self
@@ -92,7 +93,9 @@ impl CommandDispatcherProcessor {
 
             if let Some(reporter_id) = reporter_id {
                 self.instantiated_tool_envs_reporters
-                    .entry(id).or_default().push(reporter_id);
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             if let Some((reporter, reporter_id)) = self
@@ -122,7 +125,10 @@ impl CommandDispatcherProcessor {
 
         self.instantiated_tool_envs.on_result(id, result);
         if let Some(reporter_ids) = self.instantiated_tool_envs_reporters.remove(&id)
-            && let Some(reporter) = self.reporter.as_deref_mut().and_then(Reporter::as_instantiate_tool_environment_reporter)
+            && let Some(reporter) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_instantiate_tool_environment_reporter)
         {
             for reporter_id in reporter_ids {
                 reporter.on_finished(reporter_id);

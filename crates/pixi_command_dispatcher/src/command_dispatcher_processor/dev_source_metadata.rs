@@ -18,18 +18,16 @@ impl CommandDispatcherProcessor {
 
         // Cycle detection: if we already have a pending task for this key,
         // check whether following the parent chain would create a cycle.
-        if let Some(id) = self.dev_source_metadata.get_id(&task.spec) {
-            if self.contains_cycle(id, task.parent) {
-                let _ = task.tx.send(Err(DevSourceMetadataError::Cycle));
-                return;
-            }
+        if let Some(id) = self.dev_source_metadata.get_id(&task.spec)
+            && self.contains_cycle(id, task.parent)
+        {
+            let _ = task.tx.send(Err(DevSourceMetadataError::Cycle));
+            return;
         }
 
-        let action = self.dev_source_metadata.on_task(
-            task.spec.clone(),
-            task.tx,
-            DevSourceMetadataId,
-        );
+        let action =
+            self.dev_source_metadata
+                .on_task(task.spec.clone(), task.tx, DevSourceMetadataId);
 
         let id = match &action {
             DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,

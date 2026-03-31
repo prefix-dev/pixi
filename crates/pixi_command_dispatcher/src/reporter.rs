@@ -129,7 +129,12 @@ pub struct UrlCheckoutId(pub usize);
 pub trait UrlCheckoutReporter {
     /// Called when a url checkout was queued on the
     /// [`crate::CommandDispatcher`].
-    fn on_queued(&mut self, reason: Option<ReporterContext>, env: &Url, dedup_id: DedupGroupId) -> UrlCheckoutId;
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &Url,
+        dedup_id: DedupGroupId,
+    ) -> UrlCheckoutId;
 
     /// Called when the url checkout has started.
     fn on_start(&mut self, checkout_id: UrlCheckoutId);

@@ -21,11 +21,9 @@ impl CommandDispatcherProcessor {
 
         let url = task.spec.url.clone();
 
-        let action = self.url_checkouts.on_task(
-            task.spec.clone(),
-            task.tx,
-            UrlCheckoutId,
-        );
+        let action = self
+            .url_checkouts
+            .on_task(task.spec.clone(), task.tx, UrlCheckoutId);
 
         let id = match &action {
             DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,
@@ -41,8 +39,7 @@ impl CommandDispatcherProcessor {
         } = action
         {
             if let Some(parent) = task.parent {
-                self.parent_contexts
-                    .insert(dispatcher_context, parent);
+                self.parent_contexts.insert(dispatcher_context, parent);
             }
 
             // Notify the reporter.
@@ -54,7 +51,10 @@ impl CommandDispatcherProcessor {
                 .map(|reporter| reporter.on_queued(parent_context, &url, dedup_group_id));
 
             if let Some(reporter_id) = reporter_id {
-                self.url_checkout_reporters.entry(id).or_default().push(reporter_id);
+                self.url_checkout_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             if let Some((reporter, reporter_id)) = self
@@ -86,9 +86,7 @@ impl CommandDispatcherProcessor {
                     .map(move |result| {
                         TaskResult::UrlCheckedOut(
                             id,
-                            Box::new(
-                                result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
-                            ),
+                            Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
                         )
                     })
                     .boxed_local(),
@@ -103,7 +101,10 @@ impl CommandDispatcherProcessor {
                 .map(|reporter| reporter.on_queued(parent_context, &url, dedup_group_id));
 
             if let Some(reporter_id) = reporter_id {
-                self.url_checkout_reporters.entry(id).or_default().push(reporter_id);
+                self.url_checkout_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             if let Some((reporter, reporter_id)) = self
@@ -130,7 +131,10 @@ impl CommandDispatcherProcessor {
 
         self.url_checkouts.on_result(id, result);
         if let Some(reporter_ids) = self.url_checkout_reporters.remove(&id)
-            && let Some(reporter) = self.reporter.as_deref_mut().and_then(Reporter::as_url_reporter)
+            && let Some(reporter) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_url_reporter)
         {
             for reporter_id in reporter_ids {
                 reporter.on_finished(reporter_id);

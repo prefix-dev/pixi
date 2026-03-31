@@ -12,12 +12,12 @@ use std::{
 use crate::source_build_cache_status::SourceBuildDeduplicationKey;
 use crate::source_record::SourceRecordDeduplicationKey;
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
-    CommandDispatcher, CommandDispatcherError, DevSourceMetadata, DevSourceMetadataError,
-    DevSourceMetadataSpec, InstallPixiEnvironmentResult, Reporter, ResolvedSourceRecord,
-    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
-    SourceBuildCacheStatusError, SourceBuildError, SourceBuildResult, SourceBuildSpec,
-    SourceMetadata, SourceMetadataError, SourceRecordError,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
+    CommandDispatcherError, DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec,
+    InstallPixiEnvironmentResult, Reporter, ResolvedSourceRecord, SolveCondaEnvironmentSpec,
+    SolvePixiEnvironmentError, SourceBuildCacheEntry, SourceBuildCacheStatusError,
+    SourceBuildError, SourceBuildResult, SourceBuildSpec, SourceMetadata, SourceMetadataError,
+    SourceRecordError,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcherChannel,
@@ -109,12 +109,8 @@ pub(crate) struct CommandDispatcherProcessor {
     /// Source metadata tasks (not deduplicated; fans out to deduplicated
     /// SourceRecord tasks). Uses a unique counter as key so every request
     /// creates a new task.
-    source_metadata: dedup::DedupTaskRegistry<
-        usize,
-        SourceMetadataId,
-        Arc<SourceMetadata>,
-        SourceMetadataError,
-    >,
+    source_metadata:
+        dedup::DedupTaskRegistry<usize, SourceMetadataId, Arc<SourceMetadata>, SourceMetadataError>,
     source_metadata_reporters: HashMap<SourceMetadataId, Vec<reporter::SourceMetadataId>>,
     source_metadata_id_counter: usize,
 
@@ -139,22 +135,12 @@ pub(crate) struct CommandDispatcherProcessor {
 
     /// Git checkouts in the process of being checked out, or already
     /// checked out.
-    git_checkouts: dedup::DedupTaskRegistry<
-        RepositoryReference,
-        GitCheckoutId,
-        Fetch,
-        GitError,
-    >,
+    git_checkouts: dedup::DedupTaskRegistry<RepositoryReference, GitCheckoutId, Fetch, GitError>,
     git_checkout_reporters: HashMap<GitCheckoutId, Vec<reporter::GitCheckoutId>>,
 
     /// Url checkouts in the process of being checked out, or already
     /// checked out.
-    url_checkouts: dedup::DedupTaskRegistry<
-        UrlSpec,
-        UrlCheckoutId,
-        UrlCheckout,
-        UrlError,
-    >,
+    url_checkouts: dedup::DedupTaskRegistry<UrlSpec, UrlCheckoutId, UrlCheckout, UrlError>,
     url_checkout_reporters: HashMap<UrlCheckoutId, Vec<reporter::UrlCheckoutId>>,
 
     /// Source builds that are currently being processed.
@@ -255,7 +241,6 @@ enum TaskResult {
         BackendSourceBuildId,
         BoxedDispatcherResult<BackendBuiltSource, BackendSourceBuildError>,
     ),
-
 }
 
 /// Information about a pending conda environment solve. This is used by the
@@ -698,7 +683,7 @@ impl CommandDispatcherProcessor {
                 self.url_checkouts.on_subscriber_cancelled(id);
             }
             // Non-dedup tasks never push subscriber monitors.
-            _ => unreachable!("subscriber cancellation for non-dedup context: {context:?}")
+            _ => unreachable!("subscriber cancellation for non-dedup context: {context:?}"),
         }
     }
 
