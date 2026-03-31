@@ -19,104 +19,104 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        let action = self
+        match self
             .source_build
-            .on_task(task.spec.clone(), task.tx, SourceBuildId);
-
-        let id = match &action {
-            DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,
-            DedupAction::AlreadyCompleted => return,
-        };
-
-        let dispatcher_context = CommandDispatcherContext::SourceBuild(id);
-
-        if let DedupAction::New {
-            cancellation_token,
-            dedup_group_id,
-            ..
-        } = action
+            .on_task(task.spec.clone(), task.tx, SourceBuildId)
         {
-            if let Some(parent) = task.parent {
-                self.parent_contexts.insert(dispatcher_context, parent);
-            }
-
-            // Notify the reporter that a new task has been queued.
-            let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-            let reporter_id = self
-                .reporter
-                .as_deref_mut()
-                .and_then(Reporter::as_source_build_reporter)
-                .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
-
-            if let Some(reporter_id) = reporter_id {
-                self.source_build_reporters
-                    .entry(id)
-                    .or_default()
-                    .push(reporter_id);
-            }
-
-            let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
-            let reporter_context = self.reporter_context(dispatcher_context);
-            let (tx, rx) = futures::channel::mpsc::unbounded::<String>();
-
-            let mut run_exports_reporter: Option<Arc<dyn RunExportsReporter>> = None;
-            if let Some(reporter) = self.reporter.as_mut() {
-                let created = reporter.create_run_exports_reporter(reporter_context);
-                if let Some((source_reporter, reporter_id)) =
-                    reporter.as_source_build_reporter().zip(
-                        self.source_build_reporters
-                            .get(&id)
-                            .and_then(|ids| ids.first().copied()),
-                    )
-                {
-                    source_reporter.on_started(reporter_id, Box::new(rx));
+            DedupAction::AlreadyCompleted => {}
+            DedupAction::New {
+                cancellation_token,
+                dedup_group_id,
+                id,
+                ..
+            } => {
+                let dispatcher_context = CommandDispatcherContext::SourceBuild(id);
+                if let Some(parent) = task.parent {
+                    self.parent_contexts.insert(dispatcher_context, parent);
                 }
-                run_exports_reporter = created;
-            }
 
-            self.pending_futures.push(
-                cancellation_token
-                    .run_until_cancelled_owned(task.spec.build(
-                        dispatcher,
-                        run_exports_reporter.clone(),
-                        tx,
-                    ))
-                    .map(move |result| {
-                        TaskResult::SourceBuild(
-                            id,
-                            Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
+                // Notify the reporter that a new task has been queued.
+                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
+                let reporter_id = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_source_build_reporter)
+                    .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
+
+                if let Some(reporter_id) = reporter_id {
+                    self.source_build_reporters
+                        .entry(id)
+                        .or_default()
+                        .push(reporter_id);
+                }
+
+                let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+                let reporter_context = self.reporter_context(dispatcher_context);
+                let (tx, rx) = futures::channel::mpsc::unbounded::<String>();
+
+                let mut run_exports_reporter: Option<Arc<dyn RunExportsReporter>> = None;
+                if let Some(reporter) = self.reporter.as_mut() {
+                    let created = reporter.create_run_exports_reporter(reporter_context);
+                    if let Some((source_reporter, reporter_id)) =
+                        reporter.as_source_build_reporter().zip(
+                            self.source_build_reporters
+                                .get(&id)
+                                .and_then(|ids| ids.first().copied()),
                         )
-                    })
-                    .boxed_local(),
-            );
-        } else if let DedupAction::Subscribed { dedup_group_id, .. } = action {
-            // Notify the reporter for the subscriber as well.
-            let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-            let reporter_id = self
-                .reporter
-                .as_deref_mut()
-                .and_then(Reporter::as_source_build_reporter)
-                .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
+                    {
+                        source_reporter.on_started(reporter_id, Box::new(rx));
+                    }
+                    run_exports_reporter = created;
+                }
 
-            if let Some(reporter_id) = reporter_id {
-                self.source_build_reporters
-                    .entry(id)
-                    .or_default()
-                    .push(reporter_id);
+                self.pending_futures.push(
+                    cancellation_token
+                        .run_until_cancelled_owned(task.spec.build(
+                            dispatcher,
+                            run_exports_reporter.clone(),
+                            tx,
+                        ))
+                        .map(move |result| {
+                            TaskResult::SourceBuild(
+                                id,
+                                Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
+                            )
+                        })
+                        .boxed_local(),
+                );
+                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
+            DedupAction::Subscribed {
+                dedup_group_id, id, ..
+            } => {
+                let dispatcher_context = CommandDispatcherContext::SourceBuild(id);
+                // Notify the reporter for the subscriber as well.
+                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
+                let reporter_id = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_source_build_reporter)
+                    .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
 
-            // Subscribers don't get the output stream.
-            if let Some((reporter, reporter_id)) = self
-                .reporter
-                .as_deref_mut()
-                .and_then(Reporter::as_source_build_reporter)
-                .zip(reporter_id)
-            {
-                reporter.on_started(reporter_id, Box::new(futures::stream::empty()));
+                if let Some(reporter_id) = reporter_id {
+                    self.source_build_reporters
+                        .entry(id)
+                        .or_default()
+                        .push(reporter_id);
+                }
+
+                // Subscribers don't get the output stream.
+                if let Some((reporter, reporter_id)) = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_source_build_reporter)
+                    .zip(reporter_id)
+                {
+                    reporter.on_started(reporter_id, Box::new(futures::stream::empty()));
+                }
+                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
-        }
-
-        self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
+        };
     }
 
     /// Called when a [`TaskResult::SourceBuild`] task was received.

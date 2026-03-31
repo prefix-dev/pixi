@@ -31,47 +31,49 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        let action =
-            self.source_build_cache_status
-                .on_task(cache_key, task.tx, SourceBuildCacheStatusId);
-
-        let id = match &action {
-            DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,
-            DedupAction::AlreadyCompleted => return,
-        };
-
-        let dispatcher_context = CommandDispatcherContext::QuerySourceBuildCache(id);
-
-        if let DedupAction::New {
-            cancellation_token, ..
-        } = action
+        match self
+            .source_build_cache_status
+            .on_task(cache_key, task.tx, SourceBuildCacheStatusId)
         {
-            if let Some(parent) = task.parent {
-                self.parent_contexts.insert(dispatcher_context, parent);
+            DedupAction::AlreadyCompleted => {}
+            DedupAction::New {
+                cancellation_token,
+                id,
+                ..
+            } => {
+                let dispatcher_context = CommandDispatcherContext::QuerySourceBuildCache(id);
+                if let Some(parent) = task.parent {
+                    self.parent_contexts.insert(dispatcher_context, parent);
+                }
+
+                let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+
+                self.pending_futures.push(
+                    cancellation_token
+                        .run_until_cancelled_owned(task.spec.query(dispatcher))
+                        .map(move |result| {
+                            TaskResult::QuerySourceBuildCache(
+                                id,
+                                Box::new(
+                                    result
+                                        .unwrap_or(Err(CommandDispatcherError::Cancelled))
+                                        .map(Arc::new),
+                                ),
+                            )
+                        })
+                        .boxed_local(),
+                );
+                // Push a monitoring future for this subscriber so the task is
+                // cancelled when all callers drop their futures.
+                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
-
-            let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
-
-            self.pending_futures.push(
-                cancellation_token
-                    .run_until_cancelled_owned(task.spec.query(dispatcher))
-                    .map(move |result| {
-                        TaskResult::QuerySourceBuildCache(
-                            id,
-                            Box::new(
-                                result
-                                    .unwrap_or(Err(CommandDispatcherError::Cancelled))
-                                    .map(Arc::new),
-                            ),
-                        )
-                    })
-                    .boxed_local(),
-            );
-        }
-
-        // Push a monitoring future for this subscriber so the task is
-        // cancelled when all callers drop their futures.
-        self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
+            DedupAction::Subscribed { id, .. } => {
+                let dispatcher_context = CommandDispatcherContext::QuerySourceBuildCache(id);
+                // Push a monitoring future for this subscriber so the task is
+                // cancelled when all callers drop their futures.
+                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
+            }
+        };
     }
 
     /// Called when a [`TaskResult::QuerySourceBuildCache`] task was
