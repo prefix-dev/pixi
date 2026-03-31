@@ -57,7 +57,7 @@ impl CommandDispatcherProcessor {
                     .and_then(Reporter::as_git_reporter)
                     .zip(reporter_id)
                 {
-                    reporter.on_start(reporter_id)
+                    reporter.on_started(reporter_id)
                 }
 
                 let resolver = self.inner.git_resolver.clone();
@@ -108,7 +108,7 @@ impl CommandDispatcherProcessor {
                     .and_then(Reporter::as_git_reporter)
                     .zip(reporter_id)
                 {
-                    reporter.on_start(reporter_id)
+                    reporter.on_started(reporter_id)
                 }
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }

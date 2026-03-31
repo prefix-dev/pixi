@@ -45,7 +45,7 @@ impl CommandDispatcherProcessor {
             .and_then(Reporter::as_pixi_solve_reporter)
             .zip(reporter_id)
         {
-            reporter.on_start(id)
+            reporter.on_started(id)
         }
 
         let dispatcher_context = CommandDispatcherContext::SolvePixiEnvironment(pending_env_id);

@@ -46,7 +46,7 @@ impl CommandDispatcherProcessor {
             .and_then(Reporter::as_pixi_install_reporter)
             .zip(reporter_id)
         {
-            reporter.on_start(id)
+            reporter.on_started(id)
         }
 
         // Create a reporter for the installation task.
