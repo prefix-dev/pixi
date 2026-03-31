@@ -221,7 +221,7 @@ jobs:
           Get-ChildItem target/distrib -Filter "*.msi" | Copy-Item -Destination $signDir
       - name: Sign Windows binaries
         if: runner.os == 'Windows'
-        uses: azure/trusted-signing-action@87c2e83e6868da99d3380aa309851b32ed9a8346 # v1.1.0
+        uses: azure/trusted-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1.2.0
         with:
           endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
           signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
