@@ -2042,8 +2042,7 @@ async fn lock_pypi_packages(
                     static_metadata_cache: ctx.static_metadata_cache,
                 };
 
-                match read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx).await
-                {
+                match read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx).await {
                     Ok(m) => Some(m),
                     Err(e) => {
                         return Err(CommandDispatcherError::Failed(Box::new(
@@ -2892,11 +2891,7 @@ async fn read_local_package_metadata(
     // We use best_platform() since the build prefix is shared across all target platforms
     let best_platform = ctx.environment.best_platform();
     let cache_key = BuildCacheKey::new(ctx.environment.name().clone(), best_platform);
-    let cache = ctx
-        .build_caches
-        .entry(cache_key)
-        .or_default()
-        .clone();
+    let cache = ctx.build_caches.entry(cache_key).or_default().clone();
 
     let index_locations = pypi_options_to_index_locations(&pypi_options, ctx.project_root)
         .map_err(|e| {
@@ -3517,8 +3512,7 @@ mod tests {
         let uv_context: OnceCell<UvResolutionContext> = OnceCell::new();
 
         // Create build caches for sharing between satisfiability and resolution
-        let build_caches: DashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>> =
-            DashMap::new();
+        let build_caches: DashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>> = DashMap::new();
 
         // Create static metadata cache for sharing across platforms
         let static_metadata_cache: DashMap<PathBuf, pypi_metadata::LocalPackageMetadata> =
@@ -3544,17 +3538,16 @@ mod tests {
                     build_caches: &build_caches,
                     static_metadata_cache: &static_metadata_cache,
                 };
-                let (verified_env, _locked_pypi) =
-                    verify_platform_satisfiability(&ctx, locked_env)
-                        .await
-                        .map_err(|e| match e {
-                            CommandDispatcherError::Failed(e) => {
-                                LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
-                            }
-                            CommandDispatcherError::Cancelled => {
-                                panic!("operation was cancelled which should never happen here")
-                            }
-                        })?;
+                let (verified_env, _locked_pypi) = verify_platform_satisfiability(&ctx, locked_env)
+                    .await
+                    .map_err(|e| match e {
+                        CommandDispatcherError::Failed(e) => {
+                            LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
+                        }
+                        CommandDispatcherError::Cancelled => {
+                            panic!("operation was cancelled which should never happen here")
+                        }
+                    })?;
 
                 individual_verified_envs.insert((env.name(), platform), verified_env);
             }

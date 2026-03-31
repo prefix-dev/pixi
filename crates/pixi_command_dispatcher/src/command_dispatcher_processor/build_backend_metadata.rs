@@ -20,11 +20,9 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        let action = self.build_backend_metadata.on_task(
-            task.spec.clone(),
-            task.tx,
-            BuildBackendMetadataId,
-        );
+        let action =
+            self.build_backend_metadata
+                .on_task(task.spec.clone(), task.tx, BuildBackendMetadataId);
 
         let id = match &action {
             DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,
@@ -40,8 +38,7 @@ impl CommandDispatcherProcessor {
         } = action
         {
             if let Some(parent) = task.parent {
-                self.parent_contexts
-                    .insert(dispatcher_context, parent);
+                self.parent_contexts.insert(dispatcher_context, parent);
             }
 
             // Notify the reporter that a new task has been queued.
@@ -53,7 +50,10 @@ impl CommandDispatcherProcessor {
                 .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
 
             if let Some(reporter_id) = reporter_id {
-                self.build_backend_metadata_reporters.entry(id).or_default().push(reporter_id);
+                self.build_backend_metadata_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             // Open a channel to receive build output.
@@ -76,10 +76,11 @@ impl CommandDispatcherProcessor {
                     .map(move |result| {
                         TaskResult::BuildBackendMetadata(
                             id,
-                            Box::new(result.map_or(
-                                Err(CommandDispatcherError::Cancelled),
-                                |result| result.map(Arc::new),
-                            )),
+                            Box::new(
+                                result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
+                                    result.map(Arc::new)
+                                }),
+                            ),
                         )
                     })
                     .boxed_local(),
@@ -94,7 +95,10 @@ impl CommandDispatcherProcessor {
                 .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
 
             if let Some(reporter_id) = reporter_id {
-                self.build_backend_metadata_reporters.entry(id).or_default().push(reporter_id);
+                self.build_backend_metadata_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             // Subscribers don't get the output stream.
@@ -127,7 +131,10 @@ impl CommandDispatcherProcessor {
         let failed = result.is_err();
         self.build_backend_metadata.on_result(id, result);
         if let Some(reporter_ids) = self.build_backend_metadata_reporters.remove(&id)
-            && let Some(reporter) = self.reporter.as_deref_mut().and_then(Reporter::as_build_backend_metadata_reporter)
+            && let Some(reporter) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_build_backend_metadata_reporter)
         {
             for reporter_id in reporter_ids {
                 reporter.on_finished(reporter_id, failed);

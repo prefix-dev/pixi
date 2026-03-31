@@ -18,11 +18,9 @@ impl CommandDispatcherProcessor {
 
         let repository_reference = RepositoryReference::from(&task.spec);
 
-        let action = self.git_checkouts.on_task(
-            repository_reference.clone(),
-            task.tx,
-            GitCheckoutId,
-        );
+        let action =
+            self.git_checkouts
+                .on_task(repository_reference.clone(), task.tx, GitCheckoutId);
 
         let id = match &action {
             DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,
@@ -38,8 +36,7 @@ impl CommandDispatcherProcessor {
         } = action
         {
             if let Some(parent) = task.parent {
-                self.parent_contexts
-                    .insert(dispatcher_context, parent);
+                self.parent_contexts.insert(dispatcher_context, parent);
             }
 
             // Notify the reporter.
@@ -48,10 +45,15 @@ impl CommandDispatcherProcessor {
                 .reporter
                 .as_deref_mut()
                 .and_then(Reporter::as_git_reporter)
-                .map(|reporter| reporter.on_queued(parent_context, &repository_reference, dedup_group_id));
+                .map(|reporter| {
+                    reporter.on_queued(parent_context, &repository_reference, dedup_group_id)
+                });
 
             if let Some(reporter_id) = reporter_id {
-                self.git_checkout_reporters.entry(id).or_default().push(reporter_id);
+                self.git_checkout_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             if let Some((reporter, reporter_id)) = self
@@ -77,9 +79,7 @@ impl CommandDispatcherProcessor {
                     .map(move |result| {
                         TaskResult::GitCheckedOut(
                             id,
-                            Box::new(
-                                result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
-                            ),
+                            Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
                         )
                     })
                     .boxed_local(),
@@ -91,10 +91,15 @@ impl CommandDispatcherProcessor {
                 .reporter
                 .as_deref_mut()
                 .and_then(Reporter::as_git_reporter)
-                .map(|reporter| reporter.on_queued(parent_context, &repository_reference, dedup_group_id));
+                .map(|reporter| {
+                    reporter.on_queued(parent_context, &repository_reference, dedup_group_id)
+                });
 
             if let Some(reporter_id) = reporter_id {
-                self.git_checkout_reporters.entry(id).or_default().push(reporter_id);
+                self.git_checkout_reporters
+                    .entry(id)
+                    .or_default()
+                    .push(reporter_id);
             }
 
             if let Some((reporter, reporter_id)) = self
@@ -121,7 +126,10 @@ impl CommandDispatcherProcessor {
 
         self.git_checkouts.on_result(id, result);
         if let Some(reporter_ids) = self.git_checkout_reporters.remove(&id)
-            && let Some(reporter) = self.reporter.as_deref_mut().and_then(Reporter::as_git_reporter)
+            && let Some(reporter) = self
+                .reporter
+                .as_deref_mut()
+                .and_then(Reporter::as_git_reporter)
         {
             for reporter_id in reporter_ids {
                 reporter.on_finished(reporter_id);

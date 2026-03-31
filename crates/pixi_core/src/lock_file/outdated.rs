@@ -4,15 +4,12 @@ use std::{
     sync::Arc,
 };
 
-use dashmap::DashMap;
-use futures::StreamExt;
 use super::{
     CondaPrefixUpdater,
     resolve::build_dispatch::LazyBuildDispatchDependencies,
     satisfiability::{VerifySatisfiabilityContext, pypi_metadata},
     verify_environment_satisfiability, verify_platform_satisfiability,
 };
-use pixi_command_dispatcher::executor::CancellationAwareFutures;
 use crate::{
     Workspace,
     lock_file::{
@@ -21,9 +18,12 @@ use crate::{
     },
     workspace::{Environment, SolveGroup},
 };
+use dashmap::DashMap;
 use fancy_display::FancyDisplay;
+use futures::StreamExt;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
+use pixi_command_dispatcher::executor::CancellationAwareFutures;
 use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt};
@@ -338,9 +338,7 @@ async fn find_unsatisfiable_targets<'p>(
             platform_futures.push(async move {
                 let result = verify_platform_satisfiability(&ctx, locked_environment).await;
                 match result {
-                    Ok((verified_env, locked_pypi)) => {
-                        Ok((platform, verified_env, locked_pypi))
-                    }
+                    Ok((verified_env, locked_pypi)) => Ok((platform, verified_env, locked_pypi)),
                     Err(CommandDispatcherError::Cancelled) => {
                         Err(CommandDispatcherError::Cancelled)
                     }
