@@ -15,13 +15,8 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        // Notify the reporter that a new solve has been queued.
-        let parent_context = task
-            .parent
-            .and_then(|context| self.reporter_context(context));
-        let reporter_id = task
-            .spec
-            .report_queued(&mut self.reporter, parent_context, None);
+        let (reporter_id, cancellation_token) =
+            self.start_slotmap_task(&task.spec, task.parent, task.cancellation_token);
 
         // Store information about the pending environment.
         let pending_env_id = self.solve_pixi_environments.insert(PendingPixiEnvironment {
@@ -46,12 +41,6 @@ impl CommandDispatcherProcessor {
             .as_deref_mut()
             .and_then(|reporter| reporter.create_gateway_reporter(reporter_context));
 
-        // Create a child cancellation token linked to parent's token (if any).
-        // This ensures that when the parent task is cancelled, this task is also cancelled.
-        let cancellation_token =
-            self.get_child_cancellation_token(task.parent, task.cancellation_token);
-
-        // Store the cancellation token for this context so child tasks can link to it.
         self.store_cancellation_token(dispatcher_context, cancellation_token.clone());
 
         // Add the task to the list of pending futures.

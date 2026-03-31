@@ -162,6 +162,8 @@ pub(crate) struct CommandDispatcherProcessor {
         Arc<SourceBuildCacheEntry>,
         SourceBuildCacheStatusError,
     >,
+    /// Unused — kept for uniform `DedupTaskFields` access.
+    source_build_cache_status_reporters: HashMap<SourceBuildCacheStatusId, Vec<()>>,
 
     /// Dev source metadata requests that are currently being processed.
     dev_source_metadata: dedup::DedupTaskRegistry<
@@ -170,6 +172,8 @@ pub(crate) struct CommandDispatcherProcessor {
         DevSourceMetadata,
         DevSourceMetadataError,
     >,
+    /// Unused — kept for uniform `DedupTaskFields` access.
+    dev_source_metadata_reporters: HashMap<DevSourceMetadataId, Vec<()>>,
 
     /// Backend source builds that are currently being processed.
     backend_source_builds: slotmap::SlotMap<BackendSourceBuildId, PendingBackendSourceBuild>,
@@ -246,6 +250,12 @@ enum TaskResult {
     ),
 }
 
+/// The sender + reporter ID extracted from a pending slotmap entry.
+type PendingParts<S> = (
+    oneshot::Sender<Result<<S as TaskSpec>::Output, <S as TaskSpec>::Error>>,
+    Option<<S as reporter::Reportable>::ReporterId>,
+);
+
 /// Maps a slot-map based task spec to its pending entry on
 /// [`CommandDispatcherProcessor`].
 ///
@@ -256,13 +266,7 @@ trait HasSlotmapTaskFields: TaskSpec + reporter::Reportable {
 
     /// Removes the pending entry from the processor's slotmap and returns
     /// the sender and reporter ID.
-    fn remove_pending(
-        proc: &mut CommandDispatcherProcessor,
-        id: Self::Id,
-    ) -> (
-        oneshot::Sender<Result<Self::Output, Self::Error>>,
-        Option<Self::ReporterId>,
-    );
+    fn remove_pending(proc: &mut CommandDispatcherProcessor, id: Self::Id) -> PendingParts<Self>;
 
     /// Constructs the context variant for this task's ID.
     fn context(id: Self::Id) -> CommandDispatcherContext;
@@ -270,13 +274,7 @@ trait HasSlotmapTaskFields: TaskSpec + reporter::Reportable {
 
 impl HasSlotmapTaskFields for SolveCondaEnvironmentSpec {
     type Id = SolveCondaEnvironmentId;
-    fn remove_pending(
-        proc: &mut CommandDispatcherProcessor,
-        id: Self::Id,
-    ) -> (
-        oneshot::Sender<Result<Self::Output, Self::Error>>,
-        Option<Self::ReporterId>,
-    ) {
+    fn remove_pending(proc: &mut CommandDispatcherProcessor, id: Self::Id) -> PendingParts<Self> {
         let entry = proc
             .conda_solves
             .remove(id)
@@ -290,13 +288,7 @@ impl HasSlotmapTaskFields for SolveCondaEnvironmentSpec {
 
 impl HasSlotmapTaskFields for crate::PixiEnvironmentSpec {
     type Id = SolvePixiEnvironmentId;
-    fn remove_pending(
-        proc: &mut CommandDispatcherProcessor,
-        id: Self::Id,
-    ) -> (
-        oneshot::Sender<Result<Self::Output, Self::Error>>,
-        Option<Self::ReporterId>,
-    ) {
+    fn remove_pending(proc: &mut CommandDispatcherProcessor, id: Self::Id) -> PendingParts<Self> {
         let entry = proc
             .solve_pixi_environments
             .remove(id)
@@ -310,13 +302,7 @@ impl HasSlotmapTaskFields for crate::PixiEnvironmentSpec {
 
 impl HasSlotmapTaskFields for crate::install_pixi::InstallPixiEnvironmentSpec {
     type Id = InstallPixiEnvironmentId;
-    fn remove_pending(
-        proc: &mut CommandDispatcherProcessor,
-        id: Self::Id,
-    ) -> (
-        oneshot::Sender<Result<Self::Output, Self::Error>>,
-        Option<Self::ReporterId>,
-    ) {
+    fn remove_pending(proc: &mut CommandDispatcherProcessor, id: Self::Id) -> PendingParts<Self> {
         let entry = proc
             .install_pixi_environment
             .remove(id)
@@ -330,13 +316,7 @@ impl HasSlotmapTaskFields for crate::install_pixi::InstallPixiEnvironmentSpec {
 
 impl HasSlotmapTaskFields for Box<BackendSourceBuildSpec> {
     type Id = BackendSourceBuildId;
-    fn remove_pending(
-        proc: &mut CommandDispatcherProcessor,
-        id: Self::Id,
-    ) -> (
-        oneshot::Sender<Result<Self::Output, Self::Error>>,
-        Option<Self::ReporterId>,
-    ) {
+    fn remove_pending(proc: &mut CommandDispatcherProcessor, id: Self::Id) -> PendingParts<Self> {
         let entry = proc
             .backend_source_builds
             .remove(id)
@@ -359,20 +339,6 @@ struct PendingBackendSourceBuild {
     reporter_id: Option<reporter::BackendSourceBuildId>,
 }
 
-impl PendingTask<Box<BackendSourceBuildSpec>> for PendingBackendSourceBuild {
-    fn into_parts(
-        self,
-    ) -> (
-        oneshot::Sender<Result<BackendBuiltSource, BackendSourceBuildError>>,
-        Option<reporter::BackendSourceBuildId>,
-    ) {
-        (self.tx, self.reporter_id)
-    }
-}
-
-/// Information about a pending pixi environment solve. This is used by the
-/// background task to keep track of which command_dispatcher is awaiting the
-/// result.
 struct PendingPixiEnvironment {
     tx: oneshot::Sender<Result<Vec<PixiRecord>, SolvePixiEnvironmentError>>,
     reporter_id: Option<reporter::PixiSolveId>,
@@ -428,7 +394,9 @@ impl CommandDispatcherProcessor {
                 source_build: Default::default(),
                 source_build_reporters: HashMap::default(),
                 source_build_cache_status: Default::default(),
+                source_build_cache_status_reporters: HashMap::default(),
                 dev_source_metadata: Default::default(),
+                dev_source_metadata_reporters: HashMap::default(),
                 backend_source_builds: Default::default(),
                 pending_backend_source_builds: Default::default(),
                 pending_futures: ExecutorFutures::new(inner.executor),
@@ -1042,6 +1010,25 @@ impl CommandDispatcherProcessor {
             }
             .boxed_local(),
         );
+    }
+
+    /// Common setup for slot-map based (non-deduplicated) task handlers.
+    ///
+    /// Performs the reporter queued notification and cancellation token
+    /// creation. The caller must check `is_parent_cancelled` before calling.
+    /// Returns the reporter ID and a child cancellation token so the caller
+    /// can insert the pending entry and spawn the task-specific work.
+    fn start_slotmap_task<S: reporter::Reportable>(
+        &mut self,
+        spec: &S,
+        task_parent: Option<CommandDispatcherContext>,
+        task_cancellation_token: CancellationToken,
+    ) -> (Option<S::ReporterId>, CancellationToken) {
+        let parent_context = task_parent.and_then(|ctx| self.reporter_context(ctx));
+        let reporter_id = spec.report_queued(&mut self.reporter, parent_context, None);
+        let cancellation_token =
+            self.get_child_cancellation_token(task_parent, task_cancellation_token);
+        (reporter_id, cancellation_token)
     }
 
     /// Creates a child cancellation token linked to the parent's token.
