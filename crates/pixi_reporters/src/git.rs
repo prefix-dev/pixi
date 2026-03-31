@@ -84,7 +84,7 @@ impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
         checkout_id
     }
 
-    fn on_start(&mut self, checkout_id: GitCheckoutId) {
+    fn on_started(&mut self, checkout_id: GitCheckoutId) {
         let pb = self.multi_progress.insert_after(
             self.last_progress_bar().unwrap_or(&self.anchor),
             ProgressBar::hidden(),

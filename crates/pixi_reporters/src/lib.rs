@@ -148,7 +148,7 @@ impl pixi_command_dispatcher::PixiInstallReporter for TopLevelProgress {
         PixiInstallId(0)
     }
 
-    fn on_start(&mut self, _install_id: PixiInstallId) {}
+    fn on_started(&mut self, _install_id: PixiInstallId) {}
 
     fn on_finished(&mut self, _install_id: PixiInstallId) {}
 }
@@ -180,7 +180,7 @@ impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {
         PixiSolveId(id)
     }
 
-    fn on_start(&mut self, _solve_id: PixiSolveId) {}
+    fn on_started(&mut self, _solve_id: PixiSolveId) {}
 
     fn on_finished(&mut self, _solve_id: PixiSolveId) {}
 }
@@ -202,7 +202,7 @@ impl pixi_command_dispatcher::CondaSolveReporter for TopLevelProgress {
         }
     }
 
-    fn on_start(&mut self, solve_id: CondaSolveId) {
+    fn on_started(&mut self, solve_id: CondaSolveId) {
         self.conda_solve_reporter.start(solve_id.0);
     }
 

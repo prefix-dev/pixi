@@ -270,7 +270,7 @@ impl CondaSolveReporter for EventReporter {
         next_id
     }
 
-    fn on_start(&mut self, solve_id: CondaSolveId) {
+    fn on_started(&mut self, solve_id: CondaSolveId) {
         let event = Event::CondaSolveStarted { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -302,7 +302,7 @@ impl PixiSolveReporter for EventReporter {
         next_id
     }
 
-    fn on_start(&mut self, solve_id: PixiSolveId) {
+    fn on_started(&mut self, solve_id: PixiSolveId) {
         let event = Event::PixiSolveStarted { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -334,7 +334,7 @@ impl PixiInstallReporter for EventReporter {
         next_id
     }
 
-    fn on_start(&mut self, solve_id: PixiInstallId) {
+    fn on_started(&mut self, solve_id: PixiInstallId) {
         let event = Event::PixiInstallStarted { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -367,7 +367,7 @@ impl GitCheckoutReporter for EventReporter {
         next_id
     }
 
-    fn on_start(&mut self, checkout_id: GitCheckoutId) {
+    fn on_started(&mut self, checkout_id: GitCheckoutId) {
         let event = Event::GitCheckoutStarted { id: checkout_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);

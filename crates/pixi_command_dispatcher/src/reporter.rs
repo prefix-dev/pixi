@@ -38,8 +38,8 @@ pub trait PixiInstallReporter {
         env: &InstallPixiEnvironmentSpec,
     ) -> PixiInstallId;
 
-    /// Called when solving of the specified environment has started.
-    fn on_start(&mut self, solve_id: PixiInstallId);
+    /// Called when installation of the specified environment has started.
+    fn on_started(&mut self, solve_id: PixiInstallId);
 
     /// Called when solving of the specified environment has finished.
     fn on_finished(&mut self, solve_id: PixiInstallId);
@@ -67,7 +67,7 @@ pub trait PixiSolveReporter {
     ) -> PixiSolveId;
 
     /// Called when solving of the specified environment has started.
-    fn on_start(&mut self, solve_id: PixiSolveId);
+    fn on_started(&mut self, solve_id: PixiSolveId);
 
     /// Called when solving of the specified environment has finished.
     fn on_finished(&mut self, solve_id: PixiSolveId);
@@ -95,7 +95,7 @@ pub trait CondaSolveReporter {
     ) -> CondaSolveId;
 
     /// Called when solving of the specified environment has started.
-    fn on_start(&mut self, solve_id: CondaSolveId);
+    fn on_started(&mut self, solve_id: CondaSolveId);
 
     /// Called when solving of the specified environment has finished.
     fn on_finished(&mut self, solve_id: CondaSolveId);
@@ -116,7 +116,7 @@ pub trait GitCheckoutReporter {
     ) -> GitCheckoutId;
 
     /// Called when the git checkout has started.
-    fn on_start(&mut self, checkout_id: GitCheckoutId);
+    fn on_started(&mut self, checkout_id: GitCheckoutId);
 
     /// Called when the git checkout has finished.
     fn on_finished(&mut self, checkout_id: GitCheckoutId);
@@ -137,7 +137,7 @@ pub trait UrlCheckoutReporter {
     ) -> UrlCheckoutId;
 
     /// Called when the url checkout has started.
-    fn on_start(&mut self, checkout_id: UrlCheckoutId);
+    fn on_started(&mut self, checkout_id: UrlCheckoutId);
 
     /// Called when the url checkout has finished.
     fn on_finished(&mut self, checkout_id: UrlCheckoutId);

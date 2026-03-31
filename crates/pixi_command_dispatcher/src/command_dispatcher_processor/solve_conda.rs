@@ -74,7 +74,7 @@ impl CommandDispatcherProcessor {
                 .and_then(Reporter::as_conda_solve_reporter)
                 .zip(reporter_id)
             {
-                reporter.on_start(id)
+                reporter.on_started(id)
             }
 
             // Store the cancellation token for this context so child tasks can link to it.
