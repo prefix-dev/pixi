@@ -25,41 +25,41 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        let action =
-            self.dev_source_metadata
-                .on_task(task.spec.clone(), task.tx, DevSourceMetadataId);
-
-        let id = match &action {
-            DedupAction::New { id, .. } | DedupAction::Subscribed { id, .. } => *id,
-            DedupAction::AlreadyCompleted => return,
-        };
-
-        let dispatcher_context = CommandDispatcherContext::DevSourceMetadata(id);
-
-        if let DedupAction::New {
-            cancellation_token, ..
-        } = action
+        match self
+            .dev_source_metadata
+            .on_task(task.spec.clone(), task.tx, DevSourceMetadataId)
         {
-            if let Some(parent) = task.parent {
-                self.parent_contexts.insert(dispatcher_context, parent);
+            DedupAction::AlreadyCompleted => {}
+            DedupAction::New {
+                cancellation_token,
+                id,
+                ..
+            } => {
+                let dispatcher_context = CommandDispatcherContext::DevSourceMetadata(id);
+                if let Some(parent) = task.parent {
+                    self.parent_contexts.insert(dispatcher_context, parent);
+                }
+
+                let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+
+                self.pending_futures.push(
+                    cancellation_token
+                        .run_until_cancelled_owned(task.spec.request(dispatcher))
+                        .map(move |result| {
+                            TaskResult::DevSourceMetadata(
+                                id,
+                                Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
+                            )
+                        })
+                        .boxed_local(),
+                );
+                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
-
-            let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
-
-            self.pending_futures.push(
-                cancellation_token
-                    .run_until_cancelled_owned(task.spec.request(dispatcher))
-                    .map(move |result| {
-                        TaskResult::DevSourceMetadata(
-                            id,
-                            Box::new(result.unwrap_or(Err(CommandDispatcherError::Cancelled))),
-                        )
-                    })
-                    .boxed_local(),
-            );
-        }
-
-        self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
+            DedupAction::Subscribed { id, .. } => {
+                let dispatcher_context = CommandDispatcherContext::DevSourceMetadata(id);
+                self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
+            }
+        };
     }
 
     /// Called when a [`TaskResult::DevSourceMetadata`] task was received.
