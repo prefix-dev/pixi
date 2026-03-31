@@ -6,10 +6,12 @@ use super::CommandDispatcherProcessor;
 use super::TaskResult;
 use super::dedup::DedupAction;
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, CommandDispatcherError, Reporter,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
+    CommandDispatcherError, Reporter,
     command_dispatcher::{
         BuildBackendMetadataId, BuildBackendMetadataTask, CommandDispatcherContext,
     },
+    reporter::Reportable,
 };
 
 impl CommandDispatcherProcessor {
@@ -37,14 +39,12 @@ impl CommandDispatcherProcessor {
                     self.parent_contexts.insert(dispatcher_context, parent);
                 }
 
-                // Notify the reporter that a new task has been queued.
                 let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_build_backend_metadata_reporter)
-                    .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
-
+                let reporter_id = task.spec.report_queued(
+                    &mut self.reporter,
+                    parent_context,
+                    Some(dedup_group_id),
+                );
                 if let Some(reporter_id) = reporter_id {
                     self.build_backend_metadata_reporters
                         .entry(id)
@@ -88,29 +88,21 @@ impl CommandDispatcherProcessor {
                 dedup_group_id, id, ..
             } => {
                 let dispatcher_context = CommandDispatcherContext::BuildBackendMetadata(id);
-                // Notify the reporter for the subscriber as well.
                 let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_build_backend_metadata_reporter)
-                    .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
-
+                let reporter_id = task.spec.report_queued(
+                    &mut self.reporter,
+                    parent_context,
+                    Some(dedup_group_id),
+                );
                 if let Some(reporter_id) = reporter_id {
                     self.build_backend_metadata_reporters
                         .entry(id)
                         .or_default()
                         .push(reporter_id);
                 }
-
                 // Subscribers don't get the output stream.
-                if let Some((reporter, reporter_id)) = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_build_backend_metadata_reporter)
-                    .zip(reporter_id)
-                {
-                    reporter.on_started(reporter_id, Box::new(futures::stream::empty()))
+                if let Some(reporter_id) = reporter_id {
+                    BuildBackendMetadataSpec::report_started(&mut self.reporter, reporter_id);
                 }
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
@@ -132,14 +124,9 @@ impl CommandDispatcherProcessor {
 
         let failed = result.is_err();
         self.build_backend_metadata.on_result(id, result);
-        if let Some(reporter_ids) = self.build_backend_metadata_reporters.remove(&id)
-            && let Some(reporter) = self
-                .reporter
-                .as_deref_mut()
-                .and_then(Reporter::as_build_backend_metadata_reporter)
-        {
+        if let Some(reporter_ids) = self.build_backend_metadata_reporters.remove(&id) {
             for reporter_id in reporter_ids {
-                reporter.on_finished(reporter_id, failed);
+                BuildBackendMetadataSpec::report_finished(&mut self.reporter, reporter_id, failed);
             }
         }
     }

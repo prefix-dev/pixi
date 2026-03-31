@@ -7,8 +7,9 @@ use super::CommandDispatcherProcessor;
 use super::TaskResult;
 use super::dedup::DedupAction;
 use crate::{
-    CommandDispatcherError, Reporter, SourceBuildError, SourceBuildResult,
+    CommandDispatcherError, SourceBuildError, SourceBuildResult, SourceBuildSpec,
     command_dispatcher::{CommandDispatcherContext, SourceBuildId, SourceBuildTask},
+    reporter::Reportable,
 };
 
 impl CommandDispatcherProcessor {
@@ -37,11 +38,11 @@ impl CommandDispatcherProcessor {
 
                 // Notify the reporter that a new task has been queued.
                 let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_source_build_reporter)
-                    .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
+                let reporter_id = task.spec.report_queued(
+                    &mut self.reporter,
+                    parent_context,
+                    Some(dedup_group_id),
+                );
 
                 if let Some(reporter_id) = reporter_id {
                     self.source_build_reporters
@@ -92,11 +93,11 @@ impl CommandDispatcherProcessor {
                 let dispatcher_context = CommandDispatcherContext::SourceBuild(id);
                 // Notify the reporter for the subscriber as well.
                 let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_source_build_reporter)
-                    .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
+                let reporter_id = task.spec.report_queued(
+                    &mut self.reporter,
+                    parent_context,
+                    Some(dedup_group_id),
+                );
 
                 if let Some(reporter_id) = reporter_id {
                     self.source_build_reporters
@@ -106,13 +107,8 @@ impl CommandDispatcherProcessor {
                 }
 
                 // Subscribers don't get the output stream.
-                if let Some((reporter, reporter_id)) = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_source_build_reporter)
-                    .zip(reporter_id)
-                {
-                    reporter.on_started(reporter_id, Box::new(futures::stream::empty()));
+                if let Some(reporter_id) = reporter_id {
+                    SourceBuildSpec::report_started(&mut self.reporter, reporter_id);
                 }
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
@@ -130,14 +126,9 @@ impl CommandDispatcherProcessor {
 
         let failed = result.is_err();
         self.source_build.on_result(id, result);
-        if let Some(reporter_ids) = self.source_build_reporters.remove(&id)
-            && let Some(reporter) = self
-                .reporter
-                .as_deref_mut()
-                .and_then(Reporter::as_source_build_reporter)
-        {
+        if let Some(reporter_ids) = self.source_build_reporters.remove(&id) {
             for reporter_id in reporter_ids {
-                reporter.on_finished(reporter_id, failed);
+                SourceBuildSpec::report_finished(&mut self.reporter, reporter_id, failed);
             }
         }
     }

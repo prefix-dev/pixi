@@ -6,8 +6,9 @@ use super::CommandDispatcherProcessor;
 use super::TaskResult;
 use super::dedup::DedupAction;
 use crate::{
-    CommandDispatcherError, Reporter, ResolvedSourceRecord, SourceRecordError,
+    CommandDispatcherError, ResolvedSourceRecord, SourceRecordError, SourceRecordSpec,
     command_dispatcher::{CommandDispatcherContext, SourceRecordId, SourceRecordTask},
+    reporter::Reportable,
     source_metadata::Cycle,
     source_record::SourceRecordDeduplicationKey,
 };
@@ -51,11 +52,11 @@ impl CommandDispatcherProcessor {
 
                 // Notify the reporter.
                 let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_source_record_reporter)
-                    .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
+                let reporter_id = task.spec.report_queued(
+                    &mut self.reporter,
+                    parent_context,
+                    Some(dedup_group_id),
+                );
 
                 if let Some(reporter_id) = reporter_id {
                     self.source_record_reporters
@@ -64,13 +65,8 @@ impl CommandDispatcherProcessor {
                         .push(reporter_id);
                 }
 
-                if let Some((reporter, reporter_id)) = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_source_record_reporter)
-                    .zip(reporter_id)
-                {
-                    reporter.on_started(reporter_id)
+                if let Some(reporter_id) = reporter_id {
+                    SourceRecordSpec::report_started(&mut self.reporter, reporter_id);
                 }
 
                 let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
@@ -106,11 +102,11 @@ impl CommandDispatcherProcessor {
                 let dispatcher_context = CommandDispatcherContext::SourceRecord(id);
                 // Notify the reporter for the subscriber as well.
                 let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-                let reporter_id = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_source_record_reporter)
-                    .map(|reporter| reporter.on_queued(parent_context, &task.spec, dedup_group_id));
+                let reporter_id = task.spec.report_queued(
+                    &mut self.reporter,
+                    parent_context,
+                    Some(dedup_group_id),
+                );
 
                 if let Some(reporter_id) = reporter_id {
                     self.source_record_reporters
@@ -119,13 +115,8 @@ impl CommandDispatcherProcessor {
                         .push(reporter_id);
                 }
 
-                if let Some((reporter, reporter_id)) = self
-                    .reporter
-                    .as_deref_mut()
-                    .and_then(Reporter::as_source_record_reporter)
-                    .zip(reporter_id)
-                {
-                    reporter.on_started(reporter_id)
+                if let Some(reporter_id) = reporter_id {
+                    SourceRecordSpec::report_started(&mut self.reporter, reporter_id);
                 }
                 self.push_subscriber_monitor(dispatcher_context, task.cancellation_token);
             }
@@ -141,15 +132,11 @@ impl CommandDispatcherProcessor {
         self.parent_contexts
             .remove(&CommandDispatcherContext::SourceRecord(id));
 
+        let failed = result.is_err();
         self.source_record.on_result(id, result);
-        if let Some(reporter_ids) = self.source_record_reporters.remove(&id)
-            && let Some(reporter) = self
-                .reporter
-                .as_deref_mut()
-                .and_then(Reporter::as_source_record_reporter)
-        {
+        if let Some(reporter_ids) = self.source_record_reporters.remove(&id) {
             for reporter_id in reporter_ids {
-                reporter.on_finished(reporter_id);
+                SourceRecordSpec::report_finished(&mut self.reporter, reporter_id, failed);
             }
         }
     }

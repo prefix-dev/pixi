@@ -3,10 +3,12 @@ use pixi_record::PixiRecord;
 
 use super::{CommandDispatcherProcessor, PendingPixiEnvironment, TaskResult};
 use crate::{
-    CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter, SolvePixiEnvironmentError,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
+    SolvePixiEnvironmentError,
     command_dispatcher::{
         CommandDispatcherContext, SolvePixiEnvironmentId, SolvePixiEnvironmentTask,
     },
+    reporter::Reportable,
 };
 
 impl CommandDispatcherProcessor {
@@ -21,11 +23,9 @@ impl CommandDispatcherProcessor {
         let parent_context = task
             .parent
             .and_then(|context| self.reporter_context(context));
-        let reporter_id = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_pixi_solve_reporter)
-            .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+        let reporter_id = task
+            .spec
+            .report_queued(&mut self.reporter, parent_context, None);
 
         // Store information about the pending environment.
         let pending_env_id = self.solve_pixi_environments.insert(PendingPixiEnvironment {
@@ -39,13 +39,8 @@ impl CommandDispatcherProcessor {
         }
 
         // Notify the reporter that the solve has started.
-        if let Some((reporter, id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_pixi_solve_reporter)
-            .zip(reporter_id)
-        {
-            reporter.on_started(id)
+        if let Some(id) = reporter_id {
+            PixiEnvironmentSpec::report_started(&mut self.reporter, id);
         }
 
         let dispatcher_context = CommandDispatcherContext::SolvePixiEnvironment(pending_env_id);
@@ -97,13 +92,8 @@ impl CommandDispatcherProcessor {
             .expect("got a result for a conda environment that was not pending");
 
         // Notify the reporter that the solve finished.
-        if let Some((reporter, id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_pixi_solve_reporter)
-            .zip(env.reporter_id)
-        {
-            reporter.on_finished(id)
+        if let Some(id) = env.reporter_id {
+            PixiEnvironmentSpec::report_finished(&mut self.reporter, id, result.is_err());
         }
 
         let Some(result) = result.into_ok_or_failed() else {
