@@ -24,11 +24,11 @@ impl CommandDispatcherProcessor {
 
         // Cycle detection: if we already have a pending task for this key,
         // check whether following the parent chain would create a cycle.
-        if let Some(id) = self.source_build_cache_status.get_id(&cache_key) {
-            if self.contains_cycle(id, task.parent) {
-                let _ = task.tx.send(Err(SourceBuildCacheStatusError::Cycle));
-                return;
-            }
+        if let Some(id) = self.source_build_cache_status.get_id(&cache_key)
+            && self.contains_cycle(id, task.parent)
+        {
+            let _ = task.tx.send(Err(SourceBuildCacheStatusError::Cycle));
+            return;
         }
 
         let action =
