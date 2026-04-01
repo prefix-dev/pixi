@@ -110,6 +110,10 @@ class ChannelInlineTable(StrictBaseModel):
 
     channel: ChannelName = Field(description="The channel the packages needs to be fetched from")
     priority: int | None = Field(None, description="The priority of the channel")
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        description="Override the workspace-level `exclude-newer` cutoff for this channel only",
+    )
 
 
 Channel = ChannelName | ChannelInlineTable

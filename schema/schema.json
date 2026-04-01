@@ -601,6 +601,12 @@
             }
           ]
         },
+        "exclude-newer": {
+          "title": "Exclude-Newer",
+          "description": "Override the workspace-level `exclude-newer` cutoff for this channel only",
+          "type": "string",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+        },
         "priority": {
           "title": "Priority",
           "description": "The priority of the channel",
@@ -2533,7 +2539,7 @@
           "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|(\\d+\\s*[A-Za-z]+\\s*)+)$",
           "examples": [
             "2023-11-03T03:33:12Z",
-            "2023-11-03T03:33:12+00:00",
+            "2026-04-01",
             "7days",
             "1h30m"
           ]
