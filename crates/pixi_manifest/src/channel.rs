@@ -59,16 +59,10 @@ impl From<(NamedChannelOrUrl, Option<i32>)> for PrioritizedChannel {
 
 impl From<PrioritizedChannel> for Value {
     fn from(channel: PrioritizedChannel) -> Self {
-        let (channel_key, channel_value) = match &channel.channel {
-            NamedChannelOrUrl::Name(name) => ("channel", name.to_string()),
-            NamedChannelOrUrl::Url(url) => ("url", url.to_string()),
-            NamedChannelOrUrl::Path(path) => ("path", path.to_string()),
-        };
-
         match channel.priority {
             Some(priority) => {
                 let mut table = Table::new().into_inline_table();
-                table.insert(channel_key, channel_value.into());
+                table.insert("channel", channel.channel.to_string().into());
                 table.insert("priority", i64::from(priority).into());
                 Value::InlineTable(table)
             }

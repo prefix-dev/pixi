@@ -783,7 +783,7 @@ impl<'p> LockFileDerivedData<'p> {
                 {
                     let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
                     let index_strategy = environment.pypi_options().index_strategy.clone();
-                    let exclude_newer = environment.exclude_newer();
+                    let exclude_newer = environment.exclude_newer_raw().map(|config| config.cutoff());
                     let skip_wheel_filename_check =
                         environment.pypi_options().skip_wheel_filename_check;
 
@@ -2624,7 +2624,9 @@ async fn spawn_solve_pypi_task<'p>(
         ));
     }
 
-    let exclude_newer = grouped_environment.exclude_newer();
+    let exclude_newer = grouped_environment
+        .exclude_newer_raw()
+        .map(|config| config.cutoff());
 
     // Get the system requirements for this environment
     let system_requirements = grouped_environment.system_requirements();

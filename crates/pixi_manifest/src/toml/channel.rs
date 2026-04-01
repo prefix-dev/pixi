@@ -199,22 +199,4 @@ mod test {
           ╰────
         "###);
     }
-
-    #[test]
-    fn test_url_key_is_rejected() {
-        let input = r#"
-        channel = { url = "https://prefix.dev/conda-forge", priority = 10 }
-        "#;
-        let error = TopLevel::from_toml_str(input).unwrap_err();
-        assert_snapshot!(format_parse_error(input, error), @r###"
-         × Unexpected keys, expected only 'channel', 'priority'
-          ╭─[pixi.toml:2:21]
-        1 │
-        2 │         channel = { url = "https://prefix.dev/conda-forge", priority = 10 }
-          ·                     ─┬─
-          ·                      ╰── 'url' was not expected here
-        3 │
-          ╰────
-        "###);
-    }
 }

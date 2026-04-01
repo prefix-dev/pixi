@@ -4,13 +4,12 @@ use std::{
 };
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_spec::TomlVersionSpecStr;
+use pixi_spec::{ExcludeNewer, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
 
-use crate::exclude_newer::ExcludeNewer;
 use crate::{
     PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
     error::GenericError,

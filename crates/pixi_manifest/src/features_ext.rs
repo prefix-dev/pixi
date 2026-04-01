@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use chrono::{DateTime, Utc};
 use indexmap::IndexSet;
 use miette::Diagnostic;
-use pixi_spec::ResolvedExcludeNewer;
+use pixi_spec::{ExcludeNewer, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
@@ -106,7 +106,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     }
 
     /// Returns the raw exclude-newer configuration.
-    fn exclude_newer_raw(&self) -> Option<crate::exclude_newer::ExcludeNewer> {
+    fn exclude_newer_raw(&self) -> Option<ExcludeNewer> {
         self.workspace_manifest().workspace.exclude_newer
     }
 
@@ -142,24 +142,19 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             });
 
             *config = match package_exclude_newer {
-                crate::exclude_newer::ExcludeNewer::Timestamp(dt) => {
+                ExcludeNewer::Timestamp(dt) => {
                     config.clone().with_package_cutoff(name.clone(), dt)
                 }
-                crate::exclude_newer::ExcludeNewer::Duration(duration) => {
+                ExcludeNewer::Duration(duration) => {
                     config.clone().with_package_cutoff(
                         name.clone(),
-                        crate::exclude_newer::ExcludeNewer::Duration(duration).cutoff(),
+                        ExcludeNewer::Duration(duration).cutoff(),
                     )
                 }
             };
         }
 
         Ok(exclude_newer)
-    }
-
-    /// Returns the resolved default exclude-newer cutoff.
-    fn exclude_newer(&self) -> Option<DateTime<Utc>> {
-        self.exclude_newer_raw().map(|config| config.cutoff())
     }
 
     /// Returns the strategy for solving packages.

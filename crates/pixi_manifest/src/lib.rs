@@ -6,7 +6,6 @@ mod discovery;
 mod environment;
 mod environments;
 mod error;
-mod exclude_newer;
 mod feature;
 mod features_ext;
 mod has_features_iter;
@@ -37,7 +36,6 @@ pub use discovery::{
 };
 pub use environment::{Environment, EnvironmentName};
 pub use error::TomlError;
-pub use exclude_newer::ExcludeNewer;
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
