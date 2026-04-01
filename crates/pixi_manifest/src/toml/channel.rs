@@ -36,10 +36,10 @@ impl From<TomlPrioritizedChannel> for PrioritizedChannel {
 
 impl From<PrioritizedChannel> for TomlPrioritizedChannel {
     fn from(channel: PrioritizedChannel) -> Self {
-        if channel.priority.is_some() {
+        if let Some(priority) = channel.priority {
             TomlPrioritizedChannel::Map(PrioritizedChannel {
                 channel: channel.channel,
-                priority: channel.priority,
+                priority: Some(priority),
             })
         } else {
             TomlPrioritizedChannel::Str(channel.channel)
@@ -84,7 +84,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlPrioritizedChannel {
                 let channel = th.required::<TomlFromStr<_>>("channel")?;
                 let priority = th.optional("priority");
                 th.finalize(None)?;
-
                 Ok(TomlPrioritizedChannel::Map(PrioritizedChannel {
                     channel: channel.into_inner(),
                     priority,
