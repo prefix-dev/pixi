@@ -6,7 +6,6 @@ use rattler_conda_types::NamedChannelOrUrl;
 use serde::{Serialize, Serializer};
 use toml_span::de_helpers::expected;
 use toml_span::{DeserError, ErrorKind, Value, de_helpers::TableHelper, value::ValueInner};
-use url::Url;
 
 /// Layout of a prioritized channel in a toml file.
 ///
@@ -84,38 +83,14 @@ impl<'de> toml_span::Deserialize<'de> for TomlPrioritizedChannel {
             inner @ ValueInner::Table(_) => {
                 let mut th = TableHelper::new(&mut toml_span::Value::with_span(inner, value.span))?;
                 let channel = th.optional::<TomlFromStr<NamedChannelOrUrl>>("channel");
-                let url = th
-                    .optional::<TomlFromStr<Url>>("url")
-                    .map(|url| NamedChannelOrUrl::Url(url.into_inner()));
-                let path = th
-                    .optional::<TomlFromStr<NamedChannelOrUrl>>("path")
-                    .map(TomlFromStr::into_inner);
                 let priority = th.optional("priority");
                 th.finalize(None)?;
 
-                let channel = match (channel.map(TomlFromStr::into_inner), url, path) {
-                    (Some(channel), None, None) => channel,
-                    (None, Some(url), None) => url,
-                    (None, None, Some(path)) => path,
-                    (Some(_), Some(_), None)
-                    | (Some(_), None, Some(_))
-                    | (None, Some(_), Some(_))
-                    | (Some(_), Some(_), Some(_)) => {
+                let channel = match channel.map(TomlFromStr::into_inner) {
+                    Some(channel) => channel,
+                    None => {
                         return Err(toml_span::Error {
-                            kind: ErrorKind::Custom(
-                                "a channel entry may specify only one of 'channel', 'url', or 'path'"
-                                    .into(),
-                            ),
-                            span: value.span,
-                            line_info: None,
-                        }
-                        .into());
-                    }
-                    (None, None, None) => {
-                        return Err(toml_span::Error {
-                            kind: ErrorKind::Custom(
-                                "missing field 'channel', 'url', or 'path' in table".into(),
-                            ),
+                            kind: ErrorKind::Custom("missing field 'channel' in table".into()),
                             span: value.span,
                             line_info: None,
                         }
@@ -215,11 +190,29 @@ mod test {
         "#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         assert_snapshot!(format_parse_error(input, error), @r###"
-         × missing field 'channel', 'url', or 'path' in table
+         × missing field 'channel' in table
           ╭─[pixi.toml:2:19]
         1 │
         2 │         channel = { priority = 10 }
           ·                   ─────────────────
+        3 │
+          ╰────
+        "###);
+    }
+
+    #[test]
+    fn test_url_key_is_rejected() {
+        let input = r#"
+        channel = { url = "https://prefix.dev/conda-forge", priority = 10 }
+        "#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        assert_snapshot!(format_parse_error(input, error), @r###"
+         × Unexpected keys, expected only 'channel', 'priority'
+          ╭─[pixi.toml:2:21]
+        1 │
+        2 │         channel = { url = "https://prefix.dev/conda-forge", priority = 10 }
+          ·                     ─┬─
+          ·                      ╰── 'url' was not expected here
         3 │
           ╰────
         "###);

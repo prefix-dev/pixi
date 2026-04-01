@@ -62,7 +62,7 @@ Inline channel tables can be used to set additional metadata such as priority:
 
 ```toml
 channels = [
-  { url = "https://my.private/channel", priority = 10 },
+  { channel = "conda-forge", priority = 10 },
   "https://prefix.dev/conda-forge",
 ]
 ```

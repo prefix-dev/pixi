@@ -557,6 +557,9 @@
       "title": "ChannelInlineTable",
       "description": "A precise description of a `conda` channel, with an optional priority.",
       "type": "object",
+      "required": [
+        "channel"
+      ],
       "additionalProperties": false,
       "properties": {
         "channel": {
@@ -574,42 +577,12 @@
             }
           ]
         },
-        "path": {
-          "title": "Path",
-          "description": "The explicit local channel path to fetch packages from",
-          "type": "string",
-          "minLength": 1
-        },
         "priority": {
           "title": "Priority",
           "description": "The priority of the channel",
           "type": "integer"
-        },
-        "url": {
-          "title": "Url",
-          "description": "The explicit channel URL to fetch packages from",
-          "type": "string",
-          "format": "uri",
-          "minLength": 1
         }
-      },
-      "oneOf": [
-        {
-          "required": [
-            "channel"
-          ]
-        },
-        {
-          "required": [
-            "url"
-          ]
-        },
-        {
-          "required": [
-            "path"
-          ]
-        }
-      ]
+      }
     },
     "ChannelPriority": {
       "title": "ChannelPriority",

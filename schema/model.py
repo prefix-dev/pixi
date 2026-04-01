@@ -96,8 +96,6 @@ class StrictBaseModel(BaseModel):
 CHANNEL_INLINE_ONE_OF: JsonDict = {
     "oneOf": [
         {"required": ["channel"]},
-        {"required": ["url"]},
-        {"required": ["path"]},
     ]
 }
 
@@ -127,21 +125,13 @@ class ChannelInlineTable(StrictBaseModel):
         None,
         description="The named channel to fetch packages from",
     )
-    url: AnyHttpUrl | None = Field(
-        None,
-        description="The explicit channel URL to fetch packages from",
-    )
-    path: NonEmptyStr | None = Field(
-        None,
-        description="The explicit local channel path to fetch packages from",
-    )
     priority: int | None = Field(None, description="The priority of the channel")
 
     @model_validator(mode="after")
     def validate_channel_source(self) -> "ChannelInlineTable":
-        present = sum(value is not None for value in (self.channel, self.url, self.path))
+        present = sum(value is not None for value in (self.channel,))
         if present != 1:
-            raise ValueError("exactly one of 'channel', 'url', or 'path' must be set")
+            raise ValueError("exactly one of 'channel' must be set")
         return self
 
 
