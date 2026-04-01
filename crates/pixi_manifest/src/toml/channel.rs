@@ -82,24 +82,12 @@ impl<'de> toml_span::Deserialize<'de> for TomlPrioritizedChannel {
             }
             inner @ ValueInner::Table(_) => {
                 let mut th = TableHelper::new(&mut toml_span::Value::with_span(inner, value.span))?;
-                let channel = th.optional::<TomlFromStr<NamedChannelOrUrl>>("channel");
+                let channel = th.required::<TomlFromStr<_>>("channel")?;
                 let priority = th.optional("priority");
                 th.finalize(None)?;
 
-                let channel = match channel.map(TomlFromStr::into_inner) {
-                    Some(channel) => channel,
-                    None => {
-                        return Err(toml_span::Error {
-                            kind: ErrorKind::Custom("missing field 'channel' in table".into()),
-                            span: value.span,
-                            line_info: None,
-                        }
-                        .into());
-                    }
-                };
-
                 Ok(TomlPrioritizedChannel::Map(PrioritizedChannel {
-                    channel,
+                    channel: channel.into_inner(),
                     priority,
                 }))
             }
