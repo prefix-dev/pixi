@@ -58,15 +58,6 @@ To access private or public channels on [prefix.dev](https://prefix.dev/channels
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_channels"
 ```
 
-Inline channel tables can be used to set additional metadata such as priority:
-
-```toml
-channels = [
-  { channel = "conda-forge", priority = 10 },
-  "https://prefix.dev/conda-forge",
-]
-```
-
 ### `platforms`
 
 Defines the list of platforms that the workspace supports.

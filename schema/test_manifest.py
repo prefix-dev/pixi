@@ -207,7 +207,7 @@ def test_gh_1089_python_jsonschema(manifest_schemata: TRawSchemata) -> None:
             cls.check_schema(schema)
 
 
-def test_exclude_newer_is_valid_in_workspace_channels_dependencies_and_constraints(
+def test_exclude_newer_is_valid_in_workspace(
     validator: Validator,
 ) -> None:
     manifest = tomllib.loads("""
@@ -220,7 +220,7 @@ channels = ["conda-forge", { channel = "bioconda", exclude-newer = "0d" }]
 [dependencies]
 polars = { version = "*", exclude-newer = "0d" }
 
-[constraints]
+[target.linux.constraints]
 openssl = { exclude-newer = "0d" }
 """)
 
