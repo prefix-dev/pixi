@@ -14,7 +14,6 @@ use toml_span::{DeserError, ErrorKind, Value, de_helpers::TableHelper, value::Va
 /// ```toml
 /// channel = "some-channel"
 /// channel = "https://prefix.dev/some-channel"
-/// channel = "/absolute/path/to/channel"
 /// channel = { channel = "some-channel", priority = 10 }
 /// ```
 #[derive(Debug)]
