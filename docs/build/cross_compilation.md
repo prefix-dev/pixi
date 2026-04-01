@@ -235,6 +235,8 @@ outputs:
           -DCMAKE_BUILD_TYPE=Release
         ninja -C build py_phoenix_socket_backend_stub
     requirements:
+      run_constraints:
+        - cpp_math ==${{ version }}
       build:
         - cmake
         - ninja
