@@ -3,6 +3,7 @@ use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, Passthroug
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
 use rattler_conda_types::{Platform, package::RunExportsJson};
+use std::time::Duration;
 use tempfile::TempDir;
 
 use crate::{
@@ -10,6 +11,73 @@ use crate::{
     setup_tracing,
 };
 use pixi_test_utils::{MockRepoData, Package, format_diagnostic};
+
+fn write_basic_source_package_manifest(path: &std::path::Path, version: &str, extra: &str) {
+    let source_pixi_toml = format!(
+        r#"
+[package]
+name = "my-package"
+version = "{version}"
+
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+{extra}
+"#
+    );
+    fs::write(path.join("pixi.toml"), source_pixi_toml).unwrap();
+}
+
+fn write_basic_source_workspace_manifest(path: &std::path::Path, channels: &[&str]) {
+    let channels = channels
+        .iter()
+        .map(|c| format!(r#""{c}""#))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = [{channels}]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        Platform::current()
+    );
+    fs::write(path, manifest_content).unwrap();
+}
+
+fn write_source_workspace_manifest_with_binary_dependencies(
+    path: &std::path::Path,
+    channels: &[&str],
+    binary_dependencies: &[&str],
+) {
+    let channels = channels
+        .iter()
+        .map(|c| format!(r#""{c}""#))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let binary_dependencies = binary_dependencies
+        .iter()
+        .map(|name| format!(r#"{name} = "*""#))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = [{channels}]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+{binary_dependencies}
+"#,
+        Platform::current()
+    );
+    fs::write(path, manifest_content).unwrap();
+}
 
 /// Test that verifies build backend receives the correct resolved source path
 /// when a relative path is specified in the source field
@@ -1494,5 +1562,148 @@ my-package = {{ path = "./my-package" }}
     assert_eq!(
         my_pkg.package_build_source, my_pkg_2.package_build_source,
         "package_build_source should be identical after roundtrip"
+    );
+}
+
+#[tokio::test]
+async fn test_source_timestamp_reused_when_lockfile_recomputed_for_unrelated_binary_change() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foo", "1.0.0").finish());
+    package_database.add_package(Package::build("bar", "1.0.0").finish());
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+    let mock_channel = url::Url::from_directory_path(channel_dir.path())
+        .unwrap()
+        .to_string();
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    write_basic_source_package_manifest(&source_dir, "1.0.0", "");
+    write_source_workspace_manifest_with_binary_dependencies(
+        &pixi.manifest_path(),
+        &[&mock_channel],
+        &["foo"],
+    );
+
+    let initial_lock = pixi.update_lock_file().await.unwrap();
+    let initial_timestamp = initial_lock
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        )
+        .expect("my-package should have a source timestamp");
+
+    std::thread::sleep(Duration::from_millis(25));
+    write_source_workspace_manifest_with_binary_dependencies(
+        &pixi.manifest_path(),
+        &[&mock_channel],
+        &["foo", "bar"],
+    );
+
+    let relocked = pixi.update_lock_file().await.unwrap();
+    let relocked_timestamp = relocked
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        )
+        .expect("my-package should still have a source timestamp");
+
+    assert_eq!(
+        initial_timestamp, relocked_timestamp,
+        "source timestamp should be reused when relocking due to an unrelated binary dependency change"
+    );
+}
+
+#[tokio::test]
+async fn test_source_timestamp_changes_when_source_metadata_changes() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    write_basic_source_package_manifest(&source_dir, "1.0.0", "");
+    write_basic_source_workspace_manifest(&pixi.manifest_path(), &[]);
+
+    let initial_lock = pixi.update_lock_file().await.unwrap();
+    let initial_timestamp = initial_lock
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        )
+        .expect("my-package should have a source timestamp");
+
+    std::thread::sleep(Duration::from_millis(25));
+    write_basic_source_package_manifest(&source_dir, "1.1.0", "");
+
+    let relocked = pixi.update_lock_file().await.unwrap();
+    let relocked_timestamp = relocked
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        )
+        .expect("my-package should still have a source timestamp");
+
+    assert_ne!(
+        initial_timestamp, relocked_timestamp,
+        "source timestamp should change when the source metadata changes"
+    );
+}
+
+#[tokio::test]
+async fn test_source_timestamp_changes_for_explicit_update() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    write_basic_source_package_manifest(&source_dir, "1.0.0", "");
+    write_basic_source_workspace_manifest(&pixi.manifest_path(), &[]);
+
+    let initial_lock = pixi.update_lock_file().await.unwrap();
+    let initial_timestamp = initial_lock
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        )
+        .expect("my-package should have a source timestamp");
+
+    std::thread::sleep(Duration::from_millis(25));
+    pixi.update().with_package("my-package").await.unwrap();
+
+    let updated_lock = pixi.lock_file().await.unwrap();
+    let updated_timestamp = updated_lock
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        )
+        .expect("my-package should still have a source timestamp");
+
+    assert_ne!(
+        initial_timestamp, updated_timestamp,
+        "source timestamp should change when the package is explicitly updated"
     );
 }

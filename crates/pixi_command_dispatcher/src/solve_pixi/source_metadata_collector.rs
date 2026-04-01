@@ -196,13 +196,6 @@ impl SourceMetadataCollector {
 
         // Determine if we should override the build_source pin for this package.
         let preferred_build_source = self.preferred_build_sources.get(&name).cloned();
-        let source_timestamp_hints = self
-            .source_timestamp_hints
-            .iter()
-            .filter(|(key, _)| key.package == name)
-            .map(|(key, timestamp)| (key.variants.clone(), *timestamp))
-            .collect();
-
         // Always checkout the manifest-defined source location (root), discovery
         // will pick build_source; we only pass preferred locations.
         let manifest_source_checkout = self
@@ -232,7 +225,7 @@ impl SourceMetadataCollector {
                     enabled_protocols: self.enabled_protocols.clone(),
                 },
                 exclude_newer: Some(self.exclude_newer),
-                source_timestamp_hints,
+                source_timestamp_hints: self.source_timestamp_hints.clone(),
             })
             .await
         {
