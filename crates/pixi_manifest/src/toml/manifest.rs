@@ -226,6 +226,9 @@ impl TomlManifest {
             // the default feature
             pypi_options: self.pypi_options.map(PixiSpanned::into_inner),
 
+            // Use extra-build-dependencies from the root for the default feature
+            extra_build_dependencies: self.extra_build_dependencies.map(PixiSpanned::into_inner),
+
             // Combine the default target with all user specified targets
             targets: Targets::from_default_and_user_defined(
                 default_workspace_target,
@@ -425,7 +428,7 @@ impl TomlManifest {
 
         let WithWarnings {
             warnings: mut workspace_warnings,
-            value: mut workspace,
+            value: workspace,
         } = workspace.value.into_workspace(
             ExternalWorkspaceProperties {
                 name: project_name.or(external.name),
@@ -433,8 +436,6 @@ impl TomlManifest {
             },
             root_directory,
         )?;
-        workspace.extra_build_dependencies =
-            self.extra_build_dependencies.map(PixiSpanned::into_inner);
         warnings.append(&mut workspace_warnings);
 
         let workspace_manifest = WorkspaceManifest {
@@ -1240,7 +1241,7 @@ mod test {
         .unwrap();
 
         let extra_build_dependencies = manifest
-            .workspace
+            .default_feature()
             .extra_build_dependencies
             .as_ref()
             .expect("extra build dependencies should be parsed");
@@ -1249,6 +1250,59 @@ mod test {
             .expect("package should exist");
 
         assert_eq!(specs.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_feature_scoped_extra_build_dependencies() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.cuda.extra-build-dependencies]
+        fused-ssim = ["torch>=2", "numpy"]
+
+        [environments]
+        cuda = ["cuda"]
+        "#,
+        )
+        .unwrap();
+
+        assert!(manifest.default_feature().extra_build_dependencies.is_none());
+
+        let cuda_feature = manifest.feature("cuda").expect("feature should exist");
+        let extra_build_dependencies = cuda_feature
+            .extra_build_dependencies
+            .as_ref()
+            .expect("extra build dependencies should be parsed on feature");
+        let specs = extra_build_dependencies
+            .get(&PypiPackageName::from_str("fused-ssim").unwrap())
+            .expect("package should exist");
+
+        assert_eq!(specs.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_invalid_feature_scoped_extra_build_dependencies() {
+        let error = expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.cuda.extra-build-dependencies]
+        fused-ssim = ["not a pep508"]
+
+        [environments]
+        cuda = ["cuda"]
+        "#,
+        );
+
+        assert!(error.contains("Expected one of"));
+        assert!(error.contains("not a pep508"));
     }
 
     #[test]
