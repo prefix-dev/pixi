@@ -2070,6 +2070,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#custom-build-variants-as-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Build Variants as Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4147,6 +4158,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#custom-build-variants-as-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Build Variants as Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#limitations" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4313,6 +4335,23 @@ model only provides the workspace structure information that the recipe cannot k
 <li><strong>Build Execution</strong>: Runs the build script specified in the recipe</li>
 <li><strong>Package Creation</strong>: Creates conda packages according to the recipe specification</li>
 </ol>
+<h2 id="custom-build-variants-as-environment-variables">Custom Build Variants as Environment Variables<a class="headerlink" href="#custom-build-variants-as-environment-variables" title="Permanent link">#</a></h2>
+<p>When using <code>[workspace.build-variants]</code>, any variant key that is not a recognized language key (like <code>python</code>, <code>numpy</code>, <code>r</code>, etc.) is automatically exported as an environment variable during the build.</p>
+<p>This is useful for passing configuration to build scripts without modifying the recipe.
+For example, to override the macOS sysroot used during compilation:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[workspace.target.osx.build-variants]</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">CONDA_BUILD_SYSROOT</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+<p>During the build, <code>CONDA_BUILD_SYSROOT</code> will be set as an environment variable available to the build script.
+Custom variant keys can also be used in recipe templates via Jinja:</p>
+<div class="language-yaml highlight"><span class="filename">recipe.yaml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">build</span><span class="p">:</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">script</span><span class="p">:</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">env</span><span class="p">:</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">      </span><span class="nt">MY_FLAG</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ my_custom_flag }}</span>
+</span></code></pre></div>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[workspace.build-variants]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">my_custom_flag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;enabled&quot;</span><span class="p">]</span>
+</span></code></pre></div>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">#</a></h2>
 <ul>
 <li>Requires an existing rattler-build recipe file - cannot infer build instructions automatically</li>

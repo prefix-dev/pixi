@@ -21,7 +21,7 @@ Pixi can do a lot of things, but it is designed to be simple to use. Let's go th
 
 Pixi can manage global installations of tools in global environments. It installs the environments in a central location, so you can use them from anywhere.
 
-- [`pixi global install`](../reference/cli/pixi/global/install/) - install a package into it's own environment in the global space.
+- [`pixi global install`](../reference/cli/pixi/global/install/) - install a package into its own environment in the global space.
 - [`pixi global uninstall`](../reference/cli/pixi/global/uninstall/) - uninstall an environment from the global space.
 - [`pixi global add`](../reference/cli/pixi/global/add/) - add a package to an existing global environment.
 - [`pixi global sync`](../reference/cli/pixi/global/sync/) - sync the globally installed environments with the global manifest, describing all the environments you want to install.
@@ -62,7 +62,7 @@ More information: [Multiple Environments](../workspace/multi_environment/)
 
 ## Tasks
 
-Pixi can run cross-platform tasks using it's built-in task runner. This can be a predefined task or any normal executable.
+Pixi can run cross-platform tasks using its built-in task runner. This can be a predefined task or any normal executable.
 
 - [`pixi run`](../reference/cli/pixi/run/) - Run a task or command
 - [`pixi task add`](../reference/cli/pixi/task/add/) - Add a new task to the manifest
