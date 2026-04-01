@@ -80,15 +80,6 @@ impl ResolvedExcludeNewer {
     }
 }
 
-impl From<ExcludeNewer> for rattler_solve::ExcludeNewer {
-    fn from(value: ExcludeNewer) -> Self {
-        match value {
-            ExcludeNewer::Timestamp(dt) => Self::from_datetime(dt),
-            ExcludeNewer::Duration(dur) => Self::from_duration(dur),
-        }
-    }
-}
-
 impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
     fn from(value: ResolvedExcludeNewer) -> Self {
         let mut config = rattler_solve::ExcludeNewer::from_datetime(value.cutoff)
@@ -249,31 +240,6 @@ mod test {
         let t = ExcludeNewer::from_str("2006-12-02T02:07:43Z").unwrap();
         let display = format!("{t}");
         assert!(display.contains("2006"), "got: {display}");
-    }
-
-    #[test]
-    fn test_into_rattler_solve_timestamp() {
-        let t = ExcludeNewer::from_str("2006-12-02T02:07:43Z").unwrap();
-        let config: rattler_solve::ExcludeNewer = t.into();
-        assert_eq!(
-            config.cutoff_for_package(&PackageName::new_unchecked("foo"), None),
-            DateTime::parse_from_rfc3339("2006-12-02T02:07:43Z")
-                .unwrap()
-                .with_timezone(&Utc)
-        );
-    }
-
-    #[test]
-    fn test_into_rattler_solve_duration() {
-        let before = Utc::now();
-        let d = ExcludeNewer::Duration(std::time::Duration::from_secs(3600));
-        let config: rattler_solve::ExcludeNewer = d.into();
-        let resolved = config.cutoff_for_package(&PackageName::new_unchecked("foo"), None);
-        let after = Utc::now();
-
-        let one_hour = chrono::Duration::seconds(3600);
-        assert!(resolved >= before - one_hour);
-        assert!(resolved <= after - one_hour + chrono::Duration::seconds(1));
     }
 
     #[test]
