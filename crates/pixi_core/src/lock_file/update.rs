@@ -34,7 +34,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
+use pixi_record::{ParseLockFileError, PixiRecord, SourceRecordReuseKey, UnresolvedPixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -1175,6 +1175,30 @@ impl<'p> UpdateContext<'p> {
         None
     }
 
+    fn source_timestamp_hints_for_group(
+        &self,
+        group: &GroupedEnvironment<'p>,
+        platform: Platform,
+    ) -> HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>> {
+        match group {
+            GroupedEnvironment::Environment(env) => self
+                .outdated_envs
+                .validated_source_timestamps
+                .get(&(env.clone(), platform))
+                .cloned()
+                .unwrap_or_default(),
+            GroupedEnvironment::Group(group) => group
+                .environments()
+                .filter_map(|env| {
+                    self.outdated_envs
+                        .validated_source_timestamps
+                        .get(&(env, platform))
+                })
+                .flat_map(|timestamps| timestamps.iter().map(|(key, value)| (key.clone(), *value)))
+                .collect(),
+        }
+    }
+
     /// Takes the latest repodata records for the given environment and
     /// platform. Returns `None` if neither the records exist nor are in the
     /// process of being updated.
@@ -1776,6 +1800,8 @@ impl<'p> UpdateContext<'p> {
                 let mapping_client = self.mapping_client.clone();
                 let command_dispatcher = self.command_dispatcher.clone();
                 let source_clone = source.clone();
+                let source_timestamp_hints =
+                    self.source_timestamp_hints_for_group(&source, platform);
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source_clone,
                     locked_group_records,
@@ -1784,6 +1810,7 @@ impl<'p> UpdateContext<'p> {
                     channel_priority,
                     command_dispatcher,
                     pin_overrides,
+                    source_timestamp_hints,
                 )
                 .map(|result| result.map_err_with(Report::new))
                 .boxed_local();
@@ -2322,6 +2349,7 @@ async fn spawn_solve_conda_environment_task(
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
     pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
+    source_timestamp_hints: HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>,
 ) -> Result<TaskResult, CommandDispatcherError<SolveCondaEnvironmentError>> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -2441,6 +2469,7 @@ async fn spawn_solve_conda_environment_task(
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
             preferred_build_source: pin_overrides,
+            source_timestamp_hints,
         })
         .await
         .map_err_with(|source| SolveCondaEnvironmentError::SolveFailed {
