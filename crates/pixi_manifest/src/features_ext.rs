@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use miette::Diagnostic;
+use pixi_pypi_spec::PypiPackageName;
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
@@ -271,6 +272,35 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
                 acc.union(opts)
                     .expect("merging of pypi-options should already have been checked")
             })
+    }
+
+    /// Returns the merged extra build dependencies for this collection.
+    ///
+    /// Entries are merged across all features in iterator order. For duplicate
+    /// package keys, requirement lists are appended in that same order.
+    fn extra_build_dependencies(
+        &self,
+    ) -> Option<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>> {
+        let merged = self.features().filter_map(|feature| {
+            feature
+                .extra_build_dependencies
+                .as_ref()
+                .filter(|deps| !deps.is_empty())
+        });
+
+        let combined = merged.fold(
+            IndexMap::<PypiPackageName, Vec<pep508_rs::Requirement>>::new(),
+            |mut acc, deps| {
+            for (name, requirements) in deps {
+                acc.entry(name.clone())
+                    .or_default()
+                    .extend(requirements.iter().cloned());
+            }
+            acc
+        },
+        );
+
+        (!combined.is_empty()).then_some(combined)
     }
 }
 
