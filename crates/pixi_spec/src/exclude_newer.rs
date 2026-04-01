@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Days, NaiveDate, NaiveTime, Utc};
 use rattler_conda_types::PackageName;
 use std::{collections::BTreeMap, str::FromStr};
 
@@ -110,18 +110,7 @@ impl FromStr for ExcludeNewer {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(duration) = s.parse::<humantime::Duration>() {
-            return Ok(ExcludeNewer::Duration(duration.into()));
-        }
-
-        let timestamp_err = match DateTime::parse_from_rfc3339(s) {
-            Ok(timestamp) => return Ok(ExcludeNewer::Timestamp(timestamp.with_timezone(&Utc))),
-            Err(err) => err,
-        };
-
-        Err(format!(
-            "`{s}` is neither a valid duration nor timestamp ({timestamp_err})"
-        ))
+        parse_exclude_newer_str(s)
     }
 }
 
@@ -162,13 +151,38 @@ impl<'de> serde::Deserialize<'de> for ExcludeNewer {
 
         match RawExcludeNewer::deserialize(deserializer)? {
             RawExcludeNewer::Timestamp(cutoff) => Ok(ExcludeNewer::Timestamp(cutoff)),
-            RawExcludeNewer::Duration(duration) => duration
-                .parse::<humantime::Duration>()
-                .map(Into::into)
-                .map(ExcludeNewer::Duration)
-                .map_err(serde::de::Error::custom),
+            RawExcludeNewer::Duration(value) => {
+                parse_exclude_newer_str(&value).map_err(serde::de::Error::custom)
+            }
         }
     }
+}
+
+fn parse_exclude_newer_str(s: &str) -> Result<ExcludeNewer, String> {
+    if let Ok(duration) = s.parse::<humantime::Duration>() {
+        return Ok(ExcludeNewer::Duration(duration.into()));
+    }
+
+    let date_err = match NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        Ok(date) => {
+            let next_midnight = date
+                .checked_add_days(Days::new(1))
+                .expect("valid exclude-newer date should have a following day")
+                .and_time(NaiveTime::MIN)
+                .and_utc();
+            return Ok(ExcludeNewer::Timestamp(next_midnight));
+        }
+        Err(err) => err,
+    };
+
+    let timestamp_err = match DateTime::parse_from_rfc3339(s) {
+        Ok(timestamp) => return Ok(ExcludeNewer::Timestamp(timestamp.with_timezone(&Utc))),
+        Err(err) => err,
+    };
+
+    Err(format!(
+        "`{s}` is neither a valid duration, date ({date_err}), nor timestamp ({timestamp_err})"
+    ))
 }
 
 #[cfg(test)]
@@ -189,6 +203,14 @@ mod test {
             (ExcludeNewer::Timestamp(a), ExcludeNewer::Timestamp(b)) => assert_eq!(a, b),
             _ => panic!("expected timestamps"),
         }
+    }
+
+    #[test]
+    fn test_from_str_date() {
+        assert_eq!(
+            ExcludeNewer::from_str("2006-12-02").unwrap(),
+            ExcludeNewer::from_str("2006-12-03T00:00:00Z").unwrap(),
+        );
     }
 
     #[test]

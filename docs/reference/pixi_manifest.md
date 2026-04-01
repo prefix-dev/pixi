@@ -308,6 +308,7 @@ installing recently published (and potentially compromised) packages.
 The value may be specified in the following formats:
 
 * As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
+* As a date in `YYYY-MM-DD` format (e.g. `2026-03-30`). This is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
 * As a relative duration (e.g. `7days`, `1h30m`, `30m`). The duration is relative to the current time at solve time.
 
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
