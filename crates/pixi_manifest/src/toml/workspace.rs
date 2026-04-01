@@ -134,7 +134,6 @@ impl TomlWorkspace {
             platforms: self.platforms.value,
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
-            extra_build_dependencies: None,
             s3_options: self.s3_options,
             preview,
             build_variant_files: build_variant_files_default,
