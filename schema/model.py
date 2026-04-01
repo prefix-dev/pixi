@@ -53,6 +53,7 @@ ExcludeNewer = Annotated[
     StringConstraints(
         # Matches either:
         # - An RFC 3339 timestamp, e.g. YYYY-MM-DDTHH:MM:SSZ or with fractional seconds
+        # - A date, e.g. YYYY-MM-DD
         # - A duration token sequence accepted by humantime, e.g. 7d, 1h, 30m, 1h30m, 1ms
         pattern=r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})|(\d+\s*[A-Za-z]+\s*)+)$"
     ),
@@ -107,8 +108,6 @@ ChannelName = NonEmptyStr | AnyHttpUrl
 class ChannelInlineTable(StrictBaseModel):
     """A precise description of a `conda` channel, with an optional priority."""
 
-    # Keep this close to main: inline channel tables only support named channels.
-    # URL and path channels remain supported through plain string entries.
     channel: ChannelName = Field(description="The channel the packages needs to be fetched from")
     priority: int | None = Field(None, description="The priority of the channel")
 
@@ -177,7 +176,7 @@ class Workspace(StrictBaseModel):
     )
     exclude_newer: ExcludeNewer | None = Field(
         None,
-        examples=["2023-11-03T03:33:12Z", "2023-11-03T03:33:12+00:00", "7days", "1h30m"],
+        examples=["2023-11-03T03:33:12Z", "2026-04-01", "7days", "1h30m"],
         description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration (e.g. '7days', '1h30m').",
     )
     platforms: list[Platform] | None = Field(
