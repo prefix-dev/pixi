@@ -47,6 +47,19 @@ use crate::{
     PinnedUrlSpec, VariantValue,
 };
 
+/// Identifies a specific source package output for timestamp reuse.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct SourceRecordReuseKey {
+    pub package: PackageName,
+    pub variants: BTreeMap<String, VariantValue>,
+}
+
+impl SourceRecordReuseKey {
+    pub fn new(package: PackageName, variants: BTreeMap<String, VariantValue>) -> Self {
+        Self { package, variants }
+    }
+}
+
 /// Represents a pinned build source with information about how it was originally specified in the
 /// manifest.
 ///
