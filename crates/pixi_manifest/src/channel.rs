@@ -12,20 +12,6 @@ pub struct PrioritizedChannel {
 }
 
 impl PrioritizedChannel {
-    /// Sort prioritized channels by their priority, highest first.
-    pub fn sort_prioritized_channels_by_priority<'a, I>(
-        channels: I,
-    ) -> impl Iterator<Item = &'a crate::PrioritizedChannel>
-    where
-        I: IntoIterator<Item = &'a crate::PrioritizedChannel>,
-    {
-        channels.into_iter().sorted_by(|a, b| {
-            let a = a.priority.unwrap_or(0);
-            let b = b.priority.unwrap_or(0);
-            b.cmp(&a)
-        })
-    }
-
     /// The prioritized channels contain a priority, sort on this priority.
     /// Higher priority comes first. [-10, 1, 0 ,2] -> [2, 1, 0, -10]
     pub fn sort_channels_by_priority<'a, I>(
@@ -34,7 +20,13 @@ impl PrioritizedChannel {
     where
         I: IntoIterator<Item = &'a crate::PrioritizedChannel>,
     {
-        Self::sort_prioritized_channels_by_priority(channels)
+        channels
+            .into_iter()
+            .sorted_by(|a, b| {
+                let a = a.priority.unwrap_or(0);
+                let b = b.priority.unwrap_or(0);
+                b.cmp(&a)
+            })
             .map(|prioritized_channel| &prioritized_channel.channel)
     }
 }

@@ -45,7 +45,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ///
     /// If a feature does not specify any channel the default channels from the
     /// project metadata are used instead.
-    fn prioritized_channels(&self) -> Vec<&'source PrioritizedChannel> {
+    fn channels(&self) -> IndexSet<&'source NamedChannelOrUrl> {
         // Collect all the channels from the features in one set,
         // deduplicate them and sort them on feature index, default feature comes last.
         let channels = self.features().flat_map(|feature| match &feature.channels {
@@ -53,22 +53,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             None => &self.workspace_manifest().workspace.channels,
         });
 
-        let mut seen = HashSet::new();
-        let mut prioritized = Vec::new();
-        for channel in PrioritizedChannel::sort_prioritized_channels_by_priority(channels) {
-            if seen.insert(&channel.channel) {
-                prioritized.push(channel);
-            }
-        }
-
-        prioritized
-    }
-
-    fn channels(&self) -> IndexSet<&'source NamedChannelOrUrl> {
-        self.prioritized_channels()
-            .into_iter()
-            .map(|channel| &channel.channel)
-            .collect()
+        PrioritizedChannel::sort_channels_by_priority(channels).collect()
     }
 
     /// Returns the channels associated with this collection.
