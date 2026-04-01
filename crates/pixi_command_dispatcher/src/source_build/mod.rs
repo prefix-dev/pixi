@@ -885,6 +885,7 @@ impl SourceBuildSpec {
                 variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 preferred_build_source: BTreeMap::new(),
+                source_timestamp_hints: Default::default(),
             })
             .await
     }

@@ -22,7 +22,8 @@ use serde::Serialize;
 // commonly used variant throughout the codebase.
 pub use source_record::{
     FullSourceRecord as SourceRecord, FullSourceRecordData, PartialSourceRecord,
-    PartialSourceRecordData, PinnedBuildSourceSpec, SourceRecordData, UnresolvedSourceRecord,
+    PartialSourceRecordData, PinnedBuildSourceSpec, SourceRecordData, SourceRecordReuseKey,
+    UnresolvedSourceRecord,
 };
 use thiserror::Error;
 
