@@ -12,7 +12,6 @@ version = "0.1.0"
 chrono = { workspace = true }
 console = { workspace = true }
 dunce = { workspace = true }
-humantime = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
 indexmap = { workspace = true }

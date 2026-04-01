@@ -196,7 +196,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         // When running `pixi publish`, the exclude_newer config will be ignored.
-        // It will only be used when using the package as a source depdendency.
+        // It will only be used when using the package as a source dependency.
         exclude_newer: None,
         build_environment: build_environment.clone(),
         variant_configuration: Some(variant_configuration.clone()),
@@ -237,7 +237,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
                 // When running `pixi publish`, the exclude_newer config will be ignored.
-                // It will only be used when using the package as a source depdendency.
+                // It will only be used when using the package as a source dependency.
                 exclude_newer: None,
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
