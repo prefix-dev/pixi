@@ -1,6 +1,6 @@
 [workspace]
 channels = ["conda-forge"]
-exclude-newer = "2025-11-04T00:00:00Z"
+exclude-newer = "2025-11-03"
 name = "source-dependency"
 platforms = ["win-64"]
 version = "0.1.0"
