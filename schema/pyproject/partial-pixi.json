@@ -564,7 +564,7 @@
       "properties": {
         "channel": {
           "title": "Channel",
-          "description": "The named channel to fetch packages from",
+          "description": "The channel the packages needs to be fetched from",
           "anyOf": [
             {
               "type": "string",

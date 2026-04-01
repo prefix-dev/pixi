@@ -17,7 +17,6 @@ from pydantic import (
     Field,
     PositiveFloat,
     StringConstraints,
-    model_validator,
 )
 
 if TYPE_CHECKING:
@@ -93,13 +92,6 @@ class StrictBaseModel(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", alias_generator=hyphenize)
 
 
-CHANNEL_INLINE_ONE_OF: JsonDict = {
-    "oneOf": [
-        {"required": ["channel"]},
-    ]
-}
-
-
 class WorkspaceInheritance(StrictBaseModel):
     """Indicates that a field should inherit its value from the workspace."""
 
@@ -115,24 +107,10 @@ ChannelName = NonEmptyStr | AnyHttpUrl
 class ChannelInlineTable(StrictBaseModel):
     """A precise description of a `conda` channel, with an optional priority."""
 
-    model_config: ClassVar[ConfigDict] = ConfigDict(
-        extra="forbid",
-        alias_generator=hyphenize,
-        json_schema_extra=CHANNEL_INLINE_ONE_OF,
-    )
-
-    channel: ChannelName | None = Field(
-        None,
-        description="The named channel to fetch packages from",
-    )
+    # Keep this close to main: inline channel tables only support named channels.
+    # URL and path channels remain supported through plain string entries.
+    channel: ChannelName = Field(description="The channel the packages needs to be fetched from")
     priority: int | None = Field(None, description="The priority of the channel")
-
-    @model_validator(mode="after")
-    def validate_channel_source(self) -> "ChannelInlineTable":
-        present = sum(value is not None for value in (self.channel,))
-        if present != 1:
-            raise ValueError("exactly one of 'channel' must be set")
-        return self
 
 
 Channel = ChannelName | ChannelInlineTable
