@@ -676,6 +676,7 @@ impl SourceRecordSpec {
                 variant_files: self.backend_metadata.variant_files.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
                 preferred_build_source,
+                source_timestamp_hints: Default::default(),
             })
             .await
         {

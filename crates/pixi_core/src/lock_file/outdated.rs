@@ -8,7 +8,8 @@ use super::{
     CondaPrefixUpdater,
     resolve::build_dispatch::LazyBuildDispatchDependencies,
     satisfiability::{
-        VerifySatisfiabilityContext, pypi_metadata, verify_environment_satisfiability,
+        ValidatedSourceTimestamps, VerifySatisfiabilityContext, pypi_metadata,
+        verify_environment_satisfiability,
     },
     verify_platform_satisfiability,
 };
@@ -93,6 +94,11 @@ pub struct OutdatedEnvironments<'p> {
     /// Locked pypi records with metadata, resolved during the satisfiability
     /// check. Forwarded to the update path to avoid re-reading source trees.
     pub locked_pypi_records: HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
+
+    /// Source record timestamps that were validated unchanged during
+    /// satisfiability checking.
+    pub validated_source_timestamps:
+        HashMap<(Environment<'p>, Platform), ValidatedSourceTimestamps>,
 }
 
 /// A struct that stores whether the locked content of certain environments
@@ -136,6 +142,7 @@ impl<'p> OutdatedEnvironments<'p> {
             build_caches,
             static_metadata_cache,
             locked_pypi_records,
+            validated_source_timestamps,
         ) = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file).await;
 
         // Extend the outdated targets to include the solve groups
@@ -194,6 +201,7 @@ impl<'p> OutdatedEnvironments<'p> {
             build_caches,
             static_metadata_cache,
             locked_pypi_records,
+            validated_source_timestamps,
         }
     }
 
@@ -227,9 +235,11 @@ async fn find_unsatisfiable_targets<'p>(
     HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
     HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
     HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
+    HashMap<(Environment<'p>, Platform), ValidatedSourceTimestamps>,
 ) {
     let mut verified_environments = HashMap::new();
     let mut locked_pypi_by_env_platform = HashMap::new();
+    let mut validated_source_timestamps = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
 
     // Create UV context lazily for building dynamic metadata
@@ -258,7 +268,7 @@ async fn find_unsatisfiable_targets<'p>(
                 .outdated_conda
                 .entry(environment.clone())
                 .or_default()
-                .extend(platforms);
+                .extend(platforms.iter().copied());
 
             continue;
         };
@@ -274,7 +284,7 @@ async fn find_unsatisfiable_targets<'p>(
                 .outdated_conda
                 .entry(environment.clone())
                 .or_default()
-                .extend(platforms);
+                .extend(platforms.iter().copied());
 
             match unsat {
                 EnvironmentUnsat::AdditionalPlatformsInLockFile(platforms) => {
@@ -320,7 +330,12 @@ async fn find_unsatisfiable_targets<'p>(
                 }
             }
 
-            continue;
+            if unsatisfiable_targets
+                .disregard_locked_content
+                .should_disregard_conda(&environment)
+            {
+                continue;
+            }
         }
 
         // Verify each individual platform in parallel
@@ -339,54 +354,62 @@ async fn find_unsatisfiable_targets<'p>(
             };
             platform_futures.push(async move {
                 let result = verify_platform_satisfiability(&ctx, locked_environment).await;
-                match result {
-                    Ok((verified_env, locked_pypi)) => Ok((platform, verified_env, locked_pypi)),
-                    Err(CommandDispatcherError::Cancelled) => {
-                        Err(CommandDispatcherError::Cancelled)
-                    }
-                    Err(CommandDispatcherError::Failed(unsat)) => {
-                        Err(CommandDispatcherError::Failed((platform, unsat)))
-                    }
-                }
+                Ok::<_, CommandDispatcherError<std::convert::Infallible>>((platform, result))
             });
         }
 
         // Collect all platform results
         while let Some(result) = platform_futures.next().await {
             match result {
-                Ok((platform, verified_env, locked_pypi)) => {
-                    verified_environments.insert((environment.clone(), platform), verified_env);
-                    locked_pypi_by_env_platform
-                        .insert((environment.clone(), platform), locked_pypi);
+                Ok((platform, outcome)) => {
+                    if !outcome.validated_source_timestamps.is_empty() {
+                        validated_source_timestamps.insert(
+                            (environment.clone(), platform),
+                            outcome.validated_source_timestamps,
+                        );
+                    }
+
+                    match outcome.result {
+                        Ok((verified_env, locked_pypi)) => {
+                            verified_environments
+                                .insert((environment.clone(), platform), verified_env);
+                            locked_pypi_by_env_platform
+                                .insert((environment.clone(), platform), locked_pypi);
+                        }
+                        Err(CommandDispatcherError::Cancelled) => {
+                            // Cancellation is handled by CancellationAwareFutures;
+                            // remaining platforms will be skipped automatically.
+                        }
+                        Err(CommandDispatcherError::Failed(unsat)) if unsat.is_pypi_only() => {
+                            tracing::info!(
+                                "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                                environment.name().fancy_display()
+                            );
+
+                            unsatisfiable_targets
+                                .outdated_pypi
+                                .entry(environment.clone())
+                                .or_default()
+                                .insert(platform);
+                        }
+                        Err(CommandDispatcherError::Failed(unsat)) => {
+                            tracing::info!(
+                                "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                                environment.name().fancy_display()
+                            );
+
+                            unsatisfiable_targets
+                                .outdated_conda
+                                .entry(environment.clone())
+                                .or_default()
+                                .insert(platform);
+                        }
+                    }
                 }
                 Err(CommandDispatcherError::Cancelled) => {
-                    // Cancellation is handled by CancellationAwareFutures;
-                    // remaining platforms will be skipped automatically.
+                    unreachable!("platform task cannot cancel")
                 }
-                Err(CommandDispatcherError::Failed((platform, unsat))) if unsat.is_pypi_only() => {
-                    tracing::info!(
-                        "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                        environment.name().fancy_display()
-                    );
-
-                    unsatisfiable_targets
-                        .outdated_pypi
-                        .entry(environment.clone())
-                        .or_default()
-                        .insert(platform);
-                }
-                Err(CommandDispatcherError::Failed((platform, unsat))) => {
-                    tracing::info!(
-                        "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                        environment.name().fancy_display()
-                    );
-
-                    unsatisfiable_targets
-                        .outdated_conda
-                        .entry(environment.clone())
-                        .or_default()
-                        .insert(platform);
-                }
+                Err(CommandDispatcherError::Failed(_)) => unreachable!("platform task cannot fail"),
             }
         }
     }
@@ -447,6 +470,7 @@ async fn find_unsatisfiable_targets<'p>(
         build_caches.into_iter().collect(),
         static_metadata_cache.into_iter().collect(),
         locked_pypi_by_env_platform,
+        validated_source_timestamps,
     )
 }
 
