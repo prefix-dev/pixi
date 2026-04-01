@@ -510,4 +510,47 @@ mod tests {
         let converted = convert_extra_build_dependencies(&None, std::path::Path::new(".")).unwrap();
         assert!(converted.is_empty());
     }
+
+    #[test]
+    fn empty_some_extra_build_dependencies_is_noop() {
+        let converted =
+            convert_extra_build_dependencies(&Some(IndexMap::new()), std::path::Path::new("."))
+                .unwrap();
+        assert!(converted.is_empty());
+    }
+
+    #[test]
+    fn converts_multiple_extra_build_dependencies_for_multiple_packages() {
+        let mut deps: IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>> = IndexMap::new();
+        deps.insert(
+            PypiPackageName::from_str("fused-ssim").unwrap(),
+            vec![
+                pep508_rs::Requirement::from_str("torch>=2").unwrap(),
+                pep508_rs::Requirement::from_str("numpy").unwrap(),
+            ],
+        );
+        deps.insert(
+            PypiPackageName::from_str("pybind11").unwrap(),
+            vec![pep508_rs::Requirement::from_str("cmake>=3.27").unwrap()],
+        );
+
+        let converted =
+            convert_extra_build_dependencies(&Some(deps), std::path::Path::new(".")).unwrap();
+
+        let fused = converted
+            .get(&uv_normalize::PackageName::from_str("fused-ssim").unwrap())
+            .expect("fused-ssim should be present");
+        assert_eq!(fused.len(), 2);
+        assert_eq!(fused[0].requirement.name.as_ref(), "torch");
+        assert_eq!(fused[1].requirement.name.as_ref(), "numpy");
+
+        let pybind = converted
+            .get(&uv_normalize::PackageName::from_str("pybind11").unwrap())
+            .expect("pybind11 should be present");
+        assert_eq!(pybind.len(), 1);
+        assert_eq!(pybind[0].requirement.name.as_ref(), "cmake");
+
+        assert!(fused.iter().all(|req| !req.match_runtime));
+        assert!(pybind.iter().all(|req| !req.match_runtime));
+    }
 }
