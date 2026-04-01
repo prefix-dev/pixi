@@ -410,6 +410,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
+    use pixi_pypi_spec::PypiPackageName;
 
     use super::*;
 
@@ -906,6 +907,165 @@ mod tests {
         // and the one from the feature
         assert_eq!(foo_opts.extra_index_urls.unwrap().len(), 2);
         assert_eq!(bar_opts.extra_index_urls.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_extra_build_dependencies_are_scoped_and_merged_per_environment() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64"]
+
+        [extra-build-dependencies]
+        foo = ["numpy>=1"]
+
+        [feature.cuda.extra-build-dependencies]
+        foo = ["torch>=2"]
+        bar = ["setuptools>=68"]
+
+        [environments]
+        cuda = ["cuda"]
+        "#,
+        )
+        .unwrap();
+
+        let default_env = manifest.default_environment();
+        let default_deps = default_env
+            .extra_build_dependencies()
+            .expect("default environment should include default extra build dependencies");
+        assert_eq!(default_deps.len(), 1);
+        assert_eq!(
+            default_deps
+                .get(&"foo".parse::<PypiPackageName>().unwrap())
+                .expect("foo extra-build-dependencies should exist")
+                .len(),
+            1
+        );
+
+        let cuda_env = manifest.environment("cuda").unwrap();
+        let cuda_deps = cuda_env
+            .extra_build_dependencies()
+            .expect("cuda environment should include merged extra build dependencies");
+
+        let foo_requirements = cuda_deps
+            .get(&"foo".parse::<PypiPackageName>().unwrap())
+            .expect("foo requirements should be merged");
+        assert_eq!(foo_requirements.len(), 2);
+        assert_eq!(cuda_deps.len(), 2);
+        assert!(cuda_deps.contains_key(&"bar".parse::<PypiPackageName>().unwrap()));
+    }
+
+    #[test]
+    fn test_extra_build_dependencies_respect_no_default_feature() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64"]
+
+        [extra-build-dependencies]
+        foo = ["numpy>=1"]
+
+        [feature.cuda.extra-build-dependencies]
+        foo = ["torch>=2"]
+
+        [environments]
+        cuda = { features = ["cuda"], no-default-feature = true }
+        "#,
+        )
+        .unwrap();
+
+        let cuda_env = manifest.environment("cuda").unwrap();
+        let cuda_deps = cuda_env
+            .extra_build_dependencies()
+            .expect("cuda environment should include extra build dependencies");
+
+        let foo_requirements = cuda_deps
+            .get(&"foo".parse::<PypiPackageName>().unwrap())
+            .expect("foo requirements should exist");
+
+        assert_eq!(foo_requirements.len(), 1);
+    }
+
+    #[test]
+    fn test_extra_build_dependencies_merge_order_includes_default_last() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64"]
+
+        [extra-build-dependencies]
+        foo = ["numpy>=1"]
+
+        [feature.a.extra-build-dependencies]
+        foo = ["torch>=2"]
+
+        [feature.b.extra-build-dependencies]
+        foo = ["setuptools>=68"]
+
+        [environments]
+        combo = ["a", "b"]
+        "#,
+        )
+        .unwrap();
+
+        let combo_env = manifest.environment("combo").unwrap();
+        let combo_deps = combo_env
+            .extra_build_dependencies()
+            .expect("combo environment should include merged extra build dependencies");
+
+        let foo_requirements = combo_deps
+            .get(&"foo".parse::<PypiPackageName>().unwrap())
+            .expect("foo requirements should exist");
+
+        let rendered: Vec<String> = foo_requirements.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            rendered,
+            vec![
+                "torch>=2".to_string(),
+                "setuptools>=68".to_string(),
+                "numpy>=1".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_extra_build_dependencies_empty_tables_are_ignored() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "foobar"
+        channels = []
+        platforms = ["linux-64"]
+
+        [extra-build-dependencies]
+
+        [feature.cuda.extra-build-dependencies]
+
+        [environments]
+        cuda = ["cuda"]
+        "#,
+        )
+        .unwrap();
+
+        assert!(manifest
+            .default_environment()
+            .extra_build_dependencies()
+            .is_none());
+        assert!(manifest
+            .environment("cuda")
+            .unwrap()
+            .extra_build_dependencies()
+            .is_none());
     }
 
     #[test]
