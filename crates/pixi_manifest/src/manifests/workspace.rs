@@ -3533,10 +3533,7 @@ polars = { version = "*", exclude-newer = "0d" }
             manifest: &manifest,
             features: vec![default_feature],
         };
-        let config = features
-            .exclude_newer_config(None)
-            .unwrap()
-            .unwrap();
+        let config = features.exclude_newer_config(None).unwrap().unwrap();
         let after = chrono::Utc::now();
         let package = PackageName::from_str("polars").unwrap();
         let package_cutoff = config.cutoff_for_package(&package, None);

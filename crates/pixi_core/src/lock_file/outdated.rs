@@ -1,6 +1,4 @@
-use super::{
-    satisfiability::verify_environment_satisfiability, verify_platform_satisfiability,
-};
+use super::{satisfiability::verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
     Workspace,
     lock_file::satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},

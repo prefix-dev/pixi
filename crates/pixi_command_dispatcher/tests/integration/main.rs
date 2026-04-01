@@ -22,7 +22,9 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::default_channel_config;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
-use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, Subdirectory, UrlSpec};
+use pixi_spec::{
+    GitReference, GitSpec, PathSpec, PixiSpec, ResolvedExcludeNewer, Subdirectory, UrlSpec,
+};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_url::UrlError;
@@ -253,6 +255,49 @@ pub async fn instantiate_backend_without_compatible_api_version() {
         .unwrap_err();
 
     insta::assert_snapshot!(format_diagnostic(&err));
+}
+
+#[tokio::test]
+pub async fn instantiate_backend_with_compatible_api_version_respects_exclude_newer() {
+    let backend_name = PackageName::new_unchecked("backend-with-compatible-api-version");
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs())
+        .with_executor(Executor::Serial)
+        .finish();
+
+    dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
+            backend_name.clone(),
+            PixiSpec::Version(VersionSpec::Any),
+            Vec::from([Url::from_directory_path(channel_dir.clone())
+                .unwrap()
+                .into()]),
+        ))
+        .await
+        .expect("backend should instantiate without exclude-newer");
+
+    let err = dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
+            exclude_newer: Some(ResolvedExcludeNewer::from_datetime(
+                "2025-01-01T00:00:00Z".parse().unwrap(),
+            )),
+            ..InstantiateToolEnvironmentSpec::new(
+                backend_name,
+                PixiSpec::Version(VersionSpec::Any),
+                Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
+            )
+        })
+        .await
+        .unwrap_err();
+
+    let rendered = format_diagnostic(&err);
+    assert!(rendered.contains("backend-with-compatible-api-version"));
 }
 
 /// When two identical tool env instantiations are queued concurrently and the
@@ -645,6 +690,7 @@ async fn source_build_cache_status_clear_works() {
             None,
         ),
         channels: Vec::<ChannelUrl>::new(),
+        exclude_newer: None,
         build_environment: build_env,
         channel_config: default_channel_config(),
         enabled_protocols: Default::default(),

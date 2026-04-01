@@ -119,7 +119,6 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
-
 }
 
 fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {

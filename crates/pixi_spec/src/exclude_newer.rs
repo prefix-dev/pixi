@@ -141,7 +141,9 @@ impl serde::Serialize for ExcludeNewer {
     {
         match self {
             Self::Timestamp(cutoff) => cutoff.serialize(serializer),
-            Self::Duration(duration) => serializer.collect_str(&humantime::Duration::from(*duration)),
+            Self::Duration(duration) => {
+                serializer.collect_str(&humantime::Duration::from(*duration))
+            }
         }
     }
 }
