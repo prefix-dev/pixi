@@ -1270,7 +1270,12 @@ mod test {
         )
         .unwrap();
 
-        assert!(manifest.default_feature().extra_build_dependencies.is_none());
+        assert!(
+            manifest
+                .default_feature()
+                .extra_build_dependencies
+                .is_none()
+        );
 
         let cuda_feature = manifest.feature("cuda").expect("feature should exist");
         let extra_build_dependencies = cuda_feature

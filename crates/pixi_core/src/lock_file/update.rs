@@ -1769,15 +1769,11 @@ impl<'p> UpdateContext<'p> {
                 context.clone()
             } else {
                 let extra_build_dependencies = group.extra_build_dependencies();
-                let mut context = UvResolutionContext::from_config(
-                    project.config(),
-                    project.client()?.clone(),
-                )?;
-                context.extra_build_requires = convert_extra_build_dependencies(
-                    &extra_build_dependencies,
-                    project.root(),
-                )
-                .into_diagnostic()?;
+                let mut context =
+                    UvResolutionContext::from_config(project.config(), project.client()?.clone())?;
+                context.extra_build_requires =
+                    convert_extra_build_dependencies(&extra_build_dependencies, project.root())
+                        .into_diagnostic()?;
                 uv_context_by_group.insert(group.clone(), context.clone());
                 context
             };

@@ -1057,15 +1057,19 @@ mod tests {
         )
         .unwrap();
 
-        assert!(manifest
-            .default_environment()
-            .extra_build_dependencies()
-            .is_none());
-        assert!(manifest
-            .environment("cuda")
-            .unwrap()
-            .extra_build_dependencies()
-            .is_none());
+        assert!(
+            manifest
+                .default_environment()
+                .extra_build_dependencies()
+                .is_none()
+        );
+        assert!(
+            manifest
+                .environment("cuda")
+                .unwrap()
+                .extra_build_dependencies()
+                .is_none()
+        );
     }
 
     #[test]

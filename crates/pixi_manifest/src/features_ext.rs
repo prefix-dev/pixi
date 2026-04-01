@@ -291,13 +291,13 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         let combined = merged.fold(
             IndexMap::<PypiPackageName, Vec<pep508_rs::Requirement>>::new(),
             |mut acc, deps| {
-            for (name, requirements) in deps {
-                acc.entry(name.clone())
-                    .or_default()
-                    .extend(requirements.iter().cloned());
-            }
-            acc
-        },
+                for (name, requirements) in deps {
+                    acc.entry(name.clone())
+                        .or_default()
+                        .extend(requirements.iter().cloned());
+                }
+                acc
+            },
         );
 
         (!combined.is_empty()).then_some(combined)

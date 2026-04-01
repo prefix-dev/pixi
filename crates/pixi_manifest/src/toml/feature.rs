@@ -32,8 +32,7 @@ pub struct TomlFeature {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
-    pub extra_build_dependencies:
-        Option<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>,
+    pub extra_build_dependencies: Option<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>,
     pub dev: Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
 
     /// Version constraints - limit versions of packages that can be installed
@@ -186,7 +185,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
             .map(TomlIndexMap::into_inner);
         let extra_build_dependencies = th
-            .optional::<TomlWith<_, TomlIndexMap<_, Vec<TomlFromStr<_>>>>>("extra-build-dependencies")
+            .optional::<TomlWith<_, TomlIndexMap<_, Vec<TomlFromStr<_>>>>>(
+                "extra-build-dependencies",
+            )
             .map(TomlWith::into_inner);
         let dev = th
             .optional::<TomlIndexMap<_, _>>("dev")
