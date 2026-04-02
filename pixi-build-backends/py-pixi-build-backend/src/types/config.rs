@@ -57,11 +57,7 @@ impl BackendConfig for PyBackendConfig {
         self.debug_dir.as_deref()
     }
 
-    fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
-        if target_config.debug_dir.is_some() {
-            miette::bail!("`debug_dir` cannot have a target specific value");
-        }
-
+    fn merge_with_target_config(&self, _target_config: &Self) -> miette::Result<Self> {
         Ok(self.clone())
     }
 }
