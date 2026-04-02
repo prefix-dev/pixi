@@ -350,16 +350,7 @@ pub fn package_xml_to_conda_requirements(
     // Add ros_workspace for ROS2
     let ros_workspace_dep;
     if !distro.is_ros1 {
-        ros_workspace_dep = Dependency {
-            name: "ros_workspace".to_string(),
-            version_lt: None,
-            version_lte: None,
-            version_eq: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
-        };
+        ros_workspace_dep = Dependency::from("ros_workspace");
         build_deps.push(&ros_workspace_dep);
     }
 
@@ -632,16 +623,7 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = robostack_data();
 
-        let dep = Dependency {
-            name: "acl".to_string(),
-            version_lt: None,
-            version_lte: None,
-            version_eq: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
-        };
+        let dep = Dependency::from("acl");
 
         let result =
             rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
@@ -653,16 +635,7 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = robostack_data();
 
-        let dep = Dependency {
-            name: "acl".to_string(),
-            version_lt: None,
-            version_lte: None,
-            version_eq: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
-        };
+        let dep = Dependency::from("acl");
 
         let result =
             rosdep_to_conda_package_spec(&dep, &distro, Platform::Osx64, &package_map).unwrap();
@@ -674,16 +647,7 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = robostack_data();
 
-        let dep = Dependency {
-            name: "binutils".to_string(),
-            version_lt: None,
-            version_lte: None,
-            version_eq: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
-        };
+        let dep = Dependency::from("binutils");
 
         let result =
             rosdep_to_conda_package_spec(&dep, &distro, Platform::Win64, &package_map).unwrap();
@@ -696,16 +660,7 @@ mod tests {
         let package_map = robostack_data();
 
         // libudev-dev
-        let dep = Dependency {
-            name: "libudev-dev".to_string(),
-            version_lt: None,
-            version_lte: None,
-            version_eq: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
-        };
+        let dep = Dependency::from("libudev-dev");
 
         let linux =
             rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
@@ -719,16 +674,7 @@ mod tests {
         assert_eq!(win, vec!["libusb"]);
 
         // libomp-dev
-        let dep = Dependency {
-            name: "libomp-dev".to_string(),
-            version_lt: None,
-            version_lte: None,
-            version_eq: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
-        };
+        let dep = Dependency::from("libomp-dev");
 
         let linux =
             rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
@@ -747,16 +693,7 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = robostack_data();
 
-        let dep = Dependency {
-            name: "opengl".to_string(),
-            version_lt: None,
-            version_lte: None,
-            version_eq: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
-        };
+        let dep = Dependency::from("opengl");
 
         let linux =
             rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
@@ -782,14 +719,8 @@ mod tests {
         let distro = jazzy_distro();
 
         let dep = Dependency {
-            name: "ament_cmake".to_string(),
             version_eq: Some("1.2.3".to_string()),
-            version_lt: None,
-            version_lte: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
+            ..Dependency::from("ament_cmake")
         };
 
         let result =
@@ -803,14 +734,9 @@ mod tests {
         let distro = jazzy_distro();
 
         let dep = Dependency {
-            name: "rclcpp".to_string(),
             version_gte: Some("18.0.0".to_string()),
             version_lt: Some("20.0.0".to_string()),
-            version_eq: None,
-            version_lte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
+            ..Dependency::from("rclcpp")
         };
 
         let result =
@@ -831,14 +757,8 @@ mod tests {
         package_map.insert("custom_ros_dep".to_string(), entry);
 
         let dep = Dependency {
-            name: "custom_ros_dep".to_string(),
             version_gte: Some("3.1".to_string()),
-            version_lt: None,
-            version_lte: None,
-            version_eq: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
+            ..Dependency::from("custom_ros_dep")
         };
 
         let result =
@@ -852,14 +772,8 @@ mod tests {
         let package_map = robostack_data();
 
         let dep = Dependency {
-            name: "xtensor".to_string(),
             version_eq: Some("2.0".to_string()),
-            version_lt: None,
-            version_lte: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
+            ..Dependency::from("xtensor")
         };
 
         let result = rosdep_to_conda_package_spec(&dep, &distro, Platform::current(), &package_map);
@@ -875,14 +789,8 @@ mod tests {
         let package_map = robostack_data();
 
         let dep = Dependency {
-            name: "boost".to_string(),
             version_eq: Some("2.0".to_string()),
-            version_lt: None,
-            version_lte: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
+            ..Dependency::from("boost")
         };
 
         let result = rosdep_to_conda_package_spec(&dep, &distro, Platform::current(), &package_map);
@@ -895,14 +803,9 @@ mod tests {
     #[test]
     fn test_conflicting_version_specs() {
         let dep = Dependency {
-            name: "rclcpp".to_string(),
             version_gt: Some("18.0.0".to_string()),
             version_gte: Some("20.0.0".to_string()),
-            version_lt: None,
-            version_lte: None,
-            version_eq: None,
-            condition: None,
-            evaluated_condition: None,
+            ..Dependency::from("rclcpp")
         };
 
         let result = rosdep_nameless_matchspec(&dep);
@@ -915,14 +818,8 @@ mod tests {
     #[test]
     fn test_version_constraint_eq() {
         let dep = Dependency {
-            name: "test".to_string(),
             version_eq: Some("1.0".to_string()),
-            version_lt: None,
-            version_lte: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
+            ..Dependency::from("test")
         };
         assert_eq!(
             rosdep_nameless_matchspec(&dep).unwrap(),
@@ -933,14 +830,9 @@ mod tests {
     #[test]
     fn test_version_constraint_range() {
         let dep = Dependency {
-            name: "test".to_string(),
             version_gte: Some("1.0".to_string()),
             version_lt: Some("2.0".to_string()),
-            version_eq: None,
-            version_lte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
+            ..Dependency::from("test")
         };
         assert_eq!(
             rosdep_nameless_matchspec(&dep).unwrap(),
@@ -950,16 +842,7 @@ mod tests {
 
     #[test]
     fn test_version_constraint_none() {
-        let dep = Dependency {
-            name: "test".to_string(),
-            version_eq: None,
-            version_lt: None,
-            version_lte: None,
-            version_gte: None,
-            version_gt: None,
-            condition: None,
-            evaluated_condition: None,
-        };
+        let dep = Dependency::from("test");
         assert_eq!(rosdep_nameless_matchspec(&dep).unwrap(), None);
     }
 
@@ -1100,14 +983,8 @@ mod tests {
         let distro = jazzy_distro();
 
         let dep = Dependency {
-            name: "customlib".to_string(),
             version_gt: Some("1.0.0".to_string()),
-            version_lt: None,
-            version_lte: None,
-            version_eq: None,
-            version_gte: None,
-            condition: None,
-            evaluated_condition: None,
+            ..Dependency::from("customlib")
         };
 
         let result =

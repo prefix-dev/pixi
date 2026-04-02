@@ -83,6 +83,21 @@ impl Dependency {
     }
 }
 
+impl From<&str> for Dependency {
+    fn from(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            version_lt: None,
+            version_lte: None,
+            version_eq: None,
+            version_gte: None,
+            version_gt: None,
+            condition: None,
+            evaluated_condition: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Export {
     pub build_type: Option<BuildType>,

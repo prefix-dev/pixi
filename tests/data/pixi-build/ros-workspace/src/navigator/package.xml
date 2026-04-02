@@ -3,8 +3,8 @@
 <package format="3">
   <name>navigator</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="ruben.arts@hotmail.com">rarts</maintainer>
+  <description>Navigator package</description>
+  <maintainer email="some@email.com">Maintainer Name</maintainer>
   <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
