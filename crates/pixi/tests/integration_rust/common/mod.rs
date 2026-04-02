@@ -145,6 +145,9 @@ pub trait LockFileExt {
         package: &str,
     ) -> Option<LockedPackageRef<'_>>;
 
+    /// Returns the [`CondaSourceData`] for a source package in the given
+    /// environment and platform, or `None` if the package is not found or is
+    /// not a source package.
     fn get_conda_source_package(
         &self,
         environment: &str,
@@ -152,6 +155,9 @@ pub trait LockFileExt {
         package: &str,
     ) -> Option<&CondaSourceData>;
 
+    /// Returns the timestamp of a source package in the given environment and
+    /// platform, or `None` if the package is not found or is not a source
+    /// package.
     fn get_conda_source_timestamp(
         &self,
         environment: &str,
@@ -308,7 +314,7 @@ impl LockFileExt for LockFile {
         package: &str,
     ) -> Option<chrono::DateTime<chrono::Utc>> {
         self.get_conda_source_package(environment, platform, package)
-            .map(|source| source.timestamp)
+            .and_then(|source| source.timestamp)
     }
 }
 

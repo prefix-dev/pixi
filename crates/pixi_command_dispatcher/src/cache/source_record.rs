@@ -65,8 +65,9 @@ pub struct SourceRecordCacheKey {
     pub source: CanonicalSourceCodeLocation,
 
     /// The timestamp of the newest dependency that was used when resolving.
-    /// Different timestamps can yield different dependency sets.
-    pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// Different timestamps can yield different dependency sets. `None` when
+    /// there are no host or build dependencies.
+    pub timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl SourceRecordCache {
@@ -111,7 +112,7 @@ impl MetadataCacheKey<SourceRecordCache> for SourceRecordCacheKey {
         self.variants.hash(&mut hasher);
 
         let source_dir = self.source.cache_unique_key();
-        let timestamp_ms = self.timestamp.timestamp_millis();
+        let timestamp_ms = self.timestamp.map_or(0, |t| t.timestamp_millis());
         CacheKeyString::new(format!(
             "{source_dir}/{}-{}-{}-{}",
             self.package.as_normalized(),
@@ -170,8 +171,9 @@ pub struct CachedSourceRecord {
     /// and from which location.
     pub sources: HashMap<String, SourceLocationSpec>,
 
-    /// The timestamp of the newest package that was present in the build/host dependencies.
-    pub timestamp: chrono::DateTime<chrono::Utc>,
+    /// The timestamp of the newest package that was present in the build/host
+    /// dependencies, or `None` when there are no host or build dependencies.
+    pub timestamp: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl MetadataCacheEntry<SourceRecordCache> for SourceRecordCacheEntry {

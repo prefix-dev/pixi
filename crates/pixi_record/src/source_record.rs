@@ -131,7 +131,10 @@ pub struct SourceRecord<D> {
     /// when solving the host and build environments of this source record
     /// should yield roughly the same environment. This is used to soft-lock
     /// those environments.
-    pub timestamp: chrono::DateTime<chrono::Utc>,
+    ///
+    /// `None` when the source package has no host or build dependencies,
+    /// meaning there is nothing to soft-lock.
+    pub timestamp: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The short hash that was originally parsed from the lock file (e.g.
     /// the 9f3c2a7b part of numba-cuda[9f3c2a7b] @ .).
@@ -457,10 +460,35 @@ impl SourceRecord<SourceRecordData> {
     }
 
     /// Convert into lock-file compatible `CondaSourceData<SourceMetadata>`.
+    ///
+    /// If the source is mutable (path-based), full metadata is downgraded to
+    /// partial so the lock file does not store stale version/build data.
     pub fn into_conda_source_data(self, _workspace_root: &Path) -> CondaSourceData {
+        // Downgrade full records to partial when the source is mutable.
+        let is_mutable = self.manifest_source.is_mutable()
+            || self
+                .build_source
+                .as_ref()
+                .is_some_and(|bs| bs.pinned().is_mutable());
+
         let package_build_source = build_source_to_package_build_source(self.build_source);
 
-        let metadata = match self.data {
+        let data = if is_mutable {
+            match self.data {
+                SourceRecordData::Full(full) => {
+                    SourceRecordData::Partial(PartialSourceRecordData {
+                        name: full.package_record.name,
+                        depends: full.package_record.depends,
+                        sources: full.sources,
+                    })
+                }
+                partial @ SourceRecordData::Partial(_) => partial,
+            }
+        } else {
+            self.data
+        };
+
+        let metadata = match data {
             SourceRecordData::Full(full) => SourceMetadata::Full(Box::new(FullSourceMetadata {
                 package_record: full.package_record,
                 sources: full
@@ -842,7 +870,7 @@ mod tests {
                 "python".into(),
                 crate::VariantValue::from("3.12".to_string()),
             )]),
-            timestamp: chrono::Utc::now(),
+            timestamp: Some(chrono::Utc::now()),
             identifier_hash: Some("abcd1234".to_string()),
         };
 
@@ -912,7 +940,7 @@ mod tests {
             }),
             build_source: None,
             variants: BTreeMap::new(),
-            timestamp: chrono::Utc::now(),
+            timestamp: Some(chrono::Utc::now()),
             identifier_hash: None,
         });
 
@@ -946,7 +974,7 @@ mod tests {
             manifest_source,
             build_source,
             variants,
-            timestamp: chrono::Utc::now(),
+            timestamp: Some(chrono::Utc::now()),
             identifier_hash: None,
         }
     }
