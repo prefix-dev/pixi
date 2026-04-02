@@ -1187,15 +1187,42 @@ impl<'p> UpdateContext<'p> {
                 .get(&(env.clone(), platform))
                 .cloned()
                 .unwrap_or_default(),
-            GroupedEnvironment::Group(group) => group
-                .environments()
-                .filter_map(|env| {
+            GroupedEnvironment::Group(group) => {
+                let mut merged = HashMap::new();
+                let mut conflicts = std::collections::HashSet::new();
+
+                for timestamps in group.environments().filter_map(|env| {
                     self.outdated_envs
                         .validated_source_timestamps
                         .get(&(env, platform))
-                })
-                .flat_map(|timestamps| timestamps.iter().map(|(key, value)| (key.clone(), *value)))
-                .collect(),
+                }) {
+                    for (key, value) in timestamps {
+                        if conflicts.contains(key) {
+                            continue;
+                        }
+
+                        match merged.entry(key.clone()) {
+                            std::collections::hash_map::Entry::Vacant(entry) => {
+                                entry.insert(*value);
+                            }
+                            std::collections::hash_map::Entry::Occupied(entry)
+                                if entry.get() == value => {}
+                            std::collections::hash_map::Entry::Occupied(_) => {
+                                tracing::debug!(
+                                    package = %key.package.as_source(),
+                                    variants = ?key.variants,
+                                    platform = %platform,
+                                    "ignoring conflicting source timestamp hints across solve-group environments"
+                                );
+                                conflicts.insert(key.clone());
+                                merged.remove(key);
+                            }
+                        }
+                    }
+                }
+
+                merged
+            }
         }
     }
 
