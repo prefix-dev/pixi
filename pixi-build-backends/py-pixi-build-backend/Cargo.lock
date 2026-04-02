@@ -4868,9 +4868,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_core"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90ffbff5749149d29b4923c867b994cbdbc53d74a9160f7e1f38bd31e0a68fbb"
+checksum = "2a6a518810792788f64f6136203346211bdde5afc78f6251332f22c2443082da"
 dependencies = [
  "anyhow",
  "arwen-codesign",
@@ -4953,9 +4953,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_jinja"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecb4724c92edf69e8b52f2e80fda12ae1826e0bf061cb31a94c63373c5eaebf1"
+checksum = "2a09c7c94faa044dc9e0a63ebdbaaa600c9b6901a9a8aa803fd4442bf8c2bd11"
 dependencies = [
  "fs-err",
  "indexmap 2.13.0",
@@ -4988,9 +4988,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_recipe"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3969558b900ccded1cb114a0514c261fde10272d84bc27e1964ea97cffaaaab4"
+checksum = "a604f0126ad4b979e0ebe7f91525a27b0edf37a49fae3ecdd67b5eb4ae2617db"
 dependencies = [
  "fs-err",
  "globset",
@@ -5084,9 +5084,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_types"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1efa783832ccd7730eda9d305d2e327be4914e45573a20189a8caf94f9046965"
+checksum = "5c1af290b7cf625c02ceb931c8e38f561c6eb3cbf6990b5c0eafe0ab0faf2d92"
 dependencies = [
  "globset",
  "itertools 0.14.0",
@@ -5100,9 +5100,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_variant_config"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c31911d254516eb2dfc6f23807d8e956769cdfc4d7482f84591812ae6974eeb"
+checksum = "83969759a8ac8c999137c3137cacd5c947a8cae838e66e202a3c7bb9d07e5020"
 dependencies = [
  "fs-err",
  "marked-yaml",
@@ -5121,9 +5121,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_yaml_parser"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2248161bd478fbd53939da7d510425cb89480152a2cdb05ec9ac95d24d17133"
+checksum = "385a641dbf247cb0c71e49035ce04eb8c4c5bf56033ed6f164fe530e67c98c9f"
 dependencies = [
  "marked-yaml",
  "miette",

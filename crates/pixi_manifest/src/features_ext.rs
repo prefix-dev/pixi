@@ -127,15 +127,10 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             });
 
             *config = match package_exclude_newer {
-                ExcludeNewer::Timestamp(dt) => {
-                    config.clone().with_package_cutoff(name.clone(), dt)
-                }
-                ExcludeNewer::Duration(duration) => {
-                    config.clone().with_package_cutoff(
-                        name.clone(),
-                        ExcludeNewer::Duration(duration).cutoff(),
-                    )
-                }
+                ExcludeNewer::Timestamp(dt) => config.clone().with_package_cutoff(name.clone(), dt),
+                ExcludeNewer::Duration(duration) => config
+                    .clone()
+                    .with_package_cutoff(name.clone(), ExcludeNewer::Duration(duration).cutoff()),
             };
         }
 
