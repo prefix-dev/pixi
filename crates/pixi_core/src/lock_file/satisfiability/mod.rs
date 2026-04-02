@@ -1162,7 +1162,7 @@ pub async fn verify_platform_satisfiability(
                                 variant_files: Some(platform_setup.variant_files.clone()),
                                 enabled_protocols: EnabledProtocols::default(),
                             },
-                            exclude_newer: Some(source.timestamp),
+                            exclude_newer: source.timestamp,
                         };
 
                         let resolved_record = match ctx
@@ -1196,10 +1196,12 @@ pub async fn verify_platform_satisfiability(
         }
     };
 
+    let lock_file_version = locked_environment.lock_file().version();
     let source_validation_future = validate_locked_source_records(
         ctx.command_dispatcher.clone(),
         &platform_setup,
         &pixi_records,
+        lock_file_version,
     );
 
     // Create a lookup table from package name to package record. Returns an error
@@ -1646,6 +1648,7 @@ async fn validate_locked_source_records(
     command_dispatcher: CommandDispatcher,
     platform_setup: &PlatformVerificationSetup,
     pixi_records: &[PixiRecord],
+    lock_file_version: rattler_lock::FileFormatVersion,
 ) -> Result<SourceMetadataValidationOutcome, CommandDispatcherError<Box<PlatformUnsat>>> {
     let source_records: Vec<_> = pixi_records
         .iter()
@@ -1658,13 +1661,20 @@ async fn validate_locked_source_records(
         });
     }
 
-    verify_source_metadata(source_records, command_dispatcher, platform_setup).await
+    verify_source_metadata(
+        source_records,
+        command_dispatcher,
+        platform_setup,
+        lock_file_version,
+    )
+    .await
 }
 
 async fn verify_source_metadata(
     source_records: Vec<&SourceRecord>,
     command_dispatcher: CommandDispatcher,
     platform_setup: &PlatformVerificationSetup,
+    lock_file_version: rattler_lock::FileFormatVersion,
 ) -> Result<SourceMetadataValidationOutcome, CommandDispatcherError<Box<PlatformUnsat>>> {
     // Process all source records concurrently using CancellationAwareFutures
     // so that cancelled results are filtered and the dedup cache is populated.
@@ -1691,7 +1701,7 @@ async fn verify_source_metadata(
                     variant_files: Some(platform_setup.variant_files),
                     enabled_protocols: EnabledProtocols::default(),
                 },
-                exclude_newer: Some(source_record.timestamp),
+                exclude_newer: source_record.timestamp,
             };
 
             // Request the source record to verify if it still matches the
@@ -1704,22 +1714,27 @@ async fn verify_source_metadata(
 
             // Verify the resolved record against the locked record. These
             // checks only produce real errors, never cancellations.
-            verify_locked_source_record(source_record, &resolved.record)
+            verify_locked_source_record(source_record, &resolved.record, lock_file_version)
                 .map_err(CommandDispatcherError::Failed)?;
 
-            Ok((
-                SourceRecordReuseKey::new(
-                    source_record.name().clone(),
-                    source_record.variants().clone(),
-                ),
-                source_record.timestamp,
-            ))
+            // Only produce a reuse hint when the source record has a
+            // timestamp (i.e. it had host/build dependencies). Records
+            // without a timestamp have nothing to soft-lock.
+            Ok(source_record.timestamp.map(|ts| {
+                (
+                    SourceRecordReuseKey::new(
+                        source_record.name().clone(),
+                        source_record.variants().clone(),
+                    ),
+                    ts,
+                )
+            }))
         });
     }
 
     let (validated, errors) = results.collect_all().await?;
     Ok(SourceMetadataValidationOutcome {
-        validated_source_timestamps: validated.into_iter().collect(),
+        validated_source_timestamps: validated.into_iter().flatten().collect(),
         error: errors
             .into_iter()
             .next()
@@ -1732,7 +1747,22 @@ async fn verify_source_metadata(
 fn verify_locked_source_record(
     source_record: &pixi_record::SourceRecord,
     current_record: &pixi_record::SourceRecord,
+    lock_file_version: rattler_lock::FileFormatVersion,
 ) -> Result<(), Box<PlatformUnsat>> {
+    // If the resolved record gained a timestamp (host/build deps exist) but
+    // the locked record lacks one, the lock file needs re-solving. For v6
+    // lock files this is expected (they never had timestamps); for v7+ it
+    // indicates a corrupt or hand-edited lock file.
+    if current_record.timestamp.is_some()
+        && source_record.timestamp.is_none()
+        && lock_file_version >= rattler_lock::FileFormatVersion::V7
+    {
+        return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+            source_record.name().as_source().to_string(),
+            "host/build dependencies are not pinned with a timestamp".to_string(),
+        )));
+    }
+
     // Check if the build source location changed
     if current_record.build_source() != source_record.build_source() {
         return Err(Box::new(PlatformUnsat::SourceBuildLocationChanged(

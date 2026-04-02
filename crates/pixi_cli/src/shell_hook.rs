@@ -172,6 +172,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
             no_install: args.lock_and_install_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
         },
         ReinstallPackages::default(),
         &pixi_core::environment::InstallFilter::default(),
