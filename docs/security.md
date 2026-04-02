@@ -15,7 +15,7 @@ The first layer of supply chain security is reproducibility.
 
 Pixi records the resolved environment in `pixi.lock`, including the exact package artifacts that were selected. That gives you a stable review surface in code review and makes unexpected dependency changes visible when the lock file changes.
 
-To review lock file changes between commits in a human-readable way, you can use [`pixi diff`](integration/extensions/pixi_diff.md) directly or integrate the output into CI with [`pixi-diff-to-markdown`](integration/ci/updates_github_actions.md).
+To review lock file changes between commits in a human-readable way, you can use [`pixi-diff`](integration/extensions/pixi_diff.md) directly or integrate the output into CI with [`pixi-diff-to-markdown`](integration/ci/updates_github_actions.md).
 
 Using the following command, you can generate a readable overview of what changed between an older lock file and your current one:
 
