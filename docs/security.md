@@ -7,7 +7,7 @@ Pixi helps reduce supply chain risk in a few different ways:
 - it lets you react to advisories by constraining or overriding affected dependencies;
 - it supports generating and uploading Sigstore attestations when publishing to prefix.dev.
 
-At the same time, Pixi does not try to be a full vulnerability scanner for conda environments. Today, the most reliable way to test an installed Pixi environment against CVEs is to scan the environment itself with [Trivy](https://github.com/aquasecurity/trivy).
+At the same time, Pixi does not try to be a full vulnerability scanner for conda environments. Today, our preferred way to inspect a Pixi-managed environment for CVE analysis is to generate an SBOM from the installed environment with [Syft](https://github.com/anchore/syft).
 
 ## Reproducible Dependency Resolution
 
@@ -83,23 +83,21 @@ urllib3 = ">=2.2.2"
 
 These controls are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints and overrides help you respond once a vulnerable version is already known.
 
-## CVE Scanning Today
+## SBOM Generation Today
 
-To properly test a Pixi-managed conda environment against CVEs today, scan the installed environment with [Trivy](https://github.com/aquasecurity/trivy).
+To analyze a Pixi-managed conda environment for vulnerabilities today, our preferred workflow is to generate an SBOM from the installed environment with [Syft](https://github.com/anchore/syft).
 
 For a default workspace environment, that usually means scanning the environment directory directly:
 
 ```bash
-trivy fs .pixi/envs/default
+syft .pixi/envs/default
 ```
 
-This matters because Trivy can identify vulnerabilities from installed artifacts that are hard to infer from conda metadata alone (at the moment):
+This matters because scanning the installed environment captures what is actually present on disk, not just what was requested in the manifest.
 
-- for Python packages, Trivy can inspect metadata in `site-packages`;
-- for Go binaries, Trivy can read module and Go version information embedded in the binary at build time;
-- for Rust binaries, Trivy can scan auditable binaries built with `cargo-auditable`.
+Syft is especially useful as the inventory step in that process: it catalogs the installed software and produces an SBOM that can then be fed into the rest of your vulnerability workflow.
 
-For Rust packages on conda-forge, building with `cargo-auditable` is the current recommendation because it makes those shadow dependencies visible to scanners. See the conda-forge [Rust packaging guide](https://conda-forge.org/docs/maintainer/example_recipes/rust) or the [conda-forge agent skill](https://prefix.dev/channels/skill-forge/packages/agent-skill-conda-forge) for the recommended recipe pattern.
+For Rust packages on conda-forge, building with `cargo-auditable` remains the current recommendation because it makes those shadow dependencies visible to downstream scanning tools. See the conda-forge [Rust packaging guide](https://conda-forge.org/docs/maintainer/example_recipes/rust) or the [conda-forge agent skill](https://prefix.dev/channels/skill-forge/packages/agent-skill-conda-forge) for the recommended recipe pattern.
 
 ## Package Signing And Attestations
 
@@ -130,7 +128,7 @@ One example of a channel that already uses package signing extensively is the [g
 Cross-ecosystem vulnerability matching for conda packages is still improving.
 
 We are currently working on a PURL-related Conda Enhancement Proposal, [conda/ceps#63](https://github.com/conda/ceps/pull/63), that will make it easier to match conda-installed software against CVEs that are tracked in other ecosystems like PyPi.
-Currently, this is only feasible using tools like Trivy to scan the already-installed environment for PyPi packages.
+Today, generating an SBOM from the already-installed environment with tools like Syft is still the most practical workaround for that gap.
 
 For a broader view of the conda ecosystem work around regulatory readiness, SBOMs, CVE mapping, and auditable Rust binaries, see QuantCo's post, [Making the conda(-forge) ecosystem ready for cybersecurity regulations](https://tech.quantco.com/blog/conda-regulation-support).
 
@@ -139,4 +137,4 @@ Until that work is standardized and widely implemented, the safest approach is:
 - keep lock files under review;
 - use `exclude-newer` where a delayed trust window makes sense;
 - update your dependencies when advisories land;
-- scan the installed environments with Trivy.
+- generate an SBOM from the installed environments with Syft as part of your security review workflow.
