@@ -64,7 +64,7 @@ This is useful when you want a conservative trust window for public ecosystems, 
 !!! tip "CEP for `upload_timestamp` in repodata"
     There is also an in-progress proposal, [conda/ceps#154](https://github.com/conda/ceps/pull/154), to include upload timestamps in `repodata.json`. If adopted, that would let tools consume channel-provided upload times directly and harden this workflow against spoofed timestamp entries from conda-forge itself.
 
-## Responding To Vulnerability Advisories
+## Responding To Vulnerability Advisories Using Dependency Overrides
 
 When a CVE affects one of your dependencies, there the best way to respond is to update your dependency to a non-vulnerable version.
 In those cases, you might need to decrease the package-specific `exclude-newer` as mentioned above.
