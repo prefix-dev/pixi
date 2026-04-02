@@ -12,11 +12,11 @@ use crate::{
 };
 use pixi_test_utils::{MockRepoData, Package, format_diagnostic};
 
-fn write_basic_source_package_manifest(path: &std::path::Path, version: &str, extra: &str) {
+fn write_source_package_manifest(path: &std::path::Path, name: &str, version: &str, extra: &str) {
     let source_pixi_toml = format!(
         r#"
 [package]
-name = "my-package"
+name = "{name}"
 version = "{version}"
 
 [package.build]
@@ -27,12 +27,25 @@ backend = {{ name = "in-memory", version = "0.1.0" }}
     fs::write(path.join("pixi.toml"), source_pixi_toml).unwrap();
 }
 
-fn write_basic_source_workspace_manifest(path: &std::path::Path, channels: &[&str]) {
+fn write_basic_source_package_manifest(path: &std::path::Path, version: &str, extra: &str) {
+    write_source_package_manifest(path, "my-package", version, extra);
+}
+
+fn write_source_workspace_manifest(
+    path: &std::path::Path,
+    channels: &[&str],
+    source_dependencies: &[&str],
+) {
     let channels = channels
         .iter()
         .map(|c| format!(r#""{c}""#))
         .collect::<Vec<_>>()
         .join(", ");
+    let source_dependencies = source_dependencies
+        .iter()
+        .map(|name| format!(r#"{name} = {{ path = "./{name}" }}"#))
+        .collect::<Vec<_>>()
+        .join("\n");
     let manifest_content = format!(
         r#"
 [workspace]
@@ -41,11 +54,15 @@ platforms = ["{}"]
 preview = ["pixi-build"]
 
 [dependencies]
-my-package = {{ path = "./my-package" }}
+{source_dependencies}
 "#,
         Platform::current()
     );
     fs::write(path, manifest_content).unwrap();
+}
+
+fn write_basic_source_workspace_manifest(path: &std::path::Path, channels: &[&str]) {
+    write_source_workspace_manifest(path, channels, &["my-package"]);
 }
 
 fn write_source_workspace_manifest_with_binary_dependencies(
@@ -1705,5 +1722,69 @@ async fn test_source_timestamp_changes_for_explicit_update() {
     assert_ne!(
         initial_timestamp, updated_timestamp,
         "source timestamp should change when the package is explicitly updated"
+    );
+}
+
+#[tokio::test]
+async fn test_source_timestamp_reuse_survives_sibling_metadata_change() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let my_package_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&my_package_dir).unwrap();
+    write_source_package_manifest(&my_package_dir, "my-package", "1.0.0", "");
+
+    let other_package_dir = pixi.workspace_path().join("other-package");
+    fs::create_dir_all(&other_package_dir).unwrap();
+    write_source_package_manifest(&other_package_dir, "other-package", "1.0.0", "");
+
+    write_source_workspace_manifest(&pixi.manifest_path(), &[], &["my-package", "other-package"]);
+
+    let initial_lock = pixi.update_lock_file().await.unwrap();
+    let initial_my_timestamp = initial_lock
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        )
+        .expect("my-package should have a source timestamp");
+    let initial_other_timestamp = initial_lock
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "other-package",
+        )
+        .expect("other-package should have a source timestamp");
+
+    std::thread::sleep(Duration::from_millis(25));
+    write_source_package_manifest(&other_package_dir, "other-package", "1.1.0", "");
+
+    let relocked = pixi.update_lock_file().await.unwrap();
+    let relocked_my_timestamp = relocked
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        )
+        .expect("my-package should still have a source timestamp");
+    let relocked_other_timestamp = relocked
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "other-package",
+        )
+        .expect("other-package should still have a source timestamp");
+
+    assert_eq!(
+        initial_my_timestamp, relocked_my_timestamp,
+        "unchanged source package should keep its timestamp even when a sibling source package changes"
+    );
+    assert_ne!(
+        initial_other_timestamp, relocked_other_timestamp,
+        "changed sibling source package should get a fresh timestamp"
     );
 }
