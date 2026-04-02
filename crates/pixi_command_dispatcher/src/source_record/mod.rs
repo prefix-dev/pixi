@@ -136,7 +136,7 @@ impl SourceRecordSpec {
                 build_environment: self.backend_metadata.build_environment.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
                 source: build_backend_metadata.source.clone().into(),
-                timestamp: exclude_newer,
+                timestamp: Some(exclude_newer),
             };
             let cached_metadata = command_dispatcher
                 .source_record_cache()
@@ -232,6 +232,16 @@ impl SourceRecordSpec {
             )
             .await?;
 
+        // Skip caching when there is no timestamp (no host/build deps).
+        // Without a timestamp there is nothing to soft-lock, and the result
+        // is fully determined by the source manifest content.
+        if record.timestamp.is_none() {
+            return Ok(ResolvedSourceRecord {
+                record: Self::amend_cached_source_record(&build_backend_metadata.source, record),
+                source: build_backend_metadata.source.clone(),
+            });
+        }
+
         // Write back to cache using the record's resolved timestamp as key.
         if !build_backend_metadata.skip_cache {
             let write_cache_key: CacheKey<SourceRecordCache> = SourceRecordCacheKey {
@@ -245,7 +255,7 @@ impl SourceRecordSpec {
             };
 
             // If we previously did not read the right cache entry
-            let (is_stale, cached_entry) = if Some(record.timestamp) != self.exclude_newer {
+            let (is_stale, cached_entry) = if record.timestamp != self.exclude_newer {
                 let prev_cached_entry = command_dispatcher
                     .source_record_cache()
                     .read(&write_cache_key)
@@ -566,7 +576,9 @@ impl SourceRecordSpec {
             strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
-        // Compute the timestamp of the newest package that was used in the build/host environment.
+        // Compute the timestamp of the newest package that was used in the
+        // build/host environment. Returns `None` when there are no host or
+        // build dependencies, meaning there is nothing to soft-lock.
         let newest_package_timestamp = host_records
             .iter()
             .chain(build_records.iter())
@@ -576,8 +588,7 @@ impl SourceRecordSpec {
                     .timestamp
                     .map(chrono::DateTime::<chrono::Utc>::from)
             })
-            .max()
-            .unwrap_or_else(chrono::Utc::now);
+            .max();
 
         Ok(CachedSourceRecord {
             package_record: PackageRecord {
