@@ -190,6 +190,7 @@ nav:
           - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md
   - Advanced:
+      - Security: security.md
       - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
       - Dependency Overrides: advanced/override.md
