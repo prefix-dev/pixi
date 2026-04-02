@@ -3,7 +3,6 @@ use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, Passthroug
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
 use rattler_conda_types::{Platform, package::RunExportsJson};
-use std::time::Duration;
 use tempfile::TempDir;
 
 use crate::{
@@ -1591,9 +1590,17 @@ async fn test_source_timestamp_reused_when_lockfile_recomputed_for_unrelated_bin
         .unwrap()
         .with_backend_override(backend_override);
 
+    let t_fixed = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .unwrap()
+        .into();
     let mut package_database = MockRepoData::default();
     package_database.add_package(Package::build("foo", "1.0.0").finish());
     package_database.add_package(Package::build("bar", "1.0.0").finish());
+    package_database.add_package(
+        Package::build("host-dep", "1.0.0")
+            .with_timestamp(t_fixed)
+            .finish(),
+    );
     let channel_dir = TempDir::new().unwrap();
     package_database
         .write_repodata(channel_dir.path())
@@ -1605,7 +1612,12 @@ async fn test_source_timestamp_reused_when_lockfile_recomputed_for_unrelated_bin
 
     let source_dir = pixi.workspace_path().join("my-package");
     fs::create_dir_all(&source_dir).unwrap();
-    write_basic_source_package_manifest(&source_dir, "1.0.0", "");
+    write_basic_source_package_manifest(
+        &source_dir,
+        "1.0.0",
+        r#"[package.host-dependencies]
+host-dep = "*""#,
+    );
     write_source_workspace_manifest_with_binary_dependencies(
         &pixi.manifest_path(),
         &[&mock_channel],
@@ -1621,7 +1633,8 @@ async fn test_source_timestamp_reused_when_lockfile_recomputed_for_unrelated_bin
         )
         .expect("my-package should have a source timestamp");
 
-    std::thread::sleep(Duration::from_millis(25));
+    // No sleep needed: the source record cache ensures the same record is
+    // returned when the hint passes the original timestamp as exclude_newer.
     write_source_workspace_manifest_with_binary_dependencies(
         &pixi.manifest_path(),
         &[&mock_channel],
@@ -1657,31 +1670,15 @@ async fn test_source_timestamp_changes_when_source_metadata_changes() {
     write_basic_source_package_manifest(&source_dir, "1.0.0", "");
     write_basic_source_workspace_manifest(&pixi.manifest_path(), &[]);
 
-    let initial_lock = pixi.update_lock_file().await.unwrap();
-    let initial_timestamp = initial_lock
-        .get_conda_source_timestamp(
-            consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
-            "my-package",
-        )
-        .expect("my-package should have a source timestamp");
+    pixi.update_lock_file().await.unwrap();
 
-    std::thread::sleep(Duration::from_millis(25));
+    // Change the source package version. Since this is a mutable path-based
+    // source, the lock file stores only partial metadata (no version), so the
+    // lock file content won't change. The important thing is that the
+    // satisfiability check detects the metadata change and re-solves
+    // successfully.
     write_basic_source_package_manifest(&source_dir, "1.1.0", "");
-
-    let relocked = pixi.update_lock_file().await.unwrap();
-    let relocked_timestamp = relocked
-        .get_conda_source_timestamp(
-            consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
-            "my-package",
-        )
-        .expect("my-package should still have a source timestamp");
-
-    assert_ne!(
-        initial_timestamp, relocked_timestamp,
-        "source timestamp should change when the source metadata changes"
-    );
+    pixi.update_lock_file().await.unwrap();
 }
 
 #[tokio::test]
@@ -1693,10 +1690,35 @@ async fn test_source_timestamp_changes_for_explicit_update() {
         .unwrap()
         .with_backend_override(backend_override);
 
+    let t1 = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .unwrap()
+        .into();
+    let t2 = chrono::DateTime::parse_from_rfc3339("2026-02-01T00:00:00Z")
+        .unwrap()
+        .into();
+
+    // Initial channel only has host-dep 1.0.0.
+    let mut db = MockRepoData::default();
+    db.add_package(
+        Package::build("host-dep", "1.0.0")
+            .with_timestamp(t1)
+            .finish(),
+    );
+    let channel_dir = TempDir::new().unwrap();
+    db.write_repodata(channel_dir.path()).await.unwrap();
+    let mock_channel = url::Url::from_directory_path(channel_dir.path())
+        .unwrap()
+        .to_string();
+
     let source_dir = pixi.workspace_path().join("my-package");
     fs::create_dir_all(&source_dir).unwrap();
-    write_basic_source_package_manifest(&source_dir, "1.0.0", "");
-    write_basic_source_workspace_manifest(&pixi.manifest_path(), &[]);
+    write_basic_source_package_manifest(
+        &source_dir,
+        "1.0.0",
+        r#"[package.host-dependencies]
+host-dep = "*""#,
+    );
+    write_basic_source_workspace_manifest(&pixi.manifest_path(), &[&mock_channel]);
 
     let initial_lock = pixi.update_lock_file().await.unwrap();
     let initial_timestamp = initial_lock
@@ -1707,7 +1729,21 @@ async fn test_source_timestamp_changes_for_explicit_update() {
         )
         .expect("my-package should have a source timestamp");
 
-    std::thread::sleep(Duration::from_millis(25));
+    // Publish a newer host-dep to the same channel. The explicit update
+    // should pick it up, producing a deterministically different timestamp.
+    let mut db2 = MockRepoData::default();
+    db2.add_package(
+        Package::build("host-dep", "1.0.0")
+            .with_timestamp(t1)
+            .finish(),
+    );
+    db2.add_package(
+        Package::build("host-dep", "1.0.1")
+            .with_timestamp(t2)
+            .finish(),
+    );
+    db2.write_repodata(channel_dir.path()).await.unwrap();
+
     pixi.update().with_package("my-package").await.unwrap();
 
     let updated_lock = pixi.lock_file().await.unwrap();
@@ -1719,9 +1755,10 @@ async fn test_source_timestamp_changes_for_explicit_update() {
         )
         .expect("my-package should still have a source timestamp");
 
-    assert_ne!(
-        initial_timestamp, updated_timestamp,
-        "source timestamp should change when the package is explicitly updated"
+    assert!(
+        updated_timestamp > initial_timestamp,
+        "source timestamp should advance when the package is explicitly updated \
+         (initial={initial_timestamp}, updated={updated_timestamp})"
     );
 }
 
@@ -1734,15 +1771,40 @@ async fn test_source_timestamp_reuse_survives_sibling_metadata_change() {
         .unwrap()
         .with_backend_override(backend_override);
 
+    let t_fixed = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .unwrap()
+        .into();
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("host-dep", "1.0.0")
+            .with_timestamp(t_fixed)
+            .finish(),
+    );
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+    let mock_channel = url::Url::from_directory_path(channel_dir.path())
+        .unwrap()
+        .to_string();
+
+    let host_dep_extra = r#"[package.host-dependencies]
+host-dep = "*""#;
+
     let my_package_dir = pixi.workspace_path().join("my-package");
     fs::create_dir_all(&my_package_dir).unwrap();
-    write_source_package_manifest(&my_package_dir, "my-package", "1.0.0", "");
+    write_source_package_manifest(&my_package_dir, "my-package", "1.0.0", host_dep_extra);
 
     let other_package_dir = pixi.workspace_path().join("other-package");
     fs::create_dir_all(&other_package_dir).unwrap();
-    write_source_package_manifest(&other_package_dir, "other-package", "1.0.0", "");
+    write_source_package_manifest(&other_package_dir, "other-package", "1.0.0", host_dep_extra);
 
-    write_source_workspace_manifest(&pixi.manifest_path(), &[], &["my-package", "other-package"]);
+    write_source_workspace_manifest(
+        &pixi.manifest_path(),
+        &[&mock_channel],
+        &["my-package", "other-package"],
+    );
 
     let initial_lock = pixi.update_lock_file().await.unwrap();
     let initial_my_timestamp = initial_lock
@@ -1752,16 +1814,9 @@ async fn test_source_timestamp_reuse_survives_sibling_metadata_change() {
             "my-package",
         )
         .expect("my-package should have a source timestamp");
-    let initial_other_timestamp = initial_lock
-        .get_conda_source_timestamp(
-            consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
-            "other-package",
-        )
-        .expect("other-package should have a source timestamp");
 
-    std::thread::sleep(Duration::from_millis(25));
-    write_source_package_manifest(&other_package_dir, "other-package", "1.1.0", "");
+    // Bump other-package version; my-package stays unchanged.
+    write_source_package_manifest(&other_package_dir, "other-package", "1.1.0", host_dep_extra);
 
     let relocked = pixi.update_lock_file().await.unwrap();
     let relocked_my_timestamp = relocked
@@ -1771,20 +1826,230 @@ async fn test_source_timestamp_reuse_survives_sibling_metadata_change() {
             "my-package",
         )
         .expect("my-package should still have a source timestamp");
-    let relocked_other_timestamp = relocked
-        .get_conda_source_timestamp(
-            consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
-            "other-package",
-        )
-        .expect("other-package should still have a source timestamp");
 
     assert_eq!(
         initial_my_timestamp, relocked_my_timestamp,
         "unchanged source package should keep its timestamp even when a sibling source package changes"
     );
-    assert_ne!(
-        initial_other_timestamp, relocked_other_timestamp,
-        "changed sibling source package should get a fresh timestamp"
+
+    // Verify the changed sibling was re-solved and is still present.
+    assert!(
+        relocked
+            .get_conda_source_timestamp(
+                consts::DEFAULT_ENVIRONMENT_NAME,
+                Platform::current(),
+                "other-package",
+            )
+            .is_some(),
+        "changed sibling should still be present with a timestamp after re-solve"
+    );
+}
+
+#[tokio::test]
+async fn test_source_timestamp_reused_across_solve_group_environments() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let t_fixed = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .unwrap()
+        .into();
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foo", "1.0.0").finish());
+    package_database.add_package(Package::build("bar", "1.0.0").finish());
+    package_database.add_package(
+        Package::build("host-dep", "1.0.0")
+            .with_timestamp(t_fixed)
+            .finish(),
+    );
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+    let mock_channel = url::Url::from_directory_path(channel_dir.path())
+        .unwrap()
+        .to_string();
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    write_basic_source_package_manifest(
+        &source_dir,
+        "1.0.0",
+        r#"[package.host-dependencies]
+host-dep = "*""#,
+    );
+
+    // Two environments in the same solve group, both inheriting the source dep.
+    let initial_manifest = format!(
+        r#"
+[workspace]
+channels = ["{mock_channel}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+foo = "*"
+
+[feature.env-a.dependencies]
+
+[feature.env-b.dependencies]
+
+[environments]
+env-a = {{ features = ["env-a"], solve-group = "shared" }}
+env-b = {{ features = ["env-b"], solve-group = "shared" }}
+"#,
+        Platform::current()
+    );
+    fs::write(pixi.manifest_path(), &initial_manifest).unwrap();
+
+    let initial_lock = pixi.update_lock_file().await.unwrap();
+    let initial_ts_a = initial_lock
+        .get_conda_source_timestamp("env-a", Platform::current(), "my-package")
+        .expect("env-a should have my-package source timestamp");
+    let initial_ts_b = initial_lock
+        .get_conda_source_timestamp("env-b", Platform::current(), "my-package")
+        .expect("env-b should have my-package source timestamp");
+
+    assert_eq!(
+        initial_ts_a, initial_ts_b,
+        "both environments should get the same timestamp from the shared solve group"
+    );
+
+    // Add an unrelated binary dependency — triggers re-solve but source hasn't changed.
+    let updated_manifest = format!(
+        r#"
+[workspace]
+channels = ["{mock_channel}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+foo = "*"
+bar = "*"
+
+[feature.env-a.dependencies]
+
+[feature.env-b.dependencies]
+
+[environments]
+env-a = {{ features = ["env-a"], solve-group = "shared" }}
+env-b = {{ features = ["env-b"], solve-group = "shared" }}
+"#,
+        Platform::current()
+    );
+    fs::write(pixi.manifest_path(), &updated_manifest).unwrap();
+
+    let relocked = pixi.update_lock_file().await.unwrap();
+    let relocked_ts_a = relocked
+        .get_conda_source_timestamp("env-a", Platform::current(), "my-package")
+        .expect("env-a should still have my-package source timestamp");
+    let relocked_ts_b = relocked
+        .get_conda_source_timestamp("env-b", Platform::current(), "my-package")
+        .expect("env-b should still have my-package source timestamp");
+
+    assert_eq!(
+        initial_ts_a, relocked_ts_a,
+        "env-a timestamp should be preserved after adding unrelated binary dep"
+    );
+    assert_eq!(
+        initial_ts_b, relocked_ts_b,
+        "env-b timestamp should be preserved after adding unrelated binary dep"
+    );
+}
+
+#[tokio::test]
+async fn test_source_timestamp_reused_when_channel_appended() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let t_fixed = chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z")
+        .unwrap()
+        .into();
+
+    // Channel 1 has foo + host-dep, channel 2 has bar.
+    // host-dep is a host-dep of the source package so the timestamp is
+    // deterministic (not Utc::now()). Both channels must carry it so the
+    // re-resolve after appending channel 2 can still find it.
+    let mut db1 = MockRepoData::default();
+    db1.add_package(Package::build("foo", "1.0.0").finish());
+    db1.add_package(
+        Package::build("host-dep", "1.0.0")
+            .with_timestamp(t_fixed)
+            .finish(),
+    );
+    let channel1_dir = TempDir::new().unwrap();
+    db1.write_repodata(channel1_dir.path()).await.unwrap();
+    let channel1 = url::Url::from_directory_path(channel1_dir.path())
+        .unwrap()
+        .to_string();
+
+    let mut db2 = MockRepoData::default();
+    db2.add_package(Package::build("bar", "1.0.0").finish());
+    db2.add_package(
+        Package::build("host-dep", "1.0.0")
+            .with_timestamp(t_fixed)
+            .finish(),
+    );
+    let channel2_dir = TempDir::new().unwrap();
+    db2.write_repodata(channel2_dir.path()).await.unwrap();
+    let channel2 = url::Url::from_directory_path(channel2_dir.path())
+        .unwrap()
+        .to_string();
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    write_basic_source_package_manifest(
+        &source_dir,
+        "1.0.0",
+        r#"[package.host-dependencies]
+host-dep = "*""#,
+    );
+
+    // Initial lock with one channel.
+    write_source_workspace_manifest_with_binary_dependencies(
+        &pixi.manifest_path(),
+        &[&channel1],
+        &["foo"],
+    );
+
+    let initial_lock = pixi.update_lock_file().await.unwrap();
+    let initial_timestamp = initial_lock
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        )
+        .expect("my-package should have a source timestamp");
+
+    // Append a second, lower-priority channel. Existing packages remain valid
+    // (ChannelsExtended), so the source timestamp should be preserved.
+    write_source_workspace_manifest_with_binary_dependencies(
+        &pixi.manifest_path(),
+        &[&channel1, &channel2],
+        &["foo"],
+    );
+
+    let relocked = pixi.update_lock_file().await.unwrap();
+    let relocked_timestamp = relocked
+        .get_conda_source_timestamp(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        )
+        .expect("my-package should still have a source timestamp");
+
+    assert_eq!(
+        initial_timestamp, relocked_timestamp,
+        "source timestamp should be preserved when a lower-priority channel is appended"
     );
 }

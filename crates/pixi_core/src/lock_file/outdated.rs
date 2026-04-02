@@ -330,7 +330,12 @@ async fn find_unsatisfiable_targets<'p>(
                 }
             }
 
-            continue;
+            if unsatisfiable_targets
+                .disregard_locked_content
+                .should_disregard_conda(&environment)
+            {
+                continue;
+            }
         }
 
         // Verify each individual platform in parallel
