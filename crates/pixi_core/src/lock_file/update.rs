@@ -34,7 +34,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
+use pixi_record::{ParseLockFileError, PixiRecord, SourceRecordReuseKey, UnresolvedPixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -262,6 +262,8 @@ impl Workspace {
         // Load the lock-file, displaying warning if there's a version mismatch
         let lock_file = lock_file_result.into_lock_file_or_empty_with_warning();
 
+        let needs_format_upgrade = lock_file.version() < rattler_lock::FileFormatVersion::LATEST;
+
         let glob_hash_cache = GlobHashCache::default();
 
         // Construct a command dispatcher that will be used to run the tasks.
@@ -300,14 +302,23 @@ impl Workspace {
         }
 
         // Check which environments are out of date.
-        let outdated = OutdatedEnvironments::from_workspace_and_lock_file(
+        let mut outdated = OutdatedEnvironments::from_workspace_and_lock_file(
             self,
             command_dispatcher.clone(),
             &lock_file,
         )
         .await;
-        if outdated.is_empty() {
-            tracing::info!("the lock-file is up-to-date");
+        if outdated.is_empty() && !(needs_format_upgrade && options.upgrade_lock_file_format) {
+            if needs_format_upgrade {
+                tracing::warn!(
+                    "the lock file is up-to-date but uses an older format (v{}), \
+                     run `pixi update` to upgrade to v{} for improved reproducibility",
+                    lock_file.version(),
+                    rattler_lock::FileFormatVersion::LATEST,
+                );
+            } else {
+                tracing::info!("the lock-file is up-to-date");
+            }
 
             // If no-environment is outdated we can return early.
             // Pass the build_caches even if empty, in case conda_prefix needs them
@@ -326,6 +337,26 @@ impl Workspace {
                 },
                 false,
             ));
+        }
+
+        // When upgrading the lock file format, force a full re-solve of all
+        // environments so that source records are rebuilt with timestamps.
+        // Simply re-serializing the old lock file would preserve the missing
+        // timestamp fields.
+        if needs_format_upgrade && options.upgrade_lock_file_format {
+            tracing::warn!(
+                "the lock file is up-to-date but uses an older format (v{}), \
+                 re-solving all environments using locked content to upgrade to v{}",
+                lock_file.version(),
+                rattler_lock::FileFormatVersion::LATEST,
+            );
+            for env in self.environments() {
+                outdated
+                    .conda
+                    .entry(env.clone())
+                    .or_default()
+                    .extend(env.platforms());
+            }
         }
 
         // If the lock-file is out of date, but we're not allowed to update it, we
@@ -450,6 +481,11 @@ pub struct UpdateLockFileOptions {
 
     /// Don't install anything to disk.
     pub no_install: bool,
+
+    /// If true, rewrite the lock file to the latest format version even when
+    /// its content is already up-to-date. Set by `pixi lock`, `pixi update`,
+    /// and `pixi upgrade`.
+    pub upgrade_lock_file_format: bool,
 
     /// The maximum number of concurrent solves that are allowed to run. If this
     /// value is None a heuristic is used based on the number of cores
@@ -1124,6 +1160,26 @@ pub struct UpdateContext<'p> {
 }
 
 impl<'p> UpdateContext<'p> {
+    fn merge_source_timestamp_hints<'a>(
+        timestamp_sets: impl IntoIterator<
+            Item = &'a HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>,
+        >,
+    ) -> HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>> {
+        let mut merged: HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>> =
+            HashMap::new();
+
+        for timestamps in timestamp_sets {
+            for (key, value) in timestamps {
+                merged
+                    .entry(key.clone())
+                    .and_modify(|existing| *existing = (*existing).max(*value))
+                    .or_insert(*value);
+            }
+        }
+
+        merged
+    }
+
     /// Returns a future that will resolve to the solved repodata records for
     /// the given environment group or `None` if the records do not exist
     /// and are also not in the process of being updated.
@@ -1173,6 +1229,28 @@ impl<'p> UpdateContext<'p> {
         }
 
         None
+    }
+
+    fn source_timestamp_hints_for_group(
+        &self,
+        group: &GroupedEnvironment<'p>,
+        platform: Platform,
+    ) -> HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>> {
+        match group {
+            GroupedEnvironment::Environment(env) => self
+                .outdated_envs
+                .validated_source_timestamps
+                .get(&(env.clone(), platform))
+                .cloned()
+                .unwrap_or_default(),
+            GroupedEnvironment::Group(group) => {
+                Self::merge_source_timestamp_hints(group.environments().filter_map(|env| {
+                    self.outdated_envs
+                        .validated_source_timestamps
+                        .get(&(env, platform))
+                }))
+            }
+        }
     }
 
     /// Takes the latest repodata records for the given environment and
@@ -1776,6 +1854,8 @@ impl<'p> UpdateContext<'p> {
                 let mapping_client = self.mapping_client.clone();
                 let command_dispatcher = self.command_dispatcher.clone();
                 let source_clone = source.clone();
+                let source_timestamp_hints =
+                    self.source_timestamp_hints_for_group(&source, platform);
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source_clone,
                     locked_group_records,
@@ -1784,6 +1864,7 @@ impl<'p> UpdateContext<'p> {
                     channel_priority,
                     command_dispatcher,
                     pin_overrides,
+                    source_timestamp_hints,
                 )
                 .map(|result| result.map_err_with(Report::new))
                 .boxed_local();
@@ -2322,6 +2403,7 @@ async fn spawn_solve_conda_environment_task(
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
     pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
+    source_timestamp_hints: HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>,
 ) -> Result<TaskResult, CommandDispatcherError<SolveCondaEnvironmentError>> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -2441,6 +2523,7 @@ async fn spawn_solve_conda_environment_task(
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
             preferred_build_source: pin_overrides,
+            source_timestamp_hints,
         })
         .await
         .map_err_with(|source| SolveCondaEnvironmentError::SolveFailed {
@@ -2866,8 +2949,27 @@ fn is_editable_from_manifest(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{TimeZone, Utc};
     use pixi_manifest::PyPiDependencies;
     use pixi_pypi_spec::PixiPypiSpec;
+    use pixi_record::VariantValue;
+    use rattler_conda_types::PackageName;
+    use std::collections::BTreeMap;
+
+    fn source_key(package: &str, variants: &[(&str, &str)]) -> SourceRecordReuseKey {
+        SourceRecordReuseKey::new(
+            PackageName::from_str(package).unwrap(),
+            variants
+                .iter()
+                .map(|(key, value)| {
+                    (
+                        (*key).to_string(),
+                        VariantValue::String((*value).to_string()),
+                    )
+                })
+                .collect::<BTreeMap<_, _>>(),
+        )
+    }
 
     #[test]
     fn test_editable_path_spec_with_registry_spec() {
@@ -2938,6 +3040,52 @@ mod tests {
         assert!(
             !is_editable_from_manifest(&deps, &pep508_name),
             "Higher-priority feature's explicit editable=false should take precedence"
+        );
+    }
+
+    #[test]
+    fn test_merge_source_timestamp_hints_keeps_distinct_variants() {
+        let early = Utc.with_ymd_and_hms(2026, 4, 1, 12, 0, 0).unwrap();
+        let later = Utc.with_ymd_and_hms(2026, 4, 1, 13, 0, 0).unwrap();
+
+        let first = HashMap::from([(source_key("my-package", &[("python", "3.11")]), early)]);
+        let second = HashMap::from([(source_key("my-package", &[("python", "3.12")]), later)]);
+
+        let merged = UpdateContext::merge_source_timestamp_hints([&first, &second]);
+
+        assert_eq!(merged.len(), 2);
+        assert_eq!(
+            merged.get(&source_key("my-package", &[("python", "3.11")])),
+            Some(&early)
+        );
+        assert_eq!(
+            merged.get(&source_key("my-package", &[("python", "3.12")])),
+            Some(&later)
+        );
+    }
+
+    #[test]
+    fn test_merge_source_timestamp_hints_takes_max_for_same_output() {
+        let early = Utc.with_ymd_and_hms(2026, 4, 1, 12, 0, 0).unwrap();
+        let later = Utc.with_ymd_and_hms(2026, 4, 1, 13, 0, 0).unwrap();
+        let stable = Utc.with_ymd_and_hms(2026, 4, 1, 14, 0, 0).unwrap();
+
+        let first = HashMap::from([
+            (source_key("my-package", &[("python", "3.11")]), early),
+            (source_key("other-package", &[("python", "3.11")]), stable),
+        ]);
+        let second = HashMap::from([(source_key("my-package", &[("python", "3.11")]), later)]);
+
+        let merged = UpdateContext::merge_source_timestamp_hints([&first, &second]);
+
+        assert_eq!(
+            merged.get(&source_key("my-package", &[("python", "3.11")])),
+            Some(&later),
+            "should keep the highest timestamp when environments disagree"
+        );
+        assert_eq!(
+            merged.get(&source_key("other-package", &[("python", "3.11")])),
+            Some(&stable)
         );
     }
 }

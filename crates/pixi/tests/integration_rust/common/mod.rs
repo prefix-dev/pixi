@@ -41,7 +41,7 @@ use pixi_task::{
     TaskGraphError, TaskName, get_task_env,
 };
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
-use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
+use rattler_lock::{CondaSourceData, LockFile, LockedPackageRef, UrlOrPath};
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -144,6 +144,26 @@ pub trait LockFileExt {
         platform: Platform,
         package: &str,
     ) -> Option<LockedPackageRef<'_>>;
+
+    /// Returns the [`CondaSourceData`] for a source package in the given
+    /// environment and platform, or `None` if the package is not found or is
+    /// not a source package.
+    fn get_conda_source_package(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<&CondaSourceData>;
+
+    /// Returns the timestamp of a source package in the given environment and
+    /// platform, or `None` if the package is not found or is not a source
+    /// package.
+    fn get_conda_source_timestamp(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<chrono::DateTime<chrono::Utc>>;
 }
 
 impl LockFileExt for LockFile {
@@ -259,6 +279,42 @@ impl LockFileExt for LockFile {
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
             .map(|p| p.location().clone())
+    }
+
+    fn get_conda_source_package(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<&CondaSourceData> {
+        let p = self.platform(&platform.to_string())?;
+        self.environment(environment).and_then(|env| {
+            env.packages(p).and_then(|mut packages| {
+                packages.find_map(|p| match p {
+                    LockedPackageRef::Conda(conda) => {
+                        let source = conda.as_source()?;
+                        let matches = source.metadata.as_full().is_some_and(|full| {
+                            full.package_record.name.as_normalized() == package
+                        }) || source
+                            .metadata
+                            .as_partial()
+                            .is_some_and(|partial| partial.name.as_normalized() == package);
+                        matches.then_some(source)
+                    }
+                    LockedPackageRef::Pypi(_) => None,
+                })
+            })
+        })
+    }
+
+    fn get_conda_source_timestamp(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<chrono::DateTime<chrono::Utc>> {
+        self.get_conda_source_package(environment, platform, package)
+            .and_then(|source| source.timestamp)
     }
 }
 

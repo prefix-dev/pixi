@@ -2,7 +2,7 @@ pub mod pypi_metadata;
 
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::{Display, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
@@ -33,7 +33,8 @@ use pixi_manifest::{
 use pixi_pypi_spec::PixiPypiSource;
 use pixi_record::{
     DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedBuildSourceSpec, PinnedSourceSpec,
-    PixiRecord, SourceMismatchError, UnresolvedPixiRecord, VariantValue,
+    PixiRecord, SourceMismatchError, SourceRecord, SourceRecordReuseKey, UnresolvedPixiRecord,
+    VariantValue,
 };
 use pixi_spec::{
     PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError, Subdirectory,
@@ -1002,6 +1003,74 @@ pub struct VerifySatisfiabilityContext<'a> {
     pub static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
+pub type ValidatedSourceTimestamps = HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>;
+
+pub struct PlatformSatisfiabilityOutcome {
+    pub validated_source_timestamps: ValidatedSourceTimestamps,
+    pub result: Result<
+        (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
+        CommandDispatcherError<Box<PlatformUnsat>>,
+    >,
+}
+
+struct SourceMetadataValidationOutcome {
+    validated_source_timestamps: ValidatedSourceTimestamps,
+    error: Option<CommandDispatcherError<Box<PlatformUnsat>>>,
+}
+
+#[derive(Clone)]
+struct PlatformVerificationSetup {
+    channel_config: rattler_conda_types::ChannelConfig,
+    channels: Vec<ChannelUrl>,
+    variant_configuration: BTreeMap<String, Vec<VariantValue>>,
+    variant_files: Vec<PathBuf>,
+    virtual_packages: Vec<GenericVirtualPackage>,
+    build_environment: BuildEnvironment,
+}
+
+fn build_platform_verification_setup(
+    ctx: &VerifySatisfiabilityContext<'_>,
+) -> Result<PlatformVerificationSetup, CommandDispatcherError<Box<PlatformUnsat>>> {
+    let channel_config = ctx.environment.workspace().channel_config();
+    let channels = ctx
+        .environment
+        .channels()
+        .into_iter()
+        .cloned()
+        .map(|c| c.into_base_url(&channel_config))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| CommandDispatcherError::Failed(Box::new(PlatformUnsat::InvalidChannel(e))))?;
+    let VariantConfig {
+        variant_configuration,
+        variant_files,
+    } = ctx
+        .environment
+        .workspace()
+        .variants(ctx.platform)
+        .map_err(|e| CommandDispatcherError::Failed(Box::new(PlatformUnsat::Variants(e))))?;
+    let virtual_packages: Vec<GenericVirtualPackage> = ctx
+        .environment
+        .virtual_packages(ctx.platform)
+        .into_iter()
+        .map(GenericVirtualPackage::from)
+        .collect();
+    let build_environment = BuildEnvironment {
+        host_platform: ctx.platform,
+        build_platform: ctx.platform,
+        host_virtual_packages: virtual_packages.clone(),
+        build_virtual_packages: virtual_packages.clone(),
+    };
+
+    Ok(PlatformVerificationSetup {
+        channel_config,
+        channels,
+        variant_configuration,
+        variant_files,
+        virtual_packages,
+        build_environment,
+    })
+}
+
 /// Verifies that the package requirements of the specified `environment` can be
 /// satisfied with the packages present in the lock-file.
 ///
@@ -1017,10 +1086,17 @@ pub struct VerifySatisfiabilityContext<'a> {
 pub async fn verify_platform_satisfiability(
     ctx: &VerifySatisfiabilityContext<'_>,
     locked_environment: rattler_lock::Environment<'_>,
-) -> Result<
-    (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
-    CommandDispatcherError<Box<PlatformUnsat>>,
-> {
+) -> PlatformSatisfiabilityOutcome {
+    let platform_setup = match build_platform_verification_setup(ctx) {
+        Ok(setup) => setup,
+        Err(err) => {
+            return PlatformSatisfiabilityOutcome {
+                validated_source_timestamps: Default::default(),
+                result: Err(err),
+            };
+        }
+    };
+
     // Convert the lock file into a list of conda and pypi packages.
     // Read as UnresolvedPixiRecord first, then resolve any partial source records.
     let mut unresolved_records: Vec<UnresolvedPixiRecord> = Vec::new();
@@ -1036,11 +1112,21 @@ pub async fn verify_platform_satisfiability(
         match package {
             LockedPackageRef::Conda(conda) => {
                 let url = conda.location().clone();
-                unresolved_records.push(
-                    UnresolvedPixiRecord::from_conda_package_data(conda.clone(), ctx.project_root)
-                        .map_err(|e| Box::new(PlatformUnsat::CorruptedEntry(url.to_string(), e)))
-                        .map_err(CommandDispatcherError::Failed)?,
-                );
+                let record = match UnresolvedPixiRecord::from_conda_package_data(
+                    conda.clone(),
+                    ctx.project_root,
+                ) {
+                    Ok(record) => record,
+                    Err(e) => {
+                        return PlatformSatisfiabilityOutcome {
+                            validated_source_timestamps: Default::default(),
+                            result: Err(CommandDispatcherError::Failed(Box::new(
+                                PlatformUnsat::CorruptedEntry(url.to_string(), e),
+                            ))),
+                        };
+                    }
+                };
+                unresolved_records.push(record);
             }
             LockedPackageRef::Pypi(pypi) => {
                 pypi_packages.push(pypi.clone().into());
@@ -1052,34 +1138,6 @@ pub async fn verify_platform_satisfiability(
     let pixi_records: Vec<PixiRecord> = {
         let has_partials = unresolved_records.iter().any(|r| r.is_partial());
         if has_partials {
-            let channel_config = ctx.environment.workspace().channel_config();
-            let channels: Vec<ChannelUrl> = ctx
-                .environment
-                .channels()
-                .into_iter()
-                .cloned()
-                .map(|c| c.into_base_url(&channel_config))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| {
-                    CommandDispatcherError::Failed(Box::new(PlatformUnsat::InvalidChannel(e)))
-                })?;
-            let VariantConfig {
-                variant_configuration,
-                variant_files,
-            } = ctx
-                .environment
-                .workspace()
-                .variants(ctx.platform)
-                .map_err(|e| {
-                    CommandDispatcherError::Failed(Box::new(PlatformUnsat::Variants(e)))
-                })?;
-            let virtual_packages: Vec<GenericVirtualPackage> = ctx
-                .environment
-                .virtual_packages(ctx.platform)
-                .into_iter()
-                .map(GenericVirtualPackage::from)
-                .collect();
-
             let mut resolved = Vec::with_capacity(unresolved_records.len());
             for record in unresolved_records {
                 match record.try_into_resolved() {
@@ -1095,26 +1153,32 @@ pub async fn verify_platform_satisfiability(
                                     .build_source()
                                     .cloned()
                                     .map(PinnedBuildSourceSpec::into_pinned),
-                                channel_config: channel_config.clone(),
-                                channels: channels.clone(),
-                                build_environment: BuildEnvironment {
-                                    host_platform: ctx.platform,
-                                    build_platform: ctx.platform,
-                                    host_virtual_packages: virtual_packages.clone(),
-                                    build_virtual_packages: virtual_packages.clone(),
-                                },
-                                variant_configuration: Some(variant_configuration.clone()),
-                                variant_files: Some(variant_files.clone()),
+                                channel_config: platform_setup.channel_config.clone(),
+                                channels: platform_setup.channels.clone(),
+                                build_environment: platform_setup.build_environment.clone(),
+                                variant_configuration: Some(
+                                    platform_setup.variant_configuration.clone(),
+                                ),
+                                variant_files: Some(platform_setup.variant_files.clone()),
                                 enabled_protocols: EnabledProtocols::default(),
                             },
-                            exclude_newer: Some(source.timestamp),
+                            exclude_newer: source.timestamp,
                         };
 
-                        let resolved_record = ctx
+                        let resolved_record = match ctx
                             .command_dispatcher
                             .source_record(spec)
                             .await
-                            .map_err_with(Box::<PlatformUnsat>::from)?;
+                            .map_err_with(Box::<PlatformUnsat>::from)
+                        {
+                            Ok(record) => record,
+                            Err(err) => {
+                                return PlatformSatisfiabilityOutcome {
+                                    validated_source_timestamps: Default::default(),
+                                    result: Err(err),
+                                };
+                            }
+                        };
 
                         resolved.push(PixiRecord::Source(resolved_record.record.clone()));
                     }
@@ -1132,92 +1196,122 @@ pub async fn verify_platform_satisfiability(
         }
     };
 
-    // to reflect new purls for pypi packages
-    // we need to invalidate the locked environment
-    // if all conda packages have empty purls
-    if ctx.environment.has_pypi_dependencies()
-        && pypi_packages.is_empty()
-        && pixi_records
-            .iter()
-            .filter_map(PixiRecord::as_binary)
-            .all(|record| record.package_record.purls.is_none())
-    {
+    let lock_file_version = locked_environment.lock_file().version();
+    let source_validation_future = validate_locked_source_records(
+        ctx.command_dispatcher.clone(),
+        &platform_setup,
+        &pixi_records,
+        lock_file_version,
+    );
+
+    // Create a lookup table from package name to package record. Returns an error
+    // if we find a duplicate entry for a record
+    let package_verification_future = async {
+        // to reflect new purls for pypi packages
+        // we need to invalidate the locked environment
+        // if all conda packages have empty purls
+        if ctx.environment.has_pypi_dependencies()
+            && pypi_packages.is_empty()
+            && pixi_records
+                .iter()
+                .filter_map(PixiRecord::as_binary)
+                .all(|record| record.package_record.purls.is_none())
         {
             return Err(CommandDispatcherError::Failed(Box::new(
                 PlatformUnsat::MissingPurls,
             )));
         }
-    }
 
-    // Create a lookup table from package name to package record. Returns an error
-    // if we find a duplicate entry for a record
-    let pixi_records_by_name = match PixiRecordsByName::from_unique_iter(pixi_records.clone()) {
-        Ok(pixi_records) => pixi_records,
-        Err(duplicate) => {
-            return Err(CommandDispatcherError::Failed(Box::new(
-                PlatformUnsat::DuplicateEntry(
+        let pixi_records_by_name = PixiRecordsByName::from_unique_iter(pixi_records.clone())
+            .map_err(|duplicate| {
+                CommandDispatcherError::Failed(Box::new(PlatformUnsat::DuplicateEntry(
                     duplicate.package_record().name.as_source().to_string(),
-                ),
-            )));
-        }
-    };
+                )))
+            })?;
 
-    // Create a lookup table from package name to package record. Returns an error
-    // if we find a duplicate entry for a record
-    let pypi_records_by_name = match PypiRecordsByName::from_unique_iter(pypi_packages) {
-        Ok(pypi_packages) => pypi_packages,
-        Err(duplicate) => {
-            return Err(CommandDispatcherError::Failed(Box::new(
-                PlatformUnsat::DuplicateEntry(duplicate.name().to_string()),
-            )));
-        }
-    };
+        // Create a lookup table from package name to package record. Returns an error
+        // if we find a duplicate entry for a record
+        let pypi_records_by_name =
+            PypiRecordsByName::from_unique_iter(pypi_packages).map_err(|duplicate| {
+                CommandDispatcherError::Failed(Box::new(PlatformUnsat::DuplicateEntry(
+                    duplicate.name().to_string(),
+                )))
+            })?;
 
-    // Get host platform records for building (we can only run Python on the host platform)
-    let best_platform = ctx.environment.best_platform();
-    let building_pixi_records = if ctx.platform == best_platform {
-        // Same platform, reuse the records
-        Ok(pixi_records_by_name.clone())
-    } else {
-        // Different platform - extract host platform records for building
-        let mut host_pixi_records: Vec<PixiRecord> = Vec::new();
-        let lock_best_platform = locked_environment
-            .lock_file()
-            .platform(&best_platform.to_string());
-        for package in lock_best_platform
-            .and_then(|p| locked_environment.packages(p))
-            .into_iter()
-            .flatten()
-        {
-            if let LockedPackageRef::Conda(conda) = package {
-                let url = conda.location().clone();
-                let record =
-                    UnresolvedPixiRecord::from_conda_package_data(conda.clone(), ctx.project_root)
-                        .map_err(|e| Box::new(PlatformUnsat::CorruptedEntry(url.to_string(), e)))
-                        .map_err(CommandDispatcherError::Failed)?;
-                // Partial source records (e.g. packages that haven't
-                // been built yet) cannot be resolved. Skip them — only
-                // fully resolved records are needed as build
-                // dependencies for UV metadata builds.
-                if let Ok(resolved) = record.try_into_resolved() {
-                    host_pixi_records.push(resolved);
+        // Get host platform records for building (we can only run Python on the host platform)
+        let best_platform = ctx.environment.best_platform();
+        let building_pixi_records = if ctx.platform == best_platform {
+            // Same platform, reuse the records
+            Ok(pixi_records_by_name.clone())
+        } else {
+            // Different platform - extract host platform records for building
+            let mut host_pixi_records: Vec<PixiRecord> = Vec::new();
+            let lock_best_platform = locked_environment
+                .lock_file()
+                .platform(&best_platform.to_string());
+            for package in lock_best_platform
+                .and_then(|p| locked_environment.packages(p))
+                .into_iter()
+                .flatten()
+            {
+                if let LockedPackageRef::Conda(conda) = package {
+                    let url = conda.location().clone();
+                    let record = UnresolvedPixiRecord::from_conda_package_data(
+                        conda.clone(),
+                        ctx.project_root,
+                    )
+                    .map_err(|e| {
+                        CommandDispatcherError::Failed(Box::new(PlatformUnsat::CorruptedEntry(
+                            url.to_string(),
+                            e,
+                        )))
+                    })?;
+                    // Partial source records (e.g. packages that haven't
+                    // been built yet) cannot be resolved. Skip them — only
+                    // fully resolved records are needed as build
+                    // dependencies for UV metadata builds.
+                    if let Ok(resolved) = record.try_into_resolved() {
+                        host_pixi_records.push(resolved);
+                    }
                 }
             }
-        }
-        PixiRecordsByName::from_unique_iter(host_pixi_records).map_err(|duplicate| {
-            PlatformUnsat::DuplicateEntry(duplicate.package_record().name.as_source().to_string())
-        })
+            PixiRecordsByName::from_unique_iter(host_pixi_records).map_err(|duplicate| {
+                PlatformUnsat::DuplicateEntry(
+                    duplicate.package_record().name.as_source().to_string(),
+                )
+            })
+        };
+
+        verify_package_platform_satisfiability(
+            ctx,
+            &platform_setup,
+            &pixi_records_by_name,
+            &pypi_records_by_name,
+            building_pixi_records,
+        )
+        .await
     };
 
-    // Run satisfiability check - for local packages with dynamic metadata,
-    // we use UV infrastructure to build metadata if available.
-    verify_package_platform_satisfiability(
-        ctx,
-        &pixi_records_by_name,
-        &pypi_records_by_name,
-        building_pixi_records,
-    )
-    .await
+    let ((validated_source_timestamps, source_validation_error), result) = futures::join!(
+        async {
+            match source_validation_future.await {
+                Ok(outcome) => (outcome.validated_source_timestamps, outcome.error),
+                Err(err) => (Default::default(), Some(err)),
+            }
+        },
+        package_verification_future,
+    );
+
+    PlatformSatisfiabilityOutcome {
+        validated_source_timestamps,
+        result: match result {
+            Ok(result) => match source_validation_error {
+                Some(err) => Err(err),
+                None => Ok(result),
+            },
+            Err(err) => Err(err),
+        },
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -1550,28 +1644,45 @@ pub struct VerifiedIndividualEnvironment {
 /// This function fetches the current metadata for each source package and
 /// compares it with the locked metadata to detect if any source packages have
 /// changed.
-#[allow(clippy::too_many_arguments)]
-async fn verify_source_metadata(
-    source_records: Vec<&pixi_record::SourceRecord>,
+async fn validate_locked_source_records(
     command_dispatcher: CommandDispatcher,
-    channel_config: rattler_conda_types::ChannelConfig,
-    channel_urls: Vec<ChannelUrl>,
-    variants: std::collections::BTreeMap<String, Vec<VariantValue>>,
-    variant_files: Vec<PathBuf>,
-    virtual_packages: Vec<GenericVirtualPackage>,
-    platform: Platform,
-) -> Result<(), CommandDispatcherError<Box<PlatformUnsat>>> {
+    platform_setup: &PlatformVerificationSetup,
+    pixi_records: &[PixiRecord],
+    lock_file_version: rattler_lock::FileFormatVersion,
+) -> Result<SourceMetadataValidationOutcome, CommandDispatcherError<Box<PlatformUnsat>>> {
+    let source_records: Vec<_> = pixi_records
+        .iter()
+        .filter_map(PixiRecord::as_source)
+        .collect();
+    if source_records.is_empty() {
+        return Ok(SourceMetadataValidationOutcome {
+            validated_source_timestamps: Default::default(),
+            error: None,
+        });
+    }
+
+    verify_source_metadata(
+        source_records,
+        command_dispatcher,
+        platform_setup,
+        lock_file_version,
+    )
+    .await
+}
+
+async fn verify_source_metadata(
+    source_records: Vec<&SourceRecord>,
+    command_dispatcher: CommandDispatcher,
+    platform_setup: &PlatformVerificationSetup,
+    lock_file_version: rattler_lock::FileFormatVersion,
+) -> Result<SourceMetadataValidationOutcome, CommandDispatcherError<Box<PlatformUnsat>>> {
     // Process all source records concurrently using CancellationAwareFutures
     // so that cancelled results are filtered and the dedup cache is populated.
     let mut results = CancellationAwareFutures::new(command_dispatcher.executor());
 
     for source_record in source_records {
         let command_dispatcher = command_dispatcher.clone();
-        let channel_config = channel_config.clone();
-        let channel_urls = channel_urls.clone();
-        let variants = variants.clone();
-        let variant_files = variant_files.clone();
-        let virtual_packages = virtual_packages.clone();
+        let platform_setup = platform_setup.clone();
 
         results.push(async move {
             let spec = SourceRecordSpec {
@@ -1583,19 +1694,14 @@ async fn verify_source_metadata(
                         .build_source()
                         .cloned()
                         .map(PinnedBuildSourceSpec::into_pinned),
-                    channel_config,
-                    channels: channel_urls,
-                    build_environment: BuildEnvironment {
-                        host_platform: platform,
-                        build_platform: platform,
-                        host_virtual_packages: virtual_packages.clone(),
-                        build_virtual_packages: virtual_packages,
-                    },
-                    variant_configuration: Some(variants),
-                    variant_files: Some(variant_files),
+                    channel_config: platform_setup.channel_config,
+                    channels: platform_setup.channels,
+                    build_environment: platform_setup.build_environment,
+                    variant_configuration: Some(platform_setup.variant_configuration),
+                    variant_files: Some(platform_setup.variant_files),
                     enabled_protocols: EnabledProtocols::default(),
                 },
-                exclude_newer: Some(source_record.timestamp),
+                exclude_newer: source_record.timestamp,
             };
 
             // Request the source record to verify if it still matches the
@@ -1608,14 +1714,32 @@ async fn verify_source_metadata(
 
             // Verify the resolved record against the locked record. These
             // checks only produce real errors, never cancellations.
-            verify_locked_source_record(source_record, &resolved.record)
-                .map_err(CommandDispatcherError::Failed)
+            verify_locked_source_record(source_record, &resolved.record, lock_file_version)
+                .map_err(CommandDispatcherError::Failed)?;
+
+            // Only produce a reuse hint when the source record has a
+            // timestamp (i.e. it had host/build dependencies). Records
+            // without a timestamp have nothing to soft-lock.
+            Ok(source_record.timestamp.map(|ts| {
+                (
+                    SourceRecordReuseKey::new(
+                        source_record.name().clone(),
+                        source_record.variants().clone(),
+                    ),
+                    ts,
+                )
+            }))
         });
     }
 
-    results
-        .try_for_each(|result| async move { Ok(result) })
-        .await
+    let (validated, errors) = results.collect_all().await?;
+    Ok(SourceMetadataValidationOutcome {
+        validated_source_timestamps: validated.into_iter().flatten().collect(),
+        error: errors
+            .into_iter()
+            .next()
+            .map(CommandDispatcherError::Failed),
+    })
 }
 
 /// Verify that a single locked source record still matches the currently
@@ -1623,7 +1747,22 @@ async fn verify_source_metadata(
 fn verify_locked_source_record(
     source_record: &pixi_record::SourceRecord,
     current_record: &pixi_record::SourceRecord,
+    lock_file_version: rattler_lock::FileFormatVersion,
 ) -> Result<(), Box<PlatformUnsat>> {
+    // If the resolved record gained a timestamp (host/build deps exist) but
+    // the locked record lacks one, the lock file needs re-solving. For v6
+    // lock files this is expected (they never had timestamps); for v7+ it
+    // indicates a corrupt or hand-edited lock file.
+    if current_record.timestamp.is_some()
+        && source_record.timestamp.is_none()
+        && lock_file_version >= rattler_lock::FileFormatVersion::V7
+    {
+        return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+            source_record.name().as_source().to_string(),
+            "host/build dependencies are not pinned with a timestamp".to_string(),
+        )));
+    }
+
     // Check if the build source location changed
     if current_record.build_source() != source_record.build_source() {
         return Err(Box::new(PlatformUnsat::SourceBuildLocationChanged(
@@ -2087,8 +2226,9 @@ async fn lock_pypi_packages(
     ))
 }
 
-pub(crate) async fn verify_package_platform_satisfiability(
+async fn verify_package_platform_satisfiability(
     ctx: &VerifySatisfiabilityContext<'_>,
+    platform_setup: &PlatformVerificationSetup,
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
@@ -2194,33 +2334,16 @@ pub(crate) async fn verify_package_platform_satisfiability(
         )));
     }
 
-    // Create a list of virtual packages by name
-    let virtual_packages = ctx
-        .environment
-        .virtual_packages(ctx.platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
+    let virtual_packages = platform_setup
+        .virtual_packages
+        .iter()
+        .cloned()
         .map(|vpkg| (vpkg.name.clone(), vpkg))
         .collect::<HashMap<_, _>>();
 
-    // The list of channels and platforms we need for this task
-    let channels = ctx
-        .environment
-        .channels()
-        .into_iter()
-        .cloned()
-        .collect_vec();
-
-    // Get the channel configuration
-    let channel_config = ctx.environment.workspace().channel_config();
-
     // Resolve the channel URLs for the channels we need.
-    let channels = channels
-        .iter()
-        .map(|c| c.clone().into_base_url(&channel_config))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| Box::new(PlatformUnsat::InvalidChannel(e)))
-        .map_err(CommandDispatcherError::Failed)?;
+    let channels = platform_setup.channels.clone();
+    let channel_config = platform_setup.channel_config.clone();
 
     // Check that all locked conda packages satisfy the current constraints.
     // If a constraint is violated, the lock file needs to be re-solved.
@@ -2276,63 +2399,29 @@ pub(crate) async fn verify_package_platform_satisfiability(
         }
     }
 
-    // Determine the build variants
-    let VariantConfig {
-        variant_configuration,
-        variant_files,
-    } = ctx
-        .environment
-        .workspace()
-        .variants(ctx.platform)
-        .map_err(|e| CommandDispatcherError::Failed(Box::new(PlatformUnsat::Variants(e))))?;
-
-    let build_environment =
-        BuildEnvironment::simple(ctx.platform, virtual_packages.values().cloned().collect());
-
-    // Get all source records from the lock file for metadata verification
-    let source_records: Vec<_> = locked_pixi_records
-        .records
-        .iter()
-        .filter_map(PixiRecord::as_source)
-        .collect();
-
-    // Resolve dev dependencies and verify source metadata in parallel
-    let dev_deps_future = resolve_dev_dependencies(
+    let resolve_dev_dependencies_future = resolve_dev_dependencies(
         dev_dependencies,
         &ctx.command_dispatcher,
         &channel_config,
         &channels,
-        &build_environment,
-        &variant_configuration,
-        &variant_files,
+        &platform_setup.build_environment,
+        &platform_setup.variant_configuration,
+        &platform_setup.variant_files,
     );
 
-    let source_metadata_future = verify_source_metadata(
-        source_records,
-        ctx.command_dispatcher.clone(),
-        channel_config.clone(),
-        channels.clone(),
-        variant_configuration.clone(),
-        variant_files.clone(),
-        virtual_packages.values().cloned().collect(),
-        ctx.platform,
+    // Determine the pypi packages provided by the locked conda packages.
+    let locked_conda_pypi_packages = locked_pixi_records
+        .by_pypi_name()
+        .map_err(|e| CommandDispatcherError::Failed(Box::new(e.into())))?;
+
+    let lock_pypi_packages_future = lock_pypi_packages(
+        ctx,
+        locked_pixi_records,
+        unresolved_pypi_environment,
+        building_pixi_records,
     );
-
-    // Use `join!` instead of `try_join!` so that both futures always run to
-    // completion. Their results populate the dedup cache and must not be
-    // dropped early.
-    let (dev_deps_result, source_metadata_result) =
-        futures::join!(dev_deps_future, source_metadata_future);
-
-    let resolved_dev_dependencies = match (dev_deps_result, source_metadata_result) {
-        // If any errored, we error.
-        (Err(CommandDispatcherError::Failed(e)), _)
-        | (_, Err(CommandDispatcherError::Failed(e))) => Err(CommandDispatcherError::Failed(e)),
-        // Otherwise, if any was cancelled, we return cancelled.
-        (Err(CommandDispatcherError::Cancelled), _)
-        | (_, Err(CommandDispatcherError::Cancelled)) => Err(CommandDispatcherError::Cancelled),
-        (Ok(resolved_dev_dependencies), _) => Ok(resolved_dev_dependencies),
-    }?;
+    let (resolved_dev_dependencies, locked_pypi_records) =
+        futures::try_join!(resolve_dev_dependencies_future, lock_pypi_packages_future)?;
 
     if (environment_dependencies.is_empty() && resolved_dev_dependencies.is_empty())
         && !locked_pixi_records.is_empty()
@@ -2341,19 +2430,6 @@ pub(crate) async fn verify_package_platform_satisfiability(
             PlatformUnsat::TooManyCondaPackages(Vec::new()),
         )));
     }
-
-    // Determine the pypi packages provided by the locked conda packages.
-    let locked_conda_pypi_packages = locked_pixi_records
-        .by_pypi_name()
-        .map_err(|e| CommandDispatcherError::Failed(Box::new(e.into())))?;
-
-    let locked_pypi_records = lock_pypi_packages(
-        ctx,
-        locked_pixi_records,
-        unresolved_pypi_environment,
-        building_pixi_records,
-    )
-    .await?;
 
     // Keep a list of all conda packages that we have already visited
     let mut conda_packages_visited = HashSet::new();
@@ -3538,16 +3614,15 @@ mod tests {
                     build_caches: &build_caches,
                     static_metadata_cache: &static_metadata_cache,
                 };
-                let (verified_env, _locked_pypi) = verify_platform_satisfiability(&ctx, locked_env)
-                    .await
-                    .map_err(|e| match e {
-                        CommandDispatcherError::Failed(e) => {
-                            LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
-                        }
-                        CommandDispatcherError::Cancelled => {
-                            panic!("operation was cancelled which should never happen here")
-                        }
-                    })?;
+                let outcome = verify_platform_satisfiability(&ctx, locked_env).await;
+                let (verified_env, _locked_pypi) = outcome.result.map_err(|e| match e {
+                    CommandDispatcherError::Failed(e) => {
+                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
+                    }
+                    CommandDispatcherError::Cancelled => {
+                        panic!("operation was cancelled which should never happen here")
+                    }
+                })?;
 
                 individual_verified_envs.insert((env.name(), platform), verified_env);
             }

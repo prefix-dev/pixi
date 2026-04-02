@@ -36,6 +36,7 @@ pub async fn list(
             lock_file_usage,
             no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
         })
         .await?
         .0

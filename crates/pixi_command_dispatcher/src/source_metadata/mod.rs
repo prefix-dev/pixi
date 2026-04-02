@@ -2,8 +2,7 @@ pub(crate) mod cycle;
 
 pub use cycle::{Cycle, CycleEnvironment};
 use miette::Diagnostic;
-use pixi_record::SourceRecord;
-use pixi_variant::VariantValue;
+use pixi_record::{SourceRecord, SourceRecordReuseKey, VariantValue};
 use rattler_conda_types::PackageName;
 use thiserror::Error;
 use tracing::instrument;
@@ -26,6 +25,11 @@ pub struct SourceMetadataSpec {
 
     /// The timestamp exclusion to apply when retrieving the metadata.
     pub exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
+
+    /// Timestamp hints keyed by exact source output identity.
+    #[serde(skip)]
+    pub source_timestamp_hints:
+        std::collections::HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>,
 }
 
 /// The result of resolving source metadata for all variants of a package.
@@ -93,7 +97,7 @@ impl SourceMetadataSpec {
         // Fan out a SourceRecordSpec for each matching output variant concurrently.
         let mut futures = CancellationAwareFutures::new(command_dispatcher.executor());
         for output in matching_outputs {
-            let variants = output
+            let variants: std::collections::BTreeMap<String, VariantValue> = output
                 .metadata
                 .variant
                 .iter()
@@ -103,9 +107,13 @@ impl SourceMetadataSpec {
             let dispatcher = command_dispatcher.clone();
             let spec = SourceRecordSpec {
                 package: self.package.clone(),
-                variants,
+                variants: variants.clone(),
                 backend_metadata: self.backend_metadata.clone(),
-                exclude_newer: self.exclude_newer,
+                exclude_newer: self
+                    .source_timestamp_hints
+                    .get(&SourceRecordReuseKey::new(self.package.clone(), variants))
+                    .copied()
+                    .or(self.exclude_newer),
             };
             futures.push(async move {
                 dispatcher

@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::PathBuf,
     sync::Arc,
 };
@@ -7,7 +7,7 @@ use std::{
 use futures::{FutureExt, StreamExt};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::{PinnedSourceSpec, VariantValue};
+use pixi_record::{PinnedSourceSpec, SourceRecordReuseKey, VariantValue};
 use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, MatchSpec, PackageNameMatcher, ParseStrictness,
@@ -32,6 +32,7 @@ pub struct SourceMetadataCollector {
     variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
     variant_files: Option<Vec<PathBuf>>,
     preferred_build_sources: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
+    source_timestamp_hints: HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>,
     exclude_newer: chrono::DateTime<chrono::Utc>,
 }
 
@@ -78,6 +79,7 @@ impl SourceMetadataCollector {
         variant_files: Option<Vec<PathBuf>>,
         enabled_protocols: EnabledProtocols,
         preferred_build_sources: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
+        source_timestamp_hints: HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>,
         exclude_newer: chrono::DateTime<chrono::Utc>,
     ) -> Self {
         Self {
@@ -89,6 +91,7 @@ impl SourceMetadataCollector {
             variant_configuration,
             variant_files,
             preferred_build_sources,
+            source_timestamp_hints,
             exclude_newer,
         }
     }
@@ -190,7 +193,6 @@ impl SourceMetadataCollector {
 
         // Determine if we should override the build_source pin for this package.
         let preferred_build_source = self.preferred_build_sources.get(&name).cloned();
-
         // Always checkout the manifest-defined source location (root), discovery
         // will pick build_source; we only pass preferred locations.
         let manifest_source_checkout = self
@@ -219,6 +221,7 @@ impl SourceMetadataCollector {
                     enabled_protocols: self.enabled_protocols.clone(),
                 },
                 exclude_newer: Some(self.exclude_newer),
+                source_timestamp_hints: self.source_timestamp_hints.clone(),
             })
             .await
         {
