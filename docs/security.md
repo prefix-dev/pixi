@@ -7,7 +7,7 @@ Pixi helps reduce supply chain risk in a few different ways:
 - it lets you react to advisories by constraining or overriding affected dependencies;
 - it supports generating and uploading Sigstore attestations when publishing to prefix.dev.
 
-At the same time, Pixi does not try to be a full vulnerability scanner for conda environments. Today, our preferred way to inspect a Pixi-managed environment for CVE analysis is to generate an SBOM from the installed environment with [Syft](https://github.com/anchore/syft).
+At the same time, Pixi does not try to be a vulnerability scanner for conda environments. Today, our preferred way to inspect a Pixi-managed environment for CVE analysis is to generate an SBOM from the installed environment with [Syft](https://github.com/anchore/syft).
 
 ## Reproducible Dependency Resolution
 
