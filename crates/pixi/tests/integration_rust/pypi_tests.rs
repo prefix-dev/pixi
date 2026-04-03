@@ -343,6 +343,125 @@ async fn test_file_based_index_returns_path() {
 }
 
 #[tokio::test]
+async fn test_extra_build_dependencies_manifest_key_with_wheel_install() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Simple wheel-only index
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .into_simple_index()
+        .expect("failed to create simple index");
+
+    let pixi = PixiControl::from_pyproject_manifest(&format!(
+        r#"
+        [project]
+        name = "extra-build-deps-smoke"
+        version = "0.1.0"
+        requires-python = ">=3.12"
+        dependencies = ["foo"]
+
+        [build-system]
+        requires = ["hatchling"]
+        build-backend = "hatchling.build"
+
+        [tool.pixi.workspace]
+        channels = ["{channel_url}"]
+        platforms = ["{platform}"]
+        conda-pypi-map = {{}}
+
+        [tool.pixi.dependencies]
+        python = "==3.12.0"
+
+        [tool.pixi.pypi-options]
+        index-url = "{index_url}"
+
+        [tool.pixi.extra-build-dependencies]
+        foo = ["bar"]
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        index_url = simple.index_url(),
+    ))
+    .unwrap();
+
+    // Wheel is available for foo; lock-file resolution should succeed while
+    // accepting the extra-build-dependencies configuration.
+    pixi.update_lock_file().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_extra_build_dependencies_feature_scoped_with_multiple_environments() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Simple wheel-only index
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .into_simple_index()
+        .expect("failed to create simple index");
+
+    let pixi = PixiControl::from_pyproject_manifest(&format!(
+        r#"
+        [project]
+        name = "extra-build-deps-feature-scoped"
+        version = "0.1.0"
+        requires-python = ">=3.12"
+        dependencies = ["foo"]
+
+        [build-system]
+        requires = ["hatchling"]
+        build-backend = "hatchling.build"
+
+        [tool.pixi.workspace]
+        channels = ["{channel_url}"]
+        platforms = ["{platform}"]
+        conda-pypi-map = {{}}
+
+        [tool.pixi.dependencies]
+        python = "==3.12.0"
+
+        [tool.pixi.pypi-options]
+        index-url = "{index_url}"
+
+        [tool.pixi.feature.cuda.extra-build-dependencies]
+        foo = ["bar"]
+
+        [tool.pixi.environments]
+        cuda = ["cuda"]
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        index_url = simple.index_url(),
+    ))
+    .unwrap();
+
+    // Lock update should succeed when extra-build-dependencies is scoped to a feature
+    // and a non-default environment includes that feature.
+    pixi.update_lock_file().await.unwrap();
+}
+
+#[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_index_strategy() {
     setup_tracing();

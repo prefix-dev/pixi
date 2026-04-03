@@ -13,6 +13,7 @@ version = "0.1.0"
 [dependencies]
 chrono = { workspace = true }
 dunce = { workspace = true }
+indexmap = { workspace = true }
 jiff = { workspace = true }
 miette = { workspace = true }
 pep440_rs = { workspace = true }
