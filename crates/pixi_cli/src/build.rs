@@ -192,8 +192,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
         .expect("cache dir is not absolute")
         .into_assume_dir();
-    let workspace_dir = AbsPathBuf::new(workspace.pixi_dir())
-        .expect("pixi dir is not absolute")
+    let workspace_dir = AbsPathBuf::new(workspace.workspace_cache_root_dir())
+        .expect("workspace cache root dir is not absolute")
         .into_assume_dir();
     let mut cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
     if let Some(build_dir) = args.build_dir {
