@@ -10,6 +10,7 @@
 
 mod detailed;
 mod dev_source;
+mod exclude_newer;
 mod git;
 mod path;
 mod source_anchor;
@@ -21,6 +22,7 @@ use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
 pub use dev_source::DevSourceSpec;
+pub use exclude_newer::{ExcludeNewer, ResolvedExcludeNewer};
 pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
@@ -162,6 +164,7 @@ impl PixiSpec {
                 md5: spec.md5,
                 sha256: spec.sha256,
                 license: spec.license,
+                exclude_newer: None,
             }))
         }
     }
@@ -367,6 +370,14 @@ impl PixiSpec {
         match self.into_source_or_binary() {
             Either::Left(_source) => Ok(NamelessMatchSpec::default()),
             Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config),
+        }
+    }
+
+    /// Returns the per-package exclude-newer override for this spec, if any.
+    pub fn exclude_newer(&self) -> Option<ExcludeNewer> {
+        match self {
+            Self::DetailedVersion(spec) => spec.exclude_newer,
+            Self::Version(_) | Self::Url(_) | Self::Git(_) | Self::Path(_) => None,
         }
     }
 }
@@ -635,6 +646,14 @@ impl BinarySpec {
             BinarySpec::DetailedVersion(spec) => spec.try_into_nameless_match_spec(channel_config),
             BinarySpec::Url(url) => Ok(url.into()),
             BinarySpec::Path(path) => path.try_into_nameless_match_spec(&channel_config.root_dir),
+        }
+    }
+
+    /// Returns the per-package exclude-newer override for this spec, if any.
+    pub fn exclude_newer(&self) -> Option<ExcludeNewer> {
+        match self {
+            Self::DetailedVersion(spec) => spec.exclude_newer,
+            Self::Version(_) | Self::Url(_) | Self::Path(_) => None,
         }
     }
 }

@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use chrono::{DateTime, Utc};
 use indexmap::IndexSet;
 use miette::Diagnostic;
+use pixi_spec::{ExcludeNewer, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
@@ -89,12 +90,51 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         Ok(channel_priority)
     }
 
-    /// Returns whether packages should be excluded newer than a certain date.
-    fn exclude_newer(&self) -> Option<DateTime<Utc>> {
-        self.workspace_manifest()
-            .workspace
-            .exclude_newer
-            .map(Into::into)
+    /// Returns the raw exclude-newer configuration.
+    fn exclude_newer_raw(&self) -> Option<ExcludeNewer> {
+        self.workspace_manifest().workspace.exclude_newer
+    }
+
+    /// Returns the effective exclude-newer solver configuration.
+    fn exclude_newer_config(
+        &self,
+        platform: Option<Platform>,
+    ) -> Result<Option<rattler_solve::ExcludeNewer>, ParseChannelError> {
+        self.exclude_newer_config_resolved(platform)
+            .map(|exclude_newer| exclude_newer.map(Into::into))
+    }
+
+    /// Returns the effective exclude-newer solver configuration with absolute cutoffs.
+    fn exclude_newer_config_resolved(
+        &self,
+        platform: Option<Platform>,
+    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
+        let mut exclude_newer = self
+            .exclude_newer_raw()
+            .map(|config| ResolvedExcludeNewer::from_datetime(config.cutoff()));
+
+        for (name, spec) in self
+            .combined_dependencies(platform)
+            .iter_specs()
+            .chain(self.combined_constraints(platform).iter_specs())
+        {
+            let Some(package_exclude_newer) = spec.exclude_newer() else {
+                continue;
+            };
+
+            let config = exclude_newer.get_or_insert_with(|| {
+                ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
+            });
+
+            *config = match package_exclude_newer {
+                ExcludeNewer::Timestamp(dt) => config.clone().with_package_cutoff(name.clone(), dt),
+                ExcludeNewer::Duration(duration) => config
+                    .clone()
+                    .with_package_cutoff(name.clone(), ExcludeNewer::Duration(duration).cutoff()),
+            };
+        }
+
+        Ok(exclude_newer)
     }
 
     /// Returns the strategy for solving packages.

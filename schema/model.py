@@ -50,7 +50,13 @@ GitUrl = Annotated[
 ]
 ExcludeNewer = Annotated[
     str,
-    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$"),
+    StringConstraints(
+        # Matches either:
+        # - An RFC 3339 timestamp, e.g. YYYY-MM-DDTHH:MM:SSZ or with fractional seconds
+        # - A date, e.g. YYYY-MM-DD
+        # - A duration token sequence accepted by humantime, e.g. 7d, 1h, 30m, 1h30m, 1ms
+        pattern=r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})|(\d+\s*[A-Za-z]+\s*)+)$"
+    ),
 ]
 
 
@@ -104,6 +110,10 @@ class ChannelInlineTable(StrictBaseModel):
 
     channel: ChannelName = Field(description="The channel the packages needs to be fetched from")
     priority: int | None = Field(None, description="The priority of the channel")
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        description="Override the workspace-level `exclude-newer` cutoff for this channel only",
+    )
 
 
 Channel = ChannelName | ChannelInlineTable
@@ -170,8 +180,8 @@ class Workspace(StrictBaseModel):
     )
     exclude_newer: ExcludeNewer | None = Field(
         None,
-        examples=["2023-11-03", "2023-11-03T03:33:12Z"],
-        description="Exclude any package newer than this date",
+        examples=["2023-11-03T03:33:12Z", "2026-04-01", "7days", "1h30m"],
+        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration (e.g. '7days', '1h30m').",
     )
     platforms: list[Platform] | None = Field(
         None, description="The platforms that the project supports"
@@ -249,6 +259,11 @@ class MatchspecTable(StrictBaseModel):
         None, description="The subdir of the package, also known as platform"
     )
     license: NonEmptyStr | None = Field(None, description="The license of the package")
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        alias="exclude-newer",
+        description="Override the workspace-level `exclude-newer` cutoff for this package only",
+    )
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 

@@ -917,8 +917,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
-        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
+        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, Feature, FeatureName,
+        FeaturesExt, HasFeaturesIter, HasWorkspaceManifest, PrioritizedChannel, SpecType,
+        TargetSelector, Task, TomlError, WorkspaceManifest,
         manifests::document::ManifestDocument,
         pyproject::PyProjectManifest,
         task::TaskRenderContext,
@@ -3456,5 +3457,88 @@ openssl = "<2"
             .unwrap()
             .to_string();
         assert_eq!(linux_spec, "<2");
+    }
+
+    #[test]
+    fn test_package_exclude_newer_in_dependencies_and_constraints() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+
+[dependencies]
+polars = { version = "*", exclude-newer = "0d" }
+
+[constraints]
+openssl = { exclude-newer = "0d" }
+"#;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let feature = manifest.default_feature();
+
+        let polars = PackageName::from_str("polars").unwrap();
+        let run_dependencies = feature.run_dependencies(None).unwrap();
+        let polars_spec = run_dependencies.get_single(&polars).unwrap().unwrap();
+        assert_eq!(
+            polars_spec.exclude_newer().map(|value| value.to_string()),
+            Some("0s".to_string())
+        );
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+        let constraints = feature.constraints(None).unwrap();
+        let openssl_spec = constraints.get_single(&openssl).unwrap().unwrap();
+        assert_eq!(
+            openssl_spec.exclude_newer().map(|value| value.to_string()),
+            Some("0s".to_string())
+        );
+    }
+
+    #[test]
+    fn test_exclude_newer_config_applies_package_overrides() {
+        struct TestFeatures<'a> {
+            manifest: &'a WorkspaceManifest,
+            features: Vec<&'a Feature>,
+        }
+
+        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
+            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+                self.manifest
+            }
+        }
+
+        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
+            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+                self.features.clone().into_iter()
+            }
+        }
+
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+
+[dependencies]
+polars = { version = "*", exclude-newer = "0d" }
+"#;
+
+        let before = chrono::Utc::now();
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+        let features = TestFeatures {
+            manifest: &manifest,
+            features: vec![default_feature],
+        };
+        let config = features.exclude_newer_config(None).unwrap().unwrap();
+        let after = chrono::Utc::now();
+        let package = PackageName::from_str("polars").unwrap();
+        let package_cutoff = config.cutoff_for_package(&package, None);
+
+        assert!(package_cutoff >= before);
+        assert!(package_cutoff <= after + chrono::Duration::seconds(1));
     }
 }

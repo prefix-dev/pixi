@@ -8,7 +8,7 @@ use futures::{FutureExt, StreamExt};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::{PinnedSourceSpec, VariantValue};
-use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
+use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, MatchSpec, PackageNameMatcher, ParseStrictness,
 };
@@ -28,6 +28,7 @@ pub struct SourceMetadataCollector {
     channel_config: ChannelConfig,
     channels: Vec<ChannelUrl>,
     build_environment: BuildEnvironment,
+    exclude_newer: Option<ResolvedExcludeNewer>,
     enabled_protocols: EnabledProtocols,
     variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
     variant_files: Option<Vec<PathBuf>>,
@@ -73,6 +74,7 @@ impl SourceMetadataCollector {
         channel_urls: Vec<ChannelUrl>,
         channel_config: ChannelConfig,
         build_environment: BuildEnvironment,
+        exclude_newer: Option<ResolvedExcludeNewer>,
         variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
         variant_files: Option<Vec<PathBuf>>,
         enabled_protocols: EnabledProtocols,
@@ -82,6 +84,7 @@ impl SourceMetadataCollector {
             command_queue,
             channels: channel_urls,
             build_environment,
+            exclude_newer,
             enabled_protocols,
             channel_config,
             variant_configuration,
@@ -198,6 +201,7 @@ impl SourceMetadataCollector {
                     channel_config: self.channel_config.clone(),
                     channels: self.channels.clone(),
                     build_environment: self.build_environment.clone(),
+                    exclude_newer: self.exclude_newer.clone(),
                     variant_configuration: self.variant_configuration.clone(),
                     variant_files: self.variant_files.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),

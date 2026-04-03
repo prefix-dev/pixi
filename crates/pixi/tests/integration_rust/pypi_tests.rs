@@ -558,6 +558,91 @@ async fn pin_torch() {
 }
 
 #[tokio::test]
+async fn test_exclude_newer_relative_pypi_rejects_unknown_timestamps() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .with_timestamp("2020-12-01T00:00:00Z".parse().unwrap())
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("boltons", "20.2.1"))
+        .into_simple_index()
+        .unwrap();
+
+    let pixi_without_exclude_newer = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "test-exclude-newer-relative-pypi-baseline"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        boltons = "*"
+
+        [pypi-options]
+        index-url = "{pypi_index_url}"
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        pypi_index_url = pypi_index.index_url(),
+    ))
+    .unwrap();
+
+    let baseline_lock = pixi_without_exclude_newer.update_lock_file().await.unwrap();
+    assert!(baseline_lock.contains_pep508_requirement(
+        "default",
+        platform,
+        "boltons ==20.2.1".parse().unwrap()
+    ));
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "test-exclude-newer-relative-pypi"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        exclude-newer = "1d"
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        boltons = "*"
+
+        [pypi-options]
+        index-url = "{pypi_index_url}"
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        pypi_index_url = pypi_index.index_url(),
+    ))
+    .unwrap();
+
+    let err = pixi
+        .update_lock_file()
+        .await
+        .expect_err("relative exclude-newer should reject PyPI packages without timestamps");
+    let rendered = format!("{err:?}");
+    assert!(
+        rendered.contains("no versions of boltons"),
+        "expected PyPI solve to fail once the relative exclude-newer cutoff filters timestamp-less candidates, got:\n{rendered}"
+    );
+}
+
+#[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_allow_insecure_host() {
     setup_tracing();

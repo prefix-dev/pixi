@@ -10,6 +10,7 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_path::AbsPathBuf;
 use pixi_record::VariantValue;
+use pixi_spec::ResolvedExcludeNewer;
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, BinaryHeap};
@@ -54,6 +55,9 @@ pub struct BuildBackendMetadataCacheShard {
     /// The build environment
     pub build_environment: BuildEnvironment,
 
+    /// Exclude packages newer than the configured cutoffs when solving backend environments.
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
+
     /// The protocols that are enabled for source packages
     pub enabled_protocols: EnabledProtocols,
 
@@ -89,6 +93,7 @@ impl CacheKey for BuildBackendMetadataCacheShard {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
         self.build_environment.build_platform.hash(&mut hasher);
+        self.exclude_newer.hash(&mut hasher);
 
         let mut build_virtual_packages = self.build_environment.build_virtual_packages.clone();
         build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));

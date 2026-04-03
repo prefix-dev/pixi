@@ -14,6 +14,16 @@ expression: snapshot
   result:
     version: "==1.2.3"
     build-number: ">=3"
+- input:
+    exclude-newer: 0d
+  result:
+    exclude-newer: 0s
+- input:
+    version: "*"
+    exclude-newer: 0d
+  result:
+    version: "*"
+    exclude-newer: 0s
 - input: "*"
   result: "*"
 - input:

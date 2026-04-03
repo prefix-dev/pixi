@@ -6,7 +6,6 @@ mod discovery;
 mod environment;
 mod environments;
 mod error;
-mod exclude_newer;
 mod feature;
 mod features_ext;
 mod has_features_iter;

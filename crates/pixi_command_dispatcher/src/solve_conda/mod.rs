@@ -4,10 +4,9 @@ use std::{
     sync::Arc,
 };
 
-use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use pixi_record::{PixiRecord, SourceRecord};
-use pixi_spec::{BinarySpec, SourceSpec};
+use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
@@ -81,9 +80,9 @@ pub struct SolveCondaEnvironmentSpec {
     #[serde(skip_serializing_if = "crate::is_default")]
     pub channel_priority: ChannelPriority,
 
-    /// Exclude any packages after the first cut-off date.
-    #[serde(skip_serializing_if = "crate::is_default")]
-    pub exclude_newer: Option<DateTime<Utc>>,
+    /// Exclude packages newer than the configured default and per-channel cutoffs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
@@ -119,6 +118,8 @@ impl SolveCondaEnvironmentSpec {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
+            let exclude_newer = self.exclude_newer.clone().map(Into::into);
+
             // Determine for which records we have source records because those records should only
             //  be installed as source records.
             let package_names_from_source = self
@@ -299,7 +300,7 @@ impl SolveCondaEnvironmentSpec {
                 locked_packages: installed,
                 virtual_packages: self.virtual_packages,
                 channel_priority: self.channel_priority,
-                exclude_newer: self.exclude_newer,
+                exclude_newer,
                 strategy: self.strategy,
                 constraints: constrains_match_specs,
                 ..rattler_solve::SolverTask::from_iter(solvable_records)

@@ -138,34 +138,54 @@ fn fmt_solve_strategy(strategy: rattler_solve::SolveStrategy) -> &'static str {
 
 #[derive(Debug, Error)]
 pub struct ExcludeNewerMismatch {
-    locked_exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
-    expected_exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
+    package: String,
+    timestamp: chrono::DateTime<chrono::Utc>,
+    exclude_newer: chrono::DateTime<chrono::Utc>,
 }
 
 impl Display for ExcludeNewerMismatch {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match (self.locked_exclude_newer, self.expected_exclude_newer) {
-            (Some(locked), None) => {
-                write!(
-                    f,
-                    "the lock-file was solved with exclude-newer set to {locked}, but the environment does not have this option set"
-                )
+        write!(
+            f,
+            "the locked package '{}' has timestamp {}, which is newer than the environment's exclude-newer cutoff {}",
+            self.package, self.timestamp, self.exclude_newer
+        )
+    }
+}
+
+fn verify_exclude_newer(
+    environment: &Environment<'_>,
+    locked_environment: &rattler_lock::Environment<'_>,
+) -> Result<(), ExcludeNewerMismatch> {
+    for (platform, packages) in locked_environment.conda_packages_by_platform() {
+        let Some(exclude_newer) = environment
+            .exclude_newer_config(Some(platform))
+            .expect("environment channels were already validated")
+        else {
+            continue;
+        };
+
+        for package in packages {
+            let record = package.record();
+            let channel = package
+                .as_binary()
+                .and_then(|binary| binary.channel.as_ref())
+                .map(ToString::to_string);
+
+            if let Some(timestamp) = record.timestamp.as_ref()
+                && exclude_newer.is_excluded(&record.name, channel.as_deref(), Some(timestamp))
+            {
+                return Err(ExcludeNewerMismatch {
+                    package: record.name.as_source().to_string(),
+                    timestamp: (*timestamp).into(),
+                    exclude_newer: exclude_newer
+                        .cutoff_for_package(&record.name, channel.as_deref()),
+                });
             }
-            (None, Some(expected)) => {
-                write!(
-                    f,
-                    "the lock-file was solved without exclude-newer, but the environment has this option set to {expected}"
-                )
-            }
-            (Some(locked), Some(expected)) if locked != expected => {
-                write!(
-                    f,
-                    "the lock-file was solved with exclude-newer set to {locked}, but the environment has this option set to {expected}"
-                )
-            }
-            _ => unreachable!("if we get here the values are the same"),
         }
     }
+
+    Ok(())
 }
 
 #[derive(Debug, Error)]
@@ -619,15 +639,8 @@ pub fn verify_environment_satisfiability(
         });
     }
 
-    let locked_exclude_newer = locked_environment.solve_options().exclude_newer;
-    let expected_exclude_newer = environment.exclude_newer();
-    if locked_exclude_newer != expected_exclude_newer {
-        return Err(EnvironmentUnsat::ExcludeNewerMismatch(
-            ExcludeNewerMismatch {
-                locked_exclude_newer,
-                expected_exclude_newer,
-            },
-        ));
+    if let Err(err) = verify_exclude_newer(environment, &locked_environment) {
+        return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
     }
 
     Ok(())
@@ -1237,6 +1250,7 @@ async fn verify_source_metadata(
                         .clone()
                         .map(PinnedBuildSourceSpec::into_pinned),
                     channel_config,
+                    exclude_newer: None,
                     channels: channel_urls,
                     build_environment: BuildEnvironment {
                         host_platform: platform,
@@ -1625,6 +1639,7 @@ async fn resolve_single_dev_dependency(
             manifest_source: pinned_source.pinned,
             preferred_build_source: None,
             channel_config: channel_config.clone(),
+            exclude_newer: None,
             channels,
             build_environment,
             variant_configuration: Some(variants),

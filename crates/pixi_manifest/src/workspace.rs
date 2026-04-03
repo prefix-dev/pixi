@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use indexmap::IndexSet;
+use pixi_spec::ExcludeNewer;
 use pixi_toml::TomlEnum;
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
 use serde::Deserialize;
@@ -8,9 +9,7 @@ use toml_span::{DeserError, Value};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
-use crate::{
-    PrioritizedChannel, S3Options, Targets, exclude_newer::ExcludeNewer, preview::Preview,
-};
+use crate::{PrioritizedChannel, S3Options, Targets, preview::Preview};
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
 use once_cell::sync::Lazy;
 
