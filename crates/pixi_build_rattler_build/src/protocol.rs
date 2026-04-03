@@ -36,7 +36,9 @@ use rattler_build_core::{
     tool_configuration::Configuration,
     types::{PackageIdentifier, PackagingSettings},
 };
-use rattler_build_recipe::{stage1::Source as RecipeSource, variant_render::RenderConfig};
+use rattler_build_recipe::{
+    stage0::Value as Stage0Value, stage1::Source as RecipeSource, variant_render::RenderConfig,
+};
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
@@ -83,7 +85,16 @@ impl Protocol for RattlerBuildBackend {
         );
 
         // Parse the recipe into stage0
-        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+        let mut stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+
+        // Apply build number override before rendering so the build string is
+        // automatically updated.
+        if let Some(build_number) = params.build_number_override
+            && let rattler_build_recipe::stage0::Recipe::SingleOutput(ref mut single) =
+                stage0_recipe
+        {
+            single.build.number = Some(Stage0Value::new_concrete(build_number, None));
+        }
 
         // Build render config
         let render_config = RenderConfig::new()
@@ -101,7 +112,7 @@ impl Protocol for RattlerBuildBackend {
             render_config,
         )?;
 
-        // Convert to DiscoveredOutputs
+        // Convert to DiscoveredOutputs, applying build string prefix if set.
         let discovered_outputs: indexmap::IndexSet<DiscoveredOutput> = rendered_variants
             .into_iter()
             .map(|rendered| {
@@ -112,12 +123,17 @@ impl Protocol for RattlerBuildBackend {
                 } else {
                     Platform::NoArch
                 };
-                let build_string = recipe
+                let original_build_string = recipe
                     .build()
                     .string
                     .as_resolved()
                     .expect("build string should be resolved")
                     .to_string();
+                let build_string = if let Some(prefix) = &params.build_string_prefix {
+                    format!("{prefix}_{original_build_string}")
+                } else {
+                    original_build_string
+                };
                 DiscoveredOutput {
                     name: recipe.package().name().as_normalized().to_string(),
                     version: recipe.package().version().to_string(),
@@ -167,7 +183,9 @@ impl Protocol for RattlerBuildBackend {
             );
 
             let build = recipe.build();
-            let build_number = build.number.unwrap_or(0);
+            let build_number = params
+                .build_number_override
+                .unwrap_or_else(|| build.number.unwrap_or(0));
             let noarch = build.noarch.unwrap_or(NoArchType::none());
             let python_site_packages_path = build.python.site_packages_path.clone();
 
@@ -334,7 +352,16 @@ impl Protocol for RattlerBuildBackend {
         );
 
         // Parse the recipe into stage0
-        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+        let mut stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+
+        // Apply build number override before rendering so the build string is
+        // automatically updated.
+        if let Some(build_number) = params.output.build_number_override
+            && let rattler_build_recipe::stage0::Recipe::SingleOutput(ref mut single) =
+                stage0_recipe
+        {
+            single.build.number = Some(Stage0Value::new_concrete(build_number, None));
+        }
 
         // Build render config
         let render_config = RenderConfig::new()
@@ -352,23 +379,30 @@ impl Protocol for RattlerBuildBackend {
             render_config,
         )?;
 
-        // Convert to DiscoveredOutputs
+        // Convert to DiscoveredOutputs, applying build string prefix if set.
         let discovered_outputs: indexmap::IndexSet<DiscoveredOutput> = rendered_variants
             .into_iter()
             .map(|rendered| {
-                let recipe = rendered.recipe;
+                let mut recipe = rendered.recipe;
                 let variant = rendered.variant;
                 let effective_target_platform = if recipe.build().noarch.is_none() {
                     host_platform
                 } else {
                     Platform::NoArch
                 };
-                let build_string = recipe
+                let original_build_string = recipe
                     .build()
                     .string
                     .as_resolved()
                     .expect("build string should be resolved")
                     .to_string();
+                let build_string = if let Some(prefix) = &params.output.build_string_prefix {
+                    let new_bs = format!("{prefix}_{original_build_string}");
+                    recipe.build.string = new_bs.clone().into();
+                    new_bs
+                } else {
+                    original_build_string
+                };
                 DiscoveredOutput {
                     name: recipe.package().name().as_normalized().to_string(),
                     version: recipe.package().version().to_string(),
@@ -713,6 +747,8 @@ mod tests {
                         variant_configuration: None,
                         variant_files: None,
                         work_directory: current_dir,
+                        build_number_override: None,
+                        build_string_prefix: None,
                     })
                     .await
                     .unwrap();
@@ -776,6 +812,8 @@ mod tests {
                 variant_configuration: None,
                 variant_files: Some(vec![variant_file.clone()]),
                 work_directory: temp_dir.path().to_path_buf(),
+                build_number_override: None,
+                build_string_prefix: None,
             })
             .await
             .unwrap();
@@ -822,6 +860,8 @@ mod tests {
                 variant_configuration: Some(variant_configuration),
                 variant_files: None,
                 work_directory: temp_dir.path().to_path_buf(),
+                build_number_override: None,
+                build_string_prefix: None,
             })
             .await
             .unwrap();
@@ -887,6 +927,8 @@ numpy:
                 variant_configuration: Some(variant_configuration),
                 variant_files: Some(vec![variant_file.clone()]),
                 work_directory: temp_dir.path().to_path_buf(),
+                build_number_override: None,
+                build_string_prefix: None,
             })
             .await
             .unwrap();
@@ -960,6 +1002,8 @@ numpy:
                 variant_configuration: None,
                 variant_files: Some(vec![variant_file.clone()]),
                 work_directory: temp_dir.path().to_path_buf(),
+                build_number_override: None,
+                build_string_prefix: None,
             })
             .await
             .unwrap();

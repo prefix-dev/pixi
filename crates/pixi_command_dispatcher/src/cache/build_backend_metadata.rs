@@ -59,6 +59,12 @@ pub struct BuildBackendMetadataCacheShard {
 
     /// The pinned source location
     pub source: CanonicalSourceCodeLocation,
+
+    /// Build number override, if any.
+    pub build_number_override: Option<u64>,
+
+    /// Build string prefix, if any.
+    pub build_string_prefix: Option<String>,
 }
 
 impl BuildBackendMetadataCache {

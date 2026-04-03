@@ -103,6 +103,12 @@ pub struct SourceBuildSpec {
 
     /// Force rebuild even if the build cache is up to date.
     pub force: bool,
+
+    /// Override the build number for this package.
+    pub build_number_override: Option<u64>,
+
+    /// A string to prepend to the build string of this package.
+    pub build_string_prefix: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -582,6 +588,8 @@ impl SourceBuildSpec {
                     variant_files: self.variant_files.clone(),
                     work_directory: work_directory.clone(),
                     channels: self.channels.clone(),
+                    build_number_override: self.build_number_override,
+                    build_string_prefix: self.build_string_prefix.clone(),
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));
@@ -817,6 +825,8 @@ impl SourceBuildSpec {
                     },
                     variant: output.metadata.variant,
                     output_directory: self.output_directory,
+                    build_number_override: self.build_number_override,
+                    build_string_prefix: self.build_string_prefix.clone(),
                 }),
                 backend,
                 package: self.package,

@@ -92,6 +92,12 @@ pub struct BackendSourceBuildV1Method {
 
     /// Whether to build the package in editable mode.
     pub editable: bool,
+
+    /// Override the build number for this package.
+    pub build_number_override: Option<u64>,
+
+    /// A string to prepend to the build string of this package.
+    pub build_string_prefix: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -261,6 +267,8 @@ impl BackendSourceBuildSpec {
                             .parse()
                             .expect("found a package record with an unparsable subdir"),
                         variant: params.variant,
+                        build_number_override: params.build_number_override,
+                        build_string_prefix: params.build_string_prefix,
                     },
                     work_directory: work_directory.clone(),
                     output_directory: params.output_directory,

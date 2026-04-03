@@ -28,7 +28,7 @@ use rattler_build_core::{
     tool_configuration::Configuration,
     types::{Directories, PackageIdentifier, PackagingSettings},
 };
-use rattler_build_recipe::variant_render::RenderConfig;
+use rattler_build_recipe::{stage0::Value, variant_render::RenderConfig};
 use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
@@ -256,7 +256,7 @@ where
         variant_config.variants.append(&mut param_variants);
 
         // Construct the intermediate recipe
-        let generated_recipe = self
+        let mut generated_recipe = self
             .generate_recipe
             .generate_recipe(
                 &self.project_model,
@@ -269,6 +269,12 @@ where
                 self.cache_dir.clone(),
             )
             .await?;
+
+        // Apply build number override before rendering so the build string is
+        // automatically updated.
+        if let Some(build_number) = params.build_number_override {
+            generated_recipe.recipe.build.number = Some(Value::new_concrete(build_number, None));
+        }
 
         // Convert the recipe to source code.
         // TODO(baszalmstra): In the future it would be great if we could just
@@ -309,7 +315,7 @@ where
             render_config,
         )?;
 
-        // Convert to DiscoveredOutputs
+        // Convert to DiscoveredOutputs, applying build string prefix if set.
         let discovered_outputs: IndexSet<DiscoveredOutput> = rendered_variants
             .into_iter()
             .map(|rendered| {
@@ -320,12 +326,17 @@ where
                 } else {
                     Platform::NoArch
                 };
-                let build_string = recipe
+                let original_build_string = recipe
                     .build()
                     .string
                     .as_resolved()
                     .expect("build string should be resolved")
                     .to_string();
+                let build_string = if let Some(prefix) = &params.build_string_prefix {
+                    format!("{prefix}_{original_build_string}")
+                } else {
+                    original_build_string
+                };
                 DiscoveredOutput {
                     name: recipe.package().name().as_normalized().to_string(),
                     version: recipe.package().version().to_string(),
@@ -365,7 +376,9 @@ where
                 continue;
             }
 
-            let build_number = recipe.build().number.unwrap_or(0);
+            let build_number = params
+                .build_number_override
+                .unwrap_or_else(|| recipe.build().number.unwrap_or(0));
 
             let directories = output_directory(
                 if num_of_outputs == 1 {
@@ -606,6 +619,12 @@ where
             )
             .await?;
 
+        // Apply build number override before rendering so the build string is
+        // automatically updated.
+        if let Some(build_number) = params.output.build_number_override {
+            recipe.recipe.build.number = Some(Value::new_concrete(build_number, None));
+        }
+
         // Convert the recipe to source code.
         // TODO(baszalmstra): In the future it would be great if we could just
         // immediately use the intermediate recipe for some of this rattler-build
@@ -646,23 +665,31 @@ where
             render_config,
         )?;
 
-        // Convert to DiscoveredOutputs
+        // Convert to DiscoveredOutputs, applying build string prefix if set.
         let discovered_outputs: IndexSet<DiscoveredOutput> = rendered_variants
             .into_iter()
             .map(|rendered| {
-                let r = rendered.recipe;
+                let mut r = rendered.recipe;
                 let variant = rendered.variant;
                 let effective_target_platform = if r.build().noarch.is_none() {
                     host_platform
                 } else {
                     Platform::NoArch
                 };
-                let build_string = r
+                let original_build_string = r
                     .build()
                     .string
                     .as_resolved()
                     .expect("build string should be resolved")
                     .to_string();
+                let build_string = if let Some(prefix) = &params.output.build_string_prefix {
+                    let new_bs = format!("{prefix}_{original_build_string}");
+                    // Update the recipe's build string so the built package gets the right name.
+                    r.build.string = new_bs.clone().into();
+                    new_bs
+                } else {
+                    original_build_string
+                };
                 DiscoveredOutput {
                     name: r.package().name().as_normalized().to_string(),
                     version: r.package().version().to_string(),
