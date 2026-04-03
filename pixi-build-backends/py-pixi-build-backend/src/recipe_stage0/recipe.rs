@@ -708,6 +708,7 @@ impl PyBuild {
         let python: PythonBuild = self.python.borrow(py).clone().into_python_build();
 
         Build {
+            string: None,
             number,
             script,
             noarch,

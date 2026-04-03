@@ -25,6 +25,7 @@ use rattler_build_core::{
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
     metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
+    system_tools::SystemTools,
     tool_configuration::Configuration,
     types::{Directories, PackageIdentifier, PackagingSettings},
 };
@@ -295,11 +296,17 @@ where
         let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(params.host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(params.host_platform)
             .with_recipe_path(&recipe_path);
+        if let Some(prefix) = &self.project_model.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.project_model.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -632,11 +639,17 @@ where
         };
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(host_platform)
             .with_recipe_path(&recipe_path);
+        if let Some(prefix) = &self.project_model.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.project_model.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -787,7 +800,7 @@ where
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
             build_summary: Arc::default(),
-            system_tools: Default::default(),
+            system_tools: SystemTools::new("pixi", env!("CARGO_PKG_VERSION")),
             extra_meta: None,
         };
 

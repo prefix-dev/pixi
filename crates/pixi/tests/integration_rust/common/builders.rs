@@ -683,6 +683,18 @@ impl BuildBuilder {
         self.args.path = Some(path.into());
         self
     }
+
+    /// Set the build string prefix
+    pub fn with_build_string_prefix(mut self, build_string: impl Into<String>) -> Self {
+        self.args.build_string_prefix = Some(build_string.into());
+        self
+    }
+
+    /// Set the build number
+    pub fn with_build_number(mut self, build_number: u64) -> Self {
+        self.args.build_number = Some(build_number);
+        self
+    }
 }
 
 impl IntoFuture for BuildBuilder {

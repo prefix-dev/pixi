@@ -4,7 +4,7 @@ expression: project_model
 ---
 {
   "name": "array-api-extra",
-  "buildString": null,
+  "buildStringPrefix": null,
   "buildNumber": null,
   "version": "0.8.0",
   "description": null,
