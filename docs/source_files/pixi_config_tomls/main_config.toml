@@ -3,6 +3,10 @@
 default-channels = ["conda-forge"]
 # --8<-- [end:default-channels]
 
+# --8<-- [start:channel-alias]
+channel-alias = "https://prefix.dev/"
+# --8<-- [end:channel-alias]
+
 
 # --8<-- [start:tls-no-verify]
 tls-no-verify = false

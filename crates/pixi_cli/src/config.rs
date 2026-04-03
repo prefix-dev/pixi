@@ -331,6 +331,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
 
     match key {
         "default-channels" => new.default_channels = config.default_channels.clone(),
+        "channel-alias" => new.channel_alias = config.channel_alias.clone(),
         "shell" => new.shell = config.shell.clone(),
         "tls-no-verify" => new.tls_no_verify = config.tls_no_verify,
         "authentication-override-file" => {
@@ -343,6 +344,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         _ => {
             let keys = [
                 "default-channels",
+                "channel-alias",
                 "tls-no-verify",
                 "authentication-override-file",
                 "mirrors",

@@ -713,6 +713,14 @@ pub struct Config {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub default_channels: Vec<NamedChannelOrUrl>,
 
+    /// The base URL to use when a channel is specified by name only.
+    /// For example, if set to `https://prefix.dev`, a channel named
+    /// `conda-forge` will resolve to `https://prefix.dev/conda-forge`.
+    /// Defaults to `https://conda.anaconda.org`.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_alias: Option<Url>,
+
     /// Path to the file containing the authentication token.
     #[serde(default)]
     #[serde(alias = "authentication_override_file")] // BREAK: remove to stop supporting snake_case alias
@@ -826,6 +834,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             default_channels: Vec::new(),
+            channel_alias: None,
             authentication_override_file: None,
             tls_no_verify: None,
             tls_root_certs: None,
@@ -1198,6 +1207,11 @@ impl Config {
             config.shell.force_activate = config.force_activate;
         }
 
+        // Apply channel_alias to channel_config if set
+        if let Some(ref alias) = config.channel_alias {
+            config.channel_config.channel_alias = alias.clone();
+        }
+
         Ok((config, unused_keys))
     }
 
@@ -1370,6 +1384,7 @@ impl Config {
     pub fn get_keys(&self) -> &[&str] {
         &[
             "authentication-override-file",
+            "channel-alias",
             "concurrency",
             "concurrency.downloads",
             "concurrency.solves",
@@ -1416,12 +1431,24 @@ impl Config {
         self.mirrors.extend(other.mirrors);
         other.loaded_from.extend(self.loaded_from);
 
+        let channel_alias = other.channel_alias.or(self.channel_alias);
+        let mut channel_config = if other.channel_config == default_channel_config() {
+            self.channel_config
+        } else {
+            other.channel_config
+        };
+        // Ensure channel_config reflects the merged channel_alias
+        if let Some(ref alias) = channel_alias {
+            channel_config.channel_alias = alias.clone();
+        }
+
         Self {
             default_channels: if other.default_channels.is_empty() {
                 self.default_channels
             } else {
                 other.default_channels
             },
+            channel_alias,
             tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
             tls_root_certs: other.tls_root_certs.or(self.tls_root_certs),
             authentication_override_file: other
@@ -1430,11 +1457,7 @@ impl Config {
             // Extended self.mirrors with other.mirrors
             mirrors: self.mirrors,
             loaded_from: other.loaded_from,
-            channel_config: if other.channel_config == default_channel_config() {
-                self.channel_config
-            } else {
-                other.channel_config
-            },
+            channel_config,
             repodata_config: self.repodata_config.merge(other.repodata_config),
             pypi_config: self.pypi_config.merge(other.pypi_config),
             s3_options: {
@@ -1598,6 +1621,18 @@ impl Config {
                     .transpose()
                     .into_diagnostic()?
                     .unwrap_or_default();
+            }
+            "channel-alias" => {
+                self.channel_alias = value
+                    .map(|v| Url::parse(&v))
+                    .transpose()
+                    .into_diagnostic()?;
+                // Also update the channel_config to keep it in sync
+                if let Some(ref alias) = self.channel_alias {
+                    self.channel_config.channel_alias = alias.clone();
+                } else {
+                    self.channel_config = default_channel_config();
+                }
             }
             "authentication-override-file" => {
                 self.authentication_override_file = value.map(PathBuf::from);
@@ -2264,6 +2299,7 @@ UNUSED = "unused"
         let mut config = Config::default();
         let other = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
+            channel_alias: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             tls_root_certs: Some(TlsRootCerts::Native),
@@ -2332,6 +2368,7 @@ UNUSED = "unused"
         let mut config = Config::default();
         let other = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
+            channel_alias: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
@@ -3021,6 +3058,90 @@ UNUSED = "unused"
                 archive_type: CondaArchiveType::Conda,
                 compression_level: CompressionLevel::Lowest
             }
+        );
+    }
+
+    #[test]
+    fn test_channel_alias_parse() {
+        let toml = r#"channel-alias = "https://prefix.dev/""#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(
+            config.channel_alias,
+            Some(Url::parse("https://prefix.dev/").unwrap())
+        );
+        assert_eq!(
+            config.channel_config.channel_alias,
+            Url::parse("https://prefix.dev/").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_channel_alias_not_set() {
+        let toml = r#"default-channels = ["conda-forge"]"#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(config.channel_alias, None);
+        // channel_config should use the default alias
+        assert_eq!(
+            config.channel_config.channel_alias,
+            default_channel_config().channel_alias
+        );
+    }
+
+    #[test]
+    fn test_channel_alias_merge() {
+        let toml1 = r#"channel-alias = "https://prefix.dev/""#;
+        let (config1, _) = Config::from_toml(toml1, None).unwrap();
+
+        // Config without channel_alias should not override
+        let toml2 = r#"default-channels = ["bioconda"]"#;
+        let (config2, _) = Config::from_toml(toml2, None).unwrap();
+
+        let merged = config1.clone().merge_config(config2);
+        assert_eq!(
+            merged.channel_alias,
+            Some(Url::parse("https://prefix.dev/").unwrap())
+        );
+        assert_eq!(
+            merged.channel_config.channel_alias,
+            Url::parse("https://prefix.dev/").unwrap()
+        );
+
+        // Config with channel_alias should override
+        let toml3 = r#"channel-alias = "https://my-server.com/""#;
+        let (config3, _) = Config::from_toml(toml3, None).unwrap();
+
+        let merged = config1.merge_config(config3);
+        assert_eq!(
+            merged.channel_alias,
+            Some(Url::parse("https://my-server.com/").unwrap())
+        );
+        assert_eq!(
+            merged.channel_config.channel_alias,
+            Url::parse("https://my-server.com/").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_channel_alias_set() {
+        let mut config = Config::default();
+        config
+            .set("channel-alias", Some("https://prefix.dev/".to_string()))
+            .unwrap();
+        assert_eq!(
+            config.channel_alias,
+            Some(Url::parse("https://prefix.dev/").unwrap())
+        );
+        assert_eq!(
+            config.channel_config.channel_alias,
+            Url::parse("https://prefix.dev/").unwrap()
+        );
+
+        // Unset
+        config.set("channel-alias", None).unwrap();
+        assert_eq!(config.channel_alias, None);
+        assert_eq!(
+            config.channel_config.channel_alias,
+            default_channel_config().channel_alias
         );
     }
 }

@@ -77,6 +77,27 @@ This defaults to only conda-forge.
 The `default-channels` are only used when initializing a new workspace. Once initialized the `channels` are used from the
 workspace manifest.
 
+### `channel-alias`
+
+The base URL to use when a channel is specified by name only.
+When you use a channel name like `conda-forge` in your workspace or configuration, pixi resolves it to a full URL by prepending the channel alias.
+
+By default, this is `https://conda.anaconda.org/`, so a channel named `conda-forge` resolves to `https://conda.anaconda.org/conda-forge`.
+
+If you set the channel alias to a different server, all named channels will resolve against that server instead.
+For example, setting it to `https://prefix.dev/` means `conda-forge` resolves to `https://prefix.dev/conda-forge`.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:channel-alias"
+```
+
+!!! note
+    Channels specified as full URLs (e.g., `https://conda.anaconda.org/conda-forge`) are not affected by this setting.
+    Only named channels (e.g., `conda-forge`) use the channel alias for resolution.
+
+!!! tip
+    This is similar to conda's [`channel_alias`](https://docs.conda.io/projects/conda/en/latest/user-guide/configuration/settings.html#channel-alias-set-a-channel-alias) setting.
+
 ### `shell`
 
 - `change-ps1`:  When set to `false`, the `(pixi)` prefix in the shell prompt is removed.
