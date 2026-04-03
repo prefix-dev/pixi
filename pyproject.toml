@@ -13,6 +13,7 @@ ignore = [
   "tests/data",
   "site",
   "output",
+  "target",
 ]
 pythonPlatform = "All"
 pythonVersion = "3.13"
