@@ -17,8 +17,9 @@ This is the security model we recommend, step by step:
 1. make dependency resolution reproducible and reviewable;
 2. delay very fresh uploads when a cooldown is appropriate;
 3. respond to advisories by constraining or overriding dependencies;
-4. scan the installed environment with tooling that understands what is actually on disk;
-5. add attestations when you publish your own artifacts.
+4. treat package installation and activation hooks as code execution surfaces;
+5. scan the installed environment with tooling that understands what is actually on disk;
+6. add attestations when you publish your own artifacts.
 
 ## 1. Make Dependency Resolution Reproducible
 
@@ -135,7 +136,44 @@ Do not trust overrides blindly. In the best case, maintainers publish a patch re
 
 Treat overrides as a short-term mitigation: apply the smallest possible change, test the affected environment, and remove the override once upstream metadata or upstream releases make it unnecessary.
 
-## 4. Scan The Installed Environment Directly
+## 4. Treat Package Hooks As Code Execution
+
+**What it is**
+
+Conda packages can carry executable hooks in addition to files and metadata.
+
+Two especially relevant cases are:
+
+- [`post-link` scripts](reference/pixi_configuration.md#run-post-link-scripts), which run during installation if explicitly enabled;
+- [activation scripts](workspace/environment.md#activation), which are run during environment activation.
+
+**What it helps against**
+
+This helps you reason about a class of supply-chain risk that is different from "is this version vulnerable?": package installation or activation itself can become the arbitrary code execution event.
+
+**How it works**
+
+Pixi disables `post-link` scripts by default, and that is the safer posture. Enabling them means allowing arbitrary package-provided shell or batch scripts to run during installation.
+
+Activation scripts are different: they are part of normal conda environment activation and are currently run by default when you use `pixi shell`, `pixi run`, or `pixi shell-hook`. That means a malicious package can execute code at activation time even if installation itself looked uneventful.
+
+This also affects `direnv` integrations. The documented [`direnv` setup](integration/third_party/direnv.md) uses `watch_file pixi.lock`, which means a lock file change causes `direnv` to re-run `pixi shell-hook`. If the new lock file introduces a package with a malicious activation script, switching to that lock file can trigger the same arbitrary code execution without a fresh manual approval.
+
+!!! tip ""
+    We plan to add an option to disable shell activation scripts and allow JSON-style activations only. Track progress in [pixi#4889](https://github.com/prefix-dev/pixi/issues/4889).
+
+!!! tip ""
+    There is an upstream `direnv` pull request, [direnv#1530](https://github.com/direnv/direnv/pull/1530), that adds `require_allowed pixi.toml pixi.lock`. Once released, that can be used to force a fresh `direnv allow` when the manifest or lock file changes.
+
+**How to implement it**
+
+Keep `post-link` scripts disabled unless you have a concrete package that requires them and you have reviewed that behavior.
+
+Treat `pixi shell`, `pixi run`, `pixi shell-hook`, and any automation around them as code execution boundaries, not just environment setup commands.
+
+If you use `direnv`, be aware that `watch_file pixi.lock` improves convenience but also lowers the friction for activation-time code execution after dependency changes. Re-introduce an approval step on lock file changes as soon as your `direnv` version supports it.
+
+## 5. Scan The Installed Environment Directly
 
 **What it is**
 
@@ -180,7 +218,7 @@ For Rust packages on conda-forge, building with `cargo-auditable` remains the cu
 
 Run Syft against the installed environment in CI or as part of your release review process, pass the conda and cargo-auditable catalogers explicitly, and feed the result directly into your vulnerability scanner. Generate a portable SBOM only when you need to archive or share that inventory with others.
 
-## 5. Add Attestations When Publishing Your Own Artifacts
+## 6. Add Attestations When Publishing Your Own Artifacts
 
 **What it is**
 
