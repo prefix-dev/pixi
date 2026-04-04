@@ -17,7 +17,7 @@ This is the security model we recommend, step by step:
 1. make dependency resolution reproducible and reviewable;
 2. delay very fresh uploads when a cooldown is appropriate;
 3. respond to advisories by constraining or overriding dependencies;
-4. scan the installed environment by generating an SBOM;
+4. scan the installed environment with tooling that understands what is actually on disk;
 5. add attestations when you publish your own artifacts.
 
 ## 1. Make Dependency Resolution Reproducible
@@ -131,11 +131,13 @@ These controls are complementary to `exclude-newer`: `exclude-newer` reduces exp
 
 When an advisory lands, update to the fixed version first. If the solver is blocked by transitive bounds, add the narrowest override that gets you onto the non-vulnerable release and remove it again once upstream metadata catches up.
 
-## 4. Generate An SBOM From The Installed Environment
+## 4. Scan The Installed Environment Directly
 
 **What it is**
 
-For CVE analysis today, our preferred workflow is to generate an SBOM from the installed Pixi-managed environment with [Syft](https://github.com/anchore/syft).
+For CVE analysis today, our preferred workflow is to scan the installed Pixi-managed environment directly with [Syft](https://github.com/anchore/syft) and a vulnerability scanner such as Grype.
+
+Generating an SBOM is still useful when you want to archive the inventory or share it with someone else, but it does not need to be the default intermediate step for local or CI vulnerability analysis.
 
 **What it helps against**
 
@@ -145,19 +147,34 @@ It is especially relevant in the conda ecosystem because cross-ecosystem vulnera
 
 **How it works**
 
-Instead of scanning only what was requested in `pixi.toml`, you scan the concrete environment directory:
+Instead of scanning only what was requested in `pixi.toml`, you scan the concrete environment directory. Internally, we recommend enabling the conda and auditable Rust catalogers explicitly so the behavior stays consistent across different scan targets:
 
 ```bash
-syft .pixi/envs/default
+syft .pixi/envs/default \
+  --select-catalogers=+conda-meta-cataloger,+cargo-auditable-binary-cataloger \
+  --output syft-json=syft-output.json
 ```
 
-Syft catalogs the installed software and produces an SBOM that can then feed the rest of your vulnerability workflow.
+That output can then be fed to Grype for CVE scanning:
+
+```bash
+grype syft-output.json
+```
+
+This matters because Syft will detect conda packages from `conda-meta` when scanning a filesystem location like `.pixi/envs/default`, but it does not always do so by default when scanning a container image that contains a conda environment. Passing the catalogers explicitly avoids that surprise.
+
+If you want to continue straight into vulnerability analysis, prefer feeding Syft's own output into your scanner instead of converting through CycloneDX first. In practice, format conversion can lose information, and scanning a CycloneDX export can produce different results from scanning Syft's native output directly.
+
+For conda packages specifically, Syft currently tends to emit CPEs but not PURLs. That means Grype may need to be configured to match on CPEs if you want useful conda vulnerability results.
+
+!!! tip ""
+    If you only want to scan your environment for CVEs, you can also run `grype .pixi/envs/default` directly.
 
 For Rust packages on conda-forge, building with `cargo-auditable` remains the current recommendation because it makes those shadow dependencies visible to downstream scanning tools. See the conda-forge [Rust packaging guide](https://conda-forge.org/docs/maintainer/example_recipes/rust) or the [conda-forge agent skill](https://prefix.dev/channels/skill-forge/packages/agent-skill-conda-forge) for the recommended recipe pattern.
 
 **How to implement it**
 
-Run SBOM generation against the installed environment in CI or as part of your release review process, and feed that SBOM into the vulnerability tools your organization already trusts.
+Run Syft against the installed environment in CI or as part of your release review process, pass the conda and cargo-auditable catalogers explicitly, and feed the result directly into your vulnerability scanner. Generate a portable SBOM only when you need to archive or share that inventory with others.
 
 ## 5. Add Attestations When Publishing Your Own Artifacts
 
@@ -201,7 +218,7 @@ If you publish packages that others consume, generate attestations in CI by defa
 
 Cross-ecosystem vulnerability matching for conda packages is still improving.
 
-We are currently working on a PURL-related Conda Enhancement Proposal, [conda/ceps#63](https://github.com/conda/ceps/pull/63), that will make it easier to match conda-installed software against CVEs that are tracked in other ecosystems like PyPI. Until that work is standardized and widely implemented, generating an SBOM from the already-installed environment with tools like Syft remains the most practical workaround.
+We are currently working on a PURL-related Conda Enhancement Proposal, [conda/ceps#63](https://github.com/conda/ceps/pull/63), that will make it easier to match conda-installed software against CVEs that are tracked in other ecosystems like PyPI. Until that work is standardized and widely implemented, direct scans of the already-installed environment with tools like Syft and Grype remain the most practical workaround.
 
 For a broader view of the conda ecosystem work around regulatory readiness, SBOMs, CVE mapping, and auditable Rust binaries, see QuantCo's post, [Making the conda(-forge) ecosystem ready for cybersecurity regulations](https://tech.quantco.com/blog/conda-regulation-support).
 
@@ -211,5 +228,5 @@ If you want a conservative default posture, we recommend:
 - use `exclude-newer` for public channels;
 - selectively bypass the delay only for trusted or urgent fixes;
 - update or override dependencies when advisories land;
-- scan the installed environment with Syft;
+- scan the installed environment with Syft and your vulnerability scanner;
 - generate attestations for packages you publish.
