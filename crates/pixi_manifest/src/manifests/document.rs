@@ -10,8 +10,8 @@ use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 use crate::{
     FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
-    SpecType, SystemRequirements, Task, TomlError, manifests::table_name::TableName,
-    toml::TomlDocument, utils::WithSourceCode,
+    SpecType, SystemRequirements, Task, TomlError, error::GenericError,
+    manifests::table_name::TableName, toml::TomlDocument, utils::WithSourceCode,
 };
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
@@ -858,6 +858,35 @@ impl ManifestDocument {
             }
         } else {
             table.remove("requires-pixi");
+        }
+
+        Ok(())
+    }
+
+    /// Sets the `requires-python` field in a pyproject.toml manifest.
+    /// Returns an error if called on a pixi.toml manifest.
+    pub fn set_requires_python(&mut self, version: Option<&str>) -> Result<(), TomlError> {
+        match self {
+            ManifestDocument::PixiToml(_) | ManifestDocument::MojoProjectToml(_) => {
+                return Err(TomlError::Generic(GenericError::new(
+                    "`requires-python` is only supported in `pyproject.toml` manifests",
+                )));
+            }
+            ManifestDocument::PyProjectToml(_) => {}
+        }
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&["project"])?;
+
+        if let Some(version) = version {
+            if let Some(item) = table.get_mut("requires-python") {
+                *item = value(version);
+            } else {
+                table.insert("requires-python", value(version));
+            }
+        } else {
+            table.remove("requires-python");
         }
 
         Ok(())
