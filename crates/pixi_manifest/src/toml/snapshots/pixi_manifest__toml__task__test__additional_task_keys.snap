@@ -1,8 +1,9 @@
 ---
 source: crates/pixi_manifest/src/toml/task.rs
+assertion_line: 359
 expression: "expect_parse_failure(r#\"\n            cmd = \"test\"\n            depends = [\"a\", \"b\"]\n        \"#)"
 ---
-  × Unexpected keys, expected only 'cmd', 'inputs', 'outputs', 'depends-on', 'cwd', 'env', 'default-environment', 'description', 'clean-env', 'args'
+  × Unexpected keys, expected only 'cmd', 'inputs', 'outputs', 'depends-on', 'cwd', 'env', 'default-environment', 'description', 'clean-env', 'args', 'error-on-missing-globs'
    ╭─[pixi.toml:3:13]
  2 │             cmd = "test"
  3 │             depends = ["a", "b"]
