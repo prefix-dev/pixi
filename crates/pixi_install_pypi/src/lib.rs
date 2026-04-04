@@ -706,26 +706,26 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         }
 
         if !install_missing.is_empty() {
-            tracing::debug!(
+            tracing::info!(
                 "*installing* from remote because no version is cached: {}",
                 install_missing.iter().join(", ")
             );
         }
         if !install_stale.is_empty() {
-            tracing::debug!(
+            tracing::info!(
                 "*installing* from remote because cached version is stale: {}",
                 install_stale.iter().join(", ")
             );
         }
         if !install_cached.is_empty() {
-            tracing::debug!(
+            tracing::info!(
                 "*installing* cached version because cache is up-to-date: {}",
                 install_cached.iter().join(", ")
             );
         }
 
         if !reinstalls.is_empty() {
-            tracing::debug!(
+            tracing::info!(
                 "*re-installing* following packages: {}",
                 reinstalls
                     .iter()
