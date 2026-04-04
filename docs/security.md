@@ -184,7 +184,7 @@ Pixi supports Sigstore-based attestations when publishing packages to [prefix.de
 
 **What it helps against**
 
-Attestations improve provenance. They help downstream consumers verify where an artifact came from and how it was produced, which is especially valuable when you operate your own channel or publish internal packages.
+Attestations are pieces of metadata about your package. Attestations are cryptographically signed to allow consumers to verify the content and origin of an attestation. Pixi and Rattler-Build generate build provenance attestations, which encode information about how and by whom a package was built. This is especially valuable when you operate your own channel or publish internal packages.
 
 **How it works**
 
