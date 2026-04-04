@@ -306,6 +306,26 @@ Both PyPi and conda packages are considered.
     Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
     If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
 
+### `warnings` (optional)
+
+The `warnings` table allows you to configure how pixi handles specific warnings. You can either specify a simple action for a warning pattern or a more detailed configuration.
+
+Supported actions are:
+- `hide`: The warning is completely hidden.
+- `log`: The warning is printed to stderr.
+- `verbose`: The warning is printed to stderr with a link to more information.
+- `fail`: The warning is treated as an error and will cause pixi to exit.
+
+You can use wildcards (`*`) to match multiple warning codes.
+
+```toml
+[workspace.warnings]
+"TI*" = "hide" # Hide all Task Input warnings
+"project-deprecated" = { level = "fail", description = "Deprecated projects are forbidden in this workspace" }
+```
+
+Check the [warnings reference](../reference/warnings.md) for a list of all available warning codes.
+
 ### `build-variants` (optional)
 
 !!! warning "Preview Feature"
