@@ -131,6 +131,10 @@ These controls are complementary to `exclude-newer`: `exclude-newer` reduces exp
 
 When an advisory lands, update to the fixed version first. If the solver is blocked by transitive bounds, add the narrowest override that gets you onto the non-vulnerable release and remove it again once upstream metadata catches up.
 
+Do not trust overrides blindly. In the best case, maintainers publish a patch release on the same minor version you are already using, so the compatibility risk stays small. In practice, the available fix can sometimes be in a newer major version, and forcing that version through an override can break compatibility with other packages.
+
+Treat overrides as a short-term mitigation: apply the smallest possible change, test the affected environment, and remove the override once upstream metadata or upstream releases make it unnecessary.
+
 ## 4. Scan The Installed Environment Directly
 
 **What it is**
