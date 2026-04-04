@@ -157,12 +157,12 @@ Pixi disables `post-link` scripts by default, and that is the safer posture. Ena
 
 Activation scripts are different: they are part of normal conda environment activation and are currently run by default when you use `pixi shell`, `pixi run`, or `pixi shell-hook`. That means a malicious package can execute code at activation time even if installation itself looked uneventful.
 
-This also affects `direnv` integrations. The documented [`direnv` setup](integration/third_party/direnv.md) uses `watch_file pixi.lock`, which means a lock file change causes `direnv` to re-run `pixi shell-hook`. If the new lock file introduces a package with a malicious activation script, switching to that lock file can trigger the same arbitrary code execution without a fresh manual approval.
-
-!!! tip ""
+!!! tip "Disable activation scripts in Pixi"
     We plan to add an option to disable shell activation scripts and allow JSON-style activations only. Track progress in [pixi#4889](https://github.com/prefix-dev/pixi/issues/4889).
 
-!!! tip ""
+This also affects `direnv` integrations. The documented [`direnv` setup](integration/third_party/direnv.md) uses `watch_file pixi.lock`, which means a lock file change causes `direnv` to re-run `pixi shell-hook`. If the new lock file introduces a package with a malicious activation script, switching to that lock file can trigger the same arbitrary code execution without a fresh manual approval.
+
+!!! tip "`require_allowed` in `direnv`"
     There is an upstream `direnv` pull request, [direnv#1530](https://github.com/direnv/direnv/pull/1530), that adds `require_allowed pixi.toml pixi.lock`. Once released, that can be used to force a fresh `direnv allow` when the manifest or lock file changes.
 
 **How to implement it**
@@ -177,19 +177,20 @@ If you use `direnv`, be aware that `watch_file pixi.lock` improves convenience b
 
 **What it is**
 
-For CVE analysis today, our preferred workflow is to scan the installed Pixi-managed environment directly with [Syft](https://github.com/anchore/syft) and a vulnerability scanner such as Grype.
+For CVE analysis today, our preferred workflow is to scan the installed Pixi-managed environment directly with [Syft](https://github.com/anchore/syft) and a vulnerability scanner such as [Grype](https://github.com/anchore/grype).
 
-Generating an SBOM is still useful when you want to archive the inventory or share it with someone else, but it does not need to be the default intermediate step for local or CI vulnerability analysis.
+Generating an SBOM is useful when you want to archive the inventory or share it with someone else, but it does not need to be the default intermediate step for local or CI vulnerability analysis.
 
 **What it helps against**
 
 This improves visibility. It helps you understand what is actually present on disk, which is what your security tooling ultimately needs to analyze.
 
-It is especially relevant in the conda ecosystem because cross-ecosystem vulnerability matching is still improving. Today, an installed-environment scan is often the most practical way to bridge that gap.
+It is especially relevant in the conda ecosystem because cross-ecosystem vulnerability matching is still improving.
+Today, a file-system scan of the installed environment is often the most practical way to bridge that gap.
 
 **How it works**
 
-Instead of scanning only what was requested in `pixi.toml`, you scan the concrete environment directory. Internally, we recommend enabling the conda and auditable Rust catalogers explicitly so the behavior stays consistent across different scan targets:
+Instead of scanning only what was requested in `pixi.toml`, you scan the concrete environment directory. We recommend enabling the conda and auditable Rust catalogers explicitly so the behavior stays consistent across different scan targets:
 
 ```bash
 syft .pixi/envs/default \
@@ -249,7 +250,7 @@ One example of a channel that already uses package signing extensively is the [g
 !!! note ""
     We are actively working on adding package signing to conda-forge, the most popular Conda channel.
 
-!!! tip ""
+!!! tip "Serving Sigstore Attestations in Conda Channels"
     This is part of the broader conda ecosystem work to standardize attestation and signing. The current attestation work is captured in [CEP 27](https://conda.org/learn/ceps/cep-0027/), and broader package signing and Sigstore-serving work is still evolving in the ecosystem. We are also working on a proposal for serving this information on prefix.dev in [conda/ceps#142](https://github.com/conda/ceps/pull/142).
 
 **How to implement it**
