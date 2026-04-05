@@ -233,6 +233,8 @@ Attestations are pieces of metadata about your package. Attestations are cryptog
 
 You can generate attestations directly during publish or upload an existing attestation in CI.
 
+For more background on Sigstore attestations in the conda ecosystem, see the [Rattler-Build Sigstore documentation](https://rattler-build.prefix.dev/latest/sigstore/).
+
 For example:
 
 ```bash
@@ -243,6 +245,23 @@ When using the lower-level upload command for prefix.dev, Pixi can also upload a
 
 ```bash
 pixi upload prefix --channel <channel-name> --generate-attestation dist/*.conda
+```
+
+Consumers can then validate those attestations with Sigstore tooling. For example, with the GitHub CLI:
+
+```bash
+gh attestation verify my-package-0.1.0-h123_0.conda \
+  --owner my-org \
+  --predicate-type "https://schemas.conda.org/attestations-publish-1.schema.json"
+```
+
+Or with `cosign`:
+
+```bash
+cosign verify-blob \
+  --certificate-identity-regexp "https://github.com/my-org/.*" \
+  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+  my-package-0.1.0-h123_0.conda
 ```
 
 One example of a channel that already uses package signing extensively is the [github-releases](https://prefix.dev/channels/github-releases) channel on prefix.dev (GitHub: [hunger/octoconda](https://github.com/hunger/octoconda)).
