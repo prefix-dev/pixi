@@ -153,7 +153,7 @@ This helps you reason about a class of supply-chain risk that is different from 
 
 **How it works**
 
-Pixi disables `post-link` scripts by default, and that is the safer posture. Enabling them means allowing arbitrary package-provided shell or batch scripts to run during installation.
+Pixi disables `post-link` scripts by default. As long as you don't enable this functionality, package-provided shell or batch scripts are not allowed to run during installation.
 
 Activation scripts are different: they are part of normal conda environment activation and are currently run by default when you use `pixi shell`, `pixi run`, or `pixi shell-hook`. That means a malicious package can execute code at activation time even if installation itself looked uneventful.
 
