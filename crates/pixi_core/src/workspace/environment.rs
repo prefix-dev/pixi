@@ -929,6 +929,58 @@ mod tests {
     }
 
     #[test]
+    fn test_exclude_newer_package_channel_workspace_precedence() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "test"
+        channels = [{ channel = "my-private-forge", exclude-newer = "2016-12-02T02:07:43Z" }, "conda-forge"]
+        platforms = ["linux-64"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+
+        [dependencies]
+        polars = { version = "*", exclude-newer = "2017-12-02T02:07:43Z" }
+        numpy = "*"
+
+        [constraints]
+        openssl = { exclude-newer = "2018-12-02T02:07:43Z" }
+        "#,
+        )
+        .unwrap();
+
+        let env = workspace.environment("default").unwrap();
+        let config = env.exclude_newer_config(None).unwrap().unwrap();
+        let polars = PackageName::new_unchecked("polars");
+        let numpy = PackageName::new_unchecked("numpy");
+        let openssl = PackageName::new_unchecked("openssl");
+        let workspace_cutoff = chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let channel_cutoff = chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let dependency_cutoff = chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let constraint_cutoff = chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let polars_cutoff = config.cutoff_for_package(&polars, Some("my-private-forge"));
+        assert_eq!(polars_cutoff, dependency_cutoff);
+
+        let openssl_cutoff = config.cutoff_for_package(&openssl, Some("my-private-forge"));
+        assert_eq!(openssl_cutoff, constraint_cutoff);
+
+        let private_numpy_cutoff = config.cutoff_for_package(&numpy, Some("my-private-forge"));
+        assert_eq!(private_numpy_cutoff, channel_cutoff);
+
+        let forge_numpy_cutoff = config.cutoff_for_package(&numpy, Some("conda-forge"));
+        assert_eq!(forge_numpy_cutoff, workspace_cutoff);
+    }
+
+    #[test]
     fn test_pypi_options_per_environment() {
         let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
