@@ -250,6 +250,7 @@ impl WorkspaceMut {
         platforms: &[Platform],
         editable: bool,
         dry_run: bool,
+        upgrade_lock_file_format: bool,
     ) -> Result<Option<UpdateDeps>, miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
         let mut pypi_specs_to_add_constraints_for = IndexMap::new();
@@ -381,6 +382,7 @@ impl WorkspaceMut {
         } = UpdateContext::builder(self.workspace(), None)?
             .with_lock_file(unlocked_lock_file)
             .with_no_install(no_install || dry_run)
+            .with_upgrade_lock_file_format(upgrade_lock_file_format)
             .finish()
             .await?
             .update()

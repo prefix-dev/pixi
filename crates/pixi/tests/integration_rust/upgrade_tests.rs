@@ -77,6 +77,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
             &[],
             true,
             args.dry_run,
+            false,
         )
         .await
         .unwrap();

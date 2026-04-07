@@ -90,6 +90,7 @@ pub async fn add_conda_dep(
         &dep_options.platforms,
         false,
         dry_run,
+        false,
     ))
     .await
     {
@@ -133,6 +134,7 @@ pub async fn add_pypi_dep(
         &options.platforms,
         editable,
         dry_run,
+        false,
     ))
     .await
     {

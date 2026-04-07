@@ -166,6 +166,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_lock_file(relaxed_lock_file.clone())
         .with_no_install(args.no_install)
         .with_update_targets(specs.packages.clone())
+        .with_upgrade_lock_file_format(true)
         .finish()
         .await?
         .update()

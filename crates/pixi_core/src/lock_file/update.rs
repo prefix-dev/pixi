@@ -300,14 +300,24 @@ impl Workspace {
         }
 
         // Check which environments are out of date.
+        let needs_format_upgrade = lock_file.version() < rattler_lock::FileFormatVersion::LATEST;
         let outdated = OutdatedEnvironments::from_workspace_and_lock_file(
             self,
             command_dispatcher.clone(),
             &lock_file,
         )
         .await;
-        if outdated.is_empty() {
-            tracing::info!("the lock-file is up-to-date");
+        if outdated.is_empty() && !(needs_format_upgrade && options.upgrade_lock_file_format) {
+            if needs_format_upgrade {
+                tracing::warn!(
+                    "the lock file is up-to-date but uses an older format (v{}), \
+                     run `pixi update` to upgrade to v{} for improved reproducibility",
+                    lock_file.version(),
+                    rattler_lock::FileFormatVersion::LATEST,
+                );
+            } else {
+                tracing::info!("the lock-file is up-to-date");
+            }
 
             // If no-environment is outdated we can return early.
             // Pass the build_caches even if empty, in case conda_prefix needs them
@@ -335,12 +345,16 @@ impl Workspace {
         }
 
         // Construct an update context and perform the actual update.
+        // The format upgrade logic (marking all environments as outdated when
+        // the lock file uses an older format) is handled inside
+        // `UpdateContextBuilder::finish()`.
         let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))?
             .with_package_cache(package_cache)
             .with_no_install(options.no_install)
             .with_outdated_environments(outdated)
             .with_lock_file(lock_file)
             .with_glob_hash_cache(glob_hash_cache)
+            .with_upgrade_lock_file_format(options.upgrade_lock_file_format)
             .finish()
             .await?
             .update()
@@ -450,6 +464,11 @@ pub struct UpdateLockFileOptions {
 
     /// Don't install anything to disk.
     pub no_install: bool,
+
+    /// If true, rewrite the lock file to the latest format version even when
+    /// its content is already up-to-date. The actual logic is handled by
+    /// `UpdateContextBuilder::with_upgrade_lock_file_format`.
+    pub upgrade_lock_file_format: bool,
 
     /// The maximum number of concurrent solves that are allowed to run. If this
     /// value is None a heuristic is used based on the number of cores
@@ -1331,6 +1350,10 @@ pub struct UpdateContextBuilder<'p> {
 
     /// Optional list of package names explicitly targeted for update.
     update_targets: Option<std::collections::HashSet<String>>,
+
+    /// If true, rewrite the lock file to the latest format version even when
+    /// its content is already up-to-date.
+    upgrade_lock_file_format: bool,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -1386,6 +1409,17 @@ impl<'p> UpdateContextBuilder<'p> {
         }
     }
 
+    /// If true, upgrade the lock file to the latest format version even when
+    /// its content is already up-to-date. This forces a re-solve of all
+    /// environments so that records are rebuilt with the latest fields (e.g.
+    /// source-record timestamps).
+    pub fn with_upgrade_lock_file_format(self, upgrade: bool) -> Self {
+        Self {
+            upgrade_lock_file_format: upgrade,
+            ..self
+        }
+    }
+
     /// Sets the io concurrency semaphore to use when updating environments.
     #[allow(unused)]
     pub fn with_io_concurrency_semaphore(self, io_concurrency_limit: IoConcurrencyLimit) -> Self {
@@ -1421,6 +1455,27 @@ impl<'p> UpdateContextBuilder<'p> {
                 .await
             }
         };
+
+        // When upgrading the lock file format, force a full re-solve of all
+        // environments so that records are rebuilt with the latest fields
+        // (e.g. source-record timestamps). Simply re-serializing the old lock
+        // file would preserve the missing fields.
+        let needs_format_upgrade = lock_file.version() < rattler_lock::FileFormatVersion::LATEST;
+        if needs_format_upgrade && self.upgrade_lock_file_format {
+            tracing::warn!(
+                "the lock file is up-to-date but uses an older format (v{}), \
+                 re-solving all environments using locked content to upgrade to v{}",
+                lock_file.version(),
+                rattler_lock::FileFormatVersion::LATEST,
+            );
+            for env in project.environments() {
+                outdated
+                    .conda
+                    .entry(env.clone())
+                    .or_default()
+                    .extend(env.platforms());
+            }
+        }
 
         // Extract the current conda records from the lock-file.
         let workspace_root = project.root();
@@ -1669,6 +1724,7 @@ impl<'p> UpdateContext<'p> {
             mapping_client: None,
             command_dispatcher,
             update_targets: None,
+            upgrade_lock_file_format: false,
         })
     }
 

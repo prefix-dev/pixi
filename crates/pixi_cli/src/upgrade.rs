@@ -9,6 +9,7 @@ use pep508_rs::Requirement;
 use pixi_config::ConfigCli;
 use pixi_core::{
     WorkspaceLocator,
+    environment::LockFileUsage,
     lock_file::UpdateContext,
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
 };
@@ -168,6 +169,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &[],
                     false,
                     args.dry_run,
+                    true,
                 )
                 .await?
         {
@@ -196,6 +198,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     &[platform],
                     false,
                     args.dry_run,
+                    true,
                 )
                 .await?
             {
@@ -211,6 +214,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 printed_any = true;
             }
         }
+    }
+
+    // If no packages were upgraded, the lock file may still use an older
+    // format. Force a format upgrade so that `pixi upgrade` always produces
+    // a lock file in the latest format.
+    if !printed_any
+        && !args.dry_run
+        && lock_file_usage == LockFileUsage::Update
+        && original_lock_file.version() < rattler_lock::FileFormatVersion::LATEST
+    {
+        let derived = UpdateContext::builder(workspace.workspace(), None)?
+            .with_lock_file(original_lock_file.clone())
+            .with_no_install(args.no_install_config.no_install)
+            .with_upgrade_lock_file_format(true)
+            .finish()
+            .await?
+            .update()
+            .await?;
+        derived.write_to_disk()?;
     }
 
     // If JSON is requested, emit a single combined diff once.
