@@ -261,17 +261,19 @@ For private packages, you can host your own channel on [prefix.dev](https://pref
 If you use uv's `exclude-newer` setting to ignore packages uploaded after a given date, the Pixi
 equivalent is [`[workspace].exclude-newer`](../reference/pixi_manifest.md#exclude-newer-optional):
 
-```toml title="pixi.toml"
-[workspace]
-exclude-newer = "2025-01-01"
-```
+=== "pixi.toml"
 
-Or in `pyproject.toml`:
+    ```toml
+    [workspace]
+    exclude-newer = "2025-01-01"
+    ```
 
-```toml title="pyproject.toml"
-[tool.pixi.workspace]
-exclude-newer = "2025-01-01"
-```
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    exclude-newer = "2025-01-01"
+    ```
 
 Unlike uv, Pixi applies this cutoff across both conda and PyPI resolution.
 
@@ -293,29 +295,59 @@ In Pixi, the equivalent depends on which ecosystem the package comes from:
 
 For example, a conda package can combine a channel pin with an `exclude-newer` override:
 
-```toml title="pixi.toml"
-[workspace]
-exclude-newer = "2025-01-01"
+=== "pixi.toml"
 
-[dependencies]
-pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+    ```toml
+    [workspace]
+    exclude-newer = "2025-01-01"
 
-[constraints]
-openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
-```
+    [dependencies]
+    pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+
+    [constraints]
+    openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    exclude-newer = "2025-01-01"
+
+    [tool.pixi.dependencies]
+    pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+
+    [tool.pixi.constraints]
+    openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+    ```
 
 And a PyPI package uses the same pattern, but with PyPI-specific tables:
 
-```toml title="pixi.toml"
-[workspace]
-exclude-newer = "2025-01-01"
+=== "pixi.toml"
 
-[pypi-dependencies]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
+    ```toml
+    [workspace]
+    exclude-newer = "2025-01-01"
 
-[pypi-options.dependency-overrides]
-tqdm = { version = "*", exclude-newer = "2025-02-01" }
-```
+    [pypi-dependencies]
+    torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
+
+    [pypi-options.dependency-overrides]
+    tqdm = { version = "*", exclude-newer = "2025-02-01" }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    exclude-newer = "2025-01-01"
+
+    [tool.pixi.pypi-dependencies]
+    torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
+
+    [tool.pixi.pypi-options.dependency-overrides]
+    tqdm = { version = "*", exclude-newer = "2025-02-01" }
+    ```
 
 So compared to uv:
 
