@@ -84,6 +84,17 @@ pub struct BuildBackendMetadataSpec {
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
+
+    /// An optional build string prefix provided by the user (e.g. via CLI).
+    /// When set, this is passed via `build_string_prefix` in the `ProjectModel`
+    /// sent to the build backend, which prepends it to the auto-generated build
+    /// string.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_string_prefix: Option<String>,
+
+    /// An optional build number override provided by the user (e.g. via CLI).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_number: Option<u64>,
 }
 
 /// The metadata of a source checkout.
@@ -219,11 +230,22 @@ impl BuildBackendMetadataSpec {
             None => (None, 0),
         };
 
-        let project_model_hash = discovered_backend
-            .init_params
-            .project_model
-            .as_ref()
-            .map(ProjectModelHash::from);
+        // Apply CLI overrides to the project model if provided.
+        // Only override fields the user explicitly set — leave manifest
+        // values intact when the CLI flag is absent.
+        let project_model = {
+            let mut model = discovered_backend.init_params.project_model.clone();
+            if let Some(m) = &mut model {
+                m.build_string_prefix = self
+                    .build_string_prefix
+                    .clone()
+                    .or(m.build_string_prefix.take());
+                m.build_number = self.build_number.map(Into::into).or(m.build_number.take());
+            }
+            model
+        };
+
+        let project_model_hash = project_model.as_ref().map(ProjectModelHash::from);
 
         let configuration_hash = ConfigurationHash::compute(
             discovered_backend.init_params.configuration.as_ref(),
@@ -275,7 +297,7 @@ impl BuildBackendMetadataSpec {
                     .expect("manifest path is not absolute")
                     .assume_file()
                     .to_path_buf(),
-                project_model: discovered_backend.init_params.project_model.clone(),
+                project_model,
                 configuration: discovered_backend.init_params.configuration.clone(),
                 target_configuration: discovered_backend.init_params.target_configuration.clone(),
             })

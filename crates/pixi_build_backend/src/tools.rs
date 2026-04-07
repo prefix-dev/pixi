@@ -359,7 +359,7 @@ impl RattlerBuild {
                 finalized_cache_dependencies: None,
                 finalized_cache_sources: None,
                 finalized_sources: None,
-                system_tools: SystemTools::new(),
+                system_tools: SystemTools::new("pixi", env!("CARGO_PKG_VERSION")),
                 build_summary: Default::default(),
                 extra_meta: None,
             });

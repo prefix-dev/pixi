@@ -61,6 +61,11 @@ pixi publish [OPTIONS] --to <TO>
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
 
+- <a id="arg---build-number" href="#arg---build-number">`--build-number <BUILD_NUMBER>`</a>
+:  Override the build number for the package (e.g., `--build-number 5`)
+- <a id="arg---build-string-prefix" href="#arg---build-string-prefix">`--build-string-prefix <BUILD_STRING_PREFIX>`</a>
+:  A string to prepend to the build string (e.g., `--build-string-prefix pr42`)
+
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file

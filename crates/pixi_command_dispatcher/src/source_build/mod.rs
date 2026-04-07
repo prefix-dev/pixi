@@ -103,6 +103,15 @@ pub struct SourceBuildSpec {
 
     /// Force rebuild even if the build cache is up to date.
     pub force: bool,
+
+    /// An optional build string prefix provided by the user (e.g. via CLI).
+    /// When set, this is passed via `build_string_prefix` in the `ProjectModel`
+    /// sent to the build backend, which prepends it to the auto-generated build
+    /// string.
+    pub build_string_prefix: Option<String>,
+
+    /// An optional build number override provided by the user (e.g. via CLI).
+    pub build_number: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -251,12 +260,23 @@ impl SourceBuildSpec {
             .await
             .map_err_with(|e| SourceBuildError::Discovery(Arc::new(e)))?;
 
+        // Apply CLI overrides to the project model if provided.
+        // Only override fields the user explicitly set — leave manifest
+        // values intact when the CLI flag is absent.
+        let project_model = {
+            let mut model = discovered_backend.init_params.project_model.clone();
+            if let Some(m) = &mut model {
+                m.build_string_prefix = self
+                    .build_string_prefix
+                    .clone()
+                    .or(m.build_string_prefix.take());
+                m.build_number = self.build_number.map(Into::into).or(m.build_number.take());
+            }
+            model
+        };
+
         // Compute the hashes for caching purposes.
-        let project_model_hash = discovered_backend
-            .init_params
-            .project_model
-            .as_ref()
-            .map(ProjectModelHash::from);
+        let project_model_hash = project_model.as_ref().map(ProjectModelHash::from);
         let configuration_hash = ConfigurationHash::compute(
             discovered_backend.init_params.configuration.as_ref(),
             discovered_backend.init_params.target_configuration.as_ref(),
@@ -321,7 +341,7 @@ impl SourceBuildSpec {
                     .expect("manifest path is not absolute")
                     .assume_file()
                     .to_path_buf(),
-                project_model: discovered_backend.init_params.project_model.clone(),
+                project_model,
                 configuration: discovered_backend.init_params.configuration.clone(),
                 target_configuration: discovered_backend.init_params.target_configuration.clone(),
             })
