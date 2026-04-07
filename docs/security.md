@@ -155,7 +155,7 @@ This helps you reason about a class of supply-chain risk that is different from 
 
 Pixi disables `post-link` scripts by default. As long as you don't enable this functionality, package-provided shell or batch scripts are not allowed to run during installation.
 
-Activation scripts are different: they are part of normal conda environment activation and are currently run by default when you use `pixi shell`, `pixi run`, or `pixi shell-hook`. That means a malicious package can execute code at activation time even if installation itself looked uneventful.
+Activation scripts are different: they are part of normal conda environment activation and are currently run by default when you use `pixi shell`, `pixi run`, or `pixi shell-hook`. That means a malicious package can execute code at activation time.
 
 !!! tip "Disable activation scripts in Pixi"
     We plan to add an option to disable shell activation scripts and allow JSON-style activations only. Track progress in [pixi#4889](https://github.com/prefix-dev/pixi/issues/4889).
