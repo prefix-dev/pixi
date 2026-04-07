@@ -10,7 +10,6 @@ context:
   r_version: ${{ env.get('PIXI_BUILD_R_VERSION', default='0.1.0dev') }}
   rattler_build_version: ${{ env.get('PIXI_BUILD_RATTLER_BUILD_VERSION', default='0.1.0dev') }}
   rust_version: ${{ env.get('PIXI_BUILD_RUST_VERSION', default='0.1.0dev') }}
-  py_pixi_build_backend_version: ${{ env.get('PY_PIXI_BUILD_BACKEND_VERSION', default='0.1.0dev') }}
   ros_version: ${{ env.get('PIXI_BUILD_ROS_VERSION', default='0.1.0dev') }}
 
 recipe:
@@ -329,72 +328,6 @@ outputs:
       license_file:
         - LICENSE
         - THIRDPARTY.yml
-      documentation: https://prefix-dev.github.io/pixi-build-backends
-      repository: https://github.com/prefix-dev/pixi-build-backends
-
-  # === py-pixi-build-backend (Python/Rust hybrid) ===
-  - package:
-      name: py-pixi-build-backend
-      version: ${{ py_pixi_build_backend_version }}
-
-    source:
-      - path: ../../..
-
-    requirements:
-      build:
-        - if: build_platform != target_platform
-          then:
-            - python ${{ python_min }}.*
-            - cross-python_${{ target_platform }} ${{ python_min }}.*
-            - maturin >=1.2.2,<2
-        - ${{ compiler('rust') }}
-        - ${{ stdlib('c') }}
-      host:
-        - python ${{ python_min }}.*
-        - python-abi3
-        - maturin >=1.2.2,<2
-        - pip
-      run:
-        - python >=${{ python_min }}
-        - pixi-build-api-version >=4,<5
-      ignore_run_exports:
-        from_package:
-          - cross-python_${{ target_platform }}
-
-    build:
-      script:
-        content:
-          - if: unix
-            then:
-              - export RUSTC_WRAPPER=sccache
-              - export CARGO_TARGET_DIR=$SRC_DIR/../../../target-cache-py-pixi-build-backends
-          - if: win
-            then:
-              - set RUSTC_WRAPPER=sccache
-              - set "CARGO_TARGET_DIR=%SRC_DIR%\..\..\..\target-cache-py-pixi-build-backends"
-          - cd pixi-build-backends/py-pixi-build-backend
-          - pip install . -vv --no-build-isolation
-      python:
-        version_independent: true
-      files:
-        exclude:
-          - bin/*
-
-    tests:
-      - python:
-          python_version: ${{ python_min }}.*
-          pip_check: false
-          imports:
-            - pixi_build_backend
-
-    about:
-      homepage: https://github.com/prefix-dev/pixi-build-backends
-      summary: Python bindings for pixi-build-backends
-      description: |
-        This package provides Python bindings for pixi-build-backends, enabling
-        Python applications to use the pixi build system programmatically.
-      license: BSD-3-Clause
-      license_file: LICENSE
       documentation: https://prefix-dev.github.io/pixi-build-backends
       repository: https://github.com/prefix-dev/pixi-build-backends
 

@@ -2,7 +2,6 @@
 
 import json
 import subprocess
-import tomllib
 from datetime import datetime
 from pathlib import Path
 
@@ -56,13 +55,6 @@ def main():
         if package["name"] in rust_packages:
             env_name = package["name"].replace("-", "_").upper() + "_VERSION"
             env_vars[env_name] = f"{package['version']}.{version_suffix}"
-
-    # py-pixi-build-backend (separate workspace)
-    py_backend_cargo = repo_root / "pixi-build-backends" / "py-pixi-build-backend" / "Cargo.toml"
-    with open(py_backend_cargo, "rb") as f:
-        cargo_toml = tomllib.load(f)
-        version = cargo_toml["package"]["version"]
-        env_vars["PY_PIXI_BUILD_BACKEND_VERSION"] = f"{version}.{version_suffix}"
 
     for name, value in env_vars.items():
         print(f"{name}={value}")
