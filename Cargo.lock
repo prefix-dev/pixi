@@ -6461,7 +6461,6 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "assert_matches",
- "chrono",
  "console 0.16.3",
  "csv",
  "fancy_display",
