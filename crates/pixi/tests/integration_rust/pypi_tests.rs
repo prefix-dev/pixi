@@ -497,6 +497,223 @@ async fn test_pinning_index() {
 }
 
 #[tokio::test]
+async fn test_exclude_newer_per_package_pypi_index_override() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let default_idx = PyPIDatabase::new()
+        .with(
+            PyPIPackage::new("foo", "1.0.0")
+                .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap()),
+        )
+        .into_simple_index()
+        .unwrap();
+
+    let explicit_idx = PyPIDatabase::new()
+        .with(
+            PyPIPackage::new("foo", "2.0.0")
+                .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap()),
+        )
+        .into_simple_index()
+        .unwrap();
+
+    let baseline = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-exclude-newer-package-index-baseline"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        foo = {{ version = "*", index = "{explicit_idx_url}" }}
+
+        [pypi-options]
+        index-url = "{default_idx_url}"
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        explicit_idx_url = explicit_idx.index_url(),
+        default_idx_url = default_idx.index_url(),
+    ))
+    .unwrap();
+
+    let err = baseline
+        .update_lock_file()
+        .await
+        .expect_err("global cutoff should reject the explicit-index candidate");
+    let rendered = format!("{err:?}");
+    assert!(
+        rendered.contains("no versions of foo"),
+        "expected PyPI solve to fail once the explicit-index candidate is filtered by exclude-newer, got:\n{rendered}"
+    );
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-exclude-newer-package-index"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        foo = {{ version = "*", index = "{explicit_idx_url}", exclude-newer = "0d" }}
+
+        [pypi-options]
+        index-url = "{default_idx_url}"
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        explicit_idx_url = explicit_idx.index_url(),
+        default_idx_url = default_idx.index_url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "foo"),
+        Some("2.0.0".into())
+    );
+    assert_eq!(
+        lock_file
+            .get_pypi_package_url("default", platform, "foo")
+            .unwrap()
+            .as_path()
+            .unwrap(),
+        Utf8TypedPath::from(&*explicit_idx.index_path().as_os_str().to_string_lossy())
+            .join("foo")
+            .join("foo-2.0.0-py3-none-any.whl")
+    );
+}
+
+#[tokio::test]
+async fn test_exclude_newer_dependency_override_pypi_index_override() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let default_idx = PyPIDatabase::new()
+        .with(
+            PyPIPackage::new("consumer", "1.0.0")
+                .with_requires_dist(["foo>=2.0.0"])
+                .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap()),
+        )
+        .into_simple_index()
+        .unwrap();
+
+    let explicit_idx = PyPIDatabase::new()
+        .with(
+            PyPIPackage::new("foo", "2.0.0")
+                .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap()),
+        )
+        .into_simple_index()
+        .unwrap();
+
+    let baseline = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-exclude-newer-override-index-baseline"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        consumer = "*"
+
+        [pypi-options]
+        index-url = "{default_idx_url}"
+
+        [pypi-options.dependency-overrides]
+        foo = {{ version = ">=2.0.0", index = "{explicit_idx_url}" }}
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        default_idx_url = default_idx.index_url(),
+        explicit_idx_url = explicit_idx.index_url(),
+    ))
+    .unwrap();
+
+    let err = baseline
+        .update_lock_file()
+        .await
+        .expect_err("global cutoff should reject the dependency-override candidate");
+    let rendered = format!("{err:?}");
+    assert!(
+        rendered.contains("no versions of foo"),
+        "expected PyPI solve to fail once the override candidate is filtered by exclude-newer, got:\n{rendered}"
+    );
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-exclude-newer-override-index"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        consumer = "*"
+
+        [pypi-options]
+        index-url = "{default_idx_url}"
+
+        [pypi-options.dependency-overrides]
+        foo = {{ version = ">=2.0.0", index = "{explicit_idx_url}", exclude-newer = "0d" }}
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        default_idx_url = default_idx.index_url(),
+        explicit_idx_url = explicit_idx.index_url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "consumer"),
+        Some("1.0.0".into())
+    );
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "foo"),
+        Some("2.0.0".into())
+    );
+}
+
+#[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 /// This test checks if we can receive torch correctly from the whl/cu124 index.
 async fn pin_torch() {

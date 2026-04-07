@@ -1,7 +1,7 @@
 use crate::{PixiPypiSource, PixiPypiSpec, VersionOrStar};
 use itertools::Itertools;
 use pep508_rs::{ExtraName, MarkerTree};
-use pixi_spec::{GitReference, GitSpec, SubdirectoryError};
+use pixi_spec::{ExcludeNewer, GitReference, GitSpec, SubdirectoryError};
 use pixi_toml::{TomlFromStr, TomlWith};
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -61,6 +61,8 @@ struct RawPyPiRequirement {
     extras: Vec<ExtraName>,
 
     marker: MarkerTree,
+
+    exclude_newer: Option<ExcludeNewer>,
 
     // Path Only
     pub path: Option<PathBuf>,
@@ -174,7 +176,10 @@ impl RawPyPiRequirement {
             }
         };
 
-        Ok(req)
+        Ok(PixiPypiSpec {
+            exclude_newer: self.exclude_newer,
+            ..req
+        })
     }
 }
 
@@ -216,6 +221,9 @@ impl<'de> toml_span::Deserialize<'de> for RawPyPiRequirement {
             .optional::<TomlFromStr<_>>("env-markers")
             .map(TomlFromStr::into_inner)
             .unwrap_or_default();
+        let exclude_newer = th
+            .optional::<TomlFromStr<_>>("exclude-newer")
+            .map(TomlFromStr::into_inner);
 
         th.finalize(None)?;
 
@@ -232,6 +240,7 @@ impl<'de> toml_span::Deserialize<'de> for RawPyPiRequirement {
             subdirectory,
             index,
             marker,
+            exclude_newer,
         })
     }
 }
@@ -296,6 +305,18 @@ impl From<PixiPypiSpec> for toml_edit::Value {
             }
         }
 
+        fn insert_exclude_newer(
+            table: &mut toml_edit::InlineTable,
+            exclude_newer: Option<ExcludeNewer>,
+        ) {
+            if let Some(exclude_newer) = exclude_newer {
+                table.insert(
+                    "exclude-newer",
+                    toml_edit::Value::String(toml_edit::Formatted::new(exclude_newer.to_string())),
+                );
+            }
+        }
+
         fn insert_index(table: &mut toml_edit::InlineTable, index: &Option<Url>) {
             if let Some(index) = index {
                 table.insert(
@@ -307,11 +328,15 @@ impl From<PixiPypiSpec> for toml_edit::Value {
 
         let extras = &val.extras;
         let markers = &val.env_markers;
+        let exclude_newer = val.exclude_newer;
 
         match &val.source {
             // Simple version string (no extras, no index)
             PixiPypiSource::Registry { version, index }
-                if extras.is_empty() && index.is_none() && markers.is_true() =>
+                if extras.is_empty()
+                    && index.is_none()
+                    && exclude_newer.is_none()
+                    && markers.is_true() =>
             {
                 toml_edit::Value::from(version.to_string())
             }
@@ -324,6 +349,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 );
                 insert_extras(&mut table, extras);
                 insert_index(&mut table, index);
+                insert_exclude_newer(&mut table, exclude_newer);
                 insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
@@ -374,6 +400,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     );
                 }
                 insert_extras(&mut table, extras);
+                insert_exclude_newer(&mut table, exclude_newer);
                 insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
@@ -392,6 +419,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     );
                 }
                 insert_extras(&mut table, extras);
+                insert_exclude_newer(&mut table, exclude_newer);
                 insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
@@ -410,6 +438,7 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                     );
                 }
                 insert_extras(&mut table, extras);
+                insert_exclude_newer(&mut table, exclude_newer);
                 insert_markers(&mut table, markers);
                 toml_edit::Value::InlineTable(table.to_owned())
             }
@@ -631,7 +660,7 @@ mod test {
     fn test_deserialize_fail_on_unknown() {
         let input = r#"foo = { borked = "bork"}"#;
         assert_snapshot!(format_parse_error(input, from_toml_str::<TomlIndexMap::<pep508_rs::PackageName, PixiPypiSpec>>(input).unwrap_err()), @r#"
-         × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index', 'env-markers'
+         × Unexpected keys, expected only 'version', 'extras', 'path', 'editable', 'git', 'branch', 'tag', 'rev', 'url', 'subdirectory', 'index', 'env-markers', 'exclude-newer'
           ╭─[pixi.toml:1:9]
         1 │ foo = { borked = "bork"}
           ·         ───┬──

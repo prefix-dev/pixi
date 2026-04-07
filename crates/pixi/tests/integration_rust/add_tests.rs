@@ -548,6 +548,7 @@ index-url = "{index_url}"
                             index: None,
                         },
                         env_markers: MarkerTree::default(),
+                        exclude_newer: None,
                     }
                 );
             }

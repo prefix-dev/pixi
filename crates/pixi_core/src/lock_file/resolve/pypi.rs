@@ -14,7 +14,6 @@ use once_cell::sync::OnceCell;
 
 use futures::FutureExt;
 
-use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
@@ -30,8 +29,8 @@ use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
     convert_uv_requirements_to_pep508, into_pinned_git_spec, into_uv_git_reference,
     into_uv_git_sha, pypi_options_to_build_options, pypi_options_to_index_locations,
-    to_exclude_newer, to_index_strategy, to_normalize, to_prerelease_mode, to_requirements,
-    to_uv_normalize, to_uv_version, to_version_specifiers,
+    to_index_strategy, to_normalize, to_prerelease_mode, to_requirements, to_uv_normalize,
+    to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -297,7 +296,7 @@ pub async fn resolve_pypi(
     project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     environment_name: Environment<'_>,
     disallow_install_conda_prefix: bool,
-    exclude_newer: Option<DateTime<Utc>>,
+    exclude_newer: uv_resolver::ExcludeNewer,
     solve_strategy: SolveStrategy,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
@@ -523,7 +522,7 @@ pub async fn resolve_pypi(
         prerelease_mode,
         index_strategy,
         build_options: build_options.clone(),
-        exclude_newer: exclude_newer.map(to_exclude_newer).unwrap_or_default(),
+        exclude_newer: exclude_newer.clone(),
         ..Options::default()
     };
 
