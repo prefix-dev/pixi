@@ -103,7 +103,7 @@ To override or change the mapping of conda packages to PyPI packages, you can us
 
 ### PyPI overrides vs conda constraints
 
-PyPI's [`pypi-options.dependency-overrides`](../reference/pixi_manifest.md#dependency-overrides)
+PyPI's [`pypi-options.dependency-overrides`](../advanced/override.md)
 fills a similar role to conda [`constraints`](../reference/pixi_manifest.md#constraints): both can
 steer transitive dependencies without adding a new direct dependency.
 
