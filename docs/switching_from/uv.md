@@ -256,6 +256,73 @@ channels = ["conda-forge"]
 
 For private packages, you can host your own channel on [prefix.dev](https://prefix.dev/), S3, or JFrog Artifactory. See [Authentication](../deployment/authentication.md).
 
+### Resolution cutoffs (`exclude-newer`)
+
+If you use uv's `exclude-newer` setting to ignore packages uploaded after a given date, the Pixi
+equivalent is [`[workspace].exclude-newer`](../reference/pixi_manifest.md#exclude-newer-optional):
+
+```toml title="pixi.toml"
+[workspace]
+exclude-newer = "2025-01-01"
+```
+
+Or in `pyproject.toml`:
+
+```toml title="pyproject.toml"
+[tool.pixi.workspace]
+exclude-newer = "2025-01-01"
+```
+
+Unlike uv, Pixi applies this cutoff across both conda and PyPI resolution.
+
+If you want to override the cutoff for a specific package, uv uses
+[`exclude-newer-package`](https://docs.astral.sh/uv/reference/settings/#exclude-newer-package):
+
+```toml title="pyproject.toml"
+[tool.uv]
+exclude-newer = "2025-01-01"
+exclude-newer-package = { tqdm = "2025-02-01" }
+```
+
+In Pixi, the equivalent depends on which ecosystem the package comes from:
+
+- For a direct conda package, set `exclude-newer` on the dependency itself.
+- For a transitive conda package, set it in [`[constraints]`](../reference/pixi_manifest.md#constraints).
+- For a direct PyPI package, set it in [`[pypi-dependencies]`](../reference/pixi_manifest.md#pypi-dependencies).
+- For a transitive PyPI package, set it in [`[pypi-options.dependency-overrides]`](../reference/pixi_manifest.md#dependency-overrides).
+
+For example, a conda package can combine a channel pin with an `exclude-newer` override:
+
+```toml title="pixi.toml"
+[workspace]
+exclude-newer = "2025-01-01"
+
+[dependencies]
+pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+
+[constraints]
+openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+```
+
+And a PyPI package uses the same pattern, but with PyPI-specific tables:
+
+```toml title="pixi.toml"
+[workspace]
+exclude-newer = "2025-01-01"
+
+[pypi-dependencies]
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
+
+[pypi-options.dependency-overrides]
+tqdm = { version = "*", exclude-newer = "2025-02-01" }
+```
+
+So compared to uv:
+
+- uv has a global `exclude-newer` and a package-level `exclude-newer-package`
+- Pixi has the same global cutoff, but package-specific overrides live on the relevant manifest entry
+- Pixi can also pair a conda package override with `channel = "..."`, which has no direct uv equivalent
+
 ### Lockfiles
 
 Both tools generate lockfiles for reproducibility.
