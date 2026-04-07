@@ -34,8 +34,8 @@ use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
-    to_uv_normalize,
+    ConversionError, convert_extra_build_dependencies, to_extra_name, to_marker_environment,
+    to_normalize, to_uv_extra_name, to_uv_normalize,
 };
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -759,10 +759,17 @@ impl<'p> LockFileDerivedData<'p> {
                 let uv_context = self
                     .uv_context
                     .get_or_try_init(|| {
-                        UvResolutionContext::from_config(
+                        let extra_build_dependencies = environment.extra_build_dependencies();
+                        let mut context = UvResolutionContext::from_config(
                             self.workspace.config(),
                             self.workspace.client()?.clone(),
+                        )?;
+                        context.extra_build_requires = convert_extra_build_dependencies(
+                            &extra_build_dependencies,
+                            self.workspace.root(),
                         )
+                        .into_diagnostic()?;
+                        Ok::<UvResolutionContext, miette::Report>(context)
                     })?
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
@@ -1690,6 +1697,8 @@ impl<'p> UpdateContext<'p> {
 
         // Spawn tasks to update the pypi packages.
         let uv_context = once_cell::sync::OnceCell::new();
+        let mut uv_context_by_group: HashMap<GroupedEnvironment<'p>, UvResolutionContext> =
+            HashMap::new();
         let mut pypi_conda_prefix_updaters = HashMap::new();
         for (environment, platform) in
             self.outdated_envs
@@ -1756,11 +1765,18 @@ impl<'p> UpdateContext<'p> {
                     Entry::Occupied(entry) => entry.get().clone(),
                 };
 
-            let uv_context = uv_context
-                .get_or_try_init(|| {
-                    UvResolutionContext::from_config(project.config(), project.client()?.clone())
-                })?
-                .clone();
+            let uv_context = if let Some(context) = uv_context_by_group.get(&group) {
+                context.clone()
+            } else {
+                let extra_build_dependencies = group.extra_build_dependencies();
+                let mut context =
+                    UvResolutionContext::from_config(project.config(), project.client()?.clone())?;
+                context.extra_build_requires =
+                    convert_extra_build_dependencies(&extra_build_dependencies, project.root())
+                        .into_diagnostic()?;
+                uv_context_by_group.insert(group.clone(), context.clone());
+                context
+            };
 
             let locked_group_records = self
                 .locked_grouped_pypi_records

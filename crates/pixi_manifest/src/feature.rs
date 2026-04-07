@@ -150,6 +150,11 @@ pub struct Feature {
     /// Pypi-related options
     pub pypi_options: Option<PypiOptions>,
 
+    /// Additional build dependencies for PyPI packages.
+    /// Used when upstream package metadata does not correctly
+    /// specify `build-system.requires`.
+    pub extra_build_dependencies: Option<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>,
+
     /// Target specific configuration.
     pub targets: Targets<WorkspaceTarget>,
 }
@@ -165,6 +170,7 @@ impl Feature {
             solve_strategy: None,
             system_requirements: SystemRequirements::default(),
             pypi_options: None,
+            extra_build_dependencies: None,
             targets: <Targets<WorkspaceTarget> as Default>::default(),
         }
     }

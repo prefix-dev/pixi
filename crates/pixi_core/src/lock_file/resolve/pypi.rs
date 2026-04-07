@@ -540,6 +540,7 @@ pub async fn resolve_pypi(
         &context.hash_strategy,
     )
     .with_index_strategy(index_strategy)
+    .with_extra_build_requires(context.extra_build_requires.clone())
     .with_exclude_newer(options.exclude_newer.clone())
     .with_workspace_cache(context.workspace_cache.clone())
     // Create a forked shared state that condains the in-memory index.

@@ -7,7 +7,7 @@ use std::{
 use indexmap::IndexMap;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
+use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::{Platform, Version};
 use toml_span::{
     DeserError, Spanned, Value,
@@ -51,6 +51,13 @@ pub struct TomlManifest {
     pub constraints: Option<PixiSpanned<UniquePackageMap>>,
 
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
+    /// Additional build dependencies for PyPI packages.
+    ///
+    /// This maps a PyPI package name to additional PEP 508 requirements that
+    /// should be injected into build-time requirements when an sdist is built.
+    /// This only affects build dependency payloads and not runtime resolution.
+    pub extra_build_dependencies:
+        Option<PixiSpanned<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>>,
     pub dev_dependencies: Option<
         PixiSpanned<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
     >,
@@ -218,6 +225,9 @@ impl TomlManifest {
             // Use the pypi-options from the manifest for
             // the default feature
             pypi_options: self.pypi_options.map(PixiSpanned::into_inner),
+
+            // Use extra-build-dependencies from the root for the default feature
+            extra_build_dependencies: self.extra_build_dependencies.map(PixiSpanned::into_inner),
 
             // Combine the default target with all user specified targets
             targets: Targets::from_default_and_user_defined(
@@ -529,6 +539,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         let pypi_dependencies = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-dependencies")
             .map(TomlWith::into_inner);
+        let extra_build_dependencies = th
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Vec<TomlFromStr<_>>>>>>(
+                "extra-build-dependencies",
+            )
+            .map(TomlWith::into_inner);
         let dev = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("dev")
             .map(TomlWith::into_inner);
@@ -594,6 +609,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             build_dependencies,
             constraints,
             pypi_dependencies,
+            extra_build_dependencies,
             dev_dependencies: dev,
             activation,
             tasks,
@@ -626,6 +642,8 @@ pub struct ExternalWorkspaceProperties {
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
 
@@ -1205,6 +1223,91 @@ mod test {
         bad-pkg = { path = "../path", git = "https://github.com/example/repo.git" }
         "#,
         ));
+    }
+
+    #[test]
+    fn test_parse_extra_build_dependencies() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [extra-build-dependencies]
+        fused-ssim = ["torch>=2", "numpy"]
+        "#,
+        )
+        .unwrap();
+
+        let extra_build_dependencies = manifest
+            .default_feature()
+            .extra_build_dependencies
+            .as_ref()
+            .expect("extra build dependencies should be parsed");
+        let specs = extra_build_dependencies
+            .get(&PypiPackageName::from_str("fused-ssim").unwrap())
+            .expect("package should exist");
+
+        assert_eq!(specs.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_feature_scoped_extra_build_dependencies() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.cuda.extra-build-dependencies]
+        fused-ssim = ["torch>=2", "numpy"]
+
+        [environments]
+        cuda = ["cuda"]
+        "#,
+        )
+        .unwrap();
+
+        assert!(
+            manifest
+                .default_feature()
+                .extra_build_dependencies
+                .is_none()
+        );
+
+        let cuda_feature = manifest.feature("cuda").expect("feature should exist");
+        let extra_build_dependencies = cuda_feature
+            .extra_build_dependencies
+            .as_ref()
+            .expect("extra build dependencies should be parsed on feature");
+        let specs = extra_build_dependencies
+            .get(&PypiPackageName::from_str("fused-ssim").unwrap())
+            .expect("package should exist");
+
+        assert_eq!(specs.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_invalid_feature_scoped_extra_build_dependencies() {
+        let error = expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.cuda.extra-build-dependencies]
+        fused-ssim = ["not a pep508"]
+
+        [environments]
+        cuda = ["cuda"]
+        "#,
+        );
+
+        assert!(error.contains("Expected one of"));
+        assert!(error.contains("not a pep508"));
     }
 
     #[test]

@@ -40,8 +40,8 @@ use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{
-    CachedDist, ConfigSettings, DependencyMetadata, Dist, ExtraBuildRequires, ExtraBuildVariables,
-    IndexLocations, IndexUrl, InstalledDist, Name, PackageConfigSettings, Resolution,
+    CachedDist, ConfigSettings, DependencyMetadata, Dist, IndexLocations, IndexUrl, InstalledDist,
+    Name, Resolution,
 };
 use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
@@ -492,10 +492,10 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             site_packages.iter().count(),
         );
 
-        let extra_build_requires = ExtraBuildRequires::default();
-        let package_settings = PackageConfigSettings::default();
+        let extra_build_requires = &self.context_config.uv_context.extra_build_requires;
+        let package_settings = &self.context_config.uv_context.package_config_settings;
 
-        let extra_build_variables = ExtraBuildVariables::default();
+        let extra_build_variables = &self.context_config.uv_context.extra_build_variables;
 
         // This is used to find wheels that are available from the registry
         let registry_index = RegistryWheelIndex::new(
@@ -504,9 +504,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &planner_config.index_locations,
             &self.context_config.uv_context.hash_strategy,
             &planner_config.config_settings,
-            &package_settings,
-            &extra_build_requires,
-            &extra_build_variables,
+            package_settings,
+            extra_build_requires,
+            extra_build_variables,
         );
         // These were added in 0.8.2, we might want to support these
         // if people ask for them
@@ -515,9 +515,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &planner_config.tags,
             &self.context_config.uv_context.hash_strategy,
             &planner_config.config_settings,
-            &package_settings,
-            &extra_build_requires,
-            &extra_build_variables,
+            package_settings,
+            extra_build_requires,
+            extra_build_variables,
         );
 
         // Partition into those that should be linked from the cache (`cached`), those

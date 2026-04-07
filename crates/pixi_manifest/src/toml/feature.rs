@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
+use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::Platform;
 use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper};
 
@@ -32,6 +32,7 @@ pub struct TomlFeature {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
+    pub extra_build_dependencies: Option<IndexMap<PypiPackageName, Vec<pep508_rs::Requirement>>>,
     pub dev: Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
 
     /// Version constraints - limit versions of packages that can be installed
@@ -73,6 +74,9 @@ impl TomlFeature {
             warnings: self.warnings,
         }
         .into_workspace_target(None, preview)?;
+
+        // Store extra_build_dependencies on the Feature directly
+        let extra_build_dependencies = self.extra_build_dependencies;
 
         let mut targets = IndexMap::new();
         for (selector, target) in self.target {
@@ -126,6 +130,7 @@ impl TomlFeature {
             solve_strategy: self.solve_strategy,
             system_requirements: self.system_requirements,
             pypi_options: self.pypi_options,
+            extra_build_dependencies,
             targets: Targets::from_default_and_user_defined(default_target, targets),
         })
         .with_warnings(warnings))
@@ -179,6 +184,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
         let pypi_dependencies = th
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
             .map(TomlIndexMap::into_inner);
+        let extra_build_dependencies = th
+            .optional::<TomlWith<_, TomlIndexMap<_, Vec<TomlFromStr<_>>>>>(
+                "extra-build-dependencies",
+            )
+            .map(TomlWith::into_inner);
         let dev = th
             .optional::<TomlIndexMap<_, _>>("dev")
             .map(TomlIndexMap::into_inner);
@@ -214,6 +224,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             build_dependencies,
             constraints,
             pypi_dependencies,
+            extra_build_dependencies,
             dev,
             activation,
             tasks,
