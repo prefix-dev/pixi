@@ -351,14 +351,27 @@ And a PyPI package uses the same pattern, but with PyPI-specific tables:
 
 Unlike uv, Pixi can also override `exclude-newer` on a per-channel level:
 
-```toml
-[workspace]
-exclude-newer = "7 days"
-channels = [
-  { channel = "my-internal-channel", exclude-newer = "0d" },
-  "conda-forge",
-]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace]
+    exclude-newer = "7 days"
+    channels = [
+      { channel = "my-internal-channel", exclude-newer = "0d" },
+      "conda-forge",
+    ]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    exclude-newer = "7 days"
+    channels = [
+      { channel = "my-internal-channel", exclude-newer = "0d" },
+      "conda-forge",
+    ]
+    ```
 
 ### Lockfiles
 
