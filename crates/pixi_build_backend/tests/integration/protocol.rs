@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use crate::common::model::{convert_test_model_to_project_model_v1, load_project_model_from_json};
 use imp::TestGenerateRecipe;
-use pixi_build_backend::{intermediate_backend::IntermediateBackend, protocol::Protocol};
+use pixi_build_backend::{
+    intermediate_backend::IntermediateBackend, protocol::Protocol, tools::BackendIdentifier,
+};
 use pixi_build_types::procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params};
 use rattler_build_core::console_utils::LoggingOutputHandler;
 use rattler_conda_types::{ChannelUrl, Platform};
@@ -117,7 +119,7 @@ async fn test_conda_build_v1() {
     let target_config = Default::default();
 
     let intermediate_backend: IntermediateBackend<TestGenerateRecipe> = IntermediateBackend::new(
-        Some(("test-backend", env!("CARGO_PKG_VERSION"))),
+        BackendIdentifier::new("test-backend", env!("CARGO_PKG_VERSION")),
         pixi_manifest.clone(),
         Some(tmp_dir_path.clone()),
         project_model_v1,

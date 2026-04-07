@@ -14,6 +14,7 @@ use serde_json::Value;
 use crate::{
     generated_recipe::GenerateRecipe, intermediate_backend::IntermediateBackendInstantiator,
     protocol::ProtocolInstantiator,
+    tools::BackendIdentifier,
 };
 
 /// A utility function to remove empty values from a JSON object.
@@ -63,6 +64,7 @@ where
     };
 
     let (protocol, _result) = IntermediateBackendInstantiator::<T>::new(
+        BackendIdentifier::new("test-backend", env!("CARGO_PKG_VERSION")),
         LoggingOutputHandler::default(),
         Arc::new(T::default()),
     )
