@@ -111,9 +111,11 @@ Keep `post-link` scripts disabled unless you have a concrete package that requir
 
 ## 5. Scan The Installed Environment Directly
 
-For CVE analysis today, our preferred workflow is to scan the installed Pixi-managed environment directly with [Syft](https://github.com/anchore/syft) and a vulnerability scanner such as [Grype](https://github.com/anchore/grype). Run that scan in CI or as part of your release review process, and generate a portable SBOM only when you need to archive the inventory or share it with someone else.
+For CVE analysis today, our preferred workflow is to scan the installed Pixi-managed environment directly with [Syft](https://github.com/anchore/syft) and a vulnerability scanner such as [Grype](https://github.com/anchore/grype). The goal here is narrow: find known-vulnerable software that is actually present in the environment you built, including transitive dependencies and ecosystem-specific packages that may never appear clearly in `pixi.toml`. This improves visibility into what is really on disk, which is what your security tooling ultimately needs to analyze.
 
-This improves visibility because it tells you what is actually present on disk, which is what your security tooling ultimately needs to analyze. That is especially relevant in the conda ecosystem, where cross-ecosystem vulnerability matching is still improving. Today, a file-system scan of the installed environment is often the most practical way to bridge that gap. Instead of scanning only what was requested in `pixi.toml`, you scan the concrete environment directory. We recommend enabling the conda and auditable Rust catalogers explicitly so the behavior stays consistent across different scan targets:
+This does not protect against every supply-chain problem. It does not stop a malicious package from being installed, verify package provenance, or catch issues that are not yet in the scanner's advisory data. It is also limited by ecosystem matching quality. That matters for conda in particular, because cross-ecosystem CVE matching is still improving. Today, scanning the installed filesystem is often the most practical workaround: instead of asking "what did I intend to install?", you ask "what ended up in this environment?"
+
+In practice, that means scanning the concrete environment directory, usually in CI or as part of release review, and generating a portable SBOM only when you need to archive or share the inventory. We recommend enabling the conda and auditable Rust catalogers explicitly so the behavior stays consistent across different scan targets:
 
 ```bash
 syft .pixi/envs/default \
