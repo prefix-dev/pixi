@@ -292,7 +292,7 @@ requires-pixi = ">=0.40,<1.0"
 
 ### `exclude-newer` (optional)
 
-When specified this will exclude any package from consideration that is newer than the specified timestamp or duration.
+When specified on the workspace this will exclude any package from consideration that is newer than the specified timestamp or duration.
 This is useful to reproduce installations regardless of new package releases, or to reduce the risk of
 installing recently published (and potentially compromised) packages.
 
@@ -305,6 +305,21 @@ The value may be specified in the following formats:
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
 Both PyPi and conda packages are considered.
+
+Channels can override the workspace cutoff:
+
+```toml
+[workspace]
+channels = ["conda-forge", { channel = "bioconda", exclude-newer = "0d" }]
+exclude-newer = "7days"
+```
+
+Packages can then override both the workspace baseline and any channel-specific cutoff:
+
+```toml
+[dependencies]
+polars = { version = "*", exclude-newer = "0d" }
+```
 
 !!! note
     Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
