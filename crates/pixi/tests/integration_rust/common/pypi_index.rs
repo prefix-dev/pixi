@@ -17,6 +17,8 @@ use url::Url;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
+type ProjectFileEntry = (String, Option<DateTime<Utc>>);
+
 /// A wheel tag triple: (python tag, abi tag, platform tag).
 /// Defaults to `py3-none-any`.
 #[derive(Clone, Debug)]
@@ -134,7 +136,7 @@ impl Database {
 
         // Group wheels by normalized project name
         use std::collections::BTreeMap;
-        let mut projects: BTreeMap<String, Vec<(String, Option<DateTime<Utc>>)>> = BTreeMap::new();
+        let mut projects: BTreeMap<String, Vec<ProjectFileEntry>> = BTreeMap::new();
 
         for pkg in &self.packages {
             let project = normalize_simple_name(&pkg.name);
