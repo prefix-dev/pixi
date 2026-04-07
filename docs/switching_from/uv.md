@@ -275,7 +275,7 @@ equivalent is [`[workspace].exclude-newer`](../reference/pixi_manifest.md#exclud
     exclude-newer = "2025-01-01"
     ```
 
-Unlike uv, Pixi applies this cutoff across both conda and PyPI resolution.
+Pixi applies this cutoff across both conda and PyPI resolution.
 
 If you want to override the cutoff for a specific package, uv uses
 [`exclude-newer-package`](https://docs.astral.sh/uv/reference/settings/#exclude-newer-package):
@@ -349,11 +349,16 @@ And a PyPI package uses the same pattern, but with PyPI-specific tables:
     tqdm = { version = "*", exclude-newer = "2025-02-01" }
     ```
 
-So compared to uv:
+Unlike uv, Pixi can also override `exclude-newer` on a per-channel level:
 
-- uv has a global `exclude-newer` and a package-level `exclude-newer-package`
-- Pixi has the same global cutoff, but package-specific overrides live on the relevant manifest entry
-- Pixi can also pair a conda package override with `channel = "..."`, which has no direct uv equivalent
+```toml
+[workspace]
+exclude-newer = "7 days"
+channels = [
+  { channel = "my-internal-channel", exclude-newer = "0d" },
+  "conda-forge",
+]
+```
 
 ### Lockfiles
 
