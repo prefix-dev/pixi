@@ -467,11 +467,10 @@ impl GenerateRecipe for PythonGenerator {
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
         IntermediateBackendInstantiator::<PythonGenerator>::new(
-            env!("CARGO_PKG_NAME"),
-            env!("CARGO_PKG_VERSION"),
             log,
             Arc::default(),
         )
+        .with_backend_identifier(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
     })
     .await
     {

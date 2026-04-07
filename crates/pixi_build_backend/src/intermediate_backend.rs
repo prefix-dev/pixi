@@ -68,32 +68,33 @@ pub struct IntermediateBackendConfig {
 }
 
 pub struct IntermediateBackendInstantiator<T: GenerateRecipe> {
-    backend_name: &'static str,
-    backend_version: &'static str,
+    backend_identifier: Option<(&'static str, &'static str)>,
     logging_output_handler: LoggingOutputHandler,
 
     generator: Arc<T>,
 }
 
 impl<T: GenerateRecipe> IntermediateBackendInstantiator<T> {
-    pub fn new(
-        backend_name: &'static str,
-        backend_version: &'static str,
-        logging_output_handler: LoggingOutputHandler,
-        instance: Arc<T>,
-    ) -> Self {
+    pub fn new(logging_output_handler: LoggingOutputHandler, instance: Arc<T>) -> Self {
         Self {
-            backend_name,
-            backend_version,
+            backend_identifier: None,
             logging_output_handler,
             generator: instance,
         }
     }
+
+    pub fn with_backend_identifier(
+        mut self,
+        backend_name: &'static str,
+        backend_version: &'static str,
+    ) -> Self {
+        self.backend_identifier = Some((backend_name, backend_version));
+        self
+    }
 }
 
 pub struct IntermediateBackend<T: GenerateRecipe> {
-    pub(crate) backend_name: &'static str,
-    pub(crate) backend_version: &'static str,
+    pub(crate) backend_identifier: Option<(&'static str, &'static str)>,
     pub(crate) logging_output_handler: LoggingOutputHandler,
     pub(crate) source_dir: PathBuf,
     /// The path to the manifest file relative to the source directory.
@@ -107,8 +108,7 @@ pub struct IntermediateBackend<T: GenerateRecipe> {
 impl<T: GenerateRecipe> IntermediateBackend<T> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        backend_name: &'static str,
-        backend_version: &'static str,
+        backend_identifier: Option<(&'static str, &'static str)>,
         manifest_path: PathBuf,
         source_dir: Option<PathBuf>,
         project_model: ProjectModel,
@@ -171,8 +171,7 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
             .collect::<Result<_, miette::Report>>()?;
 
         Ok(Self {
-            backend_name,
-            backend_version,
+            backend_identifier,
             source_dir,
             manifest_rel_path,
             project_model,
@@ -208,8 +207,7 @@ where
         let target_config = params.target_configuration.unwrap_or_default();
 
         let instance = IntermediateBackend::<T>::new(
-            self.backend_name,
-            self.backend_version,
+            self.backend_identifier,
             params.manifest_path,
             params.source_directory,
             project_model,
@@ -764,6 +762,12 @@ where
             .with_allow_absolute_license_paths(true)
             .finish();
 
+        let (backend_name, backend_version) = self.backend_identifier.ok_or_else(|| {
+            miette::miette!(
+                "backend identifier must be set before running conda/build-v1 for the intermediate backend"
+            )
+        })?;
+
         let output = Output {
             recipe: discovered_output.recipe,
             build_configuration: BuildConfiguration {
@@ -805,8 +809,8 @@ where
             finalized_cache_sources: None,
             build_summary: Arc::default(),
             system_tools: rattler_build_core::system_tools::SystemTools::new(
-                self.backend_name,
-                self.backend_version,
+                backend_name,
+                backend_version,
             ),
             extra_meta: None,
         };
