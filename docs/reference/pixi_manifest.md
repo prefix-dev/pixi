@@ -786,6 +786,22 @@ openssl = ">=3.0"
 
 Constraints use the same [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html)
 syntax as `[dependencies]`.
+They also support the same inline MatchSpec fields, including `channel` and `exclude-newer`.
+
+This makes constraints useful not just for version bounds, but also for applying a different
+`exclude-newer` cutoff to a transitive conda package without making it a direct dependency:
+
+```toml
+[workspace]
+exclude-newer = "2025-01-01"
+
+[dependencies]
+python = ">=3.11"
+requests = ">=2.28"
+
+[constraints]
+openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+```
 
 !!! note
     Constraints do **not** cause a package to be installed. They only restrict which version is
