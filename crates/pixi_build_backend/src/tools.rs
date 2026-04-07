@@ -33,6 +33,10 @@ pub const VARIANTS_CONFIG_FILE: &str = "variants.yaml";
 /// should be hidden behind this struct and all pixi-build-backends
 /// should only interact with this struct.
 pub struct RattlerBuild {
+    /// The build backend name reported to rattler-build system tools.
+    pub backend_name: &'static str,
+    /// The build backend version reported to rattler-build system tools.
+    pub backend_version: &'static str,
     /// The source of the recipe
     pub recipe_source: Source,
     /// The target platform for the build.
@@ -153,6 +157,8 @@ pub enum OneOrMultipleOutputs {
 impl RattlerBuild {
     /// Create a new `RattlerBuild` instance.
     pub fn new(
+        backend_name: &'static str,
+        backend_version: &'static str,
         source: Source,
         target_platform: Platform,
         host_platform: Platform,
@@ -161,6 +167,8 @@ impl RattlerBuild {
         work_directory: PathBuf,
     ) -> Self {
         Self {
+            backend_name,
+            backend_version,
             recipe_source: source,
             target_platform,
             host_platform,
@@ -359,7 +367,7 @@ impl RattlerBuild {
                 finalized_cache_dependencies: None,
                 finalized_cache_sources: None,
                 finalized_sources: None,
-                system_tools: SystemTools::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+                system_tools: SystemTools::new(self.backend_name, self.backend_version),
                 build_summary: Default::default(),
                 extra_meta: None,
             });

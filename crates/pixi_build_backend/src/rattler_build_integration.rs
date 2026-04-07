@@ -28,6 +28,8 @@ use crate::{generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe};
 /// use the `IntermediateRecipe` directly.
 #[allow(clippy::too_many_arguments)]
 pub async fn get_build_output(
+    backend_name: &'static str,
+    backend_version: &'static str,
     generated_recipe: &GeneratedRecipe,
     tool_config: Arc<tool_configuration::Configuration>,
     target_platform: Platform,
@@ -201,7 +203,7 @@ pub async fn get_build_output(
             finalized_sources: None,
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
-            system_tools: SystemTools::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            system_tools: SystemTools::new(backend_name, backend_version),
             build_summary: Arc::default(),
             extra_meta: None,
         };

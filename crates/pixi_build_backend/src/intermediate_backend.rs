@@ -68,14 +68,23 @@ pub struct IntermediateBackendConfig {
 }
 
 pub struct IntermediateBackendInstantiator<T: GenerateRecipe> {
+    backend_name: &'static str,
+    backend_version: &'static str,
     logging_output_handler: LoggingOutputHandler,
 
     generator: Arc<T>,
 }
 
 impl<T: GenerateRecipe> IntermediateBackendInstantiator<T> {
-    pub fn new(logging_output_handler: LoggingOutputHandler, instance: Arc<T>) -> Self {
+    pub fn new(
+        backend_name: &'static str,
+        backend_version: &'static str,
+        logging_output_handler: LoggingOutputHandler,
+        instance: Arc<T>,
+    ) -> Self {
         Self {
+            backend_name,
+            backend_version,
             logging_output_handler,
             generator: instance,
         }
@@ -83,6 +92,8 @@ impl<T: GenerateRecipe> IntermediateBackendInstantiator<T> {
 }
 
 pub struct IntermediateBackend<T: GenerateRecipe> {
+    pub(crate) backend_name: &'static str,
+    pub(crate) backend_version: &'static str,
     pub(crate) logging_output_handler: LoggingOutputHandler,
     pub(crate) source_dir: PathBuf,
     /// The path to the manifest file relative to the source directory.
@@ -96,6 +107,8 @@ pub struct IntermediateBackend<T: GenerateRecipe> {
 impl<T: GenerateRecipe> IntermediateBackend<T> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        backend_name: &'static str,
+        backend_version: &'static str,
         manifest_path: PathBuf,
         source_dir: Option<PathBuf>,
         project_model: ProjectModel,
@@ -158,6 +171,8 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
             .collect::<Result<_, miette::Report>>()?;
 
         Ok(Self {
+            backend_name,
+            backend_version,
             source_dir,
             manifest_rel_path,
             project_model,
@@ -193,6 +208,8 @@ where
         let target_config = params.target_configuration.unwrap_or_default();
 
         let instance = IntermediateBackend::<T>::new(
+            self.backend_name,
+            self.backend_version,
             params.manifest_path,
             params.source_directory,
             project_model,
@@ -788,8 +805,8 @@ where
             finalized_cache_sources: None,
             build_summary: Arc::default(),
             system_tools: rattler_build_core::system_tools::SystemTools::new(
-                env!("CARGO_PKG_NAME"),
-                env!("CARGO_PKG_VERSION"),
+                self.backend_name,
+                self.backend_version,
             ),
             extra_meta: None,
         };

@@ -63,6 +63,8 @@ where
     };
 
     let (protocol, _result) = IntermediateBackendInstantiator::<T>::new(
+        "test-backend",
+        env!("CARGO_PKG_VERSION"),
         LoggingOutputHandler::default(),
         Arc::new(T::default()),
     )
