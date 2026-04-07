@@ -1,6 +1,8 @@
 ## Overview
 
-Sometimes our direct dependency declares outdated intermediate dependency or is too tight to solve with other direct dependencies. In this case, we can override the intermediate dependency in our `pyproject.toml`or `pixi.toml` file.
+Sometimes a direct dependency declares an outdated intermediate dependency, or is too tight to solve
+with other direct dependencies. In that case, you can override the intermediate dependency in your
+`pyproject.toml` or `pixi.toml` file.
 
 !!! note
     This option is not recommended unless you know what you are doing, as uv will ignore all the version constraints of the dependency and use the version you specified.
@@ -22,8 +24,35 @@ numpy = ">=2.0.0"
 This will override the version of `numpy` used by all dependencies to be at least `2.0.0`, regardless of what the dependencies specify.
 This is useful if you need a specific version of a library that is not compatible with the versions specified by your dependencies.
 
+### Override a dependency index and `exclude-newer`
+
+Overrides can also change where a transitive package comes from and which `exclude-newer` cutoff is
+used for that package.
+
+```toml
+[workspace]
+exclude-newer = "2025-01-01"
+
+[pypi-dependencies]
+consumer = "*"
+
+[pypi-options.dependency-overrides]
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "0d" }
+```
+
+This does not add `torch` to the environment by itself. Instead, if `consumer` or any other package
+depends on `torch`, pixi will:
+
+- resolve `torch` from the specified `index`
+- use the override's `exclude-newer` value for `torch`
+- keep using the workspace cutoff for all other packages
+
+This is useful when most of the environment should stay pinned to an older cutoff, but a specific
+package needs a newer release stream from a separate index.
+
 ### Override a dependency version in a specific feature
-it can also be specified in feature level,
+
+It can also be specified at the feature level:
 ```toml
 [feature.dev.pypi-options.dependency-overrides]
 numpy = ">=2.0.0"
@@ -58,7 +87,7 @@ outdated = ["outdated"]
 conflict_a=["outdated", "dev"]
 conflict_b=["dev","outdated"]
 ```
-the following constrains are merged out:
+the following constraints are used:
 default: `numpy >= 2.1.0`
 dev: `numpy == 2.0.0`
 outdated: `numpy == 1.21.0`
@@ -68,3 +97,18 @@ conflict_b: `numpy == 2.0.0` (from `dev`)
 This may contrast with the intuition that all overrides are applied and combined to a result. It
 is done this way to avoid conflicts and confusion: Since users are granted fully control over the
 overrides, it is up to them to choose the right overrides for an environment.
+
+## Direct dependencies vs overrides
+
+Use `[pypi-dependencies]` when the package itself should be installed into the environment.
+
+Use `[pypi-options.dependency-overrides]` when you want to steer how a package is resolved only if
+it appears in the dependency graph.
+
+For `exclude-newer`, this means:
+
+- a value in `[pypi-dependencies]` applies to a direct package
+- a value in `[pypi-options.dependency-overrides]` applies to transitive uses of that package
+
+If the same package is present in both places, the dependency override's `exclude-newer` value is
+used for that package during PyPI resolution.

@@ -306,6 +306,14 @@ When using a relative duration, the lock file will be re-solved when a package i
 
 Both PyPi and conda packages are considered.
 
+For PyPI packages, the workspace-level cutoff can be overridden per package:
+
+- In [`[pypi-dependencies]`](#pypi-dependencies) for direct dependencies
+- In [`[pypi-options.dependency-overrides]`](#dependency-overrides) for transitive dependencies
+
+This is especially useful when a package is pinned to a separate `index` and needs a different cutoff
+than the rest of the workspace.
+
 !!! note
     Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
     If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
@@ -461,6 +469,7 @@ The options that can be defined are:
 
 - `index-url`: replaces the main index url.
 - `extra-index-urls`: adds an extra index url.
+- `dependency-overrides`: overrides the requirement used for a package when it appears in the PyPI dependency graph.
 - `find-links`: similar to `--find-links` option in `pip`.
 - `no-build-isolation`: disables build isolation, can only be set per package.
 - `no-build`: don't build source distributions.
@@ -501,6 +510,36 @@ There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/
 
 !!! tip "Authentication Methods"
     To read about existing authentication methods for private registries, please check the [PyPI Authentication](../deployment/authentication.md#pypi-authentication) section.
+
+
+### Dependency Overrides
+
+`dependency-overrides` lets you replace the requirement used for a PyPI package without making that
+package a direct dependency of the environment.
+
+This is useful when a transitive dependency needs a different version range, a separate package
+index, or a different `exclude-newer` cutoff than the rest of the workspace.
+
+```toml
+[workspace]
+exclude-newer = "2025-01-01"
+
+[pypi-dependencies]
+consumer = "*"
+
+[pypi-options.dependency-overrides]
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "0d" }
+```
+
+In this example:
+
+- `consumer` is a direct dependency and will always be installed.
+- `torch` is **not** added by the override alone.
+- If `torch` appears anywhere in the PyPI dependency graph, pixi will resolve it from the specified
+  `index` and use the package-specific `exclude-newer` value instead of the workspace cutoff.
+
+See the [override guide](../advanced/override.md) for more examples and merge behavior across
+features.
 
 
 ### No Build Isolation
@@ -908,6 +947,25 @@ torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
 
 This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions.
 Learn more about installing PyTorch [here](../python/pytorch.md).
+
+##### `exclude-newer`
+
+Overrides the workspace-level [`exclude-newer`](#exclude-newer-optional) cutoff for a single PyPI
+package.
+
+This only changes candidate selection for that package. It does not add the package to the
+environment by itself.
+
+```toml
+[workspace]
+exclude-newer = "2025-01-01"
+
+[pypi-dependencies]
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "0d" }
+```
+
+This is useful when most of the workspace should stay pinned to an older cutoff, but one package
+needs a newer release stream from a separate index.
 
 ##### `git`
 
