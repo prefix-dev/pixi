@@ -31,7 +31,7 @@ It also makes use of `pixi shell-hook` to not rely on Pixi being installed in th
     For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.41.4 AS build
+FROM ghcr.io/prefix-dev/pixi:0.66.0 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
@@ -46,7 +46,7 @@ RUN cat /shell-hook >> /app/entrypoint.sh
 # extend the shell-hook script to run the command passed to the container
 RUN echo 'exec "$@"' >> /app/entrypoint.sh
 
-FROM ubuntu:24.04 AS production
+FROM ubuntu:25.04 AS production
 WORKDIR /app
 # only copy the production environment into prod container
 # please note that the "prefix" (path) needs to stay the same as in the build container
@@ -59,4 +59,27 @@ EXPOSE 8000
 ENTRYPOINT [ "/app/entrypoint.sh" ]
 # run your app inside the pixi environment
 CMD [ "uvicorn", "my_project:app", "--host", "0.0.0.0" ]
+```
+
+### Missing CA certificates
+
+The Pixi docker images do not include CA certificates.
+This can cause TLS errors in tools that need to verify HTTPS connections, for example when building Rust projects with Cargo.
+To fix this, install them in your build stage. For example, when compiling a Rust project:
+
+```Dockerfile
+FROM ghcr.io/prefix-dev/pixi:0.66.0 AS build
+
+RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . .
+RUN pixi install --locked
+RUN pixi run build-rust
+
+FROM ubuntu:25.04 AS production
+COPY --from=build /app/target/release/my-rust-app /usr/local/bin/my-rust-app
+
+EXPOSE 8000
+ENTRYPOINT [ "/usr/local/bin/my-rust-app" ]
 ```
