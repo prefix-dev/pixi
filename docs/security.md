@@ -204,7 +204,7 @@ That output can then be fed to Grype for CVE scanning:
 grype syft-output.json
 ```
 
-This matters because Syft will detect conda packages from `conda-meta` when scanning a filesystem location like `.pixi/envs/default`, but it does not always do so by default when scanning a container image that contains a conda environment. Passing the catalogers explicitly avoids that surprise.
+Syft will detect conda packages from `conda-meta` when scanning a filesystem location like `.pixi/envs/default`, but it does not always do so by default when scanning a container image that contains a conda environment. Passing the catalogers explicitly avoids that surprise.
 
 If you want to continue straight into vulnerability analysis, prefer feeding Syft's own output into your scanner instead of converting through CycloneDX first. In practice, format conversion can lose information, and scanning a CycloneDX export can produce different results from scanning Syft's native output directly.
 
