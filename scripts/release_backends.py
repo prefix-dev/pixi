@@ -67,8 +67,8 @@ BACKEND_DEFS: list[dict[str, Any]] = [
     },
     {
         "binary": "pixi-build-ros",
-        "version_file": "pixi-build-backends/backends/pixi-build-ros/pyproject.toml",
-        "version_table": "project",
+        "version_file": "crates/pixi_build_ros/Cargo.toml",
+        "in_cargo_workspace": True,
         "feedstock": "conda-forge/pixi-build-ros-feedstock",
     },
 ]
