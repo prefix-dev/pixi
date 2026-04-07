@@ -1,7 +1,0 @@
-[package.build.backend]
-name = "pixi-build-ros"
-version = "*"
-
-[package.build.config]
-distro = "humble"
-extra-input-globs = ["hi"]
