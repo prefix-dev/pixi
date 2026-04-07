@@ -306,19 +306,34 @@ When using a relative duration, the lock file will be re-solved when a package i
 
 Both PyPi and conda packages are considered.
 
-Channels can override the workspace cutoff:
+For conda packages, the workspace-level cutoff can be overridden per package:
+
+- In [`[dependencies]`](#dependencies) for direct dependencies
+- In [`[constraints]`](#constraints) for transitive dependencies
+
+These conda package-specific overrides can also be paired with `channel = "..."` on the package
+entry. This is the way to express channel-aware `exclude-newer` behavior in the manifest today.
+
+For PyPI packages, the workspace-level cutoff can be overridden per package:
+
+- In [`[pypi-dependencies]`](#pypi-dependencies) for direct dependencies
+- In [`[pypi-options.dependency-overrides]`](#dependency-overrides) for transitive dependencies
+
+This is especially useful when a package is pinned to a separate `index` and needs a different cutoff
+than the rest of the workspace.
 
 ```toml
 [workspace]
-channels = ["conda-forge", { channel = "bioconda", exclude-newer = "0d" }]
-exclude-newer = "7days"
-```
+exclude-newer = "2025-01-01"
 
-Packages can then override both the workspace baseline and any channel-specific cutoff:
-
-```toml
 [dependencies]
-polars = { version = "*", exclude-newer = "0d" }
+pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+
+[constraints]
+openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+
+[pypi-dependencies]
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
 ```
 
 !!! note
