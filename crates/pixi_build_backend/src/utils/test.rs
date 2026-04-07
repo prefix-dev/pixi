@@ -13,8 +13,7 @@ use serde_json::Value;
 
 use crate::{
     generated_recipe::GenerateRecipe, intermediate_backend::IntermediateBackendInstantiator,
-    protocol::ProtocolInstantiator,
-    tools::BackendIdentifier,
+    protocol::ProtocolInstantiator, tools::BackendIdentifier,
 };
 
 /// A utility function to remove empty values from a JSON object.
