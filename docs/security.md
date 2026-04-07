@@ -10,7 +10,7 @@ Typical risks include:
 - known-vulnerable dependencies that stay in your environment because nothing forces an update;
 - poor visibility into what actually changed between one environment revision and the next.
 
-Pixi does not eliminate these risks, and it is not a vulnerability scanner for conda environments. What it does provide is a set of practical controls that help you reduce exposure, review changes more clearly, and respond faster when something goes wrong.
+Pixi does not eliminate these risks, and it does not include a vulnerability scanner for conda environments. What it does provide is a set of practical controls that help you reduce exposure, review changes more clearly, and respond faster when something goes wrong.
 
 This is the security model we recommend, step by step:
 
