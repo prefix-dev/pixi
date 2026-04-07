@@ -291,7 +291,7 @@ In Pixi, the equivalent depends on which ecosystem the package comes from:
 - For a direct conda package, set `exclude-newer` on the dependency itself.
 - For a transitive conda package, set it in [`[constraints]`](../reference/pixi_manifest.md#constraints).
 - For a direct PyPI package, set it in [`[pypi-dependencies]`](../reference/pixi_manifest.md#pypi-dependencies).
-- For a transitive PyPI package, set it in [`[pypi-options.dependency-overrides]`](../reference/pixi_manifest.md#dependency-overrides).
+- For a transitive PyPI package, set it in [`[pypi-options.dependency-overrides]`](../advanced/override.md).
 
 For example, a conda package can combine a channel pin with an `exclude-newer` override:
 
