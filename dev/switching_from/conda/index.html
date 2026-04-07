@@ -958,6 +958,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#named-workspaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Named workspaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#automated-switching" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4030,6 +4041,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#named-workspaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Named workspaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#automated-switching" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4107,7 +4129,7 @@ This shift towards workspaces offers a more organized and efficient way to manag
 <tr>
 <td>Activating an Environment</td>
 <td><code>conda activate myenv</code></td>
-<td><code>pixi shell</code> within the workspace directory</td>
+<td><code>pixi shell</code> within the workspace directory, or <code>pixi shell -w myenv</code></td>
 </tr>
 <tr>
 <td>Deactivating an Environment</td>
@@ -4169,12 +4191,36 @@ It creates a single isolated environment for the given requirement and installs 
 Installing <code>pip</code> with <code>pixi global</code> will create a new isolated environment with its own <code>pip</code> binary.
 Using that <code>pip</code> binary will install packages in the <code>pip</code> environment, making it unreachable from anywhere as you can't activate it.</p>
 </div>
+<h2 id="named-workspaces">Named workspaces<a class="headerlink" href="#named-workspaces" title="Permanent link">#</a></h2>
+<p><code>conda</code> provides the ability to perform actions on an environment by name or path to a prefix. For example,</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># installs package into an environment named `myenv`</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>conda<span class="w"> </span>install<span class="w"> </span>--name<span class="w"> </span>myenv<span class="w"> </span>numpy
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># installs a package into an environment that is located at `{_CONDA_ROOT}/envs/myenv`</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>conda<span class="w"> </span>install<span class="w"> </span>--prefix<span class="w"> </span><span class="o">{</span>_CONDA_ROOT<span class="o">}</span>/envs/myenv<span class="w"> </span>numpy
+</span></code></pre></div>
+<p><code>pixi</code> provides a similar functionality. You may register a named workspace using the <code>pixi workspace register</code> command.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>register<span class="w"> </span>--name<span class="w"> </span>myproject<span class="w"> </span>--path<span class="w"> </span>/path/to/myproject
+</span></code></pre></div>
+<details class="tip">
+<summary>Creating a new named workspace</summary>
+<p>Registering a workspace in pixi is currently a two step process. First you must create a workspace, for example using the <code>pixi init</code> command. Then, you may add it to the workspace registry with the <code>pixi workspace register</code> command. This is in contrast to conda, which allows creating a new named environment, for example using the command <code>conda create --name myenv</code>.</p>
+</details>
+<p>Then, you may use the named workspace similar to how <code>conda</code> works </p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># adds a package into a workspace that has been registered with name `myproject`</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy<span class="w"> </span>--workspace<span class="w"> </span>myproject
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="c1"># adds a package into a workspace at the location `/path/to/myproject`</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy<span class="w"> </span>--manifest-path<span class="w"> </span>/path/to/myproject
+</span></code></pre></div>
+<details class="tip">
+<summary>Use <code>pixi workspace register prune</code> to clean up disassociated workspaces</summary>
+<p>Your named workspace will be disassociated if you move the workspace path. To list all existing associations try running <code>pixi workspace register list</code>. To remove disassociated paths try running <code>pixi workspace register prune</code>.</p>
+</details>
 <h2 id="automated-switching">Automated switching<a class="headerlink" href="#automated-switching" title="Permanent link">#</a></h2>
 <p>You can import <code>environment.yml</code> files into a Pixi workspace — see our <a href="../../tutorials/import/">import tutorial</a>.</p>
 <details class="tip">
 <summary>Exporting your environment</summary>
 <p>If you are working with Conda users or systems, you can <a href="../../reference/cli/pixi/workspace/export/">export your environment to a <code>environment.yml</code></a> file to share them.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>workspace<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>workspace<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment
 </span></code></pre></div>
 Additionally you can export a <a href="../../reference/cli/pixi/workspace/export/">conda explicit specification</a>.</p>
 </details>
