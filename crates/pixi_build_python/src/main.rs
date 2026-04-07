@@ -12,6 +12,7 @@ use pixi_build_backend::{
     Variable,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
+    tools::BackendIdentifier,
     traits::ProjectModel,
 };
 use pyproject_toml::PyProjectToml;
@@ -466,8 +467,11 @@ impl GenerateRecipe for PythonGenerator {
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<PythonGenerator>::new(log, Arc::default())
-            .with_backend_identifier(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
+        IntermediateBackendInstantiator::<PythonGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            log,
+            Arc::default(),
+        )
     })
     .await
     {

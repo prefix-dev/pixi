@@ -14,6 +14,7 @@ use fs_err as fs;
 use miette::IntoDiagnostic;
 use pixi_build_backend::generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams};
 use pixi_build_backend::intermediate_backend::IntermediateBackendInstantiator;
+use pixi_build_backend::tools::BackendIdentifier;
 use rattler_build_jinja::{JinjaTemplate, Variable};
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_build_types::NormalizedKey;
@@ -274,7 +275,11 @@ impl GenerateRecipe for RosGenerator {
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<RosGenerator>::new(log, Arc::default())
+        IntermediateBackendInstantiator::<RosGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            log,
+            Arc::default(),
+        )
     })
     .await
     {

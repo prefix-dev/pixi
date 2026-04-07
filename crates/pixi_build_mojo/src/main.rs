@@ -8,6 +8,7 @@ use pixi_build_backend::generated_recipe::DefaultMetadataProvider;
 use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
+    tools::BackendIdentifier,
     traits::ProjectModel,
 };
 use rattler_build_jinja::Variable;
@@ -160,7 +161,11 @@ impl MojoGenerator {
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<MojoGenerator>::new(log, Arc::default())
+        IntermediateBackendInstantiator::<MojoGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            log,
+            Arc::default(),
+        )
     })
     .await
     {

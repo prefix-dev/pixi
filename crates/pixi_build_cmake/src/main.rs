@@ -7,6 +7,7 @@ use miette::IntoDiagnostic;
 use pixi_build_backend::{
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
+    tools::BackendIdentifier,
     traits::ProjectModel,
 };
 use pixi_build_types::SourcePackageName;
@@ -174,7 +175,11 @@ impl GenerateRecipe for CMakeGenerator {
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<CMakeGenerator>::new(log, Arc::default())
+        IntermediateBackendInstantiator::<CMakeGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            log,
+            Arc::default(),
+        )
     })
     .await
     {
@@ -400,6 +405,7 @@ mod tests {
         });
 
         let factory = IntermediateBackendInstantiator::<CMakeGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
             LoggingOutputHandler::default(),
             Arc::default(),
         )
