@@ -41,7 +41,6 @@ SCHEMAS_FOR_FILE: dict[str, dict[str, list[str]]] = {
         PYPROJECT_SCHEMA: [],
     },
 }
-SKIP_REAL_MANIFEST = {(PYPROJECT_PARTIAL_SCHEMA, "py-pixi-build-backend"): "no pixi tool"}
 
 
 def _from_request(request: pytest.FixtureRequest, fixture_set: dict[str, Path]) -> dict[str, Any]:
@@ -171,10 +170,6 @@ def test_real_manifests(
     all_errors: dict[str, Any] = {}
     for schema_path, validator in all_validators[path.name].items():
         print("\t...", schema_path)
-        skip_reason = SKIP_REAL_MANIFEST.get((schema_path, path.parent.name))
-        if skip_reason:
-            print("\t\t... skipped:", skip_reason)
-            continue
         subpath = SCHEMAS_FOR_FILE[path.name][schema_path]
         partial = manifest
         for segment in subpath:
