@@ -117,6 +117,7 @@ async fn test_conda_build_v1() {
     let target_config = Default::default();
 
     let intermediate_backend: IntermediateBackend<TestGenerateRecipe> = IntermediateBackend::new(
+        Some(("test-backend", env!("CARGO_PKG_VERSION"))),
         pixi_manifest.clone(),
         Some(tmp_dir_path.clone()),
         project_model_v1,

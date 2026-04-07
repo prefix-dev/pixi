@@ -466,11 +466,8 @@ impl GenerateRecipe for PythonGenerator {
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<PythonGenerator>::new(
-            log,
-            Arc::default(),
-        )
-        .with_backend_identifier(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
+        IntermediateBackendInstantiator::<PythonGenerator>::new(log, Arc::default())
+            .with_backend_identifier(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
     })
     .await
     {
