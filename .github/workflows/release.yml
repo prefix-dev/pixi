@@ -79,7 +79,7 @@ jobs:
           git: https://github.com/ruben-arts/cargo-dist.git
           rev: d4085f9cf734dbfeb49d6ff89b16c768b7977ad3 # feature/update_bin_in_root_tar
 
-      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           environments: dist
           activate-environment: true
@@ -172,7 +172,7 @@ jobs:
           crate: cargo-zigbuild
           version: "0.20.1"
 
-      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           environments: dist
           activate-environment: true
