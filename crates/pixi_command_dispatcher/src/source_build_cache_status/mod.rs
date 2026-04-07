@@ -5,6 +5,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_glob::GlobSet;
 use pixi_record::{CanonicalSourceLocation, PinnedSourceSpec, VariantValue};
+use pixi_spec::ResolvedExcludeNewer;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use tokio::sync::Mutex;
 use tracing::instrument;
@@ -37,6 +38,9 @@ pub struct SourceBuildCacheStatusSpec {
 
     /// The channels to use when building source packages.
     pub channels: Vec<ChannelUrl>,
+
+    /// Exclude packages newer than the configured cutoffs when solving build environments.
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// The build environment used to build the package.
     pub build_environment: BuildEnvironment,
@@ -140,6 +144,7 @@ impl SourceBuildCacheStatusSpec {
         BuildInput {
             build_source: self.source.source_code().into(),
             channel_urls: self.channels.clone(),
+            exclude_newer: self.exclude_newer.clone(),
             name: self.package.name.as_source().to_string(),
             version: self.package.version.to_string(),
             build: self.package.build.to_string(),
@@ -284,6 +289,7 @@ impl SourceBuildCacheStatusSpec {
                     package: identifier.clone(),
                     source: source.clone(),
                     channels: self.channels.clone(),
+                    exclude_newer: self.exclude_newer.clone(),
                     build_environment: self.build_environment.clone(),
                     channel_config: self.channel_config.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),

@@ -444,7 +444,10 @@ impl Protocol for RattlerBuildBackend {
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
             build_summary: Arc::default(),
-            system_tools: Default::default(),
+            system_tools: rattler_build_core::system_tools::SystemTools::new(
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+            ),
             extra_meta: None,
         };
 

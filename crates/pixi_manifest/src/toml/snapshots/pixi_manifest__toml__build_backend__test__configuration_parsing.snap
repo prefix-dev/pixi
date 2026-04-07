@@ -41,6 +41,7 @@ TomlPackageBuild {
                 channel: None,
                 subdir: None,
                 license: None,
+                exclude_newer: None,
             },
             channels: None,
             additional_dependencies: UniquePackageMap {

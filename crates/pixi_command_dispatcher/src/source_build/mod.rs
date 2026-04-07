@@ -11,7 +11,7 @@ use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_path::AbsPath;
 use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, VariantValue};
-use pixi_spec::{SourceAnchor, SourceLocationSpec};
+use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
     Platform, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
@@ -63,6 +63,10 @@ pub struct SourceBuildSpec {
     /// The channels to use for solving.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub channels: Vec<ChannelUrl>,
+
+    /// Exclude packages newer than the configured cutoffs when solving build environments.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// Information about host platform on which the package is build. Note that
     /// a package might be targeting noarch in which case the host platform
@@ -157,6 +161,7 @@ impl SourceBuildSpec {
                     build_environment: self.build_environment.clone(),
                     source: self.source.clone(),
                     channels: self.channels.clone(),
+                    exclude_newer: self.exclude_newer.clone(),
                     channel_config: self.channel_config.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
                     variants: self.variants.clone(),
@@ -312,6 +317,7 @@ impl SourceBuildSpec {
                     .as_dir_or_file_parent()
                     .to_path_buf(),
                 channel_config: self.channel_config.clone(),
+                exclude_newer: self.exclude_newer.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 workspace_root: AbsPath::new(&discovered_backend.init_params.workspace_root)
                     .expect("workspace root is not absolute")
@@ -719,6 +725,7 @@ impl SourceBuildSpec {
                         ignore_packages: None,
                         build_environment: self.build_environment.to_build_from_build(),
                         force_reinstall: Default::default(),
+                        exclude_newer: self.exclude_newer.clone(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
                         variant_configuration: self.variant_configuration.clone(),
@@ -749,6 +756,7 @@ impl SourceBuildSpec {
                         ignore_packages: None,
                         build_environment: self.build_environment.clone(),
                         force_reinstall: Default::default(),
+                        exclude_newer: self.exclude_newer.clone(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
                         variant_configuration: self.variant_configuration,
@@ -874,7 +882,7 @@ impl SourceBuildSpec {
                 channels: self.channels.clone(),
                 strategy: Default::default(),
                 channel_priority: Default::default(),
-                exclude_newer: None,
+                exclude_newer: self.exclude_newer.clone(),
                 channel_config: self.channel_config.clone(),
                 variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),

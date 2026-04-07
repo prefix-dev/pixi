@@ -12,6 +12,7 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::{PixiRecord, SourceRecord, VariantValue};
+use pixi_spec::ResolvedExcludeNewer;
 use rattler::install::{
     InstallationResultRecord, Installer, InstallerError, Transaction,
     link_script::{LinkScriptError, PrePostLinkResult},
@@ -56,6 +57,10 @@ pub struct InstallPixiEnvironmentSpec {
     /// Packages to force reinstalling.
     #[serde(skip_serializing_if = "HashSet::is_empty")]
     pub force_reinstall: HashSet<rattler_conda_types::PackageName>,
+
+    /// Exclude packages newer than the configured cutoffs when solving build environments.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// The channels to use when building source packages.
     pub channels: Vec<ChannelUrl>,
@@ -109,6 +114,7 @@ impl InstallPixiEnvironmentSpec {
             ignore_packages: None,
             build_environment: BuildEnvironment::default(),
             force_reinstall: HashSet::new(),
+            exclude_newer: None,
             channels: Vec::new(),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             variant_configuration: None,
@@ -228,6 +234,7 @@ impl InstallPixiEnvironmentSpec {
                 variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
                 variants: source_record.variants.clone(),
+                exclude_newer: self.exclude_newer.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: None,
                 work_directory: None,

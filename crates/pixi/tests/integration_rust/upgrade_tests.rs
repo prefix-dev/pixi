@@ -109,7 +109,11 @@ async fn upgrade_command_updates_platform_specific_version() {
 
     let platform = Platform::current();
     let mut package_database = MockRepoData::default();
-    package_database.add_package(Package::build("python", "3.12.0").finish());
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_timestamp("2025-05-18T00:00:00Z".parse().unwrap())
+            .finish(),
+    );
     let channel_dir = TempDir::new().unwrap();
     package_database
         .write_repodata(channel_dir.path())
@@ -155,7 +159,11 @@ async fn upgrade_command_updates_all_platform_specific_targets() {
     setup_tracing();
 
     let mut package_database = MockRepoData::default();
-    package_database.add_package(Package::build("python", "3.12.0").finish());
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_timestamp("2025-05-18T00:00:00Z".parse().unwrap())
+            .finish(),
+    );
     let channel_dir = TempDir::new().unwrap();
     package_database
         .write_repodata(channel_dir.path())
