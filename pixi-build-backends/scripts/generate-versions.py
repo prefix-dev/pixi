@@ -49,6 +49,7 @@ def main():
         "pixi-build-python",
         "pixi-build-r",
         "pixi-build-rattler-build",
+        "pixi-build-ros",
         "pixi-build-rust",
     ]
     for package in cargo_metadata.get("packages", []):
@@ -62,15 +63,6 @@ def main():
         cargo_toml = tomllib.load(f)
         version = cargo_toml["package"]["version"]
         env_vars["PY_PIXI_BUILD_BACKEND_VERSION"] = f"{version}.{version_suffix}"
-
-    # pixi-build-ros (Python package)
-    ros_pyproject = (
-        repo_root / "pixi-build-backends" / "backends" / "pixi-build-ros" / "pyproject.toml"
-    )
-    with open(ros_pyproject, "rb") as f:
-        pyproject = tomllib.load(f)
-        version = pyproject["project"]["version"]
-        env_vars["PIXI_BUILD_ROS_VERSION"] = f"{version}.{version_suffix}"
 
     for name, value in env_vars.items():
         print(f"{name}={value}")
