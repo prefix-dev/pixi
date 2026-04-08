@@ -408,7 +408,8 @@ impl Workspace {
     /// Returns the default solve group environments directory, without
     /// interacting with config
     pub fn default_solve_group_environments_dir(&self) -> PathBuf {
-        self.default_pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        self.default_pixi_dir()
+            .join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
     /// Returns the solve group environments directory
@@ -1468,7 +1469,9 @@ platforms = []
             ..Default::default()
         });
 
-        let dot_pixi = dunce::canonicalize(workspace_dir.path()).unwrap().join(".pixi");
+        let dot_pixi = dunce::canonicalize(workspace_dir.path())
+            .unwrap()
+            .join(".pixi");
         let detached_subdir = detached_dir.path().join(format!(
             "{}-{}",
             workspace.display_name(),
