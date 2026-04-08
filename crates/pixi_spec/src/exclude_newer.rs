@@ -34,7 +34,6 @@ pub struct ResolvedExcludeNewer {
     pub package_cutoffs: BTreeMap<PackageName, DateTime<Utc>>,
 
     /// Whether to include packages that don't have a timestamp.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub include_unknown_timestamp: bool,
 }
 
@@ -59,7 +58,9 @@ impl ResolvedExcludeNewer {
             cutoff,
             channel_cutoffs: BTreeMap::new(),
             package_cutoffs: BTreeMap::new(),
-            include_unknown_timestamp: false,
+            // TODO: After https://github.com/conda/ceps/pull/154 we might need to rethink this
+            // https://github.com/prefix-dev/pixi/pull/5848/changes#r3051252281
+            include_unknown_timestamp: true,
         }
     }
 
@@ -324,5 +325,6 @@ mod test {
             ),
             package_cutoff
         );
+        assert!(config.include_unknown_timestamp());
     }
 }
