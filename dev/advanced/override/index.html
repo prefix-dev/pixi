@@ -3474,6 +3474,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#override-a-dependency-index-and-exclude-newer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Override a dependency index and exclude-newer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#override-a-dependency-version-in-a-specific-feature" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3497,6 +3508,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#direct-dependencies-vs-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct dependencies vs overrides
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4013,6 +4035,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#override-a-dependency-index-and-exclude-newer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Override a dependency index and exclude-newer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#override-a-dependency-version-in-a-specific-feature" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4036,6 +4069,17 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#direct-dependencies-vs-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct dependencies vs overrides
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4067,7 +4111,9 @@
   <h1>Dependency Overrides</h1>
 
 <h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">#</a></h2>
-<p>Sometimes our direct dependency declares outdated intermediate dependency or is too tight to solve with other direct dependencies. In this case, we can override the intermediate dependency in our <code>pyproject.toml</code>or <code>pixi.toml</code> file.</p>
+<p>Sometimes a direct dependency declares an outdated intermediate dependency, or is too tight to solve
+with other direct dependencies. In that case, you can override the intermediate dependency in your
+<code>pyproject.toml</code> or <code>pixi.toml</code> file.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>This option is not recommended unless you know what you are doing, as uv will ignore all the version constraints of the dependency and use the version you specified.</p>
@@ -4085,36 +4131,57 @@ or in <code>pixi.toml</code>:</p>
 </span></code></pre></div>
 This will override the version of <code>numpy</code> used by all dependencies to be at least <code>2.0.0</code>, regardless of what the dependencies specify.
 This is useful if you need a specific version of a library that is not compatible with the versions specified by your dependencies.</p>
+<h3 id="override-a-dependency-index-and-exclude-newer">Override a dependency index and <code>exclude-newer</code><a class="headerlink" href="#override-a-dependency-index-and-exclude-newer" title="Permanent link">#</a></h3>
+<p>Overrides can also change where a transitive package comes from and which <code>exclude-newer</code> cutoff is
+used for that package.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">consumer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">[pypi-options.dependency-overrides]</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">torch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://download.pytorch.org/whl/cu124&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>This does not add <code>torch</code> to the environment by itself. Instead, if <code>consumer</code> or any other package
+depends on <code>torch</code>, pixi will:</p>
+<ul>
+<li>resolve <code>torch</code> from the specified <code>index</code></li>
+<li>use the override's <code>exclude-newer</code> value for <code>torch</code></li>
+<li>keep using the workspace cutoff for all other packages</li>
+</ul>
+<p>This is useful when most of the environment should stay pinned to an older cutoff, but a specific
+package needs a newer release stream from a separate index.</p>
 <h3 id="override-a-dependency-version-in-a-specific-feature">Override a dependency version in a specific feature<a class="headerlink" href="#override-a-dependency-version-in-a-specific-feature" title="Permanent link">#</a></h3>
-<p>it can also be specified in feature level,
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[feature.dev.pypi-options.dependency-overrides]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.0.0&quot;</span>
+<p>It can also be specified at the feature level:
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[feature.dev.pypi-options.dependency-overrides]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.0.0&quot;</span>
 </span></code></pre></div>
 This will override the version of <code>numpy</code> used by all dependencies in the <code>dev</code> feature to be at least <code>2.0.0</code>, regardless of what the dependencies specify when the <code>dev</code> feature is enabled.</p>
 <h3 id="interact-with-other-overrides">Interact with other overrides<a class="headerlink" href="#interact-with-other-overrides" title="Permanent link">#</a></h3>
 <p>For a specific environment, all the <code>dependency-overrides</code> defined in different features will be combined in the order they were defined.</p>
 <p>If the same dependency is overridden multiple times, we'll use the override from the <strong>prior</strong> feature in that environment.</p>
 <p>Also, the default feature will always come, and come last in the list of all overrides.</p>
-<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># pixi.toml</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">dependency-overrides</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">numpy</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.1.0&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">[pypi-dependencies]</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1.25.0&quot;</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="k">[feature.dev.pypi-options.dependency-overrides]</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==2.0.0&quot;</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="k">[feature.outdated.pypi-options.dependency-overrides]</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==1.21.0&quot;</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">[environments]</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">dev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;dev&quot;</span><span class="p">]</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="n">outdated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;outdated&quot;</span><span class="p">]</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="n">conflict_a</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;outdated&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;dev&quot;</span><span class="p">]</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">conflict_b</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;dev&quot;</span><span class="p">,</span><span class="s2">&quot;outdated&quot;</span><span class="p">]</span>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># pixi.toml</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">[pypi-options]</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">dependency-overrides</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">numpy</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.1.0&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1.25.0&quot;</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="k">[feature.dev.pypi-options.dependency-overrides]</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==2.0.0&quot;</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="k">[feature.outdated.pypi-options.dependency-overrides]</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==1.21.0&quot;</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="k">[environments]</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="n">dev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;dev&quot;</span><span class="p">]</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="n">outdated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;outdated&quot;</span><span class="p">]</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="n">conflict_a</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;outdated&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;dev&quot;</span><span class="p">]</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="n">conflict_b</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;dev&quot;</span><span class="p">,</span><span class="s2">&quot;outdated&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-the following constrains are merged out:
+the following constraints are used:
 default: <code>numpy &gt;= 2.1.0</code>
 dev: <code>numpy == 2.0.0</code>
 outdated: <code>numpy == 1.21.0</code>
@@ -4123,6 +4190,17 @@ conflict_b: <code>numpy == 2.0.0</code> (from <code>dev</code>)</p>
 <p>This may contrast with the intuition that all overrides are applied and combined to a result. It
 is done this way to avoid conflicts and confusion: Since users are granted fully control over the
 overrides, it is up to them to choose the right overrides for an environment.</p>
+<h2 id="direct-dependencies-vs-overrides">Direct dependencies vs overrides<a class="headerlink" href="#direct-dependencies-vs-overrides" title="Permanent link">#</a></h2>
+<p>Use <code>[pypi-dependencies]</code> when the package itself should be installed into the environment.</p>
+<p>Use <code>[pypi-options.dependency-overrides]</code> when you want to steer how a package is resolved only if
+it appears in the dependency graph.</p>
+<p>For <code>exclude-newer</code>, this means:</p>
+<ul>
+<li>a value in <code>[pypi-dependencies]</code> applies to a direct package</li>
+<li>a value in <code>[pypi-options.dependency-overrides]</code> applies to transitive uses of that package</li>
+</ul>
+<p>If the same package is present in both places, the dependency override's <code>exclude-newer</code> value is
+used for that package during PyPI resolution.</p>
 
 
 

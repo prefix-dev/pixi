@@ -1336,6 +1336,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#pypi-overrides-vs-conda-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PyPI overrides vs conda constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#pinned-package-conflicts" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4002,6 +4013,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#pypi-overrides-vs-conda-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PyPI overrides vs conda constraints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#pinned-package-conflicts" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4155,6 +4177,19 @@ Which results in the following output:
 In this example, Pixi will first resolve the conda dependencies and install the <code>python</code> conda package.
 Then, since <code>numpy</code> is not specified as a conda dependency, Pixi will resolve the PyPI dependencies and install the <code>numpy</code> PyPI package.</p>
 <p>To override or change the mapping of conda packages to PyPI packages, you can use the <a href="../../reference/pixi_manifest/#conda-pypi-map-optional"><code>conda-pypi-map</code></a> field in the <code>pixi.toml</code> file.</p>
+<h3 id="pypi-overrides-vs-conda-constraints">PyPI overrides vs conda constraints<a class="headerlink" href="#pypi-overrides-vs-conda-constraints" title="Permanent link">#</a></h3>
+<p>PyPI's <a href="../../advanced/override/"><code>pypi-options.dependency-overrides</code></a>
+fills a similar role to conda <a href="../../reference/pixi_manifest/#constraints"><code>constraints</code></a>: both can
+steer transitive dependencies without adding a new direct dependency.</p>
+<p>The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
+the requirement used for that package during PyPI resolution.</p>
+<p>That same model is used for PyPI package-specific <code>exclude-newer</code> values:</p>
+<ul>
+<li>set <code>exclude-newer</code> in <a href="../../reference/pixi_manifest/#pypi-dependencies"><code>pypi-dependencies</code></a> for a direct package</li>
+<li>set it in <code>pypi-options.dependency-overrides</code> for a transitive package</li>
+</ul>
+<p>PyPI does not have a conda-style per-channel cutoff. When you use a separate package index, pin the
+package with <code>index = "..."</code> and set <code>exclude-newer</code> on that package.</p>
 <h3 id="pinned-package-conflicts">Pinned package conflicts<a class="headerlink" href="#pinned-package-conflicts" title="Permanent link">#</a></h3>
 <p>When trying to install conda and PyPI dependencies,
 such as with the following <code>pixi.toml</code> manifest:</p>
