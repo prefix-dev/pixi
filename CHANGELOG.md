@@ -13,22 +13,21 @@ Allowing users to specify an acceptable settle time before the package is used i
 This example extensively uses the new `exclude-newer` configuration options:
 ```toml
 [workspace]
-channels = [
-    # Channel specific exclude-newer
-    { channel = "conda-forge", exclude-newer = "3y"},
-    { channel = "bioconda", exclude-newer = "1m"},
-]
-platforms = ["osx-arm64", "linux-64", "linux-aarch64", "osx-64", "win-64"]
-
 # Workspace level exclude newer
-exclude-newer = "1y"
-
+exclude-newer = "14d"
 # Exact timestamp exclude-newer still works as well:
 # exclude-newer = "2025-01-01"
 
+channels = [
+    # Channel specific exclude-newer
+    { channel = "my-internal-channel", exclude-newer = "0d" },
+    "conda-forge",
+]
+platforms = ["osx-arm64", "linux-64", "linux-aarch64", "osx-64", "win-64"]
+
 [exclude-newer]
 # Package specific exclude-newer
-bzip2 = "1y"
+bzip2 = "3d"
 
 [dependencies]
 python = "*"
