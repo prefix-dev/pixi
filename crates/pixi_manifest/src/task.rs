@@ -866,12 +866,12 @@ impl Display for Task {
 pub fn quote(in_str: &str) -> Cow<'_, str> {
     if in_str.is_empty() {
         "\"\"".into()
-    } else if in_str.contains(['\t', '\r', '\n', ' ', '[', ']']) {
+    } else if in_str.contains(['\t', '\r', '\n', ' ', '[', ']', '(', ')', '{', '}', '&', '|', ';', '<', '>', '$', '*', '?', '!', '`']) {
         let mut out: String = String::with_capacity(in_str.len() + 2);
         out.push('"');
         for c in in_str.chars() {
             match c {
-                '"' | '\\' => out.push('\\'),
+                '"' | '\\' | '$' | '`' => out.push('\\'),
                 _ => (),
             }
             out.push(c);
@@ -1102,15 +1102,21 @@ mod tests {
     fn test_quote() {
         assert_eq!(quote("foobar"), "foobar");
         assert_eq!(quote("foo bar"), "\"foo bar\"");
-        assert_eq!(quote("\""), "\"");
+        assert_eq!(quote("\""), "\"\\\"\"");
         assert_eq!(quote("foo \" bar"), "\"foo \\\" bar\"");
         assert_eq!(quote(""), "\"\"");
-        assert_eq!(quote("$PATH"), "$PATH");
+        // $ now triggers quoting and gets escaped
+        assert_eq!(quote("$PATH"), "\"\\$PATH\"");
         assert_eq!(
             quote("PATH=\"$PATH;build/Debug\""),
-            "PATH=\"$PATH;build/Debug\""
+            "\"PATH=\\\"\\$PATH;build/Debug\\\"\""
         );
         assert_eq!(quote("name=[64,64]"), "\"name=[64,64]\"");
+        // Shell-special characters now trigger quoting
+        assert_eq!(quote("(echo hello)"), "\"(echo hello)\"");
+        assert_eq!(quote("foo|bar"), "\"foo|bar\"");
+        assert_eq!(quote("a&&b"), "\"a&&b\"");
+        assert_eq!(quote("cmd`whoami`"), "\"cmd\\`whoami\\`\"");
     }
 
     #[test]
