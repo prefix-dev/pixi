@@ -205,7 +205,12 @@ def test_gh_1089_python_jsonschema(manifest_schemata: TRawSchemata) -> None:
 @pytest.mark.parametrize(
     ("workspace_value", "channel_value", "conda_override", "pypi_override"),
     [
-        ("2023-10-01T00:00:00Z", "2023-10-01T00:00:00Z", "2023-10-01T00:00:00Z", "2023-10-01T00:00:00Z"),
+        (
+            "2023-10-01T00:00:00Z",
+            "2023-10-01T00:00:00Z",
+            "2023-10-01T00:00:00Z",
+            "2023-10-01T00:00:00Z",
+        ),
         ("2026-03-30", "2026-03-30", "2026-03-30", "2026-03-30"),
         ("0d", "0d", "0d", "0d"),
         ("1 week", "1 week", "1 week", "1 week"),
