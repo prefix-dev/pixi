@@ -154,17 +154,14 @@ impl Display for ExcludeNewerMismatch {
 }
 
 fn verify_exclude_newer(
-    environment: &Environment<'_>,
+    exclude_newer: Option<&rattler_solve::ExcludeNewer>,
     locked_environment: &rattler_lock::Environment<'_>,
 ) -> Result<(), ExcludeNewerMismatch> {
-    for (_platform, packages) in locked_environment.conda_packages_by_platform() {
-        let Some(exclude_newer) = environment
-            .exclude_newer_config()
-            .expect("environment channels were already validated")
-        else {
-            continue;
-        };
+    let Some(exclude_newer) = exclude_newer else {
+        return Ok(());
+    };
 
+    for (_platform, packages) in locked_environment.conda_packages_by_platform() {
         for package in packages {
             let record = package.record();
             let channel = package
@@ -639,7 +636,11 @@ pub fn verify_environment_satisfiability(
         });
     }
 
-    if let Err(err) = verify_exclude_newer(environment, &locked_environment) {
+    let exclude_newer = environment
+        .exclude_newer_config_resolved_with_channel_config(&config)?
+        .map(rattler_solve::ExcludeNewer::from);
+
+    if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
     }
 

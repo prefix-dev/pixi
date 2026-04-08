@@ -1575,6 +1575,44 @@ async fn test_exclude_newer_per_package_dependency_override() {
 }
 
 #[tokio::test]
+async fn test_exclude_newer_url_channel_override() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-url-channel-override"
+    channels = [{{ channel = "{channel}", exclude-newer = "0d" }}]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==2"
+    ));
+}
+
+#[tokio::test]
 async fn test_exclude_newer_per_package_constraint_override() {
     setup_tracing();
 
