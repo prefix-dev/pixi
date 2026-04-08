@@ -349,7 +349,7 @@ Unlike uv, Pixi can also override `exclude-newer` on a per-channel level:
 
 ```toml
 [workspace]
-exclude-newer = "7 days"
+exclude-newer = "7d"
 channels = [
   { channel = "my-internal-channel", exclude-newer = "0d" },
   "conda-forge",
@@ -358,7 +358,7 @@ channels = [
 
 ```toml
 [tool.pixi.workspace]
-exclude-newer = "7 days"
+exclude-newer = "7d"
 channels = [
   { channel = "my-internal-channel", exclude-newer = "0d" },
   "conda-forge",

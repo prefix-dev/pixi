@@ -5381,7 +5381,7 @@ installing recently published (and potentially compromised) packages.</p>
 <ul>
 <li>As an <a href="https://www.rfc-editor.org/rfc/rfc3339.html">RFC 3339</a> timestamp (e.g. <code>2023-10-01T00:00:00Z</code>)</li>
 <li>As a date in <code>YYYY-MM-DD</code> format (e.g. <code>2026-03-30</code>). This is interpreted as the start of the following day in UTC, so <code>2026-03-30</code> means <code>2026-03-31T00:00:00Z</code>.</li>
-<li>As a relative duration (e.g. <code>7days</code>, <code>1h30m</code>, <code>30m</code>). The duration is relative to the current time at solve time.</li>
+<li>As a relative duration (e.g. <code>7d</code>, <code>1h30m</code>, <code>30m</code>). Relative durations support everything <a href="https://docs.rs/humantime/latest/humantime/fn.parse_duration.html"><code>humantime</code></a> accepts. The duration is relative to the current time at solve time.</li>
 </ul>
 <p>When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.</p>
 <p>Both PyPi and conda packages are considered.</p>
@@ -5391,6 +5391,16 @@ installing recently published (and potentially compromised) packages.</p>
 <a href="#exclude-newer-optional"><code>[pypi-exclude-newer]</code></a> table.</p>
 <p>This is especially useful when a package is pinned to a separate <code>channel</code> or <code>index</code> and needs a
 different cutoff than the rest of the workspace.</p>
+<div class="admonition note">
+<p class="admonition-title">Satisfiability checks with <code>exclude-newer</code></p>
+<p>For conda packages, pixi stores the package timestamp in <code>pixi.lock</code> and can use it during
+lock-file satisfiability checks. That means changing <code>exclude-newer</code> can trigger a re-solve
+when a locked conda package is newer than the configured cutoff.</p>
+<p>For PyPI packages, pixi does not currently store upload timestamps in <code>pixi.lock</code>. As a
+result, changes to <code>exclude-newer</code> or <code>[pypi-exclude-newer]</code> do not trigger the same
+lock-file satisfiability check for already locked PyPI packages. Run <code>pixi update</code> to
+re-resolve PyPI packages and ensure the lock file respects the configured cutoff.</p>
+</div>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
@@ -5398,14 +5408,14 @@ different cutoff than the rest of the workspace.</p>
 </span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="n">pytorch-cpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.10.0&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-26-6"><a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>
 </span><span id="__span-26-7"><a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="k">[exclude-newer]</span>
-</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="n">pytorch-cpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0 days&quot;</span>
-</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="n">openssl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0 days&quot;</span>
+</span><span id="__span-26-8"><a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="n">pytorch-cpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span>
+</span><span id="__span-26-9"><a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="n">openssl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span>
 </span><span id="__span-26-10"><a id="__codelineno-26-10" name="__codelineno-26-10" href="#__codelineno-26-10"></a>
 </span><span id="__span-26-11"><a id="__codelineno-26-11" name="__codelineno-26-11" href="#__codelineno-26-11"></a><span class="k">[pypi-dependencies]</span>
 </span><span id="__span-26-12"><a id="__codelineno-26-12" name="__codelineno-26-12" href="#__codelineno-26-12"></a><span class="n">torch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.10.0&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://download.pytorch.org/whl/cu124&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-26-13"><a id="__codelineno-26-13" name="__codelineno-26-13" href="#__codelineno-26-13"></a>
 </span><span id="__span-26-14"><a id="__codelineno-26-14" name="__codelineno-26-14" href="#__codelineno-26-14"></a><span class="k">[pypi-exclude-newer]</span>
-</span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a><span class="n">torch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0 days&quot;</span>
+</span><span id="__span-26-15"><a id="__codelineno-26-15" name="__codelineno-26-15" href="#__codelineno-26-15"></a><span class="n">torch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>

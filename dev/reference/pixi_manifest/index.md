@@ -281,7 +281,7 @@ The value may be specified in the following formats:
 
 - As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
 - As a date in `YYYY-MM-DD` format (e.g. `2026-03-30`). This is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
-- As a relative duration (e.g. `7days`, `1h30m`, `30m`). The duration is relative to the current time at solve time.
+- As a relative duration (e.g. `7d`, `1h30m`, `30m`). Relative durations support everything [`humantime`](https://docs.rs/humantime/latest/humantime/fn.parse_duration.html) accepts. The duration is relative to the current time at solve time.
 
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
@@ -293,6 +293,12 @@ For PyPI packages, the workspace-level cutoff can be overridden per package in t
 
 This is especially useful when a package is pinned to a separate `channel` or `index` and needs a different cutoff than the rest of the workspace.
 
+Satisfiability checks with `exclude-newer`
+
+For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during lock-file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve when a locked conda package is newer than the configured cutoff.
+
+For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same lock-file satisfiability check for already locked PyPI packages. Run `pixi update` to re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
+
 ```toml
 [workspace]
 exclude-newer = "2025-01-01"
@@ -301,14 +307,14 @@ exclude-newer = "2025-01-01"
 pytorch-cpu = { version = ">=2.10.0", channel = "pytorch" }
 
 [exclude-newer]
-pytorch-cpu = "0 days"
-openssl = "0 days"
+pytorch-cpu = "0d"
+openssl = "0d"
 
 [pypi-dependencies]
 torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
 
 [pypi-exclude-newer]
-torch = "0 days"
+torch = "0d"
 ```
 
 Note
