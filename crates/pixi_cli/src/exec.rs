@@ -179,7 +179,13 @@ pub async fn create_exec_prefix(
         .collect();
 
     let environment_hash =
-        EnvironmentHash::new(command.clone(), specs.clone(), channels, args.platform);
+        EnvironmentHash::new(
+            command.clone(),
+            specs.clone(),
+            channels,
+            args.platform,
+            config.exclude_newer_cutoff().map(|cutoff| cutoff.to_rfc3339()),
+        );
 
     let prefix = Prefix::new(
         cache_dir
@@ -252,6 +258,9 @@ pub async fn create_exec_prefix(
         Solver.solve(SolverTask {
             specs: specs.clone(),
             virtual_packages: virtual_packages.clone(),
+            exclude_newer: config
+                .exclude_newer_cutoff()
+                .map(rattler_solve::ExcludeNewer::from_datetime),
             ..SolverTask::from_iter(&repodata.clone())
         })
     });

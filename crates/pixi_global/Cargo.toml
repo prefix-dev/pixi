@@ -10,6 +10,7 @@ version = "0.1.0"
 
 [dependencies]
 ahash = { workspace = true }
+chrono = { workspace = true }
 console = { workspace = true }
 dirs = { workspace = true }
 dunce = { workspace = true }
@@ -43,6 +44,7 @@ rattler_menuinst = { workspace = true }
 rattler_networking = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
+rattler_solve = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 rstest = { workspace = true }

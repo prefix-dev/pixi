@@ -65,6 +65,38 @@ async fn specific_channel() {
     )
 }
 
+#[tokio::test]
+async fn init_uses_global_exclude_newer_configuration() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    fs_err::write(
+        pixi.workspace_path().join(".pixi/config.toml"),
+        r#"
+default-channels = [
+    { channel = "https://prefix.dev/internal", exclude-newer = "0d" },
+    "conda-forge",
+]
+exclude-newer = "7d"
+"#,
+    )
+    .unwrap();
+
+    pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
+
+    let manifest = pixi.manifest_contents().unwrap();
+    assert!(manifest.contains(r#"exclude-newer ="#));
+    assert!(manifest.contains(r#"{ channel = "https://prefix.dev/internal", exclude-newer ="#));
+
+    let workspace = pixi.workspace().unwrap();
+    let exclude_newer = workspace
+        .default_environment()
+        .exclude_newer_config_resolved()
+        .unwrap()
+        .unwrap();
+    assert!(exclude_newer.channel_cutoffs.contains_key("https://prefix.dev/internal"));
+}
+
 // Test the initialization from an existing pyproject.toml file without the pixi information
 #[tokio::test]
 async fn init_from_existing_pyproject_toml() {

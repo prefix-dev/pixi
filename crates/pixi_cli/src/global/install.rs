@@ -9,7 +9,7 @@ use miette::Report;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::global::{global_specs::GlobalSpecs, revert_environment_after_error};
-use pixi_config::{self, Config, ConfigCli};
+use pixi_config::{self, Config, ConfigChannel, ConfigCli};
 use pixi_global::{
     self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     common::{NotChangedReason, contains_menuinst_document},
@@ -188,14 +188,24 @@ async fn setup_environment(
     }
 
     let channels = if args.channels.is_empty() {
-        project.config().default_channels()
+        project.config().default_channel_configurations()
     } else {
-        args.channels.clone()
+        args.channels
+            .iter()
+            .cloned()
+            .map(ConfigChannel::from)
+            .collect()
     };
+    let exclude_newer = project.config().exclude_newer().map(|exclude_newer| {
+        pixi_spec::ExcludeNewer::from_str(&exclude_newer.to_string())
+            .expect("pixi config exclude-newer should be valid pixi exclude-newer")
+    });
 
     // Modify the project to include the new environment
     if !project.manifest.parsed.envs.contains_key(env_name) {
-        project.manifest.add_environment(env_name, Some(channels))?;
+        project
+            .manifest
+            .add_environment(env_name, Some(channels), exclude_newer)?;
         state_changes.insert_change(env_name, StateChange::AddedEnvironment);
     }
 
