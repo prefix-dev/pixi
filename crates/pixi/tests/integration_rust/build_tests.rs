@@ -732,18 +732,9 @@ bar = "{override_cutoff}"
     );
     pixi.update_manifest(&manifest_with_both_overrides).unwrap();
 
-    let err = pixi
-        .install()
+    pixi.install()
         .await
-        .expect_err("timestamp-less source package should remain the only blocker");
-    let rendered = format_diagnostic(err.as_ref());
-    assert!(
-        rendered.contains("my-package 1.0.0 is excluded"),
-        "{rendered}"
-    );
-    assert!(rendered.contains("package has no timestamp"), "{rendered}");
-    assert!(!rendered.contains("bar 1 is excluded"), "{rendered}");
-    assert!(!rendered.contains("foo 1 is excluded"), "{rendered}");
+        .expect("timestamp-less pixi-build source packages should remain eligible");
 }
 
 /// Test that demonstrates using PassthroughBackend with PixiControl

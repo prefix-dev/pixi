@@ -78,6 +78,12 @@ impl ResolvedExcludeNewer {
         self.package_cutoffs.insert(package, cutoff);
         self
     }
+
+    /// Controls whether packages without timestamps should remain eligible.
+    pub fn with_include_unknown_timestamp(mut self, include_unknown_timestamp: bool) -> Self {
+        self.include_unknown_timestamp = include_unknown_timestamp;
+        self
+    }
 }
 
 impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
@@ -304,6 +310,7 @@ mod test {
             ResolvedExcludeNewer::from_datetime(default_cutoff)
                 .with_channel_cutoff("https://prefix.dev/conda-forge", channel_cutoff)
                 .with_package_cutoff(PackageName::new_unchecked("foo"), package_cutoff)
+                .with_include_unknown_timestamp(true)
                 .into();
 
         assert_eq!(
@@ -324,5 +331,6 @@ mod test {
             ),
             package_cutoff
         );
+        assert!(config.include_unknown_timestamp());
     }
 }
