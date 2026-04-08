@@ -3504,10 +3504,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#override-a-dependency-index-and-exclude-newer" class="md-nav__link">
+  <a href="#override-a-dependency-index" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Override a dependency index and exclude-newer
+        Override a dependency index
       
     </span>
   </a>
@@ -4065,10 +4065,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#override-a-dependency-index-and-exclude-newer" class="md-nav__link">
+  <a href="#override-a-dependency-index" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Override a dependency index and exclude-newer
+        Override a dependency index
       
     </span>
   </a>
@@ -4161,27 +4161,20 @@ or in <code>pixi.toml</code>:</p>
 </span></code></pre></div>
 This will override the version of <code>numpy</code> used by all dependencies to be at least <code>2.0.0</code>, regardless of what the dependencies specify.
 This is useful if you need a specific version of a library that is not compatible with the versions specified by your dependencies.</p>
-<h3 id="override-a-dependency-index-and-exclude-newer">Override a dependency index and <code>exclude-newer</code><a class="headerlink" href="#override-a-dependency-index-and-exclude-newer" title="Permanent link">#</a></h3>
-<p>Overrides can also change where a transitive package comes from and which <code>exclude-newer</code> cutoff is
-used for that package.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[workspace]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
+<h3 id="override-a-dependency-index">Override a dependency index<a class="headerlink" href="#override-a-dependency-index" title="Permanent link">#</a></h3>
+<p>Overrides can also change where a transitive package comes from.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">consumer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">[pypi-dependencies]</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">consumer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="k">[pypi-options.dependency-overrides]</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="n">torch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://download.pytorch.org/whl/cu124&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">[pypi-options.dependency-overrides]</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">torch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://download.pytorch.org/whl/cu124&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>This does not add <code>torch</code> to the environment by itself. Instead, if <code>consumer</code> or any other package
 depends on <code>torch</code>, pixi will:</p>
 <ul>
 <li>resolve <code>torch</code> from the specified <code>index</code></li>
-<li>use the override's <code>exclude-newer</code> value for <code>torch</code></li>
-<li>keep using the workspace cutoff for all other packages</li>
+<li>keep resolving all other packages normally</li>
 </ul>
-<p>This is useful when most of the environment should stay pinned to an older cutoff, but a specific
-package needs a newer release stream from a separate index.</p>
 <h3 id="override-a-dependency-version-in-a-specific-feature">Override a dependency version in a specific feature<a class="headerlink" href="#override-a-dependency-version-in-a-specific-feature" title="Permanent link">#</a></h3>
 <p>It can also be specified at the feature level:
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[feature.dev.pypi-options.dependency-overrides]</span>
@@ -4224,13 +4217,6 @@ overrides, it is up to them to choose the right overrides for an environment.</p
 <p>Use <code>[pypi-dependencies]</code> when the package itself should be installed into the environment.</p>
 <p>Use <code>[pypi-options.dependency-overrides]</code> when you want to steer how a package is resolved only if
 it appears in the dependency graph.</p>
-<p>For <code>exclude-newer</code>, this means:</p>
-<ul>
-<li>a value in <code>[pypi-dependencies]</code> applies to a direct package</li>
-<li>a value in <code>[pypi-options.dependency-overrides]</code> applies to transitive uses of that package</li>
-</ul>
-<p>If the same package is present in both places, the dependency override's <code>exclude-newer</code> value is
-used for that package during PyPI resolution.</p>
 
 
 

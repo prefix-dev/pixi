@@ -290,22 +290,21 @@ exclude-newer-package = { tqdm = "2025-02-01" }
 
 In Pixi, the equivalent depends on which ecosystem the package comes from:
 
-- For a direct conda package, set `exclude-newer` on the dependency itself.
-- For a transitive conda package, set it in [`[constraints]`](../../reference/pixi_manifest/#constraints).
-- For a direct PyPI package, set it in [`[pypi-dependencies]`](../../reference/pixi_manifest/#pypi-dependencies).
-- For a transitive PyPI package, set it in [`[pypi-options.dependency-overrides]`](../../advanced/override/).
+- For a conda package, set it in [`[exclude-newer]`](../../reference/pixi_manifest/#exclude-newer-optional).
+- For a PyPI package, set it in [`[pypi-exclude-newer]`](../../reference/pixi_manifest/#exclude-newer-optional).
 
-For example, a conda package can combine a channel pin with an `exclude-newer` override:
+For example, a conda package can combine a channel pin with a package-specific `exclude-newer` override:
 
 ```toml
 [workspace]
 exclude-newer = "2025-01-01"
 
 [dependencies]
-pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+pytorch-cpu = { version = "*", channel = "pytorch" }
 
-[constraints]
-openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+[exclude-newer]
+pytorch-cpu = "2025-02-01"
+openssl = "2024-12-01"
 ```
 
 ```toml
@@ -313,10 +312,11 @@ openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
 exclude-newer = "2025-01-01"
 
 [tool.pixi.dependencies]
-pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+pytorch-cpu = { version = "*", channel = "pytorch" }
 
-[tool.pixi.constraints]
-openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+[tool.pixi.exclude-newer]
+pytorch-cpu = "2025-02-01"
+openssl = "2024-12-01"
 ```
 
 And a PyPI package uses the same pattern, but with PyPI-specific tables:
@@ -326,10 +326,11 @@ And a PyPI package uses the same pattern, but with PyPI-specific tables:
 exclude-newer = "2025-01-01"
 
 [pypi-dependencies]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
 
-[pypi-options.dependency-overrides]
-tqdm = { version = "*", exclude-newer = "2025-02-01" }
+[pypi-exclude-newer]
+torch = "2025-02-01"
+tqdm = "2025-02-01"
 ```
 
 ```toml
@@ -337,10 +338,11 @@ tqdm = { version = "*", exclude-newer = "2025-02-01" }
 exclude-newer = "2025-01-01"
 
 [tool.pixi.pypi-dependencies]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
 
-[tool.pixi.pypi-options.dependency-overrides]
-tqdm = { version = "*", exclude-newer = "2025-02-01" }
+[tool.pixi.pypi-exclude-newer]
+torch = "2025-02-01"
+tqdm = "2025-02-01"
 ```
 
 Unlike uv, Pixi can also override `exclude-newer` on a per-channel level:

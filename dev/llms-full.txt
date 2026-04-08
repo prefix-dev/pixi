@@ -3447,22 +3447,21 @@ exclude-newer-package = { tqdm = "2025-02-01" }
 
 In Pixi, the equivalent depends on which ecosystem the package comes from:
 
-- For a direct conda package, set `exclude-newer` on the dependency itself.
-- For a transitive conda package, set it in [`[constraints]`](../../reference/pixi_manifest/#constraints).
-- For a direct PyPI package, set it in [`[pypi-dependencies]`](../../reference/pixi_manifest/#pypi-dependencies).
-- For a transitive PyPI package, set it in [`[pypi-options.dependency-overrides]`](../../advanced/override/).
+- For a conda package, set it in [`[exclude-newer]`](../../reference/pixi_manifest/#exclude-newer-optional).
+- For a PyPI package, set it in [`[pypi-exclude-newer]`](../../reference/pixi_manifest/#exclude-newer-optional).
 
-For example, a conda package can combine a channel pin with an `exclude-newer` override:
+For example, a conda package can combine a channel pin with a package-specific `exclude-newer` override:
 
 ```toml
 [workspace]
 exclude-newer = "2025-01-01"
 
 [dependencies]
-pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+pytorch-cpu = { version = "*", channel = "pytorch" }
 
-[constraints]
-openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+[exclude-newer]
+pytorch-cpu = "2025-02-01"
+openssl = "2024-12-01"
 ```
 
 ```toml
@@ -3470,10 +3469,11 @@ openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
 exclude-newer = "2025-01-01"
 
 [tool.pixi.dependencies]
-pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+pytorch-cpu = { version = "*", channel = "pytorch" }
 
-[tool.pixi.constraints]
-openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+[tool.pixi.exclude-newer]
+pytorch-cpu = "2025-02-01"
+openssl = "2024-12-01"
 ```
 
 And a PyPI package uses the same pattern, but with PyPI-specific tables:
@@ -3483,10 +3483,11 @@ And a PyPI package uses the same pattern, but with PyPI-specific tables:
 exclude-newer = "2025-01-01"
 
 [pypi-dependencies]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
 
-[pypi-options.dependency-overrides]
-tqdm = { version = "*", exclude-newer = "2025-02-01" }
+[pypi-exclude-newer]
+torch = "2025-02-01"
+tqdm = "2025-02-01"
 ```
 
 ```toml
@@ -3494,10 +3495,11 @@ tqdm = { version = "*", exclude-newer = "2025-02-01" }
 exclude-newer = "2025-01-01"
 
 [tool.pixi.pypi-dependencies]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
 
-[tool.pixi.pypi-options.dependency-overrides]
-tqdm = { version = "*", exclude-newer = "2025-02-01" }
+[tool.pixi.pypi-exclude-newer]
+torch = "2025-02-01"
+tqdm = "2025-02-01"
 ```
 
 Unlike uv, Pixi can also override `exclude-newer` on a per-channel level:
@@ -5974,12 +5976,12 @@ PyPI's [`pypi-options.dependency-overrides`](../../advanced/override/) fills a s
 
 The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace the requirement used for that package during PyPI resolution.
 
-That same model is used for PyPI package-specific `exclude-newer` values:
+Package-specific `exclude-newer` values are configured separately from both mechanisms:
 
-- set `exclude-newer` in [`pypi-dependencies`](../../reference/pixi_manifest/#pypi-dependencies) for a direct package
-- set it in `pypi-options.dependency-overrides` for a transitive package
+- use [`[exclude-newer]`](../../reference/pixi_manifest/#exclude-newer-optional) for conda packages
+- use [`[pypi-exclude-newer]`](../../reference/pixi_manifest/#exclude-newer-optional) for PyPI packages
 
-PyPI does not have a conda-style per-channel cutoff. When you use a separate package index, pin the package with `index = "..."` and set `exclude-newer` on that package.
+PyPI still does not have a conda-style per-channel cutoff. When you use a separate package index, pin the package with `index = "..."` and set its cutoff in `[pypi-exclude-newer]`.
 
 ### Pinned package conflicts
 
@@ -13043,28 +13045,22 @@ numpy = ">=2.0.0"
 
 This will override the version of `numpy` used by all dependencies to be at least `2.0.0`, regardless of what the dependencies specify. This is useful if you need a specific version of a library that is not compatible with the versions specified by your dependencies.
 
-### Override a dependency index and `exclude-newer`
+### Override a dependency index
 
-Overrides can also change where a transitive package comes from and which `exclude-newer` cutoff is used for that package.
+Overrides can also change where a transitive package comes from.
 
 ```toml
-[workspace]
-exclude-newer = "2025-01-01"
-
 [pypi-dependencies]
 consumer = "*"
 
 [pypi-options.dependency-overrides]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "0d" }
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
 ```
 
 This does not add `torch` to the environment by itself. Instead, if `consumer` or any other package depends on `torch`, pixi will:
 
 - resolve `torch` from the specified `index`
-- use the override's `exclude-newer` value for `torch`
-- keep using the workspace cutoff for all other packages
-
-This is useful when most of the environment should stay pinned to an older cutoff, but a specific package needs a newer release stream from a separate index.
+- keep resolving all other packages normally
 
 ### Override a dependency version in a specific feature
 
@@ -13115,13 +13111,6 @@ This may contrast with the intuition that all overrides are applied and combined
 Use `[pypi-dependencies]` when the package itself should be installed into the environment.
 
 Use `[pypi-options.dependency-overrides]` when you want to steer how a package is resolved only if it appears in the dependency graph.
-
-For `exclude-newer`, this means:
-
-- a value in `[pypi-dependencies]` applies to a direct package
-- a value in `[pypi-options.dependency-overrides]` applies to transitive uses of that package
-
-If the same package is present in both places, the dependency override's `exclude-newer` value is used for that package during PyPI resolution.
 
 The `pixi shell` command is similar to `conda activate` but works a little different under the hood. Instead of requiring a change to your `~/.bashrc` or other files, it will launch a fresh shell. That also means that, instead of `conda deactivate`, it's enough to just exit the current shell, e.g. by pressing `Ctrl+D`.
 
@@ -14235,32 +14224,28 @@ When using a relative duration, the lock file will be re-solved when a package i
 
 Both PyPi and conda packages are considered.
 
-For conda packages, the workspace-level cutoff can be overridden per package:
+For conda packages, the workspace-level cutoff can be overridden per package in the [`[exclude-newer]`](#exclude-newer-optional) table.
 
-- In [`[dependencies]`](#dependencies) for direct dependencies
-- In [`[constraints]`](#constraints) for transitive dependencies
+For PyPI packages, the workspace-level cutoff can be overridden per package in the [`[pypi-exclude-newer]`](#exclude-newer-optional) table.
 
-These conda package-specific overrides can also be paired with `channel = "..."` on the package entry. This is the way to express channel-aware `exclude-newer` behavior in the manifest today.
-
-For PyPI packages, the workspace-level cutoff can be overridden per package:
-
-- In [`[pypi-dependencies]`](#pypi-dependencies) for direct dependencies
-- In [`[pypi-options.dependency-overrides]`](../../advanced/override/) for transitive dependencies
-
-This is especially useful when a package is pinned to a separate `index` and needs a different cutoff than the rest of the workspace.
+This is especially useful when a package is pinned to a separate `channel` or `index` and needs a different cutoff than the rest of the workspace.
 
 ```toml
 [workspace]
 exclude-newer = "2025-01-01"
 
 [dependencies]
-pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+pytorch-cpu = { version = ">=2.10.0", channel = "pytorch" }
 
-[constraints]
-openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+[exclude-newer]
+pytorch-cpu = "0 days"
+openssl = "0 days"
 
 [pypi-dependencies]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
+torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
+
+[pypi-exclude-newer]
+torch = "0 days"
 ```
 
 Note
@@ -14685,20 +14670,11 @@ requests = ">=2.28"
 openssl = ">=3.0"
 ```
 
-Constraints use the same [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html) syntax as `[dependencies]`. They also support the same inline MatchSpec fields, including `channel` and `exclude-newer`.
-
-This makes constraints useful not just for version bounds, but also for applying a different `exclude-newer` cutoff to a transitive conda package without making it a direct dependency:
+Constraints use the same [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html) syntax as `[dependencies]`. They also support the same inline MatchSpec fields, including `channel`.
 
 ```toml
-[workspace]
-exclude-newer = "2025-01-01"
-
-[dependencies]
-python = ">=3.11"
-requests = ">=2.28"
-
 [constraints]
-openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+openssl = { channel = "conda-forge", version = ">=3.0" }
 ```
 
 Note
@@ -14840,22 +14816,6 @@ torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
 ```
 
 This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions. Learn more about installing PyTorch [here](../../python/pytorch/).
-
-##### `exclude-newer`
-
-Overrides the workspace-level [`exclude-newer`](#exclude-newer-optional) cutoff for a single PyPI package.
-
-This only changes candidate selection for that package. It does not add the package to the environment by itself.
-
-```toml
-[workspace]
-exclude-newer = "2025-01-01"
-
-[pypi-dependencies]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "0d" }
-```
-
-This is useful when most of the workspace should stay pinned to an older cutoff, but one package needs a newer release stream from a separate index.
 
 ##### `git`
 

@@ -4213,13 +4213,13 @@ fills a similar role to conda <a href="../../reference/pixi_manifest/#constraint
 steer transitive dependencies without adding a new direct dependency.</p>
 <p>The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
 the requirement used for that package during PyPI resolution.</p>
-<p>That same model is used for PyPI package-specific <code>exclude-newer</code> values:</p>
+<p>Package-specific <code>exclude-newer</code> values are configured separately from both mechanisms:</p>
 <ul>
-<li>set <code>exclude-newer</code> in <a href="../../reference/pixi_manifest/#pypi-dependencies"><code>pypi-dependencies</code></a> for a direct package</li>
-<li>set it in <code>pypi-options.dependency-overrides</code> for a transitive package</li>
+<li>use <a href="../../reference/pixi_manifest/#exclude-newer-optional"><code>[exclude-newer]</code></a> for conda packages</li>
+<li>use <a href="../../reference/pixi_manifest/#exclude-newer-optional"><code>[pypi-exclude-newer]</code></a> for PyPI packages</li>
 </ul>
-<p>PyPI does not have a conda-style per-channel cutoff. When you use a separate package index, pin the
-package with <code>index = "..."</code> and set <code>exclude-newer</code> on that package.</p>
+<p>PyPI still does not have a conda-style per-channel cutoff. When you use a separate package index,
+pin the package with <code>index = "..."</code> and set its cutoff in <code>[pypi-exclude-newer]</code>.</p>
 <h3 id="pinned-package-conflicts">Pinned package conflicts<a class="headerlink" href="#pinned-package-conflicts" title="Permanent link">#</a></h3>
 <p>When trying to install conda and PyPI dependencies,
 such as with the following <code>pixi.toml</code> manifest:</p>
