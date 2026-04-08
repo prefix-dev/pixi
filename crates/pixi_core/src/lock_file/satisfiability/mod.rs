@@ -1452,24 +1452,21 @@ pub(crate) fn pypi_satisfies_requirement(
             }
 
             // Verify the index in the requirement matches the lock-file.
+            // Pre-v7 lockfiles don't store per-package index URLs, so
+            // index_url is None — skip the comparison in that case.
             match (
                 index,
                 locked_data.as_wheel().and_then(|w| w.index_url.as_ref()),
             ) {
-                (Some(required_index), locked_index) => {
+                (Some(required_index), Some(locked_url)) => {
                     let required_url: Url = required_index.url.url().clone().into();
-                    match locked_index {
-                        Some(locked_url) if locked_url == &required_url => {}
-                        other => {
-                            return Err(PlatformUnsat::LockedPyPIIndexMismatch {
-                                name: spec.name.to_string(),
-                                expected_index: required_url.to_string(),
-                                locked_index: other
-                                    .as_ref()
-                                    .map_or("<default>".to_string(), |u| u.to_string()),
-                            }
-                            .into());
+                    if locked_url != &required_url {
+                        return Err(PlatformUnsat::LockedPyPIIndexMismatch {
+                            name: spec.name.to_string(),
+                            expected_index: required_url.to_string(),
+                            locked_index: locked_url.to_string(),
                         }
+                        .into());
                     }
                 }
                 (None, Some(locked_url)) if !is_default_pypi_index(locked_url) => {
@@ -1480,7 +1477,9 @@ pub(crate) fn pypi_satisfies_requirement(
                     }
                     .into());
                 }
-                (None, _) => {}
+                // No locked index: the lockfile predates per-package
+                // index tracking (pre-v7), so we can't verify the index.
+                (_, None) | (None, _) => {}
             }
 
             Ok(())
@@ -4133,8 +4132,8 @@ mod tests {
         );
     }
 
-    /// Verify that adding an index to a requirement that was locked without one
-    /// invalidates the lock-file.
+    /// Verify that adding an index to a requirement that was locked with the
+    /// default index invalidates the lock-file.
     #[test]
     fn test_pypi_index_added_should_invalidate() {
         let locked_data = lock_for_test(make_wheel_package_with(
@@ -4144,7 +4143,7 @@ mod tests {
                 .parse()
                 .expect("failed to parse url"),
             None,
-            None,
+            Some(Url::parse("https://pypi.org/simple").unwrap()),
             vec![],
             None,
         ));
@@ -4157,6 +4156,44 @@ mod tests {
         assert!(
             result.is_err(),
             "expected adding an index to invalidate satisfiability"
+        );
+    }
+
+    /// V6 lockfiles don't store per-package PyPI index URLs, so
+    /// `index_url` is `None` after parsing. When the manifest specifies a
+    /// per-package `index`, the satisfiability check must not treat the
+    /// missing locked index as a mismatch — it is simply absent from the
+    /// older format.
+    ///
+    /// This is a regression test for a bug observed in crater runs where
+    /// `pixi install --all` upgraded v6 lockfiles to v7.
+    #[test]
+    fn test_v6_missing_index_url_should_not_invalidate() {
+        let index_url = "https://custom.example.com/simple";
+
+        // Simulate a v6 locked package: resolved from a custom index, but
+        // index_url is None because v6 doesn't store it.
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://custom.example.com/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            None, // v6: no per-package index_url
+            vec![],
+            None,
+        ));
+
+        let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        assert!(
+            result.is_ok(),
+            "v6 lockfile with missing index_url should still satisfy a \
+             requirement with an explicit index, got: {:?}",
+            result.unwrap_err()
         );
     }
 }
