@@ -1002,6 +1002,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#resolution-cutoffs-exclude-newer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution cutoffs (exclude-newer)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#lockfiles" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4329,6 +4340,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#resolution-cutoffs-exclude-newer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution cutoffs (exclude-newer)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#lockfiles" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4805,6 +4827,114 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="c1"># channels = [&quot;conda-forge&quot;, &quot;pytorch&quot;, &quot;https://my-company.com/channel&quot;]</span>
 </span></code></pre></div>
 <p>For private packages, you can host your own channel on <a href="https://prefix.dev/">prefix.dev</a>, S3, or JFrog Artifactory. See <a href="../../deployment/authentication/">Authentication</a>.</p>
+<h3 id="resolution-cutoffs-exclude-newer">Resolution cutoffs (<code>exclude-newer</code>)<a class="headerlink" href="#resolution-cutoffs-exclude-newer" title="Permanent link">#</a></h3>
+<p>If you use uv's <code>exclude-newer</code> setting to ignore packages uploaded after a given date, the Pixi
+equivalent is <a href="../../reference/pixi_manifest/#exclude-newer-optional"><code>[workspace].exclude-newer</code></a>:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">pixi.toml</label><label for="__tabbed_2_2">pyproject.toml</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[tool.pixi.workspace]</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<p>Pixi applies this cutoff across both conda and PyPI resolution.</p>
+<p>If you want to override the cutoff for a specific package, uv uses
+<a href="https://docs.astral.sh/uv/reference/settings/#exclude-newer-package"><code>exclude-newer-package</code></a>:</p>
+<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[tool.uv]</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">exclude-newer-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">tqdm</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2025-02-01&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>In Pixi, the equivalent depends on which ecosystem the package comes from:</p>
+<ul>
+<li>For a direct conda package, set <code>exclude-newer</code> on the dependency itself.</li>
+<li>For a transitive conda package, set it in <a href="../../reference/pixi_manifest/#constraints"><code>[constraints]</code></a>.</li>
+<li>For a direct PyPI package, set it in <a href="../../reference/pixi_manifest/#pypi-dependencies"><code>[pypi-dependencies]</code></a>.</li>
+<li>For a transitive PyPI package, set it in <a href="../../advanced/override/"><code>[pypi-options.dependency-overrides]</code></a>.</li>
+</ul>
+<p>For example, a conda package can combine a channel pin with an <code>exclude-newer</code> override:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">pixi.toml</label><label for="__tabbed_3_2">pyproject.toml</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="k">[dependencies]</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">pytorch-cpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2025-02-01&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="k">[constraints]</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="n">openssl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2024-12-01&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[tool.pixi.workspace]</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="k">[tool.pixi.dependencies]</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="n">pytorch-cpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2025-02-01&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>
+</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="k">[tool.pixi.constraints]</span>
+</span><span id="__span-17-8"><a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="n">openssl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2024-12-01&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<p>And a PyPI package uses the same pattern, but with PyPI-specific tables:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">pixi.toml</label><label for="__tabbed_4_2">pyproject.toml</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="n">torch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://download.pytorch.org/whl/cu124&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2025-02-01&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="k">[pypi-options.dependency-overrides]</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="n">tqdm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2025-02-01&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">[tool.pixi.workspace]</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="k">[tool.pixi.pypi-dependencies]</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="n">torch</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">index</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://download.pytorch.org/whl/cu124&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2025-02-01&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="k">[tool.pixi.pypi-options.dependency-overrides]</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="n">tqdm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2025-02-01&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
+<p>Unlike uv, Pixi can also override <code>exclude-newer</code> on a per-channel level:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">pixi.toml</label><label for="__tabbed_5_2">pyproject.toml</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;7 days&quot;</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;my-internal-channel&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="w">  </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span>
+</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="p">]</span>
+</span></code></pre></div>
+</div>
+<div class="tabbed-block">
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[tool.pixi.workspace]</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;7 days&quot;</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;my-internal-channel&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="w">  </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="p">]</span>
+</span></code></pre></div>
+</div>
+</div>
+</div>
 <h3 id="lockfiles">Lockfiles<a class="headerlink" href="#lockfiles" title="Permanent link">#</a></h3>
 <p>Both tools generate lockfiles for reproducibility.</p>
 <table>
@@ -4849,15 +4979,15 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 <p>Pixi builds packages via <a href="../../build/getting_started/">pixi-build</a>, which produces conda packages from Python, C++, Rust, ROS, and more. You can publish them to a <a href="../../deployment/prefix/">prefix.dev channel</a> or any conda channel.</p>
 <h3 id="ci-with-github-actions">CI with GitHub Actions<a class="headerlink" href="#ci-with-github-actions" title="Permanent link">#</a></h3>
 <p>uv provides <a href="https://github.com/astral-sh/setup-uv"><code>astral-sh/setup-uv</code></a> for GitHub Actions. Pixi has <a href="https://github.com/prefix-dev/setup-pixi"><code>prefix-dev/setup-pixi</code></a>, which installs Pixi, sets up caching, and runs <code>pixi install</code> in your workflow:</p>
-<div class="language-yaml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.8</span>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.8</span>
 </span></code></pre></div>
 <p>See <a href="../../integration/ci/github_actions/">GitHub Actions</a> for more details.</p>
 <h3 id="the-uv-pip-interface">The <code>uv pip</code> interface<a class="headerlink" href="#the-uv-pip-interface" title="Permanent link">#</a></h3>
 <p>uv provides a <code>uv pip</code> compatibility layer (<code>uv pip install</code>, <code>uv pip compile</code>, etc.).</p>
 <p>Pixi has no pip compatibility layer, it manages all dependencies declaratively through the manifest file. If you need pip for a specific use case, you can install it as a dependency:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pip
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># not recommended, prefer pixi add --pypi</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>&lt;some-package&gt;
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pip
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># not recommended, prefer pixi add --pypi</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>&lt;some-package&gt;
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Prefer <code>pixi add --pypi</code></p>
@@ -4869,8 +4999,8 @@ Always prefer <code>pixi add --pypi &lt;package&gt;</code> to keep dependencies 
 <h3 id="system-dependencies-are-included">System dependencies are included<a class="headerlink" href="#system-dependencies-are-included" title="Permanent link">#</a></h3>
 <p>With uv, installing <code>scipy</code> or <code>pytorch</code> often requires system-level libraries (BLAS, LAPACK, CUDA) to already be on your machine. This leads to platform-specific setup instructions, Docker containers just for build deps, or cryptic build failures.</p>
 <p>With Pixi, these system dependencies are conda packages, managed by the solver like any other dependency:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># CUDA runtime, cuDNN, and all system libraries are resolved automatically</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>pytorch-gpu
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># CUDA runtime, cuDNN, and all system libraries are resolved automatically</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>pytorch-gpu
 </span></code></pre></div>
 <h3 id="reproducibility-beyond-python">Reproducibility beyond Python<a class="headerlink" href="#reproducibility-beyond-python" title="Permanent link">#</a></h3>
 <p><code>uv.lock</code> captures your Python dependencies precisely, but your project also depends on the system's C compiler, CUDA version, OpenSSL build, and more, none of which are tracked.</p>
@@ -4882,15 +5012,15 @@ Always prefer <code>pixi add --pypi &lt;package&gt;</code> to keep dependencies 
 <p>For a deeper dive into the differences between the conda and PyPI ecosystems, see the <a href="https://conda.org/blog/conda-is-not-pypi">Conda != PyPI</a> blog post series.</p>
 <h2 id="migrating-a-project">Migrating a project<a class="headerlink" href="#migrating-a-project" title="Permanent link">#</a></h2>
 <p>To migrate an existing uv project to Pixi, start by initializing Pixi in your project directory:</p>
-<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">pixi.toml</label><label for="__tabbed_2_2">pyproject.toml</label></div>
+<div class="tabbed-set tabbed-alternate" data-tabs="6:2"><input checked="checked" id="__tabbed_6_1" name="__tabbed_6" type="radio" /><input id="__tabbed_6_2" name="__tabbed_6" type="radio" /><div class="tabbed-labels"><label for="__tabbed_6_1">pixi.toml</label><label for="__tabbed_6_2">pyproject.toml</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--format<span class="w"> </span>pixi
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--format<span class="w"> </span>pixi
 </span></code></pre></div>
 <p>This creates a <code>pixi.toml</code> alongside your <code>pyproject.toml</code>.</p>
 </div>
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--format<span class="w"> </span>pyproject
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--format<span class="w"> </span>pyproject
 </span></code></pre></div>
 <p>This adds a <code>[tool.pixi.workspace]</code> section to your existing <code>pyproject.toml</code>, keeping your PyPI dependencies in place.</p>
 </div>
@@ -4903,15 +5033,15 @@ Always prefer <code>pixi add --pypi &lt;package&gt;</code> to keep dependencies 
 </li>
 <li>
 <p><strong>Set up tasks to replace your scripts:</strong></p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>lint<span class="w"> </span><span class="s2">&quot;ruff check .&quot;</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>serve<span class="w"> </span><span class="s2">&quot;python -m http.server&quot;</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="s2">&quot;pytest&quot;</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>lint<span class="w"> </span><span class="s2">&quot;ruff check .&quot;</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>pixi<span class="w"> </span>task<span class="w"> </span>add<span class="w"> </span>serve<span class="w"> </span><span class="s2">&quot;python -m http.server&quot;</span>
 </span></code></pre></div>
 </li>
 <li>
 <p><strong>Run your project:</strong></p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>main.py
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>main.py
 </span></code></pre></div>
 </li>
 </ol>
