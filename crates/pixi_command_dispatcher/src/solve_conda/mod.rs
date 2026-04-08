@@ -118,15 +118,7 @@ impl SolveCondaEnvironmentSpec {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
-            let allow_unknown_timestamps =
-                !self.source_repodata.is_empty() || !self.dev_source_records.is_empty();
-            let exclude_newer = self
-                .exclude_newer
-                .clone()
-                .map(|exclude_newer| {
-                    exclude_newer.with_include_unknown_timestamp(allow_unknown_timestamps)
-                })
-                .map(Into::into);
+            let exclude_newer = self.exclude_newer.clone().map(Into::into);
 
             // Determine for which records we have source records because those records should only
             //  be installed as source records.
