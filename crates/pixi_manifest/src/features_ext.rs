@@ -115,16 +115,14 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// Returns the effective exclude-newer solver configuration.
     fn exclude_newer_config(
         &self,
-        platform: Option<Platform>,
     ) -> Result<Option<rattler_solve::ExcludeNewer>, ParseChannelError> {
-        self.exclude_newer_config_resolved(platform)
+        self.exclude_newer_config_resolved()
             .map(|exclude_newer| exclude_newer.map(Into::into))
     }
 
     /// Returns the effective exclude-newer solver configuration with absolute cutoffs.
     fn exclude_newer_config_resolved(
         &self,
-        platform: Option<Platform>,
     ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
         let mut exclude_newer = self
             .exclude_newer_raw()
@@ -150,24 +148,22 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             };
         }
 
-        for (name, spec) in self
-            .combined_dependencies(platform)
-            .iter_specs()
-            .chain(self.combined_constraints(platform).iter_specs())
+        for (name, package_exclude_newer) in &self
+            .workspace_manifest()
+            .workspace
+            .exclude_newer_package_overrides
         {
-            let Some(package_exclude_newer) = spec.exclude_newer() else {
-                continue;
-            };
-
             let config = exclude_newer.get_or_insert_with(|| {
                 ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
             });
 
             *config = match package_exclude_newer {
-                ExcludeNewer::Timestamp(dt) => config.clone().with_package_cutoff(name.clone(), dt),
+                ExcludeNewer::Timestamp(dt) => {
+                    config.clone().with_package_cutoff(name.clone(), *dt)
+                }
                 ExcludeNewer::Duration(duration) => config
                     .clone()
-                    .with_package_cutoff(name.clone(), ExcludeNewer::Duration(duration).cutoff()),
+                    .with_package_cutoff(name.clone(), ExcludeNewer::Duration(*duration).cutoff()),
             };
         }
 
@@ -175,49 +171,26 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     }
 
     /// Returns the effective PyPI exclude-newer solver configuration with absolute cutoffs.
-    fn pypi_exclude_newer_config_resolved(
-        &self,
-        platform: Option<Platform>,
-    ) -> ResolvedPypiExcludeNewer {
+    fn pypi_exclude_newer_config_resolved(&self) -> ResolvedPypiExcludeNewer {
         let mut exclude_newer = self
             .exclude_newer_raw()
             .map(|config| ResolvedPypiExcludeNewer::from_datetime(config.cutoff()))
             .unwrap_or_default();
 
-        for (name, specs) in self.pypi_dependencies(platform) {
-            for spec in specs {
-                let Some(package_exclude_newer) = spec.exclude_newer() else {
-                    continue;
-                };
-
-                exclude_newer = match package_exclude_newer {
-                    ExcludeNewer::Timestamp(dt) => {
-                        exclude_newer.with_package_cutoff(name.as_normalized().clone(), dt)
-                    }
-                    ExcludeNewer::Duration(duration) => exclude_newer.with_package_cutoff(
-                        name.as_normalized().clone(),
-                        ExcludeNewer::Duration(duration).cutoff(),
-                    ),
-                };
-            }
-        }
-
-        if let Some(overrides) = self.pypi_options().dependency_overrides {
-            for (name, spec) in overrides {
-                let Some(package_exclude_newer) = spec.exclude_newer() else {
-                    continue;
-                };
-
-                exclude_newer = match package_exclude_newer {
-                    ExcludeNewer::Timestamp(dt) => {
-                        exclude_newer.with_package_cutoff(name.as_normalized().clone(), dt)
-                    }
-                    ExcludeNewer::Duration(duration) => exclude_newer.with_package_cutoff(
-                        name.as_normalized().clone(),
-                        ExcludeNewer::Duration(duration).cutoff(),
-                    ),
-                };
-            }
+        for (name, package_exclude_newer) in &self
+            .workspace_manifest()
+            .workspace
+            .pypi_exclude_newer_package_overrides
+        {
+            exclude_newer = match package_exclude_newer {
+                ExcludeNewer::Timestamp(dt) => {
+                    exclude_newer.with_package_cutoff(name.as_normalized().clone(), *dt)
+                }
+                ExcludeNewer::Duration(duration) => exclude_newer.with_package_cutoff(
+                    name.as_normalized().clone(),
+                    ExcludeNewer::Duration(*duration).cutoff(),
+                ),
+            };
         }
 
         exclude_newer

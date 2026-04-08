@@ -24,31 +24,23 @@ numpy = ">=2.0.0"
 This will override the version of `numpy` used by all dependencies to be at least `2.0.0`, regardless of what the dependencies specify.
 This is useful if you need a specific version of a library that is not compatible with the versions specified by your dependencies.
 
-### Override a dependency index and `exclude-newer`
+### Override a dependency index
 
-Overrides can also change where a transitive package comes from and which `exclude-newer` cutoff is
-used for that package.
+Overrides can also change where a transitive package comes from.
 
 ```toml
-[workspace]
-exclude-newer = "2025-01-01"
-
 [pypi-dependencies]
 consumer = "*"
 
 [pypi-options.dependency-overrides]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "0d" }
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
 ```
 
 This does not add `torch` to the environment by itself. Instead, if `consumer` or any other package
 depends on `torch`, pixi will:
 
 - resolve `torch` from the specified `index`
-- use the override's `exclude-newer` value for `torch`
-- keep using the workspace cutoff for all other packages
-
-This is useful when most of the environment should stay pinned to an older cutoff, but a specific
-package needs a newer release stream from a separate index.
+- keep resolving all other packages normally
 
 ### Override a dependency version in a specific feature
 
@@ -104,11 +96,3 @@ Use `[pypi-dependencies]` when the package itself should be installed into the e
 
 Use `[pypi-options.dependency-overrides]` when you want to steer how a package is resolved only if
 it appears in the dependency graph.
-
-For `exclude-newer`, this means:
-
-- a value in `[pypi-dependencies]` applies to a direct package
-- a value in `[pypi-options.dependency-overrides]` applies to transitive uses of that package
-
-If the same package is present in both places, the dependency override's `exclude-newer` value is
-used for that package during PyPI resolution.

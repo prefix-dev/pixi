@@ -157,9 +157,9 @@ fn verify_exclude_newer(
     environment: &Environment<'_>,
     locked_environment: &rattler_lock::Environment<'_>,
 ) -> Result<(), ExcludeNewerMismatch> {
-    for (platform, packages) in locked_environment.conda_packages_by_platform() {
+    for (_platform, packages) in locked_environment.conda_packages_by_platform() {
         let Some(exclude_newer) = environment
-            .exclude_newer_config(Some(platform))
+            .exclude_newer_config()
             .expect("environment channels were already validated")
         else {
             continue;

@@ -146,6 +146,8 @@ impl TomlWorkspace {
             ),
             requires_pixi: self.requires_pixi,
             exclude_newer: self.exclude_newer,
+            exclude_newer_package_overrides: IndexMap::default(),
+            pypi_exclude_newer_package_overrides: IndexMap::default(),
         })
         .with_warnings(warnings))
     }

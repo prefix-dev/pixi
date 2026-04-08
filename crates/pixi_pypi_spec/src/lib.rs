@@ -11,7 +11,7 @@ use std::{
 
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{ExtraName, MarkerTree};
-use pixi_spec::{ExcludeNewer, GitSpec, Subdirectory};
+use pixi_spec::{GitSpec, Subdirectory};
 use serde::Serialize;
 use thiserror::Error;
 use url::Url;
@@ -149,9 +149,6 @@ pub struct PixiPypiSpec {
         skip_serializing_if = "MarkerTree::is_true"
     )]
     pub env_markers: MarkerTree,
-    /// Exclude package candidates newer than this cutoff for this package only.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub exclude_newer: Option<ExcludeNewer>,
     /// The source for this package.
     #[serde(flatten)]
     pub source: PixiPypiSource,
@@ -201,7 +198,6 @@ impl From<PixiPypiSource> for PixiPypiSpec {
     fn from(source: PixiPypiSource) -> Self {
         PixiPypiSpec {
             extras: Vec::new(),
-            exclude_newer: None,
             source,
             env_markers: MarkerTree::default(),
         }
@@ -222,7 +218,6 @@ impl PixiPypiSpec {
     ) -> Self {
         PixiPypiSpec {
             extras,
-            exclude_newer: None,
             source,
             env_markers,
         }
@@ -287,11 +282,6 @@ impl PixiPypiSpec {
         &self.env_markers
     }
 
-    /// Returns the per-package exclude-newer override, if specified.
-    pub fn exclude_newer(&self) -> Option<ExcludeNewer> {
-        self.exclude_newer
-    }
-
     /// Returns the editability setting from the manifest.
     /// Only `Path` specs can be editable. Returns `None` for non-path specs
     /// or if editability is not explicitly specified.
@@ -305,7 +295,7 @@ impl PixiPypiSpec {
     }
 
     /// Updates this spec with a new PEP 508 requirement, preserving pixi-specific
-    /// fields (`index`, `extras`, `exclude-newer`) from self.
+    /// fields (`index`, `extras`) from self.
     ///
     /// This is useful when updating a dependency (e.g., during `pixi upgrade`)
     /// where the version changes but pixi-specific fields like `index` should
@@ -330,10 +320,6 @@ impl PixiPypiSpec {
         // Preserve extras from self if updated has none
         if updated.extras.is_empty() && !self.extras.is_empty() {
             updated.extras = self.extras.clone();
-        }
-
-        if updated.exclude_newer.is_none() {
-            updated.exclude_newer = self.exclude_newer;
         }
 
         updated.env_markers.or(requirement.marker.clone());

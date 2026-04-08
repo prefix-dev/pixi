@@ -1554,7 +1554,10 @@ async fn test_exclude_newer_per_package_dependency_override() {
     exclude-newer = "2015-12-02T02:07:43Z"
 
     [dependencies]
-    foo = {{ version = "*", exclude-newer = "0d" }}
+    foo = "*"
+
+    [exclude-newer]
+    foo = "0d"
     "#,
         channel = channel.url(),
         platform = Platform::current()
@@ -1605,8 +1608,8 @@ async fn test_exclude_newer_per_package_constraint_override() {
     [dependencies]
     foo = "*"
 
-    [constraints]
-    bar = {{ exclude-newer = "0d" }}
+    [exclude-newer]
+    bar = "0d"
     "#,
         channel = channel.url(),
         platform = Platform::current()

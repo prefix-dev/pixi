@@ -783,8 +783,7 @@ impl<'p> LockFileDerivedData<'p> {
                 {
                     let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
                     let index_strategy = environment.pypi_options().index_strategy.clone();
-                    let pypi_exclude_newer = environment
-                        .pypi_exclude_newer_config_resolved(Some(environment.best_platform()));
+                    let pypi_exclude_newer = environment.pypi_exclude_newer_config_resolved();
                     let skip_wheel_filename_check =
                         environment.pypi_options().skip_wheel_filename_check;
 
@@ -2265,7 +2264,7 @@ async fn spawn_solve_conda_environment_task(
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
     let exclude_newer = group
-        .exclude_newer_config_resolved(Some(platform))
+        .exclude_newer_config_resolved()
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
 
@@ -2625,8 +2624,7 @@ async fn spawn_solve_pypi_task<'p>(
         ));
     }
 
-    let exclude_newer =
-        to_exclude_newer(&grouped_environment.pypi_exclude_newer_config_resolved(Some(platform)));
+    let exclude_newer = to_exclude_newer(&grouped_environment.pypi_exclude_newer_config_resolved());
 
     // Get the system requirements for this environment
     let system_requirements = grouped_environment.system_requirements();

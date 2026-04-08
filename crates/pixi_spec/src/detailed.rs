@@ -7,7 +7,7 @@ use rattler_conda_types::{
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::{serde_as, skip_serializing_none};
 
-use crate::{BinarySpec, ExcludeNewer, SpecConversionError};
+use crate::{BinarySpec, SpecConversionError};
 
 /// A specification for a package in a conda channel.
 ///
@@ -50,9 +50,6 @@ pub struct DetailedSpec {
     /// The sha256 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Sha256>>")]
     pub sha256: Option<Sha256Hash>,
-
-    /// Exclude package candidates newer than this cutoff for this package only.
-    pub exclude_newer: Option<ExcludeNewer>,
 }
 
 impl DetailedSpec {
@@ -133,11 +130,6 @@ impl Display for DetailedSpec {
         if let Some(sha256) = &self.sha256 {
             parts.push(format!("sha256={sha256:x}"));
         }
-
-        if let Some(exclude_newer) = &self.exclude_newer {
-            parts.push(format!("exclude_newer={exclude_newer}"));
-        }
-
         if parts.is_empty() {
             write!(f, "*")
         } else {

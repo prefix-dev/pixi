@@ -575,7 +575,10 @@ async fn test_exclude_newer_per_package_pypi_index_override() {
         python = "==3.12.0"
 
         [pypi-dependencies]
-        foo = {{ version = "*", index = "{explicit_idx_url}", exclude-newer = "0d" }}
+        foo = {{ version = "*", index = "{explicit_idx_url}" }}
+
+        [pypi-exclude-newer]
+        foo = "0d"
 
         [pypi-options]
         index-url = "{default_idx_url}"
@@ -693,7 +696,10 @@ async fn test_exclude_newer_dependency_override_pypi_index_override() {
         index-url = "{default_idx_url}"
 
         [pypi-options.dependency-overrides]
-        foo = {{ version = ">=2.0.0", index = "{explicit_idx_url}", exclude-newer = "0d" }}
+        foo = {{ version = ">=2.0.0", index = "{explicit_idx_url}" }}
+
+        [pypi-exclude-newer]
+        foo = "0d"
         "#,
         platform = platform,
         channel_url = channel.url(),

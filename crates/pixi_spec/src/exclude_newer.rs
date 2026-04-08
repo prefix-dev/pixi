@@ -179,6 +179,7 @@ fn parse_exclude_newer_str(s: &str) -> Result<ExcludeNewer, String> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn test_from_str_timestamp() {
@@ -226,6 +227,51 @@ mod test {
             ExcludeNewer::from_str("7days").unwrap(),
             ExcludeNewer::Duration(std::time::Duration::from_secs(7 * 24 * 60 * 60)),
         );
+    }
+
+    #[test]
+    fn test_from_str_invalid_reports_supported_formats() {
+        let err = ExcludeNewer::from_str("date").unwrap_err();
+        assert!(err.contains("valid duration"), "got: {err}");
+        assert!(err.contains("date ("), "got: {err}");
+        assert!(err.contains("timestamp ("), "got: {err}");
+    }
+
+    #[test]
+    fn test_cutoff_for_duration_is_relative_to_now() {
+        let before = Utc::now();
+        let cutoff = ExcludeNewer::Duration(std::time::Duration::from_secs(60 * 60)).cutoff();
+        let after = Utc::now();
+
+        assert!(
+            cutoff >= before - chrono::Duration::hours(1) - chrono::Duration::seconds(1),
+            "cutoff {cutoff} should be close to one hour before {before}",
+        );
+        assert!(
+            cutoff <= after - chrono::Duration::hours(1) + chrono::Duration::seconds(1),
+            "cutoff {cutoff} should be close to one hour before {after}",
+        );
+    }
+
+    #[test]
+    fn test_serde_deserializes_timestamp_with_space_separator() {
+        let parsed: ExcludeNewer = serde_json::from_value(json!("2006-12-02 02:07:43Z")).unwrap();
+
+        assert_eq!(
+            parsed,
+            ExcludeNewer::from_str("2006-12-02T02:07:43Z").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_serde_roundtrips_duration() {
+        let value = ExcludeNewer::Duration(std::time::Duration::from_secs(90 * 60));
+
+        let serialized = serde_json::to_value(value).unwrap();
+        assert_eq!(serialized, json!("1h 30m"));
+
+        let deserialized: ExcludeNewer = serde_json::from_value(serialized).unwrap();
+        assert_eq!(deserialized, value);
     }
 
     #[test]
