@@ -33,7 +33,7 @@ use pixi_manifest::PrioritizedChannel;
 use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::{BinarySpec, PathBinarySpec};
+use pixi_spec::{BinarySpec, ExcludeNewer, PathBinarySpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::{
     executable_from_path,
@@ -545,6 +545,47 @@ impl Project {
         self.config.global_channel_config()
     }
 
+    fn resolved_exclude_newer(
+        &self,
+        environment: &ParsedEnvironment,
+    ) -> Option<ResolvedExcludeNewer> {
+        let mut exclude_newer = environment
+            .exclude_newer
+            .clone()
+            .or_else(|| {
+                self.config
+                    .exclude_newer()
+                    .map(|exclude_newer| exclude_newer.to_string())
+                    .map(|exclude_newer| {
+                        ExcludeNewer::from_str(&exclude_newer)
+                            .expect("pixi config exclude-newer should be valid pixi exclude-newer")
+                    })
+            })
+            .map(|exclude_newer| ResolvedExcludeNewer::from_datetime(exclude_newer.cutoff()));
+
+        for channel in &environment.channels {
+            let Some(channel_exclude_newer) = channel.exclude_newer.clone() else {
+                continue;
+            };
+
+            let config = exclude_newer.get_or_insert_with(|| {
+                ResolvedExcludeNewer::from_datetime(chrono::DateTime::<chrono::Utc>::MAX_UTC)
+            });
+
+            *config = match channel_exclude_newer {
+                ExcludeNewer::Timestamp(dt) => {
+                    config.clone().with_channel_cutoff(channel.channel.to_string(), dt)
+                }
+                ExcludeNewer::Duration(duration) => config.clone().with_channel_cutoff(
+                    channel.channel.to_string(),
+                    ExcludeNewer::Duration(duration).cutoff(),
+                ),
+            };
+        }
+
+        exclude_newer
+    }
+
     /// Check if the platform matches the current platform (OS)
     /// We only need to detect virtual packages if the platform is the current
     /// one. Otherwise, we use an empty list
@@ -593,6 +634,7 @@ impl Project {
             .into_diagnostic()?;
 
         let platform = environment.platform.unwrap_or_else(Platform::current);
+        let exclude_newer = self.resolved_exclude_newer(environment);
 
         // Convert dependency specs to binary specs for CommandDispatcher
         let mut pixi_specs = DependencyMap::default();
@@ -621,6 +663,7 @@ impl Project {
             build_environment: build_environment.clone(),
             channels: channels.clone(),
             channel_config: self.config.global_channel_config().clone(),
+            exclude_newer: exclude_newer.clone(),
             ..Default::default()
         };
 
@@ -647,7 +690,7 @@ impl Project {
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
-                exclude_newer: None,
+                exclude_newer,
                 channels,
                 channel_config: self.config.global_channel_config().clone(),
                 enabled_protocols: EnabledProtocols::default(),
@@ -950,11 +993,13 @@ impl Project {
 
         let prefix = self.environment_prefix(env_name).await?;
         let prefix_records = prefix.find_installed_packages()?;
+        let exclude_newer = self.resolved_exclude_newer(environment);
         let specs_in_sync = environment_specs_in_sync(
             &prefix_records,
             &specs,
             &source_package_names,
             environment.platform,
+            exclude_newer.as_ref(),
         )
         .await?;
         if !specs_in_sync {
@@ -1421,7 +1466,10 @@ impl Project {
             manifest_source: pinned_source_spec,
             preferred_build_source: None,
             channel_config: self.global_channel_config().clone(),
-            exclude_newer: None,
+            exclude_newer: self
+                .config()
+                .exclude_newer_cutoff()
+                .map(ResolvedExcludeNewer::from_datetime),
             channels: self
                 .config()
                 .default_channels()

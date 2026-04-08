@@ -2,7 +2,7 @@ use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
-use pixi_config::Config;
+use pixi_config::{Config, ConfigChannel};
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
@@ -289,9 +289,9 @@ fn alter_config(
                         .context("invalid channel name")?;
                     let mut new_channels = config.default_channels.clone();
                     if is_prepend {
-                        new_channels.insert(0, channel);
+                        new_channels.insert(0, ConfigChannel::from(channel));
                     } else {
-                        new_channels.push(channel);
+                        new_channels.push(ConfigChannel::from(channel));
                     }
                     config.default_channels = new_channels;
                 }
@@ -331,6 +331,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
 
     match key {
         "default-channels" => new.default_channels = config.default_channels.clone(),
+        "exclude-newer" => new.exclude_newer = config.exclude_newer.clone(),
         "shell" => new.shell = config.shell.clone(),
         "tls-no-verify" => new.tls_no_verify = config.tls_no_verify,
         "authentication-override-file" => {
@@ -343,6 +344,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         _ => {
             let keys = [
                 "default-channels",
+                "exclude-newer",
                 "tls-no-verify",
                 "authentication-override-file",
                 "mirrors",
