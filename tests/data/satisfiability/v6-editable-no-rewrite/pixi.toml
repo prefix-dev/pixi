@@ -1,0 +1,10 @@
+[workspace]
+name = "yohane"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = "~=3.13.0"
+
+[pypi-dependencies]
+yohane = { path = ".", editable = true }
