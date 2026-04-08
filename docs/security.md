@@ -56,11 +56,13 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [dependencies]
 # CVE-XXXX-YYYY: allow the fresh fixed build immediately
-python = { version = "3.12.*", exclude-newer = "0d" }
+python = "3.12.*"
 
-[constraints]
+[exclude-newer]
 # CVE-XXXX-YYYY: allow the fresh fixed build immediately
-openssl = { exclude-newer = "0d" }
+python = "0d"
+# CVE-XXXX-YYYY: allow the fresh fixed build immediately
+openssl = "0d"
 ```
 
 In that example:
@@ -77,7 +79,7 @@ In that example:
 
 When an advisory lands, update to the fixed version first. If the fix is fresh, that can also mean temporarily relaxing `exclude-newer` so you can adopt the security release immediately. If another dependency prevents the solver from reaching the non-vulnerable version, Pixi supports [`dependency-overrides`](advanced/override.md) for PyPI packages.
 
-This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints and overrides help you respond once a vulnerable version is already known.
+This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints, the `[exclude-newer]` tables, and overrides help you respond once a vulnerable version is already known.
 
 !!! note "PyPI-only for now"
     We are planning to support a similar feature like this for Conda packages as well. For more information, see [pixi#4891](https://github.com/prefix-dev/pixi/issues/4891).
