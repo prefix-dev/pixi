@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_spec::{ExcludeNewer, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
@@ -37,6 +38,28 @@ pub struct ChannelPriorityCombinationError;
 /// There is blanket implementation available for all types that implement
 /// [`HasWorkspaceManifest`] and [`HasFeaturesIter`]
 pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<'source> {
+    /// Returns the channels associated with this collection, preserving the
+    /// effective metadata for the first winning entry of every unique channel.
+    fn prioritized_channels(
+        &self,
+    ) -> IndexMap<&'source NamedChannelOrUrl, &'source PrioritizedChannel> {
+        let channels = self.features().flat_map(|feature| match &feature.channels {
+            Some(channels) => channels,
+            None => &self.workspace_manifest().workspace.channels,
+        });
+
+        let mut prioritized = IndexMap::new();
+        for channel in channels.into_iter().sorted_by(|a, b| {
+            let a = a.priority.unwrap_or(0);
+            let b = b.priority.unwrap_or(0);
+            b.cmp(&a)
+        }) {
+            prioritized.entry(&channel.channel).or_insert(channel);
+        }
+
+        prioritized
+    }
+
     /// Returns the channels associated with this collection.
     ///
     /// Users can specify custom channels on a per-feature basis. This method
@@ -46,14 +69,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// If a feature does not specify any channel the default channels from the
     /// project metadata are used instead.
     fn channels(&self) -> IndexSet<&'source NamedChannelOrUrl> {
-        // Collect all the channels from the features in one set,
-        // deduplicate them and sort them on feature index, default feature comes last.
-        let channels = self.features().flat_map(|feature| match &feature.channels {
-            Some(channels) => channels,
-            None => &self.workspace_manifest().workspace.channels,
-        });
-
-        PrioritizedChannel::sort_channels_by_priority(channels).collect()
+        self.prioritized_channels().into_keys().collect()
     }
 
     /// Returns the channels associated with this collection.
@@ -90,7 +106,8 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         Ok(channel_priority)
     }
 
-    /// Returns the raw exclude-newer configuration.
+    /// Returns the raw workspace exclude-newer configuration before channel and
+    /// package-specific overrides are applied.
     fn exclude_newer_raw(&self) -> Option<ExcludeNewer> {
         self.workspace_manifest().workspace.exclude_newer
     }
@@ -112,6 +129,26 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         let mut exclude_newer = self
             .exclude_newer_raw()
             .map(|config| ResolvedExcludeNewer::from_datetime(config.cutoff()));
+
+        for channel in self.prioritized_channels().into_values() {
+            let Some(channel_exclude_newer) = channel.exclude_newer else {
+                continue;
+            };
+
+            let config = exclude_newer.get_or_insert_with(|| {
+                ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
+            });
+
+            *config = match channel_exclude_newer {
+                ExcludeNewer::Timestamp(dt) => config
+                    .clone()
+                    .with_channel_cutoff(channel.channel.to_string(), dt),
+                ExcludeNewer::Duration(duration) => config.clone().with_channel_cutoff(
+                    channel.channel.to_string(),
+                    ExcludeNewer::Duration(duration).cutoff(),
+                ),
+            };
+        }
 
         for (name, spec) in self
             .combined_dependencies(platform)

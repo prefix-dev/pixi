@@ -2235,6 +2235,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2250,6 +2251,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2267,6 +2269,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2289,6 +2292,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2307,10 +2311,12 @@ platforms = ["linux-64", "win-64"]
                 PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test")),
                     priority: None,
+                    exclude_newer: None,
                 },
                 PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test2")),
                     priority: None,
+                    exclude_newer: None,
                 },
             ]
             .into_iter()
@@ -2321,6 +2327,7 @@ platforms = ["linux-64", "win-64"]
         let custom_channel = PrioritizedChannel {
             channel: NamedChannelOrUrl::Url("https://custom.com/channel".parse().unwrap()),
             priority: None,
+            exclude_newer: None,
         };
         manifest
             .add_channels([custom_channel.clone()], &FeatureName::DEFAULT, false)
@@ -2339,6 +2346,7 @@ platforms = ["linux-64", "win-64"]
         let prioritized_channel1 = PrioritizedChannel {
             channel: NamedChannelOrUrl::Name(String::from("prioritized")),
             priority: Some(12i32),
+            exclude_newer: None,
         };
         manifest
             .add_channels([prioritized_channel1.clone()], &FeatureName::DEFAULT, false)
@@ -2356,6 +2364,7 @@ platforms = ["linux-64", "win-64"]
         let prioritized_channel2 = PrioritizedChannel {
             channel: NamedChannelOrUrl::Name(String::from("prioritized2")),
             priority: Some(-12i32),
+            exclude_newer: None,
         };
         manifest
             .add_channels([prioritized_channel2.clone()], &FeatureName::DEFAULT, false)
@@ -2406,6 +2415,7 @@ platforms = ["linux-64", "win-64"]
                 [PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                     priority: None,
+                    exclude_newer: None,
                 }],
                 &FeatureName::DEFAULT,
             )
@@ -2418,6 +2428,7 @@ platforms = ["linux-64", "win-64"]
                 [PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test_channel")),
                     priority: None,
+                    exclude_newer: None,
                 }],
                 &FeatureName::from("test"),
             )
@@ -2439,6 +2450,7 @@ platforms = ["linux-64", "win-64"]
                     [PrioritizedChannel {
                         channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                         priority: None,
+                        exclude_newer: None,
                     }],
                     &FeatureName::DEFAULT,
                 )
@@ -2622,10 +2634,12 @@ platforms = ["linux-64", "win-64"]
                 &PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("pytorch")),
                     priority: None,
+                    exclude_newer: None,
                 },
                 &PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                     priority: Some(-1),
+                    exclude_newer: None,
                 },
             ]
         );
@@ -3540,5 +3554,55 @@ polars = { version = "*", exclude-newer = "0d" }
 
         assert!(package_cutoff >= before);
         assert!(package_cutoff <= after + chrono::Duration::seconds(1));
+    }
+
+    #[test]
+    fn test_exclude_newer_config_applies_channel_overrides() {
+        struct TestFeatures<'a> {
+            manifest: &'a WorkspaceManifest,
+            features: Vec<&'a Feature>,
+        }
+
+        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
+            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+                self.manifest
+            }
+        }
+
+        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
+            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+                self.features.clone().into_iter()
+            }
+        }
+
+        let contents = r#"
+[project]
+name = "foo"
+channels = ["conda-forge", { channel = "bioconda", exclude-newer = "0d" }]
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+"#;
+
+        let before = chrono::Utc::now();
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+        let features = TestFeatures {
+            manifest: &manifest,
+            features: vec![default_feature],
+        };
+        let config = features.exclude_newer_config(None).unwrap().unwrap();
+        let after = chrono::Utc::now();
+
+        let package = PackageName::from_str("polars").unwrap();
+        let bioconda_cutoff = config.cutoff_for_package(&package, Some("bioconda"));
+        assert!(bioconda_cutoff >= before);
+        assert!(bioconda_cutoff <= after + chrono::Duration::seconds(1));
+
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("conda-forge")),
+            chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
     }
 }
