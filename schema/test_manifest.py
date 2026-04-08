@@ -212,11 +212,11 @@ platforms = ["linux-64"]
 exclude-newer = "0d"
 channels = ["conda-forge", { channel = "bioconda", exclude-newer = "0d" }]
 
-[dependencies]
-polars = { version = "*", exclude-newer = "0d" }
+[exclude-newer]
+polars = "0d"
 
-[target.linux.constraints]
-openssl = { exclude-newer = "0d" }
+[pypi-exclude-newer]
+boltons = "0d"
 """)
 
     validator.validate(manifest)

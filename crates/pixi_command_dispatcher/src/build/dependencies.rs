@@ -368,7 +368,6 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     md5,
                     sha256,
                     license,
-                    exclude_newer: None,
                 })),
             };
 

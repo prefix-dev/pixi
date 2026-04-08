@@ -220,12 +220,6 @@
             ]
           }
         },
-        "exclude-newer": {
-          "title": "Exclude-Newer",
-          "description": "Override the workspace-level `exclude-newer` cutoff for this package only",
-          "type": "string",
-          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|(\\d+\\s*[A-Za-z]+\\s*)+)$"
-        },
         "file-name": {
           "title": "File-Name",
           "description": "The file name of the package",
@@ -788,12 +782,6 @@
             "pytorch",
             "https://prefix.dev/conda-forge"
           ]
-        },
-        "exclude-newer": {
-          "title": "Exclude-Newer",
-          "description": "Override the workspace-level `exclude-newer` cutoff for this package only",
-          "type": "string",
-          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|(\\d+\\s*[A-Za-z]+\\s*)+)$"
         },
         "file-name": {
           "title": "File-Name",
@@ -1643,6 +1631,18 @@
             }
           }
         },
+        "exclude_newer": {
+          "title": "Exclude Newer",
+          "description": "Workspace-wide per-package `exclude-newer` overrides for conda packages",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "feature": {
           "title": "Feature",
           "description": "The features of the project",
@@ -1715,6 +1715,18 @@
                 "$ref": "#/$defs/PyPIUrlRequirement"
               }
             ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "pypi_exclude_newer": {
+          "title": "Pypi Exclude Newer",
+          "description": "Workspace-wide per-package `exclude-newer` overrides for PyPI packages",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|(\\d+\\s*[A-Za-z]+\\s*)+)$"
           },
           "propertyNames": {
             "minLength": 1

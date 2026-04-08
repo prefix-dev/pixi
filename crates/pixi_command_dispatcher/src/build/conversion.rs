@@ -116,7 +116,6 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpec) -> pixi_spec::BinarySpec {
             license,
             md5,
             sha256,
-            exclude_newer: None,
         })),
     }
 }

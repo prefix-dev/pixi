@@ -1,9 +1,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
+use pixi_pypi_spec::PypiPackageName;
 use pixi_spec::ExcludeNewer;
 use pixi_toml::TomlEnum;
-use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, Version, VersionSpec};
 use serde::Deserialize;
 use toml_span::{DeserError, Value};
 use url::Url;
@@ -88,6 +89,12 @@ pub struct Workspace {
 
     /// Exclude package candidates that are newer than this date.
     pub exclude_newer: Option<ExcludeNewer>,
+
+    /// Workspace-wide conda package exclude-newer overrides.
+    pub exclude_newer_package_overrides: IndexMap<PackageName, ExcludeNewer>,
+
+    /// Workspace-wide PyPI package exclude-newer overrides.
+    pub pypi_exclude_newer_package_overrides: IndexMap<PypiPackageName, ExcludeNewer>,
 }
 
 /// A source that contributes additional build variant definitions.

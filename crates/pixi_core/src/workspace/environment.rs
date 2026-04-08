@@ -833,7 +833,7 @@ mod tests {
         .unwrap();
 
         let env = workspace.environment("combined").unwrap();
-        let config = env.exclude_newer_config(None).unwrap().unwrap();
+        let config = env.exclude_newer_config().unwrap().unwrap();
         let package = PackageName::new_unchecked("polars");
 
         assert_eq!(
@@ -898,7 +898,7 @@ mod tests {
         .unwrap();
 
         let env = workspace.environment("combined").unwrap();
-        let config = env.exclude_newer_config(None).unwrap().unwrap();
+        let config = env.exclude_newer_config().unwrap().unwrap();
         let package = PackageName::new_unchecked("polars");
 
         assert_eq!(
@@ -940,17 +940,18 @@ mod tests {
         exclude-newer = "2015-12-02T02:07:43Z"
 
         [dependencies]
-        polars = { version = "*", exclude-newer = "2017-12-02T02:07:43Z" }
+        polars = "*"
         numpy = "*"
 
-        [constraints]
-        openssl = { exclude-newer = "2018-12-02T02:07:43Z" }
+        [exclude-newer]
+        polars = "2017-12-02T02:07:43Z"
+        openssl = "2018-12-02T02:07:43Z"
         "#,
         )
         .unwrap();
 
         let env = workspace.environment("default").unwrap();
-        let config = env.exclude_newer_config(None).unwrap().unwrap();
+        let config = env.exclude_newer_config().unwrap().unwrap();
         let polars = PackageName::new_unchecked("polars");
         let numpy = PackageName::new_unchecked("numpy");
         let openssl = PackageName::new_unchecked("openssl");

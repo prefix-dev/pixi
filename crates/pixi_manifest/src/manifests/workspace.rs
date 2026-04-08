@@ -3474,38 +3474,41 @@ openssl = "<2"
     }
 
     #[test]
-    fn test_package_exclude_newer_in_dependencies_and_constraints() {
+    fn test_package_exclude_newer_tables_are_parsed() {
         let contents = r#"
 [project]
 name = "foo"
 channels = []
 platforms = []
 
-[dependencies]
-polars = { version = "*", exclude-newer = "0d" }
+[exclude-newer]
+polars = "0d"
 
-[constraints]
-openssl = { exclude-newer = "0d" }
+[pypi-exclude-newer]
+boltons = "0d"
 "#;
+        use pixi_pypi_spec::PypiPackageName;
         use rattler_conda_types::PackageName;
         use std::str::FromStr;
 
         let manifest = parse_pixi_toml(contents).manifest;
-        let feature = manifest.default_feature();
-
         let polars = PackageName::from_str("polars").unwrap();
-        let run_dependencies = feature.run_dependencies(None).unwrap();
-        let polars_spec = run_dependencies.get_single(&polars).unwrap().unwrap();
         assert_eq!(
-            polars_spec.exclude_newer().map(|value| value.to_string()),
+            manifest
+                .workspace
+                .exclude_newer_package_overrides
+                .get(&polars)
+                .map(|value| value.to_string()),
             Some("0s".to_string())
         );
 
-        let openssl = PackageName::from_str("openssl").unwrap();
-        let constraints = feature.constraints(None).unwrap();
-        let openssl_spec = constraints.get_single(&openssl).unwrap().unwrap();
+        let boltons = PypiPackageName::from_str("boltons").unwrap();
         assert_eq!(
-            openssl_spec.exclude_newer().map(|value| value.to_string()),
+            manifest
+                .workspace
+                .pypi_exclude_newer_package_overrides
+                .get(&boltons)
+                .map(|value| value.to_string()),
             Some("0s".to_string())
         );
     }
@@ -3536,8 +3539,8 @@ channels = []
 platforms = []
 exclude-newer = "2015-12-02T02:07:43Z"
 
-[dependencies]
-polars = { version = "*", exclude-newer = "0d" }
+[exclude-newer]
+polars = "0d"
 "#;
 
         let before = chrono::Utc::now();
@@ -3547,7 +3550,7 @@ polars = { version = "*", exclude-newer = "0d" }
             manifest: &manifest,
             features: vec![default_feature],
         };
-        let config = features.exclude_newer_config(None).unwrap().unwrap();
+        let config = features.exclude_newer_config().unwrap().unwrap();
         let after = chrono::Utc::now();
         let package = PackageName::from_str("polars").unwrap();
         let package_cutoff = config.cutoff_for_package(&package, None);
@@ -3590,7 +3593,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             manifest: &manifest,
             features: vec![default_feature],
         };
-        let config = features.exclude_newer_config(None).unwrap().unwrap();
+        let config = features.exclude_newer_config().unwrap().unwrap();
         let after = chrono::Utc::now();
 
         let package = PackageName::from_str("polars").unwrap();

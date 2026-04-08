@@ -20,8 +20,8 @@ use toml_span::{
 use url::Url;
 
 use crate::{
-    BinarySpec, DetailedSpec, ExcludeNewer, GitReference, GitSpec, PathSourceSpec, PathSpec,
-    PixiSpec, SourceLocationSpec, Subdirectory, SubdirectoryError, UrlSourceSpec, UrlSpec,
+    BinarySpec, DetailedSpec, GitReference, GitSpec, PathSourceSpec, PathSpec, PixiSpec,
+    SourceLocationSpec, Subdirectory, SubdirectoryError, UrlSourceSpec, UrlSpec,
 };
 
 /// A TOML representation of a package specification.
@@ -57,10 +57,6 @@ pub struct TomlSpec {
 
     /// The license
     pub license: Option<String>,
-
-    /// Exclude package candidates newer than this cutoff for this package only.
-    #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
-    pub exclude_newer: Option<ExcludeNewer>,
 }
 
 /// A TOML representation of a package source location specification.
@@ -329,8 +325,7 @@ impl TomlSpec {
                         || self.subdir.is_some()
                         || loc.md5.is_some()
                         || loc.sha256.is_some()
-                        || self.license.is_some()
-                        || self.exclude_newer.is_some();
+                        || self.license.is_some();
                     if !is_detailed {
                         return Err(SpecError::MissingDetailedIdentifier);
                     }
@@ -345,7 +340,6 @@ impl TomlSpec {
                         md5: loc.md5,
                         sha256: loc.sha256,
                         license: self.license,
-                        exclude_newer: self.exclude_newer,
                     }))
                 }
                 (_, _, _) => return Err(SpecError::MultipleIdentifiers),
@@ -357,8 +351,7 @@ impl TomlSpec {
                 || self.file_name.is_some()
                 || self.channel.is_some()
                 || self.subdir.is_some()
-                || self.license.is_some()
-                || self.exclude_newer.is_some();
+                || self.license.is_some();
             if !is_detailed {
                 return Err(SpecError::MissingDetailedIdentifier);
             }
@@ -373,7 +366,6 @@ impl TomlSpec {
                 md5: None,
                 sha256: None,
                 license: self.license,
-                exclude_newer: self.exclude_newer,
             }));
         }
 
@@ -424,8 +416,7 @@ impl TomlSpec {
                         || self.subdir.is_some()
                         || loc.md5.is_some()
                         || loc.sha256.is_some()
-                        || self.license.is_some()
-                        || self.exclude_newer.is_some();
+                        || self.license.is_some();
                     if !is_detailed {
                         return Err(SpecError::MissingDetailedIdentifier);
                     }
@@ -440,7 +431,6 @@ impl TomlSpec {
                         md5: loc.md5,
                         sha256: loc.sha256,
                         license: self.license,
-                        exclude_newer: self.exclude_newer,
                     }))
                 }
                 (_, _, _) => return Err(SpecError::MultipleIdentifiers),
@@ -452,8 +442,7 @@ impl TomlSpec {
                 || self.file_name.is_some()
                 || self.channel.is_some()
                 || self.subdir.is_some()
-                || self.license.is_some()
-                || self.exclude_newer.is_some();
+                || self.license.is_some();
             if !is_detailed {
                 return Err(SpecError::MissingDetailedIdentifier);
             }
@@ -468,7 +457,6 @@ impl TomlSpec {
                 md5: None,
                 sha256: None,
                 license: self.license,
-                exclude_newer: self.exclude_newer,
             }));
         };
         Ok(spec)
@@ -612,9 +600,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
         let channel = th.optional("channel").map(TomlFromStr::into_inner);
         let subdir = th.optional("subdir");
         let license = th.optional("license");
-        let exclude_newer = th
-            .optional::<TomlFromStr<_>>("exclude-newer")
-            .map(TomlFromStr::into_inner);
         let md5 = th
             .optional::<TomlDigest<rattler_digest::Md5>>("md5")
             .map(TomlDigest::into_inner);
@@ -643,7 +628,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
             channel,
             subdir,
             license,
-            exclude_newer,
         })
     }
 }
@@ -820,8 +804,6 @@ mod test {
             json! { "1.2.3" },
             json!({ "version": "1.2.3" }),
             json!({ "version": "1.2.3", "build-number": ">=3" }),
-            json!({ "exclude-newer": "0d" }),
-            json!({ "version": "*", "exclude-newer": "0d" }),
             json! { "*" },
             json!({ "path": "foobar" }),
             json!({ "path": "~/.cache" }),
