@@ -47,7 +47,7 @@ use pixi_manifest::{
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_spec::{ResolvedExcludeNewer, SourceSpec};
+use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_lazy_reqwest_clients;
 use pixi_utils::{
     reqwest::LazyReqwestClient,
@@ -67,29 +67,6 @@ pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
-
-pub(crate) fn resolve_exclude_newer_channel_cutoffs(
-    exclude_newer: Option<ResolvedExcludeNewer>,
-    channels: impl IntoIterator<Item = (String, String)>,
-) -> Option<ResolvedExcludeNewer> {
-    let Some(mut exclude_newer) = exclude_newer else {
-        return None;
-    };
-
-    let channel_cutoffs = exclude_newer.channel_cutoffs.clone();
-    for (channel_name, channel_url) in channels {
-        if let Some(cutoff) = channel_cutoffs
-            .get(&channel_name)
-            .or_else(|| channel_cutoffs.get(&channel_url))
-            .copied()
-        {
-            exclude_newer.channel_cutoffs.insert(channel_name, cutoff);
-            exclude_newer.channel_cutoffs.insert(channel_url, cutoff);
-        }
-    }
-
-    Some(exclude_newer)
-}
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]

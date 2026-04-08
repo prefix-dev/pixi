@@ -57,7 +57,6 @@ use super::{
 };
 use crate::workspace::{
     Environment, HasWorkspaceRef, errors::VariantsError, grouped_environment::GroupedEnvironment,
-    resolve_exclude_newer_channel_cutoffs,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -637,16 +636,9 @@ pub fn verify_environment_satisfiability(
         });
     }
 
-    let exclude_newer_channels = environment.channel_urls(&config)?;
-    let exclude_newer = resolve_exclude_newer_channel_cutoffs(
-        environment.exclude_newer_config_resolved()?,
-        environment
-            .channels()
-            .into_iter()
-            .map(ToString::to_string)
-            .zip(exclude_newer_channels.iter().map(ToString::to_string)),
-    )
-    .map(rattler_solve::ExcludeNewer::from);
+    let exclude_newer = environment
+        .exclude_newer_config_resolved_with_channel_config(&config)?
+        .map(rattler_solve::ExcludeNewer::from);
 
     if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
