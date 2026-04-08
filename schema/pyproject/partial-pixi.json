@@ -104,7 +104,7 @@
       "type": "object",
       "additionalProperties": {
         "type": "string",
-        "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+        "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$"
       },
       "propertyNames": {
         "minLength": 1
@@ -193,7 +193,7 @@
       "type": "object",
       "additionalProperties": {
         "type": "string",
-        "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+        "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$"
       },
       "propertyNames": {
         "minLength": 1
@@ -599,7 +599,7 @@
           "title": "Exclude-Newer",
           "description": "Override the workspace-level `exclude-newer` cutoff for this channel only",
           "type": "string",
-          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$"
         },
         "priority": {
           "title": "Priority",
@@ -2522,13 +2522,19 @@
         },
         "exclude-newer": {
           "title": "Exclude-Newer",
-          "description": "Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration (e.g. '7days', '1h30m').",
+          "description": "Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
           "type": "string",
-          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|(\\d+\\s*[A-Za-z]+\\s*)+)$",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$",
           "examples": [
             "2023-11-03T03:33:12Z",
             "2026-04-01",
-            "7days",
+            "0d",
+            "1 week",
+            "2w",
+            "1 month",
+            "1M",
+            "72h",
+            "72 hours",
             "1h30m"
           ]
         },

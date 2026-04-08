@@ -202,6 +202,45 @@ def test_gh_1089_python_jsonschema(manifest_schemata: TRawSchemata) -> None:
             cls.check_schema(schema)
 
 
+@pytest.mark.parametrize(
+    ("workspace_value", "channel_value", "conda_override", "pypi_override"),
+    [
+        ("2023-10-01T00:00:00Z", "2023-10-01T00:00:00Z", "2023-10-01T00:00:00Z", "2023-10-01T00:00:00Z"),
+        ("2026-03-30", "2026-03-30", "2026-03-30", "2026-03-30"),
+        ("0d", "0d", "0d", "0d"),
+        ("1 week", "1 week", "1 week", "1 week"),
+        ("2w", "2w", "2w", "2w"),
+        ("1 month", "1 month", "1 month", "1 month"),
+        ("1M", "1M", "1M", "1M"),
+        ("72h", "72h", "72h", "72h"),
+        ("72 hours", "72 hours", "72 hours", "72 hours"),
+        ("1h30m", "1h30m", "1h30m", "1h30m"),
+    ],
+)
+def test_exclude_newer_website_examples_are_valid(
+    validator: Validator,
+    workspace_value: str,
+    channel_value: str,
+    conda_override: str,
+    pypi_override: str,
+) -> None:
+    manifest = tomllib.loads(f"""
+[workspace]
+name = "exclude-newer-examples"
+platforms = ["linux-64"]
+exclude-newer = "{workspace_value}"
+channels = ["conda-forge", {{ channel = "bioconda", exclude-newer = "{channel_value}" }}]
+
+[exclude-newer]
+polars = "{conda_override}"
+
+[pypi-exclude-newer]
+boltons = "{pypi_override}"
+""")
+
+    validator.validate(manifest)
+
+
 def test_exclude_newer_is_valid_in_workspace(
     validator: Validator,
 ) -> None:
@@ -209,14 +248,27 @@ def test_exclude_newer_is_valid_in_workspace(
 [workspace]
 name = "exclude-newer-example"
 platforms = ["linux-64"]
-exclude-newer = "0d"
-channels = ["conda-forge", { channel = "bioconda", exclude-newer = "0d" }]
+exclude-newer = "2024-01-01"
+channels = [
+    "conda-forge",
+    { channel = "bioconda", exclude-newer = "2024-01-01T00:00:00Z" },
+    { channel = "pytorch", exclude-newer = "0 days" },
+    { channel = "nvidia", exclude-newer = "2w" },
+    { channel = "prefix", exclude-newer = "2 weeks" },
+]
 
 [exclude-newer]
-polars = "0d"
+polars = "2024-01-01T00:00:00Z"
+numpy = "0d"
+pandas = "1M"
+scipy = "1 month"
+matplotlib = "1 week"
 
 [pypi-exclude-newer]
-boltons = "0d"
+boltons = "2024-01-01"
+black = "0 days"
+requests = "72h"
+ruff = "72 hours"
 """)
 
     validator.validate(manifest)
