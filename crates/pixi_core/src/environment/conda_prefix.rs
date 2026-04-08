@@ -21,6 +21,7 @@ use crate::{
     workspace::{
         HasWorkspaceRef,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
+        resolve_exclude_newer_channel_cutoffs,
     },
 };
 
@@ -74,7 +75,15 @@ impl CondaPrefixUpdaterBuilder<'_> {
         let exclude_newer = self
             .group
             .exclude_newer_config_resolved()
-            .into_diagnostic()?;
+            .into_diagnostic()
+            .and_then(|exclude_newer| {
+                resolve_exclude_newer_channel_cutoffs(
+                    exclude_newer,
+                    self.group.channels().into_iter().cloned(),
+                    &self.group.channel_config(),
+                )
+                .into_diagnostic()
+            })?;
 
         Ok(CondaPrefixUpdater::new(
             channels,

@@ -57,6 +57,7 @@ use super::{
 };
 use crate::workspace::{
     Environment, HasWorkspaceRef, errors::VariantsError, grouped_environment::GroupedEnvironment,
+    resolve_exclude_newer_channel_cutoffs,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -158,10 +159,15 @@ fn verify_exclude_newer(
     locked_environment: &rattler_lock::Environment<'_>,
 ) -> Result<(), ExcludeNewerMismatch> {
     for (_platform, packages) in locked_environment.conda_packages_by_platform() {
-        let Some(exclude_newer) = environment
-            .exclude_newer_config()
-            .expect("environment channels were already validated")
-        else {
+        let Some(exclude_newer) = resolve_exclude_newer_channel_cutoffs(
+            environment
+                .exclude_newer_config_resolved()
+                .expect("environment channels were already validated"),
+            environment.channels().into_iter().cloned(),
+            &environment.channel_config(),
+        )
+        .expect("environment channels were already validated")
+        .map(rattler_solve::ExcludeNewer::from) else {
             continue;
         };
 

@@ -69,6 +69,7 @@ use crate::{
         errors::VariantsError,
         get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
+        resolve_exclude_newer_channel_cutoffs,
     },
 };
 
@@ -2266,7 +2267,16 @@ async fn spawn_solve_conda_environment_task(
     let exclude_newer = group
         .exclude_newer_config_resolved()
         .map_err(SolveCondaEnvironmentError::from)
-        .map_err(CommandDispatcherError::Failed)?;
+        .map_err(CommandDispatcherError::Failed)
+        .and_then(|exclude_newer| {
+            resolve_exclude_newer_channel_cutoffs(
+                exclude_newer,
+                channels.iter().cloned(),
+                &channel_config,
+            )
+            .map_err(SolveCondaEnvironmentError::from)
+            .map_err(CommandDispatcherError::Failed)
+        })?;
 
     // Resolve the channel URLs for the channels we need.
     let channels = channels
