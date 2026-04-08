@@ -34,8 +34,8 @@ use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
-    to_uv_normalize,
+    ConversionError, to_exclude_newer, to_extra_name, to_marker_environment, to_normalize,
+    to_uv_extra_name, to_uv_normalize,
 };
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -783,9 +783,8 @@ impl<'p> LockFileDerivedData<'p> {
                 {
                     let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
                     let index_strategy = environment.pypi_options().index_strategy.clone();
-                    let exclude_newer = environment
-                        .exclude_newer_raw()
-                        .map(|config| config.cutoff());
+                    let pypi_exclude_newer = environment
+                        .pypi_exclude_newer_config_resolved(Some(environment.best_platform()));
                     let skip_wheel_filename_check =
                         environment.pypi_options().skip_wheel_filename_check;
 
@@ -802,7 +801,7 @@ impl<'p> LockFileDerivedData<'p> {
                         no_build: &no_build,
                         no_binary: &no_binary,
                         index_strategy: index_strategy.as_ref(),
-                        exclude_newer: exclude_newer.as_ref(),
+                        exclude_newer: &pypi_exclude_newer,
                         skip_wheel_filename_check,
                     };
 
@@ -2626,9 +2625,8 @@ async fn spawn_solve_pypi_task<'p>(
         ));
     }
 
-    let exclude_newer = grouped_environment
-        .exclude_newer_raw()
-        .map(|config| config.cutoff());
+    let exclude_newer =
+        to_exclude_newer(&grouped_environment.pypi_exclude_newer_config_resolved(Some(platform)));
 
     // Get the system requirements for this environment
     let system_requirements = grouped_environment.system_requirements();

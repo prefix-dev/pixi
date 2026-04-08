@@ -7,9 +7,12 @@ use crate::GitUrlWithPrefix;
 use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
-use pixi_manifest::pypi::pypi_options::{
-    FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode,
-    PypiOptions,
+use pixi_manifest::pypi::{
+    ResolvedPypiExcludeNewer,
+    pypi_options::{
+        FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode,
+        PypiOptions,
+    },
 };
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
@@ -640,10 +643,9 @@ pub fn configure_insecure_hosts_for_tls_bypass(
     allow_insecure_hosts
 }
 
-/// Converts a date to a `uv_resolver::ExcludeNewer`
-/// since 0.8.2 uv also allows this per package,
-/// but we only support the global one for now
-pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_resolver::ExcludeNewer {
+fn to_exclude_newer_timestamp(
+    exclude_newer: chrono::DateTime<chrono::Utc>,
+) -> uv_resolver::ExcludeNewerTimestamp {
     let seconds_since_epoch = exclude_newer.timestamp();
     let nanoseconds = exclude_newer.timestamp_subsec_nanos();
     let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
@@ -653,9 +655,28 @@ pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_reso
             jiff::Timestamp::MAX
         },
     );
-    // Will convert into a global ExcludeNewer
-    // ..into is needed to convert into the uv timestamp type
-    uv_resolver::ExcludeNewer::global(timestamp.into())
+    timestamp.into()
+}
+
+/// Converts a resolved PyPI exclude-newer configuration to `uv_resolver::ExcludeNewer`.
+pub fn to_exclude_newer(exclude_newer: &ResolvedPypiExcludeNewer) -> uv_resolver::ExcludeNewer {
+    let package_cutoffs = exclude_newer
+        .package_cutoffs
+        .iter()
+        .map(|(package, cutoff)| {
+            (
+                PackageName::from_str(package.as_ref())
+                    .expect("pep508 package name should be valid uv package name"),
+                to_exclude_newer_timestamp(*cutoff),
+            )
+        })
+        .map(uv_resolver::ExcludeNewerPackageEntry::from)
+        .collect();
+
+    uv_resolver::ExcludeNewer::new(
+        exclude_newer.cutoff.map(to_exclude_newer_timestamp),
+        package_cutoffs,
+    )
 }
 
 #[cfg(test)]

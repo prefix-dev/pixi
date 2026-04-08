@@ -101,6 +101,23 @@ Then, since `numpy` is not specified as a conda dependency, Pixi will resolve th
 
 To override or change the mapping of conda packages to PyPI packages, you can use the [`conda-pypi-map`](../reference/pixi_manifest.md#conda-pypi-map-optional) field in the `pixi.toml` file.
 
+### PyPI overrides vs conda constraints
+
+PyPI's [`pypi-options.dependency-overrides`](../advanced/override.md)
+fills a similar role to conda [`constraints`](../reference/pixi_manifest.md#constraints): both can
+steer transitive dependencies without adding a new direct dependency.
+
+The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
+the requirement used for that package during PyPI resolution.
+
+That same model is used for PyPI package-specific `exclude-newer` values:
+
+- set `exclude-newer` in [`pypi-dependencies`](../reference/pixi_manifest.md#pypi-dependencies) for a direct package
+- set it in `pypi-options.dependency-overrides` for a transitive package
+
+PyPI does not have a conda-style per-channel cutoff. When you use a separate package index, pin the
+package with `index = "..."` and set `exclude-newer` on that package.
+
 ### Pinned package conflicts
 
 When trying to install conda and PyPI dependencies,

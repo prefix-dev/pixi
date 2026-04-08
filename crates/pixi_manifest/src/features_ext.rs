@@ -16,7 +16,7 @@ use crate::{
     dependencies::CondaDevDependencies,
     has_features_iter::HasFeaturesIter,
     has_manifest_ref::HasWorkspaceManifest,
-    pypi::pypi_options::PypiOptions,
+    pypi::{ResolvedPypiExcludeNewer, pypi_options::PypiOptions},
     workspace::{ChannelPriority, SolveStrategy},
 };
 
@@ -172,6 +172,55 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         }
 
         Ok(exclude_newer)
+    }
+
+    /// Returns the effective PyPI exclude-newer solver configuration with absolute cutoffs.
+    fn pypi_exclude_newer_config_resolved(
+        &self,
+        platform: Option<Platform>,
+    ) -> ResolvedPypiExcludeNewer {
+        let mut exclude_newer = self
+            .exclude_newer_raw()
+            .map(|config| ResolvedPypiExcludeNewer::from_datetime(config.cutoff()))
+            .unwrap_or_default();
+
+        for (name, specs) in self.pypi_dependencies(platform) {
+            for spec in specs {
+                let Some(package_exclude_newer) = spec.exclude_newer() else {
+                    continue;
+                };
+
+                exclude_newer = match package_exclude_newer {
+                    ExcludeNewer::Timestamp(dt) => {
+                        exclude_newer.with_package_cutoff(name.as_normalized().clone(), dt)
+                    }
+                    ExcludeNewer::Duration(duration) => exclude_newer.with_package_cutoff(
+                        name.as_normalized().clone(),
+                        ExcludeNewer::Duration(duration).cutoff(),
+                    ),
+                };
+            }
+        }
+
+        if let Some(overrides) = self.pypi_options().dependency_overrides {
+            for (name, spec) in overrides {
+                let Some(package_exclude_newer) = spec.exclude_newer() else {
+                    continue;
+                };
+
+                exclude_newer = match package_exclude_newer {
+                    ExcludeNewer::Timestamp(dt) => {
+                        exclude_newer.with_package_cutoff(name.as_normalized().clone(), dt)
+                    }
+                    ExcludeNewer::Duration(duration) => exclude_newer.with_package_cutoff(
+                        name.as_normalized().clone(),
+                        ExcludeNewer::Duration(duration).cutoff(),
+                    ),
+                };
+            }
+        }
+
+        exclude_newer
     }
 
     /// Returns the strategy for solving packages.

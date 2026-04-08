@@ -5,7 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use chrono::{DateTime, Utc};
 use conda_pypi_clobber::PypiCondaClobberRegistry;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -13,6 +12,7 @@ use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
 use pixi_manifest::{
     EnvironmentName, SystemRequirements,
+    pypi::ResolvedPypiExcludeNewer,
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
 };
 use pixi_progress::await_in_progress;
@@ -175,7 +175,7 @@ pub struct PyPIBuildConfig<'a> {
     pub no_build: &'a NoBuild,
     pub no_binary: &'a NoBinary,
     pub index_strategy: Option<&'a pixi_manifest::pypi::pypi_options::IndexStrategy>,
-    pub exclude_newer: Option<&'a DateTime<Utc>>,
+    pub exclude_newer: &'a ResolvedPypiExcludeNewer,
     pub skip_wheel_filename_check: Option<bool>,
 }
 
@@ -448,11 +448,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .try_into()
             .into_diagnostic()?;
 
-        let exclude_newer = self
-            .build_config
-            .exclude_newer
-            .map(|d| to_exclude_newer(*d))
-            .unwrap_or_default();
+        let exclude_newer = self.build_config.exclude_newer;
 
         Ok(UvInstallerConfig {
             tags: planner_config.tags,
@@ -466,7 +462,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             constraints: Constraints::default(),
             index_strategy,
             dependency_metadata: DependencyMetadata::default(),
-            exclude_newer,
+            exclude_newer: to_exclude_newer(exclude_newer),
         })
     }
 
