@@ -1635,6 +1635,22 @@ pub(crate) fn pypi_satisfies_requirement(
                             }
                             .into());
                         }
+                        // v6 lockfiles encode git deps as
+                        //   git+https://repo.git#<sha>
+                        // without any ref information — no ?tag=/?branch=/?rev=
+                        // query params and no @ref in the URL path. v7 lockfiles
+                        // always include the ref as a query param. When the
+                        // locked URL carries no ref information the original ref
+                        // was not recorded and the commit SHA is the only
+                        // authority — skip the ref comparison.
+                        let has_ref_in_query = url
+                            .query_pairs()
+                            .any(|(k, _)| matches!(&*k, "tag" | "branch" | "rev"));
+                        let has_ref_in_path = url.path().contains('@');
+                        if !has_ref_in_query && !has_ref_in_path {
+                            return Ok(());
+                        }
+
                         // If the spec does specify a revision than the revision must match
                         // convert first to the same type
                         let pixi_reference = into_pixi_reference(reference.clone());
