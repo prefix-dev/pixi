@@ -300,6 +300,42 @@ pub async fn instantiate_backend_with_compatible_api_version_respects_exclude_ne
     assert!(rendered.contains("backend-with-compatible-api-version"));
 }
 
+#[tokio::test]
+pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newer_overrides() {
+    let backend_name = PackageName::new_unchecked("backend-with-compatible-api-version");
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
+    let channel_url = Url::from_directory_path(channel_dir).unwrap().into();
+    let allowed_cutoff = "2026-12-31T00:00:00Z".parse().unwrap();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs())
+        .with_executor(Executor::Serial)
+        .finish();
+
+    dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
+            exclude_newer: Some(
+                ResolvedExcludeNewer::from_datetime("2025-01-01T00:00:00Z".parse().unwrap())
+                    .with_package_cutoff(backend_name.clone(), allowed_cutoff)
+                    .with_package_cutoff(
+                        PackageName::new_unchecked("pixi-build-api-version"),
+                        allowed_cutoff,
+                    ),
+            ),
+            ..InstantiateToolEnvironmentSpec::new(
+                backend_name,
+                PixiSpec::Version(VersionSpec::Any),
+                Vec::from([channel_url]),
+            )
+        })
+        .await
+        .expect("backend should instantiate when backend packages are explicitly overridden");
+}
+
 /// When two identical tool env instantiations are queued concurrently and the
 /// operation fails, the dispatcher sends the failure to one waiter and cancels
 /// the others. This verifies cancellation without network access.
