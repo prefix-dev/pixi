@@ -2264,19 +2264,6 @@ async fn spawn_solve_conda_environment_task(
 
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
-    let exclude_newer = group
-        .exclude_newer_config_resolved()
-        .map_err(SolveCondaEnvironmentError::from)
-        .map_err(CommandDispatcherError::Failed)
-        .and_then(|exclude_newer| {
-            resolve_exclude_newer_channel_cutoffs(
-                exclude_newer,
-                channels.iter().cloned(),
-                &channel_config,
-            )
-            .map_err(SolveCondaEnvironmentError::from)
-            .map_err(CommandDispatcherError::Failed)
-        })?;
 
     // Resolve the channel URLs for the channels we need.
     let channels = channels
@@ -2285,6 +2272,18 @@ async fn spawn_solve_conda_environment_task(
         .collect::<Result<Vec<_>, _>>()
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
+
+    let exclude_newer = resolve_exclude_newer_channel_cutoffs(
+        group
+            .exclude_newer_config_resolved()
+            .map_err(SolveCondaEnvironmentError::from)
+            .map_err(CommandDispatcherError::Failed)?,
+        group
+            .channels()
+            .into_iter()
+            .map(ToString::to_string)
+            .zip(channels.iter().map(ToString::to_string)),
+    );
 
     // Determine the build variants
     let VariantConfig {

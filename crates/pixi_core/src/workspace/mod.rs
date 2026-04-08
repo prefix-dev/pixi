@@ -70,18 +70,14 @@ static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
 pub(crate) fn resolve_exclude_newer_channel_cutoffs(
     exclude_newer: Option<ResolvedExcludeNewer>,
-    channels: impl IntoIterator<Item = rattler_conda_types::NamedChannelOrUrl>,
-    channel_config: &ChannelConfig,
-) -> Result<Option<ResolvedExcludeNewer>, rattler_conda_types::ParseChannelError> {
+    channels: impl IntoIterator<Item = (String, String)>,
+) -> Option<ResolvedExcludeNewer> {
     let Some(mut exclude_newer) = exclude_newer else {
-        return Ok(None);
+        return None;
     };
 
     let channel_cutoffs = exclude_newer.channel_cutoffs.clone();
-    for channel in channels {
-        let channel_name = channel.to_string();
-        let channel_url = channel.clone().into_base_url(channel_config)?.to_string();
-
+    for (channel_name, channel_url) in channels {
         if let Some(cutoff) = channel_cutoffs
             .get(&channel_name)
             .or_else(|| channel_cutoffs.get(&channel_url))
@@ -92,7 +88,7 @@ pub(crate) fn resolve_exclude_newer_channel_cutoffs(
         }
     }
 
-    Ok(Some(exclude_newer))
+    Some(exclude_newer)
 }
 
 /// The dependency types we support

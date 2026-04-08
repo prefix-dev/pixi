@@ -72,18 +72,16 @@ impl CondaPrefixUpdaterBuilder<'_> {
         let name = self.group.name();
         let prefix = self.group.prefix();
         let variant_config = self.group.workspace().variants(self.platform)?;
-        let exclude_newer = self
-            .group
-            .exclude_newer_config_resolved()
-            .into_diagnostic()
-            .and_then(|exclude_newer| {
-                resolve_exclude_newer_channel_cutoffs(
-                    exclude_newer,
-                    self.group.channels().into_iter().cloned(),
-                    &self.group.channel_config(),
-                )
-                .into_diagnostic()
-            })?;
+        let exclude_newer = resolve_exclude_newer_channel_cutoffs(
+            self.group
+                .exclude_newer_config_resolved()
+                .into_diagnostic()?,
+            self.group
+                .channels()
+                .into_iter()
+                .map(ToString::to_string)
+                .zip(channels.iter().map(ToString::to_string)),
+        );
 
         Ok(CondaPrefixUpdater::new(
             channels,
