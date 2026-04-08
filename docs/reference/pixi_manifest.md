@@ -292,7 +292,7 @@ requires-pixi = ">=0.40,<1.0"
 
 ### `exclude-newer` (optional)
 
-When specified this will exclude any package from consideration that is newer than the specified timestamp or duration.
+When specified on the workspace this will exclude any package from consideration that is newer than the specified timestamp or duration.
 This is useful to reproduce installations regardless of new package releases, or to reduce the risk of
 installing recently published (and potentially compromised) packages.
 
@@ -305,6 +305,36 @@ The value may be specified in the following formats:
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
 Both PyPi and conda packages are considered.
+
+For conda packages, the workspace-level cutoff can be overridden per package:
+
+- In [`[dependencies]`](#dependencies) for direct dependencies
+- In [`[constraints]`](#constraints) for transitive dependencies
+
+These conda package-specific overrides can also be paired with `channel = "..."` on the package
+entry. This is the way to express channel-aware `exclude-newer` behavior in the manifest today.
+
+For PyPI packages, the workspace-level cutoff can be overridden per package:
+
+- In [`[pypi-dependencies]`](#pypi-dependencies) for direct dependencies
+- In [`[pypi-options.dependency-overrides]`](../advanced/override.md) for transitive dependencies
+
+This is especially useful when a package is pinned to a separate `index` and needs a different cutoff
+than the rest of the workspace.
+
+```toml
+[workspace]
+exclude-newer = "2025-01-01"
+
+[dependencies]
+pytorch-cpu = { version = "*", channel = "pytorch", exclude-newer = "2025-02-01" }
+
+[constraints]
+openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+
+[pypi-dependencies]
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "2025-02-01" }
+```
 
 !!! note
     Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
@@ -747,6 +777,22 @@ openssl = ">=3.0"
 
 Constraints use the same [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html)
 syntax as `[dependencies]`.
+They also support the same inline MatchSpec fields, including `channel` and `exclude-newer`.
+
+This makes constraints useful not just for version bounds, but also for applying a different
+`exclude-newer` cutoff to a transitive conda package without making it a direct dependency:
+
+```toml
+[workspace]
+exclude-newer = "2025-01-01"
+
+[dependencies]
+python = ">=3.11"
+requests = ">=2.28"
+
+[constraints]
+openssl = { channel = "conda-forge", exclude-newer = "2024-12-01" }
+```
 
 !!! note
     Constraints do **not** cause a package to be installed. They only restrict which version is
@@ -908,6 +954,25 @@ torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
 
 This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions.
 Learn more about installing PyTorch [here](../python/pytorch.md).
+
+##### `exclude-newer`
+
+Overrides the workspace-level [`exclude-newer`](#exclude-newer-optional) cutoff for a single PyPI
+package.
+
+This only changes candidate selection for that package. It does not add the package to the
+environment by itself.
+
+```toml
+[workspace]
+exclude-newer = "2025-01-01"
+
+[pypi-dependencies]
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu124", exclude-newer = "0d" }
+```
+
+This is useful when most of the workspace should stay pinned to an older cutoff, but one package
+needs a newer release stream from a separate index.
 
 ##### `git`
 

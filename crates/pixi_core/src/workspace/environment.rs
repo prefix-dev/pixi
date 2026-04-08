@@ -410,6 +410,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
+    use rattler_conda_types::PackageName;
 
     use super::*;
 
@@ -800,6 +801,183 @@ mod tests {
                 .collect_vec(),
             vec!["barry", "conda-forge", "bar"]
         );
+    }
+
+    #[test]
+    fn test_channel_specific_exclude_newer_across_multiple_features() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+
+        [feature.foo]
+        channels = [
+            { channel = "bioconda", exclude-newer = "2016-12-02T02:07:43Z" },
+            { channel = "pytorch", exclude-newer = "2017-12-02T02:07:43Z" },
+        ]
+
+        [feature.bar]
+        channels = [
+            { channel = "nvidia", exclude-newer = "2018-12-02T02:07:43Z" },
+            { channel = "dglteam", exclude-newer = "2019-12-02T02:07:43Z" },
+        ]
+
+        [environments]
+        combined = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let env = workspace.environment("combined").unwrap();
+        let config = env.exclude_newer_config(None).unwrap().unwrap();
+        let package = PackageName::new_unchecked("polars");
+
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("bioconda")),
+            chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("pytorch")),
+            chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("nvidia")),
+            chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("dglteam")),
+            chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("conda-forge")),
+            chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+    }
+
+    #[test]
+    fn test_channel_specific_exclude_newer_prefers_first_feature_channel_definition() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+
+        [feature.foo]
+        channels = [
+            { channel = "shared", exclude-newer = "2016-12-02T02:07:43Z" },
+            { channel = "bioconda", exclude-newer = "2017-12-02T02:07:43Z" },
+        ]
+
+        [feature.bar]
+        channels = [
+            { channel = "shared", exclude-newer = "2018-12-02T02:07:43Z" },
+            { channel = "nvidia", exclude-newer = "2019-12-02T02:07:43Z" },
+        ]
+
+        [environments]
+        combined = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let env = workspace.environment("combined").unwrap();
+        let config = env.exclude_newer_config(None).unwrap().unwrap();
+        let package = PackageName::new_unchecked("polars");
+
+        assert_eq!(
+            env.channels()
+                .into_iter()
+                .map(|c| c.to_string())
+                .collect_vec(),
+            vec!["shared", "bioconda", "nvidia", "conda-forge"]
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("shared")),
+            chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("bioconda")),
+            chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("nvidia")),
+            chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+    }
+
+    #[test]
+    fn test_exclude_newer_package_channel_workspace_precedence() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "test"
+        channels = [{ channel = "my-private-forge", exclude-newer = "2016-12-02T02:07:43Z" }, "conda-forge"]
+        platforms = ["linux-64"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+
+        [dependencies]
+        polars = { version = "*", exclude-newer = "2017-12-02T02:07:43Z" }
+        numpy = "*"
+
+        [constraints]
+        openssl = { exclude-newer = "2018-12-02T02:07:43Z" }
+        "#,
+        )
+        .unwrap();
+
+        let env = workspace.environment("default").unwrap();
+        let config = env.exclude_newer_config(None).unwrap().unwrap();
+        let polars = PackageName::new_unchecked("polars");
+        let numpy = PackageName::new_unchecked("numpy");
+        let openssl = PackageName::new_unchecked("openssl");
+        let workspace_cutoff = chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let channel_cutoff = chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let dependency_cutoff = chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let constraint_cutoff = chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let polars_cutoff = config.cutoff_for_package(&polars, Some("my-private-forge"));
+        assert_eq!(polars_cutoff, dependency_cutoff);
+
+        let openssl_cutoff = config.cutoff_for_package(&openssl, Some("my-private-forge"));
+        assert_eq!(openssl_cutoff, constraint_cutoff);
+
+        let private_numpy_cutoff = config.cutoff_for_package(&numpy, Some("my-private-forge"));
+        assert_eq!(private_numpy_cutoff, channel_cutoff);
+
+        let forge_numpy_cutoff = config.cutoff_for_package(&numpy, Some("conda-forge"));
+        assert_eq!(forge_numpy_cutoff, workspace_cutoff);
     }
 
     #[test]
