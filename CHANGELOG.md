@@ -5,6 +5,102 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.67.0] - 2026-04-08
+#### ✨ Highlights
+
+This release adds the ability to have relative `exclude-newer` configuration.
+Allowing users to specify an acceptable settle time before the package is used in their environments.
+This example extensively uses the new `exclude-newer` configuration options:
+```toml
+[workspace]
+channels = [
+    # Channel specific exclude-newer
+    { channel = "conda-forge", exclude-newer = "3y"},
+    { channel = "bioconda", exclude-newer = "1m"},
+]
+platforms = ["osx-arm64", "linux-64", "linux-aarch64", "osx-64", "win-64"]
+
+# Workspace level exclude newer
+exclude-newer = "1y"
+
+# Exact timestamp exclude-newer still works as well:
+# exclude-newer = "2025-01-01"
+
+[exclude-newer]
+# Package specific exclude-newer
+bzip2 = "1y"
+
+[dependencies]
+python = "*"
+snakemake = "*"
+
+[pypi-exclude-newer]
+# PyPI package specific exclude-newer
+pandas = "1week"
+
+[pypi-dependencies]
+pandas = "*"
+```
+
+#### Added
+
+- Report installation progress to terminal by @hunger in [#5634](https://github.com/prefix-dev/pixi/pull/5634)
+- Expose paths to activation scripts as a field in pixi shell-hook --json by @esteve in [#5726](https://github.com/prefix-dev/pixi/pull/5726)
+- Add `pixi publish` command for building and uploading packages by @wolfv in [#5678](https://github.com/prefix-dev/pixi/pull/5678)
+- Enable fancy error reporting for trampolines by @Hofer-Julian in [#5780](https://github.com/prefix-dev/pixi/pull/5780)
+- Rewrite `pixi-build-ros` in Rust by @Hofer-Julian in [#5799](https://github.com/prefix-dev/pixi/pull/5799)
+- Relative exclude-newer configuration by @pavelzw in [#5786](https://github.com/prefix-dev/pixi/pull/5786)
+- Add channel-specific exclude-newer by @pavelzw in [#5840](https://github.com/prefix-dev/pixi/pull/5840)
+- Add package-specific exclude-newer for PyPi by @pavelzw in [#5839](https://github.com/prefix-dev/pixi/pull/5839)
+- Use global `[exclude-newer]` table instead by @pavelzw in [#5843](https://github.com/prefix-dev/pixi/pull/5843)
+
+#### Documentation
+
+- Clarify how activation works in practice by @stinos in [#5598](https://github.com/prefix-dev/pixi/pull/5598)
+- Describe the conda ecosystem in more detail by @hunger in [#5721](https://github.com/prefix-dev/pixi/pull/5721)
+- Fixed override example by @vallsv in [#5739](https://github.com/prefix-dev/pixi/pull/5739)
+- Fix rendering rust example `index.md` by @kikocorreoso in [#5753](https://github.com/prefix-dev/pixi/pull/5753)
+- Remove pixi-build-backends channel from doc examples by @Hofer-Julian in [#5735](https://github.com/prefix-dev/pixi/pull/5735)
+- Add switching from uv section by @pavelzw in [#5766](https://github.com/prefix-dev/pixi/pull/5766)
+- Document custom build-variant keys as environment variables by @tdejager in [#5796](https://github.com/prefix-dev/pixi/pull/5796)
+- Fix typo by @pavelzw in [#5802](https://github.com/prefix-dev/pixi/pull/5802)
+- Update rattler-index s3 to use --addressing-style by @ChristianRothQC in [#5815](https://github.com/prefix-dev/pixi/pull/5815)
+- Update pixi-docker versions by @Hofer-Julian in [#5826](https://github.com/prefix-dev/pixi/pull/5826)
+- Add named workspaces notes for conda users by @soapy1 in [#5720](https://github.com/prefix-dev/pixi/pull/5720)
+- Add supply-chain security section by @pavelzw in [#5812](https://github.com/prefix-dev/pixi/pull/5812)
+- Mention satisfiability checks in exclude-newer by @pavelzw in [#5851](https://github.com/prefix-dev/pixi/pull/5851)
+- Getting_started.md grammar by @YosypC in [#5800](https://github.com/prefix-dev/pixi/pull/5800)
+
+#### Fixed
+
+- Recompute all sha hashes by @wolfv in [#5715](https://github.com/prefix-dev/pixi/pull/5715)
+- Build pixi-build-backends in container with glibc 2.17 by @Hofer-Julian in [#5736](https://github.com/prefix-dev/pixi/pull/5736)
+- Update Rattler-Build in backends-release env by @Hofer-Julian in [#5755](https://github.com/prefix-dev/pixi/pull/5755)
+- Verify all manifest schema parse with common python tools by @bollwyvl in [#5732](https://github.com/prefix-dev/pixi/pull/5732)
+- Remove spurious emulation warning when just locking by @kilian-hu in [#5723](https://github.com/prefix-dev/pixi/pull/5723)
+- License-files for out of source python packages by @ruben-arts in [#5776](https://github.com/prefix-dev/pixi/pull/5776)
+- Support symlinking trampolines by @benmoss in [#5773](https://github.com/prefix-dev/pixi/pull/5773)
+- Pop-out styling by @tdejager in [#5784](https://github.com/prefix-dev/pixi/pull/5784)
+- Allow unknown timestamps in exclude-newer by @pavelzw in [#5848](https://github.com/prefix-dev/pixi/pull/5848)
+- Channel parsing in exclude-newer by @pavelzw in [#5850](https://github.com/prefix-dev/pixi/pull/5850)
+
+
+#### Refactor
+
+- Rename pixi_build_* crates to pixi-build-* by @Hofer-Julian in [#5747](https://github.com/prefix-dev/pixi/pull/5747)
+- Replace stage0 recipe in pixi-build-backends with rattler-build implementation by @Hofer-Julian in [#5769](https://github.com/prefix-dev/pixi/pull/5769)
+- Don't use debug_dir at all in backend configs by @Hofer-Julian in [#5806](https://github.com/prefix-dev/pixi/pull/5806)
+- Remove Python based pixi-build-ros by @Hofer-Julian in [#5829](https://github.com/prefix-dev/pixi/pull/5829)
+- Remove py-pixi-build-backend by @Hofer-Julian in [#5832](https://github.com/prefix-dev/pixi/pull/5832)
+
+
+#### New Contributors
+* @YosypC made their first contribution in [#5800](https://github.com/prefix-dev/pixi/pull/5800)
+* @kikocorreoso made their first contribution in [#5753](https://github.com/prefix-dev/pixi/pull/5753)
+* @vallsv made their first contribution in [#5739](https://github.com/prefix-dev/pixi/pull/5739)
+* @esteve made their first contribution in [#5726](https://github.com/prefix-dev/pixi/pull/5726)
+* @stinos made their first contribution in [#5598](https://github.com/prefix-dev/pixi/pull/5598)
+
 ### [0.66.0] - 2026-03-16
 #### ✨ Highlights
 
