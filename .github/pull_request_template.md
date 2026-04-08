@@ -19,6 +19,10 @@ Fixes #{issue}
 <!--- If you used AI to generate code, please specify the tool used and the prompt below. --->
 Tools: {e.g., Claude, Codex, GitHub Copilot, ChatGPT, etc.}
 
+```plaintext
+Add your prompt here, this helps us understand your results.
+```
+
 ### Checklist:
 <!--- Remove the non relevant items. --->
 - [ ] I have performed a self-review of my own code
