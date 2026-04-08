@@ -984,10 +984,12 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
+    use pixi_config::{Config, DetachedEnvironments};
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::{Platform, Version};
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use std::env;
+    use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
 
@@ -1413,6 +1415,86 @@ mod tests {
             workspace.pixi_dir(),
             expected_pixi_dir,
             ".pixi directory should be in the symlink's parent directory"
+        );
+    }
+
+    const WORKSPACE_MANIFEST_STR: &str = r#"[workspace]
+name = "myproj"
+channels = []
+platforms = []
+"#;
+
+    #[test]
+    fn test_dirs_without_detached() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap();
+
+        let dot_pixi = dunce::canonicalize(temp_dir.path()).unwrap().join(".pixi");
+        assert_eq!(workspace.default_pixi_dir(), dot_pixi);
+        assert_eq!(workspace.pixi_dir(), dot_pixi);
+        assert_eq!(
+            workspace.default_environments_dir(),
+            dot_pixi.join(consts::ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_solve_group_environments_dir(),
+            dot_pixi.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_build_dir(),
+            dot_pixi.join(consts::WORKSPACE_CACHE_DIR)
+        );
+        assert_eq!(workspace.build_dir(), workspace.default_build_dir());
+    }
+
+    #[test]
+    fn test_dirs_with_detached() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let detached_dir = tempfile::tempdir().unwrap();
+
+        let workspace = Workspace::from_str(
+            &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            detached_environments: Some(DetachedEnvironments::Path(
+                detached_dir.path().to_path_buf(),
+            )),
+            ..Default::default()
+        });
+
+        let dot_pixi = dunce::canonicalize(workspace_dir.path()).unwrap().join(".pixi");
+        let detached_subdir = detached_dir.path().join(format!(
+            "{}-{}",
+            workspace.display_name(),
+            xxh3_64(workspace.root().to_string_lossy().as_bytes())
+        ));
+
+        // default_* methods always point at local .pixi
+        assert_eq!(workspace.default_pixi_dir(), dot_pixi);
+        assert_eq!(
+            workspace.default_environments_dir(),
+            dot_pixi.join(consts::ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_solve_group_environments_dir(),
+            dot_pixi.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_build_dir(),
+            dot_pixi.join(consts::WORKSPACE_CACHE_DIR)
+        );
+
+        // effective paths point into the detached directory
+        assert_eq!(workspace.pixi_dir(), detached_subdir);
+        assert_eq!(
+            workspace.build_dir(),
+            detached_subdir.join(consts::WORKSPACE_CACHE_DIR)
         );
     }
 }
