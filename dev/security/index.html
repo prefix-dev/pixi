@@ -10,31 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/integration/editor/jupyterlab/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/security/">
       
       
-        <link rel="prev" href="../r_studio/">
+        <link rel="prev" href="../integration/third_party/starship/">
       
       
-        <link rel="next" href="../../ci/github_actions/">
+        <link rel="next" href="../advanced/channel_logic/">
       
       
         
       
       
-      <link rel="icon" href="../../../assets/pixi.png">
+      <link rel="icon" href="../assets/pixi.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
     
     
       
-        <title>JupyterLab - Pixi</title>
+        <title>Security - Pixi</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -53,9 +53,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#basic-usage" class="md-skip">
+        <a href="#supply-chain-security" class="md-skip">
           Skip to content
         </a>
       
@@ -100,9 +100,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="Pixi" class="md-header__button md-logo" aria-label="Pixi" data-md-component="logo">
+    <a href=".." title="Pixi" class="md-header__button md-logo" aria-label="Pixi" data-md-component="logo">
       
-  <img src="../../../assets/pixi-logo.svg" alt="logo">
+  <img src="../assets/pixi-logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -119,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              JupyterLab
+              Security
             
           </span>
         </div>
@@ -245,9 +245,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="Pixi" class="md-nav__button md-logo" aria-label="Pixi" data-md-component="logo">
+    <a href=".." title="Pixi" class="md-nav__button md-logo" aria-label="Pixi" data-md-component="logo">
       
-  <img src="../../../assets/pixi-logo.svg" alt="logo">
+  <img src="../assets/pixi-logo.svg" alt="logo">
 
     </a>
     Pixi
@@ -274,7 +274,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../.." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -358,7 +358,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../installation/" class="md-nav__link">
+      <a href="../installation/" class="md-nav__link">
         
   
   
@@ -386,7 +386,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../first_workspace/" class="md-nav__link">
+      <a href="../first_workspace/" class="md-nav__link">
         
   
   
@@ -414,7 +414,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../getting_started/" class="md-nav__link">
+      <a href="../getting_started/" class="md-nav__link">
         
   
   
@@ -442,7 +442,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../conda_ecosystem/" class="md-nav__link">
+      <a href="../conda_ecosystem/" class="md-nav__link">
         
   
   
@@ -595,7 +595,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../python/tutorial/" class="md-nav__link">
+      <a href="../python/tutorial/" class="md-nav__link">
         
   
   
@@ -623,7 +623,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../python/pyproject_toml/" class="md-nav__link">
+      <a href="../python/pyproject_toml/" class="md-nav__link">
         
   
   
@@ -651,7 +651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../python/pytorch/" class="md-nav__link">
+      <a href="../python/pytorch/" class="md-nav__link">
         
   
   
@@ -687,7 +687,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../tutorials/ros2/" class="md-nav__link">
+      <a href="../tutorials/ros2/" class="md-nav__link">
         
   
   
@@ -715,7 +715,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../tutorials/rust/" class="md-nav__link">
+      <a href="../tutorials/rust/" class="md-nav__link">
         
   
   
@@ -798,7 +798,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../switching_from/uv/" class="md-nav__link">
+      <a href="../switching_from/uv/" class="md-nav__link">
         
   
   
@@ -826,7 +826,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../switching_from/poetry/" class="md-nav__link">
+      <a href="../switching_from/poetry/" class="md-nav__link">
         
   
   
@@ -854,7 +854,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../switching_from/conda/" class="md-nav__link">
+      <a href="../switching_from/conda/" class="md-nav__link">
         
   
   
@@ -890,7 +890,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../tutorials/multi_environment/" class="md-nav__link">
+      <a href="../tutorials/multi_environment/" class="md-nav__link">
         
   
   
@@ -918,7 +918,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../global_tools/introduction/" class="md-nav__link">
+      <a href="../global_tools/introduction/" class="md-nav__link">
         
   
   
@@ -946,7 +946,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../tutorials/import/" class="md-nav__link">
+      <a href="../tutorials/import/" class="md-nav__link">
         
   
   
@@ -1048,7 +1048,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../workspace/environment/" class="md-nav__link">
+      <a href="../workspace/environment/" class="md-nav__link">
         
   
   
@@ -1076,7 +1076,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../workspace/advanced_tasks/" class="md-nav__link">
+      <a href="../workspace/advanced_tasks/" class="md-nav__link">
         
   
   
@@ -1104,7 +1104,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../workspace/multi_platform_configuration/" class="md-nav__link">
+      <a href="../workspace/multi_platform_configuration/" class="md-nav__link">
         
   
   
@@ -1132,7 +1132,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../workspace/multi_environment/" class="md-nav__link">
+      <a href="../workspace/multi_environment/" class="md-nav__link">
         
   
   
@@ -1160,7 +1160,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../workspace/lockfile/" class="md-nav__link">
+      <a href="../workspace/lockfile/" class="md-nav__link">
         
   
   
@@ -1188,7 +1188,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../workspace/system_requirements/" class="md-nav__link">
+      <a href="../workspace/system_requirements/" class="md-nav__link">
         
   
   
@@ -1216,7 +1216,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../concepts/package_specifications/" class="md-nav__link">
+      <a href="../concepts/package_specifications/" class="md-nav__link">
         
   
   
@@ -1244,7 +1244,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../concepts/conda_pypi/" class="md-nav__link">
+      <a href="../concepts/conda_pypi/" class="md-nav__link">
         
   
   
@@ -1325,7 +1325,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../global_tools/manifest/" class="md-nav__link">
+      <a href="../global_tools/manifest/" class="md-nav__link">
         
   
   
@@ -1353,7 +1353,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../global_tools/trampolines/" class="md-nav__link">
+      <a href="../global_tools/trampolines/" class="md-nav__link">
         
   
   
@@ -1459,7 +1459,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/getting_started/" class="md-nav__link">
+      <a href="../build/getting_started/" class="md-nav__link">
         
   
   
@@ -1548,7 +1548,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/python/" class="md-nav__link">
+      <a href="../build/python/" class="md-nav__link">
         
   
   
@@ -1576,7 +1576,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/cpp/" class="md-nav__link">
+      <a href="../build/cpp/" class="md-nav__link">
         
   
   
@@ -1604,7 +1604,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/ros/" class="md-nav__link">
+      <a href="../build/ros/" class="md-nav__link">
         
   
   
@@ -1632,7 +1632,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/workspace/" class="md-nav__link">
+      <a href="../build/workspace/" class="md-nav__link">
         
   
   
@@ -1660,7 +1660,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/variants/" class="md-nav__link">
+      <a href="../build/variants/" class="md-nav__link">
         
   
   
@@ -1688,7 +1688,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/advanced_cpp/" class="md-nav__link">
+      <a href="../build/advanced_cpp/" class="md-nav__link">
         
   
   
@@ -1724,7 +1724,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/dependency_types/" class="md-nav__link">
+      <a href="../build/dependency_types/" class="md-nav__link">
         
   
   
@@ -1817,7 +1817,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/backends/" class="md-nav__link">
+      <a href="../build/backends/" class="md-nav__link">
         
   
   
@@ -1845,7 +1845,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/backends/pixi-build-cmake/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-cmake/" class="md-nav__link">
         
   
   
@@ -1873,7 +1873,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/backends/pixi-build-python/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-python/" class="md-nav__link">
         
   
   
@@ -1901,7 +1901,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/backends/pixi-build-rattler-build/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-rattler-build/" class="md-nav__link">
         
   
   
@@ -1929,7 +1929,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/backends/pixi-build-ros/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-ros/" class="md-nav__link">
         
   
   
@@ -1957,7 +1957,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/backends/pixi-build-r/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-r/" class="md-nav__link">
         
   
   
@@ -1985,7 +1985,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/backends/pixi-build-rust/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-rust/" class="md-nav__link">
         
   
   
@@ -2013,7 +2013,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/backends/pixi-build-mojo/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-mojo/" class="md-nav__link">
         
   
   
@@ -2100,7 +2100,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/key_concepts/compilers/" class="md-nav__link">
+      <a href="../build/key_concepts/compilers/" class="md-nav__link">
         
   
   
@@ -2136,7 +2136,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/package_source/" class="md-nav__link">
+      <a href="../build/package_source/" class="md-nav__link">
         
   
   
@@ -2164,7 +2164,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../build/dev/" class="md-nav__link">
+      <a href="../build/dev/" class="md-nav__link">
         
   
   
@@ -2260,7 +2260,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../deployment/prefix/" class="md-nav__link">
+      <a href="../deployment/prefix/" class="md-nav__link">
         
   
   
@@ -2288,7 +2288,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../deployment/pixi_pack/" class="md-nav__link">
+      <a href="../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -2316,7 +2316,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../deployment/authentication/" class="md-nav__link">
+      <a href="../deployment/authentication/" class="md-nav__link">
         
   
   
@@ -2344,7 +2344,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../deployment/container/" class="md-nav__link">
+      <a href="../deployment/container/" class="md-nav__link">
         
   
   
@@ -2372,7 +2372,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../deployment/s3/" class="md-nav__link">
+      <a href="../deployment/s3/" class="md-nav__link">
         
   
   
@@ -2400,7 +2400,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../deployment/artifactory/" class="md-nav__link">
+      <a href="../deployment/artifactory/" class="md-nav__link">
         
   
   
@@ -2432,10 +2432,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -2451,11 +2449,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
           <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
@@ -2476,7 +2474,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2491,10 +2489,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -2512,11 +2508,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7_1" >
         
           
           <label class="md-nav__link" for="__nav_7_1" id="__nav_7_1_label" tabindex="0">
@@ -2537,7 +2533,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_1_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_7_1">
             <span class="md-nav__icon md-icon"></span>
             
@@ -2555,7 +2551,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../vscode/" class="md-nav__link">
+      <a href="../integration/editor/vscode/" class="md-nav__link">
         
   
   
@@ -2583,7 +2579,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../jetbrains/" class="md-nav__link">
+      <a href="../integration/editor/jetbrains/" class="md-nav__link">
         
   
   
@@ -2611,7 +2607,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../zed/" class="md-nav__link">
+      <a href="../integration/editor/zed/" class="md-nav__link">
         
   
   
@@ -2639,7 +2635,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../r_studio/" class="md-nav__link">
+      <a href="../integration/editor/r_studio/" class="md-nav__link">
         
   
   
@@ -2664,35 +2660,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    JupyterLab
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../integration/editor/jupyterlab/" class="md-nav__link">
         
   
   
@@ -2708,80 +2679,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Basic usage
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Basic usage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-kernels-are-available" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What kernels are available?
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#advanced-usage" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Advanced usage
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Advanced usage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#configuring-jupyterlab" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configuring JupyterLab
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2855,7 +2752,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ci/github_actions/" class="md-nav__link">
+      <a href="../integration/ci/github_actions/" class="md-nav__link">
         
   
   
@@ -2883,7 +2780,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ci/updates_github_actions/" class="md-nav__link">
+      <a href="../integration/ci/updates_github_actions/" class="md-nav__link">
         
   
   
@@ -2984,7 +2881,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../extensions/introduction/" class="md-nav__link">
+      <a href="../integration/extensions/introduction/" class="md-nav__link">
         
   
   
@@ -3012,7 +2909,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../extensions/pixi_browse/" class="md-nav__link">
+      <a href="../integration/extensions/pixi_browse/" class="md-nav__link">
         
   
   
@@ -3040,7 +2937,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../extensions/pixi_diff/" class="md-nav__link">
+      <a href="../integration/extensions/pixi_diff/" class="md-nav__link">
         
   
   
@@ -3068,7 +2965,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ci/updates_github_actions/" class="md-nav__link">
+      <a href="../integration/ci/updates_github_actions/" class="md-nav__link">
         
   
   
@@ -3096,7 +2993,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../extensions/pixi_inject/" class="md-nav__link">
+      <a href="../integration/extensions/pixi_inject/" class="md-nav__link">
         
   
   
@@ -3124,7 +3021,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../extensions/pixi_install_to_prefix/" class="md-nav__link">
+      <a href="../integration/extensions/pixi_install_to_prefix/" class="md-nav__link">
         
   
   
@@ -3152,7 +3049,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../deployment/pixi_pack/" class="md-nav__link">
+      <a href="../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -3180,7 +3077,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../extensions/pixi_skills/" class="md-nav__link">
+      <a href="../integration/extensions/pixi_skills/" class="md-nav__link">
         
   
   
@@ -3271,7 +3168,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../third_party/conda_deny/" class="md-nav__link">
+      <a href="../integration/third_party/conda_deny/" class="md-nav__link">
         
   
   
@@ -3299,7 +3196,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../third_party/direnv/" class="md-nav__link">
+      <a href="../integration/third_party/direnv/" class="md-nav__link">
         
   
   
@@ -3327,7 +3224,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../third_party/starship/" class="md-nav__link">
+      <a href="../integration/third_party/starship/" class="md-nav__link">
         
   
   
@@ -3367,8 +3264,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -3388,11 +3287,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
@@ -3413,7 +3312,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3428,10 +3327,37 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../security/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -3447,6 +3373,103 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-make-dependency-resolution-reproducible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Make Dependency Resolution Reproducible
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-delay-fresh-uploads-with-exclude-newer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Delay Fresh Uploads With exclude-newer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-respond-to-advisories-with-constraints-and-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Respond To Advisories With Constraints And Overrides
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-treat-package-hooks-as-code-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Treat Package Hooks As Code Execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-scan-the-installed-environment-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Scan The Installed Environment Directly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-add-attestations-when-publishing-your-own-artifacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Add Attestations When Publishing Your Own Artifacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-gaps-and-practical-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Gaps And Practical Recommendation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -3459,7 +3482,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../advanced/channel_logic/" class="md-nav__link">
+      <a href="../advanced/channel_logic/" class="md-nav__link">
         
   
   
@@ -3487,7 +3510,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../advanced/explain_info_command/" class="md-nav__link">
         
   
   
@@ -3515,7 +3538,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../advanced/override/" class="md-nav__link">
+      <a href="../advanced/override/" class="md-nav__link">
         
   
   
@@ -3543,7 +3566,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../advanced/shebang/" class="md-nav__link">
+      <a href="../advanced/shebang/" class="md-nav__link">
         
   
   
@@ -3571,7 +3594,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../advanced/pixi_shell/" class="md-nav__link">
+      <a href="../advanced/pixi_shell/" class="md-nav__link">
         
   
   
@@ -3663,7 +3686,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/pixi_manifest/" class="md-nav__link">
+      <a href="../reference/pixi_manifest/" class="md-nav__link">
         
   
   
@@ -3691,7 +3714,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/pixi_configuration/" class="md-nav__link">
+      <a href="../reference/pixi_configuration/" class="md-nav__link">
         
   
   
@@ -3719,7 +3742,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/cli/pixi/" class="md-nav__link">
+      <a href="../reference/cli/pixi/" class="md-nav__link">
         
   
   
@@ -3747,7 +3770,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../reference/environment_variables/" class="md-nav__link">
+      <a href="../reference/environment_variables/" class="md-nav__link">
         
   
   
@@ -3841,7 +3864,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../CHANGELOG/" class="md-nav__link">
+      <a href="../CHANGELOG/" class="md-nav__link">
         
   
   
@@ -3869,7 +3892,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../misc/vision/" class="md-nav__link">
+      <a href="../misc/vision/" class="md-nav__link">
         
   
   
@@ -3897,7 +3920,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../misc/packaging/" class="md-nav__link">
+      <a href="../misc/packaging/" class="md-nav__link">
         
   
   
@@ -3925,7 +3948,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../misc/Community/" class="md-nav__link">
+      <a href="../misc/Community/" class="md-nav__link">
         
   
   
@@ -3953,7 +3976,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../misc/FAQ/" class="md-nav__link">
+      <a href="../misc/FAQ/" class="md-nav__link">
         
   
   
@@ -3998,6 +4021,8 @@
   
   
   
+    
+  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -4006,58 +4031,79 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#basic-usage" class="md-nav__link">
+  <a href="#1-make-dependency-resolution-reproducible" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Basic usage
+        1. Make Dependency Resolution Reproducible
       
     </span>
   </a>
-  
-    <nav class="md-nav" aria-label="Basic usage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#what-kernels-are-available" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        What kernels are available?
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#advanced-usage" class="md-nav__link">
+  <a href="#2-delay-fresh-uploads-with-exclude-newer" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Advanced usage
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Advanced usage">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#configuring-jupyterlab" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Configuring JupyterLab
+        2. Delay Fresh Uploads With exclude-newer
       
     </span>
   </a>
   
 </li>
-        
-      </ul>
-    </nav>
+      
+        <li class="md-nav__item">
+  <a href="#3-respond-to-advisories-with-constraints-and-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Respond To Advisories With Constraints And Overrides
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-treat-package-hooks-as-code-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Treat Package Hooks As Code Execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-scan-the-installed-environment-directly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Scan The Installed Environment Directly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-add-attestations-when-publishing-your-own-artifacts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Add Attestations When Publishing Your Own Artifacts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-gaps-and-practical-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current Gaps And Practical Recommendation
+      
+    </span>
+  </a>
   
 </li>
       
@@ -4078,7 +4124,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/integration/editor/jupyterlab.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/security.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -4086,55 +4132,157 @@
   
 
 
-  <h1>JupyterLab</h1>
-
-<h2 id="basic-usage">Basic usage<a class="headerlink" href="#basic-usage" title="Permanent link">#</a></h2>
-<p>Using JupyterLab with Pixi is very simple.
-You can just create a new Pixi workspace and add the <code>jupyterlab</code> package to it.
-The full example is provided under the following <a href="https://github.com/prefix-dev/pixi/tree/main/examples/jupyterlab">Github link</a>.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>jupyterlab
-</span></code></pre></div>
-<p>This will create a new Pixi workspace and add the <code>jupyterlab</code> package to it. You can then start JupyterLab using the
-following command:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>jupyter<span class="w"> </span>lab
-</span></code></pre></div>
-<p>If you want to add more "kernels" to JupyterLab, you can simply add them to your current workspace – as well as any dependencies from the scientific stack you might need.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>bash_kernel<span class="w"> </span>ipywidgets<span class="w"> </span>matplotlib<span class="w"> </span>numpy<span class="w"> </span>pandas<span class="w">  </span><span class="c1"># ...</span>
-</span></code></pre></div>
-<h3 id="what-kernels-are-available">What kernels are available?<a class="headerlink" href="#what-kernels-are-available" title="Permanent link">#</a></h3>
-<p>You can easily install more "kernels" for JupyterLab. The <code>conda-forge</code> repository has a number of interesting additional kernels - not just Python!</p>
+<h1 id="supply-chain-security">Supply Chain Security<a class="headerlink" href="#supply-chain-security" title="Permanent link">#</a></h1>
+<p>Supply chain security starts with a simple assumption: even when your own code is correct, the packages you install can still become the attack path.</p>
+<p>Typical risks include:</p>
 <ul>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/bash_kernel"><strong><code>bash_kernel</code></strong></a> A kernel for bash</li>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-cpp"><strong><code>xeus-cpp</code></strong></a> A C++ kernel based on the new clang-repl</li>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-cling"><strong><code>xeus-cling</code></strong></a> A C++ kernel based on the slightly older Cling</li>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-lua"><strong><code>xeus-lua</code></strong></a> A Lua kernel</li>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/xeus-sql"><strong><code>xeus-sql</code></strong></a> A kernel for SQL</li>
-<li><a href="https://prefix.dev/channels/conda-forge/packages/r-irkernel"><strong><code>r-irkernel</code></strong></a> An R kernel</li>
+<li>compromised or tampered artifacts;</li>
+<li>hostile or hijacked upstream releases;</li>
+<li>newly published packages that later turn out to be malicious or broken;</li>
+<li>known-vulnerable dependencies that stay in your environment because nothing forces an update;</li>
+<li>poor visibility into what actually changed between one environment revision and the next.</li>
 </ul>
-<h2 id="advanced-usage">Advanced usage<a class="headerlink" href="#advanced-usage" title="Permanent link">#</a></h2>
-<!--
-Modifications to the following section are related to the README.md in https://github.com/renan-r-santos/pixi-kernel and
-https://github.com/renan-r-santos/pixi-kernel-binder, please keep these two in sync by making a PR in both
--->
-
-<p>If you want to have only one instance of JupyterLab running but still want per-directory Pixi environments, you can use
-one of the kernels provided by the <a href="https://prefix.dev/channels/conda-forge/packages/pixi-kernel"><strong><code>pixi-kernel</code></strong></a>
-package.</p>
-<h3 id="configuring-jupyterlab">Configuring JupyterLab<a class="headerlink" href="#configuring-jupyterlab" title="Permanent link">#</a></h3>
-<p>To get started, create a Pixi workspace, add <code>jupyterlab</code> and <code>pixi-kernel</code> and then start JupyterLab:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>init
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>jupyterlab<span class="w"> </span>pixi-kernel
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>pixi<span class="w"> </span>run<span class="w"> </span>jupyter<span class="w"> </span>lab
+<p>Pixi does not eliminate these risks, and it does not include a vulnerability scanner for conda environments. What it does provide is a set of practical controls that help you reduce exposure, review changes more clearly, and respond faster when something goes wrong.</p>
+<p>This is the security model we recommend, step by step:</p>
+<ol>
+<li>make dependency resolution reproducible and reviewable;</li>
+<li>delay very fresh uploads when a cooldown is appropriate;</li>
+<li>respond to advisories by constraining or overriding dependencies;</li>
+<li>treat package installation and activation hooks as code execution surfaces;</li>
+<li>scan the installed environment with tooling that understands what is actually on disk;</li>
+<li>add attestations when you publish your own artifacts.</li>
+</ol>
+<h2 id="1-make-dependency-resolution-reproducible">1. Make Dependency Resolution Reproducible<a class="headerlink" href="#1-make-dependency-resolution-reproducible" title="Permanent link">#</a></h2>
+<p>Keep <code>pixi.lock</code> under version control, review lock file diffs in pull requests, and treat unexpected artifact changes as a security-relevant event. Pixi records the fully resolved environment in <code>pixi.lock</code>, including the exact artifacts that were selected, so future installs use those locked artifacts instead of "whatever is newest right now". That reduces the risk of silent dependency drift and gives you a stable review surface: if a dependency changes, the lock file changes too.</p>
+<p>To review lock file changes between commits in a human-readable way, you can use <a href="../integration/extensions/pixi_diff/"><code>pixi-diff</code></a> directly or integrate the output into CI with <a href="../integration/ci/updates_github_actions/"><code>pixi-diff-to-markdown</code></a>.</p>
+<p>For example:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># bash / zsh</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pixi<span class="w"> </span>diff<span class="w"> </span>--before<span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>HEAD~20:pixi.lock<span class="o">)</span><span class="w"> </span>--after<span class="w"> </span>pixi.lock<span class="w"> </span><span class="p">|</span><span class="w"> </span>pixi<span class="w"> </span>diff-to-markdown
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># fish</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>pixi<span class="w"> </span>diff<span class="w"> </span>--before<span class="w"> </span><span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>HEAD~20:pixi.lock<span class="w"> </span><span class="p">|</span><span class="w"> </span>psub<span class="o">)</span><span class="w"> </span>--after<span class="w"> </span>pixi.lock<span class="w"> </span><span class="p">|</span><span class="w"> </span>pixi<span class="w"> </span>diff-to-markdown
 </span></code></pre></div>
-<p>This will start JupyterLab and open it in your browser.</p>
-<p><img alt="JupyterLab launcher screen showing Pixi
-Kernel" src="https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets/launch-light.png#only-light" />
-<img alt="JupyterLab launcher screen showing Pixi
-Kernel" src="https://raw.githubusercontent.com/renan-r-santos/pixi-kernel/main/assets/launch-dark.png#only-dark" /></p>
-<p><code>pixi-kernel</code> searches for a manifest file, either <code>pixi.toml</code> or <code>pyproject.toml</code>, in the same directory of your
-notebook or in any parent directory. When it finds one, it will use the environment specified in the manifest file to
-start the kernel and run your notebooks.</p>
+<h2 id="2-delay-fresh-uploads-with-exclude-newer">2. Delay Fresh Uploads With <code>exclude-newer</code><a class="headerlink" href="#2-delay-fresh-uploads-with-exclude-newer" title="Permanent link">#</a></h2>
+<p>Use <a href="../reference/pixi_manifest/#exclude-newer-optional"><code>exclude-newer</code></a> to put a short delay on packages from public channels by default, then carve out exceptions only for artifacts you control or urgent security fixes that you have explicitly reviewed. This is a practical defense against compromised releases, rushed hostile uploads, or ecosystem incidents where a bad package is published and only detected shortly afterwards.</p>
+<p>The delay is useful even when public ecosystems already run security checks, because those checks are often asynchronous. Package indexes may publish first and only then run third-party analysis that later flags a release. A cooldown of a few days gives those external checks, user reports, and ecosystem response processes time to surface problems before your resolver consumes the new artifact. Pixi can apply that delay across your workspace and still let you opt specific channels or packages back in immediately when needed, which is useful when you want a conservative trust window for public ecosystems while still allowing trusted internal channels or urgent fixes through without delay.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my-workspace&quot;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="s2">&quot;conda-forge&quot;</span><span class="p">,</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="c1"># get most recent versions of packages you control</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://prefix.dev/my-internal-channel&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">]</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="n">exclude-newer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;14d&quot;</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="k">[dependencies]</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># CVE-XXXX-YYYY: allow the fresh fixed build immediately</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;3.12.*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="k">[constraints]</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># CVE-XXXX-YYYY: allow the fresh fixed build immediately</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="n">openssl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>In that example:</p>
+<ul>
+<li>all packages are delayed by 14 days by default;</li>
+<li>packages from the internal channel are not delayed;</li>
+<li><code>openssl</code> and <code>python</code> are allowed through immediately, even if the fixed build is fresh.</li>
+</ul>
+<div class="admonition tip">
+<p class="admonition-title">CEP for <code>upload_timestamp</code> in repodata</p>
+<p>There is also an in-progress proposal, <a href="https://github.com/conda/ceps/pull/154">conda/ceps#154</a>, to include upload timestamps in <code>repodata.json</code>. If adopted, that would let tools consume channel-provided upload times directly and harden this workflow against spoofed timestamp entries from conda-forge itself.
+Once this CEP is implemented, Pixi will switch the behavior of <code>exclude-newer</code> to use the <code>upload_timestamp</code> instead of the <code>timestamp</code>.</p>
+</div>
+<h2 id="3-respond-to-advisories-with-constraints-and-overrides">3. Respond To Advisories With Constraints And Overrides<a class="headerlink" href="#3-respond-to-advisories-with-constraints-and-overrides" title="Permanent link">#</a></h2>
+<p>When an advisory lands, update to the fixed version first. If the fix is fresh, that can also mean temporarily relaxing <code>exclude-newer</code> so you can adopt the security release immediately. If another dependency prevents the solver from reaching the non-vulnerable version, Pixi supports <a href="../advanced/override/"><code>dependency-overrides</code></a> for PyPI packages.</p>
+<p>This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to <code>exclude-newer</code>: <code>exclude-newer</code> reduces exposure to newly uploaded artifacts, while constraints and overrides help you respond once a vulnerable version is already known.</p>
+<div class="admonition note">
+<p class="admonition-title">PyPI-only for now</p>
+<p>We are planning to support a similar feature like this for Conda packages as well. For more information, see <a href="https://github.com/prefix-dev/pixi/issues/4891">pixi#4891</a>.</p>
+</div>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[pypi-options.dependency-overrides]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># force all packages to depend on urllib3 &gt;=2.2.2</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">urllib3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.2.2&quot;</span>
+</span></code></pre></div>
+<p>Do not trust overrides blindly. In the best case, maintainers publish a patch release on the same minor version you are already using, so the compatibility risk stays small. In practice, the available fix can sometimes be in a newer major version, and forcing that version through an override can break compatibility with other packages. Treat overrides as a short-term mitigation: apply the smallest possible change, test the affected environment, and remove the override once upstream metadata or upstream releases make it unnecessary.</p>
+<h2 id="4-treat-package-hooks-as-code-execution">4. Treat Package Hooks As Code Execution<a class="headerlink" href="#4-treat-package-hooks-as-code-execution" title="Permanent link">#</a></h2>
+<p>Treat <code>pixi shell</code>, <code>pixi run</code>, <code>pixi shell-hook</code>, and any automation around them as code execution boundaries, not just environment setup commands. Conda packages can carry executable hooks in addition to files and metadata. Two especially relevant cases are:</p>
+<ul>
+<li><a href="../reference/pixi_configuration/#run-post-link-scripts"><code>post-link</code> scripts</a>, which run during installation if explicitly enabled;</li>
+<li><a href="../workspace/environment/#activation">activation scripts</a>, which are run during environment activation.</li>
+</ul>
+<p>This is a different class of supply-chain risk from "is this version vulnerable?": package installation or activation itself can become the arbitrary code execution event. Pixi disables <code>post-link</code> scripts by default, so package-provided shell or batch scripts are not allowed to run during installation unless you explicitly enable that functionality. Activation scripts are different: they are part of normal conda environment activation and are currently run by default when you use <code>pixi shell</code>, <code>pixi run</code>, or <code>pixi shell-hook</code>. That means a malicious package can execute code at activation time.</p>
+<div class="admonition tip">
+<p class="admonition-title">Disable activation scripts in Pixi</p>
+<p>We plan to add an option to disable shell activation scripts and allow JSON-style activations only. Track progress in <a href="https://github.com/prefix-dev/pixi/issues/4889">pixi#4889</a>.</p>
+</div>
+<p>This also affects <code>direnv</code> integrations. The documented <a href="../integration/third_party/direnv/"><code>direnv</code> setup</a> uses <code>watch_file pixi.lock</code>, which means a lock file change causes <code>direnv</code> to re-run <code>pixi shell-hook</code>. If the new lock file introduces a package with a malicious activation script, switching to that lock file can trigger the same arbitrary code execution without a fresh manual approval.</p>
+<div class="admonition tip">
+<p class="admonition-title"><code>require_allowed</code> in <code>direnv</code></p>
+<p>There is an upstream <code>direnv</code> pull request, <a href="https://github.com/direnv/direnv/pull/1530">direnv#1530</a>, that adds <code>require_allowed pixi.toml pixi.lock</code>. Once released, that can be used to force a fresh <code>direnv allow</code> when the manifest or lock file changes.</p>
+</div>
+<p>Keep <code>post-link</code> scripts disabled unless you have a concrete package that requires them and you have reviewed that behavior. If you use <code>direnv</code>, be aware that <code>watch_file pixi.lock</code> improves convenience but also lowers the friction for activation-time code execution after dependency changes. Re-introduce an approval step on lock file changes as soon as your <code>direnv</code> version supports it.</p>
+<h2 id="5-scan-the-installed-environment-directly">5. Scan The Installed Environment Directly<a class="headerlink" href="#5-scan-the-installed-environment-directly" title="Permanent link">#</a></h2>
+<p>For CVE analysis today, our preferred workflow is to scan the installed Pixi-managed environment directly with <a href="https://github.com/anchore/syft">Syft</a> and a vulnerability scanner such as <a href="https://github.com/anchore/grype">Grype</a>. The goal here is narrow: find known-vulnerable software that is actually present in the environment you built, including transitive dependencies and ecosystem-specific packages that may never appear clearly in <code>pixi.toml</code>. This improves visibility into what is really on disk, which is what your security tooling ultimately needs to analyze.</p>
+<p>This does not protect against every supply-chain problem. It does not stop a malicious package from being installed, verify package provenance, or catch issues that are not yet in the scanner's advisory data. It is also limited by ecosystem matching quality. That matters for conda in particular, because cross-ecosystem CVE matching is still improving. Today, scanning the installed filesystem is often the most practical workaround: instead of asking "what did I intend to install?", you ask "what ended up in this environment?"</p>
+<p>In practice, that means scanning the concrete environment directory, usually in CI or as part of release review, and generating a portable SBOM only when you need to archive or share the inventory. We recommend enabling the conda and auditable Rust catalogers explicitly so the behavior stays consistent across different scan targets:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>syft<span class="w"> </span>.pixi/envs/default<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--select-catalogers<span class="o">=</span>+conda-meta-cataloger,+cargo-auditable-binary-cataloger<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--output<span class="w"> </span>syft-json<span class="o">=</span>syft-output.json
+</span></code></pre></div>
+<p>That output can then be fed to Grype for CVE scanning:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>grype<span class="w"> </span>syft-output.json
+</span></code></pre></div>
+<p>Syft will detect conda packages from <code>conda-meta</code> when scanning a filesystem location like <code>.pixi/envs/default</code>, but it does not always do so by default when scanning a container image that contains a conda environment. Passing the catalogers explicitly avoids that surprise.</p>
+<p>If you want to continue straight into vulnerability analysis, prefer feeding Syft's own output into your scanner instead of converting through CycloneDX first. In practice, format conversion can lose information, and scanning a CycloneDX export can produce different results from scanning Syft's native output directly.</p>
+<p>For conda packages specifically, Syft currently tends to emit CPEs but not PURLs. That means Grype may need to be configured to match on CPEs if you want useful conda vulnerability results.</p>
+<div class="admonition tip">
+<p>If you only want to scan your environment for CVEs, you can also run <code>grype .pixi/envs/default</code> directly.</p>
+</div>
+<p>For Rust packages on conda-forge, building with <code>cargo-auditable</code> remains the current recommendation because it makes those shadow dependencies visible to downstream scanning tools. See the conda-forge <a href="https://conda-forge.org/docs/maintainer/example_recipes/rust">Rust packaging guide</a> or the <a href="https://prefix.dev/channels/skill-forge/packages/agent-skill-conda-forge">conda-forge agent skill</a> for the recommended recipe pattern.</p>
+<h2 id="6-add-attestations-when-publishing-your-own-artifacts">6. Add Attestations When Publishing Your Own Artifacts<a class="headerlink" href="#6-add-attestations-when-publishing-your-own-artifacts" title="Permanent link">#</a></h2>
+<p>If you publish packages that others consume, generate attestations in CI by default and document how your consumers should verify them. Pixi supports Sigstore-based attestations when publishing packages to <a href="https://prefix.dev">prefix.dev</a>. Attestations are cryptographically signed metadata about your package, and Pixi and Rattler-Build generate build provenance attestations that encode information about how and by whom a package was built. This is especially valuable when you operate your own channel or publish internal packages.</p>
+<p>You can generate attestations directly during publish or upload an existing attestation in CI.</p>
+<p>For more background on Sigstore attestations in the conda ecosystem, see the <a href="https://rattler-build.prefix.dev/latest/sigstore/">Rattler-Build Sigstore documentation</a>.</p>
+<p>For example:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--to<span class="w"> </span>https://prefix.dev/&lt;channel-name&gt;<span class="w"> </span>--generate-attestation
+</span></code></pre></div>
+<p>When using the lower-level upload command for prefix.dev, Pixi can also upload an existing attestation or generate one during CI:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>upload<span class="w"> </span>prefix<span class="w"> </span>--channel<span class="w"> </span>&lt;channel-name&gt;<span class="w"> </span>--generate-attestation<span class="w"> </span>dist/*.conda
+</span></code></pre></div>
+<p>Consumers can then validate those attestations with Sigstore tooling. For example, with the GitHub CLI:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>my-package-0.1.0-h123_0.conda<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--owner<span class="w"> </span>my-org<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--predicate-type<span class="w"> </span><span class="s2">&quot;https://schemas.conda.org/attestations-publish-1.schema.json&quot;</span>
+</span></code></pre></div>
+<p>Or with <code>cosign</code>:</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/my-org/.*&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>my-package-0.1.0-h123_0.conda
+</span></code></pre></div>
+<p>One example of a channel that already uses package signing extensively is the <a href="https://prefix.dev/channels/github-releases">github-releases</a> channel on prefix.dev (GitHub: <a href="https://github.com/hunger/octoconda">hunger/octoconda</a>).</p>
+<div class="admonition note">
+<p>We are actively working on adding package signing to conda-forge, the most popular Conda channel.</p>
+</div>
+<div class="admonition tip">
+<p class="admonition-title">Serving Sigstore Attestations in Conda Channels</p>
+<p>This is part of the broader conda ecosystem work to standardize attestation and signing. The current attestation work is captured in <a href="https://conda.org/learn/ceps/cep-0027/">CEP 27</a>, and broader package signing and Sigstore-serving work is still evolving in the ecosystem. We are also working on a proposal for serving this information on prefix.dev in <a href="https://github.com/conda/ceps/pull/142">conda/ceps#142</a>.</p>
+</div>
+<h2 id="current-gaps-and-practical-recommendation">Current Gaps And Practical Recommendation<a class="headerlink" href="#current-gaps-and-practical-recommendation" title="Permanent link">#</a></h2>
+<p>Cross-ecosystem vulnerability matching for conda packages is still improving.</p>
+<p>We are currently working on a PURL-related Conda Enhancement Proposal, <a href="https://github.com/conda/ceps/pull/63">conda/ceps#63</a>, that will make it easier to match conda-installed software against CVEs that are tracked in other ecosystems like PyPI. Until that work is standardized and widely implemented, direct scans of the already-installed environment with tools like Syft and Grype remain the most practical workaround.</p>
+<p>For a broader view of the conda ecosystem work around regulatory readiness, SBOMs, CVE mapping, and auditable Rust binaries, see QuantCo's post, <a href="https://tech.quantco.com/blog/conda-regulation-support">Making the conda(-forge) ecosystem ready for cybersecurity regulations</a>.</p>
+<p>If you want a conservative default posture, we recommend:</p>
+<ul>
+<li>commit and review <code>pixi.lock</code>;</li>
+<li>use <code>exclude-newer</code> for public channels;</li>
+<li>selectively bypass the delay only for trusted or urgent fixes;</li>
+<li>update or override dependencies when advisories land;</li>
+<li>scan the installed environment with Syft and your vulnerability scanner;</li>
+<li>generate attestations for packages you publish.</li>
+</ul>
 
 
 
@@ -4203,9 +4351,9 @@ start the kernel and run your notebooks.</p>
           
             
             <a
-              href="../r_studio/"
+              href="../integration/third_party/starship/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: RStudio"
+              aria-label="Previous: Starship"
             >
               <div class="md-footer__button md-icon">
                 
@@ -4216,7 +4364,7 @@ start the kernel and run your notebooks.</p>
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  RStudio
+                  Starship
                 </div>
               </div>
             </a>
@@ -4226,16 +4374,16 @@ start the kernel and run your notebooks.</p>
           
             
             <a
-              href="../../ci/github_actions/"
+              href="../advanced/channel_logic/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: GitHub Actions"
+              aria-label="Next: Channel Logic"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  GitHub Actions
+                  Channel Logic
                 </div>
               </div>
               <div class="md-footer__button md-icon">
@@ -4261,8 +4409,8 @@ start the kernel and run your notebooks.</p>
         <!-- prefix logo -->
         <div class="md-footer-meta__item md-footer-meta__item--prefix-logo">
           <a href="https://prefix.dev" target="_blank">
-            <img class="prefix-logo prefix-logo__dark" src="../../../assets/prefix_logo_dark.svg" alt="">
-            <img class="prefix-logo prefix-logo__light" src="../../../assets/prefix_logo_light.svg" alt="">
+            <img class="prefix-logo prefix-logo__dark" src="../assets/prefix_logo_dark.svg" alt="">
+            <img class="prefix-logo prefix-logo__light" src="../assets/prefix_logo_light.svg" alt="">
           </a>
         </div>
 
@@ -4346,12 +4494,12 @@ start the kernel and run your notebooks.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.indexes", "navigation.top", "navigation.footer"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.indexes", "navigation.top", "navigation.footer"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../../javascripts/extra.js"></script>
+        <script src="../javascripts/extra.js"></script>
       
     
   </body>
