@@ -4,8 +4,6 @@ environments:
     channels:
       - url: https://prefix.dev/pixi-build-backends/
       - url: https://prefix.dev/conda-forge/
-    options:
-      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
         - conda: child-package

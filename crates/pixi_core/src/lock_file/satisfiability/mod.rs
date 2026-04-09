@@ -620,19 +620,15 @@ pub fn verify_environment_satisfiability(
         });
     }
 
-    let locked_prerelease_mode = locked_environment
+    let locked_prerelease_mode: Option<PrereleaseMode> = locked_environment
         .solve_options()
         .pypi_prerelease_mode
-        .unwrap_or_default()
-        .into();
-    let expected_prerelease_mode = grouped_env
-        .pypi_options()
-        .prerelease_mode
-        .unwrap_or_default();
+        .map(Into::into);
+    let expected_prerelease_mode = grouped_env.pypi_options().prerelease_mode;
     if locked_prerelease_mode != expected_prerelease_mode {
         return Err(EnvironmentUnsat::PypiPrereleaseModeMismatch {
-            locked_mode: locked_prerelease_mode,
-            expected_mode: expected_prerelease_mode,
+            locked_mode: locked_prerelease_mode.unwrap_or_default(),
+            expected_mode: expected_prerelease_mode.unwrap_or_default(),
         });
     }
 

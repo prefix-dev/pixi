@@ -2033,8 +2033,6 @@ impl<'p> UpdateContext<'p> {
             let environment_name = environment.name().to_string();
             let grouped_env = GroupedEnvironment::from(environment.clone());
             let grouped_pypi_options = grouped_env.pypi_options();
-            let pypi_prerelease_mode = grouped_pypi_options.prerelease_mode.unwrap_or_default();
-
             let channel_config = project.channel_config();
             let channels: Vec<String> = grouped_env
                 .channels()
@@ -2058,7 +2056,9 @@ impl<'p> UpdateContext<'p> {
                         .unwrap_or_default()
                         .unwrap_or_default()
                         .into(),
-                    pypi_prerelease_mode: Some(pypi_prerelease_mode.into()),
+                    pypi_prerelease_mode: grouped_pypi_options
+                        .prerelease_mode
+                        .map(Into::into),
                 },
             );
 
