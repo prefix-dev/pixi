@@ -592,6 +592,7 @@ mod test {
     #[case::tier_resolution_error("3tier-resolution-error")]
     #[case::invalid_inherit("invalid_inherit")]
     #[case::inherit_readme("inherit_readme/nested")]
+    #[case::requires_newer_pixi("requires-newer-pixi")]
     fn test_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),

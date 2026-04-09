@@ -1,0 +1,7 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+assertion_line: 705
+expression: snapshot
+---
+  × this project requires pixi '>=100', but you have pixi 0.67.0
+  help: update pixi to a version that satisfies '>=100'
