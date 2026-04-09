@@ -67,6 +67,7 @@ pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
+static CUSTOM_BUILD_DIR_WARN: OnceCell<()> = OnceCell::new();
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -327,9 +328,18 @@ impl Workspace {
         &self.root
     }
 
-    /// Returns the pixi directory of the workspace [consts::PIXI_DIR]
-    pub fn pixi_dir(&self) -> PathBuf {
+    /// Returns the default pixi directory of the workspace [consts::PIXI_DIR],
+    /// always pointing to `.pixi` regardless of detached-environments configuration.
+    pub fn default_pixi_dir(&self) -> PathBuf {
         self.root.join(consts::PIXI_DIR)
+    }
+
+    /// Returns the effective pixi directory for the workspace. When
+    /// detached-environments is configured, this returns the project-specific
+    /// detached path instead of the default `.pixi` directory.
+    pub fn pixi_dir(&self) -> PathBuf {
+        self.detached_environments_path()
+            .unwrap_or_else(|| self.default_pixi_dir())
     }
 
     /// Create the detached-environments path for this project if it is set in
@@ -349,7 +359,7 @@ impl Workspace {
     /// Returns the default environment directory without interacting with
     /// config.
     pub fn default_environments_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+        self.default_pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
 
     /// Returns the environment directory
@@ -398,17 +408,55 @@ impl Workspace {
     /// Returns the default solve group environments directory, without
     /// interacting with config
     pub fn default_solve_group_environments_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        self.default_pixi_dir()
+            .join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
     /// Returns the solve group environments directory
     pub fn solve_group_environments_dir(&self) -> PathBuf {
-        // If the detached-environments path is set, use it instead of the default
-        // directory.
-        if let Some(detached_environments_path) = self.detached_environments_path() {
-            return detached_environments_path.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR);
+        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+    }
+
+    /// Returns the default build cache directory without interacting with config.
+    pub fn default_build_dir(&self) -> PathBuf {
+        self.default_pixi_dir().join(consts::WORKSPACE_CACHE_DIR)
+    }
+
+    /// Returns the build cache directory. When detached-environments is
+    /// configured, this returns the detached path and creates a symlink from
+    /// the default `.pixi/build` location.
+    pub fn build_dir(&self) -> PathBuf {
+        let default_build_dir = self.default_build_dir();
+
+        // Early out if detached-environments is not set
+        if self.config().detached_environments().is_false() {
+            return default_build_dir;
         }
-        self.default_solve_group_environments_dir()
+
+        if self.detached_environments_path().is_some() {
+            let detached_build_path = self.pixi_dir().join(consts::WORKSPACE_CACHE_DIR);
+            let _ = CUSTOM_BUILD_DIR_WARN.get_or_init(|| {
+                if !default_build_dir.is_symlink() && default_build_dir.exists() {
+                    tracing::warn!(
+                        "Build cache found in '{}', this will be ignored and build artifacts will be stored in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
+                        default_build_dir.display(),
+                        detached_build_path.parent().expect("path should have parent").display(),
+                        format!("{}/{}", consts::PIXI_DIR, consts::WORKSPACE_CACHE_DIR),
+                        if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
+                    );
+                } else {
+                    #[cfg(not(windows))]
+                    create_symlink(&detached_build_path, &default_build_dir);
+                }
+
+                #[cfg(windows)]
+                write_warning_file(&default_build_dir, &detached_build_path);
+            });
+
+            return detached_build_path;
+        }
+
+        default_build_dir
     }
 
     /// Returns the path to the lock file of the project
@@ -937,10 +985,12 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
+    use pixi_config::{Config, DetachedEnvironments};
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::{Platform, Version};
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use std::env;
+    use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
 
@@ -1366,6 +1416,88 @@ mod tests {
             workspace.pixi_dir(),
             expected_pixi_dir,
             ".pixi directory should be in the symlink's parent directory"
+        );
+    }
+
+    const WORKSPACE_MANIFEST_STR: &str = r#"[workspace]
+name = "myproj"
+channels = []
+platforms = []
+"#;
+
+    #[test]
+    fn test_dirs_without_detached() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap();
+
+        let dot_pixi = dunce::canonicalize(temp_dir.path()).unwrap().join(".pixi");
+        assert_eq!(workspace.default_pixi_dir(), dot_pixi);
+        assert_eq!(workspace.pixi_dir(), dot_pixi);
+        assert_eq!(
+            workspace.default_environments_dir(),
+            dot_pixi.join(consts::ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_solve_group_environments_dir(),
+            dot_pixi.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_build_dir(),
+            dot_pixi.join(consts::WORKSPACE_CACHE_DIR)
+        );
+        assert_eq!(workspace.build_dir(), workspace.default_build_dir());
+    }
+
+    #[test]
+    fn test_dirs_with_detached() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let detached_dir = tempfile::tempdir().unwrap();
+
+        let workspace = Workspace::from_str(
+            &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            detached_environments: Some(DetachedEnvironments::Path(
+                detached_dir.path().to_path_buf(),
+            )),
+            ..Default::default()
+        });
+
+        let dot_pixi = dunce::canonicalize(workspace_dir.path())
+            .unwrap()
+            .join(".pixi");
+        let detached_subdir = detached_dir.path().join(format!(
+            "{}-{}",
+            workspace.display_name(),
+            xxh3_64(workspace.root().to_string_lossy().as_bytes())
+        ));
+
+        // default_* methods always point at local .pixi
+        assert_eq!(workspace.default_pixi_dir(), dot_pixi);
+        assert_eq!(
+            workspace.default_environments_dir(),
+            dot_pixi.join(consts::ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_solve_group_environments_dir(),
+            dot_pixi.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_build_dir(),
+            dot_pixi.join(consts::WORKSPACE_CACHE_DIR)
+        );
+
+        // effective paths point into the detached directory
+        assert_eq!(workspace.pixi_dir(), detached_subdir);
+        assert_eq!(
+            workspace.build_dir(),
+            detached_subdir.join(consts::WORKSPACE_CACHE_DIR)
         );
     }
 }

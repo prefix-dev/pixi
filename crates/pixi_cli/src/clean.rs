@@ -137,36 +137,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             );
         }
     } else if !args.activation_cache && !args.build && !args.workspaces_registry {
-        // Remove all pixi related work from the workspace.
-        if !workspace
-            .environments_dir()
-            .starts_with(workspace.pixi_dir())
-            && workspace.default_environments_dir().exists()
-        {
-            remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
-            remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
-                .await?;
-        }
-        remove_folder_with_progress(workspace.environments_dir(), true).await?;
+        // Remove all pixi related work from the workspace. Always clean both
+        // the default .pixi location and the effective (possibly detached) location
+        // so leftover artifacts are removed regardless of config changes.
+        remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
+        remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
+            .await?;
+        remove_folder_with_progress(workspace.environments_dir(), false).await?;
         remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
         remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
         remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
-        remove_folder_with_progress(
-            workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR),
-            false,
-        )
-        .await?;
+        remove_folder_with_progress(workspace.default_build_dir(), false).await?;
+        remove_folder_with_progress(workspace.build_dir(), false).await?;
         prune_workspace_registry().await?;
     } else {
         if args.activation_cache {
             remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
         }
         if args.build {
-            remove_folder_with_progress(
-                workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR),
-                true,
-            )
-            .await?;
+            remove_folder_with_progress(workspace.build_dir(), true).await?;
             eprintln!(
                 "{}When issues persist, you can remove all build related global cache with: {}",
                 console::style("Hint: ").blue(),
