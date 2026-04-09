@@ -137,27 +137,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             );
         }
     } else if !args.activation_cache && !args.build && !args.workspaces_registry {
-        // Remove all pixi related work from the workspace.
-        if !workspace
-            .environments_dir()
-            .starts_with(workspace.default_pixi_dir())
-            && workspace.default_environments_dir().exists()
-        {
-            remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
-            remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
-                .await?;
-        }
-        remove_folder_with_progress(workspace.environments_dir(), true).await?;
+        // Remove all pixi related work from the workspace. Always clean both
+        // the default .pixi location and the effective (possibly detached) location
+        // so leftover artifacts are removed regardless of config changes.
+        remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
+        remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
+            .await?;
+        remove_folder_with_progress(workspace.environments_dir(), false).await?;
         remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
         remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
         remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
-        if !workspace
-            .build_dir()
-            .starts_with(workspace.default_pixi_dir())
-            && workspace.default_build_dir().exists()
-        {
-            remove_folder_with_progress(workspace.default_build_dir(), false).await?;
-        }
+        remove_folder_with_progress(workspace.default_build_dir(), false).await?;
         remove_folder_with_progress(workspace.build_dir(), false).await?;
         prune_workspace_registry().await?;
     } else {
