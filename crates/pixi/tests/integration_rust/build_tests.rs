@@ -1756,9 +1756,11 @@ host-dep = "*""#,
         .expect("my-package should still have a source timestamp");
 
     assert!(
-        updated_timestamp > initial_timestamp,
+        updated_timestamp.latest > initial_timestamp.latest,
         "source timestamp should advance when the package is explicitly updated \
-         (initial={initial_timestamp}, updated={updated_timestamp})"
+         (initial={}, updated={})",
+        initial_timestamp.latest,
+        updated_timestamp.latest
     );
 }
 

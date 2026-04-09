@@ -253,14 +253,17 @@ impl InstallPixiEnvironmentSpec {
             .source_build(SourceBuildSpec {
                 source: PinnedSourceCodeLocation::new(manifest_source, build_source),
                 name,
-                exclude_newer: timestamp.unwrap_or_else(chrono::Utc::now),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
                 variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
                 variants,
-                exclude_newer: self.exclude_newer.clone(),
+                // We use the timestamp of the record itself here, or the environment specific
+                // exclude newer if no timestamp is present.
+                exclude_newer: timestamp
+                    .map(Into::into)
+                    .or_else(|| self.exclude_newer.clone()),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: None,
                 work_directory: None,

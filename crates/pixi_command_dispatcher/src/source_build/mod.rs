@@ -56,9 +56,6 @@ pub struct SourceBuildSpec {
     /// The manifest and optional build source location.
     pub source: PinnedSourceCodeLocation,
 
-    /// The exclude-newer timestamp to use
-    pub exclude_newer: chrono::DateTime<chrono::Utc>,
-
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
 
@@ -631,11 +628,12 @@ impl SourceBuildSpec {
         // Determine final directories for everything.
         let directories = Directories::new(&work_directory, host_platform);
 
-        // Create a common cut-off for the build and host environments.
+        // Create a common cut-off for the build and host environments. Use the passed in exclusion
+        // and fall-back to now.
         let exclude_newer = self
             .exclude_newer
             .clone()
-            .unwrap_or_else(|| ResolvedExcludeNewer::from_datetime(Utc::now()));
+            .unwrap_or_else(|| ResolvedExcludeNewer::from_datetime(chrono::Utc::now()));
 
         // Solve the build environment.
         let mut compatibility_map = HashMap::new();
@@ -732,7 +730,7 @@ impl SourceBuildSpec {
                         ignore_packages: None,
                         build_environment: self.build_environment.to_build_from_build(),
                         force_reinstall: Default::default(),
-                        exclude_newer: self.exclude_newer.clone(),
+                        exclude_newer: Some(exclude_newer.clone()),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
                         variant_configuration: self.variant_configuration.clone(),
@@ -763,7 +761,7 @@ impl SourceBuildSpec {
                         ignore_packages: None,
                         build_environment: self.build_environment.clone(),
                         force_reinstall: Default::default(),
-                        exclude_newer: self.exclude_newer.clone(),
+                        exclude_newer: Some(exclude_newer),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
                         variant_configuration: self.variant_configuration,

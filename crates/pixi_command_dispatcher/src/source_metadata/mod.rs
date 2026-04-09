@@ -1,12 +1,5 @@
 pub(crate) mod cycle;
 
-pub use cycle::{Cycle, CycleEnvironment};
-use miette::Diagnostic;
-use pixi_record::{SourceRecord, SourceRecordReuseKey, VariantValue};
-use rattler_conda_types::PackageName;
-use thiserror::Error;
-use tracing::instrument;
-
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, PackageNotProvidedError,
@@ -14,6 +7,14 @@ use crate::{
     executor::CancellationAwareFutures,
     source_record::{SourceRecordError, SourceRecordSpec},
 };
+pub use cycle::{Cycle, CycleEnvironment};
+use miette::Diagnostic;
+use pixi_record::{SourceRecord, SourceRecordReuseKey, SourceTimestamps, VariantValue};
+use pixi_spec::ResolvedExcludeNewer;
+use rattler_conda_types::PackageName;
+use std::collections::HashMap;
+use thiserror::Error;
+use tracing::instrument;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceMetadataSpec {
@@ -24,12 +25,12 @@ pub struct SourceMetadataSpec {
     pub backend_metadata: BuildBackendMetadataSpec,
 
     /// The timestamp exclusion to apply when retrieving the metadata.
-    pub exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
-    /// Timestamp hints keyed by exact source output identity.
+    /// Exclude-newer hints keyed by exact source output identity. Used to
+    /// soft-lock build/host dependencies when re-resolving.
     #[serde(skip)]
-    pub source_timestamp_hints:
-        std::collections::HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>,
+    pub source_exclude_newer_hints: HashMap<SourceRecordReuseKey, SourceTimestamps>,
 }
 
 /// The result of resolving source metadata for all variants of a package.
@@ -104,16 +105,23 @@ impl SourceMetadataSpec {
                 .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
                 .collect();
 
+            // Take the resolved exclude-newer and constrain it further with
+            // timestamp hints from a previous solve if available.
+            let key = SourceRecordReuseKey::new(self.package.clone(), variants.clone());
+            let exclude_newer = match (
+                self.exclude_newer.clone(),
+                self.source_exclude_newer_hints.get(&key),
+            ) {
+                (Some(en), Some(hint)) => Some(en.constraint_to_timestamps(hint)),
+                (en, _) => en,
+            };
+
             let dispatcher = command_dispatcher.clone();
             let spec = SourceRecordSpec {
                 package: self.package.clone(),
-                variants: variants.clone(),
+                variants,
                 backend_metadata: self.backend_metadata.clone(),
-                exclude_newer: self
-                    .source_timestamp_hints
-                    .get(&SourceRecordReuseKey::new(self.package.clone(), variants))
-                    .copied()
-                    .or(self.exclude_newer),
+                exclude_newer,
             };
             futures.push(async move {
                 dispatcher

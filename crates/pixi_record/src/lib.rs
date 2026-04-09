@@ -12,14 +12,13 @@ pub use pinned_source::{
     LockedGitUrl, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout, PinnedGitSpec,
     PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
 };
+pub use pixi_spec::SourceTimestamps;
 pub use pixi_variant::VariantValue;
 use rattler_conda_types::{
     MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord, RepoDataRecord,
 };
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
 use serde::Serialize;
-// Re-export the fully-resolved type as `SourceRecord` since it is the most
-// commonly used variant throughout the codebase.
 pub use source_record::{
     FullSourceRecord as SourceRecord, FullSourceRecordData, PartialSourceRecord,
     PartialSourceRecordData, PinnedBuildSourceSpec, SourceRecordData, SourceRecordReuseKey,

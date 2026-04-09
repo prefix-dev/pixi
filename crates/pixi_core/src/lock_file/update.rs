@@ -1162,18 +1162,22 @@ pub struct UpdateContext<'p> {
 impl<'p> UpdateContext<'p> {
     fn merge_source_timestamp_hints<'a>(
         timestamp_sets: impl IntoIterator<
-            Item = &'a HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>,
+            Item = &'a HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>,
         >,
-    ) -> HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>> {
-        let mut merged: HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>> =
-            HashMap::new();
+    ) -> HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps> {
+        let mut merged: HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps> = HashMap::new();
 
         for timestamps in timestamp_sets {
             for (key, value) in timestamps {
                 merged
                     .entry(key.clone())
-                    .and_modify(|existing| *existing = (*existing).max(*value))
-                    .or_insert(*value);
+                    .and_modify(|existing| {
+                        // Keep the entry with the newer default timestamp.
+                        if value.latest > existing.latest {
+                            *existing = value.clone();
+                        }
+                    })
+                    .or_insert(value.clone());
             }
         }
 
@@ -1235,7 +1239,7 @@ impl<'p> UpdateContext<'p> {
         &self,
         group: &GroupedEnvironment<'p>,
         platform: Platform,
-    ) -> HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>> {
+    ) -> HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps> {
         match group {
             GroupedEnvironment::Environment(env) => self
                 .outdated_envs
@@ -2402,7 +2406,7 @@ async fn spawn_solve_conda_environment_task(
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
     pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
-    source_timestamp_hints: HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>,
+    source_timestamp_hints: HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>,
 ) -> Result<TaskResult, CommandDispatcherError<SolveCondaEnvironmentError>> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -2467,7 +2471,7 @@ async fn spawn_solve_conda_environment_task(
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
     let exclude_newer = group
-        .exclude_newer_config_resolved_with_channel_config(&channel_config)
+        .exclude_newer_config_resolved(&channel_config)
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
 
@@ -3047,11 +3051,19 @@ mod tests {
 
     #[test]
     fn test_merge_source_timestamp_hints_keeps_distinct_variants() {
-        let early = Utc.with_ymd_and_hms(2026, 4, 1, 12, 0, 0).unwrap();
-        let later = Utc.with_ymd_and_hms(2026, 4, 1, 13, 0, 0).unwrap();
+        use pixi_spec::SourceTimestamps;
 
-        let first = HashMap::from([(source_key("my-package", &[("python", "3.11")]), early)]);
-        let second = HashMap::from([(source_key("my-package", &[("python", "3.12")]), later)]);
+        let early = SourceTimestamps::from(Utc.with_ymd_and_hms(2026, 4, 1, 12, 0, 0).unwrap());
+        let later = SourceTimestamps::from(Utc.with_ymd_and_hms(2026, 4, 1, 13, 0, 0).unwrap());
+
+        let first = HashMap::from([(
+            source_key("my-package", &[("python", "3.11")]),
+            early.clone(),
+        )]);
+        let second = HashMap::from([(
+            source_key("my-package", &[("python", "3.12")]),
+            later.clone(),
+        )]);
 
         let merged = UpdateContext::merge_source_timestamp_hints([&first, &second]);
 
@@ -3068,22 +3080,30 @@ mod tests {
 
     #[test]
     fn test_merge_source_timestamp_hints_takes_max_for_same_output() {
-        let early = Utc.with_ymd_and_hms(2026, 4, 1, 12, 0, 0).unwrap();
-        let later = Utc.with_ymd_and_hms(2026, 4, 1, 13, 0, 0).unwrap();
-        let stable = Utc.with_ymd_and_hms(2026, 4, 1, 14, 0, 0).unwrap();
+        use pixi_spec::SourceTimestamps;
+
+        let early = SourceTimestamps::from(Utc.with_ymd_and_hms(2026, 4, 1, 12, 0, 0).unwrap());
+        let later = SourceTimestamps::from(Utc.with_ymd_and_hms(2026, 4, 1, 13, 0, 0).unwrap());
+        let stable = SourceTimestamps::from(Utc.with_ymd_and_hms(2026, 4, 1, 14, 0, 0).unwrap());
 
         let first = HashMap::from([
             (source_key("my-package", &[("python", "3.11")]), early),
-            (source_key("other-package", &[("python", "3.11")]), stable),
+            (
+                source_key("other-package", &[("python", "3.11")]),
+                stable.clone(),
+            ),
         ]);
-        let second = HashMap::from([(source_key("my-package", &[("python", "3.11")]), later)]);
+        let second = HashMap::from([(
+            source_key("my-package", &[("python", "3.11")]),
+            later.clone(),
+        )]);
 
         let merged = UpdateContext::merge_source_timestamp_hints([&first, &second]);
 
         assert_eq!(
             merged.get(&source_key("my-package", &[("python", "3.11")])),
             Some(&later),
-            "should keep the highest timestamp when environments disagree"
+            "should keep the entry with the newer default timestamp when environments disagree"
         );
         assert_eq!(
             merged.get(&source_key("other-package", &[("python", "3.11")])),

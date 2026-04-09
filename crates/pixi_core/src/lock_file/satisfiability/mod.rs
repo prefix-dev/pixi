@@ -37,7 +37,8 @@ use pixi_record::{
     VariantValue,
 };
 use pixi_spec::{
-    PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError, Subdirectory,
+    PixiSpec, ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec, SourceSpec,
+    SpecConversionError, Subdirectory,
 };
 use pixi_utils::variants::VariantConfig;
 use pixi_uv_conversions::{
@@ -145,6 +146,9 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
+
+    #[error(transparent)]
+    SourceExcludeNewerMismatch(#[from] SourceExcludeNewerMismatch),
 }
 
 fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
@@ -189,7 +193,9 @@ fn verify_exclude_newer(
 
     for (_platform, packages) in locked_environment.conda_packages_by_platform() {
         for package in packages {
-            let record = package.record();
+            let Some(record) = package.record() else {
+                continue;
+            };
             let channel = package
                 .as_binary()
                 .and_then(|binary| binary.channel.as_ref())
@@ -209,6 +215,45 @@ fn verify_exclude_newer(
     }
 
     Ok(())
+}
+
+/// Checks that the timestamps stored in locked source records are compatible
+/// with the environment's exclude-newer configuration. If a source record's
+/// timestamps exceed the cutoff, the environment needs re-solving.
+fn verify_source_exclude_newer(
+    exclude_newer: Option<&ResolvedExcludeNewer>,
+    locked_environment: &rattler_lock::Environment<'_>,
+) -> Result<(), SourceExcludeNewerMismatch> {
+    let Some(exclude_newer) = exclude_newer else {
+        return Ok(());
+    };
+
+    for (_platform, packages) in locked_environment.conda_packages_by_platform() {
+        for package in packages {
+            let Some(source) = package.as_source() else {
+                continue;
+            };
+            let Some(timestamps) = &source.timestamp else {
+                continue;
+            };
+
+            if !exclude_newer.is_satisfied_by(timestamps) {
+                return Err(SourceExcludeNewerMismatch {
+                    package: source.name().as_source().to_string(),
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+#[error(
+    "the locked source package '{package}' has timestamps that exceed the environment's exclude-newer cutoff"
+)]
+pub struct SourceExcludeNewerMismatch {
+    package: String,
 }
 
 #[derive(Debug, Error)]
@@ -775,12 +820,21 @@ pub fn verify_environment_satisfiability(
         });
     }
 
-    let exclude_newer = environment
-        .exclude_newer_config_resolved_with_channel_config(&config)?
+    let resolved_exclude_newer = environment.exclude_newer_config_resolved(&config)?;
+
+    let exclude_newer = resolved_exclude_newer
+        .as_ref()
+        .cloned()
         .map(rattler_solve::ExcludeNewer::from);
 
     if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
+    }
+
+    if let Err(err) =
+        verify_source_exclude_newer(resolved_exclude_newer.as_ref(), &locked_environment)
+    {
+        return Err(EnvironmentUnsat::SourceExcludeNewerMismatch(err));
     }
 
     Ok(())
@@ -1017,7 +1071,7 @@ pub struct VerifySatisfiabilityContext<'a> {
     pub static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
-pub type ValidatedSourceTimestamps = HashMap<SourceRecordReuseKey, chrono::DateTime<chrono::Utc>>;
+pub type ValidatedSourceTimestamps = HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>;
 
 pub struct PlatformSatisfiabilityOutcome {
     pub validated_source_timestamps: ValidatedSourceTimestamps,
@@ -1168,6 +1222,7 @@ pub async fn verify_platform_satisfiability(
                                     .cloned()
                                     .map(PinnedBuildSourceSpec::into_pinned),
                                 channel_config: platform_setup.channel_config.clone(),
+                                exclude_newer: None,
                                 channels: platform_setup.channels.clone(),
                                 build_environment: platform_setup.build_environment.clone(),
                                 variant_configuration: Some(
@@ -1176,7 +1231,7 @@ pub async fn verify_platform_satisfiability(
                                 variant_files: Some(platform_setup.variant_files.clone()),
                                 enabled_protocols: EnabledProtocols::default(),
                             },
-                            exclude_newer: source.timestamp,
+                            exclude_newer: source.timestamp.clone().map(ResolvedExcludeNewer::from),
                         };
 
                         let resolved_record = match ctx
@@ -1715,7 +1770,10 @@ async fn verify_source_metadata(
                     variant_files: Some(platform_setup.variant_files),
                     enabled_protocols: EnabledProtocols::default(),
                 },
-                exclude_newer: source_record.timestamp,
+                exclude_newer: source_record
+                    .timestamp
+                    .clone()
+                    .map(ResolvedExcludeNewer::from),
             };
 
             // Request the source record to verify if it still matches the
@@ -1734,7 +1792,7 @@ async fn verify_source_metadata(
             // Only produce a reuse hint when the source record has a
             // timestamp (i.e. it had host/build dependencies). Records
             // without a timestamp have nothing to soft-lock.
-            Ok(source_record.timestamp.map(|ts| {
+            Ok(source_record.timestamp.clone().map(|ts| {
                 (
                     SourceRecordReuseKey::new(
                         source_record.name().clone(),

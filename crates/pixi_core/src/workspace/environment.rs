@@ -833,7 +833,15 @@ mod tests {
         .unwrap();
 
         let env = workspace.environment("combined").unwrap();
-        let config = env.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(
+                &rattler_conda_types::ChannelConfig::default_with_root_dir(
+                    std::env::current_dir().unwrap(),
+                ),
+            )
+            .unwrap()
+            .unwrap()
+            .into();
         let package = PackageName::new_unchecked("polars");
 
         assert_eq!(
@@ -898,7 +906,15 @@ mod tests {
         .unwrap();
 
         let env = workspace.environment("combined").unwrap();
-        let config = env.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(
+                &rattler_conda_types::ChannelConfig::default_with_root_dir(
+                    std::env::current_dir().unwrap(),
+                ),
+            )
+            .unwrap()
+            .unwrap()
+            .into();
         let package = PackageName::new_unchecked("polars");
 
         assert_eq!(
@@ -951,7 +967,15 @@ mod tests {
         .unwrap();
 
         let env = workspace.environment("default").unwrap();
-        let config = env.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(
+                &rattler_conda_types::ChannelConfig::default_with_root_dir(
+                    std::env::current_dir().unwrap(),
+                ),
+            )
+            .unwrap()
+            .unwrap()
+            .into();
         let polars = PackageName::new_unchecked("polars");
         let numpy = PackageName::new_unchecked("numpy");
         let openssl = PackageName::new_unchecked("openssl");

@@ -163,7 +163,7 @@ pub trait LockFileExt {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<chrono::DateTime<chrono::Utc>>;
+    ) -> Option<pixi_spec::SourceTimestamps>;
 }
 
 impl LockFileExt for LockFile {
@@ -312,9 +312,9 @@ impl LockFileExt for LockFile {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<chrono::DateTime<chrono::Utc>> {
+    ) -> Option<pixi_spec::SourceTimestamps> {
         self.get_conda_source_package(environment, platform, package)
-            .and_then(|source| source.timestamp)
+            .and_then(|source| source.timestamp.clone())
     }
 }
 

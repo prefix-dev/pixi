@@ -317,6 +317,12 @@ async fn find_unsatisfiable_targets<'p>(
                         .insert(environment.clone());
                 }
 
+                EnvironmentUnsat::SourceExcludeNewerMismatch(..) => {
+                    // Source packages will be re-resolved with updated
+                    // timestamps during the update phase. No need to disregard
+                    // locked content.
+                }
+
                 EnvironmentUnsat::IndexesMismatch(_)
                 | EnvironmentUnsat::InvalidDistExtensionInNoBuild(_)
                 | EnvironmentUnsat::NoBuildWithNonBinaryPackages(_)

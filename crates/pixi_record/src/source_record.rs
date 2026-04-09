@@ -127,14 +127,14 @@ pub struct SourceRecord<D> {
     /// The variants that uniquely identify the way this package was built.
     pub variants: BTreeMap<String, VariantValue>,
 
-    /// The timestamp at which this record was solved. Using the same timestamp
-    /// when solving the host and build environments of this source record
-    /// should yield roughly the same environment. This is used to soft-lock
-    /// those environments.
+    /// The timestamps of the newest packages in the build/host environments at
+    /// the time this record was solved. Reusing these timestamps when
+    /// re-solving should yield roughly the same environment, soft-locking the
+    /// build/host dependencies.
     ///
     /// `None` when the source package has no host or build dependencies,
     /// meaning there is nothing to soft-lock.
-    pub timestamp: Option<chrono::DateTime<chrono::Utc>>,
+    pub timestamp: Option<pixi_spec::SourceTimestamps>,
 
     /// The short hash that was originally parsed from the lock file (e.g.
     /// the 9f3c2a7b part of numba-cuda[9f3c2a7b] @ .).
@@ -870,7 +870,7 @@ mod tests {
                 "python".into(),
                 crate::VariantValue::from("3.12".to_string()),
             )]),
-            timestamp: Some(chrono::Utc::now()),
+            timestamp: Some(pixi_spec::SourceTimestamps::from(chrono::Utc::now())),
             identifier_hash: Some("abcd1234".to_string()),
         };
 
@@ -940,7 +940,7 @@ mod tests {
             }),
             build_source: None,
             variants: BTreeMap::new(),
-            timestamp: Some(chrono::Utc::now()),
+            timestamp: Some(pixi_spec::SourceTimestamps::from(chrono::Utc::now())),
             identifier_hash: None,
         });
 
@@ -974,7 +974,7 @@ mod tests {
             manifest_source,
             build_source,
             variants,
-            timestamp: Some(chrono::Utc::now()),
+            timestamp: Some(pixi_spec::SourceTimestamps::from(chrono::Utc::now())),
             identifier_hash: None,
         }
     }

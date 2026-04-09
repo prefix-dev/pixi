@@ -3556,7 +3556,11 @@ polars = "0d"
             manifest: &manifest,
             features: vec![default_feature],
         };
-        let config = features.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = features
+            .exclude_newer_config_resolved(&default_channel_config())
+            .unwrap()
+            .unwrap()
+            .into();
         let after = chrono::Utc::now();
         let package = PackageName::from_str("polars").unwrap();
         let package_cutoff = config.cutoff_for_package(&package, None);
@@ -3599,7 +3603,11 @@ exclude-newer = "2015-12-02T02:07:43Z"
             manifest: &manifest,
             features: vec![default_feature],
         };
-        let config = features.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = features
+            .exclude_newer_config_resolved(&default_channel_config())
+            .unwrap()
+            .unwrap()
+            .into();
         let after = chrono::Utc::now();
 
         let package = PackageName::from_str("polars").unwrap();

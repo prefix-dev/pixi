@@ -261,7 +261,8 @@ pub async fn main() {
 mod tests {
     use cargo_toml::Manifest;
     use indexmap::IndexMap;
-    use recipe_stage0::recipe::{Item, Value};
+    use rattler_build_recipe::stage0::Item;
+    use rattler_conda_types::PackageName;
 
     use super::*;
 
@@ -300,12 +301,6 @@ mod tests {
             .join("\n");
         assert!(content_str.contains("--bin rattler-build"));
     }
-    use cargo_toml::Manifest;
-    use indexmap::IndexMap;
-    use rattler_build_recipe::stage0::Item;
-    use rattler_conda_types::PackageName;
-
-    use super::*;
 
     #[test]
     fn test_input_globs_includes_extra_globs() {
