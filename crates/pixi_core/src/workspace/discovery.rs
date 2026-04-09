@@ -128,6 +128,10 @@ pub enum WorkspaceLocatorError {
     #[error("could not find workspace '{}' at '{}'", .name, .path.display())]
     #[diagnostic(help = "clean the registry with `pixi workspace register prune`")]
     MissingWorkspacePath { name: String, path: PathBuf },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PixiVersionMismatch(#[from] Box<pixi_manifest::PixiVersionMismatchError>),
 }
 
 impl WorkspaceLocator {
@@ -211,6 +215,7 @@ impl WorkspaceLocator {
         // Discover the workspace manifest for the current path.
         let workspace_manifests = match pixi_manifest::WorkspaceDiscoverer::new(discovery_start)
             .with_closest_package(self.with_closest_package)
+            .with_ignore_pixi_version_check(self.ignore_pixi_version_check)
             .discover()
         {
             Ok(manifests) => manifests,
@@ -223,6 +228,9 @@ impl WorkspaceLocator {
             }
             Err(WorkspaceDiscoveryError::Canonicalize(source, path)) => {
                 return Err(WorkspaceLocatorError::Canonicalize { path, source });
+            }
+            Err(WorkspaceDiscoveryError::PixiVersionMismatch(err)) => {
+                return Err(WorkspaceLocatorError::PixiVersionMismatch(err));
             }
         };
 
@@ -279,10 +287,6 @@ impl WorkspaceLocator {
         }
 
         let workspace = Workspace::from_manifests(discovered_manifests);
-
-        if !self.ignore_pixi_version_check {
-            workspace.verify_current_pixi_meets_requirement()?;
-        }
 
         Ok(workspace)
     }

@@ -31,8 +31,8 @@ pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
 pub use dependencies::{CondaConstraints, CondaDependencies, PyPiDependencies};
 pub use discovery::{
-    DiscoveryStart, ExplicitManifestError, LoadManifestsError, Manifests, WorkspaceDiscoverer,
-    WorkspaceDiscoveryError,
+    DiscoveryStart, ExplicitManifestError, LoadManifestsError, Manifests, PixiVersionMismatchError,
+    WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
 pub use environment::{Environment, EnvironmentName};
 pub use error::TomlError;

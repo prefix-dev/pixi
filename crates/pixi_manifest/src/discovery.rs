@@ -3,12 +3,13 @@
 
 use std::{
     path::{Path, PathBuf},
+    str::FromStr,
     sync::Arc,
 };
 
-use miette::{Diagnostic, NamedSource};
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use pixi_consts::consts;
-use rattler_conda_types::VersionSpec;
+use rattler_conda_types::{ParseStrictness, Version, VersionSpec};
 use thiserror::Error;
 use toml_span::Deserialize;
 
@@ -34,6 +35,9 @@ pub struct WorkspaceDiscoverer {
 
     /// Also discover the package closest to the current directory.
     discover_package: bool,
+
+    /// Skip the early `requires-pixi` version check.
+    ignore_pixi_version_check: bool,
 }
 
 /// A workspace discovered by calling [`WorkspaceDiscoverer::discover`].
@@ -166,13 +170,6 @@ pub enum ExplicitManifestError {
 
     #[error(transparent)]
     InvalidManifest(ProvenanceError),
-
-    #[error(transparent)]
-    ParseVersionError(#[from] rattler_conda_types::ParseVersionError),
-
-    /// The pixi version could not match the minimum requirement.
-    #[error("workspace requires pixi '{}', but I am {}", .requires_pixi, consts::PIXI_VERSION)]
-    SelfVersionMatchError { requires_pixi: VersionSpec },
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -190,6 +187,52 @@ pub enum WorkspaceDiscoveryError {
 
     #[error("cannot canonicalize path '{1}' while searching for a manifest.")]
     Canonicalize(#[source] std::io::Error, PathBuf),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PixiVersionMismatch(#[from] Box<PixiVersionMismatchError>),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+#[error(
+    "this project requires pixi '{requires_pixi}', but you have pixi {}",
+    consts::PIXI_VERSION
+)]
+#[diagnostic(help("update pixi to a version that satisfies '{requires_pixi}'"))]
+pub struct PixiVersionMismatchError {
+    pub requires_pixi: VersionSpec,
+    #[source_code]
+    pub source_code: NamedSource<Arc<str>>,
+    #[label("this version requirement is not satisfied")]
+    pub span: SourceSpan,
+}
+
+/// Extract and check the `requires-pixi` field from a parsed TOML tree before
+/// full deserialization. Returns `Some((spec, span))` if the version doesn't
+/// match, `None` if it matches or the field is absent/unparseable.
+fn check_requires_pixi_early(
+    toml: &toml_span::Value<'_>,
+    kind: ManifestKind,
+) -> Option<(VersionSpec, SourceSpan)> {
+    let pointer = match kind {
+        ManifestKind::Pixi | ManifestKind::MojoProject => "/workspace/requires-pixi",
+        ManifestKind::Pyproject => "/tool/pixi/workspace/requires-pixi",
+    };
+    let value = toml.pointer(pointer)?;
+    // Non-string values (e.g. integers, bools) will be caught as schema
+    // errors during full deserialization — skip the version check here.
+    let spec_str = value.as_str()?;
+    let span = value.span;
+    let spec = VersionSpec::from_str(spec_str, ParseStrictness::Strict).ok()?;
+    let current = Version::from_str(consts::PIXI_VERSION).ok()?;
+    if spec.matches(&current) {
+        None
+    } else {
+        Some((
+            spec,
+            SourceSpan::new(span.start.into(), span.end - span.start),
+        ))
+    }
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -235,6 +278,7 @@ impl WorkspaceDiscoverer {
         Self {
             start,
             discover_package: false,
+            ignore_pixi_version_check: false,
         }
     }
 
@@ -247,6 +291,15 @@ impl WorkspaceDiscoverer {
     pub fn with_closest_package(self, discover_package: bool) -> Self {
         Self {
             discover_package,
+            ..self
+        }
+    }
+
+    /// If set to `true`, skips the early `requires-pixi` version check that
+    /// runs before full manifest deserialization.
+    pub fn with_ignore_pixi_version_check(self, ignore: bool) -> Self {
+        Self {
+            ignore_pixi_version_check: ignore,
             ..self
         }
     }
@@ -385,6 +438,20 @@ impl WorkspaceDiscoverer {
                     .into());
                 }
             };
+
+            // Before full deserialization, check requires-pixi so that version
+            // mismatches are reported instead of confusing parse errors from
+            // fields that only exist in newer manifest formats.
+            if !self.ignore_pixi_version_check
+                && let Some((requires_pixi, span)) =
+                    check_requires_pixi_early(&toml, provenance.kind)
+            {
+                return Err(Box::new(PixiVersionMismatchError {
+                    requires_pixi,
+                    source_code: source,
+                    span,
+                }).into());
+            }
 
             // Parse the workspace manifest.
             let manifest_dir = provenance.path.parent().expect("a file must have a parent");
