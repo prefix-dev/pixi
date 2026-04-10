@@ -24,6 +24,7 @@ use pixi_command_dispatcher::{
     reporter::{
         BackendSourceBuildId, BuildBackendMetadataId, CondaSolveId, GitCheckoutId,
         InstantiateToolEnvId, PixiInstallId, PixiSolveId, SourceBuildId, SourceMetadataId,
+        SourceRecordId,
     },
 };
 use rattler_conda_types::PackageName;
@@ -64,6 +65,7 @@ impl EventTree {
         let mut pixi_install_label = HashMap::new();
         let mut build_backend_metadata_label = HashMap::new();
         let mut source_metadata_label = HashMap::new();
+        let mut source_record_label = HashMap::new();
         let mut source_build_label = HashMap::new();
         let mut backend_source_build_labels = HashMap::new();
         let mut instantiate_tool_env_label = HashMap::new();
@@ -145,6 +147,24 @@ impl EventTree {
                     );
                 }
                 Event::SourceMetadataFinished { .. } => {}
+                Event::SourceRecordQueued { id, context, spec } => {
+                    source_record_label.insert(
+                        *id,
+                        format!(
+                            "{} @ {}",
+                            &spec.package.as_source(),
+                            spec.backend_metadata.manifest_source
+                        ),
+                    );
+                    builder.set_event_parent((*id).into(), *context);
+                }
+                Event::SourceRecordStarted { id } => {
+                    builder.alloc_node(
+                        (*id).into(),
+                        format!("Source record ({})", source_record_label.get(id).unwrap()),
+                    );
+                }
+                Event::SourceRecordFinished { .. } => {}
                 Event::BuildBackendMetadataQueued { id, context, spec } => {
                     build_backend_metadata_label.insert(*id, spec.manifest_source.to_string());
                     builder.set_event_parent((*id).into(), *context);
@@ -160,10 +180,8 @@ impl EventTree {
                 }
                 Event::BuildBackendMetadataFinished { .. } => {}
                 Event::SourceBuildQueued { id, context, spec } => {
-                    source_build_label.insert(
-                        *id,
-                        format!("{} @ {}", spec.package.name.as_source(), spec.source),
-                    );
+                    source_build_label
+                        .insert(*id, format!("{} @ {}", spec.name.as_source(), spec.source));
                     builder.set_event_parent((*id).into(), *context);
                 }
                 Event::SourceBuildStarted { id } => {
@@ -178,7 +196,7 @@ impl EventTree {
                     package,
                     context,
                 } => {
-                    backend_source_build_labels.insert(*id, package.name.as_source().to_owned());
+                    backend_source_build_labels.insert(*id, package.clone());
                     builder.set_event_parent((*id).into(), *context);
                 }
                 Event::BackendSourceBuildStarted { id } => {
@@ -255,6 +273,7 @@ pub enum EventId {
     PixiInstall(PixiInstallId),
     GitCheckout(GitCheckoutId),
     SourceMetadata(SourceMetadataId),
+    SourceRecord(SourceRecordId),
     BuildBackendMetadata(BuildBackendMetadataId),
     InstantiateToolEnv(InstantiateToolEnvId),
     SourceBuild(SourceBuildId),
@@ -271,6 +290,7 @@ impl From<ReporterContext> for EventId {
             ReporterContext::InstantiateToolEnv(id) => Self::InstantiateToolEnv(id),
             ReporterContext::SourceBuild(id) => Self::SourceBuild(id),
             ReporterContext::SourceMetadata(id) => Self::SourceMetadata(id),
+            ReporterContext::SourceRecord(id) => Self::SourceRecord(id),
             ReporterContext::BackendSourceBuild(id) => Self::BackendSourceBuild(id),
         }
     }

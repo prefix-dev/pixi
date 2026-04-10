@@ -396,6 +396,7 @@ pub fn to_requirements<'req>(
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
     let requirements: Result<Vec<pep508_rs::Requirement>, ConversionError> = requirements
         .map(|requirement| {
+            let mut verbatim_url = None;
             // First we convert `uv_distribution_types::Requirement` into a string
             // The implementation is nearly identical to `requirement.to_string()`.
             // However, we ignore the uv specific index since
@@ -450,19 +451,31 @@ pub fn to_requirements<'req>(
                         writeln!(package_string, "#subdirectory={}", subdirectory.display())?;
                     }
                 }
-                uv_distribution_types::RequirementSource::Path { url, .. } => {
+                uv_distribution_types::RequirementSource::Path { url, .. }
+                | uv_distribution_types::RequirementSource::Directory { url, .. } => {
+                    verbatim_url = url.given().map(|g| {
+                        pep508_rs::VersionOrUrl::Url(
+                            pep508_rs::VerbatimUrl::from_url((*url.to_url()).clone()).with_given(g),
+                        )
+                    });
                     write!(package_string, " @ {url}")?;
                 }
-                uv_distribution_types::RequirementSource::Directory { url, .. } => {
-                    write!(package_string, " @ {url}")?;
-                }
-            }
+            };
             if let Some(marker) = marker.contents() {
                 write!(package_string, " ; {marker}")?;
             }
-            pep508_rs::Requirement::from_str(&package_string)
+            let raw_requirement = pep508_rs::Requirement::from_str(&package_string)
                 .map_err(crate::Pep508Error::Pep508Error)
-                .map_err(From::from)
+                .map_err(<ConversionError>::from)?;
+
+            // We need to pass the VerbatimUrl through!
+            Ok(pep508_rs::Requirement {
+                name: raw_requirement.name,
+                extras: raw_requirement.extras,
+                version_or_url: verbatim_url.or(raw_requirement.version_or_url),
+                marker: raw_requirement.marker,
+                origin: raw_requirement.origin,
+            })
         })
         .collect();
 

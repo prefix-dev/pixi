@@ -207,7 +207,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .build_backend_metadata(backend_metadata_spec.clone())
         .await?;
 
-    let packages = backend_metadata.metadata.outputs();
+    let packages = &backend_metadata.metadata.outputs;
 
     // Print initial build summary
     pixi_progress::println!(
@@ -215,13 +215,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         console::style(console::Emoji("📋 ", "")).cyan(),
         packages.len()
     );
-    for pkg in &packages {
+    for pkg in packages {
         pixi_progress::println!(
             "  - {} v{} [{}] ({})",
-            pkg.name.as_normalized(),
-            pkg.version,
-            pkg.build,
-            pkg.subdir
+            pkg.metadata.name.as_normalized(),
+            pkg.metadata.version,
+            pkg.metadata.build,
+            pkg.metadata.subdir
         );
     }
     pixi_progress::println!("");
@@ -232,7 +232,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     for package in packages {
         let built_package = command_dispatcher
             .source_build(SourceBuildSpec {
-                package,
+                name: package.metadata.name.clone(),
                 output_directory: None,
                 source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
@@ -243,7 +243,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 build_environment: build_environment.clone(),
                 variant_configuration: Some(variant_configuration.clone()),
                 variant_files: Some(variant_files.clone()),
-                variants: None,
+                variants: Default::default(),
                 enabled_protocols: Default::default(),
                 work_directory: None,
                 clean: args.clean,

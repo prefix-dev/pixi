@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
-use crate::cache::source_metadata::SourceMetadataCache;
+use crate::cache::source_record::SourceRecordCache;
 use crate::discover_backend_cache::DiscoveryCache;
 use crate::{
     CacheDirs, CommandDispatcher, Executor, Limits, Reporter,
@@ -172,7 +172,7 @@ impl CommandDispatcherBuilder {
             BuildBackendMetadataCache::new(cache_dirs.build_backend_metadata().into());
 
         let url_resolver = self.url_resolver.unwrap_or_default();
-        let source_metadata_cache = SourceMetadataCache::new(cache_dirs.source_metadata().into());
+        let source_record_cache = SourceRecordCache::new(cache_dirs.source_metadata().into());
 
         let build_cache = BuildCache::new(cache_dirs.source_builds());
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
@@ -188,7 +188,7 @@ impl CommandDispatcherBuilder {
         let data = Arc::new(CommandDispatcherData {
             gateway,
             build_backend_metadata_cache,
-            source_metadata_cache,
+            source_record_cache,
             build_cache,
             root_dir,
             git_resolver,

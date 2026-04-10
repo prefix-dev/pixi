@@ -2,10 +2,8 @@ mod event_reporter;
 mod event_tree;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
-    // ptr,
-    str::FromStr,
 };
 
 use pixi_path::AbsPathBuf;
@@ -17,8 +15,8 @@ use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, Executor,
-    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
-    PixiEnvironmentSpec, SourceBuildCacheStatusSpec, build::PinnedSourceCodeLocation,
+    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
+    SourceBuildCacheStatusSpec, build::PinnedSourceCodeLocation,
 };
 use pixi_config::default_channel_config;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -29,8 +27,7 @@ use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_url::UrlError;
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, PackageName, Platform, VersionSpec, VersionWithSource,
-    prefix::Prefix,
+    ChannelUrl, GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
 };
 use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
@@ -170,7 +167,7 @@ pub async fn simple_test() {
     dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
             name: "test-env".to_owned(),
-            records: records.clone(),
+            records: records.iter().cloned().map(Into::into).collect(),
             prefix: Prefix::create(&prefix_dir).unwrap(),
             installed: None,
             build_environment: build_env,
@@ -635,7 +632,7 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
         .iter()
         .filter_map(|event| match event {
             event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+                Some(package.as_str())
             }
             _ => None,
         })
@@ -709,15 +706,8 @@ async fn source_build_cache_status_clear_works() {
         host_virtual_packages: vec![],
     };
 
-    let pkg = PackageIdentifier {
-        name: PackageName::try_from("dummy-pkg").unwrap(),
-        version: VersionWithSource::from_str("0.0.0").unwrap(),
-        build: "0".to_string(),
-        subdir: host.to_string(),
-    };
-
     let spec = SourceBuildCacheStatusSpec {
-        package: pkg,
+        name: PackageName::try_from("dummy-pkg").unwrap(),
         source: PinnedSourceCodeLocation::new(
             PinnedPathSpec {
                 path: tmp_dir.path().to_string_lossy().into_owned().into(),
@@ -730,7 +720,7 @@ async fn source_build_cache_status_clear_works() {
         build_environment: build_env,
         channel_config: default_channel_config(),
         enabled_protocols: Default::default(),
-        variants: None,
+        variants: BTreeMap::new(),
     };
 
     let first = dispatcher
@@ -1146,7 +1136,7 @@ pub async fn test_force_rebuild() {
         .iter()
         .filter_map(|event| match event {
             event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+                Some(package.as_str())
             }
             _ => None,
         })
@@ -1178,7 +1168,7 @@ pub async fn test_force_rebuild() {
         .iter()
         .filter_map(|event| match event {
             event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+                Some(package.as_str())
             }
             _ => None,
         })
@@ -1206,7 +1196,7 @@ pub async fn test_force_rebuild() {
         .iter()
         .filter_map(|event| match event {
             event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized())
+                Some(package.as_str())
             }
             _ => None,
         })
@@ -1408,7 +1398,7 @@ pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
         .iter()
         .filter_map(|event| match event {
             event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized().to_string())
+                Some(package.clone())
             }
             _ => None,
         })
@@ -1502,7 +1492,7 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
         .iter()
         .filter_map(|event| match event {
             event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized().to_string())
+                Some(package.clone())
             }
             _ => None,
         })
@@ -1593,7 +1583,7 @@ pub async fn test_package_rebuilt_when_source_file_modified() {
         .iter()
         .filter_map(|event| match event {
             event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized().to_string())
+                Some(package.clone())
             }
             _ => None,
         })
@@ -1685,7 +1675,7 @@ pub async fn test_package_not_rebuilt_when_no_files_changed() {
         .iter()
         .filter_map(|event| match event {
             event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
-                Some(package.name.as_normalized().to_string())
+                Some(package.clone())
             }
             _ => None,
         })

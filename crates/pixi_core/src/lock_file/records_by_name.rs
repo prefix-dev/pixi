@@ -1,6 +1,7 @@
 use super::package_identifier::ConversionError;
-use crate::lock_file::{PypiPackageIdentifier, PypiRecord};
-use pixi_record::PixiRecord;
+use crate::lock_file::{LockedPypiRecord, PypiPackageIdentifier};
+use pixi_install_pypi::UnresolvedPypiRecord;
+use pixi_record::{PixiRecord, UnresolvedPixiRecord};
 use pixi_uv_conversions::to_uv_normalize;
 use pypi_modifiers::pypi_tags::is_python_record;
 use rattler_conda_types::{PackageName, RepoDataRecord, VersionWithSource};
@@ -8,8 +9,10 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::hash::Hash;
 
-pub type PypiRecordsByName = DependencyRecordsByName<PypiRecord>;
+pub type PypiRecordsByName = DependencyRecordsByName<UnresolvedPypiRecord>;
+pub type LockedPypiRecordsByName = DependencyRecordsByName<LockedPypiRecord>;
 pub type PixiRecordsByName = DependencyRecordsByName<PixiRecord>;
+pub type UnresolvedPixiRecordsByName = DependencyRecordsByName<UnresolvedPixiRecord>;
 
 /// A trait required from the dependencies stored in DependencyRecordsByName
 pub trait HasNameVersion {
@@ -20,19 +23,32 @@ pub trait HasNameVersion {
 
     /// Returns the name of the dependency
     fn name(&self) -> &Self::N;
-    /// Returns the version of the dependency
-    fn version(&self) -> &Self::V;
+    /// Returns the version of the dependency, or `None` if the version is
+    /// unknown (e.g. a pypi source dependency with a dynamic version).
+    fn version(&self) -> Option<&Self::V>;
 }
 
-impl HasNameVersion for PypiRecord {
+impl HasNameVersion for LockedPypiRecord {
     type N = pep508_rs::PackageName;
     type V = pep440_rs::Version;
 
     fn name(&self) -> &pep508_rs::PackageName {
-        &self.0.name
+        self.data.name()
     }
-    fn version(&self) -> &Self::V {
-        &self.0.version
+    fn version(&self) -> Option<&Self::V> {
+        Some(&self.locked_version)
+    }
+}
+
+impl HasNameVersion for UnresolvedPypiRecord {
+    type N = pep508_rs::PackageName;
+    type V = pep440_rs::Version;
+
+    fn name(&self) -> &pep508_rs::PackageName {
+        self.as_package_data().name()
+    }
+    fn version(&self) -> Option<&Self::V> {
+        self.as_package_data().version()
     }
 }
 
@@ -43,8 +59,8 @@ impl HasNameVersion for RepoDataRecord {
     fn name(&self) -> &rattler_conda_types::PackageName {
         &self.package_record.name
     }
-    fn version(&self) -> &Self::V {
-        &self.package_record.version
+    fn version(&self) -> Option<&Self::V> {
+        Some(&self.package_record.version)
     }
 }
 
@@ -56,8 +72,21 @@ impl HasNameVersion for PixiRecord {
         &self.package_record().name
     }
 
-    fn version(&self) -> &Self::V {
-        &self.package_record().version
+    fn version(&self) -> Option<&Self::V> {
+        Some(&self.package_record().version)
+    }
+}
+
+impl HasNameVersion for UnresolvedPixiRecord {
+    type N = PackageName;
+    type V = VersionWithSource;
+
+    fn name(&self) -> &Self::N {
+        UnresolvedPixiRecord::name(self)
+    }
+
+    fn version(&self) -> Option<&Self::V> {
+        self.package_record().map(|pr| &pr.version)
     }
 }
 
@@ -161,9 +190,13 @@ impl<D: HasNameVersion> DependencyRecordsByName<D> {
                     entry.insert(idx);
                 }
                 Entry::Occupied(entry) => {
-                    // Use the entry with the highest version or otherwise the first we encounter.
+                    // Use the entry with the highest version or otherwise the first
+                    // we encounter. If either version is `None` (e.g. a pypi source
+                    // dependency with a dynamic version), keep the existing entry.
                     let idx = *entry.get();
-                    if records[idx].version() < record.version() {
+                    if let (Some(existing), Some(new)) = (records[idx].version(), record.version())
+                        && existing < new
+                    {
                         records[idx] = record;
                     }
                 }
@@ -202,7 +235,7 @@ impl PixiRecordsByName {
                         .map(move |identifiers| (idx, record, identifiers))
                 }
                 PixiRecord::Source(source_record) => {
-                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
+                    PypiPackageIdentifier::from_package_record(source_record.package_record())
                         .ok()
                         .map(move |identifiers| (idx, record, identifiers))
                 }
@@ -214,5 +247,107 @@ impl PixiRecordsByName {
                 })
             })
             .collect::<Result<HashMap<_, _>, ConversionError>>()
+    }
+}
+
+impl UnresolvedPixiRecordsByName {
+    /// Converts to a [`PixiRecordsByName`] on a best-effort basis.
+    ///
+    /// Binary records and full source records are converted; partial source
+    /// records (whose metadata is incomplete) are silently dropped.
+    pub(crate) fn into_resolved_best_effort(self) -> PixiRecordsByName {
+        PixiRecordsByName::from_iter(
+            self.records
+                .into_iter()
+                .filter_map(|r| r.try_into_resolved().ok()),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lock_file::tests::{make_source_package, make_wheel_package};
+
+    #[test]
+    fn from_iter_with_none_version_does_not_panic() {
+        // A single package with no version should work fine.
+        let records = vec![make_source_package("dynamic-dep").into()];
+        let by_name = PypiRecordsByName::from_iter(records);
+        assert_eq!(by_name.len(), 1);
+        assert!(by_name.records[0].version().is_none());
+    }
+
+    #[test]
+    fn from_iter_dedup_keeps_first_when_both_versions_none() {
+        // Two packages with the same name and no version — should keep the first.
+        let records = vec![
+            make_source_package("dynamic-dep").into(),
+            make_source_package("dynamic-dep").into(),
+        ];
+        let by_name = PypiRecordsByName::from_iter(records);
+        assert_eq!(by_name.len(), 1);
+        assert!(by_name.records[0].version().is_none());
+    }
+
+    #[test]
+    fn from_iter_dedup_keeps_first_when_existing_has_no_version() {
+        // First entry has no version, second has a version — keeps the first
+        // because we can't compare None to Some.
+        let records = vec![
+            make_source_package("pkg").into(),
+            make_wheel_package("pkg", "1.0.0").into(),
+        ];
+        let by_name = PypiRecordsByName::from_iter(records);
+        assert_eq!(by_name.len(), 1);
+        assert!(by_name.records[0].version().is_none());
+    }
+
+    #[test]
+    fn from_iter_dedup_keeps_first_when_new_has_no_version() {
+        // First entry has a version, second has no version — keeps the first.
+        let records = vec![
+            make_wheel_package("pkg", "1.0.0").into(),
+            make_source_package("pkg").into(),
+        ];
+        let by_name = PypiRecordsByName::from_iter(records);
+        assert_eq!(by_name.len(), 1);
+        assert_eq!(by_name.records[0].version().unwrap().to_string(), "1.0.0");
+    }
+
+    #[test]
+    fn from_iter_dedup_picks_higher_version() {
+        let records = vec![
+            make_wheel_package("pkg", "1.0.0").into(),
+            make_wheel_package("pkg", "2.0.0").into(),
+        ];
+        let by_name = PypiRecordsByName::from_iter(records);
+        assert_eq!(by_name.len(), 1);
+        assert_eq!(by_name.records[0].version().unwrap().to_string(), "2.0.0");
+    }
+
+    #[test]
+    fn from_unique_iter_with_none_version() {
+        // from_unique_iter should work fine with None version (it doesn't compare versions).
+        let records = vec![make_source_package("dynamic-dep").into()];
+        let by_name = PypiRecordsByName::from_unique_iter(records).unwrap();
+        assert_eq!(by_name.len(), 1);
+        assert!(by_name.records[0].version().is_none());
+    }
+
+    #[test]
+    fn mixed_versioned_and_dynamic_packages() {
+        let records = vec![
+            make_wheel_package("versioned-pkg", "1.0.0").into(),
+            make_source_package("dynamic-pkg").into(),
+        ];
+        let by_name = PypiRecordsByName::from_iter(records);
+        assert_eq!(by_name.len(), 2);
+
+        let versioned = by_name.by_name(&"versioned-pkg".parse().unwrap()).unwrap();
+        assert_eq!(versioned.version().unwrap().to_string(), "1.0.0");
+
+        let dynamic = by_name.by_name(&"dynamic-pkg".parse().unwrap()).unwrap();
+        assert!(dynamic.version().is_none());
     }
 }

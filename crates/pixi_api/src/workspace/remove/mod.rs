@@ -60,6 +60,7 @@ pub async fn remove_conda_deps(
                 lock_file_usage: options.lock_file_usage,
                 no_install: options.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
             },
             ReinstallPackages::default(),
             &InstallFilter::default(),
@@ -97,6 +98,7 @@ pub async fn remove_pypi_deps(
                 lock_file_usage: options.lock_file_usage,
                 no_install: options.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
             },
             ReinstallPackages::default(),
             &InstallFilter::default(),

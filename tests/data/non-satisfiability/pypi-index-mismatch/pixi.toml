@@ -1,0 +1,10 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-index-mismatch"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+my-dep = { version = ">=1.0", index = "https://custom.example.com/simple" }
