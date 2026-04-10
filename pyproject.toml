@@ -14,6 +14,7 @@ ignore = [
   "site",
   "output",
   "target",
+  "pytest-temp",
 ]
 pythonPlatform = "All"
 pythonVersion = "3.13"
