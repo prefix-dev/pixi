@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+---
+  × this project requires pixi '>=100', but you have pixi 0.67.0
+   ╭─[<CARGO_ROOT>/tests/data/workspace-discovery/requires-newer-pixi/pixi.toml:5:18]
+ 4 │ platforms = []
+ 5 │ requires-pixi = ">=100"
+   ·                  ──┬──
+   ·                    ╰── this version requirement is not satisfied
+ 6 │ some-future-field = true
+   ╰────
+  help: update pixi to a version that satisfies '>=100'
