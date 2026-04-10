@@ -77,9 +77,14 @@ impl Protocol for RattlerBuildBackend {
         .extend_with_input_variants(params.variant_configuration.unwrap_or_default());
 
         // Create source for error reporting
+        let recipe_code = if let Some(ref version) = self.package_version {
+            inject_pixi_version_into_context(&self.recipe_source.code, version)?
+        } else {
+            self.recipe_source.code.to_string()
+        };
         let source = rattler_build_recipe::source_code::Source::from_string(
             self.recipe_source.name.clone(),
-            self.recipe_source.code.to_string(),
+            recipe_code,
         );
 
         // Parse the recipe into stage0
@@ -328,9 +333,14 @@ impl Protocol for RattlerBuildBackend {
         };
 
         // Create source for error reporting
+        let recipe_code = if let Some(ref version) = self.package_version {
+            inject_pixi_version_into_context(&self.recipe_source.code, version)?
+        } else {
+            self.recipe_source.code.to_string()
+        };
         let source = rattler_build_recipe::source_code::Source::from_string(
             self.recipe_source.name.clone(),
-            self.recipe_source.code.to_string(),
+            recipe_code,
         );
 
         // Parse the recipe into stage0
@@ -471,6 +481,38 @@ impl Protocol for RattlerBuildBackend {
     }
 }
 
+/// Injects `PIXI_PACKAGE_VERSION` as a Jinja2 context variable into the recipe YAML source.
+/// If the variable is already defined in the `context:` block, it is not overridden.
+fn inject_pixi_version_into_context(source_code: &str, version: &str) -> miette::Result<String> {
+    // If already explicitly defined by the user, respect it
+    if source_code.contains("PIXI_PACKAGE_VERSION:") {
+        return Ok(source_code.to_string());
+    }
+
+    let injected_line = format!("  PIXI_PACKAGE_VERSION: \"{version}\"\n");
+
+    // Find context: as a top-level key (at start of line, not indented)
+    let insert_after = if source_code.starts_with("context:") {
+        source_code
+            .find('\n')
+            .map(|i| i + 1)
+            .unwrap_or(source_code.len())
+    } else if let Some(pos) = source_code.find("\ncontext:") {
+        let after = pos + "\ncontext:".len();
+        source_code[after..]
+            .find('\n')
+            .map(|i| after + i + 1)
+            .unwrap_or(source_code.len())
+    } else {
+        // No context: block — prepend one
+        return Ok(format!("context:\n{injected_line}\n{source_code}"));
+    };
+
+    let mut result = source_code.to_string();
+    result.insert_str(insert_after, &injected_line);
+    Ok(result)
+}
+
 /// Extracts the package sources from an `Output` object that are mutable and
 /// should be watched for changes.
 fn extract_mutable_package_sources(output: &Output) -> Option<Vec<PathBuf>> {
@@ -591,8 +633,14 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
         }
 
         let mut workspace_dependencies = HashMap::new();
+        let project_model = params.project_model;
 
-        if let Some(target) = params.project_model.and_then(|m| m.targets) {
+        let package_version = project_model
+            .as_ref()
+            .and_then(|m| m.version.as_ref())
+            .map(|v| v.to_string());
+
+        if let Some(target) = project_model.and_then(|m| m.targets) {
             fn extract_workspace_deps(
                 target: Target,
                 workspace_deps: &mut HashMap<String, SourcePackageSpec>,
@@ -653,6 +701,7 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
 
         // Set the workspace dependencies
         instance.workspace_dependencies = workspace_dependencies;
+        instance.package_version = package_version;
 
         Ok((Box::new(instance), InitializeResult {}))
     }
@@ -1327,5 +1376,97 @@ numpy:
 
         // Verify that the basic manifest glob is still present
         assert!(globs.contains("**"));
+    }
+
+    #[tokio::test]
+    async fn test_pixi_package_version_injected_from_project_model() {
+        use pixi_build_types::ProjectModel;
+        use rattler_conda_types::Version;
+        use std::str::FromStr;
+
+        let temp_dir = tempdir().unwrap();
+        let recipe_path = temp_dir.path().join("recipe.yaml");
+
+        // Recipe using ${{ PIXI_PACKAGE_VERSION }} directly — no hardcoded version
+        let recipe = "package:\n  name: my-pkg\n  version: ${{ PIXI_PACKAGE_VERSION }}\n\nbuild:\n  number: 0\n";
+        tokio::fs::write(&recipe_path, recipe)
+            .await
+            .expect("Failed to write recipe");
+
+        let project_model = ProjectModel {
+            name: Some("my-pkg".to_string()),
+            version: Some(Version::from_str("1.2.3").unwrap()),
+            ..Default::default()
+        };
+
+        let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
+            .initialize(InitializeParams {
+                workspace_directory: None,
+                source_directory: None,
+                manifest_path: recipe_path,
+                project_model: Some(project_model),
+                configuration: None,
+                target_configuration: None,
+                cache_directory: None,
+            })
+            .await
+            .unwrap();
+
+        let result = factory
+            .0
+            .conda_outputs(CondaOutputsParams {
+                channels: vec![],
+                host_platform: Platform::Linux64,
+                build_platform: Platform::Linux64,
+                variant_configuration: None,
+                variant_files: None,
+                work_directory: temp_dir.path().to_path_buf(),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.outputs.len(), 1);
+        assert_eq!(
+            result.outputs[0].metadata.version.to_string(),
+            "1.2.3",
+            "Package version should be injected from PIXI_PACKAGE_VERSION"
+        );
+        assert_eq!(result.outputs[0].metadata.name.as_normalized(), "my-pkg");
+    }
+
+    #[test]
+    fn test_inject_version_no_context_block() {
+        let recipe = "package:\n  name: foo\n  version: 0.1.0\n";
+        let result = super::inject_pixi_version_into_context(recipe, "1.2.3").unwrap();
+        assert!(result.contains("PIXI_PACKAGE_VERSION: \"1.2.3\""));
+    }
+
+    #[test]
+    fn test_inject_version_prepended_before_existing_keys() {
+        let recipe = "context:\n  version: ${{ PIXI_PACKAGE_VERSION }}\npackage:\n  name: foo\n";
+        let result = super::inject_pixi_version_into_context(recipe, "1.2.3").unwrap();
+        let pixi_pos = result.find("PIXI_PACKAGE_VERSION:").unwrap();
+        let ver_pos = result.find("version: ${{ PIXI_PACKAGE_VERSION }}").unwrap();
+        assert!(pixi_pos < ver_pos);
+        assert!(result.contains("PIXI_PACKAGE_VERSION: \"1.2.3\""));
+        assert!(result.contains("version: ${{ PIXI_PACKAGE_VERSION }}"));
+    }
+
+    #[test]
+    fn test_inject_version_does_not_override_existing() {
+        let recipe = "context:\n  PIXI_PACKAGE_VERSION: \"my-custom\"\npackage:\n  name: foo\n";
+        let result = super::inject_pixi_version_into_context(recipe, "9.9.9").unwrap();
+        assert!(result.contains("PIXI_PACKAGE_VERSION: \"my-custom\""));
+        assert!(!result.contains("9.9.9"));
+    }
+
+    #[test]
+    fn test_inject_version_existing_context_other_keys_preserved() {
+        let recipe =
+            "context:\n  lib_version: \"2.0\"\n  suffix: \"-dev\"\npackage:\n  name: foo\n";
+        let result = super::inject_pixi_version_into_context(recipe, "3.0.0").unwrap();
+        assert!(result.contains("PIXI_PACKAGE_VERSION: \"3.0.0\""));
+        assert!(result.contains("lib_version: \"2.0\""));
+        assert!(result.contains("suffix: \"-dev\""));
     }
 }
