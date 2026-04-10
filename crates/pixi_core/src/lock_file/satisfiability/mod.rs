@@ -1241,7 +1241,7 @@ pub async fn verify_platform_satisfiability(
     while let Some(result) = pending_resolved_record.next().await {
         match result {
             Ok((unresolved_record, resolved_record)) => {
-                // Validate the patial source record against the resolved record.
+                // Validate the partial source record against the resolved record.
                 match validate_partial_against_resolved(
                     &unresolved_record,
                     &resolved_record.record,
