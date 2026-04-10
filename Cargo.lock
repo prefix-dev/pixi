@@ -6043,6 +6043,7 @@ dependencies = [
  "ctrlc",
  "deno_task_shell",
  "dialoguer",
+ "dirs",
  "dunce",
  "fancy_display",
  "flate2",

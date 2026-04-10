@@ -165,6 +165,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
+    // Warn if the bin directory is not on the PATH
+    last_updated_project.bin_dir().warn_if_not_on_path();
+
     if errors.is_empty() {
         Ok(())
     } else {

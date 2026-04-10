@@ -1,0 +1,35 @@
+--8<-- [start:description]
+
+Ensures that `~/.pixi/bin` (or `$PIXI_HOME/bin`) is on your shell's `PATH`.
+Automatically detects your shell and appends the appropriate snippet to the
+right config file.
+
+Supported shells: `bash`, `zsh`, `fish`, `nushell`, `powershell`, `xonsh`.
+
+--8<-- [end:description]
+--8<-- [start:example]
+
+## Examples
+
+Auto-detect your shell and update its config file:
+```shell
+pixi global shell-init
+```
+
+Target a specific shell:
+```shell
+pixi global shell-init --shell fish
+```
+
+Only print the snippet (do not modify any files):
+```shell
+pixi global shell-init --print
+pixi global shell-init --shell nushell --print
+```
+
+Overwrite a previously configured snippet (e.g. after changing `$PIXI_HOME`):
+```shell
+pixi global shell-init --force
+```
+
+--8<-- [end:example]
