@@ -4,9 +4,11 @@ use std::{
     process::{Command, Stdio},
     str::FromStr,
     sync::LazyLock,
+    time::Duration,
 };
 
 use clap::{ArgAction, Parser};
+use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, miette};
 use pixi_consts::consts;
@@ -26,6 +28,163 @@ use serde::{
 use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ExcludeNewer {
+    Timestamp(DateTime<Utc>),
+    Duration(Duration),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ConfigChannel {
+    pub channel: NamedChannelOrUrl,
+    pub exclude_newer: Option<ExcludeNewer>,
+}
+
+impl From<NamedChannelOrUrl> for ConfigChannel {
+    fn from(channel: NamedChannelOrUrl) -> Self {
+        Self {
+            channel,
+            exclude_newer: None,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+struct ConfigChannelTable {
+    channel: String,
+    #[serde(default, alias = "exclude_newer")]
+    exclude_newer: Option<ExcludeNewer>,
+}
+
+impl Serialize for ConfigChannel {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match &self.exclude_newer {
+            None => self.channel.serialize(serializer),
+            Some(exclude_newer) => ConfigChannelTable {
+                channel: self.channel.to_string(),
+                exclude_newer: Some(exclude_newer.clone()),
+            }
+            .serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for ConfigChannel {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum RawConfigChannel {
+            String(String),
+            Table(ConfigChannelTable),
+        }
+
+        match RawConfigChannel::deserialize(deserializer)? {
+            RawConfigChannel::String(value) => Ok(Self {
+                channel: NamedChannelOrUrl::from_str(&value).map_err(D::Error::custom)?,
+                exclude_newer: None,
+            }),
+            RawConfigChannel::Table(value) => Ok(Self {
+                channel: NamedChannelOrUrl::from_str(&value.channel).map_err(D::Error::custom)?,
+                exclude_newer: value.exclude_newer,
+            }),
+        }
+    }
+}
+
+impl ExcludeNewer {
+    pub fn cutoff(&self) -> DateTime<Utc> {
+        match self {
+            Self::Timestamp(cutoff) => *cutoff,
+            Self::Duration(duration) => {
+                let duration = chrono::Duration::from_std(*duration)
+                    .expect("exclude-newer duration is too large");
+                Utc::now() - duration
+            }
+        }
+    }
+}
+
+impl FromStr for ExcludeNewer {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_exclude_newer_str(s)
+    }
+}
+
+impl std::fmt::Display for ExcludeNewer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExcludeNewer::Timestamp(dt) => dt.fmt(f),
+            ExcludeNewer::Duration(dur) => humantime::format_duration(*dur).fmt(f),
+        }
+    }
+}
+
+impl serde::Serialize for ExcludeNewer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Timestamp(cutoff) => cutoff.serialize(serializer),
+            Self::Duration(duration) => {
+                serializer.collect_str(&humantime::Duration::from(*duration))
+            }
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ExcludeNewer {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        #[serde(untagged)]
+        enum RawExcludeNewer {
+            Timestamp(DateTime<Utc>),
+            Duration(String),
+        }
+
+        match RawExcludeNewer::deserialize(deserializer)? {
+            RawExcludeNewer::Timestamp(cutoff) => Ok(ExcludeNewer::Timestamp(cutoff)),
+            RawExcludeNewer::Duration(value) => {
+                parse_exclude_newer_str(&value).map_err(serde::de::Error::custom)
+            }
+        }
+    }
+}
+
+fn parse_exclude_newer_str(s: &str) -> Result<ExcludeNewer, String> {
+    if let Ok(duration) = humantime::parse_duration(s) {
+        return Ok(ExcludeNewer::Duration(duration));
+    }
+
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+        let next_midnight = date
+            .succ_opt()
+            .expect("valid exclude-newer date should have a following day")
+            .and_hms_opt(0, 0, 0)
+            .expect("valid midnight");
+        return Ok(ExcludeNewer::Timestamp(
+            DateTime::<Utc>::from_naive_utc_and_offset(next_midnight, Utc),
+        ));
+    }
+
+    match s.parse::<DateTime<Utc>>() {
+        Ok(timestamp) => Ok(ExcludeNewer::Timestamp(timestamp)),
+        Err(_) => Err(format!("invalid value for exclude-newer: '{s}'")),
+    }
+}
 
 /// Controls which root certificates to use for TLS connections.
 ///
@@ -711,7 +870,12 @@ pub struct Config {
     #[serde(default)]
     #[serde(alias = "default_channels")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub default_channels: Vec<NamedChannelOrUrl>,
+    pub default_channels: Vec<ConfigChannel>,
+
+    #[serde(default)]
+    #[serde(alias = "exclude_newer")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ExcludeNewer>,
 
     /// Path to the file containing the authentication token.
     #[serde(default)]
@@ -826,6 +990,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             default_channels: Vec::new(),
+            exclude_newer: None,
             authentication_override_file: None,
             tls_no_verify: None,
             tls_root_certs: None,
@@ -1136,7 +1301,7 @@ impl Config {
         config.channel_config.channel_alias = Url::parse("https://prefix.dev").unwrap();
 
         // Use conda-forge as the default channel
-        config.default_channels = vec![NamedChannelOrUrl::Name("conda-forge".into())];
+        config.default_channels = vec![NamedChannelOrUrl::Name("conda-forge".into()).into()];
 
         // Enable sharded repodata by default.
         config.repodata_config.default.disable_sharded = Some(false);
@@ -1374,6 +1539,7 @@ impl Config {
             "concurrency.downloads",
             "concurrency.solves",
             "default-channels",
+            "exclude-newer",
             "detached-environments",
             "experimental",
             "experimental.use-environment-activation-cache",
@@ -1422,6 +1588,7 @@ impl Config {
             } else {
                 other.default_channels
             },
+            exclude_newer: other.exclude_newer.or(self.exclude_newer),
             tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
             tls_root_certs: other.tls_root_certs.or(self.tls_root_certs),
             authentication_override_file: other
@@ -1467,8 +1634,35 @@ impl Config {
         if self.default_channels.is_empty() {
             consts::DEFAULT_CHANNELS.clone()
         } else {
+            self.default_channels
+                .iter()
+                .map(|channel| channel.channel.clone())
+                .collect()
+        }
+    }
+
+    /// Retrieve the configured default channel entries including per-channel
+    /// metadata.
+    pub fn default_channel_configurations(&self) -> Vec<ConfigChannel> {
+        if self.default_channels.is_empty() {
+            consts::DEFAULT_CHANNELS
+                .iter()
+                .cloned()
+                .map(ConfigChannel::from)
+                .collect()
+        } else {
             self.default_channels.clone()
         }
+    }
+
+    /// Retrieve the top-level exclude-newer value.
+    pub fn exclude_newer(&self) -> Option<ExcludeNewer> {
+        self.exclude_newer.clone()
+    }
+
+    /// Retrieve the resolved top-level exclude-newer cutoff.
+    pub fn exclude_newer_cutoff(&self) -> Option<DateTime<Utc>> {
+        self.exclude_newer.clone().map(|exclude_newer| exclude_newer.cutoff())
     }
 
     /// Retrieve the value for the tls_no_verify field (defaults to false).
@@ -1598,6 +1792,12 @@ impl Config {
                     .transpose()
                     .into_diagnostic()?
                     .unwrap_or_default();
+            }
+            "exclude-newer" => {
+                self.exclude_newer = value
+                    .map(|v| ExcludeNewer::from_str(v.as_str()))
+                    .transpose()
+                    .map_err(|err| miette!("{err}"))?;
             }
             "authentication-override-file" => {
                 self.authentication_override_file = value.map(PathBuf::from);
@@ -2030,7 +2230,7 @@ UNUSED = "unused"
         );
         let (config, unused) = Config::from_toml(toml.as_str(), None).unwrap();
         assert_eq!(
-            config.default_channels,
+            config.default_channels(),
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
         assert_eq!(config.tls_no_verify, Some(true));
@@ -2051,6 +2251,38 @@ UNUSED = "unused"
                 .join(consts::ENVIRONMENTS_DIR)
                 .as_path()
         );
+    }
+
+    #[test]
+    fn test_config_parse_exclude_newer_and_channel_overrides() {
+        let toml = r#"
+            exclude-newer = "7d"
+            default-channels = [
+                { channel = "https://prefix.dev/internal", exclude-newer = "0d" },
+                "conda-forge",
+            ]
+        "#;
+
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+
+        assert_eq!(
+            config.exclude_newer,
+            Some(ExcludeNewer::from_str("7d").unwrap())
+        );
+        assert_eq!(config.default_channels().len(), 2);
+        assert_eq!(
+            config.default_channels[0].channel,
+            NamedChannelOrUrl::from_str("https://prefix.dev/internal").unwrap()
+        );
+        assert_eq!(
+            config.default_channels[0].exclude_newer,
+            Some(ExcludeNewer::from_str("0d").unwrap())
+        );
+        assert_eq!(
+            config.default_channels[1].channel,
+            NamedChannelOrUrl::from_str("conda-forge").unwrap()
+        );
+        assert_eq!(config.default_channels[1].exclude_newer, None);
     }
 
     #[rstest]
@@ -2263,7 +2495,8 @@ UNUSED = "unused"
         // If I set every config key, ensure that `other wins`
         let mut config = Config::default();
         let other = Config {
-            default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
+            default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap().into()],
+            exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             tls_root_certs: Some(TlsRootCerts::Native),
@@ -2331,7 +2564,7 @@ UNUSED = "unused"
     fn test_config_merge_multiple() {
         let mut config = Config::default();
         let other = Config {
-            default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
+            default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap().into()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
@@ -2361,7 +2594,7 @@ UNUSED = "unused"
         };
         config = config.merge_config(other);
         assert_eq!(
-            config.default_channels,
+            config.default_channels(),
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
         assert_eq!(config.tls_no_verify, Some(true));
@@ -2372,7 +2605,7 @@ UNUSED = "unused"
         assert!(config.s3_options.contains_key("bucket1"));
 
         let other2 = Config {
-            default_channels: vec![NamedChannelOrUrl::from_str("channel").unwrap()],
+            default_channels: vec![NamedChannelOrUrl::from_str("channel").unwrap().into()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir2")),
             tls_no_verify: Some(false),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from(
@@ -2391,7 +2624,7 @@ UNUSED = "unused"
 
         config = config.merge_config(other2);
         assert_eq!(
-            config.default_channels,
+            config.default_channels(),
             vec![NamedChannelOrUrl::from_str("channel").unwrap()]
         );
         assert_eq!(config.tls_no_verify, Some(false));
@@ -2450,7 +2683,7 @@ UNUSED = "unused"
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
-            config.default_channels,
+            config.default_channels(),
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
         assert_eq!(config.tls_no_verify, Some(false));
@@ -2496,7 +2729,7 @@ UNUSED = "unused"
             .set("default-channels", Some(r#"["conda-forge"]"#.to_string()))
             .unwrap();
         assert_eq!(
-            config.default_channels,
+            config.default_channels(),
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
 
@@ -2504,6 +2737,11 @@ UNUSED = "unused"
             .set("tls-no-verify", Some("true".to_string()))
             .unwrap();
         assert_eq!(config.tls_no_verify, Some(true));
+
+        config
+            .set("exclude-newer", Some("7d".to_string()))
+            .unwrap();
+        assert_eq!(config.exclude_newer, Some(ExcludeNewer::from_str("7d").unwrap()));
 
         config
             .set(

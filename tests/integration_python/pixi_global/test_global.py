@@ -2481,3 +2481,26 @@ def test_install_nonexistent_package_no_empty_dir(
         assert not (envs_dir / "this-package-does-not-exist").exists(), (
             "Empty directory was left behind for failed package installation"
         )
+
+
+def test_global_install_writes_exclude_newer_from_config(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    (tmp_path / "config.toml").write_text(
+        f"""
+exclude-newer = "7d"
+default-channels = [
+    {{ channel = "{dummy_channel_1}", exclude-newer = "0d" }},
+]
+"""
+    )
+
+    verify_cli_command([pixi, "global", "install", "dummy-a"], env=env)
+
+    manifest = tmp_path / "manifests" / "pixi-global.toml"
+    parsed = tomllib.loads(manifest.read_text())
+    dummy_env = parsed["envs"]["dummy-a"]
+
+    assert "exclude-newer" in dummy_env
+    assert dummy_env["channels"][0]["exclude-newer"] == "0s"

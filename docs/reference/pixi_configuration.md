@@ -68,6 +68,7 @@ The following reference describes all available configuration options.
 
 The default channels to select when running `pixi init` or `pixi global install`.
 This defaults to only conda-forge.
+Entries can be plain channel strings or inline tables with a channel-specific `exclude-newer` override.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:default-channels"
@@ -76,6 +77,15 @@ This defaults to only conda-forge.
 !!! note
 The `default-channels` are only used when initializing a new workspace. Once initialized the `channels` are used from the
 workspace manifest.
+
+### `exclude-newer`
+
+Set a default resolution cutoff for commands that solve environments without a manifest-local `exclude-newer`.
+This is used by `pixi init`, `pixi exec`, `pixi build`, and `pixi global install`.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:exclude-newer"
+```
 
 ### `shell`
 

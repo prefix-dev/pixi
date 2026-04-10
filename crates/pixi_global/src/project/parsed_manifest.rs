@@ -7,7 +7,7 @@ use itertools::{Either, Itertools};
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, toml::TomlPlatform, utils::package_map::UniquePackageMap};
-use pixi_spec::PixiSpec;
+use pixi_spec::{ExcludeNewer, PixiSpec};
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::{Serialize, Serializer, ser::SerializeMap};
@@ -296,6 +296,8 @@ pub struct ParsedEnvironment {
     pub channels: IndexSet<PrioritizedChannel>,
     /// Platform used by the environment.
     pub platform: Option<Platform>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ExcludeNewer>,
     pub dependencies: UniquePackageMap,
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub exposed: IndexSet<Mapping>,
@@ -311,6 +313,9 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             .map(TomlIndexSet::into_inner)
             .unwrap_or_default();
         let platform = th.optional::<TomlPlatform>("platform").map(Platform::from);
+        let exclude_newer = th
+            .optional::<TomlFromStr<ExcludeNewer>>("exclude-newer")
+            .map(TomlFromStr::into_inner);
         let dependencies = th.optional("dependencies").unwrap_or_default();
         let exposed = th
             .optional::<TomlMapping>("exposed")
@@ -325,6 +330,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
         Ok(Self {
             channels,
             platform,
+            exclude_newer,
             dependencies,
             exposed,
             shortcuts,
@@ -334,9 +340,13 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
 
 impl ParsedEnvironment {
     // Create empty parsed environment
-    pub(crate) fn new(channels: impl IntoIterator<Item = PrioritizedChannel>) -> Self {
+    pub(crate) fn new(
+        channels: impl IntoIterator<Item = PrioritizedChannel>,
+        exclude_newer: Option<ExcludeNewer>,
+    ) -> Self {
         Self {
             channels: channels.into_iter().collect(),
+            exclude_newer,
             ..Default::default()
         }
     }

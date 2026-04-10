@@ -4,6 +4,7 @@ use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
 use miette::Diagnostic;
 use pixi_consts::consts;
+use pixi_spec::ResolvedExcludeNewer;
 use rattler_conda_types::{MatchSpec, PackageName, Platform, PrefixRecord};
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
@@ -87,6 +88,7 @@ pub(crate) async fn environment_specs_in_sync(
     specs: &IndexSet<MatchSpec>,
     source_package_names: &HashSet<PackageName>,
     platform: Option<Platform>,
+    exclude_newer: Option<&ResolvedExcludeNewer>,
 ) -> miette::Result<bool> {
     let package_records = prefix_records
         .iter()
@@ -96,6 +98,22 @@ pub(crate) async fn environment_specs_in_sync(
     if !local_environment_matches_spec(package_records, specs, source_package_names, platform) {
         return Ok(false);
     }
+
+    if let Some(exclude_newer) = exclude_newer {
+        let exclude_newer: rattler_solve::ExcludeNewer = exclude_newer.clone().into();
+        for prefix_record in prefix_records {
+            let channel = prefix_record.repodata_record.channel.as_deref();
+            let timestamp = prefix_record.repodata_record.package_record.timestamp.as_ref();
+            if exclude_newer.is_excluded(
+                &prefix_record.repodata_record.package_record.name,
+                channel,
+                timestamp,
+            ) {
+                return Ok(false);
+            }
+        }
+    }
+
     Ok(true)
 }
 
@@ -140,7 +158,13 @@ mod tests {
         let specs = IndexSet::new();
         let prefix = Prefix::new(env_dir.path());
         let prefix_records = prefix.find_installed_packages().unwrap();
-        let result = environment_specs_in_sync(&prefix_records, &specs, &HashSet::new(), None)
+        let result = environment_specs_in_sync(
+            &prefix_records,
+            &specs,
+            &HashSet::new(),
+            None,
+            None,
+        )
             .await
             .unwrap();
         assert!(result);
@@ -161,7 +185,13 @@ mod tests {
             .unwrap();
 
         let prefix_records = prefix.find_installed_packages().unwrap();
-        let result = environment_specs_in_sync(&prefix_records, &specs, &HashSet::new(), None)
+        let result = environment_specs_in_sync(
+            &prefix_records,
+            &specs,
+            &HashSet::new(),
+            None,
+            None,
+        )
             .await
             .unwrap();
         assert!(result);

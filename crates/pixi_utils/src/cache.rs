@@ -9,6 +9,7 @@ pub struct EnvironmentHash {
     pub specs: Vec<MatchSpec>,
     pub channels: Vec<String>,
     pub platform: Platform,
+    pub exclude_newer: Option<String>,
 }
 
 impl EnvironmentHash {
@@ -18,12 +19,14 @@ impl EnvironmentHash {
         specs: Vec<MatchSpec>,
         channels: Vec<String>,
         platform: Platform,
+        exclude_newer: Option<String>,
     ) -> Self {
         Self {
             command,
             specs,
             channels,
             platform,
+            exclude_newer,
         }
     }
 

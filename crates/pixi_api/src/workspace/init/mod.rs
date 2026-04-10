@@ -6,9 +6,10 @@ use std::{
     str::FromStr,
 };
 
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use minijinja::{Environment, context};
-use pixi_config::{Config, get_default_author, pixi_home};
+use pixi_config::{Config, ConfigChannel, ExcludeNewer, get_default_author, pixi_home};
 use pixi_consts::consts;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::{FeatureName, pyproject::PyProjectManifest};
@@ -88,8 +89,9 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
             name,
             version,
             author.as_ref(),
-            channels,
+            channels.into_iter().map(ConfigChannel::from).collect(),
             &platforms,
+            config.exclude_newer(),
             None,
             &vec![],
             config.s3_options,
@@ -118,11 +120,12 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         workspace
     } else {
         let channels = if let Some(channels) = options.channels {
-            channels
+            channels.into_iter().map(ConfigChannel::from).collect()
         } else {
-            config.default_channels().to_vec()
+            config.default_channel_configurations()
         };
 
+        let exclude_newer = config.exclude_newer();
         let index_url = config.pypi_config.index_url;
         let extra_index_urls = config.pypi_config.extra_index_urls;
 
@@ -165,10 +168,11 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                     context! {
                         name,
                         pixi_name,
-                        channels,
+                        channels_toml => render_channels(&channels),
+                        exclude_newer => exclude_newer.as_ref().map(ToString::to_string),
                         platforms,
                         environments,
-                        s3 => relevant_s3_options(config.s3_options, channels),
+                        s3 => relevant_s3_options(config.s3_options, channels.iter().map(|c| c.channel.clone()).collect()),
                     },
                 )
                 .expect("should be able to render the template");
@@ -231,11 +235,12 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                         pypi_package_name,
                         version,
                         author,
-                        channels,
+                        channels_toml => render_channels(&channels),
+                        exclude_newer => exclude_newer.as_ref().map(ToString::to_string),
                         platforms,
                         index_url => index_url.as_ref(),
                         extra_index_urls => &extra_index_urls,
-                        s3 => relevant_s3_options(config.s3_options, channels),
+                        s3 => relevant_s3_options(config.s3_options, channels.iter().map(|c| c.channel.clone()).collect()),
                     },
                 )
                 .expect("should be able to render the template");
@@ -287,6 +292,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                 author.as_ref(),
                 channels,
                 &platforms,
+                exclude_newer,
                 index_url.as_ref(),
                 &extra_index_urls,
                 config.s3_options,
@@ -337,8 +343,9 @@ fn render_workspace(
     name: String,
     version: &str,
     author: Option<&(String, String)>,
-    channels: Vec<NamedChannelOrUrl>,
+    channels: Vec<ConfigChannel>,
     platforms: &Vec<String>,
+    exclude_newer: Option<ExcludeNewer>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
     s3_options: HashMap<String, pixi_config::S3Options>,
@@ -349,11 +356,15 @@ fn render_workspace(
         name,
         version,
         author,
-        channels,
+        channels_toml => render_channels(&channels),
+        exclude_newer => exclude_newer.as_ref().map(ToString::to_string),
         platforms,
         index_url,
         extra_index_urls,
-        s3 => relevant_s3_options(s3_options, channels),
+        s3 => relevant_s3_options(
+            s3_options,
+            channels.iter().map(|channel| channel.channel.clone()).collect(),
+        ),
         env_vars => {if let Some(env_vars) = env_vars {
             env_vars.iter().map(|(k, v)| format!("{k} = \"{v}\"")).collect::<Vec<String>>().join(", ")
         } else {String::new()}},
@@ -372,6 +383,22 @@ fn render_workspace(
         ctx,
     )
     .expect("should be able to render the template")
+}
+
+fn render_channels(channels: &[ConfigChannel]) -> String {
+    format!(
+        "[{}]",
+        channels
+            .iter()
+            .map(|channel| match &channel.exclude_newer {
+                Some(exclude_newer) => format!(
+                    "{{ channel = \"{}\", exclude-newer = \"{}\" }}",
+                    channel.channel, exclude_newer
+                ),
+                None => format!("\"{}\"", channel.channel),
+            })
+            .join(", ")
+    )
 }
 
 fn relevant_s3_options(
