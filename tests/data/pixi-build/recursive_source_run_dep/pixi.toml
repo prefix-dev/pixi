@@ -1,6 +1,7 @@
 [workspace]
 authors = ["Julian Hofer <julianhofer@gnome.org>"]
 channels = ["https://prefix.dev/conda-forge"]
+exclude-newer = "7d"
 name = "recursive-source-run-dep"
 platforms = ["linux-64", "osx-arm64", "win-64"]
 preview = ["pixi-build"]
