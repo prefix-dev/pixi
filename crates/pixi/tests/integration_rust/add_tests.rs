@@ -1208,3 +1208,45 @@ preview = ['pixi-build']
         insta::assert_snapshot!(workspace.workspace.provenance.read().unwrap().into_inner());
     });
 }
+
+/// Test that `pixi remove <pkg>` without `--pypi` falls back to removing
+/// pypi deps when the package isn't found in conda deps. Regression test
+/// for https://github.com/prefix-dev/pixi/issues/1567
+#[tokio::test]
+async fn remove_pypi_dep_without_flag() {
+    setup_tracing();
+
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "test-remove-fallback"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{platform}"]
+
+[dependencies]
+python = ">=3.12"
+
+[pypi-dependencies]
+requests = "*"
+"#
+    ))
+    .unwrap();
+
+    // Sanity check: pypi dep exists
+    let workspace = pixi.workspace().unwrap();
+    let pypi_deps = workspace.default_environment().pypi_dependencies(None);
+    assert!(pypi_deps.names().any(|n| n.as_source() == "requests"));
+
+    // Remove without --pypi flag
+    pixi.remove("requests")
+        .with_install(false)
+        .with_frozen(true)
+        .await
+        .unwrap();
+
+    // Should be gone now
+    let workspace = pixi.workspace().unwrap();
+    let pypi_deps = workspace.default_environment().pypi_dependencies(None);
+    assert!(!pypi_deps.names().any(|n| n.as_source() == "requests"));
+}

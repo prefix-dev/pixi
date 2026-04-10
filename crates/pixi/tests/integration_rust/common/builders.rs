@@ -323,6 +323,12 @@ impl HasNoInstallConfig for RemoveBuilder {
     }
 }
 
+impl HasLockFileUpdateConfig for RemoveBuilder {
+    fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig {
+        &mut self.args.lock_file_update_config
+    }
+}
+
 impl IntoFuture for RemoveBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
