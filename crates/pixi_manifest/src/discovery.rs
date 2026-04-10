@@ -260,7 +260,7 @@ fn check_requires_pixi_early(toml: &toml_span::Value<'_>, kind: ManifestKind) ->
             return RequiresPixiCheck::Invalid {
                 span,
                 parse_error: e,
-            }
+            };
         }
     };
     let current = match Version::from_str(consts::PIXI_VERSION) {
@@ -718,6 +718,8 @@ mod test {
     #[case::inherit_readme("inherit_readme/nested")]
     #[case::requires_newer_pixi("requires-newer-pixi")]
     #[case::requires_newer_pixi_malformed("requires-newer-pixi-malformed")]
+    #[case::requires_newer_pixi_pyproject("requires-newer-pixi-pyproject")]
+    #[case::requires_newer_pixi_malformed_pyproject("requires-newer-pixi-malformed-pyproject")]
     fn test_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),

@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+assertion_line: 778
+expression: snapshot
+---
+  × this project requires pixi '>=100', but you have pixi 0.67.0
+   ╭─[<CARGO_ROOT>/tests/data/workspace-discovery/requires-newer-pixi-pyproject/pyproject.toml:7:18]
+ 6 │ platforms = []
+ 7 │ requires-pixi = ">=100"
+   ·                  ──┬──
+   ·                    ╰── this version requirement is not satisfied
+ 8 │ some-future-field = true
+   ╰────
+  help: update pixi to a version that satisfies '>=100'
