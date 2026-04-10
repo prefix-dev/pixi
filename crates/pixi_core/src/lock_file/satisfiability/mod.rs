@@ -12,7 +12,7 @@ use std::{
 
 use crate::lock_file::records_by_name::{HasNameVersion, LockedPypiRecordsByName};
 use dashmap::DashMap;
-use futures::TryStreamExt;
+use futures::{StreamExt, TryStreamExt};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use once_cell::sync::OnceCell;
@@ -21,7 +21,8 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, DevSourceMetadataError, DevSourceMetadataSpec,
-    SourceCheckoutError, SourceRecordError, SourceRecordSpec, executor::CancellationAwareFutures,
+    ResolvedSourceRecord, SourceCheckoutError, SourceRecordError, SourceRecordReuseKey,
+    SourceRecordSpec, executor::CancellationAwareFutures,
 };
 use pixi_config::Config;
 use pixi_git::url::RepositoryUrl;
@@ -33,8 +34,8 @@ use pixi_manifest::{
 use pixi_pypi_spec::PixiPypiSource;
 use pixi_record::{
     DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedBuildSourceSpec, PinnedSourceSpec,
-    PixiRecord, SourceMismatchError, SourceRecord, SourceRecordReuseKey, UnresolvedPixiRecord,
-    VariantValue,
+    PixiRecord, SourceMismatchError, SourceRecord, SourceRecordData, UnresolvedPixiRecord,
+    UnresolvedSourceRecord, VariantValue,
 };
 use pixi_spec::{
     PixiSpec, ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec, SourceSpec,
@@ -48,9 +49,9 @@ use pixi_uv_conversions::{
 use pypi_modifiers::{Tags, pypi_marker_env::determine_marker_environment};
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
-    PackageRecord, ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
+    ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
-use rattler_lock::{LockedPackageRef, PackageHashes, PypiIndexes, UrlOrPath};
+use rattler_lock::{FileFormatVersion, LockedPackageRef, PackageHashes, PypiIndexes, UrlOrPath};
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -70,6 +71,7 @@ use crate::workspace::{
     Environment, EnvironmentVars, HasWorkspaceRef, errors::VariantsError,
     grouped_environment::GroupedEnvironment,
 };
+use futures::stream::FuturesUnordered;
 use pixi_manifest::EnvironmentName;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -382,7 +384,7 @@ pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableMatchSpec(Box<MatchSpec>, String),
 
-    #[error("no package named exists '{0}' (required by '{1}')")]
+    #[error("no package named '{0}' exists (required by '{1}')")]
     SourcePackageMissing(String, String),
 
     #[error("required source package '{0}' is locked as binary (required by '{1}')")]
@@ -1081,11 +1083,6 @@ pub struct PlatformSatisfiabilityOutcome {
     >,
 }
 
-struct SourceMetadataValidationOutcome {
-    validated_source_timestamps: ValidatedSourceTimestamps,
-    error: Option<CommandDispatcherError<Box<PlatformUnsat>>>,
-}
-
 #[derive(Clone)]
 struct PlatformVerificationSetup {
     channel_config: rattler_conda_types::ChannelConfig,
@@ -1202,76 +1199,96 @@ pub async fn verify_platform_satisfiability(
         }
     }
 
-    // Resolve any partial source records using source_record().
-    let pixi_records: Vec<PixiRecord> = {
-        let has_partials = unresolved_records.iter().any(|r| r.is_partial());
-        if has_partials {
-            let mut resolved = Vec::with_capacity(unresolved_records.len());
-            for record in unresolved_records {
-                match record.try_into_resolved() {
-                    Ok(pixi_record) => resolved.push(pixi_record),
-                    Err(partial) => {
-                        let source = partial.as_source().expect("partial must be source");
-                        let spec = SourceRecordSpec {
-                            package: source.name().clone(),
-                            variants: source.variants().clone(),
-                            backend_metadata: BuildBackendMetadataSpec {
-                                manifest_source: source.manifest_source().clone(),
-                                preferred_build_source: source
-                                    .build_source()
-                                    .cloned()
-                                    .map(PinnedBuildSourceSpec::into_pinned),
-                                channel_config: platform_setup.channel_config.clone(),
-                                exclude_newer: None,
-                                channels: platform_setup.channels.clone(),
-                                build_environment: platform_setup.build_environment.clone(),
-                                variant_configuration: Some(
-                                    platform_setup.variant_configuration.clone(),
-                                ),
-                                variant_files: Some(platform_setup.variant_files.clone()),
-                                enabled_protocols: EnabledProtocols::default(),
-                            },
-                            exclude_newer: source.timestamp.clone().map(ResolvedExcludeNewer::from),
-                        };
-
-                        let resolved_record = match ctx
-                            .command_dispatcher
-                            .source_record(spec)
-                            .await
-                            .map_err_with(Box::<PlatformUnsat>::from)
-                        {
-                            Ok(record) => record,
-                            Err(err) => {
-                                return PlatformSatisfiabilityOutcome {
-                                    validated_source_timestamps: Default::default(),
-                                    result: Err(err),
-                                };
-                            }
-                        };
-
-                        resolved.push(PixiRecord::Source(resolved_record.record.clone()));
+    // Convert the unresolved records into a list of resolved records.
+    let mut pending_resolved_record = FuturesUnordered::new();
+    let mut resolved_records = Vec::new();
+    for record in unresolved_records {
+        match record {
+            UnresolvedPixiRecord::Binary(record) => {
+                resolved_records.push(PixiRecord::Binary(record))
+            }
+            UnresolvedPixiRecord::Source(record) => {
+                if record.has_mutable_source() {
+                    // If the record is mutable, we always resolve it.
+                    pending_resolved_record.push(resolve_unresolved_source_record(
+                        ctx,
+                        &platform_setup,
+                        record,
+                    ))
+                } else {
+                    // Otherwise we only resolve it if it is not already resolved.
+                    match record.try_map_data(|data| match data {
+                        SourceRecordData::Partial(data) => Err(data),
+                        SourceRecordData::Full(data) => Ok(data),
+                    }) {
+                        Ok(full_record) => resolved_records.push(PixiRecord::Source(full_record)),
+                        Err(partial_record) => {
+                            pending_resolved_record.push(resolve_unresolved_source_record(
+                                ctx,
+                                &platform_setup,
+                                partial_record.map_data(SourceRecordData::Partial),
+                            ))
+                        }
                     }
                 }
             }
-            resolved
-        } else {
-            unresolved_records
-                .into_iter()
-                .map(|r| {
-                    r.try_into_resolved()
-                        .expect("all records verified as non-partial")
-                })
-                .collect()
         }
-    };
+    }
 
-    let lock_file_version = locked_environment.lock_file().version();
-    let source_validation_future = validate_locked_source_records(
-        ctx.command_dispatcher.clone(),
-        &platform_setup,
-        &pixi_records,
-        lock_file_version,
-    );
+    // Await the resolution of any pending records and add them to the resolved records.
+    let mut validated_source_timestamps = ValidatedSourceTimestamps::new();
+    let mut first_error: Option<Box<PlatformUnsat>> = None;
+    while let Some(result) = pending_resolved_record.next().await {
+        match result {
+            Ok((unresolved_record, resolved_record)) => {
+                // Validate the patial source record against the resolved record.
+                match validate_partial_against_resolved(
+                    &unresolved_record,
+                    &resolved_record.record,
+                    locked_environment.lock_file().version(),
+                ) {
+                    Ok(()) => {
+                        // Store the validated source timestamp.
+                        if let Some(timestamp) = &resolved_record.record.timestamp {
+                            validated_source_timestamps.insert(
+                                SourceRecordReuseKey::new(
+                                    resolved_record.record.name().clone(),
+                                    resolved_record.record.variants.clone(),
+                                ),
+                                timestamp.clone(),
+                            );
+                        }
+
+                        // Store the resolved record.
+                        resolved_records.push(PixiRecord::Source(resolved_record.record.clone()))
+                    }
+                    Err(err) => {
+                        // Store the first error
+                        first_error.get_or_insert(err);
+                    }
+                }
+            }
+            Err(err) => {
+                let Some(err) = err.into_failed() else {
+                    // Propagate cancellation immediately.
+                    return PlatformSatisfiabilityOutcome {
+                        validated_source_timestamps,
+                        result: Err(CommandDispatcherError::Cancelled),
+                    };
+                };
+                first_error.get_or_insert_with(|| Box::new(PlatformUnsat::SourceRecord(err)));
+            }
+        }
+    }
+
+    // If we encountered a single error, we return it but also the validated source timestamps, so
+    // that we can reuse any source records that were valid.
+    if let Some(first_error) = first_error {
+        return PlatformSatisfiabilityOutcome {
+            validated_source_timestamps,
+            result: Err(CommandDispatcherError::Failed(first_error)),
+        };
+    }
 
     // Create a lookup table from package name to package record. Returns an error
     // if we find a duplicate entry for a record
@@ -1281,7 +1298,7 @@ pub async fn verify_platform_satisfiability(
         // if all conda packages have empty purls
         if ctx.environment.has_pypi_dependencies()
             && pypi_packages.is_empty()
-            && pixi_records
+            && resolved_records
                 .iter()
                 .filter_map(PixiRecord::as_binary)
                 .all(|record| record.package_record.purls.is_none())
@@ -1291,7 +1308,7 @@ pub async fn verify_platform_satisfiability(
             )));
         }
 
-        let pixi_records_by_name = PixiRecordsByName::from_unique_iter(pixi_records.clone())
+        let pixi_records_by_name = PixiRecordsByName::from_unique_iter(resolved_records.clone())
             .map_err(|duplicate| {
                 CommandDispatcherError::Failed(Box::new(PlatformUnsat::DuplicateEntry(
                     duplicate.package_record().name.as_source().to_string(),
@@ -1361,26 +1378,43 @@ pub async fn verify_platform_satisfiability(
         .await
     };
 
-    let ((validated_source_timestamps, source_validation_error), result) = futures::join!(
-        async {
-            match source_validation_future.await {
-                Ok(outcome) => (outcome.validated_source_timestamps, outcome.error),
-                Err(err) => (Default::default(), Some(err)),
-            }
-        },
-        package_verification_future,
-    );
-
     PlatformSatisfiabilityOutcome {
         validated_source_timestamps,
-        result: match result {
-            Ok(result) => match source_validation_error {
-                Some(err) => Err(err),
-                None => Ok(result),
-            },
-            Err(err) => Err(err),
-        },
+        result: package_verification_future.await,
     }
+}
+
+async fn resolve_unresolved_source_record(
+    ctx: &VerifySatisfiabilityContext<'_>,
+    platform_setup: &PlatformVerificationSetup,
+    source: UnresolvedSourceRecord,
+) -> Result<
+    (UnresolvedSourceRecord, Arc<ResolvedSourceRecord>),
+    CommandDispatcherError<SourceRecordError>,
+> {
+    let spec = SourceRecordSpec {
+        package: source.name().clone(),
+        variants: source.variants().clone(),
+        backend_metadata: BuildBackendMetadataSpec {
+            manifest_source: source.manifest_source().clone(),
+            preferred_build_source: source
+                .build_source()
+                .cloned()
+                .map(PinnedBuildSourceSpec::into_pinned),
+            channel_config: platform_setup.channel_config.clone(),
+            exclude_newer: None,
+            channels: platform_setup.channels.clone(),
+            build_environment: platform_setup.build_environment.clone(),
+            variant_configuration: Some(platform_setup.variant_configuration.clone()),
+            variant_files: Some(platform_setup.variant_files.clone()),
+            enabled_protocols: EnabledProtocols::default(),
+        },
+        exclude_newer: source.timestamp.clone().map(ResolvedExcludeNewer::from),
+    };
+
+    let resolve_record = ctx.command_dispatcher.source_record(spec).await?;
+
+    Ok((source, resolve_record))
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -1722,158 +1756,69 @@ pub struct VerifiedIndividualEnvironment {
     pub conda_packages_used_by_pypi: HashSet<PackageName>,
 }
 
-/// Verify that source packages in the lock file still match their current
-/// metadata.
-///
-/// This function fetches the current metadata for each source package and
-/// compares it with the locked metadata to detect if any source packages have
-/// changed.
-async fn validate_locked_source_records(
-    command_dispatcher: CommandDispatcher,
-    platform_setup: &PlatformVerificationSetup,
-    pixi_records: &[PixiRecord],
-    lock_file_version: rattler_lock::FileFormatVersion,
-) -> Result<SourceMetadataValidationOutcome, CommandDispatcherError<Box<PlatformUnsat>>> {
-    let source_records: Vec<_> = pixi_records
-        .iter()
-        .filter_map(PixiRecord::as_source)
-        .collect();
-    if source_records.is_empty() {
-        return Ok(SourceMetadataValidationOutcome {
-            validated_source_timestamps: Default::default(),
-            error: None,
-        });
-    }
-
-    verify_source_metadata(
-        source_records,
-        command_dispatcher,
-        platform_setup,
-        lock_file_version,
-    )
-    .await
-}
-
-async fn verify_source_metadata(
-    source_records: Vec<&SourceRecord>,
-    command_dispatcher: CommandDispatcher,
-    platform_setup: &PlatformVerificationSetup,
-    lock_file_version: rattler_lock::FileFormatVersion,
-) -> Result<SourceMetadataValidationOutcome, CommandDispatcherError<Box<PlatformUnsat>>> {
-    // Process all source records concurrently using CancellationAwareFutures
-    // so that cancelled results are filtered and the dedup cache is populated.
-    let mut results = CancellationAwareFutures::new(command_dispatcher.executor());
-
-    for source_record in source_records {
-        let command_dispatcher = command_dispatcher.clone();
-        let platform_setup = platform_setup.clone();
-
-        results.push(async move {
-            let spec = SourceRecordSpec {
-                package: source_record.name().clone(),
-                variants: source_record.variants().clone(),
-                backend_metadata: BuildBackendMetadataSpec {
-                    manifest_source: source_record.manifest_source().clone(),
-                    preferred_build_source: source_record
-                        .build_source()
-                        .cloned()
-                        .map(PinnedBuildSourceSpec::into_pinned),
-                    channel_config: platform_setup.channel_config,
-                    exclude_newer: None,
-                    channels: platform_setup.channels,
-                    build_environment: platform_setup.build_environment,
-                    variant_configuration: Some(platform_setup.variant_configuration),
-                    variant_files: Some(platform_setup.variant_files),
-                    enabled_protocols: EnabledProtocols::default(),
-                },
-                exclude_newer: source_record
-                    .timestamp
-                    .clone()
-                    .map(ResolvedExcludeNewer::from),
-            };
-
-            // Request the source record to verify if it still matches the
-            // locked one. `map_err_with` preserves `Cancelled` on the
-            // outer layer so the adapter can filter it.
-            let resolved = command_dispatcher
-                .source_record(spec)
-                .await
-                .map_err_with(Box::<PlatformUnsat>::from)?;
-
-            // Verify the resolved record against the locked record. These
-            // checks only produce real errors, never cancellations.
-            verify_locked_source_record(source_record, &resolved.record, lock_file_version)
-                .map_err(CommandDispatcherError::Failed)?;
-
-            // Only produce a reuse hint when the source record has a
-            // timestamp (i.e. it had host/build dependencies). Records
-            // without a timestamp have nothing to soft-lock.
-            Ok(source_record.timestamp.clone().map(|ts| {
-                (
-                    SourceRecordReuseKey::new(
-                        source_record.name().clone(),
-                        source_record.variants().clone(),
-                    ),
-                    ts,
-                )
-            }))
-        });
-    }
-
-    let (validated, errors) = results.collect_all().await?;
-    Ok(SourceMetadataValidationOutcome {
-        validated_source_timestamps: validated.into_iter().flatten().collect(),
-        error: errors
-            .into_iter()
-            .next()
-            .map(CommandDispatcherError::Failed),
-    })
-}
-
-/// Verify that a single locked source record still matches the currently
-/// resolved record for the same name + variant.
-fn verify_locked_source_record(
-    source_record: &pixi_record::SourceRecord,
-    current_record: &pixi_record::SourceRecord,
-    lock_file_version: rattler_lock::FileFormatVersion,
+fn validate_partial_against_resolved(
+    unresolved_source_record: &UnresolvedSourceRecord,
+    resolved_record: &SourceRecord,
+    lock_file_version: FileFormatVersion,
 ) -> Result<(), Box<PlatformUnsat>> {
+    let package_name = unresolved_source_record.name().as_source();
+
     // If the resolved record gained a timestamp (host/build deps exist) but
     // the locked record lacks one, the lock file needs re-solving. For v6
     // lock files this is expected (they never had timestamps); for v7+ it
     // indicates a corrupt or hand-edited lock file.
-    if current_record.timestamp.is_some()
-        && source_record.timestamp.is_none()
+    if resolved_record.timestamp.is_some()
+        && unresolved_source_record.timestamp.is_none()
         && lock_file_version >= rattler_lock::FileFormatVersion::V7
     {
         return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
-            source_record.name().as_source().to_string(),
+            package_name.to_string(),
             "host/build dependencies are not pinned with a timestamp".to_string(),
         )));
     }
 
+    // Check if the timestamps still match
+    if let (Some(current_timestamp), Some(source_timestamp)) = (
+        &unresolved_source_record.timestamp,
+        &resolved_record.timestamp,
+    ) && current_timestamp != source_timestamp
+    {
+        return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+            package_name.to_string(),
+            "host/build dependencies are not pinned with the same timestamp".to_string(),
+        )));
+    }
+
     // Check if the build source location changed
-    if current_record.build_source() != source_record.build_source() {
+    if unresolved_source_record.build_source() != resolved_record.build_source() {
         return Err(Box::new(PlatformUnsat::SourceBuildLocationChanged(
-            source_record.name().as_source().to_string(),
-            source_record
+            package_name.to_string(),
+            unresolved_source_record
                 .build_source()
                 .map(|s| s.to_string())
                 .unwrap_or_default(),
-            current_record
+            resolved_record
                 .build_source()
                 .map(|s| s.to_string())
                 .unwrap_or_default(),
         )));
     }
 
+    // Check if the dependencies are still the same.
+    if unresolved_source_record.depends() != resolved_record.depends() {
+        return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+            package_name.to_string(),
+            "run dependencies changed".to_string(),
+        )));
+    }
+
     // Check if the source dependencies match
-    let package_name = source_record.name().as_source().to_string();
-    for (source_name, locked_source_spec) in source_record.sources() {
-        match current_record.sources().get(source_name) {
+    for (source_name, locked_source_spec) in unresolved_source_record.sources() {
+        match resolved_record.sources().get(source_name) {
             Some(current_source_spec) => {
                 if locked_source_spec != current_source_spec {
                     return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
-                        package: package_name,
+                        package: package_name.to_string(),
                         dependency: source_name.clone(),
                         locked: locked_source_spec.to_string(),
                         current: current_source_spec.to_string(),
@@ -1882,7 +1827,7 @@ fn verify_locked_source_record(
             }
             None => {
                 return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
-                    package: package_name,
+                    package: package_name.to_string(),
                     dependency: source_name.clone(),
                     locked: locked_source_spec.to_string(),
                     current: "(removed)".to_string(),
@@ -1892,173 +1837,18 @@ fn verify_locked_source_record(
     }
 
     // Check if there are any new sources in current that weren't in locked
-    for (source_name, current_source_spec) in current_record.sources() {
-        if !source_record.sources().contains_key(source_name.as_str()) {
+    for (source_name, current_source_spec) in resolved_record.sources() {
+        if !unresolved_source_record
+            .sources()
+            .contains_key(source_name.as_str())
+        {
             return Err(Box::new(PlatformUnsat::SourceDependencyChanged {
-                package: package_name.clone(),
+                package: package_name.to_string(),
                 dependency: source_name.clone(),
                 locked: "(not present)".to_string(),
                 current: current_source_spec.to_string(),
             }));
         }
-    }
-
-    // Check if the package record metadata matches
-    let package_name = source_record.name().as_source();
-    tracing::trace!(
-        "Checking package record equality for '{}' (current vs locked)",
-        package_name
-    );
-
-    if let Err(reason) = package_records_are_equal(
-        current_record.package_record(),
-        source_record.package_record(),
-    ) {
-        return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
-            package_name.to_string(),
-            reason,
-        )));
-    }
-
-    Ok(())
-}
-
-/// Returns `Ok(())` if the package records are considered equal, or an error
-/// message describing which field differs.
-fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> Result<(), String> {
-    // Use destructuring to ensure we get compiler errors if these types change
-    // significantly.
-    let PackageRecord {
-        arch: _,
-        build: a_build,
-        build_number: a_build_number,
-        constrains: a_constrains,
-        depends: a_depends,
-        experimental_extra_depends: a_extra_depends,
-        features: a_features,
-        legacy_bz2_md5: _,
-        legacy_bz2_size: _,
-        license: a_license,
-        license_family: a_license_family,
-        md5: _,
-        name: a_name,
-        noarch: a_noarch,
-        platform: _,
-        purls: a_purls,
-        python_site_packages_path: a_python_site_packages_path,
-        // run_exports are not compared because they are used during the solve
-        // but not stored in the lock-file for source packages.
-        run_exports: _,
-        sha256: _,
-        size: _,
-        subdir: a_subdir,
-        timestamp: _,
-        track_features: a_track_features,
-        version: a_version,
-    } = &a;
-    let PackageRecord {
-        arch: _,
-        build: b_build,
-        build_number: b_build_number,
-        constrains: b_constrains,
-        depends: b_depends,
-        experimental_extra_depends: b_extra_depends,
-        features: b_features,
-        legacy_bz2_md5: _,
-        legacy_bz2_size: _,
-        license: b_license,
-        license_family: b_license_family,
-        md5: _,
-        name: b_name,
-        noarch: b_noarch,
-        platform: _,
-        purls: b_purls,
-        python_site_packages_path: b_python_site_packages_path,
-        // run_exports are not compared because they are used during the solve
-        // but not stored in the lock-file for source packages.
-        run_exports: _,
-        sha256: _,
-        size: _,
-        subdir: b_subdir,
-        timestamp: _,
-        track_features: b_track_features,
-        version: b_version,
-    } = &b;
-
-    if a_name != b_name {
-        return Err(format!(
-            "the package name changed (\"{}\" != \"{}\")",
-            a_name.as_source(),
-            b_name.as_source()
-        ));
-    }
-    if a_version != b_version {
-        return Err(format!(
-            "the version changed (\"{a_version}\" != \"{b_version}\")"
-        ));
-    }
-    if a_build != b_build {
-        return Err(format!(
-            "the build string changed (\"{a_build}\" != \"{b_build}\")"
-        ));
-    }
-    if a_build_number != b_build_number {
-        return Err(format!(
-            "the build number changed ({a_build_number} != {b_build_number})"
-        ));
-    }
-    if a_subdir != b_subdir {
-        return Err(format!(
-            "the subdir changed (\"{a_subdir}\" != \"{b_subdir}\")"
-        ));
-    }
-    if a_noarch != b_noarch {
-        return Err(format!(
-            "the noarch type changed ({a_noarch:?} != {b_noarch:?})"
-        ));
-    }
-    if a_depends != b_depends {
-        return Err(format!(
-            "the dependencies changed ({a_depends:?} != {b_depends:?})"
-        ));
-    }
-    if a_constrains != b_constrains {
-        return Err(format!(
-            "the constraints changed ({a_constrains:?} != {b_constrains:?})"
-        ));
-    }
-    if a_extra_depends != b_extra_depends {
-        return Err(format!(
-            "the extra dependencies changed ({a_extra_depends:?} != {b_extra_depends:?})"
-        ));
-    }
-    if a_features != b_features {
-        return Err(format!(
-            "the features changed ({a_features:?} != {b_features:?})"
-        ));
-    }
-    if a_track_features != b_track_features {
-        return Err(format!(
-            "the track_features changed ({a_track_features:?} != {b_track_features:?})"
-        ));
-    }
-    if a_license != b_license {
-        return Err(format!(
-            "the license changed ({a_license:?} != {b_license:?})"
-        ));
-    }
-    if a_license_family != b_license_family {
-        return Err(format!(
-            "the license_family changed ({a_license_family:?} != {b_license_family:?})"
-        ));
-    }
-    if a_purls != b_purls {
-        return Err(format!("the purls changed ({a_purls:?} != {b_purls:?})"));
-    }
-    if a_python_site_packages_path != b_python_site_packages_path {
-        return Err(format!(
-            "the python_site_packages_path changed ({a_python_site_packages_path:?} != {b_python_site_packages_path:?})"
-        ));
     }
 
     Ok(())
@@ -3859,8 +3649,8 @@ mod tests {
             "git+https://github.com/mypkg@rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
                 .parse()
                 .expect("failed to parse url"),
-             None,
-             None,
+            None,
+            None,
             vec![],
             None,
         ));

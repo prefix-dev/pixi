@@ -21,8 +21,7 @@ use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
 use serde::Serialize;
 pub use source_record::{
     FullSourceRecord as SourceRecord, FullSourceRecordData, PartialSourceRecord,
-    PartialSourceRecordData, PinnedBuildSourceSpec, SourceRecordData, SourceRecordReuseKey,
-    UnresolvedSourceRecord,
+    PartialSourceRecordData, PinnedBuildSourceSpec, SourceRecordData, UnresolvedSourceRecord,
 };
 use thiserror::Error;
 

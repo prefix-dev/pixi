@@ -7,7 +7,7 @@ use std::{
 use futures::{FutureExt, StreamExt};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::{PinnedSourceSpec, SourceRecordReuseKey, VariantValue};
+use pixi_record::{PinnedSourceSpec, VariantValue};
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, MatchSpec, PackageNameMatcher, ParseStrictness,
@@ -17,6 +17,7 @@ use thiserror::Error;
 use crate::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
     PackageNotProvidedError, SourceCheckoutError, SourceMetadataSpec, SourceRecordError,
+    SourceRecordReuseKey,
     executor::CancellationAwareFutures,
     source_metadata::{CycleEnvironment, SourceMetadata, SourceMetadataError},
 };

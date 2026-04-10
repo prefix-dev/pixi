@@ -47,19 +47,6 @@ use crate::{
     PinnedUrlSpec, VariantValue,
 };
 
-/// Identifies a specific source package output for timestamp reuse.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
-pub struct SourceRecordReuseKey {
-    pub package: PackageName,
-    pub variants: BTreeMap<String, VariantValue>,
-}
-
-impl SourceRecordReuseKey {
-    pub fn new(package: PackageName, variants: BTreeMap<String, VariantValue>) -> Self {
-        Self { package, variants }
-    }
-}
-
 /// Represents a pinned build source with information about how it was originally specified in the
 /// manifest.
 ///
@@ -257,6 +244,16 @@ impl<D> SourceRecord<D> {
         &self.variants
     }
 
+    /// Returns true if either the manifest source or build source is mutable
+    /// (i.e. path-based and may change over time).
+    pub fn has_mutable_source(&self) -> bool {
+        self.manifest_source().is_mutable()
+            || self
+                .build_source()
+                .as_ref()
+                .is_some_and(|bs| bs.pinned().is_mutable())
+    }
+
     /// Transform the data payload while preserving all shared fields.
     ///
     /// Useful for state transitions (e.g. Full → Unresolved, Partial → Full)
@@ -330,16 +327,6 @@ impl SourceRecord<FullSourceRecordData> {
     /// Source dependency locations.
     pub fn sources(&self) -> &HashMap<String, SourceLocationSpec> {
         &self.data.sources
-    }
-
-    /// Returns true if either the manifest source or build source is mutable
-    /// (i.e. path-based and may change over time).
-    pub fn has_mutable_source(&self) -> bool {
-        self.manifest_source.is_mutable()
-            || self
-                .build_source
-                .as_ref()
-                .is_some_and(|bs| bs.pinned().is_mutable())
     }
 
     /// Convert into lock-file compatible `CondaSourceData`.

@@ -24,7 +24,8 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    PixiEnvironmentSpec, SolvePixiEnvironmentError, executor::CancellationAwareFutures,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError, SourceRecordReuseKey,
+    executor::CancellationAwareFutures,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -34,7 +35,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord, SourceRecordReuseKey, UnresolvedPixiRecord};
+use pixi_record::{ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{

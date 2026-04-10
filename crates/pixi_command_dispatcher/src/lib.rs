@@ -96,7 +96,9 @@ pub use source_build_cache_status::{
 };
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
-pub use source_record::{ResolvedSourceRecord, SourceRecordError, SourceRecordSpec};
+pub use source_record::{
+    ResolvedSourceRecord, SourceRecordError, SourceRecordReuseKey, SourceRecordSpec,
+};
 
 /// A helper function to check if a value is the default value for its type.
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {

@@ -63,6 +63,22 @@ pub struct SourceRecordDeduplicationKey {
     pub backend_metadata: BuildBackendMetadataSpec,
 }
 
+/// Identifies a specific source package output for timestamp reuse. A record's
+/// resolved timestamps depend on the build/host environments it was solved
+/// against, so the [`BuildEnvironment`] is part of the key — otherwise hints
+/// from one platform would incorrectly apply to another.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+pub struct SourceRecordReuseKey {
+    pub package: PackageName,
+    pub variants: BTreeMap<String, VariantValue>,
+}
+
+impl SourceRecordReuseKey {
+    pub fn new(package: PackageName, variants: BTreeMap<String, VariantValue>) -> Self {
+        Self { package, variants }
+    }
+}
+
 impl SourceRecordDeduplicationKey {
     pub fn new(spec: &SourceRecordSpec) -> Self {
         Self {
@@ -238,16 +254,20 @@ impl SourceRecordSpec {
         // Skip caching when there is no timestamp (no host/build deps).
         // Without a timestamp there is nothing to soft-lock, and the result
         // is fully determined by the source manifest content alone.
-        if record.timestamp.is_none() {
+        let Some(record_timestamp) = record.timestamp.clone() else {
             return Ok(ResolvedSourceRecord {
                 record: Self::amend_cached_source_record(&build_backend_metadata.source, record),
                 source: build_backend_metadata.source.clone(),
             });
-        }
+        };
 
         // Write back to cache using the record's resolved timestamp as key.
         if !build_backend_metadata.skip_cache {
-            let resolved_exclude_newer = record.timestamp.clone().map(ResolvedExcludeNewer::from);
+            let mut resolved_exclude_newer: ResolvedExcludeNewer = record_timestamp.clone().into();
+            if let Some(input_exclude_newer) = &self.exclude_newer {
+                resolved_exclude_newer.include_unknown_timestamp =
+                    input_exclude_newer.include_unknown_timestamp;
+            }
             let write_cache_key: CacheKey<SourceRecordCache> = SourceRecordCacheKey {
                 package: self.package.clone(),
                 variants: self.variants.clone(),
@@ -255,13 +275,13 @@ impl SourceRecordSpec {
                 build_environment: self.backend_metadata.build_environment.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
                 source: build_backend_metadata.source.clone().into(),
-                exclude_newer: resolved_exclude_newer.clone(),
+                exclude_newer: Some(resolved_exclude_newer.clone()),
             };
 
             // If we previously did not read the right cache entry, compare
             // the resolved timestamps (converted to ResolvedExcludeNewer) with
             // the input exclude_newer.
-            let (is_stale, cached_entry) = if resolved_exclude_newer != self.exclude_newer {
+            let (is_stale, cached_entry) = if Some(resolved_exclude_newer) != self.exclude_newer {
                 let prev_cached_entry = command_dispatcher
                     .source_record_cache()
                     .read(&write_cache_key)

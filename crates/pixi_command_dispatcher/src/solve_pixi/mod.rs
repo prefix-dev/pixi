@@ -13,7 +13,7 @@ use indexmap::IndexMap;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::VariantValue;
-use pixi_record::{DevSourceRecord, PixiRecord, SourceRecordReuseKey};
+use pixi_record::{DevSourceRecord, PixiRecord};
 use pixi_spec::{BinarySpec, PixiSpec, ResolvedExcludeNewer, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, ParseChannelError, Platform};
@@ -26,7 +26,7 @@ use tracing::instrument;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    Cycle, SolveCondaEnvironmentSpec, SourceMetadataError,
+    Cycle, SolveCondaEnvironmentSpec, SourceMetadataError, SourceRecordReuseKey,
     solve_conda::SolveCondaEnvironmentError,
     solve_pixi::source_metadata_collector::{
         CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,

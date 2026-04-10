@@ -98,12 +98,13 @@ impl MetadataCacheKey<SourceRecordCache> for SourceRecordCacheKey {
     fn key(&self) -> CacheKeyString<SourceRecordCache> {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
-        self.build_environment.build_platform.hash(&mut hasher);
 
+        self.build_environment.build_platform.hash(&mut hasher);
         let mut build_virtual_packages = self.build_environment.build_virtual_packages.clone();
         build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
         build_virtual_packages.hash(&mut hasher);
 
+        self.build_environment.host_platform.hash(&mut hasher);
         let mut host_virtual_packages = self.build_environment.host_virtual_packages.clone();
         host_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
         host_virtual_packages.hash(&mut hasher);

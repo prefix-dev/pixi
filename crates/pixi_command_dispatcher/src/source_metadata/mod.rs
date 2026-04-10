@@ -5,11 +5,11 @@ use crate::{
     CommandDispatcherErrorResultExt, PackageNotProvidedError,
     build::PinnedSourceCodeLocation,
     executor::CancellationAwareFutures,
-    source_record::{SourceRecordError, SourceRecordSpec},
+    source_record::{SourceRecordError, SourceRecordReuseKey, SourceRecordSpec},
 };
 pub use cycle::{Cycle, CycleEnvironment};
 use miette::Diagnostic;
-use pixi_record::{SourceRecord, SourceRecordReuseKey, SourceTimestamps, VariantValue};
+use pixi_record::{SourceRecord, SourceTimestamps, VariantValue};
 use pixi_spec::ResolvedExcludeNewer;
 use rattler_conda_types::PackageName;
 use std::collections::HashMap;
