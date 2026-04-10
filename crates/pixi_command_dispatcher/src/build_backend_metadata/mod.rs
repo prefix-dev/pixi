@@ -655,7 +655,7 @@ impl BuildBackendMetadataSpec {
         for output in &outputs.outputs {
             tracing::debug!(
                 backend = %backend_identifier,
-                package = ?output.metadata.name,
+                package = %output.metadata.name.as_source(),
                 version = %output.metadata.version,
                 build = %output.metadata.build,
                 subdir = %output.metadata.subdir,
