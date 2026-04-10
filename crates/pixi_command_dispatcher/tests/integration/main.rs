@@ -812,6 +812,8 @@ pub async fn test_dev_source_metadata() {
             variant_files: None,
             enabled_protocols: Default::default(),
             preferred_build_source: None,
+            build_number_override: None,
+            build_string_prefix: None,
         },
     };
 
@@ -904,6 +906,8 @@ pub async fn test_dev_source_metadata_package_not_provided() {
             variant_files: None,
             enabled_protocols: Default::default(),
             preferred_build_source: None,
+            build_number_override: None,
+            build_string_prefix: None,
         },
     };
 
@@ -980,6 +984,8 @@ pub async fn test_dev_source_metadata_with_variants() {
             variant_files: None,
             enabled_protocols: Default::default(),
             preferred_build_source: None,
+            build_number_override: None,
+            build_string_prefix: None,
         },
     };
 
@@ -1740,6 +1746,8 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
             variant_files: None,
             enabled_protocols: Default::default(),
             preferred_build_source: None,
+            build_number_override: None,
+            build_string_prefix: None,
         },
     };
 
@@ -1841,6 +1849,8 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
             variant_files: None,
             enabled_protocols: Default::default(),
             preferred_build_source: None,
+            build_number_override: None,
+            build_string_prefix: None,
         },
     };
 

@@ -88,6 +88,8 @@ where
             variant_configuration,
             variant_files,
             work_directory: current_dir,
+            build_number_override: None,
+            build_string_prefix: None,
         })
         .await
         .unwrap()

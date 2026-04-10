@@ -92,6 +92,20 @@ pub struct Args {
     /// Generate sigstore attestation (prefix.dev only)
     #[arg(long)]
     pub generate_attestation: bool,
+
+    /// Override the build number for the package (e.g., `--build-number 5`).
+    ///
+    /// When set, this replaces the build number in the recipe and updates the
+    /// build string accordingly.
+    #[arg(long)]
+    pub build_number: Option<u64>,
+
+    /// A string to prepend to the build string (e.g., `--build-string-prefix pr42`).
+    ///
+    /// When set, the build string becomes `<prefix>_<original_build_string>`.
+    /// This can be used to tag builds with a git hash, PR number, or other identifier.
+    #[arg(long)]
+    pub build_string_prefix: Option<String>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -202,6 +216,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         variant_configuration: Some(variant_configuration.clone()),
         variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
+        build_number_override: args.build_number,
+        build_string_prefix: args.build_string_prefix.clone(),
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -249,6 +265,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 clean: args.clean,
                 force: false,
                 build_profile: BuildProfile::Release,
+                build_number_override: args.build_number,
+                build_string_prefix: args.build_string_prefix.clone(),
             })
             .await?;
 

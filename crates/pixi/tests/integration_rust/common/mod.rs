@@ -753,6 +753,8 @@ impl PixiControl {
                 build_dir: None,
                 clean: false,
                 path: Some(self.manifest_path()),
+                build_number: None,
+                build_string_prefix: None,
             },
         }
     }
