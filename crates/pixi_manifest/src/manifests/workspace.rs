@@ -3603,15 +3603,20 @@ exclude-newer = "2015-12-02T02:07:43Z"
             manifest: &manifest,
             features: vec![default_feature],
         };
+        let channel_config = default_channel_config();
         let config: rattler_solve::ExcludeNewer = features
-            .exclude_newer_config_resolved(&default_channel_config())
+            .exclude_newer_config_resolved(&channel_config)
             .unwrap()
             .unwrap()
             .into();
         let after = chrono::Utc::now();
 
+        let bioconda = NamedChannelOrUrl::Name(String::from("bioconda"))
+            .into_base_url(&channel_config)
+            .unwrap();
+
         let package = PackageName::from_str("polars").unwrap();
-        let bioconda_cutoff = config.cutoff_for_package(&package, Some("bioconda"));
+        let bioconda_cutoff = config.cutoff_for_package(&package, Some(bioconda.as_str()));
         assert!(bioconda_cutoff >= before);
         assert!(bioconda_cutoff <= after + chrono::Duration::seconds(1));
 

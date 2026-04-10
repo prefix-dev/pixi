@@ -436,14 +436,14 @@ mod test {
         assert_eq!(
             config.cutoff_for_package(
                 &PackageName::new_unchecked("bar"),
-                Some("https://prefix.dev/conda-forge"),
+                Some("https://prefix.dev/conda-forge/"),
             ),
             channel_cutoff
         );
         assert_eq!(
             config.cutoff_for_package(
                 &PackageName::new_unchecked("foo"),
-                Some("https://prefix.dev/conda-forge"),
+                Some("https://prefix.dev/conda-forge/"),
             ),
             package_cutoff
         );

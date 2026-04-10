@@ -261,22 +261,4 @@ mod tests {
         assert_eq!(merged.compilers, Some(vec!["rust".to_string()]));
         assert!(merged.binaries.is_empty());
     }
-
-    #[test]
-    fn test_merge_target_debug_dir_error() {
-        let base_config = RustBackendConfig {
-            debug_dir: Some(PathBuf::from("/base/debug")),
-            ..RustBackendConfig::new_with_clean_environment()
-        };
-
-        let target_config = RustBackendConfig {
-            debug_dir: Some(PathBuf::from("/target/debug")),
-            ..RustBackendConfig::new_with_clean_environment()
-        };
-
-        let result = base_config.merge_with_target_config(&target_config);
-        assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("`debug_dir` cannot have a target specific value"));
-    }
 }

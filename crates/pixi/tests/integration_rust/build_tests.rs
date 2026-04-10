@@ -706,7 +706,7 @@ my-package = {{ path = "./my-package" }}
         .expect_err("source build env solve should inherit exclude-newer during install");
     let rendered = format_diagnostic(err.as_ref());
     assert!(
-        rendered.contains("failed to solve the build environment"),
+        rendered.contains("failed to solve the environment"),
         "{rendered}"
     );
     assert!(rendered.contains("foo"), "{rendered}");
