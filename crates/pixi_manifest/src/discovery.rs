@@ -660,6 +660,7 @@ mod test {
     #[case::invalid_inherit("invalid_inherit")]
     #[case::inherit_readme("inherit_readme/nested")]
     #[case::requires_newer_pixi("requires-newer-pixi")]
+    #[case::requires_newer_pixi_malformed("requires-newer-pixi-malformed")]
     fn test_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
