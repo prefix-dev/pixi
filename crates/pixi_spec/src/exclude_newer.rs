@@ -174,8 +174,8 @@ impl ResolvedExcludeNewer {
 
 /// Convert [`crate::SourceTimestamps`] into a [`ResolvedExcludeNewer`].
 ///
-/// [`SourceTimestamps`] records the concrete timestamps of the newest packages
-/// in the build/host environments stored in the lock file.
+/// [`crate::SourceTimestamps`] records the concrete timestamps of the newest
+/// packages in the build/host environments stored in the lock file.
 /// [`ResolvedExcludeNewer`] is the solve-time cutoff configuration that
 /// constrains which packages are visible. This conversion bridges the two so
 /// that a locked source record can be re-solved with the same constraints.

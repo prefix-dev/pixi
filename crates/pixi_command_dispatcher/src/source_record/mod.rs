@@ -670,7 +670,7 @@ impl SourceRecordSpec {
                     let channel = repo_data_record
                         .channel
                         .as_ref()
-                        .and_then(|channel_str| Some(Url::parse(&channel_str).ok()?.into()));
+                        .and_then(|channel_str| Some(Url::parse(channel_str).ok()?.into()));
                     if let Some(entry) = highest_timestamp_by_name.get_mut(repo_data_record.name())
                     {
                         *entry = Some(entry.map_or(timestamp, |previous| timestamp.max(previous)));
@@ -718,16 +718,15 @@ impl SourceRecordSpec {
                 .values()
                 .chain(highest_timestamp_by_name.values())
                 .copied()
-                .filter_map(std::convert::identity)
+                .flatten()
                 .max()
         });
 
-        let timestamp = default_timestamp.map(move |latest| SourceTimestamps {
+        default_timestamp.map(move |latest| SourceTimestamps {
             latest,
             channels: highest_timestamp_by_channel,
             packages: highest_timestamp_by_name,
-        });
-        timestamp
+        })
     }
 
     async fn solve_dependencies(
