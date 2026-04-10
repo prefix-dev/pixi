@@ -223,6 +223,13 @@ fn print_search_results<W: Write>(
         if i >= n_packages {
             break;
         }
+
+        // When limit is 0, show only package names with no version info
+        if n_versions == 0 {
+            writeln!(out, "{}", console::style(name.as_source()).green().bold())?;
+            continue;
+        }
+
         if i > 0 {
             writeln!(out)?;
         }
