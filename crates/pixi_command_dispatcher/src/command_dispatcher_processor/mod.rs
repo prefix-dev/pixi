@@ -12,6 +12,7 @@ use std::{
 use crate::CommandDispatcherErrorResultExt;
 use crate::command_dispatcher::TaskSpec;
 use crate::source_build_cache_status::SourceBuildDeduplicationKey;
+use crate::source_metadata::cycle::SourceCycleKey;
 use crate::source_record::SourceRecordDeduplicationKey;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher,
@@ -37,7 +38,6 @@ use crate::{
     solve_conda::SolveCondaEnvironmentError,
 };
 use futures::{StreamExt, future::LocalBoxFuture};
-use itertools::Itertools;
 use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
 use pixi_spec::UrlSpec;
@@ -66,6 +66,14 @@ pub(crate) struct CommandDispatcherProcessor {
 
     /// Keeps track of the parent context for each task that is being processed.
     parent_contexts: HashMap<CommandDispatcherContext, CommandDispatcherContext>,
+
+    /// Tracks the `(package, source)` pair for each in-flight source-related
+    /// task context. Used for cycle detection independent of dedup keys:
+    /// cycles are detected by walking the parent chain and looking for an
+    /// ancestor that is already processing the same pair, so that incidental
+    /// spec differences (variants, exclude_newer, channels, ...) cannot
+    /// prevent a cycle from being detected.
+    active_source_requests: HashMap<CommandDispatcherContext, SourceCycleKey>,
 
     /// Keeps track of cancellation tokens for each task context.
     /// Used to create child tokens that are automatically cancelled when the parent is cancelled.
@@ -372,6 +380,7 @@ impl CommandDispatcherProcessor {
             let task = Self {
                 receiver: rx,
                 parent_contexts: HashMap::new(),
+                active_source_requests: HashMap::new(),
                 cancellation_tokens: HashMap::new(),
                 sender: weak_tx,
                 conda_solves: slotmap::SlotMap::default(),
@@ -705,16 +714,18 @@ impl CommandDispatcherProcessor {
         let _ = sender.send(());
     }
 
-    /// Returns true if by following the parent chain of the `parent` context we
-    /// stumble on `id`.
-    pub fn contains_cycle<T: TryFrom<CommandDispatcherContext> + PartialEq>(
+    /// Returns true if any ancestor of `parent` (or `parent` itself) is
+    /// currently processing a source request with the same
+    /// `(package, source)` pair as `key`. This is independent of any dedup
+    /// key, so cycles are detected even when the two requests have
+    /// incidentally different specs (variants, exclude_newer, ...).
+    pub(crate) fn has_source_cycle(
         &self,
-        id: T,
+        key: &SourceCycleKey,
         parent: Option<CommandDispatcherContext>,
     ) -> bool {
-        std::iter::successors(parent, |ctx| self.parent_contexts.get(ctx).cloned())
-            .filter_map(|context| T::try_from(context).ok())
-            .contains(&id)
+        std::iter::successors(parent, |ctx| self.parent_contexts.get(ctx).copied())
+            .any(|ctx| self.active_source_requests.get(&ctx) == Some(key))
     }
 }
 
@@ -1115,6 +1126,7 @@ impl CommandDispatcherProcessor {
         id: S::Id,
         result: Result<S::Ok, CommandDispatcherError<S::Err>>,
     ) {
+        self.active_source_requests.remove(&context);
         let fields = S::dedup_task_fields(self);
         fields.parent_contexts.remove(&context);
         let failed = result.is_err();

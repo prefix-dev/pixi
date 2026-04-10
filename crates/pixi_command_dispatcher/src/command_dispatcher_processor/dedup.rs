@@ -265,11 +265,6 @@ where
         }
     }
 
-    /// Look up the id for a given key, if one exists.
-    pub fn get_id(&self, key: &Key) -> Option<Id> {
-        self.key_to_id.get(key).copied()
-    }
-
     /// Clears completed entries, preserving in-flight (pending) tasks.
     pub fn clear_completed(&mut self) {
         self.tasks.retain(|_, task| match task {

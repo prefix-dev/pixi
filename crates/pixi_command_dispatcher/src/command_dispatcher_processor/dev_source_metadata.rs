@@ -4,6 +4,7 @@ use super::{CommandDispatcherProcessor, NewDedupTask, TaskResult};
 use crate::{
     CommandDispatcherError, DevSourceMetadataError,
     command_dispatcher::{CommandDispatcherContext, DevSourceMetadataId, DevSourceMetadataTask},
+    source_metadata::cycle::SourceCycleKey,
 };
 
 impl CommandDispatcherProcessor {
@@ -14,11 +15,13 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        // Cycle detection: if we already have a pending task for this key,
-        // check whether following the parent chain would create a cycle.
-        if let Some(id) = self.dev_source_metadata.get_id(&task.spec)
-            && self.contains_cycle(id, task.parent)
-        {
+        // Cycle detection: walk the parent chain looking for an ancestor that
+        // is already resolving the same `(package, manifest source)` pair.
+        let cycle_key = SourceCycleKey {
+            package: task.spec.package_name.clone(),
+            source: task.spec.backend_metadata.manifest_source.clone(),
+        };
+        if self.has_source_cycle(&cycle_key, task.parent) {
             let _ = task.tx.send(Err(DevSourceMetadataError::Cycle));
             return;
         }
@@ -44,6 +47,8 @@ impl CommandDispatcherProcessor {
         else {
             return;
         };
+
+        self.active_source_requests.insert(context, cycle_key);
 
         let dispatcher = self.create_task_command_dispatcher(context);
 

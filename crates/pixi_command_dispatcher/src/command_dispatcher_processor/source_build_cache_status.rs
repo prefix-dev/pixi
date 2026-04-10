@@ -8,6 +8,7 @@ use crate::{
     command_dispatcher::{
         CommandDispatcherContext, SourceBuildCacheStatusId, SourceBuildCacheStatusTask,
     },
+    source_metadata::cycle::SourceCycleKey,
 };
 
 impl CommandDispatcherProcessor {
@@ -18,17 +19,18 @@ impl CommandDispatcherProcessor {
             return;
         }
 
-        let cache_key = task.spec.key();
-
-        // Cycle detection: if we already have a pending task for this key,
-        // check whether following the parent chain would create a cycle.
-        if let Some(id) = self.source_build_cache_status.get_id(&cache_key)
-            && self.contains_cycle(id, task.parent)
-        {
+        // Cycle detection: walk the parent chain looking for an ancestor that
+        // is already resolving the same `(package, manifest source)` pair.
+        let cycle_key = SourceCycleKey {
+            package: task.spec.name.clone(),
+            source: task.spec.source.manifest_source().clone(),
+        };
+        if self.has_source_cycle(&cycle_key, task.parent) {
             let _ = task.tx.send(Err(SourceBuildCacheStatusError::Cycle));
             return;
         }
 
+        let cache_key = task.spec.key();
         let action =
             self.source_build_cache_status
                 .on_task(cache_key, task.tx, SourceBuildCacheStatusId);
@@ -50,6 +52,8 @@ impl CommandDispatcherProcessor {
         else {
             return;
         };
+
+        self.active_source_requests.insert(context, cycle_key);
 
         let dispatcher = self.create_task_command_dispatcher(context);
 
