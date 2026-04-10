@@ -10,7 +10,7 @@ pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
 
 ## Arguments
 
-- [`<EXPOSED_NAME>`](#arg-%3CEXPOSED_NAME%3E) : The exposed names that should be removed Can be specified multiple times
+- [`<EXPOSED_NAME>`](#arg-%3CEXPOSED_NAME%3E) : The exposed names that should be removed. Can be specified multiple times
 
   ```
   May be provided more than once.
@@ -52,7 +52,7 @@ pixi global expose remove [OPTIONS] [EXPOSED_NAME]...
 
 Remove exposed binaries from the global environment
 
-`pixi global expose remove python310 python3 --environment myenv` will remove the exposed names `python310` and `python3` from the environment `myenv`
+`pixi global expose remove python310 python3` will remove the exposed names `python310` and `python3` from the environment they belong to
 
 ## Examples
 
