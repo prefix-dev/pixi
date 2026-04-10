@@ -132,6 +132,10 @@ pub enum WorkspaceLocatorError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     PixiVersionMismatch(#[from] Box<pixi_manifest::PixiVersionMismatchError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidRequiresPixi(#[from] Box<pixi_manifest::InvalidRequiresPixiError>),
 }
 
 impl WorkspaceLocator {
@@ -231,6 +235,9 @@ impl WorkspaceLocator {
             }
             Err(WorkspaceDiscoveryError::PixiVersionMismatch(err)) => {
                 return Err(WorkspaceLocatorError::PixiVersionMismatch(err));
+            }
+            Err(WorkspaceDiscoveryError::InvalidRequiresPixi(err)) => {
+                return Err(WorkspaceLocatorError::InvalidRequiresPixi(err));
             }
         };
 

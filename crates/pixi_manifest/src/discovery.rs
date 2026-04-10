@@ -191,6 +191,10 @@ pub enum WorkspaceDiscoveryError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     PixiVersionMismatch(#[from] Box<PixiVersionMismatchError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidRequiresPixi(#[from] Box<InvalidRequiresPixiError>),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -207,31 +211,70 @@ pub struct PixiVersionMismatchError {
     pub span: SourceSpan,
 }
 
+#[derive(Debug, Error, Diagnostic)]
+#[error("invalid version specifier in 'requires-pixi'")]
+pub struct InvalidRequiresPixiError {
+    #[source_code]
+    pub source_code: NamedSource<Arc<str>>,
+    #[label("could not parse this as a version specifier")]
+    pub span: SourceSpan,
+    #[source]
+    pub parse_error: rattler_conda_types::version_spec::ParseVersionSpecError,
+}
+
+/// Result of the early `requires-pixi` check.
+enum RequiresPixiCheck {
+    /// Field is absent or the current pixi version satisfies the constraint.
+    Satisfied,
+    /// The current pixi version does not satisfy the constraint.
+    Mismatch {
+        requires_pixi: VersionSpec,
+        span: SourceSpan,
+    },
+    /// The `requires-pixi` value could not be parsed as a version specifier.
+    Invalid {
+        span: SourceSpan,
+        parse_error: rattler_conda_types::version_spec::ParseVersionSpecError,
+    },
+}
+
 /// Extract and check the `requires-pixi` field from a parsed TOML tree before
-/// full deserialization. Returns `Some((spec, span))` if the version doesn't
-/// match, `None` if it matches or the field is absent/unparseable.
-fn check_requires_pixi_early(
-    toml: &toml_span::Value<'_>,
-    kind: ManifestKind,
-) -> Option<(VersionSpec, SourceSpan)> {
+/// full deserialization.
+fn check_requires_pixi_early(toml: &toml_span::Value<'_>, kind: ManifestKind) -> RequiresPixiCheck {
     let pointer = match kind {
         ManifestKind::Pixi | ManifestKind::MojoProject => "/workspace/requires-pixi",
         ManifestKind::Pyproject => "/tool/pixi/workspace/requires-pixi",
     };
-    let value = toml.pointer(pointer)?;
-    // Non-string values (e.g. integers, bools) will be caught as schema
-    // errors during full deserialization — skip the version check here.
-    let spec_str = value.as_str()?;
-    let span = value.span;
-    let spec = VersionSpec::from_str(spec_str, ParseStrictness::Strict).ok()?;
-    let current = Version::from_str(consts::PIXI_VERSION).ok()?;
+    let Some(value) = toml.pointer(pointer) else {
+        return RequiresPixiCheck::Satisfied;
+    };
+    let Some(spec_str) = value.as_str() else {
+        // Non-string values (e.g. integers, bools) will be caught as schema
+        // errors during full deserialization — skip the version check here.
+        return RequiresPixiCheck::Satisfied;
+    };
+    let span = SourceSpan::new(value.span.start.into(), value.span.end - value.span.start);
+    let spec = match VersionSpec::from_str(spec_str, ParseStrictness::Strict) {
+        Ok(spec) => spec,
+        Err(e) => {
+            return RequiresPixiCheck::Invalid {
+                span,
+                parse_error: e,
+            }
+        }
+    };
+    let current = match Version::from_str(consts::PIXI_VERSION) {
+        Ok(v) => v,
+        // If our own version can't be parsed, skip the check.
+        Err(_) => return RequiresPixiCheck::Satisfied,
+    };
     if spec.matches(&current) {
-        None
+        RequiresPixiCheck::Satisfied
     } else {
-        Some((
-            spec,
-            SourceSpan::new(span.start.into(), span.end - span.start),
-        ))
+        RequiresPixiCheck::Mismatch {
+            requires_pixi: spec,
+            span,
+        }
     }
 }
 
@@ -442,15 +485,29 @@ impl WorkspaceDiscoverer {
             // Before full deserialization, check requires-pixi so that version
             // mismatches are reported instead of confusing parse errors from
             // fields that only exist in newer manifest formats.
-            if !self.ignore_pixi_version_check
-                && let Some((requires_pixi, span)) =
-                    check_requires_pixi_early(&toml, provenance.kind)
-            {
-                return Err(Box::new(PixiVersionMismatchError {
-                    requires_pixi,
-                    source_code: source,
-                    span,
-                }).into());
+            if !self.ignore_pixi_version_check {
+                match check_requires_pixi_early(&toml, provenance.kind) {
+                    RequiresPixiCheck::Satisfied => {}
+                    RequiresPixiCheck::Mismatch {
+                        requires_pixi,
+                        span,
+                    } => {
+                        return Err(Box::new(PixiVersionMismatchError {
+                            requires_pixi,
+                            source_code: source,
+                            span,
+                        })
+                        .into());
+                    }
+                    RequiresPixiCheck::Invalid { span, parse_error } => {
+                        return Err(Box::new(InvalidRequiresPixiError {
+                            source_code: source,
+                            span,
+                            parse_error,
+                        })
+                        .into());
+                    }
+                }
             }
 
             // Parse the workspace manifest.
