@@ -3,6 +3,19 @@
 Pixi can do a lot of things, but it is designed to be simple to use.
 Let's go through the basic usage of Pixi.
 
+## How Pixi works
+
+When you use Pixi, it manages three aspects in your project directory:
+- `pixi.toml` - the manifest file, listing the dependencies you want in your project
+- `pixi.lock` - the lockfile, containing the resolved versions of dependencies (including transitive ones), you should commit this file to version control
+- `.pixi/` - the installed environment on your machine
+  
+The following commands interact with these files in sequence:
+- [`pixi add`](./reference/cli/pixi/add.md) - adds a dependency to `pixi.toml`
+- [`pixi lock`](./reference/cli/pixi/lock.md) - resolves the dependencies in `pixi.toml` and writes the exact versions to `pixi.lock`
+- [`pixi install`](./reference/cli/pixi/install.md) - installs the packages listed in `pixi.lock` into the `.pixi/` directory
+- [`pixi run`](./reference/cli/pixi/run.md) - activates the `.pixi/` environment and runs given command
+
 ## Managing workspaces
 
 - [`pixi init`](./reference/cli/pixi/init.md) - create a new Pixi manifest in the current directory
