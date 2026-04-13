@@ -7,7 +7,7 @@ Let's go through the basic usage of Pixi.
 
 When you use Pixi, it manages three aspects in your project directory:
 
-- `pixi.toml` - the manifest file, listing the dependencies you want in your project
+- `pixi.toml`( or `pyproject.toml`) - the manifest file, listing the dependencies you want in your project
 - `pixi.lock` - the lockfile, containing the resolved versions of dependencies (including transitive ones), you should commit this file to version control
 - `.pixi/` - the installed environment on your machine
   
