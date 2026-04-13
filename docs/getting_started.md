@@ -18,6 +18,24 @@ Let's go through the basic usage of Pixi.
 - [`pixi tree`](./reference/cli/pixi/tree.md) - show a tree of dependencies in the current environment
 - [`pixi clean`](./reference/cli/pixi/clean.md) - remove the environment from your machine
 
+This diagram shows how Pixi's commands connect to each other.
+`pixi add` writes your dependency to `pixi.toml`. Then `pixi lock`
+reads that file and resolves the exact versions, writing them to `pixi.lock`.
+Finally, `pixi install` reads `pixi.lock` and installs everything into the `.pixi/` folder on your machine.
+The dashed arrows show that `pixi run` is smart — it automatically triggers
+`pixi install` and `pixi lock` if they haven't been run yet, so you never have to think about the order.
+
+```mermaid
+flowchart TB
+    add[pixi add] -->|writes| toml[pixi.toml]
+    toml -->|reads| lock[pixi lock]
+    lock -->|writes| lockfile[pixi.lock]
+    lockfile -->|reads| install[pixi install]
+    install -->|writes| env[.pixi/]
+    run[pixi run] -.->|auto-triggers| install
+    install -.->|auto-triggers| lock
+```
+
 ## Managing global installations
 
 Pixi can manage global installations of tools in global environments.
