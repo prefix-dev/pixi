@@ -18,21 +18,6 @@ For a more integrated experience, use the community-maintained [Pixi extension](
 
 ## Tips & Tricks
 
-### Exclude `.pixi` from Search
-
-To improve performance and avoid "noise" in your search results while keeping the folder visible in the explorer, add this to your `.vscode/settings.json`:
-
-```json
-{
-  "search.exclude": {
-    "**/.pixi": true
-  },
-  "files.watcherExclude": {
-    "**/.pixi/**": true
-  }
-}
-```
-
 ### C++ Support (CMake)
 
 For C++ projects, use [CMake Presets](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html) to point to the Pixi environment tools (like `ninja` or `clang`).
