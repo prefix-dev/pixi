@@ -4,4 +4,4 @@ expression: script
 ---
 export OPENSSL_DIR="$PREFIX"
 
-cargo install --locked --root "$PREFIX" --path my-prefix-dir --target-dir target --no-track  --force
+cargo install --locked --root "$PREFIX" --path "my-prefix-dir" --target-dir target --no-track  --force
