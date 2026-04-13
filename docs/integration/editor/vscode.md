@@ -2,11 +2,37 @@
 
 ## Python Extension
 
-First, install the Python extension from the [marketplace](https://marketplace.visualstudio.com/items?itemName=ms-python.python).
-Typically, the extension will detect and select the Pixi default environment automatically as soon as you open a Python file.
-In case it doesn't or you want to select a different environment, you can open the environment selector to select the environment of your choice.
+The [Python extension](https://marketplace.visualstudio.com/items?itemName=ms-python.python) can automatically detect Pixi environments via the `.pixi` folder in your project root.
+
+!!! tip "Manual Selection"
+    If it isn't detected automatically, you can manually select the interpreter (e.g. `.pixi/envs/default/bin/python`) via the **Python: Select Interpreter** command in the Command Palette.
 
 ![VSCode Python Environment Selector](../../assets/vscode-python-env-selector.png)
+
+## Pixi VS Code Extension
+
+For a more integrated experience, use the community-maintained [Pixi extension](https://marketplace.visualstudio.com/items?itemName=renan-r-santos.pixi-code). It adds:
+
+- **Task Explorer**: Run Pixi tasks directly from the UI.
+- **Dependency Management**: Add or remove packages without leaving the editor.
+
+## Tips & Tricks
+
+### Exclude `.pixi` from Search
+
+To improve performance and avoid noise, exclude the `.pixi` folder from search and watchers in your `.vscode/settings.json`:
+
+```json
+{
+  "search.exclude": { "**/.pixi": true },
+  "files.exclude": { "**/.pixi": true },
+  "files.watcherExclude": { "**/.pixi/**": true }
+}
+```
+
+### C++ Support (CMake)
+
+For C++ projects, use [CMake Presets](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html) to point to the Pixi environment tools (like `ninja` or `clang`).
 
 ## Direnv Extension
 
