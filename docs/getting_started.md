@@ -18,22 +18,42 @@ Let's go through the basic usage of Pixi.
 - [`pixi tree`](./reference/cli/pixi/tree.md) - show a tree of dependencies in the current environment
 - [`pixi clean`](./reference/cli/pixi/clean.md) - remove the environment from your machine
 
-This diagram shows how Pixi's commands connect to each other.
-`pixi add` writes your dependency to `pixi.toml`. Then `pixi lock`
-reads that file and resolves the exact versions, writing them to `pixi.lock`.
-Finally, `pixi install` reads `pixi.lock` and installs everything into the `.pixi/` folder on your machine.
-The dashed arrows show that `pixi run` is smart — it automatically triggers
-`pixi install` and `pixi lock` if they haven't been run yet, so you never have to think about the order.
+
+## How Pixi works
+
+When you use Pixi, it manages three aspects in your project directory:
+
+- `pixi.toml`( or `pyproject.toml`) - the manifest file, listing the dependencies you want in your project
+- `pixi.lock` - the lockfile, containing the resolved versions of dependencies (including transitive ones), you should commit this file to version control
+- `.pixi/` - the installed environment on your machine
+
+The following commands interact with these files in sequence:
+
+- [`pixi add`](./reference/cli/pixi/add.md) - adds a dependency to `pixi.toml`
+- [`pixi lock`](./reference/cli/pixi/lock.md) - resolves the dependencies in `pixi.toml` and writes the exact versions to `pixi.lock`
+- [`pixi install`](./reference/cli/pixi/install.md) - installs the packages listed in `pixi.lock` into the `.pixi/` directory
+- [`pixi run`](./reference/cli/pixi/run.md) - activates the `.pixi/` environment and runs given command
+
+The diagram below shows how Pixi's commands and files relate to each other.
+There are two types of elements: **commands** .
+
+
+Starting from the left, `pixi add` writes your dependency into `pixi.toml`.
+Then `pixi lock` reads that file and calculates the exact version of every package,
+saving the result in `pixi.lock`. Finally, `pixi install` reads `pixi.lock`
+and installs everything into the `.pixi/envs/` folder on your machine.
+
+The dashed arrow shows the shortcut: instead of running these steps manually,
+`pixi run` triggers the whole chain automatically ,  so you only ever need one command.
 
 ```mermaid
-flowchart TB
-    add[pixi add] -->|writes| toml[pixi.toml]
-    toml -->|reads| lock[pixi lock]
-    lock -->|writes| lockfile[pixi.lock]
-    lockfile -->|reads| install[pixi install]
-    install -->|writes| env[.pixi/]
-    run[pixi run] -.->|auto-triggers| install
-    install -.->|auto-triggers| lock
+flowchart LR
+    add[pixi add] --> toml[pixi.toml]
+    toml --> lock[pixi lock]
+    lock --> lockfile[pixi.lock]
+    lockfile --> install[pixi install]
+    install --> env[.pixi/envs/]
+    run[pixi run] -. auto-triggers .-> install
 ```
 
 ## Managing global installations
