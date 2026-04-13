@@ -1,8 +1,8 @@
 In this tutorial, we will show you how to develop a Rust package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 
-The audience for this tutorial is developers who are familiar with Rust and `cargo` and how are interested to try Pixi for their development workflow.
-The benefit would be within a rust workflow that you lock both rust and the C/System dependencies your project might be using. For example tokio users might depend on `openssl` for linux.
+The audience for this tutorial is developers who are familiar with Rust and `cargo` and who are interested to try Pixi for their development workflow.
+The benefit would be within a Rust workflow that you lock both Rust and the C/System dependencies your project might be using. For example Tokio users might depend on `openssl` for Linux.
 
 
 ## Prerequisites
@@ -34,15 +34,17 @@ name = "my_rust_project"
 version = "0.1.0"
 description = "Add a short description here"
 authors = ["User Name <user.name@email.url>"]
-channels = ["conda-forge"]
-platforms = ["linux-64"] # (1)!
+channels = ["conda-forge"] # (1)!
+platforms = ["linux-64"] # (2)!
 
 [tasks]
 
 [dependencies]
 ```
 
-1. The `platforms` is set to your system's platform by default. You can change it to any platform you want to support. e.g. `["linux-64", "osx-64", "osx-arm64", "win-64"]`.
+1. `conda-forge` is the default package manager for Pixi. You can change it to any compatible package manager. Or include multiple package managers. e.g. `["robostack", "bioconda", "nvidia", "pytorch"]`.
+
+2. The `platforms` is set to your system's platform by default. You can change it to any platform you want to support. e.g. `["linux-64", "osx-64", "osx-arm64", "win-64"]`.
 
 ## Add Rust dependencies
 
@@ -55,14 +57,14 @@ This will add the `rust` package to your `pixi.toml` file under `[dependencies]`
 Which includes the `rust` toolchain, and `cargo`.
 
 ## Add a `cargo` project
-Now that you have rust installed, you can create a `cargo` project in your `pixi` workspace.
+Now that you have Rust installed, you can create a `cargo` project in your `pixi` workspace.
 ```shell
 pixi run cargo init
 ```
 
-`pixi run` is pixi's way to run commands in an environment. It will make sure that the environment is activated for the command to run.
+`pixi run` is Pixi's way to run commands in an environment. It will make sure that the environment is activated for the command to run.
 It runs its own cross-platform shell, if you want more information checkout the [`tasks` documentation](../workspace/advanced_tasks.md).
-You can also activate the environment in a shell by running `pixi shell`, after that you don't need `pixi run ...` anymore.
+You can also activate the environment in a shell by running `pixi shell`, after that you don't need `pixi run` anymore.
 
 Now we can build a `cargo` project using `pixi`.
 ```shell
@@ -98,7 +100,7 @@ pixi run start
 Hello, world!
 ```
 
-Congratulations, you have a Rust project running on your machine with pixi!
+Congratulations, you have a Rust project running on your machine with Pixi!
 
 ## Next steps, why is this useful when there is `rustup`?
 Cargo is not a binary package manager, but a source-based package manager.
