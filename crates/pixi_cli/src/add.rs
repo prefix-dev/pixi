@@ -71,6 +71,10 @@ use crate::{
 /// packages that are not following the semver versioning scheme but will use
 /// the minor version by default:
 /// Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl
+/// 
+/// It is also possible to configure custom channels (or mirrors) for dependencies within your workspace. 
+/// These channels can be scoped to a specific feature, allowing you to group dependencies that should be resolved from a particular source.
+
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
