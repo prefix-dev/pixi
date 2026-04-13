@@ -210,7 +210,7 @@ This ensures that a free-threaded version of Python is installed into the enviro
 
 Pixi can also create multiple environments, this works well together with the `dependency-groups` feature in the `pyproject.toml` file.
 
-Let's add a dependency-group, which Pixi calls a `feature`, named `test`. And add the `pytest` package to this group.
+Before creating an environment, let's add a dependency-group, which Pixi calls a `feature`, named `test`. And add the `pytest` package to this group.
 
 ```shell
 pixi add --pypi --feature test pytest
@@ -225,6 +225,8 @@ test = ["pytest"]
 
 After we have added the `dependency-groups` to the `pyproject.toml`, Pixi sees these as a [`feature`](../../reference/pixi_manifest/#the-feature-and-environments-tables), which can contain a collection of `dependencies`, `tasks`, `channels`, and more.
 
+We now set up the `default` environment as well as the `test` environment. Notice how the `test` environment is set up using the `test` feature.
+
 ```shell
 pixi workspace environment add default --solve-group default --force
 pixi workspace environment add test --feature test --solve-group default
@@ -236,6 +238,19 @@ Which results in:
 [tool.pixi.environments]
 default = { solve-group = "default" }
 test = { features = ["test"], solve-group = "default" }
+```
+
+This will then run the `pytest` command, using the dependencies from the `test` environment. As the project does not have any tests yet, the output should look like the following:
+
+```shell
+✔ The test environment has been installed.
+============================== test session starts ==============================
+platform darwin -- Python 3.14.4, pytest-9.0.3, pluggy-1.6.0
+rootdir: <path_to_your_environment>/pixi-py
+configfile: pyproject.toml
+collected 0 items                                                                                                                                           
+
+============================ no tests ran in 0.00s ==============================
 ```
 
 Solve Groups
@@ -329,16 +344,16 @@ pixi run test
 results in the following output:
 
 ```shell
-✨ Pixi task (test): pytest .
-================================================================================================= test session starts =================================================================================================
-platform darwin -- Python 3.12.2, pytest-8.1.1, pluggy-1.4.0
-rootdir: /private/tmp/pixi-py
+✨ Pixi task (test in test): pytest
+================================= test session starts =================================
+platform darwin -- Python 3.14.4, pytest-9.0.3, pluggy-1.6.0
+rootdir: <path_to_your_environment>/pixi-py
 configfile: pyproject.toml
-collected 1 item
+collected 1 item                                                                                                                                            
 
-test_me.py .                                                                                                                                                                                                    [100%]
+tests/test_me.py .                                                                [100%]
 
-================================================================================================== 1 passed in 0.00s =================================================================================================
+================================== 1 passed in 0.00s ===================================
 ```
 
 Why didn't I have to specify the environment?
