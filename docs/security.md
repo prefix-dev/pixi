@@ -15,7 +15,7 @@ Pixi does not eliminate these risks, and it does not include a vulnerability sca
 These risks fall into two broad categories, each requiring a different response:
 
 - **A newly published package is malicious or broken.** The threat arrives with a future install. Steps like `exclude-newer` (step 2) and lock file review (step 1) help you avoid pulling it in.
-- **A package you already depend on is found to be vulnerable.** The threat is already in your environment. Unlike ecosystems with registry-integrated alert services (e.g. GitHub Dependabot, `npm audit`), the conda ecosystem does not yet have an event-driven notification mechanism. The primary way to detect this today is to scan your installed environment on a recurring schedule (step 5) and then respond by constraining or overriding dependencies (step 3).
+- **A package you already depend on is found to be vulnerable.** The threat is already in your environment. You can detect this by scanning your installed environment on a recurring schedule (step 5) and then respond by constraining or overriding dependencies (step 3). GitHub Dependabot already [supports conda as an ecosystem](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#supported-ecosystems-maintained-by-github), though lockfile-based update support is not yet available.
 
 This is the security model we recommend, step by step:
 

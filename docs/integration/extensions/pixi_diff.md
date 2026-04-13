@@ -67,9 +67,6 @@ pixi diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi diff-to-markdown > diff
 !!!tip "pixi-diff-to-markdown in GitHub Actions updates"
     For other usages of [`pixi-diff-to-markdown`](https://github.com/pavelzw/pixi-diff-to-markdown), see also our page about [updating lockfiles using GitHub Actions](../ci/updates_github_actions.md).
 
-!!! note "Diff detection is not vulnerability scanning"
-    `pixi-diff` and `pixi-diff-to-markdown` show what changed in your lockfile, but they do not detect whether any of those changes introduce known vulnerabilities. For CVE scanning and broader supply chain security guidance, see the [Supply Chain Security](../../security.md) page.
-
 You can view this generated markdown file in your terminal using [`glow`](https://github.com/charmbracelet/glow).
 
 ```bash
