@@ -20,13 +20,16 @@ For a more integrated experience, use the community-maintained [Pixi extension](
 
 ### Exclude `.pixi` from Search
 
-To improve performance and avoid noise, exclude the `.pixi` folder from search and watchers in your `.vscode/settings.json`:
+To improve performance and avoid "noise" in your search results while keeping the folder visible in the explorer, add this to your `.vscode/settings.json`:
 
 ```json
 {
-  "search.exclude": { "**/.pixi": true },
-  "files.exclude": { "**/.pixi": true },
-  "files.watcherExclude": { "**/.pixi/**": true }
+  "search.exclude": {
+    "**/.pixi": true
+  },
+  "files.watcherExclude": {
+    "**/.pixi/**": true
+  }
 }
 ```
 
