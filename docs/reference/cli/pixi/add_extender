@@ -50,7 +50,7 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 12. This will add the `boost-check` source package to the dependencies from the git repository using `main` branch and the `boost-check` folder in the repository.
 13. This will add the `boost-check` source package to the dependencies from the git repository using `v0.1.0` tag.
 14. This will add the `boost-check` source package to the dependencies from the git repository using `e50d4a1` revision.
-15. This will add the `https://my-mirror.example.com` dependency to your work channel and the feature `my-awesome-mirror`.
+15. This will add the `https://my-mirror.example.com` channel to the `my-awesome-mirror` feature in your workspace, and add the `numpy-mirrored` package from that channel as a dependency.
 16. This will add the `requests` package as `pypi` dependency with the `security` extra.
 17. This will add the `pre-release` version of `Django` to the project as a `pypi` dependency.
 18. This will add the `boltons` package in the feature `lint` as `pypi` dependency.
