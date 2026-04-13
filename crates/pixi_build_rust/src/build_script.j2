@@ -16,7 +16,7 @@ SET {{ key }}={{ value }}
 {{ export("RUSTC_WRAPPER", "sccache") }}
 {%- endif %}
 
-cargo install --locked --root "{{ env("PREFIX") }}" --path {{ source_dir }} --target-dir target --no-track {{ extra_args | join(" ") }} --force
+cargo install --locked --root "{{ env("PREFIX") }}" --path "{{ source_dir }}" --target-dir target --no-track {{ extra_args | join(" ") }} --force
 {%- if not is_bash %}
 if errorlevel 1 exit 1
 {%- endif %}
