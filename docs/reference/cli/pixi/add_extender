@@ -18,6 +18,7 @@ pixi add --git https://github.com/wolfv/pixi-build-examples boost-check # (11)!
 pixi add --git https://github.com/wolfv/pixi-build-examples --branch main --subdir boost-check boost-check # (12)!
 pixi add --git https://github.com/wolfv/pixi-build-examples --tag v0.1.0 boost-check # (13)!
 pixi add --git https://github.com/wolfv/pixi-build-examples --rev e50d4a1 boost-check # (14)!
+pixi workspace channel add https://prefix.dev/bioconda && pixi add https://prefix.dev/bioconda::htslib
 pixi workspace channel add https://my-mirror.example.com --feature=my-awesome-mirror && pixi add --feature=my-awesome-mirror numpy-mirrored
 
 # Add a pypi dependency
