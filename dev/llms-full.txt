@@ -4669,6 +4669,92 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
 
 More info in [`deno_task_shell` documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner).
 
+## Best Practices
+
+Task can be very handy and may even replace simple Makefiles. There are a few principles that can make tasks more useful.
+
+### Use a `description`
+
+It is a good habit to add a description to your task:
+
+pixi.toml
+
+```toml
+[tasks]
+echo = { cmd = "echo Hello Pixi user", description = "Friendly greeting to a Pixi user" }
+build = { cmd = "build", description = "Build everything" }
+test = { cmd = "test", description = "Run all tests" }
+```
+
+Now, the command `pixi task list` will not only list all task names but also the their descriptions.
+
+```shell
+pixi task list
+Tasks that can run on this machine:
+-----------------------------------
+build, echo, test
+Task   Description
+build  Build everything
+echo   Friendly greeting to a Pixi user
+test   Run all tests
+```
+
+This list can be very helpful to quickly find the right tasks.
+
+### Use different TOML syntax for long commands
+
+Tasks can get quite long:
+
+pixi.toml
+
+```toml
+echo-arg = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello"}], description = "Display the given argument" }
+```
+
+While it is possible to add line breaks inside the task in your `pixi.toml` to make the task more readable:
+
+pixi.toml
+
+```toml
+echo-arg = {
+    cmd = "echo {{ ARGUMENT }}",
+    args = [{"arg" = "ARGUMENT", "default" = "hello"}],
+    description = "Display the given argument"
+}
+```
+
+it will not work in `pyproject.toml` because it supports only TOML 1.0, that doesn't allow line breaks inside the task specification. Other tools can't parse the `pyproject.toml` anymore. So if you use an editable dependency:
+
+pyproject.toml
+
+```toml
+[tool.pixi.pypi-dependencies]
+myproject = { path = ".", editable = true }
+```
+
+Pixi will use your build system and reports an error:
+
+```shell
+Error:   × Failed to update PyPI packages for environment 'default'
+  ├─▶ Failed to prepare distributions
+  ├─▶ Failed to build `proj1 @ file:///.../proj1`
+  ├─▶ The build backend returned an error
+  ╰─▶ Call to `hatchling.build.build_editable` failed (exit status: 1)
+```
+
+There is an alternative syntax, adding the task name to the table header:
+
+pyproject.toml
+
+```toml
+[tool.pixi.tasks.echo-arg]
+cmd = "echo {{ ARGUMENT }}"
+args = [{"arg" = "ARGUMENT", "default" = "hello"}]
+description = "Display the given argument"
+```
+
+This is valid TOML 1.0 syntax and makes more complex task better readable.
+
 Pixi is a tool to manage environments. This document explains what an environment looks like and how to use it.
 
 ## Activation
