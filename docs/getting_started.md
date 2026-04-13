@@ -18,8 +18,6 @@ The following commands interact with these files in sequence:
 - [`pixi install`](./reference/cli/pixi/install.md) - installs the packages listed in `pixi.lock` into the `.pixi/` directory
 - [`pixi run`](./reference/cli/pixi/run.md) - activates the `.pixi/` environment and runs given command
 
-You rarely need to run these commands manually. pixi run, pixi shell, and pixi add will automatically update the lockfile and install the environment if anything is missing or out of date.
-
 
 ## Managing workspaces
 
