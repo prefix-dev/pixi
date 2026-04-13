@@ -2622,6 +2622,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#pixi-vs-code-extension" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pixi VS Code Extension
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tips-tricks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tips &amp; Tricks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tips &amp; Tricks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#c-support-cmake" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C++ Support (CMake)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#direnv-extension" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4005,6 +4044,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#pixi-vs-code-extension" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pixi VS Code Extension
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tips-tricks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tips &amp; Tricks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tips &amp; Tricks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#c-support-cmake" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C++ Support (CMake)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#direnv-extension" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4066,10 +4144,21 @@
 
 <p><a href="https://code.visualstudio.com/">Visual Studio Code</a> is a popular editor that can be extended to support most programming languages by installing the suitable extension.</p>
 <h2 id="python-extension">Python Extension<a class="headerlink" href="#python-extension" title="Permanent link">#</a></h2>
-<p>First, install the Python extension from the <a href="https://marketplace.visualstudio.com/items?itemName=ms-python.python">marketplace</a>.
-Typically, the extension will detect and select the Pixi default environment automatically as soon as you open a Python file.
-In case it doesn't or you want to select a different environment, you can open the environment selector to select the environment of your choice.</p>
+<p>The <a href="https://marketplace.visualstudio.com/items?itemName=ms-python.python">Python extension</a> can automatically detect Pixi environments via the <code>.pixi</code> folder in your project root.</p>
+<div class="admonition tip">
+<p class="admonition-title">Manual Selection</p>
+<p>If it isn't detected automatically, you can manually select the interpreter (e.g. <code>.pixi/envs/default/bin/python</code>) via the <strong>Python: Select Interpreter</strong> command in the Command Palette.</p>
+</div>
 <p><img alt="VSCode Python Environment Selector" src="../../../assets/vscode-python-env-selector.png" /></p>
+<h2 id="pixi-vs-code-extension">Pixi VS Code Extension<a class="headerlink" href="#pixi-vs-code-extension" title="Permanent link">#</a></h2>
+<p>For a more integrated experience, use the community-maintained <a href="https://marketplace.visualstudio.com/items?itemName=renan-r-santos.pixi-code">Pixi extension</a>. It adds:</p>
+<ul>
+<li><strong>Task Explorer</strong>: Run Pixi tasks directly from the UI.</li>
+<li><strong>Dependency Management</strong>: Add or remove packages without leaving the editor.</li>
+</ul>
+<h2 id="tips-tricks">Tips &amp; Tricks<a class="headerlink" href="#tips-tricks" title="Permanent link">#</a></h2>
+<h3 id="c-support-cmake">C++ Support (CMake)<a class="headerlink" href="#c-support-cmake" title="Permanent link">#</a></h3>
+<p>For C++ projects, use <a href="https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html">CMake Presets</a> to point to the Pixi environment tools (like <code>ninja</code> or <code>clang</code>).</p>
 <h2 id="direnv-extension">Direnv Extension<a class="headerlink" href="#direnv-extension" title="Permanent link">#</a></h2>
 <p>Direnv provides a language agnostic way of running VSCode in a Pixi environment.
 First, install the Direnv extension from the <a href="https://marketplace.visualstudio.com/items?itemName=mkhl.direnv">marketplace</a>.
