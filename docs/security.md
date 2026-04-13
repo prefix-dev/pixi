@@ -10,7 +10,12 @@ Typical risks include:
 - known-vulnerable dependencies that stay in your environment because nothing forces an update;
 - poor visibility into what actually changed between one environment revision and the next.
 
-Pixi does not eliminate these risks, and it does not include a vulnerability scanner for conda environments. What it does provide is a set of practical controls that help you reduce exposure, review changes more clearly, and respond faster when something goes wrong.
+Pixi does not eliminate these risks, and it does not include a vulnerability scanner or advisory notification system for conda environments. What it does provide is a set of practical controls that help you reduce exposure, review changes more clearly, and respond faster when something goes wrong.
+
+These risks fall into two broad categories, each requiring a different response:
+
+- **A newly published package is malicious or broken.** The threat arrives with a future install. Steps like `exclude-newer` (step 2) and lock file review (step 1) help you avoid pulling it in.
+- **A package you already depend on is found to be vulnerable.** The threat is already in your environment. You can detect this by scanning your installed environment on a recurring schedule (step 5) and then respond by constraining or overriding dependencies (step 3). GitHub Dependabot already [supports conda as an ecosystem](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#supported-ecosystems-maintained-by-github), though lockfile-based update support is not yet available.
 
 This is the security model we recommend, step by step:
 
@@ -18,7 +23,7 @@ This is the security model we recommend, step by step:
 2. delay very fresh uploads when a cooldown is appropriate;
 3. respond to advisories by constraining or overriding dependencies;
 4. treat package installation and activation hooks as code execution surfaces;
-5. scan the installed environment with tooling that understands what is actually on disk;
+5. scan the installed environment on a schedule with tooling that understands what is actually on disk;
 6. add attestations when you publish your own artifacts.
 
 ## 1. Make Dependency Resolution Reproducible
@@ -139,6 +144,8 @@ For conda packages specifically, Syft currently tends to emit CPEs but not PURLs
 
 !!! tip ""
     If you only want to scan your environment for CVEs, you can also run `grype .pixi/envs/default` directly.
+
+Run these scans on a recurring schedule in CI, not only on pull requests. Advisories can be published at any time, so a periodic scan (e.g. a daily or weekly cron job) is needed to catch vulnerabilities in dependencies that have not changed recently.
 
 For Rust packages on conda-forge, building with `cargo-auditable` remains the current recommendation because it makes those shadow dependencies visible to downstream scanning tools. See the conda-forge [Rust packaging guide](https://conda-forge.org/docs/maintainer/example_recipes/rust) or the [conda-forge agent skill](https://prefix.dev/channels/skill-forge/packages/agent-skill-conda-forge) for the recommended recipe pattern.
 
