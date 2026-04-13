@@ -42,7 +42,7 @@ platforms = ["linux-64"] # (2)!
 [dependencies]
 ```
 
-1. `conda-forge` is the default conda channel for Pixi. You can change it to any compatible conda channel. Or include multiple conda channels, e.g. `["robostack", "bioconda", "nvidia", "pytorch"]`.
+1. `conda-forge` is the default conda channel for Pixi. You can change it to any compatible conda channel. Or include multiple conda channels, e.g. `["robostack", "bioconda"]`.
 
 2. The `platforms` is set to your system's platform by default. You can change it to any platform you want to support. e.g. `["linux-64", "osx-64", "osx-arm64", "win-64"]`.
 
