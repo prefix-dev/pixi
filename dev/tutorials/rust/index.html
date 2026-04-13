@@ -4152,8 +4152,8 @@
 
 <p>In this tutorial, we will show you how to develop a Rust package using <code>pixi</code>.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.</p>
-<p>The audience for this tutorial is developers who are familiar with Rust and <code>cargo</code> and how are interested to try Pixi for their development workflow.
-The benefit would be within a rust workflow that you lock both rust and the C/System dependencies your project might be using. For example tokio users might depend on <code>openssl</code> for linux.</p>
+<p>The audience for this tutorial is developers who are familiar with Rust and <code>cargo</code> and who are interested to try Pixi for their development workflow.
+The benefit would be within a Rust workflow that you lock both Rust and the C/System dependencies your project might be using. For example Tokio users might depend on <code>openssl</code> for Linux.</p>
 <h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">#</a></h2>
 <ul>
 <li>You need to have <code>pixi</code> installed. If you haven't installed it yet, you can follow the instructions in the <a href="../../">installation guide</a>.
@@ -4175,15 +4175,20 @@ The benefit would be within a rust workflow that you lock both rust and the C/Sy
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Add a short description here&quot;</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;User Name &lt;user.name@email.url&gt;&quot;</span><span class="p">]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span><span class="w"> </span><span class="c1"># (1)!</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span><span class="w"> </span><span class="c1"># (1)!</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span><span class="w"> </span><span class="c1"># (2)!</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
 </span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">[tasks]</span>
 </span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
 </span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="k">[dependencies]</span>
 </span></code></pre></div>
 <ol>
-<li>The <code>platforms</code> is set to your system's platform by default. You can change it to any platform you want to support. e.g. <code>["linux-64", "osx-64", "osx-arm64", "win-64"]</code>.</li>
+<li>
+<p><code>conda-forge</code> is the default conda channel for Pixi. You can change it to any compatible conda channel. Or include multiple conda channels, e.g. <code>["robostack", "bioconda"]</code>.</p>
+</li>
+<li>
+<p>The <code>platforms</code> is set to your system's platform by default. You can change it to any platform you want to support. e.g. <code>["linux-64", "osx-64", "osx-arm64", "win-64"]</code>.</p>
+</li>
 </ol>
 <h2 id="add-rust-dependencies">Add Rust dependencies<a class="headerlink" href="#add-rust-dependencies" title="Permanent link">#</a></h2>
 <p>To use a Pixi workspace you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your workspace without any issues.
@@ -4192,12 +4197,12 @@ The benefit would be within a rust workflow that you lock both rust and the C/Sy
 <p>This will add the <code>rust</code> package to your <code>pixi.toml</code> file under <code>[dependencies]</code>.
 Which includes the <code>rust</code> toolchain, and <code>cargo</code>.</p>
 <h2 id="add-a-cargo-project">Add a <code>cargo</code> project<a class="headerlink" href="#add-a-cargo-project" title="Permanent link">#</a></h2>
-<p>Now that you have rust installed, you can create a <code>cargo</code> project in your <code>pixi</code> workspace.
+<p>Now that you have Rust installed, you can create a <code>cargo</code> project in your <code>pixi</code> workspace.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>init
 </span></code></pre></div></p>
-<p><code>pixi run</code> is pixi's way to run commands in an environment. It will make sure that the environment is activated for the command to run.
+<p><code>pixi run</code> is Pixi's way to run commands in an environment. It will make sure that the environment is activated for the command to run.
 It runs its own cross-platform shell, if you want more information checkout the <a href="../../workspace/advanced_tasks/"><code>tasks</code> documentation</a>.
-You can also activate the environment in a shell by running <code>pixi shell</code>, after that you don't need <code>pixi run ...</code> anymore.</p>
+You can also activate the environment in a shell by running <code>pixi shell</code>, after that you don't need <code>pixi run</code> anymore.</p>
 <p>Now we can build a <code>cargo</code> project using <code>pixi</code>.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>build
 </span></code></pre></div>
@@ -4221,7 +4226,7 @@ Which you can simplify with a task again.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>start
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>Hello,<span class="w"> </span>world!
 </span></code></pre></div></p>
-<p>Congratulations, you have a Rust project running on your machine with pixi!</p>
+<p>Congratulations, you have a Rust project running on your machine with Pixi!</p>
 <h2 id="next-steps-why-is-this-useful-when-there-is-rustup">Next steps, why is this useful when there is <code>rustup</code>?<a class="headerlink" href="#next-steps-why-is-this-useful-when-there-is-rustup" title="Permanent link">#</a></h2>
 <p>Cargo is not a binary package manager, but a source-based package manager.
 This means that you need to have the Rust compiler installed on your system to use it.

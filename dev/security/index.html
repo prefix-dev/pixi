@@ -4142,14 +4142,19 @@
 <li>known-vulnerable dependencies that stay in your environment because nothing forces an update;</li>
 <li>poor visibility into what actually changed between one environment revision and the next.</li>
 </ul>
-<p>Pixi does not eliminate these risks, and it does not include a vulnerability scanner for conda environments. What it does provide is a set of practical controls that help you reduce exposure, review changes more clearly, and respond faster when something goes wrong.</p>
+<p>Pixi does not eliminate these risks, and it does not include a vulnerability scanner or advisory notification system for conda environments. What it does provide is a set of practical controls that help you reduce exposure, review changes more clearly, and respond faster when something goes wrong.</p>
+<p>These risks fall into two broad categories, each requiring a different response:</p>
+<ul>
+<li><strong>A newly published package is malicious or broken.</strong> The threat arrives with a future install. Steps like <code>exclude-newer</code> (step 2) and lock file review (step 1) help you avoid pulling it in.</li>
+<li><strong>A package you already depend on is found to be vulnerable.</strong> The threat is already in your environment. You can detect this by scanning your installed environment on a recurring schedule (step 5) and then respond by constraining or overriding dependencies (step 3). GitHub Dependabot already <a href="https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#supported-ecosystems-maintained-by-github">supports conda as an ecosystem</a>, though lockfile-based update support is not yet available.</li>
+</ul>
 <p>This is the security model we recommend, step by step:</p>
 <ol>
 <li>make dependency resolution reproducible and reviewable;</li>
 <li>delay very fresh uploads when a cooldown is appropriate;</li>
 <li>respond to advisories by constraining or overriding dependencies;</li>
 <li>treat package installation and activation hooks as code execution surfaces;</li>
-<li>scan the installed environment with tooling that understands what is actually on disk;</li>
+<li>scan the installed environment on a schedule with tooling that understands what is actually on disk;</li>
 <li>add attestations when you publish your own artifacts.</li>
 </ol>
 <h2 id="1-make-dependency-resolution-reproducible">1. Make Dependency Resolution Reproducible<a class="headerlink" href="#1-make-dependency-resolution-reproducible" title="Permanent link">#</a></h2>
@@ -4242,6 +4247,7 @@ Once this CEP is implemented, Pixi will switch the behavior of <code>exclude-new
 <div class="admonition tip">
 <p>If you only want to scan your environment for CVEs, you can also run <code>grype .pixi/envs/default</code> directly.</p>
 </div>
+<p>Run these scans on a recurring schedule in CI, not only on pull requests. Advisories can be published at any time, so a periodic scan (e.g. a daily or weekly cron job) is needed to catch vulnerabilities in dependencies that have not changed recently.</p>
 <p>For Rust packages on conda-forge, building with <code>cargo-auditable</code> remains the current recommendation because it makes those shadow dependencies visible to downstream scanning tools. See the conda-forge <a href="https://conda-forge.org/docs/maintainer/example_recipes/rust">Rust packaging guide</a> or the <a href="https://prefix.dev/channels/skill-forge/packages/agent-skill-conda-forge">conda-forge agent skill</a> for the recommended recipe pattern.</p>
 <h2 id="6-add-attestations-when-publishing-your-own-artifacts">6. Add Attestations When Publishing Your Own Artifacts<a class="headerlink" href="#6-add-attestations-when-publishing-your-own-artifacts" title="Permanent link">#</a></h2>
 <p>If you publish packages that others consume, generate attestations in CI by default and document how your consumers should verify them. Pixi supports Sigstore-based attestations when publishing packages to <a href="https://prefix.dev">prefix.dev</a>. Attestations are cryptographically signed metadata about your package, and Pixi and Rattler-Build generate build provenance attestations that encode information about how and by whom a package was built. This is especially valuable when you operate your own channel or publish internal packages.</p>
