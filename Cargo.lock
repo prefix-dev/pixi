@@ -179,6 +179,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "anymap3"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "170433209e817da6aae2c51aa0dd443009a613425dd041ebfb2492d1c4c11a25"
+
+[[package]]
 name = "arbitrary"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1667,6 +1673,12 @@ checksum = "75443c44cd6b379beb8c5b45d85d0773baf31cce901fe7bb252f4eff3008ef7d"
 dependencies = [
  "cc",
 ]
+
+[[package]]
+name = "cmp_any"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9b18233253483ce2f65329a24072ec414db782531bdbb7d0bbc4bd2ce6b7e21"
 
 [[package]]
 name = "cmpv2"
@@ -3667,7 +3679,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -6171,6 +6183,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_compute_engine"
+version = "0.1.0"
+dependencies = [
+ "anymap3",
+ "cmp_any",
+ "futures",
+ "insta",
+ "parking_lot 0.12.5",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-test",
+]
+
+[[package]]
 name = "pixi_config"
 version = "0.1.0"
 dependencies = [
@@ -7290,7 +7316,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7328,7 +7354,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -10571,6 +10597,17 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util 0.7.18",
+]
+
+[[package]]
+name = "tokio-test"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
+dependencies = [
+ "futures-core",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
