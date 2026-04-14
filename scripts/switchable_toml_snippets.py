@@ -13,7 +13,10 @@ def find_repo_root(start: Path) -> Path:
     for candidate in (start, *start.parents):
         if (candidate / "pixi.toml").is_file() and (candidate / "docs").is_dir():
             return candidate
-    raise RuntimeError("Unable to locate repository root from script location")
+    raise RuntimeError(
+        "Unable to locate repository root while walking upward from "
+        f"'{start}'. Expected to find both 'pixi.toml' and 'docs/' in the same directory."
+    )
 
 
 REPO_ROOT = find_repo_root(Path(__file__).resolve())
@@ -397,9 +400,15 @@ def process_markdown_file(filepath: Path) -> ProcessResult:
                 new_lines.append(line)
                 new_lines.extend(block_lines)
                 new_lines.append(closing_line)
-                snippet_part = include_snippet or ""
-                message = f"Missing include or snippet in {rel_path}: {include_path}:{snippet_part}".rstrip(
-                    ":"
+                include_target = include_path
+                if include_snippet:
+                    include_target = f"{include_path}:{include_snippet}"
+
+                message = (
+                    f"Unable to resolve mkdocs include in '{rel_path}': '{include_target}'. "
+                    "The referenced file does not exist, or the named snippet markers are missing. "
+                    "For named snippets, add '# --8<-- [start:<name>]' and '# --8<-- [end:<name>]' "
+                    "to the source file."
                 )
                 result.errors.append(message)
                 index += 1
@@ -482,6 +491,12 @@ def main() -> int:
     )
 
     print(summary)
+
+    if error_count:
+        print(
+            "FAILED: fix the errors listed above and rerun "
+            "'python scripts/switchable_toml_snippets.py'."
+        )
 
     return 1 if error_count else 0
 
