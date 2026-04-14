@@ -240,6 +240,7 @@ rattler_shell = { version = "0.26.6", default-features = false }
 rattler_solve = { version = "5.2.0", default-features = false }
 rattler_upload = { version = "0.5.3", default-features = false, features = [
   "s3",
+  "sigstore",
 ] }
 rattler_virtual_packages = { version = "2.3.15", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
