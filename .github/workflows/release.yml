@@ -85,7 +85,7 @@ jobs:
           activate-environment: true
 
       - name: Cache dist
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: cargo-dist-cache
           # TODO: revert after switching back to released dist
@@ -108,7 +108,7 @@ jobs:
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
       - name: "Upload dist-manifest.json"
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-plan-dist-manifest
           path: plan-dist-manifest.json
@@ -278,7 +278,7 @@ jobs:
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
       - name: "Upload artifacts"
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-build-local-${{ join(matrix.targets, '_') }}
           path: |
@@ -362,7 +362,7 @@ jobs:
             echo "Patched checksums in global-dist-manifest.json"
           fi
       - name: "Upload artifacts"
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-build-global
           path: |
@@ -408,7 +408,7 @@ jobs:
           cat dist-manifest.json
           echo "manifest=$(jq -c "." dist-manifest.json)" >> "$GITHUB_OUTPUT"
       - name: "Upload dist-manifest.json"
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           # Overwrite the previous copy
           name: artifacts-dist-manifest
@@ -442,55 +442,55 @@ jobs:
 
       # Upload unpacked artifacts, not sure how to do this in one go as you have to name the artifact
       - name: Upload unpacked artifact for pixi-aarch64-unknown-linux-musl
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-aarch64-unknown-linux-musl
           path: unpacked-artifacts/pixi-aarch64-unknown-linux-musl
 
       - name: Upload unpacked artifact for pixi-x86_64-unknown-linux-musl
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-x86_64-unknown-linux-musl
           path: unpacked-artifacts/pixi-x86_64-unknown-linux-musl
 
       - name: Upload unpacked artifact for pixi-aarch64-apple-darwin
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-aarch64-apple-darwin
           path: unpacked-artifacts/pixi-aarch64-apple-darwin
 
       - name: Upload unpacked artifact for pixi-x86_64-apple-darwin
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-x86_64-apple-darwin
           path: unpacked-artifacts/pixi-x86_64-apple-darwin
 
       - name: Upload unpacked artifact for pixi-x86_64-pc-windows-msvc.exe
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-x86_64-pc-windows-msvc.exe
           path: unpacked-artifacts/pixi-x86_64-pc-windows-msvc.exe
 
       - name: Upload unpacked artifact for pixi-aarch64-pc-windows-msvc.exe
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-aarch64-pc-windows-msvc.exe
           path: unpacked-artifacts/pixi-aarch64-pc-windows-msvc.exe
 
       - name: Upload unpacked artifact for pixi-riscv64gc-unknown-linux-gnu
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-riscv64gc-unknown-linux-gnu
           path: unpacked-artifacts/pixi-riscv64gc-unknown-linux-gnu
 
       # Upload installer scripts
       - name: Upload install.sh
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-install.sh
           path: install/install.sh
       - name: Upload install.ps1
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-install.ps1
           path: install/install.ps1

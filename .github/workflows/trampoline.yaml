@@ -101,7 +101,7 @@ jobs:
         run: pixi run compress-trampoline --target ${{ matrix.target }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: trampoline-${{ matrix.target }}
           path: trampoline/binaries/pixi-trampoline-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}.zst
@@ -127,7 +127,7 @@ jobs:
         run: ls -R trampoline/binaries/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: trampolines
           path: trampoline/binaries/
