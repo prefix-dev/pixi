@@ -107,7 +107,7 @@ class Backend:
     @property
     def cargo_name(self) -> str:
         """Cargo package name for `cargo update --package`."""
-        return self.binary.replace("-", "_")
+        return self.binary
 
     @property
     def version_path(self) -> Path:
