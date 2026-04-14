@@ -14,8 +14,7 @@ def find_repo_root(start: Path) -> Path:
         if (candidate / "pixi.toml").is_file() and (candidate / "docs").is_dir():
             return candidate
     raise RuntimeError(
-        "Unable to locate repository root while walking upward from "
-        f"'{start}'. Expected to find both 'pixi.toml' and 'docs/' in the same directory."
+        f"Unable to locate repository root while walking upward from '{start}'. Expected to find both 'pixi.toml' and 'docs/' in the same directory."
     )
 
 
@@ -495,7 +494,7 @@ def main() -> int:
     if error_count:
         print(
             "FAILED: fix the errors listed above and rerun "
-            "'python scripts/switchable_toml_snippets.py'."
+            + "'python scripts/switchable_toml_snippets.py'."
         )
 
     return 1 if error_count else 0
