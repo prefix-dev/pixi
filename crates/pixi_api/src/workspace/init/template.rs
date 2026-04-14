@@ -5,7 +5,10 @@ pub const WORKSPACE_TEMPLATE: &str = r#"[workspace]
 {%- if author %}
 authors = ["{{ author[0] }} <{{ author[1] }}>"]
 {%- endif %}
-channels = {{ channels }}
+channels = {{ channels_toml }}
+{%- if exclude_newer %}
+exclude-newer = "{{ exclude_newer }}"
+{%- endif %}
 name = "{{ name }}"
 platforms = {{ platforms }}
 version = "{{ version }}"
@@ -59,7 +62,10 @@ pub const PYROJECT_TEMPLATE_EXISTING: &str = r#"
 {%- if pixi_name %}
 name = "{{ name }}"
 {%- endif %}
-channels = {{ channels }}
+channels = {{ channels_toml }}
+{%- if exclude_newer %}
+exclude-newer = "{{ exclude_newer }}"
+{%- endif %}
 platforms = {{ platforms }}
 
 [tool.pixi.pypi-dependencies]
@@ -113,7 +119,10 @@ build-backend = "hatchling.build"
 requires = ["hatchling"]
 
 [tool.pixi.workspace]
-channels = {{ channels }}
+channels = {{ channels_toml }}
+{%- if exclude_newer %}
+exclude-newer = "{{ exclude_newer }}"
+{%- endif %}
 platforms = {{ platforms }}
 
 

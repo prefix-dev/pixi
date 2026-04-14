@@ -7,9 +7,10 @@ use std::{
 use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
-use pixi_config::Config;
+use pixi_config::{Config, ConfigChannel};
 use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
+use pixi_spec::ExcludeNewer;
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
@@ -81,11 +82,12 @@ impl Manifest {
     pub fn add_environment(
         &mut self,
         env_name: &EnvironmentName,
-        channels: Option<Vec<NamedChannelOrUrl>>,
+        channels: Option<Vec<ConfigChannel>>,
+        exclude_newer: Option<ExcludeNewer>,
     ) -> miette::Result<()> {
         let channels = channels
             .filter(|c| !c.is_empty())
-            .unwrap_or_else(|| Config::load_global().default_channels());
+            .unwrap_or_else(|| Config::load_global().default_channel_configurations());
 
         // Update self.parsed
         if self.parsed.envs.get(env_name).is_some() {
@@ -93,7 +95,18 @@ impl Manifest {
         }
         self.parsed.envs.insert(
             env_name.clone(),
-            ParsedEnvironment::new(channels.clone().into_iter().map(PrioritizedChannel::from)),
+            ParsedEnvironment::new(
+                channels.clone().into_iter().map(|channel| PrioritizedChannel {
+                    channel: channel.channel,
+                    priority: None,
+                    exclude_newer: channel.exclude_newer.map(|exclude_newer| {
+                        ExcludeNewer::from_str(&exclude_newer.to_string()).expect(
+                            "pixi config channel exclude-newer should be valid pixi exclude-newer",
+                        )
+                    }),
+                }),
+                exclude_newer.clone(),
+            ),
         );
 
         // Update self.document
@@ -102,7 +115,24 @@ impl Manifest {
             .get_or_insert_toml_array_mut(&["envs", env_name.as_str()], "channels")
             .map_err(|e| miette::miette!("Failed to get channels array: {}", e))?;
         for channel in channels {
-            channels_array.push(channel.as_str());
+            channels_array.push(PrioritizedChannel {
+                channel: channel.channel,
+                priority: None,
+                exclude_newer: channel.exclude_newer.map(|exclude_newer| {
+                    ExcludeNewer::from_str(&exclude_newer.to_string()).expect(
+                        "pixi config channel exclude-newer should be valid pixi exclude-newer",
+                    )
+                }),
+            });
+        }
+
+        if let Some(exclude_newer) = exclude_newer {
+            self.document
+                .get_or_insert_nested_table(&["envs", env_name.as_str()])?
+                .insert(
+                    "exclude-newer",
+                    Item::Value(toml_edit::Value::from(exclude_newer.to_string())),
+                );
         }
 
         tracing::debug!(
@@ -692,7 +722,7 @@ mod tests {
         let executable_name = "test_executable".to_string();
         let mapping = Mapping::new(exposed_name.clone(), executable_name);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        manifest.add_environment(&env_name, None).unwrap();
+        manifest.add_environment(&env_name, None, None).unwrap();
 
         let result = manifest.add_exposed_mapping(&env_name, &mapping);
         assert!(result.is_ok());
@@ -731,7 +761,7 @@ mod tests {
         let executable_relname1 = "test_executable1".to_string();
         let mapping1 = Mapping::new(exposed_name1.clone(), executable_relname1);
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        manifest.add_environment(&env_name, None).unwrap();
+        manifest.add_environment(&env_name, None, None).unwrap();
 
         manifest.add_exposed_mapping(&env_name, &mapping1).unwrap();
 
@@ -801,7 +831,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        manifest.add_environment(&env_name, None, None).unwrap();
 
         // Add and remove mapping again
         manifest.add_exposed_mapping(&env_name, &mapping).unwrap();
@@ -847,7 +877,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        manifest.add_environment(&env_name, None, None).unwrap();
 
         // Check document
         let actual_value = manifest
@@ -876,13 +906,13 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         let channels = Vec::from([
-            NamedChannelOrUrl::from_str("test-channel-1").unwrap(),
-            NamedChannelOrUrl::from_str("test-channel-2").unwrap(),
+            ConfigChannel::from(NamedChannelOrUrl::from_str("test-channel-1").unwrap()),
+            ConfigChannel::from(NamedChannelOrUrl::from_str("test-channel-2").unwrap()),
         ]);
 
         // Add environment
         manifest
-            .add_environment(&env_name, Some(channels.clone()))
+            .add_environment(&env_name, Some(channels.clone()), None)
             .unwrap();
 
         // Check document
@@ -899,10 +929,48 @@ mod tests {
         // Check channels
         let expected_channels = channels
             .into_iter()
-            .map(From::from)
+            .map(|channel| PrioritizedChannel {
+                channel: channel.channel,
+                priority: None,
+                exclude_newer: None,
+            })
             .collect::<IndexSet<_>>();
         let actual_channels = env.channels.clone();
         assert_eq!(expected_channels, actual_channels);
+    }
+
+    #[test]
+    fn test_add_environment_with_exclude_newer() {
+        let mut manifest = Manifest::default();
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let channels = vec![
+            ConfigChannel {
+                channel: NamedChannelOrUrl::from_str("https://prefix.dev/internal").unwrap(),
+                exclude_newer: Some(pixi_config::ExcludeNewer::from_str("0d").unwrap()),
+            },
+            ConfigChannel::from(NamedChannelOrUrl::from_str("conda-forge").unwrap()),
+        ];
+        let exclude_newer = ExcludeNewer::from_str("7d").unwrap();
+
+        manifest
+            .add_environment(&env_name, Some(channels), Some(exclude_newer.clone()))
+            .unwrap();
+
+        let env = manifest.parsed.envs.get(&env_name).unwrap();
+        assert_eq!(env.exclude_newer, Some(exclude_newer));
+        assert_eq!(
+            env.channels
+                .iter()
+                .next()
+                .and_then(|channel| channel.exclude_newer.clone()),
+            Some(ExcludeNewer::from_str("0d").unwrap())
+        );
+
+        let rendered = manifest.document.to_string();
+        assert!(rendered.contains(r#"exclude-newer ="#));
+        assert!(rendered.contains(
+            r#"{ channel = "https://prefix.dev/internal", exclude-newer = "0s" }"#
+        ));
     }
 
     #[test]
@@ -911,7 +979,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        manifest.add_environment(&env_name, None, None).unwrap();
 
         // Remove environment
         manifest.remove_environment(&env_name).unwrap();
@@ -957,9 +1025,10 @@ mod tests {
                 Some(
                     DEFAULT_CHANNELS
                         .iter()
-                        .map(|name| NamedChannelOrUrl::Name(name.to_string()))
+                        .map(|name| ConfigChannel::from(NamedChannelOrUrl::Name(name.to_string())))
                         .collect(),
                 ),
+                None,
             )
             .unwrap();
 
@@ -1021,7 +1090,7 @@ mod tests {
         let spec = GlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        manifest.add_environment(&env_name, None, None).unwrap();
 
         // Add dependency
         manifest.add_dependency(&env_name, &spec).unwrap();
@@ -1067,7 +1136,7 @@ mod tests {
         let platform = Platform::LinuxRiscv64;
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        manifest.add_environment(&env_name, None, None).unwrap();
 
         // Set platform
         manifest.set_platform(&env_name, platform).unwrap();
@@ -1101,7 +1170,7 @@ mod tests {
         channels.push(channel.clone());
 
         // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
+        manifest.add_environment(&env_name, None, None).unwrap();
 
         // Add channel
         manifest.add_channel(&env_name, &channel).unwrap();
@@ -1177,12 +1246,14 @@ dependencies = { "python" = "*", pytest = "*"}
     #[test]
     fn test_add_environment_with_dots() {
         let env_name = EnvironmentName::from_str("sdl.example").unwrap();
-        let channels = vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()];
+        let channels = vec![ConfigChannel::from(
+            NamedChannelOrUrl::from_str("conda-forge").unwrap(),
+        )];
 
         let mut manifest = Manifest::from_str(Path::new("global.toml"), r#"version = 1"#).unwrap();
 
         // Add environment with dots in name
-        manifest.add_environment(&env_name, Some(channels)).unwrap();
+        manifest.add_environment(&env_name, Some(channels), None).unwrap();
 
         // Check document structure
         let toml_str = manifest.document.to_string();

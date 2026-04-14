@@ -5610,7 +5610,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.67.0"
+version = "0.66.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6188,10 +6188,12 @@ dependencies = [
 name = "pixi_config"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "clap",
  "console 0.16.3",
  "dirs",
  "fs-err",
+ "humantime",
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
@@ -6404,6 +6406,7 @@ name = "pixi_global"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "chrono",
  "console 0.16.3",
  "dirs",
  "dunce",
@@ -6439,6 +6442,7 @@ dependencies = [
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
+ "rattler_solve",
  "rattler_virtual_packages",
  "regex",
  "rstest",

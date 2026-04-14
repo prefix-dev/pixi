@@ -240,6 +240,23 @@ def test_exec_with_url(pixi: Path, dummy_channel_1: str, tmp_path: Path) -> None
     )
 
 
+def test_exec_respects_global_exclude_newer(
+    pixi: Path, dummy_channel_1: str, tmp_path: Path
+) -> None:
+    pixi_home = tmp_path / "pixi-home"
+    pixi_home.mkdir(parents=True, exist_ok=True)
+    cache_dir = tmp_path / "pixi-cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (pixi_home / "config.toml").write_text('exclude-newer = "2000-01-01"\n')
+
+    verify_cli_command(
+        [pixi, "exec", "--channel", dummy_channel_1, "dummy-a"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="No candidates were found",
+        env={"PIXI_HOME": str(pixi_home), "PIXI_CACHE_DIR": str(cache_dir)},
+    )
+
+
 def _dummy_artifact(test_data: Path) -> Path:
     if sys.platform.startswith("linux"):
         return (

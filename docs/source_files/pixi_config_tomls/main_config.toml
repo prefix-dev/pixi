@@ -1,7 +1,14 @@
 
 # --8<-- [start:default-channels]
-default-channels = ["conda-forge"]
+default-channels = [
+  { channel = "https://prefix.dev/internal", exclude-newer = "0d" },
+  "conda-forge",
+]
 # --8<-- [end:default-channels]
+
+# --8<-- [start:exclude-newer]
+exclude-newer = "7d"
+# --8<-- [end:exclude-newer]
 
 
 # --8<-- [start:tls-no-verify]

@@ -1,19 +1,30 @@
 ---
 source: crates/pixi_config/src/lib.rs
+assertion_line: 2665
 expression: debug
 ---
 Config {
     default_channels: [
-        Name(
-            "conda-forge",
-        ),
-        Name(
-            "bioconda",
-        ),
-        Name(
-            "defaults",
-        ),
+        ConfigChannel {
+            channel: Name(
+                "conda-forge",
+            ),
+            exclude_newer: None,
+        },
+        ConfigChannel {
+            channel: Name(
+                "bioconda",
+            ),
+            exclude_newer: None,
+        },
+        ConfigChannel {
+            channel: Name(
+                "defaults",
+            ),
+            exclude_newer: None,
+        },
     ],
+    exclude_newer: None,
     authentication_override_file: None,
     tls_no_verify: Some(
         false,

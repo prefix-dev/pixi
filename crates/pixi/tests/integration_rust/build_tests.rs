@@ -551,6 +551,12 @@ async fn test_source_dependency_inherits_exclude_newer_for_build_dependencies() 
 
     let mut package_database = MockRepoData::default();
     package_database.add_package(
+        Package::build("in-memory", "0.1.0")
+            .with_timestamp("2024-01-10T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    package_database.add_package(
         Package::build("foo", "1")
             .with_timestamp("2026-01-10T00:00:00Z".parse().unwrap())
             .with_materialize(true)

@@ -15,7 +15,6 @@ use pixi_consts::consts::{
     WORKSPACE_MANIFEST,
 };
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart};
-use pixi_manifest::FeaturesExt;
 use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -266,11 +265,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
             .unwrap_or_else(|| package_manifest_path_canonical.to_path_buf());
 
-    let channel_config = workspace.channel_config();
+    let channel_config = workspace.config().global_channel_config().clone();
     let channels = workspace
-        .default_environment()
-        .channel_urls(&channel_config)
+        .config()
+        .default_channels()
+        .into_iter()
+        .map(|channel| channel.into_base_url(&channel_config))
+        .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
+    let exclude_newer = workspace
+        .config()
+        .exclude_newer_cutoff()
+        .map(pixi_spec::ResolvedExcludeNewer::from_datetime);
 
     let manifest_source: PinnedSourceSpec = PinnedPathSpec {
         path: manifest_path_spec.to_string_lossy().into_owned().into(),
@@ -283,9 +289,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         preferred_build_source: None,
         channels: channels.clone(),
         channel_config: channel_config.clone(),
-        // When running `pixi build`, the exclude_newer config will be ignored.
-        // It will only be used when using the package as a source dependency.
-        exclude_newer: None,
+        exclude_newer: exclude_newer.clone(),
         build_environment: build_environment.clone(),
         variant_configuration: Some(variant_configuration.clone()),
         variant_files: Some(variant_files.clone()),
@@ -316,9 +320,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 output_directory: None,
                 source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
-                // When running `pixi build`, the exclude_newer config will be ignored.
-                // It will only be used when using the package as a source dependency.
-                exclude_newer: None,
+                exclude_newer: exclude_newer.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
                 variant_configuration: Some(variant_configuration.clone()),
