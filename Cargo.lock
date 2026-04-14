@@ -158,7 +158,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -169,7 +169,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1725,7 +1725,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "958c5d6ecf1f214b4c2bbbbf6ab9523a864bd136dcf71a7e8904799acfe1ad47"
 dependencies = [
  "ansi-str",
- "console 0.16.3",
+ "console",
  "crossterm",
  "unicode-segmentation",
  "unicode-width 0.2.2",
@@ -1745,18 +1745,6 @@ name = "configparser"
 version = "3.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57e3272f0190c3f1584272d613719ba5fc7df7f4942fe542e63d949cf3a649b"
-
-[[package]]
-name = "console"
-version = "0.15.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "054ccb5b10f9f2cbf51eb355ca1d05c2d279ce1804688d0db74b4733a5aeafd8"
-dependencies = [
- "encode_unicode",
- "libc",
- "once_cell",
- "windows-sys 0.59.0",
-]
 
 [[package]]
 name = "console"
@@ -2330,7 +2318,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25f104b501bf2364e78d0d3974cbc774f738f5865306ed128e1e0d7499c0ad96"
 dependencies = [
- "console 0.16.3",
+ "console",
  "shell-words",
  "tempfile",
  "zeroize",
@@ -2366,7 +2354,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2400,7 +2388,7 @@ checksum = "9f5b01c17f85ee988d832c40e549a64bd89ab2c9f8d8a613bdf5122ae507e294"
 dependencies = [
  "cfg-if 1.0.4",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2644,7 +2632,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2705,7 +2693,7 @@ dependencies = [
 name = "fancy_display"
 version = "0.1.0"
 dependencies = [
- "console 0.16.3",
+ "console",
 ]
 
 [[package]]
@@ -3681,7 +3669,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3701,7 +3689,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.59.0",
+ "windows-core 0.62.2",
 ]
 
 [[package]]
@@ -3872,7 +3860,7 @@ version = "0.18.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25470f23803092da7d239834776d653104d551bc4d7eacaf31e6837854b8e9eb"
 dependencies = [
- "console 0.16.3",
+ "console",
  "portable-atomic",
  "unicode-width 0.2.2",
  "unit-prefix",
@@ -3905,14 +3893,14 @@ version = "1.47.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b4a6248eb93a4401ed2f37dfe8ea592d3cf05b7cf4f8efa867b6895af7e094e"
 dependencies = [
- "console 0.16.3",
+ "console",
  "globset",
  "once_cell",
  "pest",
  "pest_derive",
  "regex",
  "serde",
- "similar",
+ "similar 2.7.0",
  "tempfile",
  "walkdir",
 ]
@@ -4036,7 +4024,7 @@ dependencies = [
  "portable-atomic",
  "portable-atomic-util",
  "serde_core",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4346,7 +4334,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8cfc352a66ba903c23239ef51e809508b6fc2b0f90e3476ac7a9ff47e863ae95"
 dependencies = [
  "scopeguard",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4372,7 +4360,7 @@ version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a1886916523694cd6ea3d175f03a1e5010699a2a4cc13696d83d7bea1d80638"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4791,7 +4779,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "536bfad37a309d62069485248eeaba1e8d9853aaf951caaeaed0585a95346f08"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4953,7 +4941,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5853,7 +5841,7 @@ dependencies = [
 name = "pixi_api"
 version = "0.1.0"
 dependencies = [
- "console 0.16.3",
+ "console",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -6038,7 +6026,7 @@ dependencies = [
  "clap_complete",
  "clap_complete_nushell",
  "comfy-table",
- "console 0.16.3",
+ "console",
  "console-subscriber",
  "ctrlc",
  "deno_task_shell",
@@ -6189,7 +6177,7 @@ name = "pixi_config"
 version = "0.1.0"
 dependencies = [
  "clap",
- "console 0.16.3",
+ "console",
  "dirs",
  "fs-err",
  "insta",
@@ -6215,7 +6203,7 @@ dependencies = [
 name = "pixi_consts"
 version = "0.1.0"
 dependencies = [
- "console 0.16.3",
+ "console",
  "rattler_cache",
  "rattler_conda_types",
  "url",
@@ -6228,7 +6216,7 @@ dependencies = [
  "async-once-cell",
  "barrier_cell",
  "chrono",
- "console 0.16.3",
+ "console",
  "dashmap",
  "dialoguer",
  "dunce",
@@ -6336,7 +6324,7 @@ name = "pixi_diff"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "console 0.16.3",
+ "console",
  "indexmap 2.13.1",
  "itertools 0.14.0",
  "pixi_consts",
@@ -6404,7 +6392,7 @@ name = "pixi_global"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "console 0.16.3",
+ "console",
  "dirs",
  "dunce",
  "fake",
@@ -6461,7 +6449,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "assert_matches",
- "console 0.16.3",
+ "console",
  "csv",
  "fancy_display",
  "fs-err",
@@ -6522,7 +6510,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "chrono",
- "console 0.16.3",
+ "console",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -6646,7 +6634,7 @@ dependencies = [
 name = "pixi_reporters"
 version = "0.1.0"
 dependencies = [
- "console 0.16.3",
+ "console",
  "futures",
  "human_bytes",
  "indexmap 2.13.1",
@@ -7303,7 +7291,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7341,7 +7329,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -7481,7 +7469,7 @@ checksum = "ef6a9b758727bf8da342d130a432ab0ea9d6038b5d45334b8da786b57af18c34"
 dependencies = [
  "anyhow",
  "clap",
- "console 0.16.3",
+ "console",
  "digest",
  "dirs",
  "filetime",
@@ -7536,7 +7524,7 @@ dependencies = [
  "clap",
  "clap-verbosity-flag",
  "comfy-table",
- "console 0.16.3",
+ "console",
  "content_inspector",
  "dunce",
  "flickzeug",
@@ -7683,7 +7671,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88056f6ce105850c6885fca8757191b74b07dec7258b0ca43064c7e52eaa1f43"
 dependencies = [
  "clap",
- "console 0.16.3",
+ "console",
  "fs-err",
  "futures",
  "indexmap 2.13.1",
@@ -7870,7 +7858,7 @@ version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2eeb693043c93848508c5ddee8c2c9a8a77f93f431d681d70495057d00a20b5e"
 dependencies = [
- "console 0.16.3",
+ "console",
  "fs-err",
  "indexmap 2.13.1",
  "rattler_conda_types",
@@ -7934,7 +7922,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap-verbosity-flag",
- "console 0.16.3",
+ "console",
  "fs-err",
  "futures",
  "indexmap 2.13.1",
@@ -8993,7 +8981,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9073,7 +9061,7 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs 1.0.6",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9942,6 +9930,12 @@ name = "similar"
 version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
+
+[[package]]
+name = "similar"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04d93e861ede2e497b47833469b8ec9d5c07fa4c78ce7a00f6eb7dd8168b4b3f"
 dependencies = [
  "bstr",
  "unicode-segmentation",
@@ -9949,12 +9943,12 @@ dependencies = [
 
 [[package]]
 name = "similar-asserts"
-version = "1.7.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5b441962c817e33508847a22bd82f03a30cff43642dc2fae8b050566121eb9a"
+checksum = "997e6ca38e97437973fc9f7f50a50d1274cacd874341a4960fea90067291038c"
 dependencies = [
- "console 0.15.11",
- "similar",
+ "console",
+ "similar 3.1.0",
 ]
 
 [[package]]
@@ -10013,7 +10007,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10332,10 +10326,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.2",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10345,7 +10339,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "230a1b821ccbd75b185820a1f1ff7b14d21da1e442e22c0863ea5f08771a8874"
 dependencies = [
  "rustix 1.1.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -10961,7 +10955,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -11357,7 +11351,7 @@ name = "uv-console"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770463dff632e20c127"
 dependencies = [
- "console 0.16.3",
+ "console",
 ]
 
 [[package]]
@@ -11962,7 +11956,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770
 dependencies = [
  "anyhow",
  "configparser",
- "console 0.16.3",
+ "console",
  "fs-err",
  "futures",
  "rustc-hash",
@@ -12248,7 +12242,7 @@ name = "uv-virtualenv"
 version = "0.0.4"
 source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770463dff632e20c127"
 dependencies = [
- "console 0.16.3",
+ "console",
  "fs-err",
  "itertools 0.14.0",
  "owo-colors",
@@ -12637,7 +12631,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
