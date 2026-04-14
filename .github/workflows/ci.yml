@@ -52,6 +52,7 @@ jobs:
     outputs:
       # Flag that is raised when any code is changed
       code: ${{ steps.changed.outputs.code_any_changed }}
+      docs: ${{ steps.docs_changed.outputs.docs_any_changed }}
       unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
       win_installer: ${{ steps.win_installer_changed.outputs.code_any_changed }}
     steps:
@@ -72,6 +73,14 @@ jobs:
               - "!install/**"
               - "!assets/**"
               - "!**/*.md"
+
+      - uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68 # v47
+        id: docs_changed
+        with:
+          files_yaml: |
+            docs:
+              - "docs/**"
+              - "scripts/switchable_toml_snippets.py"
 
       - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: unix_installer_changed
@@ -172,6 +181,28 @@ jobs:
             echo "Error: Generated CLI documentation differs from committed version"
             echo "Please run 'pixi run generate-cli-docs' to regenerate the documentation and commit the changes."
             git diff
+            exit 1
+          fi
+
+  check-switchable-toml-snippets:
+    name: check toml snippets
+    needs: determine_changes
+    runs-on: ubuntu-latest
+    if: ${{ needs.determine_changes.outputs.docs == 'true' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Run switchable toml snippets generator
+        run: python3 scripts/switchable_toml_snippets.py
+
+      - name: Check if there are any docs changes
+        run: |
+          if ! git diff --quiet -- docs; then
+            echo "Error: switchable_toml_snippets.py modified documentation files"
+            echo "Please run 'python scripts/switchable_toml_snippets.py' locally and commit the changes."
+            git --no-pager diff -- docs
             exit 1
           fi
 
