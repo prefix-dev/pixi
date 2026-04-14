@@ -60,7 +60,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68 # v47
+      - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: changed
         with:
           files_yaml: |
@@ -73,14 +73,14 @@ jobs:
               - "!assets/**"
               - "!**/*.md"
 
-      - uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68 # v47
+      - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: unix_installer_changed
         with:
           files_yaml: |
             code:
               - "install/install.sh"
 
-      - uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68 # v47
+      - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: win_installer_changed
         with:
           files_yaml: |
@@ -314,7 +314,7 @@ jobs:
           --features pixi/self_update
           --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: |
@@ -352,7 +352,7 @@ jobs:
           --features self_update
           --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-linux-riscv64gc-${{ github.sha }}
           path: ./target/riscv64gc-unknown-linux-gnu/${{ env.CARGO_BUILD_PROFILE }}/pixi
@@ -378,7 +378,7 @@ jobs:
           --features pixi/self_update
           --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: |
@@ -406,7 +406,7 @@ jobs:
           --features pixi/self_update
           --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-macos-x86_64-${{ github.sha }}
           path: |
@@ -441,7 +441,7 @@ jobs:
           --features pixi/self_update
           --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: |
@@ -479,7 +479,7 @@ jobs:
           --profile $env:CARGO_BUILD_PROFILE
           --features pixi/self_update
       - name: "Upload binary"
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-windows-aarch64-${{ github.sha }}
           path: |
