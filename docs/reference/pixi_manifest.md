@@ -375,23 +375,45 @@ different cutoff than the rest of the workspace.
     lock-file satisfiability check for already locked PyPI packages. Run `pixi update` to
     re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
 
-```toml
-[workspace]
-exclude-newer = "2025-01-01"
+=== "pixi.toml"
 
-[dependencies]
-pytorch-cpu = { version = ">=2.10.0", channel = "pytorch" }
+    ```toml
+    [workspace]
+    exclude-newer = "2025-01-01"
+    
+    [dependencies]
+    pytorch-cpu = { version = ">=2.10.0", channel = "pytorch" }
+    
+    [exclude-newer]
+    pytorch-cpu = "0d"
+    openssl = "0d"
+    
+    [pypi-dependencies]
+    torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
+    
+    [pypi-exclude-newer]
+    torch = "0d"
+    ```
 
-[exclude-newer]
-pytorch-cpu = "0d"
-openssl = "0d"
+=== "pyproject.toml"
 
-[pypi-dependencies]
-torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
-
-[pypi-exclude-newer]
-torch = "0d"
-```
+    ```toml
+    [tool.pixi.workspace]
+    exclude-newer = "2025-01-01"
+    
+    [tool.pixi.dependencies]
+    pytorch-cpu = { version = ">=2.10.0", channel = "pytorch" }
+    
+    [tool.pixi.exclude-newer]
+    pytorch-cpu = "0d"
+    openssl = "0d"
+    
+    [tool.pixi.pypi-dependencies]
+    torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
+    
+    [tool.pixi.pypi-exclude-newer]
+    torch = "0d"
+    ```
 
 !!! note
     Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
@@ -969,19 +991,37 @@ This is useful for two common scenarios:
 - **Coordinating optional packages** – your project works with or without an optional library, but
   if that library is installed it must be a specific generation (e.g. CUDA 12 vs 11).
 
-```toml
-[workspace]
-channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+=== "pixi.toml"
 
-[dependencies]
-# openssl will be pulled in transitively; this constraint
-# ensures we never end up with a vulnerable 1.x release.
-requests = ">=2.28"
+    ```toml
+    [workspace]
+    channels = ["conda-forge"]
+    platforms = ["linux-64", "osx-arm64", "win-64"]
+    
+    [dependencies]
+    # openssl will be pulled in transitively; this constraint
+    # ensures we never end up with a vulnerable 1.x release.
+    requests = ">=2.28"
+    
+    [constraints]
+    openssl = ">=3.0"
+    ```
 
-[constraints]
-openssl = ">=3.0"
-```
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    channels = ["conda-forge"]
+    platforms = ["linux-64", "osx-arm64", "win-64"]
+    
+    [tool.pixi.dependencies]
+    # openssl will be pulled in transitively; this constraint
+    # ensures we never end up with a vulnerable 1.x release.
+    requests = ">=2.28"
+    
+    [tool.pixi.constraints]
+    openssl = ">=3.0"
+    ```
 
 Constraints use the same [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html)
 syntax as `[dependencies]`.
@@ -1833,4 +1873,5 @@ The `run-dependencies` are the packages that will be installed in the environmen
     ```toml
     --8<-- "docs/source_files/pyproject_tomls/pixi-package-manifest.toml:run-dependencies"
     ```
+
 

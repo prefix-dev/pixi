@@ -62,10 +62,19 @@ pixi upload prefix --channel <channel-name> <package-file> --api-key $PREFIX_API
 
 Once your channel is set up and has packages, you can use it in your `pixi.toml`:
 
-```toml
-[workspace]
-channels = ["https://prefix.dev/<channel-name>"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace]
+    channels = ["https://prefix.dev/<channel-name>"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    channels = ["https://prefix.dev/<channel-name>"]
+    ```
 
 For private channels, you need to authenticate first:
 
@@ -122,3 +131,4 @@ jobs:
 ```
 
 With trusted publishing configured, pixi automatically handles the OIDC token exchange with prefix.dev — no stored API keys required.
+

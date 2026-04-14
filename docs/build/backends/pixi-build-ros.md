@@ -8,10 +8,19 @@ It provides seamless integration with Pixi's package management workflow while s
     `pixi-build` is a preview feature, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
-    ```toml
-    [workspace]
-    preview = ["pixi-build"]
-    ```
+    === "pixi.toml"
+
+        ```toml
+            [workspace]
+            preview = ["pixi-build"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+            [tool.pixi.workspace]
+            preview = ["pixi-build"]
+        ```
 
 ## Overview
 
@@ -64,12 +73,23 @@ pixi build
 
 When you want to install it into your environment, you can do so by adding the following to your workspace `pixi.toml`:
 
-```toml
-[dependencies]
-ros-jazzy-my-ros-package = { path = "." }
-# or if the package is in a separate pixi.toml
-# ros-jazzy-my-ros-package = { path = "src/my_ros_package" }
-```
+=== "pixi.toml"
+
+    ```toml
+    [dependencies]
+    ros-jazzy-my-ros-package = { path = "." }
+    # or if the package is in a separate pixi.toml
+    # ros-jazzy-my-ros-package = { path = "src/my_ros_package" }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies]
+    ros-jazzy-my-ros-package = { path = "." }
+    # or if the package is in a separate pixi.toml
+    # ros-jazzy-my-ros-package = { path = "src/my_ros_package" }
+    ```
 Note that you need to specify the `ros-jazzy-` prefix when you use a distro configuration.
 
 
@@ -315,11 +335,21 @@ The `vs2022` compiler is more widely supported on modern GitHub runners and buil
 
 You can override these defaults by explicitly setting variants using [`[workspace.build-variants]`](https://pixi.sh/latest/reference/pixi_manifest/#build-variants-optional) in your `pixi.toml`:
 
-```toml
-[workspace.build-variants]
-c_compiler = ["vs2019"]
-cxx_compiler = ["vs2019"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace.build-variants]
+    c_compiler = ["vs2019"]
+    cxx_compiler = ["vs2019"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace.build-variants]
+    c_compiler = ["vs2019"]
+    cxx_compiler = ["vs2019"]
+    ```
 
 ## Build Process
 
@@ -371,5 +401,6 @@ For ROS1 packages using catkin build system:
 - [RoboStack](https://robostack.github.io/) - Conda packages for the Robot Operating System
 - [ament Build System](https://docs.ros.org/en/rolling/Concepts/Build-System-Development/ament.html) - ROS2 build system
 - [catkin Build System](http://wiki.ros.org/catkin) - ROS1 build system
+
 
 

@@ -454,11 +454,21 @@ The `vs2022` compiler is more widely supported on modern GitHub runners and buil
 
 You can override these defaults by explicitly setting variants using [`[workspace.build-variants]`](https://pixi.sh/latest/reference/pixi_manifest/#build-variants-optional) in your `pixi.toml`:
 
-```toml
-[workspace.build-variants]
-c_compiler = ["vs2019"]
-cxx_compiler = ["vs2019"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace.build-variants]
+    c_compiler = ["vs2019"]
+    cxx_compiler = ["vs2019"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace.build-variants]
+    c_compiler = ["vs2019"]
+    cxx_compiler = ["vs2019"]
+    ```
 
 ## Limitations
 
@@ -472,4 +482,5 @@ cxx_compiler = ["vs2019"]
 - [Building Python Packages](https://pixi.sh/latest/build/python/) - Tutorial for building Python packages with Pixi
 - [Python Packaging User Guide](https://packaging.python.org/) - Official Python packaging documentation
 - [PEP 517](https://peps.python.org/pep-0517/) - A build-system independent format for source trees
+
 

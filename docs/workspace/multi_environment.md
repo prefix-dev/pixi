@@ -35,20 +35,39 @@ As an environment goes beyond just `dependencies` the `feature` fields can be de
 - `target`: All the above features but also separated by targets.
 - `tasks`: Feature specific tasks, tasks in one environment are selected as default tasks for the environment.
 
-```toml title="Default features"
-[dependencies] # short for [feature.default.dependencies]
-python = "*"
-numpy = "==2.3"
+=== "pixi.toml"
 
-[pypi-dependencies] # short for [feature.default.pypi-dependencies]
-pandas = "*"
+    ```toml
+    [dependencies] # short for [feature.default.dependencies]
+    python = "*"
+    numpy = "==2.3"
+    
+    [pypi-dependencies] # short for [feature.default.pypi-dependencies]
+    pandas = "*"
+    
+    [system-requirements] # short for [feature.default.system-requirements]
+    libc = "2.33"
+    
+    [activation] # short for [feature.default.activation]
+    scripts = ["activate.sh"]
+    ```
 
-[system-requirements] # short for [feature.default.system-requirements]
-libc = "2.33"
+=== "pyproject.toml"
 
-[activation] # short for [feature.default.activation]
-scripts = ["activate.sh"]
-```
+    ```toml
+    [tool.pixi.dependencies] # short for [feature.default.dependencies]
+    python = "*"
+    numpy = "==2.3"
+    
+    [tool.pixi.pypi-dependencies] # short for [feature.default.pypi-dependencies]
+    pandas = "*"
+    
+    [tool.pixi.system-requirements] # short for [feature.default.system-requirements]
+    libc = "2.33"
+    
+    [tool.pixi.activation] # short for [feature.default.activation]
+    scripts = ["activate.sh"]
+    ```
 
 <!-- no-pyproject -->
 ```toml title="Different dependencies per feature"
@@ -672,5 +691,6 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     ```shell title="Executing on a machine without cuda or mlx"
     pixi run train-model
     ```
+
 
 

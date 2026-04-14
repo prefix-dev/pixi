@@ -27,13 +27,25 @@ This is useful if you need a specific version of a library that is not compatibl
 
 Overrides can also change where a transitive package comes from.
 
-```toml
-[pypi-dependencies]
-consumer = "*"
+=== "pixi.toml"
 
-[pypi-options.dependency-overrides]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
-```
+    ```toml
+    [pypi-dependencies]
+    consumer = "*"
+    
+    [pypi-options.dependency-overrides]
+    torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.pypi-dependencies]
+    consumer = "*"
+    
+    [tool.pixi.pypi-options.dependency-overrides]
+    torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
+    ```
 
 This does not add `torch` to the environment by itself. Instead, if `consumer` or any other package
 depends on `torch`, pixi will:
@@ -122,3 +134,4 @@ Use `[pypi-dependencies]` when the package itself should be installed into the e
 
 Use `[pypi-options.dependency-overrides]` when you want to steer how a package is resolved only if
 it appears in the dependency graph.
+

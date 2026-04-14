@@ -62,23 +62,47 @@ uv uses `pyproject.toml` for project configuration and `uv.toml` for tool-level 
 
 === "Pixi (pixi.toml)"
 
-    ```toml
-    [workspace]
-    name = "myproject"
-    channels = ["conda-forge"]
-    platforms = ["linux-64", "osx-arm64", "win-64"]
+    === "pixi.toml"
 
-    [dependencies]
-    python = ">=3.12"
-    numpy = ">=1.26"
-    pandas = ">=2.0"
+        ```toml
+            [workspace]
+            name = "myproject"
+            channels = ["conda-forge"]
+            platforms = ["linux-64", "osx-arm64", "win-64"]
+        
+            [dependencies]
+            python = ">=3.12"
+            numpy = ">=1.26"
+            pandas = ">=2.0"
+        
+            [feature.test.dependencies]
+            pytest = ">=8.0"
+        
+            [environments]
+            test = ["test"]
+        ```
 
-    [feature.test.dependencies]
-    pytest = ">=8.0"
+    === "pyproject.toml"
 
-    [environments]
-    test = ["test"]
-    ```
+        ```toml
+            [project]
+            name = "myproject"
+        
+            [tool.pixi.workspace]
+            channels = ["conda-forge"]
+            platforms = ["linux-64", "osx-arm64", "win-64"]
+        
+            [tool.pixi.dependencies]
+            python = ">=3.12"
+            numpy = ">=1.26"
+            pandas = ">=2.0"
+        
+            [tool.pixi.feature.test.dependencies]
+            pytest = ">=8.0"
+        
+            [tool.pixi.environments]
+            test = ["test"]
+        ```
 
 === "Pixi (pyproject.toml)"
 
@@ -121,13 +145,25 @@ Python gets version-locked in your lockfile alongside everything else, so there'
 
 uv creates a single `.venv/` directory per project. Pixi creates environments under `.pixi/envs/`, and supports **multiple named environments** that exist simultaneously in one workspace:
 
-```toml title="pixi.toml"
-[environments]
-default = []
-test = ["test"]
-docs = ["docs"]
-cuda = ["cuda"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [environments]
+    default = []
+    test = ["test"]
+    docs = ["docs"]
+    cuda = ["cuda"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.environments]
+    default = []
+    test = ["test"]
+    docs = ["docs"]
+    cuda = ["cuda"]
+    ```
 
 Each environment can have completely different (even conflicting) dependencies, and Pixi keeps them all installed side by side. For example, you can have one environment with `numpy 1.x` and another with `numpy 2.x`, both ready to use without reinstalling anything.
 
@@ -159,14 +195,27 @@ members = ["packages/*"]
 
 Pixi takes a different approach: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
 
-```toml title="pixi.toml"
-[workspace]
-channels = ["conda-forge"]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+=== "pixi.toml"
 
-[dependencies]
-my_lib = { path = "packages/my_lib" }
-```
+    ```toml
+    [workspace]
+    channels = ["conda-forge"]
+    platforms = ["linux-64", "osx-arm64", "win-64"]
+    
+    [dependencies]
+    my_lib = { path = "packages/my_lib" }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    channels = ["conda-forge"]
+    platforms = ["linux-64", "osx-arm64", "win-64"]
+    
+    [tool.pixi.dependencies]
+    my_lib = { path = "packages/my_lib" }
+    ```
 
 Both tools share a single lockfile across the workspace. See [Building Multiple Packages](../build/workspace.md).
 
@@ -197,14 +246,27 @@ This works on Linux and macOS. A more complete scripting feature is under discus
 
 uv has no built-in task runner. Pixi does:
 
-```toml title="pixi.toml"
-[tasks]
-start = "python main.py"
-test = "pytest"
-lint = "ruff check ."
-check = { depends-on = ["lint", "test"] }  # task dependencies
-fmt = { cmd = "ruff format .", env = { RUFF_LINE_LENGTH = "120" } }
-```
+=== "pixi.toml"
+
+    ```toml
+    [tasks]
+    start = "python main.py"
+    test = "pytest"
+    lint = "ruff check ."
+    check = { depends-on = ["lint", "test"] }  # task dependencies
+    fmt = { cmd = "ruff format .", env = { RUFF_LINE_LENGTH = "120" } }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.tasks]
+    start = "python main.py"
+    test = "pytest"
+    lint = "ruff check ."
+    check = { depends-on = ["lint", "test"] }  # task dependencies
+    fmt = { cmd = "ruff format .", env = { RUFF_LINE_LENGTH = "120" } }
+    ```
 
 ```shell
 pixi run check   # runs lint then test
@@ -247,12 +309,23 @@ uv uses PyPI as its default package index, with support for custom indexes via `
 
 Pixi uses **conda channels**, repositories of pre-compiled packages. The default is [conda-forge](https://conda-forge.org/), the largest community-maintained channel:
 
-```toml title="pixi.toml"
-[workspace]
-channels = ["conda-forge"]
-# Add additional channels:
-# channels = ["conda-forge", "pytorch", "https://my-company.com/channel"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace]
+    channels = ["conda-forge"]
+    # Add additional channels:
+    # channels = ["conda-forge", "pytorch", "https://my-company.com/channel"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    channels = ["conda-forge"]
+    # Add additional channels:
+    # channels = ["conda-forge", "pytorch", "https://my-company.com/channel"]
+    ```
 
 For private packages, you can host your own channel on [prefix.dev](https://prefix.dev/), S3, or JFrog Artifactory. See [Authentication](../deployment/authentication.md).
 
@@ -493,3 +566,4 @@ To migrate an existing uv project to Pixi, start by initializing Pixi in your pr
     ```
 
 Once everything works with `pixi.lock`, you can remove `uv.lock`.
+

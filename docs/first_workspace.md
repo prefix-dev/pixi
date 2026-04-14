@@ -200,27 +200,53 @@ This will execute the command `echo Hello, World!` in the workspace's default en
 ??? tip "Do you want to use more powerful features?"
     Tasks can be much more powerful, for example:
 
-    ```toml
-    [tasks.name-of-powerful-task]
-    cmd = "echo This task can do much more! Like have {{ arguments }} and {{ "minijinja" | capitalize }} templates."
+    === "pixi.toml"
 
-    # List of tasks that must be run before this one.
-    depends-on = ["other-task"]
+        ```toml
+            [tasks.name-of-powerful-task]
+            cmd = "echo This task can do much more! Like have {{ arguments }} and {{ "minijinja" | capitalize }} templates."
+        
+            # List of tasks that must be run before this one.
+            depends-on = ["other-task"]
+        
+            # Working directory relative to the root of the workspace
+            cwd = "current/working/directory"
+        
+            # List of arguments for the task
+            args = [{ arg = "arguments", default = "default arguments" }]
+        
+            # Run the command if the input files have changed
+            input = ["src"]
+            # Run the command if the output files are missing
+            output = ["output.txt"]
+        
+            # Set environment variables for the task
+            env = { MY_ENV_VAR = "value" }
+        ```
 
-    # Working directory relative to the root of the workspace
-    cwd = "current/working/directory"
+    === "pyproject.toml"
 
-    # List of arguments for the task
-    args = [{ arg = "arguments", default = "default arguments" }]
-
-    # Run the command if the input files have changed
-    input = ["src"]
-    # Run the command if the output files are missing
-    output = ["output.txt"]
-
-    # Set environment variables for the task
-    env = { MY_ENV_VAR = "value" }
-    ```
+        ```toml
+            [tool.pixi.tasks.name-of-powerful-task]
+            cmd = "echo This task can do much more! Like have {{ arguments }} and {{ "minijinja" | capitalize }} templates."
+        
+            # List of tasks that must be run before this one.
+            depends-on = ["other-task"]
+        
+            # Working directory relative to the root of the workspace
+            cwd = "current/working/directory"
+        
+            # List of arguments for the task
+            args = [{ arg = "arguments", default = "default arguments" }]
+        
+            # Run the command if the input files have changed
+            input = ["src"]
+            # Run the command if the output files are missing
+            output = ["output.txt"]
+        
+            # Set environment variables for the task
+            env = { MY_ENV_VAR = "value" }
+        ```
     More information about tasks can be found in the [Tasks](./workspace/advanced_tasks.md) section of the documentation.
 
 ## Environments
@@ -248,3 +274,4 @@ exit
 Want to understand the concepts behind what you just did — packages,
 channels, platforms? Continue to
 [The Conda Ecosystem](conda_ecosystem.md).
+

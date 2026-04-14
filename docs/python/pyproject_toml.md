@@ -19,7 +19,7 @@ The `pyproject.toml` file supports the `requires_python` field.
 Pixi understands that field and automatically adds the version to the dependencies.
 
 This is an example of a `pyproject.toml` file with the `requires_python` field, which will be used as the python dependency:
-
+<!-- no-pyproject -->
 ```toml title="pyproject.toml"
 [project]
 name = "my_project"
@@ -31,8 +31,8 @@ platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 ```
 
 Which is equivalent to:
-
-```toml title="equivalent pixi.toml"
+<!-- no-pyproject -->
+```toml title="pixi.toml"
 [workspace]
 name = "my_project"
 channels = ["conda-forge"]
@@ -319,4 +319,5 @@ More information about what is allowed in this sections is available in the [uv 
     The main `pixi.toml` or `pyproject.toml` is parsed directly by pixi and not processed by `uv`.
     This means that you **cannot** use the `[tool.uv.sources]` section in the main `pixi.toml` or `pyproject.toml`.
     This is a limitation we are aware of, feel free to open an issue if you would like support for [this](https://github.com/prefix-dev/pixi/issues/new/choose).
+
 

@@ -874,12 +874,23 @@ There are a few principles that can make tasks more useful.
 
 It is a good habit to add a description to your task:
 
-```toml title="pixi.toml"
-[tasks]
-echo = { cmd = "echo Hello Pixi user", description = "Friendly greeting to a Pixi user" }
-build = { cmd = "build", description = "Build everything" }
-test = { cmd = "test", description = "Run all tests" }
-```
+=== "pixi.toml"
+
+    ```toml
+    [tasks]
+    echo = { cmd = "echo Hello Pixi user", description = "Friendly greeting to a Pixi user" }
+    build = { cmd = "build", description = "Build everything" }
+    test = { cmd = "test", description = "Run all tests" }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.tasks]
+    echo = { cmd = "echo Hello Pixi user", description = "Friendly greeting to a Pixi user" }
+    build = { cmd = "build", description = "Build everything" }
+    test = { cmd = "test", description = "Run all tests" }
+    ```
 
 Now, the command `pixi task list` will not only list all task names but also
 the their descriptions.
@@ -946,3 +957,4 @@ description = "Display the given argument"
 ```
 
 This is valid  TOML 1.0 syntax and makes more complex task better readable.
+

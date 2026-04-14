@@ -132,16 +132,34 @@ This will create a sourceable script in the `install` folder, you can source thi
 Normally this would be the script you add to your `.bashrc` but instead you tell Pixi to use it by adding the following to `pixi.toml`:
 
 === "Linux & macOS"
-    ```toml title="pixi.toml"
-    [activation]
-    scripts = ["install/setup.sh"]
-    ```
+    === "pixi.toml"
+
+        ```toml
+            [activation]
+            scripts = ["install/setup.sh"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+            [tool.pixi.activation]
+            scripts = ["install/setup.sh"]
+        ```
 
 === "Windows"
-    ```toml title="pixi.toml"
-    [activation]
-    scripts = ["install/setup.bat"]
-    ```
+    === "pixi.toml"
+
+        ```toml
+            [activation]
+            scripts = ["install/setup.bat"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+            [tool.pixi.activation]
+            scripts = ["install/setup.bat"]
+        ```
 
 ??? tip "Multi platform support"
     You can add multiple activation scripts for different platforms, so you can support multiple platforms with one workspace.
@@ -276,4 +294,5 @@ You can find more documentation on RoboStack channels in the [RoboStack document
 ### Community examples
 
 ROS 2 Humble on macOS,[Simulating differential drive using Gazebo](https://medium.com/@davisogunsina/ros-2-macos-support-installing-and-running-ros-2-on-macos-79039d1d3655).
+
 

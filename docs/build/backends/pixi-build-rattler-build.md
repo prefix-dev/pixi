@@ -7,10 +7,19 @@ This backend is designed for projects that either have existing recipe.yaml file
     `pixi-build` is a preview feature, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
-    ```toml
-    [workspace]
-    preview = ["pixi-build"]
-    ```
+    === "pixi.toml"
+
+        ```toml
+            [workspace]
+            preview = ["pixi-build"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+            [tool.pixi.workspace]
+            preview = ["pixi-build"]
+        ```
 
 
 ## Overview
@@ -181,10 +190,19 @@ When using `[workspace.build-variants]`, any variant key that is not a recognize
 This is useful for passing configuration to build scripts without modifying the recipe.
 For example, to override the macOS sysroot used during compilation:
 
-```toml title="pixi.toml"
-[workspace.target.osx.build-variants]
-CONDA_BUILD_SYSROOT = ["/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace.target.osx.build-variants]
+    CONDA_BUILD_SYSROOT = ["/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace.target.osx.build-variants]
+    CONDA_BUILD_SYSROOT = ["/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk"]
+    ```
 
 During the build, `CONDA_BUILD_SYSROOT` will be set as an environment variable available to the build script.
 Custom variant keys can also be used in recipe templates via Jinja:
@@ -196,15 +214,25 @@ build:
       MY_FLAG: ${{ my_custom_flag }}
 ```
 
-```toml title="pixi.toml"
-[workspace.build-variants]
-my_custom_flag = ["enabled"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace.build-variants]
+    my_custom_flag = ["enabled"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace.build-variants]
+    my_custom_flag = ["enabled"]
+    ```
 
 ## Limitations
 
 - Requires an existing rattler-build recipe file - cannot infer build instructions automatically
 - Build configuration is primarily controlled through the recipe file rather than `pixi.toml`
 - Cannot specify binary dependencies in the manifest
+
 
 

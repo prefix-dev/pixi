@@ -6,10 +6,19 @@ The `pixi-build-r` backend is designed for building R packages using `R CMD INST
     `pixi-build` is a preview feature, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
-    ```toml
-    [workspace]
-    preview = ["pixi-build"]
-    ```
+    === "pixi.toml"
+
+        ```toml
+            [workspace]
+            preview = ["pixi-build"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+            [tool.pixi.workspace]
+            preview = ["pixi-build"]
+        ```
 
 
 ## Overview
@@ -248,4 +257,5 @@ The R backend follows this build process:
 - [Build Backends Overview](../backends.md) - Overview of all available build backends
 - [Compilers](../key_concepts/compilers.md) - How pixi-build integrates with conda-forge's compiler infrastructure
 - [CRAN](https://cran.r-project.org/) - The Comprehensive R Archive Network
+
 
