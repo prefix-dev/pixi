@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{ComputeEngine, dedup::DedupStore, engine::EngineInner};
+use crate::{ComputeEngine, engine::EngineInner, key_graph::KeyGraph};
 
 /// Builder for [`ComputeEngine`].
 ///
@@ -58,7 +58,7 @@ impl ComputeEngineBuilder {
     pub fn build(self) -> ComputeEngine {
         ComputeEngine {
             inner: Arc::new(EngineInner {
-                store: DedupStore::default(),
+                graph: KeyGraph::default(),
                 sequential_branches: self.sequential_branches,
             }),
         }

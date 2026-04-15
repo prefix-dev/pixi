@@ -4,13 +4,22 @@
 use std::{future::Future, sync::Arc};
 
 use futures::future::BoxFuture;
+use parking_lot::Mutex;
 use tokio::sync::oneshot;
 
 use crate::{
     AnyKey, ComputeError, CycleStack, Key,
-    dedup::{Lookup, boxed_compute_future},
     engine::EngineInner,
+    key_graph::{Lookup, SpawnGeneration, boxed_compute_future},
 };
+
+/// Shared dependency accumulator for a single compute frame.
+///
+/// All sub-ctxes minted by parallel combinators within one frame
+/// share the same `DepsList` so every branch contributes to the same
+/// parent's dep set. The list is moved into the `Completed` graph
+/// node when the parent's compute body returns.
+type DepsList = Arc<Mutex<Vec<AnyKey>>>;
 
 /// Context passed to [`Key::compute`] so it can request dependencies.
 ///
@@ -27,11 +36,11 @@ use crate::{
 ///
 /// Calling [`ComputeCtx::compute`] takes `&mut self`, which forces
 /// dependency requests within a single compute frame to be serialized.
-/// That is intentional: dependency recording (added in a later phase of
-/// development) requires mutation of ctx state, and `&mut self` rules out
-/// the kinds of races that would make that recording non-deterministic.
-/// For explicit parallel dependency requests, use one of the parallel
-/// combinators below.
+/// That is intentional: dependency recording mutates ctx state (the
+/// shared dep accumulator), and `&mut self` rules out the kinds of
+/// races that would make that recording non-deterministic. For explicit
+/// parallel dependency requests, use one of the parallel combinators
+/// below.
 ///
 /// # Parallel combinators
 ///
@@ -82,6 +91,11 @@ pub struct ComputeCtx {
     /// dependency cycles via a simple containment check. The last element
     /// is the Key whose `compute` is currently executing.
     chain: Vec<AnyKey>,
+    /// Dependencies recorded by the currently-computing key. Shared
+    /// across parallel sub-ctxes so every branch contributes to the
+    /// same set; flushed into the `Completed` node when the parent's
+    /// compute body returns.
+    deps: DepsList,
 }
 
 impl ComputeCtx {
@@ -89,23 +103,26 @@ impl ComputeCtx {
         Self {
             engine,
             chain: Vec::new(),
+            deps: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
     /// Build a handle used by the parallel combinators to produce one
     /// future per branch, each owning its own sub-ctx that inherits this
-    /// ctx's cycle chain.
+    /// ctx's cycle chain and shares this ctx's dep accumulator.
     fn parallel(&mut self) -> ParallelBuilder<'_> {
         if self.engine.sequential_branches {
             ParallelBuilder::Serial {
                 engine: &self.engine,
                 chain: &self.chain,
+                deps: &self.deps,
                 prev_done: None,
             }
         } else {
             ParallelBuilder::Concurrent {
                 engine: &self.engine,
                 chain: &self.chain,
+                deps: &self.deps,
             }
         }
     }
@@ -146,21 +163,26 @@ impl ComputeCtx {
         // the calling frame (rather than inside an `async` body) lets us
         // decouple the returned future from the `&K` lifetime.
         let any_key = AnyKey::new(key.clone());
-        let setup: Result<Lookup<K::Value>, ComputeError> =
-            if self.chain.iter().any(|k| k == &any_key) {
-                let mut stack = self.chain.clone();
-                stack.push(any_key);
-                Err(ComputeError::Cycle(CycleStack(stack)))
-            } else {
-                let child_chain = {
-                    let mut c = self.chain.clone();
-                    c.push(any_key);
-                    c
-                };
-                Ok(self.engine.store.get_or_insert_with(key, || {
-                    spawn_compute_future::<K>(self.engine.clone(), key.clone(), child_chain)
-                }))
+        let setup: Result<Lookup<K::Value>, ComputeError> = if self
+            .chain
+            .iter()
+            .any(|k| k == &any_key)
+        {
+            let mut stack = self.chain.clone();
+            stack.push(any_key);
+            Err(ComputeError::Cycle(CycleStack(stack)))
+        } else {
+            self.deps.lock().push(any_key.clone());
+
+            let child_chain = {
+                let mut c = self.chain.clone();
+                c.push(any_key);
+                c
             };
+            Ok(self.engine.graph.get_or_insert_with(key, |generation| {
+                spawn_compute_future::<K>(self.engine.clone(), key.clone(), child_chain, generation)
+            }))
+        };
 
         async move {
             match setup? {
@@ -292,7 +314,7 @@ impl ComputeCtx {
     /// matters if you split the returned `Vec` and selectively poll or
     /// retain futures.
     ///
-    /// Under the concurrent default this contract is vacuous — branches
+    /// Under the concurrent default this contract is vacuous: branches
     /// are not gated on each other, so unpolled futures just never run.
     ///
     /// # Example
@@ -442,10 +464,12 @@ enum ParallelBuilder<'p> {
     Concurrent {
         engine: &'p Arc<EngineInner>,
         chain: &'p Vec<AnyKey>,
+        deps: &'p DepsList,
     },
     Serial {
         engine: &'p Arc<EngineInner>,
         chain: &'p Vec<AnyKey>,
+        deps: &'p DepsList,
         /// The receiver the next-minted branch must await before
         /// invoking its closure. `None` initially (first branch has no
         /// predecessor).
@@ -458,13 +482,25 @@ impl ParallelBuilder<'_> {
     where
         F: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send,
     {
-        let (engine, chain) = match self {
-            ParallelBuilder::Concurrent { engine, chain }
-            | ParallelBuilder::Serial { engine, chain, .. } => (*engine, *chain),
+        let (engine, chain, deps) = match self {
+            ParallelBuilder::Concurrent {
+                engine,
+                chain,
+                deps,
+            }
+            | ParallelBuilder::Serial {
+                engine,
+                chain,
+                deps,
+                ..
+            } => (*engine, *chain, *deps),
         };
         let mut ctx = ComputeCtx {
             engine: engine.clone(),
             chain: chain.clone(),
+            // Sub-ctxes share the parent's dep accumulator so every
+            // branch contributes to the same set.
+            deps: deps.clone(),
         };
         // Serial: take the previous branch's completion receiver (this
         // branch will await it before running `func`) and install a fresh
@@ -499,22 +535,36 @@ impl ParallelBuilder<'_> {
 /// Build the future that will be driven by a freshly-spawned tokio task for
 /// Key `K`.
 ///
-/// Runs under the dedup store's mutex, so it must be quick. The bulk of
-/// the work happens inside the spawned task, not here.
+/// Runs under the per-type slot's mutex, so it must be quick. The bulk
+/// of the work happens inside the spawned task, not here.
+///
+/// `generation` is the [`SpawnGeneration`] minted by the slot for this
+/// spawn. The task threads it back into [`insert_completed`], which uses
+/// it to detect a stale-write race (subscribers all dropped, weak ref
+/// went dangling, a fresh re-spawn replaced the slot's `InFlight` entry,
+/// then this task's already-past-the-last-await tail finally runs).
 fn spawn_compute_future<K: Key>(
     engine: Arc<EngineInner>,
     key: K,
     child_chain: Vec<AnyKey>,
+    generation: SpawnGeneration,
 ) -> BoxFuture<'static, Result<K::Value, ComputeError>> {
     let handle = tokio::spawn(async move {
         let mut child_ctx = ComputeCtx {
             engine: engine.clone(),
             chain: child_chain,
+            deps: Arc::new(Mutex::new(Vec::new())),
         };
         let value = key.compute(&mut child_ctx).await;
+        let final_deps = std::mem::take(&mut *child_ctx.deps.lock());
         // Promote to the completed cache synchronously, before returning,
-        // so cancellation cannot interrupt the promotion.
-        engine.store.insert_completed::<K>(&key, value.clone());
+        // so cancellation cannot interrupt the promotion. The slot only
+        // accepts the write if its current `InFlight` entry still has
+        // our generation; otherwise we lost the race to a re-spawn and
+        // the value is silently dropped.
+        engine
+            .graph
+            .insert_completed::<K>(&key, value.clone(), final_deps, generation);
         value
     });
     boxed_compute_future(handle)

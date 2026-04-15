@@ -2,8 +2,8 @@
 //!
 //! [`AnyKey`] lets the engine store, hash, compare, and display Keys without
 //! needing to know their concrete type. It is used for rendering cycle
-//! stacks in error messages and for future graph-introspection features that
-//! collect Keys regardless of their static type.
+//! stacks in error messages and for the dependency-graph snapshot, which
+//! collects Keys regardless of their static type.
 
 use std::{
     fmt,
@@ -19,7 +19,7 @@ use crate::Key;
 ///
 /// `AnyKey` is the engine's way of talking about Keys when the concrete
 /// type is not statically known: rendering cycle stacks, populating
-/// future graph-introspection APIs, and building heterogenous collections
+/// dependency-graph snapshots, and building heterogenous collections
 /// of Keys all go through `AnyKey`.
 ///
 /// Two `AnyKey`s compare equal iff they wrap values of the same concrete

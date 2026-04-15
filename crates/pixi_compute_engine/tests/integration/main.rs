@@ -7,4 +7,5 @@ mod combinators;
 mod common;
 mod cycle;
 mod executor;
+mod introspection;
 mod misc;

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{ComputeCtx, ComputeEngineBuilder, ComputeError, Key, dedup::DedupStore};
+use crate::{ComputeCtx, ComputeEngineBuilder, ComputeError, Key, key_graph::KeyGraph};
 
 /// The top-level compute engine.
 ///
@@ -65,7 +65,9 @@ pub struct ComputeEngine {
 /// [`ComputeCtx`] spawned by a compute.
 #[derive(Default)]
 pub(crate) struct EngineInner {
-    pub(crate) store: DedupStore,
+    /// Keyed graph storage. Doubles as the value cache and the
+    /// dependency graph.
+    pub(crate) graph: KeyGraph,
     /// Set via [`ComputeEngineBuilder::sequential_branches`]. When
     /// `true`, the parallel combinators on [`ComputeCtx`] run their
     /// branches one at a time in mint order instead of concurrently.

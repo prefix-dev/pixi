@@ -55,6 +55,17 @@
 //! # tokio_test::block_on(async {
 //! let engine = ComputeEngine::new();
 //! assert_eq!(engine.compute(&Fib(10)).await.unwrap(), Ok(55));
+//!
+//! // After a compute settles, the engine's dependency graph can be
+//! // snapshotted via `DependencyGraph::from_engine`. The snapshot is a
+//! // detached clone, so subsequent computes do not mutate it.
+//! use pixi_compute_engine::DependencyGraph;
+//! let graph = DependencyGraph::from_engine(&engine);
+//!
+//! // Render the snapshot to Graphviz `.dot` for visualization. Use
+//! // `write_dot(path)` to write straight to a file, or `write_dot_to`
+//! // for any `std::io::Write` (here, stderr).
+//! graph.write_dot_to(&mut std::io::stderr()).unwrap();
 //! # });
 //! ```
 //!
@@ -85,10 +96,11 @@ mod abort_on_drop;
 mod any_key;
 mod builder;
 mod ctx;
-mod dedup;
 mod engine;
 mod error;
+pub mod introspection;
 mod key;
+mod key_graph;
 mod short_type_name;
 
 pub use any_key::AnyKey;
@@ -96,5 +108,6 @@ pub use builder::ComputeEngineBuilder;
 pub use ctx::ComputeCtx;
 pub use engine::ComputeEngine;
 pub use error::{ComputeError, CycleStack};
+pub use introspection::{DependencyGraph, GraphNode, NodeState};
 pub use key::Key;
 pub use short_type_name::short_type_name;
