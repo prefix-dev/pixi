@@ -5,8 +5,9 @@
 //! rather than timers, so they run deterministically without relying on
 //! wall-clock waits.
 
-use std::{fmt, sync::Arc, sync::atomic::Ordering};
+use std::{sync::Arc, sync::atomic::Ordering};
 
+use derive_more::Display;
 use futures::FutureExt;
 use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
 use tokio::sync::Notify;
@@ -18,17 +19,13 @@ use super::common::{Counter, Flag, Invisible, counter, flag, poll_once};
 /// the future is released (normal completion or abort), and only flips
 /// `finished = true` if allowed to run past the park, which should never
 /// happen in these tests.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("{id}")]
 struct SlowKey {
     id: u32,
     started: Invisible<Arc<Notify>>,
     dropped: Invisible<Arc<Notify>>,
     finished: Flag,
-}
-impl fmt::Display for SlowKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.id)
-    }
 }
 impl Key for SlowKey {
     type Value = u32;
@@ -92,15 +89,11 @@ async fn cancellation_drops_task() {
 
 /// A Key whose compute yields a few times, giving the test time to
 /// interleave a `select!`-racing caller and a normal caller.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("{id}")]
 struct YieldingKey {
     id: u32,
     counter: Counter,
-}
-impl fmt::Display for YieldingKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.id)
-    }
 }
 impl Key for YieldingKey {
     type Value = u32;
@@ -174,14 +167,10 @@ async fn cancellation_with_subscribers() {
 /// aborted rather than merely orphaned.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn try_compute2_cancels_losing_branch() {
-    #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+    #[display("racer")]
     struct Racer {
         slow: SlowKey,
-    }
-    impl fmt::Display for Racer {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str("racer")
-        }
     }
     impl Key for Racer {
         type Value = Result<u32, &'static str>;

@@ -1,7 +1,8 @@
 //! Basic compute, dedup, caching, and transitive-dependency tests.
 
-use std::{fmt, sync::atomic::Ordering};
+use std::sync::atomic::Ordering;
 
+use derive_more::Display;
 use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
 
 use super::common::{Counter, DoubleKey, PlusTenKey, counter};
@@ -58,15 +59,11 @@ async fn dedup_sequential() {
 
 /// A Key whose compute always produces an `Err` in its `Value`. Used to
 /// verify that failures cache the same way successes do.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("{id}")]
 struct FailingKey {
     id: u32,
     counter: Counter,
-}
-impl fmt::Display for FailingKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.id)
-    }
 }
 impl Key for FailingKey {
     type Value = Result<u32, String>;

@@ -1,19 +1,14 @@
 //! Parallel combinator tests: `compute2`/`compute3`/`compute_many`/
 //! `compute_join` and their `try_*` variants, plus `declare_*_closure`.
 
-use std::fmt;
-
+use derive_more::Display;
 use futures::{FutureExt, TryFutureExt};
 use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
 
 /// Simple numeric Key used by the parallel combinator tests.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("{_0}")]
 struct NumKey(u32);
-impl fmt::Display for NumKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 impl Key for NumKey {
     type Value = u32;
     async fn compute(&self, _ctx: &mut ComputeCtx) -> Self::Value {
@@ -23,13 +18,9 @@ impl Key for NumKey {
 
 /// Aggregator Key that exercises both `compute2` and `compute_join` by
 /// summing a mix of sub-computes.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("sum")]
 struct ParallelSum;
-impl fmt::Display for ParallelSum {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("sum")
-    }
-}
 impl Key for ParallelSum {
     type Value = u32;
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
@@ -60,13 +51,9 @@ async fn parallel_combinators() {
 /// error otherwise.
 #[tokio::test(flavor = "current_thread")]
 async fn try_compute2_ok_and_err() {
-    #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+    #[display("{_0}")]
     struct Agg(bool);
-    impl fmt::Display for Agg {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "{}", self.0)
-        }
-    }
     impl Key for Agg {
         type Value = Result<u32, &'static str>;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
@@ -95,13 +82,9 @@ async fn try_compute2_ok_and_err() {
 /// `compute3` resolves all three branches in parallel and returns a tuple.
 #[tokio::test(flavor = "current_thread")]
 async fn compute3_resolves_three() {
-    #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+    #[display("triple")]
     struct Triple;
-    impl fmt::Display for Triple {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str("triple")
-        }
-    }
     impl Key for Triple {
         type Value = u32;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
@@ -124,13 +107,9 @@ async fn compute3_resolves_three() {
 /// error from any branch otherwise.
 #[tokio::test(flavor = "current_thread")]
 async fn try_compute3_ok_and_err() {
-    #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+    #[display("{_0}")]
     struct TryTriple(u8);
-    impl fmt::Display for TryTriple {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "{}", self.0)
-        }
-    }
     impl Key for TryTriple {
         type Value = Result<u32, &'static str>;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
@@ -154,13 +133,9 @@ async fn try_compute3_ok_and_err() {
 /// can drive them however they like.
 #[tokio::test(flavor = "current_thread")]
 async fn compute_many_builds_independent_futures() {
-    #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+    #[display("many")]
     struct Many;
-    impl fmt::Display for Many {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str("many")
-        }
-    }
     impl Key for Many {
         type Value = u32;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
@@ -185,13 +160,9 @@ async fn compute_many_builds_independent_futures() {
 /// `compute_join` call site.
 #[tokio::test(flavor = "current_thread")]
 async fn declare_join_closure_pins_hrtb() {
-    #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+    #[display("outer")]
     struct Outer;
-    impl fmt::Display for Outer {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str("outer")
-        }
-    }
     impl Key for Outer {
         type Value = u32;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
@@ -214,13 +185,9 @@ async fn declare_join_closure_pins_hrtb() {
 /// the first error.
 #[tokio::test(flavor = "current_thread")]
 async fn try_compute_join_ok_and_err() {
-    #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+    #[display("{_0}")]
     struct Joiner(bool);
-    impl fmt::Display for Joiner {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "{}", self.0)
-        }
-    }
     impl Key for Joiner {
         type Value = Result<Vec<u32>, &'static str>;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {

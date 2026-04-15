@@ -19,6 +19,7 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 serde = { workspace = true, optional = true, features = ["derive"] }
 
 [dev-dependencies]
+derive_more = { workspace = true, features = ["display"] }
 insta = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tokio-test = { workspace = true }

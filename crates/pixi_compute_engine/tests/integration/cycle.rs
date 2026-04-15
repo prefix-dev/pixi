@@ -1,7 +1,6 @@
 //! Cycle detection tests.
 
-use std::fmt;
-
+use derive_more::Display;
 use futures::{FutureExt, TryFutureExt};
 use pixi_compute_engine::{ComputeCtx, ComputeEngine, ComputeError, Key};
 
@@ -19,15 +18,11 @@ enum CyclePattern {
 /// A Key that calls the next Key in `pattern` and folds any
 /// `ComputeError::Cycle` into its `Value`, so tests can assert on the
 /// rendered chain.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("{name}")]
 struct CycleKey {
     name: char,
     pattern: CyclePattern,
-}
-impl fmt::Display for CycleKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name)
-    }
 }
 impl Key for CycleKey {
     type Value = Result<(), String>;
@@ -100,13 +95,9 @@ async fn deep_cycle() {
 /// still caught.
 #[tokio::test(flavor = "current_thread")]
 async fn cycle_detection_across_sub_ctx() {
-    #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+    #[display("outer")]
     struct Outer;
-    impl fmt::Display for Outer {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.write_str("outer")
-        }
-    }
     impl Key for Outer {
         type Value = Result<(), String>;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {

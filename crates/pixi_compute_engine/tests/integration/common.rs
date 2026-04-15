@@ -1,7 +1,6 @@
 //! Shared helpers and Key types used across the engine integration tests.
 
 use std::{
-    fmt,
     hash::{Hash, Hasher},
     ops::Deref,
     pin::Pin,
@@ -12,6 +11,7 @@ use std::{
     task::Poll,
 };
 
+use derive_more::Display;
 use pixi_compute_engine::{ComputeCtx, Key};
 
 /// A wrapper that carries a side-channel value alongside a Key without
@@ -54,15 +54,11 @@ pub fn flag() -> Flag {
 
 /// A Key whose compute doubles its id. The `counter` field is side-channel
 /// only and does not affect identity.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("{id}")]
 pub struct DoubleKey {
     pub id: u32,
     pub counter: Counter,
-}
-impl fmt::Display for DoubleKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.id)
-    }
 }
 impl Key for DoubleKey {
     type Value = u32;
@@ -75,13 +71,9 @@ impl Key for DoubleKey {
 }
 
 /// Base layer of a two-Key dependency chain: returns `id + 100`.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("{_0}")]
 pub struct BaseKey(pub u32);
-impl fmt::Display for BaseKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 impl Key for BaseKey {
     type Value = u32;
     async fn compute(&self, _ctx: &mut ComputeCtx) -> Self::Value {
@@ -90,13 +82,9 @@ impl Key for BaseKey {
 }
 
 /// Outer layer: depends on `BaseKey`, adds ten to the result.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("{_0}")]
 pub struct PlusTenKey(pub u32);
-impl fmt::Display for PlusTenKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 impl Key for PlusTenKey {
     type Value = u32;
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {

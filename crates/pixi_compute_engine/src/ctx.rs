@@ -4,6 +4,7 @@
 use std::{future::Future, sync::Arc};
 
 use futures::future::BoxFuture;
+use tokio::sync::oneshot;
 
 use crate::{
     AnyKey, ComputeError, CycleStack, Key,
@@ -94,10 +95,18 @@ impl ComputeCtx {
     /// Build a handle used by the parallel combinators to produce one
     /// future per branch, each owning its own sub-ctx that inherits this
     /// ctx's cycle chain.
-    fn parallel(&mut self) -> Parallel<'_> {
-        Parallel {
-            engine: &self.engine,
-            chain: &self.chain,
+    fn parallel(&mut self) -> ParallelBuilder<'_> {
+        if self.engine.sequential_branches {
+            ParallelBuilder::Serial {
+                engine: &self.engine,
+                chain: &self.chain,
+                prev_done: None,
+            }
+        } else {
+            ParallelBuilder::Concurrent {
+                engine: &self.engine,
+                chain: &self.chain,
+            }
         }
     }
 
@@ -167,9 +176,13 @@ impl ComputeCtx {
     /// keeps working across the parallel split. Each closure receives a
     /// fresh `&mut ComputeCtx` it can use for further `compute` calls.
     ///
-    /// Concurrency is via [`futures::future::join`] (same-task polling);
-    /// true parallelism comes from [`Self::compute`] spawning one tokio
-    /// task per unique Key.
+    /// By default, concurrency is via [`futures::future::join`] (same-task
+    /// polling); true parallelism comes from [`Self::compute`] spawning
+    /// one tokio task per unique Key. When the owning engine is built
+    /// with
+    /// [`ComputeEngineBuilder::sequential_branches(true)`](crate::ComputeEngineBuilder::sequential_branches),
+    /// the second closure does not start running until the first has
+    /// returned.
     ///
     /// # Example
     ///
@@ -185,7 +198,7 @@ impl ComputeCtx {
         C1: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send,
         C2: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, U> + Send,
     {
-        let p = self.parallel();
+        let mut p = self.parallel();
         futures::future::join(p.compute(c1), p.compute(c2)).await
     }
 
@@ -200,7 +213,7 @@ impl ComputeCtx {
         C2: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, U> + Send,
         C3: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, V> + Send,
     {
-        let p = self.parallel();
+        let mut p = self.parallel();
         futures::future::join3(p.compute(c1), p.compute(c2), p.compute(c3)).await
     }
 
@@ -225,7 +238,7 @@ impl ComputeCtx {
         C1: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, Result<T, E>> + Send,
         C2: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, Result<U, E>> + Send,
     {
-        let p = self.parallel();
+        let mut p = self.parallel();
         futures::future::try_join(p.compute(c1), p.compute(c2)).await
     }
 
@@ -246,7 +259,7 @@ impl ComputeCtx {
         C2: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, Result<U, E>> + Send,
         C3: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, Result<V, E>> + Send,
     {
-        let p = self.parallel();
+        let mut p = self.parallel();
         futures::future::try_join3(p.compute(c1), p.compute(c2), p.compute(c3)).await
     }
 
@@ -262,6 +275,25 @@ impl ComputeCtx {
     /// `for<'x>` HRTB; when produced by `Iterator::map`, wrap each
     /// closure in [`declare_closure`](Self::declare_closure) to pin the
     /// binder.
+    ///
+    /// # Driving contract under
+    /// [`sequential_branches(true)`](crate::ComputeEngineBuilder::sequential_branches)
+    ///
+    /// Each returned future must be **either polled to completion or
+    /// dropped**. Holding one alive without polling it starves its
+    /// successors: the returned futures are linked so that branch N+1's
+    /// closure cannot start until branch N's closure has finished, and
+    /// a branch only signals completion when polled through.
+    ///
+    /// All standard drivers honor this ([`futures::future::join_all`],
+    /// [`futures::future::try_join_all`],
+    /// [`futures::stream::FuturesUnordered`], `tokio::join!`, and any
+    /// unwinding path drops every branch together). The contract only
+    /// matters if you split the returned `Vec` and selectively poll or
+    /// retain futures.
+    ///
+    /// Under the concurrent default this contract is vacuous — branches
+    /// are not gated on each other, so unpolled futures just never run.
     ///
     /// # Example
     ///
@@ -279,7 +311,7 @@ impl ComputeCtx {
         Items: IntoIterator<Item = F>,
         F: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send,
     {
-        let p = self.parallel();
+        let mut p = self.parallel();
         computes.into_iter().map(|func| p.compute(func)).collect()
     }
 
@@ -311,7 +343,7 @@ impl ComputeCtx {
         Mapper: for<'x> FnOnce(&'x mut ComputeCtx, T) -> BoxFuture<'x, R> + Send + Copy,
         T: Send,
     {
-        let p = self.parallel();
+        let mut p = self.parallel();
         futures::future::join_all(
             items
                 .into_iter()
@@ -378,7 +410,7 @@ impl ComputeCtx {
         Mapper: for<'x> FnOnce(&'x mut ComputeCtx, T) -> BoxFuture<'x, Result<R, E>> + Send + Copy,
         T: Send,
     {
-        let p = self.parallel();
+        let mut p = self.parallel();
         futures::future::try_join_all(
             items
                 .into_iter()
@@ -392,21 +424,75 @@ impl ComputeCtx {
 /// parallel branch. Each future owns its own sub-ctx that inherits the
 /// parent's cycle chain, so cycle detection keeps working across the split
 /// and each branch can call `ctx.compute(..)` independently.
-struct Parallel<'p> {
-    engine: &'p Arc<EngineInner>,
-    chain: &'p Vec<AnyKey>,
+///
+/// The variant mirrors the owning engine's
+/// [`sequential_branches`](crate::ComputeEngineBuilder::sequential_branches)
+/// setting:
+///
+/// - `Concurrent` mints plain futures. Each branch runs as freely as the
+///   driving combinator (`join`, `join_all`, ...) allows.
+/// - `Serial` maintains a `prev_done` oneshot receiver that each
+///   newly-minted branch must await *before* invoking its closure. Each
+///   mint also produces a fresh sender that the branch fires after its
+///   closure finishes, which unblocks the next branch. The effect is a
+///   linked chain: even with `join_all` driving them concurrently, branch
+///   N's closure does not start running until branch N−1's closure has
+///   completed, giving deterministic FIFO sub-compute ordering.
+enum ParallelBuilder<'p> {
+    Concurrent {
+        engine: &'p Arc<EngineInner>,
+        chain: &'p Vec<AnyKey>,
+    },
+    Serial {
+        engine: &'p Arc<EngineInner>,
+        chain: &'p Vec<AnyKey>,
+        /// The receiver the next-minted branch must await before
+        /// invoking its closure. `None` initially (first branch has no
+        /// predecessor).
+        prev_done: Option<oneshot::Receiver<()>>,
+    },
 }
 
-impl Parallel<'_> {
-    fn compute<F, T>(&self, func: F) -> impl Future<Output = T> + use<F, T>
+impl ParallelBuilder<'_> {
+    fn compute<F, T>(&mut self, func: F) -> impl Future<Output = T> + use<F, T>
     where
         F: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send,
     {
-        let mut ctx = ComputeCtx {
-            engine: self.engine.clone(),
-            chain: self.chain.clone(),
+        let (engine, chain) = match self {
+            ParallelBuilder::Concurrent { engine, chain }
+            | ParallelBuilder::Serial { engine, chain, .. } => (*engine, *chain),
         };
-        async move { func(&mut ctx).await }
+        let mut ctx = ComputeCtx {
+            engine: engine.clone(),
+            chain: chain.clone(),
+        };
+        // Serial: take the previous branch's completion receiver (this
+        // branch will await it before running `func`) and install a fresh
+        // receiver for the NEXT branch to await. This branch fires the
+        // matching sender once its closure finishes.
+        let (prev, done_tx) = match self {
+            ParallelBuilder::Concurrent { .. } => (None, None),
+            ParallelBuilder::Serial { prev_done, .. } => {
+                let (tx, rx) = oneshot::channel();
+                (prev_done.replace(rx), Some(tx))
+            }
+        };
+        async move {
+            if let Some(prev) = prev {
+                // `RecvError` means the sender was dropped without firing
+                // (prior branch was dropped). Proceed, because there is
+                // nothing left to wait on.
+                let _ = prev.await;
+            }
+            let value = func(&mut ctx).await;
+            if let Some(done_tx) = done_tx {
+                // Receiver may be gone if the next branch was dropped
+                // (e.g. `try_join_all` short-circuit); send failure is not
+                // an error on this path.
+                let _ = done_tx.send(());
+            }
+            value
+        }
     }
 }
 

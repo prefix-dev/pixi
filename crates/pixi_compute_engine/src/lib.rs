@@ -83,6 +83,7 @@
 
 mod abort_on_drop;
 mod any_key;
+mod builder;
 mod ctx;
 mod dedup;
 mod engine;
@@ -91,6 +92,7 @@ mod key;
 mod short_type_name;
 
 pub use any_key::AnyKey;
+pub use builder::ComputeEngineBuilder;
 pub use ctx::ComputeCtx;
 pub use engine::ComputeEngine;
 pub use error::{ComputeError, CycleStack};

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{ComputeCtx, ComputeError, Key, dedup::DedupStore};
+use crate::{ComputeCtx, ComputeEngineBuilder, ComputeError, Key, dedup::DedupStore};
 
 /// The top-level compute engine.
 ///
@@ -56,7 +56,7 @@ use crate::{ComputeCtx, ComputeError, Key, dedup::DedupStore};
 /// assert_eq!(shared.compute(&Double(21)).await.unwrap(), 42);
 /// # });
 /// ```
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ComputeEngine {
     pub(crate) inner: Arc<EngineInner>,
 }
@@ -66,15 +66,32 @@ pub struct ComputeEngine {
 #[derive(Default)]
 pub(crate) struct EngineInner {
     pub(crate) store: DedupStore,
+    /// Set via [`ComputeEngineBuilder::sequential_branches`]. When
+    /// `true`, the parallel combinators on [`ComputeCtx`] run their
+    /// branches one at a time in mint order instead of concurrently.
+    pub(crate) sequential_branches: bool,
+}
+
+impl Default for ComputeEngine {
+    fn default() -> Self {
+        Self::builder().build()
+    }
 }
 
 impl ComputeEngine {
-    /// Create a fresh engine with an empty cache.
+    /// Create a fresh engine with an empty cache and default settings.
     ///
     /// Equivalent to [`Default::default`]. The engine holds no tokio
     /// resources until the first [`compute`](Self::compute) call.
+    /// For non-default settings (e.g. serialized sub-compute ordering
+    /// for tests), use [`ComputeEngine::builder`].
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Start building a [`ComputeEngine`] with non-default settings.
+    pub fn builder() -> ComputeEngineBuilder {
+        ComputeEngineBuilder::new()
     }
 
     /// Compute the value for `key`, deduping against any in-flight or
@@ -100,15 +117,6 @@ impl ComputeEngine {
     /// The returned future uses precise capture (`use<K>`), so temporary
     /// key references like `engine.compute(&MyKey(..))` work seamlessly.
     ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let engine = ComputeEngine::new();
-    /// match engine.compute(&MyKey).await {
-    ///     Ok(value) => println!("got {value}"),
-    ///     Err(e) => eprintln!("compute failed: {e}"),
-    /// }
-    /// ```
     pub fn compute<K: Key>(
         &self,
         key: &K,
