@@ -34,7 +34,6 @@ hypothesis = "*"
 pytest = "*"
 pytest-emoji = "*"
 pytest-md = "*"
-pytest-timeout = "*"
 [feature.test.tasks]
 test = "pytest -s"
 
