@@ -324,7 +324,7 @@ jobs:
 
   build-binary-linux-riscv64gc:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     name: "build binary | linux riscv64gc"
     steps:
