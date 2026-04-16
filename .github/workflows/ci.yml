@@ -324,7 +324,7 @@ jobs:
 
   build-binary-linux-riscv64gc:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     name: "build binary | linux riscv64gc"
     steps:
@@ -601,9 +601,9 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi info
 
-      - name: Run long running integration tests
+      - name: Run extra slow integration tests
         working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run --locked test-integration-extra-slow-ci
+        run: pixi run --locked test-integration-ci extra_slow
 
       - name: Test examples
         shell: bash
@@ -634,11 +634,8 @@ jobs:
       - name: Verify pixi installation
         run: pixi info
 
-      - name: Run long running integration tests
-        run: pixi run --locked test-integration-extra-slow-ci
-
-      - name: Run integration tests
-        run: pixi run --locked test-integration-ci
+      - name: Run extra slow integration tests
+        run: pixi run --locked test-integration-ci extra_slow
 
       - name: Test examples
         run: bash tests/scripts/test-examples.sh
@@ -670,12 +667,8 @@ jobs:
       - name: Verify pixi installation
         run: pixi info
 
-      - name: Run long running integration tests
-        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
-        run: pixi run --locked test-integration-ci -m "extra_slow"
-
-      - name: Run integration tests
-        run: pixi run --locked test-integration-ci
+      - name: Run extra slow integration tests
+        run: pixi run --locked test-integration-ci extra_slow
 
       - name: "Test examples"
         run: bash tests/scripts/test-examples.sh
