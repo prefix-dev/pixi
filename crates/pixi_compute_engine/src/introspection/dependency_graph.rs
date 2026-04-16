@@ -19,6 +19,10 @@ pub enum NodeState {
     /// The key's compute finished and produced a value now stored in the
     /// completed cache.
     Completed,
+    /// The key's value was injected via
+    /// [`ComputeEngine::inject`](crate::ComputeEngine::inject), not
+    /// computed.
+    Injected,
 }
 
 /// One node in a [`DependencyGraph`] snapshot.
@@ -71,6 +75,7 @@ impl DependencyGraph {
                 state: match r.state {
                     RawNodeState::Computing => NodeState::Computing,
                     RawNodeState::Completed => NodeState::Completed,
+                    RawNodeState::Injected => NodeState::Injected,
                 },
             })
             .collect();

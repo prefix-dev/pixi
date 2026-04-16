@@ -91,6 +91,45 @@
 //! dropped, the underlying future drops, and an `AbortOnDrop` guard
 //! cancels the spawned task. The weak entry in the in-flight map then
 //! fails to upgrade on the next request, which spawns a fresh task.
+//!
+//! # Injected keys
+//!
+//! Not every value in the graph needs to be computed. An
+//! [`InjectedKey`] represents external data fed into the engine via
+//! [`ComputeEngine::inject`]. Computed keys can depend on injected
+//! values through the normal [`ComputeCtx::compute`] call, and the
+//! dependency is tracked for introspection.
+//!
+//! All injected values must be provided before computing any key that
+//! depends on them. Requesting an injected key that has not been set
+//! *panics*. Each key may be injected at most once per engine. Both
+//! restrictions exist because the engine has no invalidation mechanism:
+//! computed keys that already cached a result cannot be retroactively
+//! updated. If you need different injected values, create a new engine.
+//!
+//! ```
+//! use std::fmt;
+//! use pixi_compute_engine::{ComputeEngine, InjectedKey};
+//!
+//! #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+//! struct DbUrl(String);
+//!
+//! impl fmt::Display for DbUrl {
+//!     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//!         write!(f, "{}", self.0)
+//!     }
+//! }
+//!
+//! impl InjectedKey for DbUrl {
+//!     type Value = String;
+//! }
+//!
+//! let engine = ComputeEngine::new();
+//! engine.inject(DbUrl("primary".into()), "postgres://localhost/mydb".into());
+//!
+//! // Computed keys can read this via ctx.compute(&DbUrl("primary".into()))
+//! // inside their compute body.
+//! ```
 
 mod abort_on_drop;
 mod any_key;
@@ -98,6 +137,7 @@ mod builder;
 mod ctx;
 mod engine;
 mod error;
+mod injected;
 pub mod introspection;
 mod key;
 mod key_graph;
@@ -108,6 +148,7 @@ pub use builder::ComputeEngineBuilder;
 pub use ctx::ComputeCtx;
 pub use engine::ComputeEngine;
 pub use error::{ComputeError, CycleStack};
+pub use injected::InjectedKey;
 pub use introspection::{DependencyGraph, GraphNode, NodeState};
-pub use key::Key;
+pub use key::{Key, StorageType};
 pub use short_type_name::short_type_name;

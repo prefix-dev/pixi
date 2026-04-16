@@ -46,7 +46,7 @@ impl Key for CycleKey {
         match ctx.compute(&child).await {
             Ok(inner) => inner,
             Err(ComputeError::Cycle(stack)) => Err(format!("cycle:{stack}")),
-            Err(ComputeError::Canceled) => Err("canceled".into()),
+            Err(e) => Err(format!("{e}")),
         }
     }
 }
@@ -108,7 +108,7 @@ async fn cycle_detection_across_sub_ctx() {
                         ctx.compute(&Outer)
                             .unwrap_or_else(|e| match e {
                                 ComputeError::Cycle(s) => Err(format!("cycle:{s}")),
-                                ComputeError::Canceled => Err("canceled".into()),
+                                e => Err(format!("{e}")),
                             })
                             .boxed()
                     },

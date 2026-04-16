@@ -2,7 +2,10 @@
 
 use std::sync::Arc;
 
-use crate::{ComputeCtx, ComputeEngineBuilder, ComputeError, Key, key_graph::KeyGraph};
+use crate::{
+    ComputeCtx, ComputeEngineBuilder, ComputeError, InjectedKey, Key,
+    key_graph::{KeyGraph, Lookup},
+};
 
 /// The top-level compute engine.
 ///
@@ -125,5 +128,73 @@ impl ComputeEngine {
     ) -> impl Future<Output = Result<K::Value, ComputeError>> + use<K> {
         let mut ctx = ComputeCtx::new(self.inner.clone());
         ctx.compute(key)
+    }
+
+    /// Inject a value for an [`InjectedKey`].
+    ///
+    /// The value is stored directly in the engine's graph. Subsequent
+    /// [`compute`](Self::compute) calls (or
+    /// [`ComputeCtx::compute`](crate::ComputeCtx::compute) inside a
+    /// Key's compute body) for this key will return the injected value
+    /// immediately without spawning a task.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `key` has already been injected on this engine.
+    /// Overwriting is forbidden because the engine has no invalidation
+    /// mechanism: computed keys that already read the old value would
+    /// silently hold stale cached results.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use std::fmt;
+    /// use pixi_compute_engine::{ComputeEngine, InjectedKey};
+    ///
+    /// #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    /// struct Seed(u32);
+    ///
+    /// impl fmt::Display for Seed {
+    ///     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    ///         write!(f, "{}", self.0)
+    ///     }
+    /// }
+    ///
+    /// impl InjectedKey for Seed {
+    ///     type Value = u64;
+    /// }
+    ///
+    /// let engine = ComputeEngine::new();
+    /// engine.inject(Seed(1), 42);
+    /// ```
+    pub fn inject<K: InjectedKey>(&self, key: K, value: K::Value) {
+        self.inner.graph.insert_injected::<K>(&key, value);
+    }
+
+    /// Read an injected key synchronously, without recording a
+    /// dependency.
+    ///
+    /// Returns `None` if the key has not been injected yet. Unlike
+    /// [`ComputeCtx::compute`](crate::ComputeCtx::compute) (which
+    /// panics on a missing injected key), this method is safe to call
+    /// for optional lookups or pre-flight checks.
+    ///
+    /// # Caution
+    ///
+    /// This method does **not** record a dependency. Using it inside
+    /// a Key's compute body would make the dependency invisible to
+    /// introspection and (once invalidation exists) prevent the
+    /// engine from knowing that the parent needs to recompute when
+    /// the injected value changes. Use
+    /// [`ComputeCtx::compute`](crate::ComputeCtx::compute) there
+    /// instead.
+    pub fn read<K: InjectedKey>(&self, key: &K) -> Option<K::Value> {
+        match self.inner.graph.lookup::<K>(key) {
+            Some(Lookup::Completed(value)) => Some(value),
+            Some(Lookup::InFlight(_)) => {
+                unreachable!("InjectedKey cannot be in-flight")
+            }
+            None => None,
+        }
     }
 }

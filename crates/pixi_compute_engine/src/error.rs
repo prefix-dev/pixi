@@ -13,7 +13,8 @@ use crate::AnyKey;
 /// failures (a Key's compute returning a logical error) live inside the
 /// Key's [`Value`](crate::Key::Value) type, not here. A typical Key will
 /// therefore define `Value = Result<T, UserError>` and fold framework
-/// errors from sub-`ctx.compute` calls into its own `Value` as needed.
+/// errors from sub-[`ComputeCtx::compute`](crate::ComputeCtx::compute)
+/// calls into its own `Value` as needed.
 ///
 /// # Handling in a Key body
 ///

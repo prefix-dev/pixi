@@ -34,7 +34,7 @@ use futures::{
 };
 use parking_lot::Mutex;
 
-use crate::{AnyKey, ComputeError, Key};
+use crate::{AnyKey, ComputeError, Key, StorageType};
 
 /// A boxed compute future for Key `K`.
 pub(crate) type KeyFuture<K> = BoxFuture<'static, Result<<K as Key>::Value, ComputeError>>;
@@ -74,6 +74,9 @@ pub(crate) enum GraphNode<K: Key> {
     /// requested via `ctx.compute(..)` during the parent's compute body
     /// (in call order; duplicates from repeated reads are preserved).
     Completed { value: K::Value, deps: Vec<AnyKey> },
+    /// A value injected via [`ComputeEngine::inject`](crate::ComputeEngine::inject).
+    /// No compute task was ever spawned; the value was written directly.
+    Injected { value: K::Value },
 }
 
 /// Cached state for a single concrete Key type.
@@ -97,7 +100,9 @@ impl<K: Key> PerTypeSlot<K> {
     /// a side effect.
     fn lookup(&mut self, key: &K) -> Option<Lookup<K::Value>> {
         match self.nodes.get(key) {
-            Some(GraphNode::Completed { value, .. }) => Some(Lookup::Completed(value.clone())),
+            Some(GraphNode::Completed { value, .. } | GraphNode::Injected { value }) => {
+                Some(Lookup::Completed(value.clone()))
+            }
             Some(GraphNode::InFlight { future, .. }) => {
                 if let Some(shared) = future.upgrade() {
                     Some(Lookup::InFlight(shared))
@@ -131,6 +136,7 @@ pub(crate) struct NodeRecord {
 pub(crate) enum RawNodeState {
     Computing,
     Completed,
+    Injected,
 }
 
 impl<K: Key> TypedSlot for Mutex<PerTypeSlot<K>> {
@@ -159,6 +165,13 @@ impl<K: Key> TypedSlot for Mutex<PerTypeSlot<K>> {
                         deps: deps.clone(),
                     });
                 }
+                GraphNode::Injected { .. } => {
+                    out.push(NodeRecord {
+                        key: any_key,
+                        state: RawNodeState::Injected,
+                        deps: Vec::new(),
+                    });
+                }
             }
         }
     }
@@ -181,15 +194,22 @@ impl KeyGraph {
         }
     }
 
-    /// Look up `key` in the graph. If nothing is cached or in-flight,
-    /// mints a fresh [`SpawnGeneration`], hands it to `make_future`
-    /// (which is responsible for threading it back into the eventual
-    /// [`insert_completed`](Self::insert_completed) call), installs
-    /// the resulting future's `WeakShared` in the slot's `InFlight`
-    /// state, and returns the strong `Shared`.
+    /// Look up `key` in the graph. If the value is already cached
+    /// (completed, injected, or in-flight), returns it immediately.
     ///
-    /// `make_future` runs while the per-type slot is locked, so it
-    /// must be quick (`tokio::spawn` plus a small amount of wrapping).
+    /// On a miss, behavior depends on [`Key::storage_type`]:
+    ///
+    /// **Computed** keys: mints a fresh [`SpawnGeneration`], calls
+    /// `make_future` (which must be quick because the per-type lock is
+    /// held; a slow closure blocks every other caller for this key
+    /// type), installs the resulting future as `InFlight`, and returns
+    /// the strong `Shared`.
+    ///
+    /// **Injected** keys: panics. All injected values must be provided
+    /// via [`insert_injected`](Self::insert_injected) before any
+    /// compute that depends on them. Without invalidation the engine
+    /// cannot retroactively update dependents that already cached a
+    /// result.
     pub(crate) fn get_or_insert_with<K, F>(&self, key: &K, make_future: F) -> Lookup<K::Value>
     where
         K: Key,
@@ -204,20 +224,36 @@ impl KeyGraph {
         if let Some(hit) = s.lookup(key) {
             return hit;
         }
-        let generation = s.next_generation;
-        s.next_generation += 1;
-        let shared = make_future(generation).shared();
-        let weak = shared
-            .downgrade()
-            .expect("freshly-created Shared must be downgradeable");
-        s.nodes.insert(
-            key.clone(),
-            GraphNode::InFlight {
-                future: weak,
-                generation,
-            },
-        );
-        Lookup::InFlight(shared)
+
+        // Miss. For injected keys this means the value was never
+        // provided; for computed keys we spawn a fresh task.
+        match K::storage_type() {
+            StorageType::Injected => {
+                panic!(
+                    "injected key not set: {}. \
+                     All injected values must be provided via \
+                     ComputeEngine::inject() before computing keys \
+                     that depend on them.",
+                    AnyKey::new(key.clone()),
+                );
+            }
+            StorageType::Computed => {
+                let generation = s.next_generation;
+                s.next_generation += 1;
+                let shared = make_future(generation).shared();
+                let weak = shared
+                    .downgrade()
+                    .expect("freshly-created Shared must be downgradeable");
+                s.nodes.insert(
+                    key.clone(),
+                    GraphNode::InFlight {
+                        future: weak,
+                        generation,
+                    },
+                );
+                Lookup::InFlight(shared)
+            }
+        }
     }
 
     /// Promote a freshly-computed value into the slot if it still
@@ -252,6 +288,42 @@ impl KeyGraph {
             s.nodes
                 .insert(key.clone(), GraphNode::Completed { value, deps });
         }
+    }
+
+    /// Look up `key` without creating an entry on miss. Used by the
+    /// injected-key path in [`ComputeCtx::compute`](crate::ComputeCtx::compute)
+    /// where spawning a compute is never appropriate.
+    pub(crate) fn lookup<K: Key>(&self, key: &K) -> Option<Lookup<K::Value>> {
+        let map = self.inner.lock();
+        let slot = map.get(&TypeId::of::<K>())?.clone();
+        drop(map);
+        let typed: &Mutex<PerTypeSlot<K>> = slot
+            .as_any()
+            .downcast_ref()
+            .expect("type id matches by construction");
+        let mut s = typed.lock();
+        s.lookup(key)
+    }
+
+    /// Store an injected value directly, without spawning a compute.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `key` already has an entry in the graph (whether
+    /// injected, completed, or in-flight). The single-write contract
+    /// of [`InjectedKey`](crate::InjectedKey) means each key may be
+    /// injected at most once.
+    pub(crate) fn insert_injected<K: Key>(&self, key: &K, value: K::Value) {
+        let slot = self.get_or_create_slot::<K>();
+        let typed: &Mutex<PerTypeSlot<K>> = slot
+            .as_any()
+            .downcast_ref()
+            .expect("type id matches by construction");
+        let mut s = typed.lock();
+        if s.nodes.contains_key(key) {
+            panic!("injected key already set: {}", AnyKey::new(key.clone()),);
+        }
+        s.nodes.insert(key.clone(), GraphNode::Injected { value });
     }
 
     /// Walk every per-type slot, invoking `sink` with each one.

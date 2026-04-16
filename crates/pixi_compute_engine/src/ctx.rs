@@ -38,9 +38,11 @@ type DepsList = Arc<Mutex<Vec<AnyKey>>>;
 /// dependency requests within a single compute frame to be serialized.
 /// That is intentional: dependency recording mutates ctx state (the
 /// shared dep accumulator), and `&mut self` rules out the kinds of
-/// races that would make that recording non-deterministic. For explicit
-/// parallel dependency requests, use one of the parallel combinators
-/// below.
+/// races that would make that recording non-deterministic.
+/// Deterministic ordering matters because introspection and (future)
+/// invalidation rely on a stable, reproducible dep list for each key.
+/// For explicit parallel dependency requests, use one of the parallel
+/// combinators below.
 ///
 /// # Parallel combinators
 ///
@@ -159,30 +161,10 @@ impl ComputeCtx {
         &mut self,
         key: &K,
     ) -> impl Future<Output = Result<K::Value, ComputeError>> + use<K> {
-        // Synchronous setup: cycle check + cache/spawn lookup. Doing this in
-        // the calling frame (rather than inside an `async` body) lets us
-        // decouple the returned future from the `&K` lifetime.
-        let any_key = AnyKey::new(key.clone());
-        let setup: Result<Lookup<K::Value>, ComputeError> = if self
-            .chain
-            .iter()
-            .any(|k| k == &any_key)
-        {
-            let mut stack = self.chain.clone();
-            stack.push(any_key);
-            Err(ComputeError::Cycle(CycleStack(stack)))
-        } else {
-            self.deps.lock().push(any_key.clone());
-
-            let child_chain = {
-                let mut c = self.chain.clone();
-                c.push(any_key);
-                c
-            };
-            Ok(self.engine.graph.get_or_insert_with(key, |generation| {
-                spawn_compute_future::<K>(self.engine.clone(), key.clone(), child_chain, generation)
-            }))
-        };
+        // Synchronous setup: cycle check + cache/spawn lookup. Doing
+        // this in the calling frame (not inside an `async` body) lets
+        // us decouple the returned future from the `&K` lifetime.
+        let setup = self.resolve(key);
 
         async move {
             match setup? {
@@ -190,6 +172,35 @@ impl ComputeCtx {
                 Lookup::InFlight(shared) => shared.await,
             }
         }
+    }
+
+    /// Synchronous core of [`compute`](Self::compute): cycle check,
+    /// graph lookup/spawn, and dep recording.
+    fn resolve<K: Key>(&mut self, key: &K) -> Result<Lookup<K::Value>, ComputeError> {
+        let any_key = AnyKey::new(key.clone());
+
+        // Cycle check: is this key already on the compute stack?
+        if self.chain.iter().any(|k| k == &any_key) {
+            let mut stack = self.chain.clone();
+            stack.push(any_key);
+            return Err(ComputeError::Cycle(CycleStack(stack)));
+        }
+
+        // Build the child chain for the spawned task's cycle detector.
+        let mut child_chain = self.chain.clone();
+        child_chain.push(any_key.clone());
+
+        // The graph handles both computed and injected keys: on a hit
+        // it returns the cached/injected value; on a miss it spawns
+        // (Computed) or panics (Injected, meaning the value was never
+        // provided via engine.inject()).
+        let lookup = self.engine.graph.get_or_insert_with(key, |generation| {
+            spawn_compute_future::<K>(self.engine.clone(), key.clone(), child_chain, generation)
+        });
+
+        self.deps.lock().push(any_key);
+
+        Ok(lookup)
     }
 
     /// Run two closures concurrently, each with its own sub-ctx.

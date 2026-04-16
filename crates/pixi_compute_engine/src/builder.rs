@@ -38,7 +38,9 @@ impl ComputeEngineBuilder {
     ///
     /// This is a determinism primitive for tests: it makes sub-compute
     /// side-effect ordering reproducible regardless of tokio wake
-    /// scheduling. It is not intended for production use.
+    /// scheduling. It is not intended for production use because it
+    /// serializes work that could otherwise run concurrently, reducing
+    /// throughput.
     ///
     /// # Scope
     ///

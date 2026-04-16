@@ -8,6 +8,24 @@ use std::{
 
 use crate::{ComputeCtx, short_type_name};
 
+/// How the engine stores and retrieves a Key's value.
+///
+/// Returned by [`Key::storage_type`]. The engine uses this to decide
+/// whether to spawn a compute task or look up a pre-populated value.
+///
+/// Modeled after DICE's `StorageType` enum in buck2.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StorageType {
+    /// The value is produced by [`Key::compute`]. The engine spawns a
+    /// task, deduplicates concurrent requests, and caches the result.
+    Computed,
+    /// The value is injected externally via
+    /// [`ComputeEngine::inject`](crate::ComputeEngine::inject). The
+    /// engine performs a lookup-only, never spawning a task. Panics if
+    /// the value has not been injected yet.
+    Injected,
+}
+
 /// A unit of computation.
 ///
 /// A `Key` identifies *what* is being computed; [`Key::compute`] defines
@@ -39,7 +57,8 @@ use crate::{ComputeCtx, short_type_name};
 /// `Result<Self::Value, _>`. User-level failures must be modeled inside
 /// `Value` (for example `Arc<Result<T, E>>` or a newtype over one).
 /// Framework-level failures (cycles, cancellation) are surfaced at
-/// `ctx.compute` call sites via [`ComputeError`](crate::ComputeError); the
+/// [`ComputeCtx::compute`](crate::ComputeCtx::compute) call sites via
+/// [`ComputeError`](crate::ComputeError); the
 /// caller is responsible for folding them into its own `Value` if needed.
 ///
 /// # Example
@@ -119,5 +138,21 @@ pub trait Key: Hash + Eq + Clone + Display + Debug + Send + Sync + 'static {
     /// unstable across toolchain versions.
     fn key_type_name() -> &'static str {
         short_type_name::<Self>()
+    }
+
+    /// How the engine stores and retrieves this Key's value.
+    ///
+    /// Defaults to [`StorageType::Computed`]. The blanket
+    /// `impl<K: InjectedKey> Key for K` overrides this to
+    /// [`StorageType::Injected`].
+    ///
+    /// Do not override this in manual `Key` implementations:
+    /// returning `Injected` without a matching
+    /// [`ComputeEngine::inject`](crate::ComputeEngine::inject) call
+    /// would panic on the first lookup, and the `compute` body would
+    /// never run.
+    #[doc(hidden)]
+    fn storage_type() -> StorageType {
+        StorageType::Computed
     }
 }
