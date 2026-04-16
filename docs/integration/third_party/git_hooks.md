@@ -48,7 +48,7 @@ Make sure to install the hooks into your Git repository:
 pixi run lefthook install
 ```
 
-With this configuration, Lefthook will use `pixi run` to execute your hooks, ensuring they run within the correct environment. The `--quiet` and `--no-progress` flags are useful to avoid cluttering the Git output.
+With this configuration, Lefthook will use `pixi run` to execute your hooks, ensuring they run within the correct environment. The `--quiet` and `--no-progress` flags are useful to avoid cluttering the output.
 
 ## pre-commit
 
