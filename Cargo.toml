@@ -42,6 +42,7 @@ clap = { version = "4.5.31", default-features = false }
 clap-verbosity-flag = "3.0.2"
 clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
+cmp_any = "0.8.1"
 comfy-table = "7.2.1"
 console = "0.16.1"
 console-subscriber = "0.5.0"
@@ -99,6 +100,7 @@ pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
 pixi_build_types = { path = "crates/pixi_build_types" }
 pixi_cli = { path = "crates/pixi_cli" }
 pixi_command_dispatcher = { path = "crates/pixi_command_dispatcher" }
+pixi_compute_engine = { path = "crates/pixi_compute_engine" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_core = { path = "crates/pixi_core" }
@@ -168,6 +170,7 @@ tempfile = "3.17.1"
 text_trees = "0.1.2"
 thiserror = "2.0.12"
 tokio = "1.43.0"
+tokio-test = "0.4.5"
 tokio-util = "0.7.13"
 toml = "1.0.0"
 toml-span = "0.7.0"
