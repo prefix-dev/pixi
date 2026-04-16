@@ -56,7 +56,7 @@ impl CommandDispatcherProcessor {
 
             // Notify the reporter that the solve has started.
             if let Some(id) = reporter_id {
-                SolveCondaEnvironmentSpec::report_started(&mut self.reporter, id);
+                SolveCondaEnvironmentSpec::report_started(&self.reporter, id);
             }
 
             // Store the cancellation token for this context so child tasks can link to it.

@@ -70,63 +70,59 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
     /// Called when the command dispatcher is closing down.
     ///
     /// We want to make sure that we clean up all the progress bars.
-    fn on_finished(&mut self) {
+    fn on_finished(&self) {
         self.on_clear()
     }
 
     /// Clears the current progress bars.
-    fn on_clear(&mut self) {
+    fn on_clear(&self) {
         self.conda_solve_reporter.clear();
         self.repodata_reporter.clear();
         self.sync_reporter.clear();
     }
 
-    fn as_git_reporter(&mut self) -> Option<&mut dyn pixi_command_dispatcher::GitCheckoutReporter> {
-        Some(&mut self.source_checkout_reporter)
+    fn as_git_reporter(&self) -> Option<&dyn pixi_command_dispatcher::GitCheckoutReporter> {
+        Some(&self.source_checkout_reporter)
     }
 
-    fn as_source_build_reporter(&mut self) -> Option<&mut dyn SourceBuildReporter> {
-        Some(&mut self.sync_reporter)
+    fn as_source_build_reporter(&self) -> Option<&dyn SourceBuildReporter> {
+        Some(&self.sync_reporter)
     }
 
-    fn as_backend_source_build_reporter(&mut self) -> Option<&mut dyn BackendSourceBuildReporter> {
-        Some(&mut self.sync_reporter)
+    fn as_backend_source_build_reporter(&self) -> Option<&dyn BackendSourceBuildReporter> {
+        Some(&self.sync_reporter)
     }
 
-    fn as_conda_solve_reporter(
-        &mut self,
-    ) -> Option<&mut dyn pixi_command_dispatcher::CondaSolveReporter> {
+    fn as_conda_solve_reporter(&self) -> Option<&dyn pixi_command_dispatcher::CondaSolveReporter> {
         Some(self)
     }
 
-    fn as_pixi_solve_reporter(
-        &mut self,
-    ) -> Option<&mut dyn pixi_command_dispatcher::PixiSolveReporter> {
+    fn as_pixi_solve_reporter(&self) -> Option<&dyn pixi_command_dispatcher::PixiSolveReporter> {
         Some(self)
     }
 
     fn as_pixi_install_reporter(
-        &mut self,
-    ) -> Option<&mut dyn pixi_command_dispatcher::PixiInstallReporter> {
+        &self,
+    ) -> Option<&dyn pixi_command_dispatcher::PixiInstallReporter> {
         Some(self)
     }
 
     fn create_gateway_reporter(
-        &mut self,
+        &self,
         _reason: Option<ReporterContext>,
     ) -> Option<Box<dyn Reporter>> {
         Some(Box::new(self.repodata_reporter.clone()))
     }
 
     fn create_install_reporter(
-        &mut self,
+        &self,
         _reason: Option<ReporterContext>,
     ) -> Option<Box<dyn rattler::install::Reporter>> {
         Some(Box::new(self.sync_reporter.create_reporter()))
     }
 
     fn create_run_exports_reporter(
-        &mut self,
+        &self,
         _reason: Option<ReporterContext>,
     ) -> Option<Arc<dyn RunExportsReporter>> {
         Some(Arc::new(run_exports::RunExportsReporter::new(
@@ -138,7 +134,7 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
 
 impl pixi_command_dispatcher::PixiInstallReporter for TopLevelProgress {
     fn on_queued(
-        &mut self,
+        &self,
         _reason: Option<ReporterContext>,
         _env: &InstallPixiEnvironmentSpec,
     ) -> PixiInstallId {
@@ -148,14 +144,14 @@ impl pixi_command_dispatcher::PixiInstallReporter for TopLevelProgress {
         PixiInstallId(0)
     }
 
-    fn on_started(&mut self, _install_id: PixiInstallId) {}
+    fn on_started(&self, _install_id: PixiInstallId) {}
 
-    fn on_finished(&mut self, _install_id: PixiInstallId) {}
+    fn on_finished(&self, _install_id: PixiInstallId) {}
 }
 
 impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {
     fn on_queued(
-        &mut self,
+        &self,
         _reason: Option<ReporterContext>,
         env: &PixiEnvironmentSpec,
     ) -> PixiSolveId {
@@ -180,14 +176,14 @@ impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {
         PixiSolveId(id)
     }
 
-    fn on_started(&mut self, _solve_id: PixiSolveId) {}
+    fn on_started(&self, _solve_id: PixiSolveId) {}
 
-    fn on_finished(&mut self, _solve_id: PixiSolveId) {}
+    fn on_finished(&self, _solve_id: PixiSolveId) {}
 }
 
 impl pixi_command_dispatcher::CondaSolveReporter for TopLevelProgress {
     fn on_queued(
-        &mut self,
+        &self,
         reason: Option<ReporterContext>,
         env: &SolveCondaEnvironmentSpec,
     ) -> CondaSolveId {
@@ -202,11 +198,11 @@ impl pixi_command_dispatcher::CondaSolveReporter for TopLevelProgress {
         }
     }
 
-    fn on_started(&mut self, solve_id: CondaSolveId) {
+    fn on_started(&self, solve_id: CondaSolveId) {
         self.conda_solve_reporter.start(solve_id.0);
     }
 
-    fn on_finished(&mut self, solve_id: CondaSolveId) {
+    fn on_finished(&self, solve_id: CondaSolveId) {
         self.conda_solve_reporter.finish(solve_id.0);
     }
 }
