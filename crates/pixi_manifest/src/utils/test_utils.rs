@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::toml::{ExternalWorkspaceProperties, PackageDefaults};
 use crate::toml::{FromTomlStr, TomlManifest};
 use itertools::Itertools;
@@ -12,7 +14,7 @@ pub(crate) fn expect_parse_failure(pixi_toml: &str) -> String {
             manifest.into_workspace_manifest(
                 ExternalWorkspaceProperties::default(),
                 PackageDefaults::default(),
-                None,
+                Path::new(""),
             )
         })
         .expect_err("parsing should fail");
@@ -28,7 +30,7 @@ pub(crate) fn expect_parse_warnings(pixi_toml: &str) -> String {
         manifest.into_workspace_manifest(
             ExternalWorkspaceProperties::default(),
             PackageDefaults::default(),
-            None,
+            Path::new(""),
         )
     }) {
         Ok((_, _, warnings)) => warnings

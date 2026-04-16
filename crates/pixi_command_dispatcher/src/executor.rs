@@ -187,6 +187,34 @@ impl<Fut> CancellationAwareFutures<Fut> {
     }
 }
 
+impl<Fut, T, E> CancellationAwareFutures<Fut>
+where
+    Fut: Future<Output = Result<T, CommandDispatcherError<E>>>,
+{
+    /// Drain all futures, collecting successes and errors separately.
+    ///
+    /// Cancelled results are filtered out. Returns `Err(Cancelled)` only
+    /// if ALL futures were cancelled with no real results.
+    pub async fn collect_all(&mut self) -> Result<(Vec<T>, Vec<E>), CommandDispatcherError<E>> {
+        use futures::StreamExt;
+
+        let mut successes = Vec::new();
+        let mut errors = Vec::new();
+        while let Some(result) = self.next().await {
+            match result {
+                Ok(value) => successes.push(value),
+                Err(CommandDispatcherError::Failed(err)) => errors.push(err),
+                Err(CommandDispatcherError::Cancelled) => {}
+            }
+        }
+        if successes.is_empty() && errors.is_empty() {
+            Err(CommandDispatcherError::Cancelled)
+        } else {
+            Ok((successes, errors))
+        }
+    }
+}
+
 impl<Fut, T, E> Stream for CancellationAwareFutures<Fut>
 where
     Fut: Future<Output = Result<T, CommandDispatcherError<E>>>,

@@ -12,10 +12,13 @@ pub mod virtual_packages;
 pub use crate::environment::CondaPrefixUpdater;
 pub use install_subset::{FilteredPackages, InstallSubset};
 pub use package_identifier::PypiPackageIdentifier;
+use pixi_install_pypi::LockedPypiRecord;
 use pixi_record::PixiRecord;
 pub use pixi_uv_context::UvResolutionContext;
-use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
-pub use records_by_name::{PixiRecordsByName, PypiRecordsByName};
+pub use rattler_lock::Verbatim;
+pub use records_by_name::{
+    HasNameVersion, PixiRecordsByName, PypiRecordsByName, UnresolvedPixiRecordsByName,
+};
 pub use resolve::pypi::resolve_pypi;
 pub use satisfiability::{
     Dependency, EnvironmentUnsat, PlatformUnsat, resolve_dev_dependencies,
@@ -33,15 +36,74 @@ pub use utils::IoConcurrencyLimit;
 pub type LockedCondaPackages = Vec<PixiRecord>;
 
 /// A list of Pypi packages that are locked for a specific platform.
-pub type LockedPypiPackages = Vec<PypiRecord>;
-
-/// A single Pypi record that contains both the package data and the environment
-/// data. In Pixi we basically always need both.
-pub type PypiRecord = (PypiPackageData, PypiPackageEnvironmentData);
+pub type LockedPypiRecords = Vec<LockedPypiRecord>;
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr as _;
+
+    use pep440_rs::VersionSpecifiers;
+    use pep508_rs::Requirement;
+    use rattler_lock::{
+        PackageHashes, PypiDistributionData, PypiPackageData, PypiSourceData, UrlOrPath, Verbatim,
+    };
+
     use crate::Workspace;
+
+    pub fn make_wheel_package(name: &str, version: &str) -> PypiPackageData {
+        make_wheel_package_with(
+            name,
+            version,
+            Verbatim::new(UrlOrPath::Path(format!("./{name}").into())),
+            None,
+            None,
+            vec![],
+            None,
+        )
+    }
+
+    pub fn make_source_package(name: &str) -> PypiPackageData {
+        make_source_package_with(
+            name,
+            Verbatim::new(UrlOrPath::Path(format!("./{name}").into())),
+            vec![],
+            None,
+        )
+    }
+
+    pub fn make_wheel_package_with(
+        name: &str,
+        version: &str,
+        location: Verbatim<UrlOrPath>,
+        hash: Option<PackageHashes>,
+        index_url: Option<url::Url>,
+        requires_dist: Vec<Requirement>,
+        requires_python: Option<VersionSpecifiers>,
+    ) -> PypiPackageData {
+        PypiPackageData::Distribution(Box::new(PypiDistributionData {
+            name: name.parse().unwrap(),
+            version: pep440_rs::Version::from_str(version).unwrap(),
+            location,
+            hash,
+            index_url,
+            requires_dist,
+            requires_python,
+        }))
+    }
+
+    pub fn make_source_package_with(
+        name: &str,
+        location: Verbatim<UrlOrPath>,
+        requires_dist: Vec<Requirement>,
+        requires_python: Option<VersionSpecifiers>,
+    ) -> PypiPackageData {
+        PypiPackageData::Source(Box::new(PypiSourceData {
+            name: name.parse().unwrap(),
+            location,
+            requires_dist,
+            requires_python,
+        }))
+    }
 
     #[tokio::test]
     async fn test_load_newer_lock_file() {

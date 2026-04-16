@@ -30,6 +30,7 @@ use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, MatchSpecCondition, NamedChannelOrUrl, NamelessMatchSpec,
     ParseChannelError, StringMatcher, VersionSpec,
 };
+pub use rattler_lock::{SourceTimestamps, Verbatim};
 pub use source_anchor::SourceAnchor;
 pub use subdirectory::{Subdirectory, SubdirectoryError};
 use thiserror::Error;
@@ -136,7 +137,7 @@ impl PixiSpec {
                 url,
                 md5: spec.md5,
                 sha256: spec.sha256,
-                // A namelessmatchspec always describes a binary spec which cannot have a
+                // A nameless matchspec always describes a binary spec which cannot have a
                 // subdirectory
                 subdirectory: Subdirectory::default(),
             })
@@ -683,13 +684,20 @@ impl From<SourceLocationSpec> for rattler_lock::source::SourceLocation {
 #[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::UrlSourceLocation> for UrlSourceSpec {
     fn from(value: rattler_lock::source::UrlSourceLocation) -> Self {
-        let rattler_lock::source::UrlSourceLocation { url, md5, sha256 } = value;
+        let rattler_lock::source::UrlSourceLocation {
+            url,
+            md5,
+            sha256,
+            subdirectory,
+        } = value;
 
         Self {
             url,
             md5,
             sha256,
-            subdirectory: Subdirectory::default(),
+            subdirectory: subdirectory
+                .and_then(|s| Subdirectory::try_from(s).ok())
+                .unwrap_or_default(),
         }
     }
 }
@@ -701,6 +709,7 @@ impl From<UrlSourceSpec> for rattler_lock::source::UrlSourceLocation {
             url: value.url,
             md5: value.md5,
             sha256: value.sha256,
+            subdirectory: value.subdirectory.to_option_string(),
         }
     }
 }

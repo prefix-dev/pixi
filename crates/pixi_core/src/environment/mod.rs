@@ -147,7 +147,9 @@ impl EnvironmentHash {
         // Hash the packages
         let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str())
-            && let Some(packages) = env.packages(run_environment.best_platform())
+            && let Some(lock_platform) =
+                lock_file.platform(&run_environment.best_platform().to_string())
+            && let Some(packages) = env.packages(lock_platform)
         {
             for package in packages {
                 urls.push(package.location().to_string())
@@ -178,7 +180,8 @@ impl LockedEnvironmentHash {
         // Intentionally ignore `skipped` here: the quick-validate cache is only
         // used during runs, and should not vary based on transient install
         // filters.
-        if let Some(packages) = environment.packages(platform) {
+        let lock_platform = environment.lock_file().platform(&platform.to_string());
+        if let Some(packages) = lock_platform.and_then(|p| environment.packages(p)) {
             for package in packages {
                 // Always has the url or path
                 package.location().to_owned().to_string().hash(&mut hasher);
@@ -186,16 +189,15 @@ impl LockedEnvironmentHash {
                 match package {
                     // A select set of fields are used to hash the package
                     LockedPackageRef::Conda(pack) => {
-                        if let Some(sha) = pack.record().sha256 {
-                            sha.hash(&mut hasher);
-                        } else if let Some(md5) = pack.record().md5 {
-                            md5.hash(&mut hasher);
+                        if let Some(record) = pack.record() {
+                            if let Some(sha) = record.sha256 {
+                                sha.hash(&mut hasher);
+                            } else if let Some(md5) = record.md5 {
+                                md5.hash(&mut hasher);
+                            }
                         }
                     }
-                    LockedPackageRef::Pypi(pack, env) => {
-                        pack.editable.hash(&mut hasher);
-                        env.extras.hash(&mut hasher);
-                    }
+                    LockedPackageRef::Pypi(_) => {}
                 }
             }
         }
@@ -590,6 +592,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
             lock_file_usage: update_lock_file_options.lock_file_usage,
             no_install,
             max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
+            ..Default::default()
         })
         .await?
         .0;

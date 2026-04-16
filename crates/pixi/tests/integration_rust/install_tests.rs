@@ -756,6 +756,91 @@ async fn test_old_lock_install() {
     );
 }
 
+/// A v6 lock file has a local path dependency whose directory is called
+/// `foo.tar.gz`.  On upgrade to v7, `is_wheel_or_archive_location` matches
+/// the `.tar.gz` suffix and misclassifies the entry as a
+/// `PypiDistributionData`.  This test verifies that a re-resolve corrects
+/// the entry to `PypiSourceData` and that the resulting lock file
+/// round-trips cleanly.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_v6_local_archive_path_upgrade() {
+    setup_tracing();
+
+    let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
+    let test_dir = workspace_root.join("tests/data/v6-local-archive-path");
+
+    // Save the original lock file content so we can restore it at the end.
+    let lock_path = test_dir.join("pixi.lock");
+    let original_lock = fs_err::read_to_string(&lock_path).unwrap();
+
+    // Load the v6 lock file — foo.tar.gz is misdetected as Distribution.
+    let lock_file = rattler_lock::LockFile::from_path(&lock_path).unwrap();
+    let env = lock_file.default_environment().unwrap();
+    let foo = env
+        .pypi_packages_by_platform()
+        .flat_map(|(_, pkgs)| pkgs)
+        .find(|p| p.name().as_ref() == "foo")
+        .expect("foo should be in the lock file");
+    assert!(
+        foo.as_wheel().is_some(),
+        "v6→v7 upgrade should (incorrectly) parse foo.tar.gz as Distribution"
+    );
+
+    // Re-resolve — should detect the mismatch and re-solve.
+    let project = Workspace::from_path(&test_dir.join("pixi.toml")).unwrap();
+    pixi_core::environment::get_update_lock_file_and_prefix(
+        &project.default_environment(),
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Update,
+            no_install: true,
+            ..Default::default()
+        },
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await
+    .unwrap();
+
+    // After re-resolve, foo.tar.gz should be a Source package.
+    let new_lock = rattler_lock::LockFile::from_path(&test_dir.join("pixi.lock")).unwrap();
+    let new_env = new_lock.default_environment().unwrap();
+    let foo = new_env
+        .pypi_packages_by_platform()
+        .flat_map(|(_, pkgs)| pkgs)
+        .find(|p| p.name().as_ref() == "foo")
+        .expect("foo should be in the re-resolved lock file");
+    assert!(
+        foo.as_source().is_some(),
+        "after re-resolve foo.tar.gz should be a Source package, not Distribution"
+    );
+
+    // Round-trip: a second revalidate should not change the lock file.
+    let lock_str = fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap();
+    pixi_core::environment::get_update_lock_file_and_prefix(
+        &project.default_environment(),
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Update,
+            no_install: true,
+            ..Default::default()
+        },
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        lock_str,
+        fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap(),
+        "lock file should round-trip without changes"
+    );
+
+    // Restore the original v6 lock file so the test is idempotent.
+    fs_err::write(&lock_path, &original_lock).unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
@@ -1347,7 +1432,14 @@ async fn test_multiple_prefix_update() {
         let pixi_records = pixi_records.clone();
         // tasks.push(conda_prefix_updater.update(pixi_records));
         let updater = conda_prefix_updater.clone();
-        sets.spawn(async move { updater.update(pixi_records, None, None).await.cloned() });
+        let unresolved_records: Vec<pixi_record::UnresolvedPixiRecord> =
+            pixi_records.into_iter().map(Into::into).collect();
+        sets.spawn(async move {
+            updater
+                .update(unresolved_records, None, None)
+                .await
+                .cloned()
+        });
     }
 
     let mut first_modified = None;

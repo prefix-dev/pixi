@@ -30,8 +30,8 @@ def _git_source_entries(lock_file: Path) -> list[dict[str, Any]]:
     for entry in iter_entries():
         if isinstance(entry, dict):
             entry = cast(dict[str, Any], entry)
-            if entry.get("conda") == ".":
-                package_build_source = entry.get("package_build_source")
+            if (v := entry.get("conda_source")) and v.endswith("@ ."):
+                package_build_source = entry.get("source")
                 if package_build_source is not None:
                     serialized_sources.append(package_build_source)
 
@@ -413,8 +413,11 @@ def test_git_path_lock_detects_manual_rev_change(
     def mutate(node: Any) -> None:
         if isinstance(node, dict):
             node = cast(dict[str, Any], node)
-            if node.get("conda") == "." and "package_build_source" in node:
-                node["package_build_source"]["rev"] = local_cpp_git_repo.other_feature_rev
+            # In v7 lock files, environment entries are short references
+            # (only `conda_source` key) while the full package data (with
+            # `source`) lives in the top-level `packages` list.
+            if (v := node.get("conda_source")) and v.endswith("@ .") and "source" in node:
+                node["source"]["rev"] = local_cpp_git_repo.other_feature_rev
             for value in node.values():
                 mutate(value)
         elif isinstance(node, list):

@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::PathBuf,
     sync::Arc,
 };
@@ -16,7 +16,8 @@ use thiserror::Error;
 
 use crate::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
-    PackageNotProvidedError, SourceCheckoutError, SourceMetadataSpec,
+    PackageNotProvidedError, SourceCheckoutError, SourceMetadataSpec, SourceRecordError,
+    SourceRecordReuseKey,
     executor::CancellationAwareFutures,
     source_metadata::{CycleEnvironment, SourceMetadata, SourceMetadataError},
 };
@@ -33,6 +34,7 @@ pub struct SourceMetadataCollector {
     variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
     variant_files: Option<Vec<PathBuf>>,
     preferred_build_sources: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
+    source_timestamp_hints: HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>,
 }
 
 #[derive(Default)]
@@ -79,6 +81,7 @@ impl SourceMetadataCollector {
         variant_files: Option<Vec<PathBuf>>,
         enabled_protocols: EnabledProtocols,
         preferred_build_sources: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
+        source_timestamp_hints: HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>,
     ) -> Self {
         Self {
             command_queue,
@@ -90,6 +93,7 @@ impl SourceMetadataCollector {
             variant_configuration,
             variant_files,
             preferred_build_sources,
+            source_timestamp_hints,
         }
     }
 
@@ -104,6 +108,7 @@ impl SourceMetadataCollector {
             .collect::<Vec<_>>();
         let mut result = CollectedSourceMetadata::default();
         let mut already_encountered_specs = HashSet::new();
+        let mut collected_errors: Vec<CollectSourceMetadataError> = Vec::new();
 
         loop {
             // Create futures for all encountered specs.
@@ -117,22 +122,34 @@ impl SourceMetadataCollector {
             }
 
             // Wait for the next future to finish. Cancelled results are
-            // transparently skipped by the `CancellationAwareFutures` adapter
+            // transparently skipped by the `CancellationAwareFutures` adapter.
             // Only real errors or successes arrive here.
             let Some(source_metadata) = source_futures.next().await else {
                 // No more pending futures, we are done.
+                if let Some(err) = collected_errors.into_iter().next() {
+                    return Err(CommandDispatcherError::Failed(err));
+                }
                 return Ok(result);
             };
 
-            // Handle any potential error
-            let (source_metadata, mut chain) = source_metadata?;
+            // Collect errors but let remaining futures complete.
+            let (source_metadata, mut chain) = match source_metadata {
+                Ok(v) => v,
+                Err(CommandDispatcherError::Cancelled) => {
+                    return Err(CommandDispatcherError::Cancelled);
+                }
+                Err(CommandDispatcherError::Failed(err)) => {
+                    collected_errors.push(err);
+                    continue;
+                }
+            };
 
             // Process transitive dependencies
             for record in &source_metadata.records {
-                chain.push(record.package_record.name.clone());
+                chain.push(record.package_record().name.clone());
                 let anchor =
-                    SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
-                for depend in &record.package_record.depends {
+                    SourceAnchor::from(SourceLocationSpec::from(record.manifest_source().clone()));
+                for depend in &record.package_record().depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
                         let (PackageNameMatcher::Exact(name), nameless_spec) =
                             spec.clone().into_nameless()
@@ -141,7 +158,7 @@ impl SourceMetadataCollector {
                                 "non exact packages names are not supported in {depend}"
                             );
                         };
-                        if let Some(source_location) = record.sources.get(name.as_normalized()) {
+                        if let Some(source_location) = record.sources().get(name.as_normalized()) {
                             // We encountered a transitive source dependency.
                             let resolved_location = anchor.resolve(source_location.clone());
                             specs.push((
@@ -177,7 +194,6 @@ impl SourceMetadataCollector {
 
         // Determine if we should override the build_source pin for this package.
         let preferred_build_source = self.preferred_build_sources.get(&name).cloned();
-
         // Always checkout the manifest-defined source location (root), discovery
         // will pick build_source; we only pass preferred locations.
         let manifest_source_checkout = self
@@ -206,13 +222,17 @@ impl SourceMetadataCollector {
                     variant_files: self.variant_files.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
                 },
+                exclude_newer: self.exclude_newer.clone(),
+                source_exclude_newer_hints: self.source_timestamp_hints.clone(),
             })
             .await
         {
             Err(CommandDispatcherError::Cancelled) => {
                 return Err(CommandDispatcherError::Cancelled);
             }
-            Err(CommandDispatcherError::Failed(SourceMetadataError::Cycle(mut cycle))) => {
+            Err(CommandDispatcherError::Failed(SourceMetadataError::SourceRecord(
+                SourceRecordError::Cycle(mut cycle),
+            ))) => {
                 // Push the packages that led up to this cycle onto the cycle stack.
                 cycle
                     .stack
@@ -220,7 +240,7 @@ impl SourceMetadataCollector {
                 return Err(CommandDispatcherError::Failed(
                     CollectSourceMetadataError::SourceMetadataError {
                         name,
-                        error: SourceMetadataError::Cycle(cycle),
+                        error: SourceMetadataError::SourceRecord(SourceRecordError::Cycle(cycle)),
                     },
                 ));
             }
