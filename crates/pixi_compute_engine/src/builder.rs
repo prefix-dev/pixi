@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::{ComputeEngine, engine::EngineInner, key_graph::KeyGraph};
+use crate::{ComputeEngine, DataStore, engine::EngineInner, key_graph::KeyGraph};
 
 /// Builder for [`ComputeEngine`].
 ///
@@ -20,9 +20,10 @@ use crate::{ComputeEngine, engine::EngineInner, key_graph::KeyGraph};
 ///     .build();
 /// # let _ = engine;
 /// ```
-#[derive(Clone, Debug, Default)]
+#[derive(Default)]
 pub struct ComputeEngineBuilder {
     sequential_branches: bool,
+    global_data: DataStore,
 }
 
 impl ComputeEngineBuilder {
@@ -56,12 +57,26 @@ impl ComputeEngineBuilder {
         self
     }
 
+    /// Insert a value into the engine-wide shared data store.
+    ///
+    /// Keys access stored values via
+    /// [`ComputeCtx::global_data`](crate::ComputeCtx::global_data).
+    ///
+    /// # Panics
+    ///
+    /// Panics if a value of type `T` was already inserted.
+    pub fn with_data<T: Send + Sync + 'static>(mut self, value: T) -> Self {
+        self.global_data.set(value);
+        self
+    }
+
     /// Build the [`ComputeEngine`].
     pub fn build(self) -> ComputeEngine {
         ComputeEngine {
             inner: Arc::new(EngineInner {
                 graph: KeyGraph::default(),
                 sequential_branches: self.sequential_branches,
+                global_data: self.global_data,
             }),
         }
     }

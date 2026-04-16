@@ -5,14 +5,35 @@
 //! rather than timers, so they run deterministically without relying on
 //! wall-clock waits.
 
-use std::{sync::Arc, sync::atomic::Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 use derive_more::Display;
 use futures::FutureExt;
-use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
+use pixi_compute_engine::{ComputeCtx, ComputeEngine, DataStore, Key};
 use tokio::sync::Notify;
 
-use super::common::{Counter, Flag, Invisible, counter, flag, poll_once};
+use super::common::{HasTestCounter, poll_once, test_counter, test_flag};
+
+/// Test data for [`SlowKey`]: synchronization handles stored in the
+/// engine's DataStore.
+struct SlowKeyData {
+    started: Arc<Notify>,
+    dropped: Arc<Notify>,
+    finished: Arc<AtomicBool>,
+}
+
+trait HasSlowKeyData {
+    fn slow_key_data(&self) -> &SlowKeyData;
+}
+
+impl HasSlowKeyData for DataStore {
+    fn slow_key_data(&self) -> &SlowKeyData {
+        self.get::<SlowKeyData>()
+    }
+}
 
 /// A Key whose compute parks forever. It notifies `started` right after
 /// entering the body, installs a drop-guard that notifies `dropped` when
@@ -23,31 +44,25 @@ use super::common::{Counter, Flag, Invisible, counter, flag, poll_once};
 #[display("{id}")]
 struct SlowKey {
     id: u32,
-    started: Invisible<Arc<Notify>>,
-    dropped: Invisible<Arc<Notify>>,
-    finished: Flag,
 }
 impl Key for SlowKey {
     type Value = u32;
-    async fn compute(&self, _ctx: &mut ComputeCtx) -> Self::Value {
+    async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        let data = ctx.global_data().slow_key_data();
         struct DropNotify(Arc<Notify>);
         impl Drop for DropNotify {
             fn drop(&mut self) {
                 self.0.notify_one();
             }
         }
-        let _guard = DropNotify(self.dropped.0.clone());
-        self.started.notify_one();
+        let _guard = DropNotify(data.dropped.clone());
+        data.started.notify_one();
         // Park forever. The task is expected to be aborted externally,
         // at which point `_guard` drops and notifies `dropped`.
         std::future::pending::<()>().await;
-        self.finished.store(true, Ordering::SeqCst);
+        data.finished.store(true, Ordering::SeqCst);
         42
     }
-}
-
-fn notify() -> Invisible<Arc<Notify>> {
-    Invisible(Arc::new(Notify::new()))
 }
 
 /// When the only subscriber is dropped mid-compute, the spawned task is
@@ -56,16 +71,17 @@ fn notify() -> Invisible<Arc<Notify>> {
 /// took effect rather than observing a transient state.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cancellation_drops_task() {
-    let engine = ComputeEngine::new();
-    let started = notify();
-    let dropped = notify();
-    let finished = flag();
-    let key = SlowKey {
-        id: 1,
-        started: started.clone(),
-        dropped: dropped.clone(),
-        finished: finished.clone(),
-    };
+    let started = Arc::new(Notify::new());
+    let dropped = Arc::new(Notify::new());
+    let finished = Arc::new(AtomicBool::new(false));
+    let engine = ComputeEngine::builder()
+        .with_data(SlowKeyData {
+            started: started.clone(),
+            dropped: dropped.clone(),
+            finished: finished.clone(),
+        })
+        .build();
+    let key = SlowKey { id: 1 };
 
     let caller = tokio::spawn({
         let e = engine.clone();
@@ -93,12 +109,13 @@ async fn cancellation_drops_task() {
 #[display("{id}")]
 struct YieldingKey {
     id: u32,
-    counter: Counter,
 }
 impl Key for YieldingKey {
     type Value = u32;
-    async fn compute(&self, _ctx: &mut ComputeCtx) -> Self::Value {
-        self.counter.fetch_add(1, Ordering::SeqCst);
+    async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        ctx.global_data()
+            .test_counter()
+            .fetch_add(1, Ordering::SeqCst);
         for _ in 0..5 {
             tokio::task::yield_now().await;
         }
@@ -112,8 +129,8 @@ impl Key for YieldingKey {
 /// poll-driven.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn cancellation_with_subscribers() {
-    let engine = ComputeEngine::new();
-    let counter = counter();
+    let counter = test_counter();
+    let engine = ComputeEngine::builder().with_data(counter.clone()).build();
 
     // Handshakes: A signals "subscribed", B signals "subscribed",
     // the test tells A "okay to drop now".
@@ -123,9 +140,8 @@ async fn cancellation_with_subscribers() {
 
     let caller_a = tokio::spawn({
         let engine = engine.clone();
-        let counter = counter.clone();
         async move {
-            let key = YieldingKey { id: 42, counter };
+            let key = YieldingKey { id: 42 };
             let mut compute = engine.compute(&key).boxed();
             // Poll once to spawn the task and register as a subscriber.
             poll_once(&mut compute).await;
@@ -139,9 +155,8 @@ async fn cancellation_with_subscribers() {
 
     let caller_b = tokio::spawn({
         let engine = engine.clone();
-        let counter = counter.clone();
         async move {
-            let key = YieldingKey { id: 42, counter };
+            let key = YieldingKey { id: 42 };
             let mut compute = engine.compute(&key).boxed();
             // Poll once to subscribe to the same shared future as A.
             poll_once(&mut compute).await;
@@ -158,7 +173,7 @@ async fn cancellation_with_subscribers() {
 
     let _ = caller_a.await;
     assert_eq!(caller_b.await.unwrap(), 126);
-    assert_eq!(counter.load(Ordering::SeqCst), 1);
+    assert_eq!(counter.0.load(Ordering::SeqCst), 1);
 }
 
 /// `try_compute2` cancels the still-running branch as soon as the other
@@ -169,17 +184,14 @@ async fn cancellation_with_subscribers() {
 async fn try_compute2_cancels_losing_branch() {
     #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
     #[display("racer")]
-    struct Racer {
-        slow: SlowKey,
-    }
+    struct Racer;
     impl Key for Racer {
         type Value = Result<u32, &'static str>;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-            let slow_started = self.slow.started.0.clone();
-            let slow = self.slow.clone();
+            let slow_started = ctx.global_data().slow_key_data().started.clone();
             ctx.try_compute2(
                 move |ctx| {
-                    ctx.compute(&slow)
+                    ctx.compute(&SlowKey { id: 99 })
                         .map(|r| r.map_err(|_| "compute-err"))
                         .boxed()
                 },
@@ -199,25 +211,25 @@ async fn try_compute2_cancels_losing_branch() {
         }
     }
 
-    let started = notify();
-    let dropped = notify();
-    let finished = flag();
-    let slow = SlowKey {
-        id: 99,
-        started: started.clone(),
-        dropped: dropped.clone(),
-        finished: finished.clone(),
-    };
+    let started = Arc::new(Notify::new());
+    let dropped = Arc::new(Notify::new());
+    let finished = test_flag();
+    let engine = ComputeEngine::builder()
+        .with_data(SlowKeyData {
+            started: started.clone(),
+            dropped: dropped.clone(),
+            finished: finished.0.clone(),
+        })
+        .build();
 
-    let engine = ComputeEngine::new();
-    let result = engine.compute(&Racer { slow }).await.unwrap();
+    let result = engine.compute(&Racer).await.unwrap();
     assert_eq!(result, Err("fast-fail"));
 
     // Wait until the losing branch's spawned compute future has dropped,
     // confirming the abort actually propagated.
     dropped.notified().await;
     assert!(
-        !finished.load(Ordering::SeqCst),
+        !finished.0.load(Ordering::SeqCst),
         "losing branch's spawned compute should have been canceled"
     );
 }

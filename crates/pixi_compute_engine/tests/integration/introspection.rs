@@ -4,14 +4,14 @@
 
 use std::sync::{
     Arc,
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 use derive_more::Display;
-use pixi_compute_engine::{ComputeCtx, ComputeEngine, DependencyGraph, Key, NodeState};
+use pixi_compute_engine::{ComputeCtx, ComputeEngine, DataStore, DependencyGraph, Key, NodeState};
 use tokio::sync::Notify;
 
-use super::common::{BaseKey, Counter, Flag, Invisible, PlusTenKey, counter, flag};
+use super::common::{BaseKey, HasTestCounter, PlusTenKey, test_counter};
 
 /// After computing a small graph the snapshot has the expected nodes
 /// and one edge from the parent to its dep.
@@ -46,38 +46,57 @@ async fn small_graph_keys_and_edges() {
     assert!(graph.keys_currently_running().next().is_none());
 }
 
+/// Test data for [`ParkedKey`].
+struct ParkedKeyData {
+    started: Arc<Notify>,
+    release: Arc<Notify>,
+    finished: Arc<AtomicBool>,
+}
+
+trait HasParkedKeyData {
+    fn parked_key_data(&self) -> &ParkedKeyData;
+}
+
+impl HasParkedKeyData for DataStore {
+    fn parked_key_data(&self) -> &ParkedKeyData {
+        self.get::<ParkedKeyData>()
+    }
+}
+
 /// While a compute is parked, the snapshot reports it as currently
 /// running. After the compute completes, it reports zero in-flight.
 #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
 #[display("{id}")]
 struct ParkedKey {
     id: u32,
-    started: Invisible<Arc<Notify>>,
-    release: Invisible<Arc<Notify>>,
-    finished: Flag,
 }
 impl Key for ParkedKey {
     type Value = u32;
-    async fn compute(&self, _ctx: &mut ComputeCtx) -> Self::Value {
-        self.started.notify_one();
-        self.release.notified().await;
-        self.finished.store(true, Ordering::SeqCst);
+    async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        let data = ctx.global_data().parked_key_data();
+        let started = data.started.clone();
+        let release = data.release.clone();
+        let finished = data.finished.clone();
+        started.notify_one();
+        release.notified().await;
+        finished.store(true, Ordering::SeqCst);
         self.id
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn keys_currently_running_reports_in_flight() {
-    let engine = ComputeEngine::new();
-    let started = Invisible(Arc::new(Notify::new()));
-    let release = Invisible(Arc::new(Notify::new()));
-    let finished = flag();
-    let key = ParkedKey {
-        id: 7,
-        started: started.clone(),
-        release: release.clone(),
-        finished: finished.clone(),
-    };
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let finished = Arc::new(AtomicBool::new(false));
+    let engine = ComputeEngine::builder()
+        .with_data(ParkedKeyData {
+            started: started.clone(),
+            release: release.clone(),
+            finished: finished.clone(),
+        })
+        .build();
+    let key = ParkedKey { id: 7 };
 
     let e = engine.clone();
     let task = tokio::spawn(async move { e.compute(&key).await.unwrap() });
@@ -223,6 +242,22 @@ async fn fib_dot_snapshot() {
     "#);
 }
 
+/// Test data for [`ParentParkedAfterDep`].
+struct ParentParkedData {
+    started: Arc<Notify>,
+    release: Arc<Notify>,
+}
+
+trait HasParentParkedData {
+    fn parent_parked_data(&self) -> &ParentParkedData;
+}
+
+impl HasParentParkedData for DataStore {
+    fn parent_parked_data(&self) -> &ParentParkedData {
+        self.get::<ParentParkedData>()
+    }
+}
+
 /// A key whose compute reads a dep then parks. While the parent is
 /// parked, the snapshot must not report any edge from it (deps only
 /// land on the node when its compute body completes). After the parent
@@ -231,29 +266,29 @@ async fn fib_dot_snapshot() {
 #[display("{id}")]
 struct ParentParkedAfterDep {
     id: u32,
-    started: Invisible<Arc<Notify>>,
-    release: Invisible<Arc<Notify>>,
 }
 impl Key for ParentParkedAfterDep {
     type Value = u32;
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         let dep_value = ctx.compute(&BaseKey(self.id)).await.unwrap();
-        self.started.notify_one();
-        self.release.notified().await;
+        let data = ctx.global_data().parent_parked_data();
+        data.started.notify_one();
+        data.release.notified().await;
         dep_value
     }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn deps_appear_only_after_compute_completes() {
-    let engine = ComputeEngine::new();
-    let started = Invisible(Arc::new(Notify::new()));
-    let release = Invisible(Arc::new(Notify::new()));
-    let key = ParentParkedAfterDep {
-        id: 9,
-        started: started.clone(),
-        release: release.clone(),
-    };
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    let engine = ComputeEngine::builder()
+        .with_data(ParentParkedData {
+            started: started.clone(),
+            release: release.clone(),
+        })
+        .build();
+    let key = ParentParkedAfterDep { id: 9 };
 
     let e = engine.clone();
     let task = tokio::spawn(async move { e.compute(&key).await.unwrap() });
@@ -368,27 +403,21 @@ async fn parallel_sub_ctxes_share_parent_dep_accumulator() {
 #[display("{n}")]
 struct CountedFib {
     n: u32,
-    counter: Counter,
 }
 impl Key for CountedFib {
     type Value = u64;
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-        self.counter.fetch_add(1, Ordering::SeqCst);
+        ctx.global_data()
+            .test_counter()
+            .fetch_add(1, Ordering::SeqCst);
         let n = self.n;
         if n < 2 {
             return n as u64;
         }
-        let counter = self.counter.clone();
         let (a, b) = ctx
             .compute2(
-                |ctx| {
-                    let counter = counter.clone();
-                    futures::FutureExt::boxed(ctx.compute(&CountedFib { n: n - 1, counter }))
-                },
-                |ctx| {
-                    let counter = counter.clone();
-                    futures::FutureExt::boxed(ctx.compute(&CountedFib { n: n - 2, counter }))
-                },
+                |ctx| futures::FutureExt::boxed(ctx.compute(&CountedFib { n: n - 1 })),
+                |ctx| futures::FutureExt::boxed(ctx.compute(&CountedFib { n: n - 2 })),
             )
             .await;
         a.unwrap() + b.unwrap()
@@ -397,20 +426,28 @@ impl Key for CountedFib {
 
 #[tokio::test(flavor = "current_thread")]
 async fn fib_dedup_each_key_computed_exactly_once() {
-    let engine = ComputeEngine::new();
-    let counter = counter();
-    assert_eq!(
-        engine
-            .compute(&CountedFib {
-                n: 8,
-                counter: counter.clone(),
-            })
-            .await
-            .unwrap(),
-        21,
-    );
+    let counter = test_counter();
+    let engine = ComputeEngine::builder().with_data(counter.clone()).build();
+    assert_eq!(engine.compute(&CountedFib { n: 8 }).await.unwrap(), 21,);
     // Fib(0)..Fib(8) is 9 distinct keys, each computed exactly once.
-    assert_eq!(counter.load(Ordering::SeqCst), 9);
+    assert_eq!(counter.0.load(Ordering::SeqCst), 9);
+}
+
+/// Test data for [`LateWriter`].
+struct LateWriterData {
+    past_last_await: Arc<Notify>,
+    let_finish: Arc<Notify>,
+    visit_count: Arc<AtomicUsize>,
+}
+
+trait HasLateWriterData {
+    fn late_writer_data(&self) -> &LateWriterData;
+}
+
+impl HasLateWriterData for DataStore {
+    fn late_writer_data(&self) -> &LateWriterData {
+        self.get::<LateWriterData>()
+    }
 }
 
 /// A `Key` that signals when its compute body is past its last
@@ -421,18 +458,16 @@ async fn fib_dedup_each_key_computed_exactly_once() {
 #[display("{id}")]
 struct LateWriter {
     id: u32,
-    past_last_await: Invisible<Arc<Notify>>,
-    let_finish: Invisible<Arc<Notify>>,
-    visit_count: Invisible<Arc<AtomicUsize>>,
 }
 impl Key for LateWriter {
     type Value = u32;
-    async fn compute(&self, _ctx: &mut ComputeCtx) -> Self::Value {
-        self.visit_count.fetch_add(1, Ordering::SeqCst);
+    async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        let data = ctx.global_data().late_writer_data();
+        data.visit_count.fetch_add(1, Ordering::SeqCst);
         // Last `.await` of the compute body. Any state taken after
         // this point runs synchronously inside the spawned task.
-        self.past_last_await.notify_one();
-        self.let_finish.notified().await;
+        data.past_last_await.notify_one();
+        data.let_finish.notified().await;
         self.id
     }
 }
@@ -445,16 +480,17 @@ impl Key for LateWriter {
 /// re-spawn's value is the one observed by future callers.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stale_late_write_does_not_clobber_respawn() {
-    let engine = ComputeEngine::new();
-    let past_last_await = Invisible(Arc::new(Notify::new()));
-    let let_finish = Invisible(Arc::new(Notify::new()));
-    let visit_count = Invisible(Arc::new(AtomicUsize::new(0)));
-    let key = LateWriter {
-        id: 11,
-        past_last_await: past_last_await.clone(),
-        let_finish: let_finish.clone(),
-        visit_count: visit_count.clone(),
-    };
+    let past_last_await = Arc::new(Notify::new());
+    let let_finish = Arc::new(Notify::new());
+    let visit_count = Arc::new(AtomicUsize::new(0));
+    let engine = ComputeEngine::builder()
+        .with_data(LateWriterData {
+            past_last_await: past_last_await.clone(),
+            let_finish: let_finish.clone(),
+            visit_count: visit_count.clone(),
+        })
+        .build();
+    let key = LateWriter { id: 11 };
 
     // T1: spawn the first compute, wait until it has reached the
     // post-`.await` synchronous tail, then drop the only subscriber.

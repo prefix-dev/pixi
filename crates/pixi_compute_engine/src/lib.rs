@@ -92,6 +92,39 @@
 //! cancels the spawned task. The weak entry in the in-flight map then
 //! fails to upgrade on the next request, which spawns a fresh task.
 //!
+//! # Global data
+//!
+//! Keys often need access to shared resources (connection pools, caches,
+//! semaphores, configuration) that are not themselves computed values.
+//! The [`DataStore`] is a type-keyed container for this kind of data.
+//! Values are set at engine construction time via
+//! [`ComputeEngineBuilder::with_data`] and are immutable for the
+//! engine's lifetime. Keys read them through
+//! [`ComputeCtx::global_data`].
+//!
+//! The rule of thumb: if a value **affects the computed result**, it
+//! belongs in the [`Key`] (so it participates in dedup and caching). If
+//! it is a resource handle, observer, or optimization hint, it belongs
+//! in global data.
+//!
+//! Downstream crates typically define extension traits on [`DataStore`]
+//! for ergonomic access:
+//!
+//! ```ignore
+//! pub trait HasGateway {
+//!     fn gateway(&self) -> &Arc<Gateway>;
+//! }
+//!
+//! impl HasGateway for DataStore {
+//!     fn gateway(&self) -> &Arc<Gateway> {
+//!         self.get::<Arc<Gateway>>()
+//!     }
+//! }
+//!
+//! // Inside a Key's compute body:
+//! let gw = ctx.global_data().gateway();
+//! ```
+//!
 //! # Injected keys
 //!
 //! Not every value in the graph needs to be computed. An
@@ -135,6 +168,7 @@ mod abort_on_drop;
 mod any_key;
 mod builder;
 mod ctx;
+mod data;
 mod engine;
 mod error;
 mod injected;
@@ -146,6 +180,7 @@ mod short_type_name;
 pub use any_key::AnyKey;
 pub use builder::ComputeEngineBuilder;
 pub use ctx::ComputeCtx;
+pub use data::DataStore;
 pub use engine::ComputeEngine;
 pub use error::{ComputeError, CycleStack};
 pub use injected::InjectedKey;

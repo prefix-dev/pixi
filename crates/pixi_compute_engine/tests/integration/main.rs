@@ -6,6 +6,7 @@ mod cancellation;
 mod combinators;
 mod common;
 mod cycle;
+mod data_store;
 mod executor;
 mod injected;
 mod introspection;

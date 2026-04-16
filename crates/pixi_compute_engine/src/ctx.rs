@@ -109,6 +109,21 @@ impl ComputeCtx {
         }
     }
 
+    /// Access the engine-wide shared data store.
+    ///
+    /// Values are set at engine construction time via
+    /// [`ComputeEngineBuilder::with_data`](crate::ComputeEngineBuilder::with_data)
+    /// and are immutable for the engine's lifetime. Downstream crates
+    /// typically define extension traits on [`DataStore`](crate::DataStore)
+    /// for ergonomic access:
+    ///
+    /// ```ignore
+    /// let gw = ctx.global_data().gateway();
+    /// ```
+    pub fn global_data(&self) -> &crate::DataStore {
+        &self.engine.global_data
+    }
+
     /// Build a handle used by the parallel combinators to produce one
     /// future per branch, each owning its own sub-ctx that inherits this
     /// ctx's cycle chain and shares this ctx's dep accumulator.

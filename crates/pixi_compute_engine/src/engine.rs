@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use crate::{
-    ComputeCtx, ComputeEngineBuilder, ComputeError, InjectedKey, Key,
+    ComputeCtx, ComputeEngineBuilder, ComputeError, DataStore, InjectedKey, Key,
     key_graph::{KeyGraph, Lookup},
 };
 
@@ -66,7 +66,6 @@ pub struct ComputeEngine {
 
 /// Engine state shared between every [`ComputeEngine`] clone and every
 /// [`ComputeCtx`] spawned by a compute.
-#[derive(Default)]
 pub(crate) struct EngineInner {
     /// Keyed graph storage. Doubles as the value cache and the
     /// dependency graph.
@@ -75,6 +74,8 @@ pub(crate) struct EngineInner {
     /// `true`, the parallel combinators on [`ComputeCtx`] run their
     /// branches one at a time in mint order instead of concurrently.
     pub(crate) sequential_branches: bool,
+    /// Engine-wide shared data, set at construction time.
+    pub(crate) global_data: DataStore,
 }
 
 impl Default for ComputeEngine {
