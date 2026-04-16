@@ -11,7 +11,7 @@ When you use Pixi, it manages three aspects in your project directory:
 - `pixi.lock` - the lockfile, containing the resolved versions of dependencies (including transitive ones), you should commit this file to version control
 - `.pixi/` - the installed environment on your machine
   
-The following commands interact with these files in sequence:
+The commands you'll use the most:
 
 - [`pixi add`](./reference/cli/pixi/add.md) - adds a dependency to `pixi.toml`
 - [`pixi lock`](./reference/cli/pixi/lock.md) - resolves the dependencies in `pixi.toml` and writes the exact versions to `pixi.lock`
