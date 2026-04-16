@@ -70,7 +70,7 @@ RUSTC_WRAPPER = "sccache"
 [feature.backends-release.dependencies]
 gh = ">=2,<3"
 questionary = ">=2.1,<3"
-rattler-build = ">=0.60.0,<0.61"
+rattler-build = ">=0.61.4,<0.62"
 rich = ">=14,<15"
 "ruamel.yaml" = ">=0.18,<0.19"
 sccache = ">=0.13.0,<0.14"
@@ -219,21 +219,21 @@ test-common-wheels = { cmd = "pytest -s --numprocesses=logical tests/wheel_tests
 ], description = "Run common wheel tests" }
 # CI tests add --showlocals, and -vv for better visibility in CI logs
 test-common-wheels-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose tests/wheel_tests/", description = "Run common wheel tests in CI" }
-test-integration-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --durations=0 --timeout=600 --verbose -m 'not extra_slow' tests/integration_python", description = "Run integration tests in CI" }
-test-integration-extra-slow = { cmd = "pytest --numprocesses=logical --durations=0 --timeout=600 tests/integration_python", depends-on = [
+test-integration-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose -m '{{ markers }}'", args = [{ arg = "markers", default = "not extra_slow" }], description = "Run integration tests in CI" }
+test-integration-extra-slow = { cmd = "pytest --numprocesses=logical", depends-on = [
   "build-workspace-release",
 ], description = "Run all integration tests including extra slow" }
-test-integration-extra-slow-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --durations=0 --timeout=600 tests/integration_python", description = "Run all integration tests in CI" }
-test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=logical --durations=0 --timeout=600 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
+test-integration-extra-slow-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv", description = "Run all integration tests in CI" }
+test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=logical -m 'not slow and not extra_slow'", depends-on = [
   "build-workspace-debug",
 ], description = "Run fast integration tests with debug build" }
-test-integration-slow = { cmd = "pytest --numprocesses=logical --dist loadgroup --durations=0 --timeout=600 -m 'not extra_slow' tests/integration_python", depends-on = [
+test-integration-slow = { cmd = "pytest --numprocesses=logical --dist loadgroup -m 'not extra_slow'", depends-on = [
   "build-workspace-release",
 ], description = "Run integration tests excluding extra slow" }
-test-pixi-build = { cmd = "pytest --numprocesses=logical --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
+test-pixi-build = { cmd = "pytest --numprocesses=logical --timeout=300 tests/integration_python/pixi_build/", depends-on = [
   "build-workspace-release",
 ], description = "Run pixi-build integration tests" }
-test-pixi-build-debug = { cmd = "pytest --pixi-build=debug --numprocesses=logical --durations=0 --timeout=300 tests/integration_python/pixi_build/", depends-on = [
+test-pixi-build-debug = { cmd = "pytest --pixi-build=debug --numprocesses=logical --timeout=300 tests/integration_python/pixi_build/", depends-on = [
   "build-workspace-debug",
 ], description = "Run pixi-build integration tests with debug build" }
 
@@ -270,7 +270,7 @@ pytest-rerunfailures = ">=16.0.1,<17"
 pytest-timeout = ">=2.4.0,<3"
 pytest-xdist = ">=3.8.0,<4"
 pyyaml = ">=6.0.3,<7"
-rattler-build = ">=0.58.0,<0.59"
+rattler-build = ">=0.61.4,<0.62"
 rich = ">=14.1.0,<15"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20250915,<7"
@@ -283,7 +283,7 @@ python-build = ">=1.3.0,<2"
 # Feature for building rattler-build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.58.0,<0.59"
+rattler-build = ">=0.61.4,<0.62"
 
 [feature.recipes.tasks]
 build-backends = { cmd = "rattler-build build --recipe-dir empty --output-dir .", cwd = "tests/build-backends", description = "Build build-backends used for testing purposes" }
@@ -329,6 +329,7 @@ jsonschema = ">=4.26.0,<5"
 jsonschema-rs = ">=0.45,<1"
 pydantic = ">=2.12.5,<3"
 pytest = ">=9.0.2,<10"
+pytest-timeout = ">=2.4.0,<3"
 python-fastjsonschema = ">=2.21.2,<3"
 pyyaml = ">=6.0.3,<7"
 
@@ -385,7 +386,7 @@ pre-commit-install-minimal = { cmd = "lefthook install pre-commit", description 
 # Environment definitions
 #
 [environments]
-backends-release = { features = ["backends-release", "python"] }
+backends-release = { features = ["backends-release", "python"], solve-group = "python" }
 default = { features = [
   "rust",
   "compilers",
@@ -394,21 +395,21 @@ default = { features = [
   "dev",
   "lint",
   "schema",
-] }
+], solve-group = "python" }
 dist = { features = ["dist"] }
 # TODO: get rid of rust in the docs env, figure out what to do with the docs generation code.
-docs = { features = ["rust", "compilers", "python", "docs"] }
-python-test = { features = ["pytest", "python-test-deps", "python"] }
+docs = { features = ["rust", "compilers", "python", "docs"], solve-group = "python" }
+python-test = { features = ["pytest", "python-test-deps", "python"], solve-group = "python" }
 # TODO: Could this be mixed with the backend-release env?
 recipes = { features = ["recipes"] }
 release = { features = ["release"] }
 # TODO: Can rust-build and rust-test be merged?
-rust-build = { features = ["rust", "compilers", "python", "rust-build"] }
-rust-test = { features = ["rust", "compilers", "python", "dev", "rust-test"] }
-schema = { features = ["schema"] }
-test = { features = ["test"] }
+rust-build = { features = ["rust", "compilers", "python", "rust-build"], solve-group = "python" }
+rust-test = { features = ["rust", "compilers", "python", "dev", "rust-test"], solve-group = "python" }
+schema = { features = ["schema"], solve-group = "python" }
+test = { features = ["test"], solve-group = "python" }
 # TODO: figure out why this is not in a rust-build env.
-trampoline = { features = ["trampoline", "python"] }
+trampoline = { features = ["trampoline", "python"], solve-group = "python" }
 # Required as it runs pixi tasks itself, so we don't want it to have a dependencies on itself.
 lefthook = { features = ["lefthook"] }
 
