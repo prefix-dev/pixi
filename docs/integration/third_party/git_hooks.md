@@ -3,8 +3,7 @@
 When working with `pixi`, you might want to use Git hooks to ensure that your code is formatted and linted properly before committing or pushing it.
 Since `pixi` manages your environment, you can use these tools to run your checks within the `pixi` environment, ensuring that everyone on your team is using the same tools and versions without the overhead of downloading duplicate virtual environments.
 
-We recommend using a Git hook manager to manage your hooks. The most popular ones are [Lefthook](https://github.com/evilmartians/lefthook), [pre-commit](https://pre-commit.com/), and [prek]https://github.com/j178/prek .
-
+We recommend using a Git hook manager to manage your hooks. The most popular ones are [Lefthook](https://github.com/evilmartians/lefthook), [pre-commit](https://pre-commit.com/), and [prek](https://github.com/j178/prek).
 ## Lefthook
 
 [Lefthook](https://github.com/evilmartians/lefthook) is a fast and powerful Git hooks manager for any type of project.
