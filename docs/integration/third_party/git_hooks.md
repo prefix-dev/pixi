@@ -3,7 +3,7 @@
 When working with `pixi`, you might want to use Git hooks to ensure that your code is formatted and linted properly before committing or pushing it.
 Since `pixi` manages your environment, you can use these tools to run your checks within the `pixi` environment, ensuring that everyone on your team is using the same tools and versions without the overhead of downloading duplicate virtual environments.
 
-We recommend using a Git hook manager to manage your hooks. The most popular ones are [Lefthook](https://github.com/evilmartians/lefthook), [pre-commit](https://pre-commit.com/), and [prek](https://github.com/pavelzw/prek).
+We recommend using a Git hook manager to manage your hooks. The most popular ones are [Lefthook](https://github.com/evilmartians/lefthook), [pre-commit](https://pre-commit.com/), and [prek]https://github.com/j178/prek .
 
 ## Lefthook
 
@@ -88,29 +88,41 @@ pixi run pre-commit install
 
 By defining the hooks as `local` and `language: system`, `pre-commit` will not try to manage the environments itself, but will instead rely on `pixi run` to execute the commands within the `pixi` environment.
 
+
+!!! tip "Using pre-commit in CI"
+    This approach is **not compatible with [pre-commit.ci](https://pre-commit.ci)**, since `pixi` is not
+    pre-installed in that environment.
+ 
+    Instead, run your hooks directly in GitHub Actions using:
+ 
+    ```shell
+    pixi run pre-commit run --all-files --show-diff-on-failure
+    ```
+
+
+
 ## prek
 
-[prek](https://github.com/pavelzw/prek) is a fast, language-agnostic pre-commit hook manager.
-
-To use `prek`, you can configure it similarly to Lefthook. In your `.prek.toml`:
-
-```toml title=".prek.toml"
-[pre-commit]
-parallel = true
-
-[[pre-commit.jobs]]
-name = "ruff-check"
-include = ["*.py", "*.pyi"]
-command = "pixi run --quiet --no-progress ruff check {staged_files}"
-
-[[pre-commit.jobs]]
-name = "ruff-format"
-include = ["*.py", "*.pyi"]
-command = "pixi run --quiet --no-progress ruff format {staged_files}"
-```
-
-Then, you can run the hooks via `pixi`:
-
+[prek](https://github.com/j178/prek) is a faster, Rust-based, drop-in replacement for `pre-commit`.
+It uses the **exact same** `.pre-commit-config.yaml` configuration format, so no changes to your
+existing hook definitions are needed.
+ 
+To use `prek` with `pixi`, add it to your project:
+ 
 ```shell
-pixi run prek pre-commit
+pixi add prek
 ```
+ 
+Install the git hooks:
+ 
+```shell
+pixi run prek install
+```
+ 
+From this point on, `prek` will run your hooks on every commit using your existing
+`.pre-commit-config.yaml` — no additional configuration is required.
+ 
+!!! tip
+    If you are already using `pre-commit`, switching to `prek` is as simple as replacing
+    `pre-commit` with `prek` in your commands. Your existing `.pre-commit-config.yaml`
+    works without any modifications.
