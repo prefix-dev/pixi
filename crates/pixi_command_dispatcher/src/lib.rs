@@ -46,7 +46,6 @@ mod input_hash;
 mod install_pixi;
 mod instantiate_tool_env;
 mod limits;
-mod package_identifier;
 pub mod reporter;
 mod solve_conda;
 mod solve_pixi;
@@ -54,6 +53,7 @@ mod source_build;
 mod source_build_cache_status;
 mod source_checkout;
 mod source_metadata;
+mod source_record;
 
 pub use backend_source_build::{
     BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
@@ -63,9 +63,11 @@ pub use build::BuildEnvironment;
 pub use build_backend_metadata::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
 };
-pub use cache::build_backend_metadata::{BuildBackendMetadataCache, CachedCondaMetadata};
-pub use cache::common::MetadataCache;
-pub use cache::source_metadata::{CachedSourceMetadata, SourceMetadataCache};
+pub use cache::build_backend_metadata::{
+    BuildBackendMetadataCache, BuildBackendMetadataCacheEntry,
+};
+pub use cache::common::{CacheEntry, CacheRevision, MetadataCache};
+pub use cache::source_record::{SourceRecordCache, SourceRecordCacheEntry};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
@@ -80,7 +82,6 @@ pub use install_pixi::{
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use limits::Limits;
-pub use package_identifier::PackageIdentifier;
 pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveReporter, Reporter,
     ReporterContext,
@@ -95,6 +96,9 @@ pub use source_build_cache_status::{
 };
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
+pub use source_record::{
+    ResolvedSourceRecord, SourceRecordError, SourceRecordReuseKey, SourceRecordSpec,
+};
 
 /// A helper function to check if a value is the default value for its type.
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {

@@ -2,7 +2,10 @@ use std::{collections::HashMap, time::Duration};
 
 use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar};
-use pixi_command_dispatcher::{ReporterContext, reporter::GitCheckoutId};
+use pixi_command_dispatcher::{
+    ReporterContext,
+    reporter::{DedupGroupId, GitCheckoutId},
+};
 use pixi_git::{GIT_SSH_CLONING_WARNING_MSG, resolver::RepositoryReference, url::RepositoryUrl};
 use pixi_progress::style_warning_pb;
 
@@ -74,13 +77,14 @@ impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
         &mut self,
         _context: Option<ReporterContext>,
         env: &RepositoryReference,
+        _dedup_id: DedupGroupId,
     ) -> GitCheckoutId {
         let checkout_id = self.next_checkout_id();
         self.repository_references.insert(checkout_id, env.clone());
         checkout_id
     }
 
-    fn on_start(&mut self, checkout_id: GitCheckoutId) {
+    fn on_started(&mut self, checkout_id: GitCheckoutId) {
         let pb = self.multi_progress.insert_after(
             self.last_progress_bar().unwrap_or(&self.anchor),
             ProgressBar::hidden(),

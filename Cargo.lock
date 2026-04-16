@@ -1695,8 +1695,7 @@ dependencies = [
 [[package]]
 name = "coalesced_map"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf5a7a58a9d5b914bddb0a3a2bd920af2be897114dc8128af022af81fc43b8b"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2730,9 +2729,8 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 
 [[package]]
 name = "file_url"
-version = "0.2.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e448c82bdc9801837426d6662fbcd640db05bfc7b861fbd17779f13c90b552b1"
+version = "0.2.7"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -3680,7 +3678,7 @@ dependencies = [
  "tokio",
  "tower-service",
  "tracing",
- "windows-registry 0.6.1",
+ "windows-registry",
 ]
 
 [[package]]
@@ -5425,9 +5423,8 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 
 [[package]]
 name = "path_resolver"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bde05d7ef24e5a8818baa86a291018e17992292794f8d11ea2f5e9e1c33fb197"
+version = "0.2.7"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "ahash",
  "fs-err",
@@ -5693,7 +5690,6 @@ dependencies = [
  "minijinja",
  "pixi_build_backend",
  "pixi_build_types",
- "rattler_build_core",
  "rattler_build_jinja",
  "rattler_build_recipe",
  "rattler_build_types",
@@ -5859,6 +5855,7 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "pixi_core",
+ "pixi_install_pypi",
  "pixi_manifest",
  "pixi_pypi_spec",
  "pixi_spec",
@@ -5867,7 +5864,6 @@ dependencies = [
  "pypi_modifiers",
  "rattler_conda_types",
  "rattler_lock",
- "rattler_repodata_gateway",
  "regex",
  "same-file",
  "serde",
@@ -5876,8 +5872,10 @@ dependencies = [
  "tracing",
  "url",
  "uv-distribution",
+ "uv-distribution-filename",
  "uv-distribution-types",
  "uv-normalize",
+ "uv-pep508",
  "uv-types",
 ]
 
@@ -6130,6 +6128,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
+ "nanoid",
  "once_cell",
  "ordermap",
  "pin-project-lite",
@@ -6150,7 +6149,6 @@ dependencies = [
  "pixi_url",
  "pixi_utils",
  "pixi_variant",
- "rand 0.10.1",
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
@@ -6618,6 +6616,7 @@ dependencies = [
 name = "pixi_record"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "file_url",
  "insta",
  "itertools 0.14.0",
@@ -7469,9 +7468,8 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.40.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be8849490284fdb923bc8e953e8689352598e3005c616ff18b026decbca17a7e"
+version = "0.40.4"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "anyhow",
  "clap",
@@ -7775,9 +7773,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.6.22"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed80f0478e6604ceec0ffd860e2ad63396b674a02c1e3e67d9a548ef69904c8d"
+version = "0.6.19"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "ahash",
  "anyhow",
@@ -7808,9 +7805,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.45.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6841e5bf2d817bc98a24cf7bb817eaa97feb12e7cd81a02c60d718e5c9e9d8cd"
+version = "0.44.4"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "ahash",
  "chrono",
@@ -7851,9 +7847,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_config"
-version = "0.3.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b609355c38ee6f57efeca6af0d5ba139ab0217be1d4c59a94714d07c71c3d563"
+version = "0.3.7"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "console",
  "fs-err",
@@ -7869,9 +7864,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_digest"
-version = "1.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbab3541bf7e471550c91b70dad8edf392ffa9f57c6b0de4bbe6dd2c6c0d53d4"
+version = "1.2.3"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "blake2",
  "digest",
@@ -7909,9 +7903,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_index"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32485533b278ee8d245db377e36ea5561d36cbed57a2c29116595c67d486f7ea"
+version = "0.27.21"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "ahash",
  "anyhow",
@@ -7947,9 +7940,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.28.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d3da5b890a63628d060f15fa9a8c683d4986eaf4315cc52200e8be86d3690e3"
+version = "0.27.5"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "ahash",
  "chrono",
@@ -7962,6 +7954,7 @@ dependencies = [
  "rattler_digest",
  "rattler_solve",
  "serde",
+ "serde-untagged",
  "serde-value",
  "serde_repr",
  "serde_with",
@@ -7969,13 +7962,13 @@ dependencies = [
  "thiserror 2.0.18",
  "typed-path",
  "url",
+ "xxhash-rust",
 ]
 
 [[package]]
 name = "rattler_macros"
-version = "1.0.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "677367cf07dd4ca5b863a91cf060feea246f3b23d50af9e9fadf980db760d270"
+version = "1.0.12"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "quote",
  "syn",
@@ -7983,9 +7976,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.57"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ae5e9d8eab435d581ff45b43f5609ad44455dffa7c9fa1cd358a6839f905bfe"
+version = "0.2.54"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "chrono",
  "configparser",
@@ -8009,14 +8001,13 @@ dependencies = [
  "unicode-normalization",
  "which",
  "windows 0.61.3",
- "windows-registry 0.5.3",
+ "windows-registry",
 ]
 
 [[package]]
 name = "rattler_networking"
-version = "0.26.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f48f95c50fc0e54a32911ddb538c07956c808f6a02402423d6b025372a6f190"
+version = "0.26.7"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -8048,9 +8039,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.24.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7379f6f3ab840098c684af0e820326d53b559f80b2b21272bed7db1849697dfa"
+version = "0.24.7"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "astral-tokio-tar 0.6.0",
  "astral_async_zip",
@@ -8101,9 +8091,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_pty"
-version = "0.2.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da10b7f974ce38eaf00e0e1d29c13151fa10fa003ec03606bc1bf76e4d537dfd"
+version = "0.2.9"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "libc",
  "nix 0.30.1",
@@ -8113,9 +8102,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_redaction"
-version = "0.1.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "222837efcfa358dbb6107a741bb73bfdae75dae19d5e7eb9c869d84a9edd0a9c"
+version = "0.1.13"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "reqwest 0.12.28",
  "reqwest-middleware",
@@ -8124,9 +8112,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.27.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15aafed6b0acf2a702d1168ad649cd3ba044c289a3d2a8b2939b706ad433a33e"
+version = "0.27.4"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "ahash",
  "anyhow",
@@ -8187,9 +8174,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_s3"
-version = "0.1.33"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7c05ac5fdb915e9a60b24269dd76ad4b15cdd36324d44077d4d08e6371cf09f"
+version = "0.1.30"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "aws-config",
  "aws-credential-types",
@@ -8204,9 +8190,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.26.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdc3b5296af6848db48386a5535f4155f2aaf3d095b7b49b583c8322510f5fb5"
+version = "0.26.7"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -8226,9 +8211,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "031b79b0fc5cd671a957907d06569d7cbb96621bc7e761a8909d69ba2416d4a7"
+version = "5.2.0"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "chrono",
  "futures",
@@ -8245,9 +8229,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_upload"
-version = "0.5.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c2388721a5531dd72e5fd31c26a69546f41882ff25527da3a5c7062c4970912"
+version = "0.5.5"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -8282,9 +8265,8 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.3.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66454d119bf47cc447de80a64e34a87cb4cd2095dc37fd68102a2db2f10beb17"
+version = "2.3.16"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "archspec",
  "libloading",
@@ -9951,8 +9933,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55c0b0b683828aa9d4f5c0e59b0c856a12c30a65b5f1ca4292664734d76fa9c2"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
 dependencies = [
  "tokio",
 ]
@@ -11932,7 +11913,7 @@ dependencies = [
  "uv-warnings",
  "which",
  "windows 0.59.0",
- "windows-registry 0.5.3",
+ "windows-registry",
 ]
 
 [[package]]
@@ -12142,7 +12123,7 @@ dependencies = [
  "uv-fs",
  "uv-static",
  "windows 0.59.0",
- "windows-registry 0.5.3",
+ "windows-registry",
 ]
 
 [[package]]
@@ -12834,17 +12815,6 @@ dependencies = [
  "windows-link 0.1.3",
  "windows-result 0.3.4",
  "windows-strings 0.4.2",
-]
-
-[[package]]
-name = "windows-registry"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02752bf7fbdcce7f2a27a742f798510f3e5ad88dbe84871e5168e2120c3d5720"
-dependencies = [
- "windows-link 0.2.1",
- "windows-result 0.4.1",
- "windows-strings 0.5.1",
 ]
 
 [[package]]

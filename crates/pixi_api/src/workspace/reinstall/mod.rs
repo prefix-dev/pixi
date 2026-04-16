@@ -47,6 +47,7 @@ pub async fn reinstall<I: Interface>(
                 lock_file_usage,
                 no_install: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
             },
             options.reinstall_packages.clone(),
             &InstallFilter::default(),

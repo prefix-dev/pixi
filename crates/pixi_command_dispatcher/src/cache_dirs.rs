@@ -1,6 +1,6 @@
 use crate::build::BuildCache;
 use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
-use crate::cache::source_metadata::SourceMetadataCache;
+use crate::cache::source_record::SourceRecordCache;
 use pixi_consts::consts;
 use pixi_path::{AbsPresumedDirPath, AbsPresumedDirPathBuf};
 
@@ -158,7 +158,7 @@ impl CacheDirs {
                 .join(format!(
                     "{}-{}",
                     consts::CACHED_SOURCE_METADATA,
-                    SourceMetadataCache::CACHE_SUFFIX
+                    SourceRecordCache::CACHE_SUFFIX
                 ))
                 .into_assume_dir()
         })

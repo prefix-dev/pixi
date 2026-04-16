@@ -35,14 +35,13 @@ use url::UrlCheckoutTask;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, DevSourceMetadata,
     DevSourceMetadataError, DevSourceMetadataSpec, Executor, InvalidPathError, PixiEnvironmentSpec,
-    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheEntry,
-    SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout, SourceCheckoutError,
-    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    ResolvedSourceRecord, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
+    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
+    SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    SourceRecordError, SourceRecordSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     build::BuildCache,
-    cache::{
-        build_backend_metadata::BuildBackendMetadataCache, source_metadata::SourceMetadataCache,
-    },
+    cache::{build_backend_metadata::BuildBackendMetadataCache, source_record::SourceRecordCache},
     cache_dirs::CacheDirs,
     discover_backend_cache::DiscoveryCache,
     install_pixi::{
@@ -114,7 +113,7 @@ pub(crate) struct CommandDispatcherData {
     pub build_backend_metadata_cache: BuildBackendMetadataCache,
 
     /// Source metadata cache used to store metadata for source packages.
-    pub source_metadata_cache: SourceMetadataCache,
+    pub source_record_cache: SourceRecordCache,
 
     /// Build cache used to store build artifacts for source packages.
     pub build_cache: BuildCache,
@@ -193,11 +192,14 @@ pub(crate) enum CommandDispatcherContext {
     BuildBackendMetadata(BuildBackendMetadataId),
     BackendSourceBuild(BackendSourceBuildId),
     SourceMetadata(SourceMetadataId),
+    SourceRecord(SourceRecordId),
     SourceBuild(SourceBuildId),
     QuerySourceBuildCache(SourceBuildCacheStatusId),
     DevSourceMetadata(DevSourceMetadataId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
+    GitCheckout(GitCheckoutId),
+    UrlCheckout(UrlCheckoutId),
 }
 
 slotmap::new_key_type! {
@@ -213,8 +215,6 @@ slotmap::new_key_type! {
     /// An id that uniquely identifies an installation of an environment.
     pub(crate) struct InstallPixiEnvironmentId;
 
-    /// A unique id that identifies a git source checkout.
-    pub(crate) struct GitCheckoutId;
 }
 
 /// An id that uniquely identifies a build backend metadata request.
@@ -224,6 +224,10 @@ pub(crate) struct BuildBackendMetadataId(pub usize);
 /// An id that uniquely identifies a source metadata request.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct SourceMetadataId(pub usize);
+
+/// An id that uniquely identifies a source record request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct SourceRecordId(pub usize);
 
 /// An id that uniquely identifies a source build request.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -241,6 +245,14 @@ pub(crate) struct DevSourceMetadataId(pub usize);
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct InstantiatedToolEnvId(pub usize);
 
+/// An id that uniquely identifies a git checkout request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct GitCheckoutId(pub usize);
+
+/// An id that uniquely identifies a URL checkout request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct UrlCheckoutId(pub usize);
+
 /// A message send to the dispatch task.
 #[allow(clippy::large_enum_variant)]
 #[derive(derive_more::From)]
@@ -250,6 +262,7 @@ pub(crate) enum ForegroundMessage {
     BuildBackendMetadata(BuildBackendMetadataTask),
     BackendSourceBuild(BackendSourceBuildTask),
     SourceMetadata(SourceMetadataTask),
+    SourceRecord(SourceRecordTask),
     SourceBuild(SourceBuildTask),
     QuerySourceBuildCache(SourceBuildCacheStatusTask),
     DevSourceMetadata(DevSourceMetadataTask),
@@ -299,6 +312,12 @@ pub(crate) type SourceMetadataTask = Task<SourceMetadataSpec>;
 impl TaskSpec for SourceMetadataSpec {
     type Output = Arc<SourceMetadata>;
     type Error = SourceMetadataError;
+}
+
+pub(crate) type SourceRecordTask = Task<SourceRecordSpec>;
+impl TaskSpec for SourceRecordSpec {
+    type Output = Arc<ResolvedSourceRecord>;
+    type Error = SourceRecordError;
 }
 
 pub(crate) type SourceBuildTask = Task<SourceBuildSpec>;
@@ -363,8 +382,8 @@ impl CommandDispatcher {
     }
 
     /// Returns the cache for source metadata.
-    pub fn source_metadata_cache(&self) -> &SourceMetadataCache {
-        &self.data.source_metadata_cache
+    pub fn source_record_cache(&self) -> &SourceRecordCache {
+        &self.data.source_record_cache
     }
 
     /// Returns the build cache for source packages.
@@ -494,11 +513,23 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
-    /// Returns the metadata of a particular source package.
+    /// Returns the metadata of a particular source package (all variants).
+    ///
+    /// Fans out to [`Self::source_record`] for each variant output returned
+    /// by the build backend.
     pub async fn source_metadata(
         &self,
         spec: SourceMetadataSpec,
     ) -> Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
+        self.execute_task(spec).await
+    }
+
+    /// Returns the resolved source record for a specific package name + variant
+    /// combination.
+    pub async fn source_record(
+        &self,
+        spec: SourceRecordSpec,
+    ) -> Result<Arc<ResolvedSourceRecord>, CommandDispatcherError<SourceRecordError>> {
         self.execute_task(spec).await
     }
 

@@ -1,7 +1,13 @@
 mod reporter;
 mod source_metadata_collector;
 
-use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, sync::Arc, time::Instant};
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+    sync::Arc,
+    time::Instant,
+};
 
 use indexmap::IndexMap;
 use miette::Diagnostic;
@@ -20,7 +26,7 @@ use tracing::instrument;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    Cycle, SolveCondaEnvironmentSpec, SourceMetadataError,
+    Cycle, SolveCondaEnvironmentSpec, SourceMetadataError, SourceRecordReuseKey,
     solve_conda::SolveCondaEnvironmentError,
     solve_pixi::source_metadata_collector::{
         CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
@@ -98,6 +104,11 @@ pub struct PixiEnvironmentSpec {
     #[serde(skip)]
     pub preferred_build_source:
         BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
+
+    /// Validated timestamp hints for specific source outputs. These are used
+    /// to reuse source-record cache entries across lock-file recomputes.
+    #[serde(skip)]
+    pub source_timestamp_hints: HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>,
 }
 
 impl Default for PixiEnvironmentSpec {
@@ -118,6 +129,7 @@ impl Default for PixiEnvironmentSpec {
             variant_files: None,
             enabled_protocols: EnabledProtocols::default(),
             preferred_build_source: BTreeMap::new(),
+            source_timestamp_hints: HashMap::new(),
         }
     }
 }
@@ -139,8 +151,6 @@ impl PixiEnvironmentSpec {
         // Process dev sources to get their metadata (before dependencies are moved)
         let dev_source_records = self.process_dev_sources(&command_queue).await?;
 
-        let exclude_newer = self.exclude_newer.clone();
-
         // Split the requirements into source and binary requirements.
         let (dev_source_source_specs, dev_source_binary_specs) =
             DevSourceRecord::split_into_source_and_binary_requirements(
@@ -153,6 +163,13 @@ impl PixiEnvironmentSpec {
 
         Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)
             .map_err(|err| CommandDispatcherError::Failed(*err))?;
+
+        // Determine a common cut-off date for excluding packages. This is established to ensure
+        // that all downstream environments all use the same cut-off date.
+        let exclude_newer = self
+            .exclude_newer
+            .clone()
+            .unwrap_or_else(|| ResolvedExcludeNewer::from_datetime(chrono::Utc::now()));
 
         // Recursively collect the metadata of all the source specs.
         let CollectedSourceMetadata {
@@ -168,6 +185,7 @@ impl PixiEnvironmentSpec {
             self.variant_files.clone(),
             self.enabled_protocols.clone(),
             self.preferred_build_source.clone(),
+            self.source_timestamp_hints.clone(),
         )
         .collect(
             source_specs
@@ -240,7 +258,7 @@ impl PixiEnvironmentSpec {
                 virtual_packages: self.build_environment.host_virtual_packages,
                 strategy: self.strategy,
                 channel_priority: self.channel_priority,
-                exclude_newer,
+                exclude_newer: Some(exclude_newer),
                 channel_config: self.channel_config,
             })
             .await
@@ -311,11 +329,25 @@ impl PixiEnvironmentSpec {
             });
         }
 
-        // Collect all dev source records
+        // Collect all dev source records, letting all futures complete
+        // before returning any error.
         let mut all_records = Vec::new();
+        let mut first_error: Option<CommandDispatcherError<SolvePixiEnvironmentError>> = None;
         while let Some(result) = dev_source_futures.next().await {
-            let metadata = result?;
-            all_records.extend(metadata.records);
+            match result {
+                Ok(metadata) => all_records.extend(metadata.records),
+                Err(CommandDispatcherError::Cancelled) => {
+                    return Err(CommandDispatcherError::Cancelled);
+                }
+                Err(err) if first_error.is_none() => {
+                    first_error = Some(err);
+                }
+                Err(_) => {}
+            }
+        }
+
+        if let Some(err) = first_error {
+            return Err(err);
         }
 
         Ok(all_records)
@@ -445,7 +477,7 @@ impl From<CollectSourceMetadataError> for SolvePixiEnvironmentError {
     fn from(err: CollectSourceMetadataError) -> Self {
         match err {
             CollectSourceMetadataError::SourceMetadataError {
-                error: SourceMetadataError::Cycle(cycle),
+                error: SourceMetadataError::SourceRecord(crate::SourceRecordError::Cycle(cycle)),
                 ..
             } => SolvePixiEnvironmentError::Cycle(cycle),
             _ => SolvePixiEnvironmentError::CollectSourceMetadataError(err),

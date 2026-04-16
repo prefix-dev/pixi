@@ -1,4 +1,11 @@
-use std::{fs::File, io::Write, path::Path, str::FromStr};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::SystemTime,
+};
 
 use pep508_rs::Requirement;
 use rattler_conda_types::Platform;
@@ -9,60 +16,6 @@ use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 use crate::common::{LockFileExt, PixiControl};
 use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
-
-/// Helper to check if a pypi package is installed as editable by looking for a .pth file.
-/// Editable installations create a .pth file in site-packages that points to the source directory.
-/// For most backends, make sure to use the old style editables when using this function
-fn has_editable_pth_file(prefix: &Path, package_name: &str) -> bool {
-    let site_packages = if cfg!(target_os = "windows") {
-        prefix.join("Lib").join("site-packages")
-    } else {
-        // Find the python version directory
-        let lib_dir = prefix.join("lib");
-        if let Ok(entries) = fs_err::read_dir(&lib_dir) {
-            let entry = entries
-                .filter_map(|e| e.ok())
-                // Find the directory that starts with "python"
-                .find(|e| e.file_name().to_string_lossy().starts_with("python"))
-                .map(|e| e.path().join("site-packages"));
-            if let Some(entry) = entry {
-                entry
-            } else {
-                panic!("expected site-packages folder");
-            }
-        } else {
-            panic!("expected lib folder");
-        }
-    };
-
-    // Look for editable .pth files - different build backends use different naming:
-    // - hatchling: _{package_name}.pth (e.g., _editable_test.pth)
-    // - setuptools: __editable__.{package_name}-{version}.pth
-    let mut count = 0u32;
-    let normalized_name = package_name.replace('-', "_");
-    if let Ok(entries) = fs_err::read_dir(&site_packages) {
-        for entry in entries.flatten() {
-            count += 1;
-            let name = entry.file_name();
-            let name_str = name.to_string_lossy();
-            if name_str.ends_with(".pth") {
-                // Check for hatchling style: _{package_name}.pth
-                if name_str == format!("_{}.pth", normalized_name) {
-                    return true;
-                }
-                // Check for setuptools style: __editable__.{package_name}-*.pth
-                if name_str.starts_with(&format!("__editable__.{}", normalized_name)) {
-                    return true;
-                }
-            }
-        }
-    }
-    if count == 0 {
-        panic!("expected folders in directory");
-    }
-
-    false
-}
 
 /// This tests if we can resolve pyproject optional dependencies recursively
 /// before when running `pixi list -e all`, this would have not included numpy
@@ -148,6 +101,416 @@ test = {{features = ["test"]}}
         lock.contains_pep508_requirement("test", platform, sphinx_req),
         "test environment should include sphinx inherited from recursive dependency group"
     );
+}
+
+fn write_subproject(pixi: &PixiControl, name: &str, version: &str) -> std::io::Result<()> {
+    fs_err::create_dir(pixi.workspace_path().join(name))?;
+    let mut file = File::create(pixi.workspace_path().join(format!("{name}/pyproject.toml")))?; // Creates or overwrites the file
+    file.write_all(
+        format!(
+            r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{name}"
+version = "{version}"
+        "#
+        )
+        .as_bytes(),
+    )
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
+async fn pyproject_relative_path_dependencies() {
+    setup_tracing();
+
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("mine", "1.0.0"))
+        .with(PyPIPackage::new("also_mine", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let platform = Platform::current();
+    let platform_str = platform.to_string();
+
+    let index_url = simple.index_url();
+
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "relative-path-dependencies"
+version = "0.9.9"
+dependencies = [
+    "mine @ ./mine"    
+]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["{platform_str}"]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.11.0"
+
+[tool.pixi.pypi-dependencies]
+also_mine = {{ path = "./also_mine" }}
+
+[tool.pixi.pypi-options]
+index-url = "{index_url}"
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    write_subproject(&pixi, "mine", "0.1.0").unwrap();
+    write_subproject(&pixi, "also_mine", "2.1.0").unwrap();
+
+    println!("Calling update_lock_file now\n");
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock.get_pypi_package("default", platform, "mine").unwrap() {
+        rattler_lock::LockedPackageRef::Conda(_) => {
+            panic!("Got a Conda package when I expected a pypi one")
+        }
+        rattler_lock::LockedPackageRef::Pypi(pkg) => {
+            assert_eq!(pkg.name().as_dist_info_name(), "mine");
+            assert_eq!(pkg.location().given(), Some("./mine"));
+            assert!(
+                pkg.as_source().is_some(),
+                "path-based package should be a source package, not a wheel",
+            );
+        }
+    }
+    match lock
+        .get_pypi_package("default", platform, "also-mine")
+        .unwrap()
+    {
+        rattler_lock::LockedPackageRef::Conda(_) => {
+            panic!("Got a Conda package when I expected a pypi one")
+        }
+        rattler_lock::LockedPackageRef::Pypi(pkg) => {
+            assert_eq!(pkg.name().as_dist_info_name(), "also_mine");
+            assert_eq!(pkg.location().given(), Some("./also_mine"));
+            assert!(
+                pkg.as_source().is_some(),
+                "path-based package should be a source package, not a wheel",
+            );
+        }
+    }
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
+async fn pyproject_dynamic_version_source_dependency() {
+    setup_tracing();
+
+    let platform = Platform::current();
+    let platform_str = platform.to_string();
+
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "main-package"
+version = "1.0.0"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["{platform_str}"]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.11.0"
+
+[tool.pixi.pypi-dependencies]
+dynamic-dep = {{ path = "./dynamic-dep" }}
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    // Create a source dependency with a dynamic version
+    fs_err::create_dir(pixi.workspace_path().join("dynamic-dep")).unwrap();
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+dynamic = ["version"]
+"#,
+    )
+    .unwrap();
+
+    // Create a minimal setup.py that provides the dynamic version
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/setup.py"),
+        r#"from setuptools import setup
+setup(version="42.23.12")
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    // The lock file should contain the dynamic-dep package
+    let pkg = lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the lock file");
+
+    match pkg {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            eprintln!("dynamic-dep version in lock file: {:?}", data.version());
+            // A source dependency with dynamic version should have no version in the lock file
+            assert!(
+                data.version().is_none(),
+                "expected no version for dynamic source dependency, got {:?}",
+                data.version()
+            );
+            assert!(
+                data.as_source().is_some(),
+                "path-based package should be a source package, not a wheel",
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Make the version static: remove `dynamic = ["version"]` and set an
+    // explicit version. The lock file should still store version as None
+    // because the package is a local source dependency.
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+version = "42.23.12"
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the lock file after making version static")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version().is_none(),
+                "version should remain None for local source dependency even after making version static, got {:?}",
+                data.version()
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Switch back to a dynamic version and re-resolve.
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+dynamic = ["version"]
+"#,
+    )
+    .unwrap();
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/setup.py"),
+        r#"from setuptools import setup
+setup(version="99.0.0")
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the lock file after switching back to dynamic version")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version().is_none(),
+                "version should be None after switching back to dynamic version, got {:?}",
+                data.version()
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Round-trip: serialize and parse the lock file, then verify the version is still None
+    let lock_str = lock.render_to_string().unwrap();
+    let lock2 = rattler_lock::LockFile::from_str_with_base_directory(&lock_str, None).unwrap();
+    match lock2
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should survive round-trip")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version().is_none(),
+                "version should be None after round-trip, got {:?}",
+                data.version()
+            );
+            assert!(
+                data.as_source().is_some(),
+                "package should be a source package after round-trip",
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Write the round-tripped lock file back, then add a second pypi
+    // dependency by rewriting the manifest. This forces a full re-resolve
+    // while the lock file with None version is on disk.
+    let workspace = pixi.workspace().unwrap();
+    lock2.to_path(&workspace.lock_file_path()).unwrap();
+
+    // Create a second source dependency
+    fs_err::create_dir(pixi.workspace_path().join("another-dep")).unwrap();
+    fs_err::write(
+        pixi.workspace_path().join("another-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "another-dep"
+version = "1.0.0"
+"#,
+    )
+    .unwrap();
+    fs_err::write(
+        pixi.workspace_path().join("another-dep/setup.py"),
+        "from setuptools import setup\nsetup()\n",
+    )
+    .unwrap();
+
+    // Rewrite the manifest to include another-dep (instead of using add_pypi
+    // which requires the conda prefix to be installed for source builds).
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "main-package"
+version = "1.0.0"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["{platform_str}"]
+conda-pypi-map = {{}}
+
+[tool.pixi.dependencies]
+python = "==3.11.0"
+
+[tool.pixi.pypi-dependencies]
+dynamic-dep = {{ path = "./dynamic-dep" }}
+another-dep = {{ path = "./another-dep" }}
+"#,
+    );
+    fs_err::write(pixi.workspace_path().join("pyproject.toml"), &pyproject).unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should survive re-resolve")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version().is_none(),
+                "version should be None after re-resolve, got {:?}",
+                data.version()
+            );
+            assert!(
+                data.as_source().is_some(),
+                "package should be a source package after re-resolve",
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+
+    // Trigger another re-resolve so that update_lock_file writes a new lock
+    // file that includes another-dep. Then verify the lock file can be loaded
+    // again — this catches URL mismatches between the environment reference
+    // (e.g. "./another-dep") and the packages section (e.g.
+    // "file:///tmp/.../another-dep").
+    fs_err::write(
+        pixi.workspace_path().join("dynamic-dep/pyproject.toml"),
+        r#"[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+version = "50.0.0"
+"#,
+    )
+    .unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    // The lock file written by the re-resolve must be loadable.
+    let lock_reloaded = pixi
+        .lock_file()
+        .await
+        .expect("lock file written by update_lock_file should be loadable");
+
+    // Both packages should be present after the round-trip through disk.
+    assert!(
+        lock_reloaded.contains_pypi_package("default", platform, "dynamic-dep"),
+        "dynamic-dep should be present after reload"
+    );
+    assert!(
+        lock_reloaded.contains_pypi_package("default", platform, "another-dep"),
+        "another-dep should be present after reload"
+    );
+
+    // Verify the in-memory lock also has both packages with correct properties.
+    match lock
+        .get_pypi_package("default", platform, "dynamic-dep")
+        .expect("dynamic-dep should be in the re-resolved lock")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version().is_none(),
+                "dynamic-dep version should be None, got {:?}",
+                data.version()
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+    match lock
+        .get_pypi_package("default", platform, "another-dep")
+        .expect("another-dep should be in the re-resolved lock")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version().is_none(),
+                "another-dep version should be None for local source dep, got {:?}",
+                data.version()
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
 }
 
 #[tokio::test]
@@ -1594,6 +1957,214 @@ async fn test_prerelease_mode_disallow() {
     );
 }
 
+/// Test that PyPI sdist with static metadata (all in pyproject.toml) can be resolved.
+/// This tests the satisfiability check extracts metadata without running setup.py.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_pypi_sdist_static_metadata_extraction() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create a pyproject.toml with all static metadata (hatchling build backend)
+    let pyproject = format!(
+        r#"
+[project]
+name = "test-static-pkg"
+version = "1.2.3"
+description = "Test package with static metadata"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["src"]
+targets.wheel.strict-naming = false
+targets.wheel.packages = ["src/test_static_pkg"]
+targets.sdist.strict-naming = false
+targets.sdist.packages = ["src/test_static_pkg"]
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{platform}"]
+
+[tool.pixi.dependencies]
+python = "~=3.12.0"
+
+[tool.pixi.pypi-dependencies]
+test-static-pkg = {{ path = ".", editable = true }}
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    // Create the package source files
+    let src_dir = pixi.workspace_path().join("src").join("test_static_pkg");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "__version__ = '1.2.3'\n").unwrap();
+
+    // Resolve the lock file
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Local path dependencies always store version as None in the lock file,
+    // even when the version is statically defined in pyproject.toml.
+    match lock_file
+        .get_pypi_package("default", platform, "test-static-pkg")
+        .expect("test-static-pkg should be in lock file")
+    {
+        rattler_lock::LockedPackageRef::Pypi(data) => {
+            assert!(
+                data.version().is_none(),
+                "local path dep should have version=None in lock file, got {:?}",
+                data.version()
+            );
+        }
+        _ => panic!("expected a pypi package"),
+    }
+}
+
+/// Find all sdist cache directories under uv-cache/sdists-v*/path/
+fn find_sdist_cache_dirs(cache_dir: &Path) -> Vec<PathBuf> {
+    let mut result = Vec::new();
+    let uv_cache = cache_dir.join("uv-cache");
+    if !uv_cache.exists() {
+        return result;
+    }
+
+    // Look for sdists-v* directories (e.g., sdists-v9)
+    if let Ok(entries) = fs_err::read_dir(&uv_cache) {
+        for entry in entries.filter_map(|e| e.ok()) {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if name.starts_with("sdists-v") {
+                    let path_dir = path.join("path");
+                    if path_dir.exists()
+                        && let Ok(hash_dirs) = fs_err::read_dir(&path_dir)
+                    {
+                        for hash_entry in hash_dirs.filter_map(|e| e.ok()) {
+                            let hash_path = hash_entry.path();
+                            if hash_path.is_dir() {
+                                result.push(hash_path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    result
+}
+
+/// Test that PyPI sdist builds are cached and reused on subsequent installs.
+/// Uses file modification time verification to check no rebuild occurred.
+#[tokio::test]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
+async fn test_pypi_sdist_cache_reuse() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    let pyproject = format!(
+        r#"
+[project]
+name = "test-cache-pkg"
+version = "1.0.0"
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["src"]
+targets.wheel.strict-naming = false
+targets.wheel.packages = ["src/test_cache_pkg"]
+targets.sdist.strict-naming = false
+targets.sdist.packages = ["src/test_cache_pkg"]
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{platform}"]
+
+[tool.pixi.dependencies]
+python = "~=3.12.0"
+
+[tool.pixi.pypi-dependencies]
+test-cache-pkg = {{ path = "." }}
+"#,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    // Create the package source files
+    let src_dir = pixi.workspace_path().join("src").join("test_cache_pkg");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "__version__ = '1.0.0'\n").unwrap();
+
+    // First install - builds and caches the wheel
+    let tmp_dir = tempdir().unwrap();
+    let cache_dir = tmp_dir.path().to_path_buf();
+
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(tmp_dir.path().to_str().unwrap()))],
+        async {
+            pixi.install().await.unwrap();
+        },
+    )
+    .await;
+
+    // Find the sdist cache directory for our package
+    let sdist_dirs = find_sdist_cache_dirs(&cache_dir);
+    assert!(
+        !sdist_dirs.is_empty(),
+        "Expected sdist cache directory to exist after first install"
+    );
+
+    // Record mtimes of all sdist cache directories
+    let mtimes_first: HashMap<PathBuf, SystemTime> = sdist_dirs
+        .iter()
+        .filter_map(|p| {
+            fs_err::metadata(p)
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .map(|t| (p.clone(), t))
+        })
+        .collect();
+
+    // Second install - should reuse cache without rebuilding
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(tmp_dir.path().to_str().unwrap()))],
+        async {
+            pixi.install().await.unwrap();
+        },
+    )
+    .await;
+
+    // Verify sdist cache directories were not modified (no rebuild occurred)
+    for (path, mtime_first) in &mtimes_first {
+        let mtime_second = fs_err::metadata(path)
+            .and_then(|m| m.modified())
+            .unwrap_or_else(|_| panic!("Cache directory disappeared: {}", path.display()));
+        assert_eq!(
+            *mtime_first,
+            mtime_second,
+            "Sdist cache was modified (rebuilt): {}",
+            path.display()
+        );
+    }
+}
+
 /// Test for issue #5205: Specifying a python sub-version (patch) should work correctly
 /// Before the fix, using python 3.10.6 would create a specifier "==3.10.*" which conflicts
 /// with requires-python = "==3.10.6". The fix uses the full version string.
@@ -1674,102 +2245,212 @@ test-project = {{ path = "." }}
     }
 }
 
-/// Test that when a lock file has editable: true but the manifest doesn't specify editable,
-/// the package is installed as non-editable (manifest takes precedence).
-///
-/// This tests the fix for the bug where old lock files with editable: true would cause
-/// packages to be installed as editable even when the manifest didn't specify it.
+/// Test that packages from different indexes get distinct `index_url` values
+/// recorded in the lock file.
 #[tokio::test]
-#[cfg_attr(
-    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
-    ignore
-)]
-async fn test_editable_from_manifest_not_lockfile() {
-    use rattler_lock::LockFile;
-
+async fn test_index_url_in_lock_file() {
     setup_tracing();
 
     let platform = Platform::current();
 
-    // Create a project with a path dependency WITHOUT editable specified
-    // Use conda-forge directly since we need a real Python
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Default index with "rsa"
+    let default_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("rsa", "4.9.1"))
+        .into_simple_index()
+        .unwrap();
+
+    // Custom index with "torch"
+    let custom_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("torch", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [workspace]
-        name = "editable-test"
+        name = "index-url-test"
         platforms = ["{platform}"]
-        channels = ["https://prefix.dev/conda-forge"]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
 
         [dependencies]
-        python = "~=3.12.0"
+        python = "==3.12.0"
 
         [pypi-dependencies]
-        editable-test = {{ path = "." }}
+        rsa = "*"
+        torch = {{ version = "*", index = "{custom_index_url}" }}
+
+        [pypi-options]
+        index-url = "{default_index_url}"
         "#,
         platform = platform,
+        channel_url = channel.url(),
+        default_index_url = default_index.index_url(),
+        custom_index_url = custom_index.index_url(),
     ))
     .unwrap();
 
-    // Create a minimal pyproject.toml for the package
-    let pyproject = r#"
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+    let lock_file = pixi.update_lock_file().await.unwrap();
 
-[project]
-name = "editable-test"
-version = "0.1.0"
-"#;
-    fs_err::write(pixi.workspace_path().join("pyproject.toml"), pyproject).unwrap();
+    let p = lock_file
+        .platform(&platform.to_string())
+        .expect("platform should exist");
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should exist");
 
-    // Create the package source
-    let src_dir = pixi.workspace_path().join("editable_test");
-    fs_err::create_dir_all(&src_dir).unwrap();
-    fs_err::write(src_dir.join("__init__.py"), "").unwrap();
-
-    // First, update the lock file (this won't have editable field since we don't record it)
-    let lock = pixi.update_lock_file().await.unwrap();
-
-    // Manually modify the lock file to add editable: true, simulating an old lock file
-    let lock_file_str = lock.render_to_string().unwrap();
-
-    // Add editable: true after the package name line
-    let modified_lock_file_str = lock_file_str.replace(
-        "name: editable-test\n",
-        "name: editable-test\n  editable: true\n",
+    // torch should have index_url set to the custom index
+    let torch = env
+        .pypi_packages(p)
+        .expect("should have pypi packages")
+        .find(|data| data.name().as_ref() == "torch")
+        .expect("torch should be in pypi packages");
+    let torch_wheel = torch.as_wheel().expect("torch should be a wheel package");
+    assert_eq!(
+        torch_wheel.index_url.as_ref().map(|u| u.as_str()),
+        Some(custom_index.index_url().as_str()),
+        "torch should have index_url set to the custom index"
     );
 
+    // rsa should have the default index URL, not the custom one
+    let rsa = env
+        .pypi_packages(p)
+        .expect("should have pypi packages")
+        .find(|data| data.name().as_ref() == "rsa")
+        .expect("rsa should be in pypi packages");
+    let rsa_wheel = rsa.as_wheel().expect("rsa should be a wheel package");
+    assert_eq!(
+        rsa_wheel.index_url.as_ref().map(|u| u.as_str()),
+        Some(default_index.index_url().as_str()),
+        "rsa should have the default index URL"
+    );
+}
+
+/// Test that the default PyPI index URL is elided from the serialized lock file
+/// while custom index URLs are preserved. Rattler handles the elision; pixi
+/// always passes through the index URL.
+///
+/// Requires network access for real PyPI resolution.
+#[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
+async fn test_index_url_omitted_for_default_pypi() {
+    setup_tracing();
+
+    // pytorch only has wheels for linux-64, so target that platform.
+    let platform = Platform::current();
+    let platforms = match platform {
+        Platform::Linux64 => "\"linux-64\"".to_string(),
+        _ => format!("\"{platform}\", \"linux-64\""),
+    };
+
+    // Create local conda channel with Python for all relevant platforms
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::Linux64)
+            .finish(),
+    );
+    if platform != Platform::Linux64 {
+        package_db.add_package(
+            Package::build("python", "3.12.0")
+                .with_subdir(platform)
+                .finish(),
+        );
+    }
+    let channel = package_db.into_channel().await.unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "index-url-pypi-test"
+        platforms = [{platforms}]
+        channels = ["{channel_url}"]
+        conda-pypi-map = {{}}
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [target.linux-64.pypi-dependencies]
+        rsa = ">=4.9.1, <5"
+        torch = {{ version = "*", index = "https://download.pytorch.org/whl/cu124" }}
+        "#,
+        channel_url = channel.url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    let p = lock_file
+        .platform("linux-64")
+        .expect("linux-64 platform should exist");
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should exist");
+
+    // torch should have index_url set to the pytorch index
+    let torch = env
+        .pypi_packages(p)
+        .expect("should have pypi packages")
+        .find(|data| data.name().as_ref() == "torch")
+        .expect("torch should be in pypi packages");
+    let torch_wheel = torch.as_wheel().expect("torch should be a wheel package");
     assert!(
-        modified_lock_file_str.contains("editable: true"),
-        "Failed to add editable: true to lock file"
+        torch_wheel
+            .index_url
+            .as_ref()
+            .expect("torch should have index_url")
+            .as_str()
+            .contains("download.pytorch.org"),
+        "torch index_url should point to pytorch: {:?}",
+        torch_wheel.index_url
     );
 
-    // Parse and write the modified lock file back
-    let modified_lockfile = LockFile::from_str(&modified_lock_file_str).unwrap();
-    let workspace = pixi.workspace().unwrap();
-    modified_lockfile
-        .to_path(&workspace.lock_file_path())
-        .unwrap();
-
-    // Verify the lock file now has editable: true
-    let lock_after_modification = pixi.lock_file().await.unwrap();
+    // rsa comes from real PyPI — index_url is set but rattler elides it
+    // during serialization
+    let rsa = env
+        .pypi_packages(p)
+        .expect("should have pypi packages")
+        .find(|data| data.name().as_ref() == "rsa")
+        .expect("rsa should be in pypi packages");
+    let rsa_wheel = rsa.as_wheel().expect("rsa should be a wheel package");
     assert!(
-        lock_after_modification
-            .is_pypi_package_editable("default", platform, "editable-test")
-            .unwrap_or(false),
-        "Lock file should have editable: true after manual modification"
+        rsa_wheel
+            .index_url
+            .as_ref()
+            .expect("rsa should have index_url")
+            .as_str()
+            .contains("pypi.org"),
+        "rsa index_url should point to pypi.org: {:?}",
+        rsa_wheel.index_url
     );
 
-    // Now install with --locked (uses the modified lock file without re-resolving)
-    // The fix should ensure that the package is installed as NON-editable
-    // because the manifest doesn't specify editable = true
-    pixi.install().with_locked().await.unwrap();
-
-    let prefix_path = pixi.default_env_path().unwrap();
-
-    // The package should NOT be installed as editable because the manifest doesn't specify editable
+    // Verify the serialized lock file: pytorch index URL should appear,
+    // pypi.org should be elided by rattler
+    let lock_file_content = lock_file.render_to_string().unwrap();
     assert!(
-        !has_editable_pth_file(&prefix_path, "editable_test"),
-        "Package should NOT be installed as editable when manifest doesn't specify editable = true (even if lock file has editable: true)"
+        lock_file_content.contains("download.pytorch.org"),
+        "serialized lock file should contain the pytorch index URL"
+    );
+    assert!(
+        !lock_file_content.contains("index_url: https://pypi.org"),
+        "serialized lock file should not contain index_url for the default PyPI index"
+    );
+
+    // Round-trip: parse and re-serialize, the output should be identical
+    let lock_file_rt =
+        rattler_lock::LockFile::from_str_with_base_directory(&lock_file_content, None).unwrap();
+    assert_eq!(
+        lock_file_content,
+        lock_file_rt.render_to_string().unwrap(),
+        "lock file content should be identical after round-trip"
     );
 }

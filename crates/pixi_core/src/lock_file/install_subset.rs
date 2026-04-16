@@ -37,16 +37,8 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
         let dependency_names: Vec<String> = match package_ref {
             LockedPackageRef::Conda(conda_data) => {
                 // Extract dependencies from conda data and parse as MatchSpec
-                let depends = match conda_data {
-                    rattler_lock::CondaPackageData::Binary(binary_data) => {
-                        &binary_data.package_record.depends
-                    }
-                    rattler_lock::CondaPackageData::Source(source_data) => {
-                        &source_data.package_record.depends
-                    }
-                };
-
-                depends
+                conda_data
+                    .depends()
                     .iter()
                     .filter_map(|dep_spec| {
                         // Parse as MatchSpec to get the package name
@@ -63,10 +55,10 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
                     })
                     .collect()
             }
-            LockedPackageRef::Pypi(pypi_data, _env_data) => {
+            LockedPackageRef::Pypi(pypi_data) => {
                 // For PyPI, use the requirement directly to get the name
                 pypi_data
-                    .requires_dist
+                    .requires_dist()
                     .iter()
                     .map(|req| req.name.to_string())
                     .collect()
@@ -78,7 +70,7 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
             dependencies: dependency_names,
             source: match package_ref {
                 LockedPackageRef::Conda(_) => PackageSource::Conda,
-                LockedPackageRef::Pypi(_, _) => PackageSource::Pypi,
+                LockedPackageRef::Pypi(_) => PackageSource::Pypi,
             },
         }
     }

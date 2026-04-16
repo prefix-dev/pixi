@@ -4,7 +4,7 @@
 //! They can be strings (e.g., "3.11" for python version), integers (e.g., 1 for feature flags),
 //! or booleans (e.g., true/false for optional features).
 
-use std::{cmp::Ordering, fmt::Display};
+use std::{cmp::Ordering, collections::BTreeMap, fmt::Display};
 
 use serde::{Deserialize, Deserializer, Serialize, de::Visitor};
 
@@ -206,5 +206,181 @@ impl PartialEq<pixi_build_types::VariantValue> for VariantValue {
 impl PartialEq<VariantValue> for pixi_build_types::VariantValue {
     fn eq(&self, other: &VariantValue) -> bool {
         other == self
+    }
+}
+
+/// Selects an item from a collection based on variant matching.
+///
+/// A match requires that all variants in the selector are present in the
+/// candidate with the same value (subset match). If multiple candidates match,
+/// the one with the fewest extra (non-selected) variant keys is preferred.
+///
+/// # Example
+///
+/// ```
+/// use std::collections::BTreeMap;
+/// use pixi_variant::{VariantSelector, VariantValue};
+///
+/// let selector = VariantSelector::new(BTreeMap::from([
+///     ("python".to_string(), VariantValue::from("3.12")),
+/// ]));
+///
+/// let items = vec![
+///     ("a", BTreeMap::from([("python".to_string(), VariantValue::from("3.11"))])),
+///     ("b", BTreeMap::from([("python".to_string(), VariantValue::from("3.12"))])),
+///     ("c", BTreeMap::from([
+///         ("python".to_string(), VariantValue::from("3.12")),
+///         ("numpy".to_string(), VariantValue::from("1.26")),
+///     ])),
+/// ];
+///
+/// let result = selector.find(&items, |item| &item.1);
+/// // "b" is preferred over "c" because it has fewer extra variants.
+/// assert_eq!(result.unwrap().0, "b");
+/// ```
+pub struct VariantSelector {
+    variants: BTreeMap<String, VariantValue>,
+}
+
+impl VariantSelector {
+    /// Creates a new selector from the given variants to match against.
+    pub fn new(variants: BTreeMap<String, VariantValue>) -> Self {
+        Self { variants }
+    }
+
+    /// Finds the best matching item from the iterator.
+    ///
+    /// Returns `None` if no item matches all selected variants. If the
+    /// selector has no variants, the first item is returned.
+    ///
+    /// The variant values extracted from each item can be any type that is
+    /// comparable with [`VariantValue`] via [`PartialEq`].
+    pub fn find<T, V, F>(&self, iter: impl IntoIterator<Item = T>, extract: F) -> Option<T>
+    where
+        V: PartialEq<VariantValue>,
+        F: Fn(&T) -> &BTreeMap<String, V>,
+    {
+        let mut best: Option<(T, usize)> = None;
+
+        for item in iter {
+            let item_variants = extract(&item);
+
+            // All selector variants must be present in the item with matching values.
+            let all_match = self
+                .variants
+                .iter()
+                .all(|(k, v)| item_variants.get(k).is_some_and(|iv| iv == v));
+
+            if !all_match {
+                continue;
+            }
+
+            let extra = item_variants.len() - self.variants.len();
+            if best
+                .as_ref()
+                .is_none_or(|(_, best_extra)| extra < *best_extra)
+            {
+                best = Some((item, extra));
+                if extra == 0 {
+                    break;
+                }
+            }
+        }
+
+        best.map(|(item, _)| item)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_empty_selector_matches_empty_variants() {
+        let selector = VariantSelector::new(BTreeMap::new());
+        let items = vec![BTreeMap::<String, VariantValue>::new()];
+        assert!(selector.find(&items, |item| *item).is_some());
+    }
+
+    #[test]
+    fn test_empty_selector_prefers_fewest_variants() {
+        let selector = VariantSelector::new(BTreeMap::new());
+        let items: Vec<(usize, BTreeMap<String, VariantValue>)> = vec![
+            (
+                1,
+                BTreeMap::from([
+                    ("a".into(), VariantValue::from("x")),
+                    ("b".into(), VariantValue::from("y")),
+                ]),
+            ),
+            (2, BTreeMap::from([("a".into(), VariantValue::from("x"))])),
+            (3, BTreeMap::new()),
+        ];
+        // Empty selector matches all, but prefers the one with fewest extras.
+        let result = selector.find(&items, |item| &item.1).unwrap();
+        assert_eq!(result.0, 3);
+    }
+
+    #[test]
+    fn test_exact_match() {
+        let selector = VariantSelector::new(BTreeMap::from([(
+            "python".into(),
+            VariantValue::from("3.12"),
+        )]));
+        let items = vec![
+            BTreeMap::from([("python".into(), VariantValue::from("3.11"))]),
+            BTreeMap::from([("python".into(), VariantValue::from("3.12"))]),
+        ];
+        let result = selector.find(&items, |item| *item).unwrap();
+        assert_eq!(result.get("python").unwrap(), &VariantValue::from("3.12"));
+    }
+
+    #[test]
+    fn test_subset_match_prefers_fewer_extras() {
+        let selector = VariantSelector::new(BTreeMap::from([(
+            "python".into(),
+            VariantValue::from("3.12"),
+        )]));
+        let items = vec![
+            (
+                "extra",
+                BTreeMap::from([
+                    ("python".into(), VariantValue::from("3.12")),
+                    ("numpy".into(), VariantValue::from("1.26")),
+                ]),
+            ),
+            (
+                "exact",
+                BTreeMap::from([("python".into(), VariantValue::from("3.12"))]),
+            ),
+        ];
+        let result = selector.find(&items, |item| &item.1).unwrap();
+        assert_eq!(result.0, "exact");
+    }
+
+    #[test]
+    fn test_no_match() {
+        let selector = VariantSelector::new(BTreeMap::from([(
+            "python".into(),
+            VariantValue::from("3.12"),
+        )]));
+        let items = vec![BTreeMap::from([(
+            "python".into(),
+            VariantValue::from("3.11"),
+        )])];
+        assert!(selector.find(&items, |item| *item).is_none());
+    }
+
+    #[test]
+    fn test_missing_key_no_match() {
+        let selector = VariantSelector::new(BTreeMap::from([(
+            "python".into(),
+            VariantValue::from("3.12"),
+        )]));
+        let items = vec![BTreeMap::from([(
+            "numpy".into(),
+            VariantValue::from("1.26"),
+        )])];
+        assert!(selector.find(&items, |item| *item).is_none());
     }
 }

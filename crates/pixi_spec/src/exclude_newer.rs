@@ -1,5 +1,5 @@
 use chrono::{DateTime, Days, NaiveDate, NaiveTime, Utc};
-use rattler_conda_types::PackageName;
+use rattler_conda_types::{ChannelUrl, PackageName};
 use std::{collections::BTreeMap, str::FromStr};
 
 /// Specifies how to exclude newer packages from the solve.
@@ -26,7 +26,7 @@ pub struct ResolvedExcludeNewer {
     /// Channel-specific cutoff dates that override [`Self::cutoff`] for
     /// records from matching channels.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub channel_cutoffs: BTreeMap<String, DateTime<Utc>>,
+    pub channel_cutoffs: BTreeMap<ChannelUrl, DateTime<Utc>>,
 
     /// Package-specific cutoff dates that override both [`Self::cutoff`] and
     /// [`Self::channel_cutoffs`] for matching package names.
@@ -65,12 +65,8 @@ impl ResolvedExcludeNewer {
     }
 
     /// Adds a channel-specific cutoff override.
-    pub fn with_channel_cutoff(
-        mut self,
-        channel: impl Into<String>,
-        cutoff: DateTime<Utc>,
-    ) -> Self {
-        self.channel_cutoffs.insert(channel.into(), cutoff);
+    pub fn with_channel_cutoff(mut self, channel: ChannelUrl, cutoff: DateTime<Utc>) -> Self {
+        self.channel_cutoffs.insert(channel, cutoff);
         self
     }
 
@@ -78,6 +74,129 @@ impl ResolvedExcludeNewer {
     pub fn with_package_cutoff(mut self, package: PackageName, cutoff: DateTime<Utc>) -> Self {
         self.package_cutoffs.insert(package, cutoff);
         self
+    }
+
+    /// Constrains this exclude-newer configuration using concrete timestamps
+    /// from a previous solve. For each dimension (default, per-channel,
+    /// per-package) that already exists in this configuration, the cutoff is
+    /// tightened to the minimum of the current value and the source timestamp.
+    /// Dimensions not present in `self` are left unchanged — no new entries
+    /// are added.
+    #[cfg(feature = "rattler_lock")]
+    pub fn constraint_to_timestamps(mut self, timestamps: &rattler_lock::SourceTimestamps) -> Self {
+        self.cutoff = self.cutoff.min(timestamps.latest);
+
+        for (channel, existing) in &mut self.channel_cutoffs {
+            if let Some(Some(ts)) = timestamps.channels.get(channel) {
+                *existing = (*existing).min(*ts);
+            }
+        }
+
+        for (package, existing) in &mut self.package_cutoffs {
+            if let Some(Some(ts)) = timestamps.packages.get(package) {
+                *existing = (*existing).min(*ts);
+            }
+        }
+
+        self
+    }
+
+    /// Returns `true` if the given source timestamps are satisfied by this
+    /// exclude-newer configuration — i.e. every timestamp falls within the
+    /// corresponding cutoff.
+    ///
+    /// The matching rules are:
+    /// - A package override in `timestamps` is checked against the matching
+    ///   `package_cutoffs` entry, falling back to `cutoff`.
+    /// - A channel override in `timestamps` is checked against the matching
+    ///   `channel_cutoffs` entry, falling back to `cutoff`.
+    /// - An entry in `channel_cutoffs` not present in `timestamps` is checked
+    ///   against `timestamps.latest`.
+    /// - An entry in `package_cutoffs` not present in `timestamps` is checked
+    ///   against `timestamps.latest`.
+    /// - `timestamps.latest` is checked against `cutoff`.
+    #[cfg(feature = "rattler_lock")]
+    pub fn is_satisfied_by(&self, timestamps: &rattler_lock::SourceTimestamps) -> bool {
+        // Check default timestamp against default cutoff.
+        if timestamps.latest > self.cutoff {
+            return false;
+        }
+
+        // Check each channel in the timestamps against the matching cutoff
+        // (or the default cutoff if no channel-specific cutoff exists).
+        for (channel, ts) in &timestamps.channels {
+            if let Some(ts) = ts {
+                let cutoff = self
+                    .channel_cutoffs
+                    .get(channel)
+                    .copied()
+                    .unwrap_or(self.cutoff);
+                if *ts > cutoff {
+                    return false;
+                }
+            }
+        }
+
+        // Check each package in the timestamps against the matching cutoff
+        // (or the default cutoff if no package-specific cutoff exists).
+        for (package, ts) in &timestamps.packages {
+            if let Some(ts) = ts {
+                let cutoff = self
+                    .package_cutoffs
+                    .get(package)
+                    .copied()
+                    .unwrap_or(self.cutoff);
+                if *ts > cutoff {
+                    return false;
+                }
+            }
+        }
+
+        // Check channel cutoffs that are in exclude_newer but not in timestamps
+        // — compare against the default timestamp.
+        for (channel, cutoff) in &self.channel_cutoffs {
+            if !timestamps.channels.contains_key(channel) && timestamps.latest > *cutoff {
+                return false;
+            }
+        }
+
+        // Check package cutoffs that are in exclude_newer but not in timestamps
+        // — compare against the default timestamp.
+        for (package, cutoff) in &self.package_cutoffs {
+            if !timestamps.packages.contains_key(package) && timestamps.latest > *cutoff {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+/// Convert [`crate::SourceTimestamps`] into a [`ResolvedExcludeNewer`].
+///
+/// [`crate::SourceTimestamps`] records the concrete timestamps of the newest
+/// packages in the build/host environments stored in the lock file.
+/// [`ResolvedExcludeNewer`] is the solve-time cutoff configuration that
+/// constrains which packages are visible. This conversion bridges the two so
+/// that a locked source record can be re-solved with the same constraints.
+#[cfg(feature = "rattler_lock")]
+impl From<crate::SourceTimestamps> for ResolvedExcludeNewer {
+    fn from(value: crate::SourceTimestamps) -> Self {
+        let mut result = Self::from_datetime(value.latest);
+
+        for (channel, cutoff) in value.channels {
+            if let Some(cutoff) = cutoff {
+                result = result.with_channel_cutoff(channel, cutoff);
+            }
+        }
+
+        for (package, cutoff) in value.packages {
+            if let Some(cutoff) = cutoff {
+                result = result.with_package_cutoff(package, cutoff);
+            }
+        }
+
+        result
     }
 }
 
@@ -87,7 +206,7 @@ impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
             .with_include_unknown_timestamp(value.include_unknown_timestamp);
 
         for (channel, cutoff) in value.channel_cutoffs {
-            config = config.with_channel_cutoff(channel, cutoff);
+            config = config.with_channel_cutoff(channel.to_string(), cutoff);
         }
 
         for (package, cutoff) in value.package_cutoffs {
@@ -303,7 +422,10 @@ mod test {
 
         let config: rattler_solve::ExcludeNewer =
             ResolvedExcludeNewer::from_datetime(default_cutoff)
-                .with_channel_cutoff("https://prefix.dev/conda-forge", channel_cutoff)
+                .with_channel_cutoff(
+                    ChannelUrl::from(url::Url::parse("https://prefix.dev/conda-forge").unwrap()),
+                    channel_cutoff,
+                )
                 .with_package_cutoff(PackageName::new_unchecked("foo"), package_cutoff)
                 .into();
 
@@ -314,17 +436,159 @@ mod test {
         assert_eq!(
             config.cutoff_for_package(
                 &PackageName::new_unchecked("bar"),
-                Some("https://prefix.dev/conda-forge"),
+                Some("https://prefix.dev/conda-forge/"),
             ),
             channel_cutoff
         );
         assert_eq!(
             config.cutoff_for_package(
                 &PackageName::new_unchecked("foo"),
-                Some("https://prefix.dev/conda-forge"),
+                Some("https://prefix.dev/conda-forge/"),
             ),
             package_cutoff
         );
         assert!(config.include_unknown_timestamp());
+    }
+
+    #[cfg(feature = "rattler_lock")]
+    mod is_satisfied_by_tests {
+        use super::*;
+        use rattler_lock::SourceTimestamps;
+
+        fn ts(s: &str) -> DateTime<Utc> {
+            DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
+        }
+
+        fn channel(s: &str) -> ChannelUrl {
+            ChannelUrl::from(url::Url::parse(s).unwrap())
+        }
+
+        #[test]
+        fn default_within_cutoff() {
+            let exclude_newer = ResolvedExcludeNewer::from_datetime(ts("2026-06-01T00:00:00Z"));
+            let timestamps = SourceTimestamps::from_default(ts("2026-05-01T00:00:00Z"));
+            assert!(exclude_newer.is_satisfied_by(&timestamps));
+        }
+
+        #[test]
+        fn default_exceeds_cutoff() {
+            let exclude_newer = ResolvedExcludeNewer::from_datetime(ts("2026-01-01T00:00:00Z"));
+            let timestamps = SourceTimestamps::from_default(ts("2026-06-01T00:00:00Z"));
+            assert!(!exclude_newer.is_satisfied_by(&timestamps));
+        }
+
+        #[test]
+        fn channel_timestamp_within_channel_cutoff() {
+            let ch = channel("https://conda.anaconda.org/conda-forge");
+            let exclude_newer = ResolvedExcludeNewer::from_datetime(ts("2026-01-01T00:00:00Z"))
+                .with_channel_cutoff(ch.clone(), ts("2026-06-01T00:00:00Z"));
+            let timestamps = SourceTimestamps::from_default(ts("2026-01-01T00:00:00Z"))
+                .with_channel(ch, Some(ts("2026-05-01T00:00:00Z")));
+            assert!(exclude_newer.is_satisfied_by(&timestamps));
+        }
+
+        #[test]
+        fn channel_timestamp_exceeds_channel_cutoff() {
+            let ch = channel("https://conda.anaconda.org/conda-forge");
+            let exclude_newer = ResolvedExcludeNewer::from_datetime(ts("2026-01-01T00:00:00Z"))
+                .with_channel_cutoff(ch.clone(), ts("2026-03-01T00:00:00Z"));
+            let timestamps = SourceTimestamps::from_default(ts("2026-01-01T00:00:00Z"))
+                .with_channel(ch, Some(ts("2026-06-01T00:00:00Z")));
+            assert!(!exclude_newer.is_satisfied_by(&timestamps));
+        }
+
+        #[test]
+        fn channel_in_timestamps_not_in_exclude_newer_uses_default_cutoff() {
+            let ch = channel("https://conda.anaconda.org/conda-forge");
+            let exclude_newer = ResolvedExcludeNewer::from_datetime(ts("2026-03-01T00:00:00Z"));
+            // Channel timestamp within default cutoff.
+            let timestamps = SourceTimestamps::from_default(ts("2026-01-01T00:00:00Z"))
+                .with_channel(ch.clone(), Some(ts("2026-02-01T00:00:00Z")));
+            assert!(exclude_newer.is_satisfied_by(&timestamps));
+            // Channel timestamp exceeds default cutoff.
+            let timestamps = SourceTimestamps::from_default(ts("2026-01-01T00:00:00Z"))
+                .with_channel(ch, Some(ts("2026-06-01T00:00:00Z")));
+            assert!(!exclude_newer.is_satisfied_by(&timestamps));
+        }
+
+        #[test]
+        fn channel_in_exclude_newer_not_in_timestamps_uses_default_timestamp() {
+            let ch = channel("https://conda.anaconda.org/conda-forge");
+            // Default timestamp within channel cutoff.
+            let exclude_newer = ResolvedExcludeNewer::from_datetime(ts("2026-06-01T00:00:00Z"))
+                .with_channel_cutoff(ch.clone(), ts("2026-04-01T00:00:00Z"));
+            let timestamps = SourceTimestamps::from_default(ts("2026-03-01T00:00:00Z"));
+            assert!(exclude_newer.is_satisfied_by(&timestamps));
+            // Default timestamp exceeds channel cutoff.
+            let timestamps = SourceTimestamps::from_default(ts("2026-05-01T00:00:00Z"));
+            assert!(!exclude_newer.is_satisfied_by(&timestamps));
+        }
+
+        #[test]
+        fn package_timestamp_within_package_cutoff() {
+            let exclude_newer = ResolvedExcludeNewer::from_datetime(ts("2026-01-01T00:00:00Z"))
+                .with_package_cutoff(
+                    PackageName::new_unchecked("numpy"),
+                    ts("2026-06-01T00:00:00Z"),
+                );
+            let timestamps = SourceTimestamps::from_default(ts("2026-01-01T00:00:00Z"))
+                .with_package(
+                    PackageName::new_unchecked("numpy"),
+                    Some(ts("2026-05-01T00:00:00Z")),
+                );
+            assert!(exclude_newer.is_satisfied_by(&timestamps));
+        }
+
+        #[test]
+        fn package_timestamp_exceeds_package_cutoff() {
+            let exclude_newer = ResolvedExcludeNewer::from_datetime(ts("2026-01-01T00:00:00Z"))
+                .with_package_cutoff(
+                    PackageName::new_unchecked("numpy"),
+                    ts("2026-03-01T00:00:00Z"),
+                );
+            let timestamps = SourceTimestamps::from_default(ts("2026-01-01T00:00:00Z"))
+                .with_package(
+                    PackageName::new_unchecked("numpy"),
+                    Some(ts("2026-06-01T00:00:00Z")),
+                );
+            assert!(!exclude_newer.is_satisfied_by(&timestamps));
+        }
+
+        #[test]
+        fn package_in_exclude_newer_not_in_timestamps_uses_default_timestamp() {
+            let exclude_newer = ResolvedExcludeNewer::from_datetime(ts("2026-06-01T00:00:00Z"))
+                .with_package_cutoff(
+                    PackageName::new_unchecked("numpy"),
+                    ts("2026-04-01T00:00:00Z"),
+                );
+            // Default timestamp within package cutoff.
+            let timestamps = SourceTimestamps::from_default(ts("2026-03-01T00:00:00Z"));
+            assert!(exclude_newer.is_satisfied_by(&timestamps));
+            // Default timestamp exceeds package cutoff.
+            let timestamps = SourceTimestamps::from_default(ts("2026-05-01T00:00:00Z"));
+            assert!(!exclude_newer.is_satisfied_by(&timestamps));
+        }
+
+        #[test]
+        fn none_timestamps_are_ignored() {
+            let ch = channel("https://conda.anaconda.org/conda-forge");
+            let exclude_newer = ResolvedExcludeNewer::from_datetime(ts("2026-01-01T00:00:00Z"))
+                .with_channel_cutoff(ch.clone(), ts("2026-01-01T00:00:00Z"));
+            // None means "not used" — should not cause a failure.
+            let timestamps = SourceTimestamps::from_default(ts("2026-01-01T00:00:00Z"))
+                .with_channel(ch, None)
+                .with_package(PackageName::new_unchecked("numpy"), None);
+            assert!(exclude_newer.is_satisfied_by(&timestamps));
+        }
+
+        #[test]
+        fn exact_match_is_satisfied() {
+            let ch = channel("https://conda.anaconda.org/conda-forge");
+            let t = ts("2026-04-01T00:00:00Z");
+            let exclude_newer =
+                ResolvedExcludeNewer::from_datetime(t).with_channel_cutoff(ch.clone(), t);
+            let timestamps = SourceTimestamps::from_default(t).with_channel(ch, Some(t));
+            assert!(exclude_newer.is_satisfied_by(&timestamps));
+        }
     }
 }
