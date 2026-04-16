@@ -422,7 +422,7 @@ impl CommandDispatcherProcessor {
     /// will run until all dispatchers have been dropped.
     async fn run(mut self) {
         tracing::trace!("Dispatch background task has started");
-        if let Some(reporter) = self.reporter.as_mut() {
+        if let Some(reporter) = self.reporter.as_ref() {
             reporter.on_start();
         }
         loop {
@@ -446,7 +446,7 @@ impl CommandDispatcherProcessor {
                 }
             }
         }
-        if let Some(reporter) = self.reporter.as_mut() {
+        if let Some(reporter) = self.reporter.as_ref() {
             reporter.on_finished();
         }
         tracing::trace!("Dispatch background task has finished");
@@ -698,7 +698,7 @@ impl CommandDispatcherProcessor {
 
     /// Called to clear the reporter.
     fn clear_reporter(&mut self, sender: oneshot::Sender<()>) {
-        if let Some(reporter) = self.reporter.as_mut() {
+        if let Some(reporter) = self.reporter.as_ref() {
             reporter.on_clear()
         }
         let _ = sender.send(());
@@ -750,7 +750,7 @@ impl HasDedupTaskFields for BuildBackendMetadataSpec {
     ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
         DedupTaskFields {
             parent_contexts: &mut proc.parent_contexts,
-            reporter: &mut proc.reporter,
+            reporter: &proc.reporter,
             reporter_map: &mut proc.build_backend_metadata_reporters,
             monitor_futures: &mut proc.monitor_futures,
             dedup: &mut proc.build_backend_metadata,
@@ -767,7 +767,7 @@ impl HasDedupTaskFields for SourceBuildSpec {
     ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
         DedupTaskFields {
             parent_contexts: &mut proc.parent_contexts,
-            reporter: &mut proc.reporter,
+            reporter: &proc.reporter,
             reporter_map: &mut proc.source_build_reporters,
             monitor_futures: &mut proc.monitor_futures,
             dedup: &mut proc.source_build,
@@ -784,7 +784,7 @@ impl HasDedupTaskFields for pixi_git::GitUrl {
     ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
         DedupTaskFields {
             parent_contexts: &mut proc.parent_contexts,
-            reporter: &mut proc.reporter,
+            reporter: &proc.reporter,
             reporter_map: &mut proc.git_checkout_reporters,
             monitor_futures: &mut proc.monitor_futures,
             dedup: &mut proc.git_checkouts,
@@ -801,7 +801,7 @@ impl HasDedupTaskFields for pixi_spec::UrlSpec {
     ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
         DedupTaskFields {
             parent_contexts: &mut proc.parent_contexts,
-            reporter: &mut proc.reporter,
+            reporter: &proc.reporter,
             reporter_map: &mut proc.url_checkout_reporters,
             monitor_futures: &mut proc.monitor_futures,
             dedup: &mut proc.url_checkouts,
@@ -818,7 +818,7 @@ impl HasDedupTaskFields for SourceRecordSpec {
     ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
         DedupTaskFields {
             parent_contexts: &mut proc.parent_contexts,
-            reporter: &mut proc.reporter,
+            reporter: &proc.reporter,
             reporter_map: &mut proc.source_record_reporters,
             monitor_futures: &mut proc.monitor_futures,
             dedup: &mut proc.source_record,
@@ -835,7 +835,7 @@ impl HasDedupTaskFields for InstantiateToolEnvironmentSpec {
     ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
         DedupTaskFields {
             parent_contexts: &mut proc.parent_contexts,
-            reporter: &mut proc.reporter,
+            reporter: &proc.reporter,
             reporter_map: &mut proc.instantiated_tool_envs_reporters,
             monitor_futures: &mut proc.monitor_futures,
             dedup: &mut proc.instantiated_tool_envs,
@@ -852,7 +852,7 @@ impl HasDedupTaskFields for SourceMetadataSpec {
     ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
         DedupTaskFields {
             parent_contexts: &mut proc.parent_contexts,
-            reporter: &mut proc.reporter,
+            reporter: &proc.reporter,
             reporter_map: &mut proc.source_metadata_reporters,
             monitor_futures: &mut proc.monitor_futures,
             dedup: &mut proc.source_metadata,
@@ -869,7 +869,7 @@ impl HasDedupTaskFields for DevSourceMetadataSpec {
     ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
         DedupTaskFields {
             parent_contexts: &mut proc.parent_contexts,
-            reporter: &mut proc.reporter,
+            reporter: &proc.reporter,
             reporter_map: &mut proc.dev_source_metadata_reporters,
             monitor_futures: &mut proc.monitor_futures,
             dedup: &mut proc.dev_source_metadata,
@@ -886,7 +886,7 @@ impl HasDedupTaskFields for SourceBuildCacheStatusSpec {
     ) -> DedupTaskFields<'_, Self::Id, Self::ReporterId, Self::Ok, Self::Err> {
         DedupTaskFields {
             parent_contexts: &mut proc.parent_contexts,
-            reporter: &mut proc.reporter,
+            reporter: &proc.reporter,
             reporter_map: &mut proc.source_build_cache_status_reporters,
             monitor_futures: &mut proc.monitor_futures,
             dedup: &mut proc.source_build_cache_status,
@@ -909,7 +909,7 @@ struct NewDedupTask<Id> {
 /// `complete_dedup_task`.
 pub(crate) struct DedupTaskFields<'a, Id, ReporterId, Ok, Err> {
     parent_contexts: &'a mut HashMap<CommandDispatcherContext, CommandDispatcherContext>,
-    reporter: &'a mut Option<Box<dyn Reporter>>,
+    reporter: &'a Option<Box<dyn Reporter>>,
     reporter_map: &'a mut HashMap<Id, Vec<ReporterId>>,
     monitor_futures: &'a mut ExecutorFutures<LocalBoxFuture<'static, CommandDispatcherContext>>,
     dedup: &'a mut dyn ErasedDedupRegistry<Id, Ok, Err>,
@@ -1036,7 +1036,7 @@ impl CommandDispatcherProcessor {
         task_cancellation_token: CancellationToken,
     ) -> (Option<S::ReporterId>, CancellationToken) {
         let parent_context = task_parent.and_then(|ctx| self.reporter_context(ctx));
-        let reporter_id = spec.report_queued(&mut self.reporter, parent_context, None);
+        let reporter_id = spec.report_queued(&self.reporter, parent_context, None);
         let cancellation_token =
             self.get_child_cancellation_token(task_parent, task_cancellation_token);
         (reporter_id, cancellation_token)
@@ -1080,7 +1080,7 @@ impl CommandDispatcherProcessor {
         self.parent_contexts.remove(&context);
         self.complete_task_token(context, &result);
         if let Some(reporter_id) = reporter_id {
-            S::report_finished(&mut self.reporter, reporter_id, result.is_err());
+            S::report_finished(&self.reporter, reporter_id, result.is_err());
         }
         if let Some(result) = result.into_ok_or_failed() {
             let _ = tx.send(result);

@@ -57,7 +57,7 @@ impl CommandDispatcherProcessor {
             // Notify the reporter that the solve has started.
             if let Some((reporter, id)) = self
                 .reporter
-                .as_deref_mut()
+                .as_deref()
                 .and_then(Reporter::as_backend_source_build_reporter)
                 .zip(reporter_id)
             {

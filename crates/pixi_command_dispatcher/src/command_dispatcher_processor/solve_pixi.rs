@@ -31,14 +31,14 @@ impl CommandDispatcherProcessor {
 
         // Notify the reporter that the solve has started.
         if let Some(id) = reporter_id {
-            PixiEnvironmentSpec::report_started(&mut self.reporter, id);
+            PixiEnvironmentSpec::report_started(&self.reporter, id);
         }
 
         let dispatcher_context = CommandDispatcherContext::SolvePixiEnvironment(pending_env_id);
         let reporter_context = self.reporter_context(dispatcher_context);
         let gateway_reporter = self
             .reporter
-            .as_deref_mut()
+            .as_deref()
             .and_then(|reporter| reporter.create_gateway_reporter(reporter_context));
 
         self.store_cancellation_token(dispatcher_context, cancellation_token.clone());

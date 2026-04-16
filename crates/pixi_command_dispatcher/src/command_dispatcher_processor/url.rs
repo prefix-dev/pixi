@@ -45,7 +45,7 @@ impl CommandDispatcherProcessor {
             .get(&id)
             .and_then(|ids| ids.last().copied())
         {
-            pixi_spec::UrlSpec::report_started(&mut self.reporter, reporter_id);
+            pixi_spec::UrlSpec::report_started(&self.reporter, reporter_id);
         }
 
         let resolver = self.inner.url_resolver.clone();

@@ -41,7 +41,7 @@ impl SyncReporter {
         }
     }
 
-    pub fn clear(&mut self) {
+    pub fn clear(&self) {
         let mut inner = self.combined_inner.lock();
         inner.preparing_progress_bar.clear();
         inner.install_progress_bar.clear();
@@ -76,7 +76,7 @@ impl SyncReporter {
 
 impl BackendSourceBuildReporter for SyncReporter {
     fn on_queued(
-        &mut self,
+        &self,
         reason: Option<ReporterContext>,
         _env: &BackendSourceBuildSpec,
     ) -> BackendSourceBuildId {
@@ -89,7 +89,7 @@ impl BackendSourceBuildReporter for SyncReporter {
     }
 
     fn on_started(
-        &mut self,
+        &self,
         _id: BackendSourceBuildId,
         mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     ) {
@@ -122,7 +122,7 @@ impl BackendSourceBuildReporter for SyncReporter {
         });
     }
 
-    fn on_finished(&mut self, _id: BackendSourceBuildId, failed: bool) {
+    fn on_finished(&self, _id: BackendSourceBuildId, failed: bool) {
         // Take the stream that receives the output from the backend so we can drop the
         // memory.
         let build_output_receiver = {
@@ -145,7 +145,7 @@ impl BackendSourceBuildReporter for SyncReporter {
 
 impl SourceBuildReporter for SyncReporter {
     fn on_queued(
-        &mut self,
+        &self,
         _reason: Option<ReporterContext>,
         env: &SourceBuildSpec,
         _dedup_id: DedupGroupId,
@@ -156,7 +156,7 @@ impl SourceBuildReporter for SyncReporter {
     }
 
     fn on_started(
-        &mut self,
+        &self,
         id: SourceBuildId,
         mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     ) {
@@ -184,7 +184,7 @@ impl SourceBuildReporter for SyncReporter {
         });
     }
 
-    fn on_finished(&mut self, id: SourceBuildId, failed: bool) {
+    fn on_finished(&self, id: SourceBuildId, failed: bool) {
         let build_output_receiver = {
             let mut inner = self.combined_inner.lock();
             inner.preparing_progress_bar.on_build_finished(id.0);

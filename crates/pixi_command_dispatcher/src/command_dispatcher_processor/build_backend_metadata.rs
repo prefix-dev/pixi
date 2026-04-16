@@ -45,7 +45,7 @@ impl CommandDispatcherProcessor {
 
         if let Some((reporter, reporter_id)) = self
             .reporter
-            .as_deref_mut()
+            .as_deref()
             .and_then(Reporter::as_build_backend_metadata_reporter)
             .zip(
                 self.build_backend_metadata_reporters

@@ -44,7 +44,7 @@ impl CommandDispatcherProcessor {
             .get(&id)
             .and_then(|ids| ids.last().copied())
         {
-            pixi_git::GitUrl::report_started(&mut self.reporter, reporter_id);
+            pixi_git::GitUrl::report_started(&self.reporter, reporter_id);
         }
 
         let resolver = self.inner.git_resolver.clone();

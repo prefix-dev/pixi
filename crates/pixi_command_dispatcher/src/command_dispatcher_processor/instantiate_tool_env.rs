@@ -48,7 +48,7 @@ impl CommandDispatcherProcessor {
             .get(&id)
             .and_then(|ids| ids.last().copied())
         {
-            InstantiateToolEnvironmentSpec::report_started(&mut self.reporter, reporter_id);
+            InstantiateToolEnvironmentSpec::report_started(&self.reporter, reporter_id);
         }
 
         let command_queue = self.create_task_command_dispatcher(context);
