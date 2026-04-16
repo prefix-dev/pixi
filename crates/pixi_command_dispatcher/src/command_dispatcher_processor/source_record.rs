@@ -64,14 +64,14 @@ impl CommandDispatcherProcessor {
             .get(&id)
             .and_then(|ids| ids.last().copied())
         {
-            SourceRecordSpec::report_started(&mut self.reporter, reporter_id);
+            SourceRecordSpec::report_started(&self.reporter, reporter_id);
         }
 
         let dispatcher = self.create_task_command_dispatcher(context);
         let reporter_context = self.reporter_context(context);
         let run_exports_reporter = self
             .reporter
-            .as_mut()
+            .as_ref()
             .and_then(|reporter| reporter.create_run_exports_reporter(reporter_context));
 
         self.pending_futures.push(

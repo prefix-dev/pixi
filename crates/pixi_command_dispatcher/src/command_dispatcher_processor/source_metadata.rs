@@ -52,7 +52,7 @@ impl CommandDispatcherProcessor {
             .get(&id)
             .and_then(|ids| ids.last().copied())
         {
-            SourceMetadataSpec::report_started(&mut self.reporter, reporter_id);
+            SourceMetadataSpec::report_started(&self.reporter, reporter_id);
         }
 
         let dispatcher = self.create_task_command_dispatcher(context);

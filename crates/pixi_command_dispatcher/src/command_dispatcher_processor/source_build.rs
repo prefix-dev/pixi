@@ -44,7 +44,7 @@ impl CommandDispatcherProcessor {
         let (tx, rx) = futures::channel::mpsc::unbounded::<String>();
 
         let mut run_exports_reporter: Option<Arc<dyn RunExportsReporter>> = None;
-        if let Some(reporter) = self.reporter.as_mut() {
+        if let Some(reporter) = self.reporter.as_ref() {
             let created = reporter.create_run_exports_reporter(reporter_context);
             if let Some((source_reporter, reporter_id)) = reporter.as_source_build_reporter().zip(
                 self.source_build_reporters

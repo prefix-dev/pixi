@@ -34,7 +34,7 @@ impl CommandDispatcherProcessor {
 
         // Notify the reporter that the solve has started.
         if let Some(id) = reporter_id {
-            InstallPixiEnvironmentSpec::report_started(&mut self.reporter, id);
+            InstallPixiEnvironmentSpec::report_started(&self.reporter, id);
         }
 
         // Create a reporter for the installation task.
@@ -42,7 +42,7 @@ impl CommandDispatcherProcessor {
         let reporter_context = self.reporter_context(dispatcher_context);
         let install_reporter = self
             .reporter
-            .as_mut()
+            .as_ref()
             .and_then(|reporter| reporter.create_install_reporter(reporter_context));
 
         // Store the cancellation token for this context so child tasks can link to it.
