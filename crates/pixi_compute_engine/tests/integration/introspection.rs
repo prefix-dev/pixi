@@ -208,7 +208,7 @@ impl Key for Fib {
                 |ctx| futures::FutureExt::boxed(ctx.compute(&Fib(n - 2))),
             )
             .await;
-        a.unwrap() + b.unwrap()
+        a + b
     }
 }
 
@@ -270,7 +270,7 @@ struct ParentParkedAfterDep {
 impl Key for ParentParkedAfterDep {
     type Value = u32;
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-        let dep_value = ctx.compute(&BaseKey(self.id)).await.unwrap();
+        let dep_value = ctx.compute(&BaseKey(self.id)).await;
         let data = ctx.global_data().parent_parked_data();
         data.started.notify_one();
         data.release.notified().await;
@@ -332,8 +332,8 @@ struct DoubleReader(u32);
 impl Key for DoubleReader {
     type Value = u32;
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-        let a = ctx.compute(&BaseKey(self.0)).await.unwrap();
-        let b = ctx.compute(&BaseKey(self.0)).await.unwrap();
+        let a = ctx.compute(&BaseKey(self.0)).await;
+        let b = ctx.compute(&BaseKey(self.0)).await;
         a + b
     }
 }
@@ -372,7 +372,7 @@ impl Key for ParallelReader {
                 |ctx| futures::FutureExt::boxed(ctx.compute(&BaseKey(n + 1))),
             )
             .await;
-        a.unwrap() + b.unwrap()
+        a + b
     }
 }
 
@@ -420,7 +420,7 @@ impl Key for CountedFib {
                 |ctx| futures::FutureExt::boxed(ctx.compute(&CountedFib { n: n - 2 })),
             )
             .await;
-        a.unwrap() + b.unwrap()
+        a + b
     }
 }
 

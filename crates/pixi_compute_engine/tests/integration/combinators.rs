@@ -35,7 +35,7 @@ impl Key for ParallelSum {
                 ctx.compute(&k).boxed()
             })
             .await;
-        a.unwrap() + b.unwrap() + rest.into_iter().map(Result::unwrap).sum::<u32>()
+        a + b + rest.into_iter().sum::<u32>()
     }
 }
 
@@ -59,10 +59,10 @@ async fn try_compute2_ok_and_err() {
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
             let fail = self.0;
             ctx.try_compute2(
-                |ctx| ctx.compute(&NumKey(1)).map_err(|_| unreachable!()).boxed(),
+                |ctx| ctx.compute(&NumKey(1)).map(Ok::<u32, &'static str>).boxed(),
                 move |ctx| {
                     ctx.compute(&NumKey(2))
-                        .map_err(|_| unreachable!())
+                        .map(Ok::<u32, &'static str>)
                         .and_then(move |v| {
                             futures::future::ready(if fail { Err("nope") } else { Ok(v) })
                         })
@@ -95,7 +95,7 @@ async fn compute3_resolves_three() {
                     |ctx| ctx.compute(&NumKey(30)).boxed(),
                 )
                 .await;
-            a.unwrap() + b.unwrap() + c.unwrap()
+            a + b + c
         }
     }
 
@@ -143,11 +143,7 @@ async fn compute_many_builds_independent_futures() {
                 ctx.compute_many((0..4u32).map(|i| {
                     ComputeCtx::declare_closure(move |ctx| ctx.compute(&NumKey(i)).boxed())
                 }));
-            futures::future::join_all(futs)
-                .await
-                .into_iter()
-                .map(Result::unwrap)
-                .sum()
+            futures::future::join_all(futs).await.into_iter().sum()
         }
     }
 
@@ -172,7 +168,6 @@ async fn declare_join_closure_pins_hrtb() {
             ctx.compute_join(vec![1u32, 2, 3], mapper)
                 .await
                 .into_iter()
-                .map(Result::unwrap)
                 .sum()
         }
     }
@@ -194,7 +189,7 @@ async fn try_compute_join_ok_and_err() {
             let fail = self.0;
             ctx.try_compute_join(vec![1u32, 2, 3], move |ctx, n| {
                 ctx.compute(&NumKey(n))
-                    .map_err(|_| unreachable!())
+                    .map(Ok::<u32, &'static str>)
                     .and_then(move |v| {
                         futures::future::ready(if fail && n == 2 { Err("middle") } else { Ok(v) })
                     })

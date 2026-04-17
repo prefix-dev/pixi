@@ -69,10 +69,8 @@ impl Key for Aggregator {
             .iter()
             .map(|&(id, yields)| Tag { id, yields })
             .collect();
-        let results = ctx
-            .compute_join(tags, |ctx, tag| ctx.compute(&tag).boxed())
-            .await;
-        results.into_iter().map(Result::unwrap).collect()
+        ctx.compute_join(tags, |ctx, tag| ctx.compute(&tag).boxed())
+            .await
     }
 }
 

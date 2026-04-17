@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// The lifecycle state of a node as observed at snapshot time.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, )]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(::serde::Serialize))]
 pub enum NodeState {
     /// A task is currently running for this key. The value has not yet

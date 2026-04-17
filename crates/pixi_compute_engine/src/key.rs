@@ -39,7 +39,7 @@ pub enum StorageType {
 /// - [`Clone`]: the engine clones the Key into its internal cache entry
 ///   and into each sub-ctx that traverses a cycle.
 /// - [`Display`] + [`Debug`]: log-friendly rendering when a Key appears in
-///   error messages ([`ComputeError::Cycle`]) or graph introspection.
+///   [`CycleError`](crate::CycleError) messages or graph introspection.
 /// - [`Send`] + [`Sync`] + `'static`: the compute runs on a spawned
 ///   tokio task.
 ///
@@ -99,13 +99,11 @@ pub enum StorageType {
 /// impl Key for Parent {
 ///     type Value = u32;
 ///     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-///         let child = ctx.compute(&Square(self.0)).await.unwrap();
+///         let child = ctx.compute(&Square(self.0)).await;
 ///         child + 1
 ///     }
 /// }
 /// ```
-///
-/// [`ComputeError::Cycle`]: crate::ComputeError::Cycle
 pub trait Key: Hash + Eq + Clone + Display + Debug + Send + Sync + 'static {
     /// The result type of this computation.
     ///
