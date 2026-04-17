@@ -145,6 +145,7 @@ nav:
           - Multiple Packages in Workspace: build/workspace.md
           - Variants: build/variants.md
           - Advanced Building Using rattler-build: build/advanced_cpp.md
+          - Cross Compilation using rattler-build: build/cross_compilation.md
       - Dependency Types: build/dependency_types.md
       - Build Backends:
           - Overview: build/backends.md
