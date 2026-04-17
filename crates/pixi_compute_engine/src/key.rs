@@ -6,7 +6,7 @@ use std::{
     hash::Hash,
 };
 
-use crate::{ComputeCtx, short_type_name};
+use crate::{ComputeCtx, Demand, short_type_name};
 
 /// How the engine stores and retrieves a Key's value.
 ///
@@ -155,4 +155,19 @@ pub trait Key: Hash + Eq + Clone + Display + Debug + Send + Sync + 'static {
     fn storage_type() -> StorageType {
         StorageType::Computed
     }
+
+    /// Expose auxiliary values through the type-erased
+    /// [`AnyKey`](crate::AnyKey) surface.
+    ///
+    /// Default is a no-op. Override to let consumers extract
+    /// domain-specific metadata from an erased Key without knowing its
+    /// concrete type (e.g. a cycle-error handler walking the cycle path
+    /// can call
+    /// [`AnyKey::request_value`](crate::AnyKey::request_value) on each
+    /// frame to pull domain context).
+    ///
+    /// The second [`Demand`] lifetime parameter is elided because it
+    /// belongs to the caller's slot-management scheme, not to the
+    /// Key. See [`Demand`] for the full API.
+    fn provide<'a>(&'a self, _demand: &mut Demand<'a, '_>) {}
 }

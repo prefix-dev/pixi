@@ -7,6 +7,7 @@ mod combinators;
 mod common;
 mod cycle;
 mod data_store;
+mod demand;
 mod executor;
 mod injected;
 mod introspection;
