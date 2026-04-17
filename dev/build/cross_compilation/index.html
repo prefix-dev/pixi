@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/misc/vision/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/build/cross_compilation/">
       
       
-        <link rel="prev" href="../../CHANGELOG/">
+        <link rel="prev" href="../advanced_cpp/">
       
       
-        <link rel="next" href="../packaging/">
+        <link rel="next" href="../dependency_types/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Pixi Vision - Pixi</title>
+        <title>Cross Compilation using rattler-build - Pixi</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pixi-values" class="md-skip">
+        <a href="#multi-output-recipe-solution" class="md-skip">
           Skip to content
         </a>
       
@@ -119,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Pixi Vision
+              Cross Compilation using rattler-build
             
           </span>
         </div>
@@ -1393,8 +1393,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -1416,11 +1418,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
@@ -1441,7 +1443,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1459,7 +1461,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/getting_started/" class="md-nav__link">
+      <a href="../getting_started/" class="md-nav__link">
         
   
   
@@ -1484,8 +1486,10 @@
                 
   
   
+    
   
   
+  
     
     
       
@@ -1507,11 +1511,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_2" checked>
         
           
           <label class="md-nav__link" for="__nav_5_2" id="__nav_5_2_label" tabindex="0">
@@ -1532,7 +1536,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1550,7 +1554,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/python/" class="md-nav__link">
+      <a href="../python/" class="md-nav__link">
         
   
   
@@ -1578,7 +1582,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/cpp/" class="md-nav__link">
+      <a href="../cpp/" class="md-nav__link">
         
   
   
@@ -1606,7 +1610,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/ros/" class="md-nav__link">
+      <a href="../ros/" class="md-nav__link">
         
   
   
@@ -1634,7 +1638,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/workspace/" class="md-nav__link">
+      <a href="../workspace/" class="md-nav__link">
         
   
   
@@ -1662,7 +1666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/variants/" class="md-nav__link">
+      <a href="../variants/" class="md-nav__link">
         
   
   
@@ -1690,7 +1694,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/advanced_cpp/" class="md-nav__link">
+      <a href="../advanced_cpp/" class="md-nav__link">
         
   
   
@@ -1715,10 +1719,35 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../build/cross_compilation/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross Compilation using rattler-build
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1734,6 +1763,151 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#multi-output-recipe-solution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-output recipe solution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workspace-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workspace structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-source-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The source file
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-cmakeliststxt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The CMakeLists.txt
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-pixitoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pixi.toml
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-reciperecipeyml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The recipe/recipe.yml
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#native-build-on-linux-64-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native build on linux-64 host
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cross-compilation-build-on-linux-64-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-compilation build on linux-64 host
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-the-elf-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying the ELF architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1754,7 +1928,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/dependency_types/" class="md-nav__link">
+      <a href="../dependency_types/" class="md-nav__link">
         
   
   
@@ -1847,7 +2021,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/backends/" class="md-nav__link">
+      <a href="../backends/" class="md-nav__link">
         
   
   
@@ -1875,7 +2049,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/backends/pixi-build-cmake/" class="md-nav__link">
+      <a href="../backends/pixi-build-cmake/" class="md-nav__link">
         
   
   
@@ -1903,7 +2077,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/backends/pixi-build-python/" class="md-nav__link">
+      <a href="../backends/pixi-build-python/" class="md-nav__link">
         
   
   
@@ -1931,7 +2105,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/backends/pixi-build-rattler-build/" class="md-nav__link">
+      <a href="../backends/pixi-build-rattler-build/" class="md-nav__link">
         
   
   
@@ -1959,7 +2133,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/backends/pixi-build-ros/" class="md-nav__link">
+      <a href="../backends/pixi-build-ros/" class="md-nav__link">
         
   
   
@@ -1987,7 +2161,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/backends/pixi-build-r/" class="md-nav__link">
+      <a href="../backends/pixi-build-r/" class="md-nav__link">
         
   
   
@@ -2015,7 +2189,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/backends/pixi-build-rust/" class="md-nav__link">
+      <a href="../backends/pixi-build-rust/" class="md-nav__link">
         
   
   
@@ -2043,7 +2217,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/backends/pixi-build-mojo/" class="md-nav__link">
+      <a href="../backends/pixi-build-mojo/" class="md-nav__link">
         
   
   
@@ -2130,7 +2304,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/key_concepts/compilers/" class="md-nav__link">
+      <a href="../key_concepts/compilers/" class="md-nav__link">
         
   
   
@@ -2166,7 +2340,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/package_source/" class="md-nav__link">
+      <a href="../package_source/" class="md-nav__link">
         
   
   
@@ -2194,7 +2368,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../build/dev/" class="md-nav__link">
+      <a href="../dev/" class="md-nav__link">
         
   
   
@@ -3706,10 +3880,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -3727,11 +3899,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
         
           
           <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
@@ -3752,7 +3924,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_10">
             <span class="md-nav__icon md-icon"></span>
             
@@ -3795,35 +3967,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Pixi Vision
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../misc/vision/" class="md-nav__link">
         
   
   
@@ -3839,57 +3986,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#pixi-values" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Pixi values
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conda" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conda
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#target-languages" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Target languages
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -3902,7 +3998,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../packaging/" class="md-nav__link">
+      <a href="../../misc/packaging/" class="md-nav__link">
         
   
   
@@ -3930,7 +4026,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../Community/" class="md-nav__link">
+      <a href="../../misc/Community/" class="md-nav__link">
         
   
   
@@ -3958,7 +4054,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../FAQ/" class="md-nav__link">
+      <a href="../../misc/FAQ/" class="md-nav__link">
         
   
   
@@ -4011,10 +4107,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#pixi-values" class="md-nav__link">
+  <a href="#multi-output-recipe-solution" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Pixi values
+        Multi-output recipe solution
       
     </span>
   </a>
@@ -4022,10 +4118,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#conda" class="md-nav__link">
+  <a href="#workspace-structure" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Conda
+        Workspace structure
       
     </span>
   </a>
@@ -4033,10 +4129,104 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#target-languages" class="md-nav__link">
+  <a href="#the-source-file" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Target languages
+        The source file
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-cmakeliststxt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The CMakeLists.txt
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-pixitoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pixi.toml
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-reciperecipeyml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The recipe/recipe.yml
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#native-build-on-linux-64-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Native build on linux-64 host
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cross-compilation-build-on-linux-64-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-compilation build on linux-64 host
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-the-elf-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verifying the ELF architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
       
     </span>
   </a>
@@ -4060,7 +4250,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/misc/vision.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/build/cross_compilation.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -4068,33 +4258,332 @@
   
 
 
-  <h1>Pixi Vision</h1>
+  <h1>Cross Compilation using rattler-build</h1>
 
-<p>We created <code>pixi</code> because we want to have a cargo/npm/yarn like package management experience for conda. We really love what the conda packaging ecosystem achieves, but we think that the user experience can be improved a lot.
-Modern package managers like <code>cargo</code> have shown us, how great a package manager can be. We want to bring that experience to the conda ecosystem.</p>
-<h2 id="pixi-values">Pixi values<a class="headerlink" href="#pixi-values" title="Permanent link">#</a></h2>
-<p>We want to make Pixi a great experience for everyone, so we have a few values that we want to uphold:</p>
+<p>In this tutorial, we will show you how to set up a <a href="https://github.com/wjakob/nanobind">nanobind</a> Python binding project that supports <strong>cross-compilation</strong>: we will demonstrate how to compile for the <code>linux-aarch64</code> platform on a <code>linux-64</code> host.
+In this tutorial we assume that you've read the <a href="../cpp/">Building a C++ Package</a> tutorial.
+If you haven't read it yet, we recommend you to do so before continuing, as the project structure and the source code will be the same as in the previous tutorial, so we may skip explicit explanations of some parts.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p><code>pixi-build</code> is a preview feature and will change until it is stabilized.</p>
+</div>
+<p><code>pixi-build</code> has built-in cross-compilation capabilities: if the build process of a package supports it, building a package for a platform (<code>linux-aarch64</code>) different from the host platform (<code>linux-64</code>) can be done simply with <code>pixi build --target-platform linux-aarch64</code>.
+However, a typical <a href="https://github.com/wjakob/nanobind">nanobind</a> project, as described in the <a href="../cpp/">Building a C++ Package tutorial</a>, doesn't cross-compile out of the box.
+There are a couple of issues:</p>
+<h4 id="1-finding-python-and-nanobind">1. Finding Python and nanobind<a class="headerlink" href="#1-finding-python-and-nanobind" title="Permanent link">#</a></h4>
+<p>The <code>find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)</code> (note the <code>Interpreter</code> component) tries to find a usable Python interpreter on the host. 
+When cross-compiling, the python from the <code>host-dependencies</code> is the <code>target-platform</code> python, which can not be executed.</p>
+<p>The <code>cross-python_${{ host_platform }}</code> package can usually be used to circumvent this issue, as <a href="https://conda-forge.org/docs/how-to/advanced/cross-compilation/#details-about-cross-compiled-python-packages">documented by conda-forge</a>.
+However, the <code>find_package</code> search logic for the <code>Interpreter</code> is still not able to correctly determine the Python path in this case.</p>
+<h4 id="2-generating-stubs-requires-importing-the-wrapper-library">2. Generating stubs requires importing the wrapper library<a class="headerlink" href="#2-generating-stubs-requires-importing-the-wrapper-library" title="Permanent link">#</a></h4>
+<p>The <code>stub_gen.py</code> script that produces the Python stubs (that provide type hints for wrapped objects) <em>imports</em> the library of the wrapped objects.
+When cross-compiling, the library is built for the target platform, so it can not be imported with a Python executable on the host.</p>
+<h2 id="multi-output-recipe-solution">Multi-output recipe solution<a class="headerlink" href="#multi-output-recipe-solution" title="Permanent link">#</a></h2>
+<p>When using Pixi, the Python path can be determined based on the <code>$PREFIX</code> and the <code>$PY_VER</code> variables available during the build: for instance <code>$ENV{PREFIX}/lib/python$ENV{PY_VER}/site-packages</code> gives the path to the site-packages directory for installation.
+Using these paths allows to not rely on the <code>find_package</code>, solving the first issue.</p>
+<p>Python stubs only provide type hints about the wrapped objects, they do not link to the compiled library.
+The stub files are actually platform independent!
+Therefore, it is possible to use the stubs for the host platform (no cross-compilation) for any target platform.</p>
+<p>This can be conveniently done using the <a href="../backends/pixi-build-rattler-build/">pixi-build-rattler-build backend</a>, which is able to build multiple outputs from a single recipe.
+We will use it to build <strong>two packages</strong>: a platform-specific (supporting cross-compilation) library package, and a <code>noarch</code> stub package.</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Type</th>
+<th>Built on</th>
+<th>Installed on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cpp_math</code></td>
+<td>native <code>.so</code></td>
+<td>host platform</td>
+<td>target platform</td>
+</tr>
+<tr>
+<td><code>cpp_math-stubs</code></td>
+<td><code>noarch: python</code></td>
+<td><code>linux-64</code> only</td>
+<td>all platforms</td>
+</tr>
+</tbody>
+</table>
+<h2 id="workspace-structure">Workspace structure<a class="headerlink" href="#workspace-structure" title="Permanent link">#</a></h2>
+<p>We use the same directory structure than the <a href="../cpp/">Building a C++ Package tutorial</a>:
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>.
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>├──<span class="w"> </span>CMakeLists.txt
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>├──<span class="w"> </span>pixi.toml
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>├──<span class="w"> </span>recipe/
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>│<span class="w">   </span>└──<span class="w"> </span>recipe.yml
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>└──<span class="w"> </span>src/
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">    </span>└──<span class="w"> </span>math.cpp
+</span></code></pre></div></p>
+<h2 id="the-source-file">The source file<a class="headerlink" href="#the-source-file" title="Permanent link">#</a></h2>
+<p><code>src/math.cpp</code> exposes a single <code>add</code> function using nanobind:</p>
+<div class="language-cpp highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;nanobind/nanobind.h&gt;</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kt">int</span><span class="w"> </span><span class="nf">add</span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="kt">int</span><span class="w"> </span><span class="n">b</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">NB_MODULE</span><span class="p">(</span><span class="n">cpp_math</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">{</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">    </span><span class="n">m</span><span class="p">.</span><span class="n">def</span><span class="p">(</span><span class="s">&quot;add&quot;</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">add</span><span class="p">);</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="p">}</span>
+</span></code></pre></div>
+<h2 id="the-cmakeliststxt">The <code>CMakeLists.txt</code><a class="headerlink" href="#the-cmakeliststxt" title="Permanent link">#</a></h2>
+<p>The CMake file needs to handle three scenarios:</p>
 <ol>
-<li><strong>Fast</strong>. We want to have a fast package manager, that is able to solve the environment in a few seconds.</li>
-<li><strong>User Friendly</strong>. We want to have a package manager that puts user friendliness on the front-line. Providing easy, accessible and intuitive commands. That have the element of <em>least surprise</em>.</li>
-<li><strong>Isolated Environment</strong>. We want to have isolated environments, that are reproducible and easy to share. Ideally, it should run on all common platforms. The Conda packaging system provides an excellent base for this.</li>
-<li><strong>Single Tool</strong>. We want to integrate most common uses when working on a development workspace with Pixi, so it should support at least dependency management, command management, building and uploading packages. You should not need to reach to another external tool for this.</li>
-<li><strong>Fun</strong>. It should be fun to use Pixi and not cause frustrations, you should not need to think about it a lot and it should generally just get out of your way.</li>
+<li><strong>Cross-compiling using pixi</strong>: Python is not executable on the host, so we locate Python and nanobind directly based on <code>$PREFIX</code>.</li>
+<li><strong>Native build with or without pixi</strong>: we can use the typical nanobind configuration.</li>
+<li><strong>Stubs-only build</strong> (<code>STUBS_ONLY=ON</code>): the <code>.so</code> is assumed already installed; we only call <code>nanobind_add_stub</code> to generate the platform independent stub file.</li>
 </ol>
-<h2 id="conda">Conda<a class="headerlink" href="#conda" title="Permanent link">#</a></h2>
-<p>We are building on top of the conda packaging ecosystem, this means that we have a huge number of packages available for different platforms on <a href="https://conda-forge.org/">conda-forge</a>.
-We believe the conda packaging ecosystem provides a solid base to manage your dependencies.
-Conda-forge is community maintained and very open to contributions.
-It is widely used in data science and scientific computing, robotics and other fields.
-And has a proven track record.</p>
-<p>More info: <a href="../../concepts/conda_pypi/">Conda &amp; Pypi</a></p>
-<h2 id="target-languages">Target languages<a class="headerlink" href="#target-languages" title="Permanent link">#</a></h2>
-<p>Essentially, we are language agnostics, we are targeting any language that can be installed with conda. Including: C++, Python, Rust, Zig etc.
-But we do believe the python ecosystem can benefit from a good package manager that is based on conda.
-So we are trying to provide an alternative to existing solutions there.
-We also think we can provide a good solution for C++ projects, as there are a lot of libraries available on conda-forge today.
-Pixi also truly shines when using it for multi-language projects e.g. a mix of C++ and Python, because we provide a nice way to build everything up to and including
-system level packages.</p>
+<div class="language-cmake highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span><span class="w"> </span><span class="s">3.15</span><span class="p">)</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nb">project</span><span class="p">(</span><span class="s">cpp_math</span><span class="p">)</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="nb">option</span><span class="p">(</span><span class="s">STUBS_ONLY</span><span class="w"> </span><span class="s2">&quot;Only generate stubs (module already installed)&quot;</span><span class="w"> </span><span class="s">OFF</span><span class="p">)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c"># ── Cross-compilation ─────────────────────────────────────────────────────────</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="nb">if</span><span class="p">(</span><span class="s">CMAKE_CROSSCOMPILING</span><span class="w"> </span><span class="s">AND</span><span class="w"> </span><span class="s">DEFINED</span><span class="w"> </span><span class="s">ENV{PREFIX}</span><span class="p">)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">  </span><span class="nb">message</span><span class="p">(</span><span class="s">STATUS</span><span class="w"> </span><span class="s2">&quot;Cross-compiling, detecting Python from sysroot…&quot;</span><span class="p">)</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="w">  </span><span class="nb">set</span><span class="p">(</span><span class="s">nanobind_ROOT</span><span class="w">        </span><span class="s2">&quot;$ENV{PREFIX}/lib/python$ENV{PY_VER}/site-packages/nanobind/cmake&quot;</span><span class="p">)</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="w">  </span><span class="nb">set</span><span class="p">(</span><span class="s">PYTHON_SITE_PACKAGES</span><span class="w"> </span><span class="s2">&quot;$ENV{PREFIX}/lib/python$ENV{PY_VER}/site-packages&quot;</span><span class="p">)</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="w">  </span><span class="nb">find_package</span><span class="p">(</span><span class="s">Python</span><span class="w"> </span><span class="o">$ENV{</span><span class="nv">PY_VER</span><span class="o">}</span><span class="w"> </span><span class="s">EXACT</span><span class="w"> </span><span class="s">COMPONENTS</span><span class="w"> </span><span class="s">Development.Module</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="nb">elseif</span><span class="p">(</span><span class="s">CMAKE_CROSSCOMPILING</span><span class="p">)</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">  </span><span class="nb">message</span><span class="p">(</span><span class="s">FATAL_ERROR</span><span class="w"> </span><span class="s2">&quot;Cross-compiling is not available when building without pixi.&quot;</span><span class="p">)</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="nb">else</span><span class="p">()</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="c"># bare-metal or pixi build without cross-compilation. Use find_package with python &gt;=3.12</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">  </span><span class="nb">find_package</span><span class="p">(</span><span class="s">Python</span><span class="w"> </span><span class="s">3.12</span><span class="w"> </span><span class="s">COMPONENTS</span><span class="w"> </span><span class="s">Interpreter</span><span class="w"> </span><span class="s">Development.Module</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">  </span><span class="nb">execute_process</span><span class="p">(</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">    </span><span class="s">COMMAND</span><span class="w"> </span><span class="s2">&quot;${Python_EXECUTABLE}&quot;</span><span class="w"> </span><span class="s">-m</span><span class="w"> </span><span class="s">nanobind</span><span class="w"> </span><span class="s">--cmake_dir</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a><span class="w">    </span><span class="s">OUTPUT_STRIP_TRAILING_WHITESPACE</span><span class="w"> </span><span class="s">OUTPUT_VARIABLE</span><span class="w"> </span><span class="s">nanobind_ROOT</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="w">  </span><span class="p">)</span>
+</span><span id="__span-2-26"><a id="__codelineno-2-26" name="__codelineno-2-26" href="#__codelineno-2-26"></a><span class="w">  </span><span class="nb">execute_process</span><span class="p">(</span>
+</span><span id="__span-2-27"><a id="__codelineno-2-27" name="__codelineno-2-27" href="#__codelineno-2-27"></a><span class="w">    </span><span class="s">COMMAND</span><span class="w"> </span><span class="s2">&quot;${Python_EXECUTABLE}&quot;</span><span class="w"> </span><span class="s">-c</span>
+</span><span id="__span-2-28"><a id="__codelineno-2-28" name="__codelineno-2-28" href="#__codelineno-2-28"></a><span class="w">      </span><span class="s2">&quot;import sysconfig; print(sysconfig.get_path(&#39;purelib&#39;))&quot;</span>
+</span><span id="__span-2-29"><a id="__codelineno-2-29" name="__codelineno-2-29" href="#__codelineno-2-29"></a><span class="w">    </span><span class="s">OUTPUT_VARIABLE</span><span class="w"> </span><span class="s">PYTHON_SITE_PACKAGES</span>
+</span><span id="__span-2-30"><a id="__codelineno-2-30" name="__codelineno-2-30" href="#__codelineno-2-30"></a><span class="w">    </span><span class="s">OUTPUT_STRIP_TRAILING_WHITESPACE</span>
+</span><span id="__span-2-31"><a id="__codelineno-2-31" name="__codelineno-2-31" href="#__codelineno-2-31"></a><span class="w">  </span><span class="p">)</span>
+</span><span id="__span-2-32"><a id="__codelineno-2-32" name="__codelineno-2-32" href="#__codelineno-2-32"></a><span class="nb">endif</span><span class="p">()</span>
+</span><span id="__span-2-33"><a id="__codelineno-2-33" name="__codelineno-2-33" href="#__codelineno-2-33"></a><span class="c"># ─────────────────────────────────────────────────────────────────────────────</span>
+</span><span id="__span-2-34"><a id="__codelineno-2-34" name="__codelineno-2-34" href="#__codelineno-2-34"></a>
+</span><span id="__span-2-35"><a id="__codelineno-2-35" name="__codelineno-2-35" href="#__codelineno-2-35"></a><span class="nb">find_package</span><span class="p">(</span><span class="s">nanobind</span><span class="w"> </span><span class="s">CONFIG</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span>
+</span><span id="__span-2-36"><a id="__codelineno-2-36" name="__codelineno-2-36" href="#__codelineno-2-36"></a>
+</span><span id="__span-2-37"><a id="__codelineno-2-37" name="__codelineno-2-37" href="#__codelineno-2-37"></a><span class="c"># ── Compiled extension ────────────────────────────────────────────────────────</span>
+</span><span id="__span-2-38"><a id="__codelineno-2-38" name="__codelineno-2-38" href="#__codelineno-2-38"></a><span class="nb">if</span><span class="p">(</span><span class="s">NOT</span><span class="w"> </span><span class="s">STUBS_ONLY</span><span class="p">)</span>
+</span><span id="__span-2-39"><a id="__codelineno-2-39" name="__codelineno-2-39" href="#__codelineno-2-39"></a><span class="w">  </span><span class="nb">nanobind_add_module</span><span class="p">(</span><span class="s">cpp_math</span><span class="w"> </span><span class="s">src/math.cpp</span><span class="p">)</span>
+</span><span id="__span-2-40"><a id="__codelineno-2-40" name="__codelineno-2-40" href="#__codelineno-2-40"></a>
+</span><span id="__span-2-41"><a id="__codelineno-2-41" name="__codelineno-2-41" href="#__codelineno-2-41"></a><span class="w">  </span><span class="nb">install</span><span class="p">(</span>
+</span><span id="__span-2-42"><a id="__codelineno-2-42" name="__codelineno-2-42" href="#__codelineno-2-42"></a><span class="w">    </span><span class="s">TARGETS</span><span class="w"> </span><span class="s">cpp_math</span>
+</span><span id="__span-2-43"><a id="__codelineno-2-43" name="__codelineno-2-43" href="#__codelineno-2-43"></a><span class="w">    </span><span class="s">LIBRARY</span><span class="w"> </span><span class="s">DESTINATION</span><span class="w"> </span><span class="o">${</span><span class="nv">PYTHON_SITE_PACKAGES</span><span class="o">}</span><span class="s">/cpp_math</span>
+</span><span id="__span-2-44"><a id="__codelineno-2-44" name="__codelineno-2-44" href="#__codelineno-2-44"></a><span class="w">    </span><span class="s">ARCHIVE</span><span class="w"> </span><span class="s">DESTINATION</span><span class="w"> </span><span class="o">${</span><span class="nv">PYTHON_SITE_PACKAGES</span><span class="o">}</span><span class="s">/cpp_math</span>
+</span><span id="__span-2-45"><a id="__codelineno-2-45" name="__codelineno-2-45" href="#__codelineno-2-45"></a><span class="w">  </span><span class="p">)</span>
+</span><span id="__span-2-46"><a id="__codelineno-2-46" name="__codelineno-2-46" href="#__codelineno-2-46"></a><span class="nb">endif</span><span class="p">()</span>
+</span><span id="__span-2-47"><a id="__codelineno-2-47" name="__codelineno-2-47" href="#__codelineno-2-47"></a>
+</span><span id="__span-2-48"><a id="__codelineno-2-48" name="__codelineno-2-48" href="#__codelineno-2-48"></a><span class="c"># ── Stubs ─────────────────────────────────────────────────────────────────────</span>
+</span><span id="__span-2-49"><a id="__codelineno-2-49" name="__codelineno-2-49" href="#__codelineno-2-49"></a><span class="nb">if</span><span class="p">(</span><span class="s">STUBS_ONLY</span><span class="p">)</span>
+</span><span id="__span-2-50"><a id="__codelineno-2-50" name="__codelineno-2-50" href="#__codelineno-2-50"></a><span class="w">  </span><span class="c"># The .so is assumed already installed.</span>
+</span><span id="__span-2-51"><a id="__codelineno-2-51" name="__codelineno-2-51" href="#__codelineno-2-51"></a><span class="w">  </span><span class="nb">nanobind_add_stub</span><span class="p">(</span>
+</span><span id="__span-2-52"><a id="__codelineno-2-52" name="__codelineno-2-52" href="#__codelineno-2-52"></a><span class="w">    </span><span class="s">cpp_math_stub</span>
+</span><span id="__span-2-53"><a id="__codelineno-2-53" name="__codelineno-2-53" href="#__codelineno-2-53"></a><span class="w">    </span><span class="s">MODULE</span><span class="w">    </span><span class="s">cpp_math</span>
+</span><span id="__span-2-54"><a id="__codelineno-2-54" name="__codelineno-2-54" href="#__codelineno-2-54"></a><span class="w">    </span><span class="s">RECURSIVE</span>
+</span><span id="__span-2-55"><a id="__codelineno-2-55" name="__codelineno-2-55" href="#__codelineno-2-55"></a><span class="w">    </span><span class="s">OUTPUT</span><span class="w">    </span><span class="s">cpp_math.pyi</span>
+</span><span id="__span-2-56"><a id="__codelineno-2-56" name="__codelineno-2-56" href="#__codelineno-2-56"></a><span class="w">    </span><span class="s">MARKER_FILE</span><span class="w"> </span><span class="s">py.typed</span>
+</span><span id="__span-2-57"><a id="__codelineno-2-57" name="__codelineno-2-57" href="#__codelineno-2-57"></a><span class="w">    </span><span class="s">OUTPUT_PATH</span><span class="w"> </span><span class="o">${</span><span class="nv">PYTHON_SITE_PACKAGES</span><span class="o">}</span><span class="s">/cpp_math</span>
+</span><span id="__span-2-58"><a id="__codelineno-2-58" name="__codelineno-2-58" href="#__codelineno-2-58"></a><span class="w">    </span><span class="s">PYTHON_PATH</span><span class="w"> </span><span class="o">${</span><span class="nv">PYTHON_SITE_PACKAGES</span><span class="o">}</span><span class="s">/cpp_math</span>
+</span><span id="__span-2-59"><a id="__codelineno-2-59" name="__codelineno-2-59" href="#__codelineno-2-59"></a><span class="w">  </span><span class="p">)</span>
+</span><span id="__span-2-60"><a id="__codelineno-2-60" name="__codelineno-2-60" href="#__codelineno-2-60"></a><span class="nb">endif</span><span class="p">()</span>
+</span></code></pre></div>
+<p><strong>Key points:</strong></p>
+<p>Cross-compilation:</p>
+<ul>
+<li><code>find_package(Python … Development.Module)</code> (no <code>Interpreter</code> component) finds the <em>target</em> headers in <code>$PREFIX</code> without needing a runnable interpreter.</li>
+<li><code>nanobind_ROOT</code> is set manually to the nanobind CMake helpers bundled in the target <code>$PREFIX</code>
+Stub-generation:</li>
+<li><code>STUBS_ONLY</code> lets the same CMake project build just the <code>.pyi</code> files. It is meant to be used in a second, native-only pass.</li>
+</ul>
+<hr />
+<h2 id="the-pixitoml">The <code>pixi.toml</code><a class="headerlink" href="#the-pixitoml" title="Permanent link">#</a></h2>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">channels</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;linux-aarch64&quot;</span><span class="p">]</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">preview</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="k">[dependencies]</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">cpp_math</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">python</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="k">[package]</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">name</span><span class="w">    </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;cpp_math&quot;</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">[package.build]</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-rattler-build&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="k">[tasks]</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python -c &#39;import cpp_math; print(cpp_math.add(1, 2))&#39;&quot;</span>
+</span></code></pre></div>
+<p>The workspace lists <strong>both</strong> <code>linux-64</code> and <code>linux-aarch64</code> platforms.
+Pixi will cross-compile the <code>linux-aarch64</code> variant on a <code>linux-64</code> host when called with <code>pixi build --target-platform linux-aarch64</code>.</p>
+<hr />
+<h2 id="the-reciperecipeyml">The <code>recipe/recipe.yml</code><a class="headerlink" href="#the-reciperecipeyml" title="Permanent link">#</a></h2>
+<p>This is the heart of the build. The recipe declares <strong>two outputs</strong> from the same source tree.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">context</span><span class="p">:</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1.0</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nt">source</span><span class="p">:</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">../</span><span class="w">   </span><span class="c1"># (1)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nt">outputs</span><span class="p">:</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="c1"># ── 1. Compiled extension — built for every target platform ─────────────────</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">package</span><span class="p">:</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cpp_math</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">      </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ version }}</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="w">    </span><span class="nt">build</span><span class="p">:</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a><span class="w">      </span><span class="nt">number</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="w">      </span><span class="nt">script</span><span class="p">:</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">if</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="w">          </span><span class="nt">then</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+</span><span id="__span-4-18"><a id="__codelineno-4-18" name="__codelineno-4-18" href="#__codelineno-4-18"></a><span class="w">            </span><span class="no">mkdir -p build &amp;&amp; rm -rf build/*</span>
+</span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a><span class="w">            </span><span class="no">cmake -GNinja -Bbuild -S .    \</span>
+</span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="w">              </span><span class="no">${CMAKE_ARGS}               \</span>
+</span><span id="__span-4-21"><a id="__codelineno-4-21" name="__codelineno-4-21" href="#__codelineno-4-21"></a><span class="w">              </span><span class="no">-DSTUBS_ONLY=OFF            \</span>
+</span><span id="__span-4-22"><a id="__codelineno-4-22" name="__codelineno-4-22" href="#__codelineno-4-22"></a><span class="w">              </span><span class="no">-DCMAKE_INSTALL_PREFIX=$PREFIX \</span>
+</span><span id="__span-4-23"><a id="__codelineno-4-23" name="__codelineno-4-23" href="#__codelineno-4-23"></a><span class="w">              </span><span class="no">-DCMAKE_BUILD_TYPE=Release</span>
+</span><span id="__span-4-24"><a id="__codelineno-4-24" name="__codelineno-4-24" href="#__codelineno-4-24"></a><span class="w">            </span><span class="no">ninja -C build</span>
+</span><span id="__span-4-25"><a id="__codelineno-4-25" name="__codelineno-4-25" href="#__codelineno-4-25"></a><span class="w">            </span><span class="no">ninja -C build install</span>
+</span><span id="__span-4-26"><a id="__codelineno-4-26" name="__codelineno-4-26" href="#__codelineno-4-26"></a><span class="w">    </span><span class="nt">requirements</span><span class="p">:</span>
+</span><span id="__span-4-27"><a id="__codelineno-4-27" name="__codelineno-4-27" href="#__codelineno-4-27"></a><span class="w">      </span><span class="nt">build</span><span class="p">:</span><span class="w">    </span><span class="c1"># (2)</span>
+</span><span id="__span-4-28"><a id="__codelineno-4-28" name="__codelineno-4-28" href="#__codelineno-4-28"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ compiler(&#39;cxx&#39;) }}</span>
+</span><span id="__span-4-29"><a id="__codelineno-4-29" name="__codelineno-4-29" href="#__codelineno-4-29"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cmake</span>
+</span><span id="__span-4-30"><a id="__codelineno-4-30" name="__codelineno-4-30" href="#__codelineno-4-30"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ninja</span>
+</span><span id="__span-4-31"><a id="__codelineno-4-31" name="__codelineno-4-31" href="#__codelineno-4-31"></a><span class="w">      </span><span class="nt">host</span><span class="p">:</span><span class="w">     </span><span class="c1"># (3)</span>
+</span><span id="__span-4-32"><a id="__codelineno-4-32" name="__codelineno-4-32" href="#__codelineno-4-32"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
+</span><span id="__span-4-33"><a id="__codelineno-4-33" name="__codelineno-4-33" href="#__codelineno-4-33"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nanobind &gt;=2.0.0</span>
+</span><span id="__span-4-34"><a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="w">      </span><span class="nt">run</span><span class="p">:</span>
+</span><span id="__span-4-35"><a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
+</span><span id="__span-4-36"><a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a>
+</span><span id="__span-4-37"><a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="w">  </span><span class="c1"># ── 2. Stubs — noarch, built only on the host (linux-64) ───────────────────</span>
+</span><span id="__span-4-38"><a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">package</span><span class="p">:</span>
+</span><span id="__span-4-39"><a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cpp_math-stubs</span>
+</span><span id="__span-4-40"><a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="w">      </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ version }}</span>
+</span><span id="__span-4-41"><a id="__codelineno-4-41" name="__codelineno-4-41" href="#__codelineno-4-41"></a><span class="w">    </span><span class="nt">build</span><span class="p">:</span>
+</span><span id="__span-4-42"><a id="__codelineno-4-42" name="__codelineno-4-42" href="#__codelineno-4-42"></a><span class="w">      </span><span class="nt">number</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+</span><span id="__span-4-43"><a id="__codelineno-4-43" name="__codelineno-4-43" href="#__codelineno-4-43"></a><span class="w">      </span><span class="nt">noarch</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span><span class="w">    </span><span class="c1"># (4)</span>
+</span><span id="__span-4-44"><a id="__codelineno-4-44" name="__codelineno-4-44" href="#__codelineno-4-44"></a><span class="w">      </span><span class="nt">skip</span><span class="p">:</span>
+</span><span id="__span-4-45"><a id="__codelineno-4-45" name="__codelineno-4-45" href="#__codelineno-4-45"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">build_platform == &quot;linux-aarch64&quot;</span><span class="w">   </span><span class="c1"># (5)</span>
+</span><span id="__span-4-46"><a id="__codelineno-4-46" name="__codelineno-4-46" href="#__codelineno-4-46"></a><span class="w">      </span><span class="nt">script</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">|</span>
+</span><span id="__span-4-47"><a id="__codelineno-4-47" name="__codelineno-4-47" href="#__codelineno-4-47"></a><span class="w">        </span><span class="no">mkdir -p build &amp;&amp; rm -rf build/*</span>
+</span><span id="__span-4-48"><a id="__codelineno-4-48" name="__codelineno-4-48" href="#__codelineno-4-48"></a><span class="w">        </span><span class="no">cmake -GNinja -Bbuild -S . \</span>
+</span><span id="__span-4-49"><a id="__codelineno-4-49" name="__codelineno-4-49" href="#__codelineno-4-49"></a><span class="w">          </span><span class="no">${CMAKE_ARGS} \</span>
+</span><span id="__span-4-50"><a id="__codelineno-4-50" name="__codelineno-4-50" href="#__codelineno-4-50"></a><span class="w">          </span><span class="no">-DSTUBS_ONLY=ON \</span>
+</span><span id="__span-4-51"><a id="__codelineno-4-51" name="__codelineno-4-51" href="#__codelineno-4-51"></a><span class="w">          </span><span class="no">-DCMAKE_INSTALL_PREFIX=$PREFIX \</span>
+</span><span id="__span-4-52"><a id="__codelineno-4-52" name="__codelineno-4-52" href="#__codelineno-4-52"></a><span class="w">          </span><span class="no">-DCMAKE_PREFIX_PATH=$PREFIX \</span>
+</span><span id="__span-4-53"><a id="__codelineno-4-53" name="__codelineno-4-53" href="#__codelineno-4-53"></a><span class="w">          </span><span class="no">-DCMAKE_MODULE_PATH=$PREFIX/share/cmake/Modules \</span>
+</span><span id="__span-4-54"><a id="__codelineno-4-54" name="__codelineno-4-54" href="#__codelineno-4-54"></a><span class="w">          </span><span class="no">-DCMAKE_BUILD_TYPE=Release</span>
+</span><span id="__span-4-55"><a id="__codelineno-4-55" name="__codelineno-4-55" href="#__codelineno-4-55"></a><span class="w">        </span><span class="no">ninja -C build py_phoenix_socket_backend_stub</span>
+</span><span id="__span-4-56"><a id="__codelineno-4-56" name="__codelineno-4-56" href="#__codelineno-4-56"></a><span class="w">    </span><span class="nt">requirements</span><span class="p">:</span>
+</span><span id="__span-4-57"><a id="__codelineno-4-57" name="__codelineno-4-57" href="#__codelineno-4-57"></a><span class="w">      </span><span class="nt">run_constraints</span><span class="p">:</span>
+</span><span id="__span-4-58"><a id="__codelineno-4-58" name="__codelineno-4-58" href="#__codelineno-4-58"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cpp_math ==${{ version }}</span>
+</span><span id="__span-4-59"><a id="__codelineno-4-59" name="__codelineno-4-59" href="#__codelineno-4-59"></a><span class="w">      </span><span class="nt">build</span><span class="p">:</span>
+</span><span id="__span-4-60"><a id="__codelineno-4-60" name="__codelineno-4-60" href="#__codelineno-4-60"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cmake</span>
+</span><span id="__span-4-61"><a id="__codelineno-4-61" name="__codelineno-4-61" href="#__codelineno-4-61"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ninja</span>
+</span><span id="__span-4-62"><a id="__codelineno-4-62" name="__codelineno-4-62" href="#__codelineno-4-62"></a><span class="w">      </span><span class="nt">host</span><span class="p">:</span>
+</span><span id="__span-4-63"><a id="__codelineno-4-63" name="__codelineno-4-63" href="#__codelineno-4-63"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
+</span><span id="__span-4-64"><a id="__codelineno-4-64" name="__codelineno-4-64" href="#__codelineno-4-64"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nanobind &gt;=2.0.0</span>
+</span><span id="__span-4-65"><a id="__codelineno-4-65" name="__codelineno-4-65" href="#__codelineno-4-65"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ pin_subpackage(&quot;cpp_math&quot;) }}</span><span class="w">   </span><span class="c1"># (6)</span>
+</span><span id="__span-4-66"><a id="__codelineno-4-66" name="__codelineno-4-66" href="#__codelineno-4-66"></a><span class="w">      </span><span class="nt">run</span><span class="p">:</span>
+</span><span id="__span-4-67"><a id="__codelineno-4-67" name="__codelineno-4-67" href="#__codelineno-4-67"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
+</span></code></pre></div>
+<ol>
+<li><strong><code>source.path: ../</code></strong> — points to the workspace root. rattler-build may skip untracked files; make sure your source files are tracked by git, or use <code>git_url</code> instead.</li>
+<li><strong><code>build</code> dependencies</strong> run on the <em>host machine</em>. <code>${{ compiler('cxx') }}</code> resolves to the right cross-compiler automatically.</li>
+<li><strong><code>host</code> dependencies</strong> are installed in the <em>target prefix</em> (<code>$PREFIX</code>). Python and nanobind headers are there, not in the build environment.</li>
+<li><strong><code>noarch: python</code></strong> means the stubs package contains only Python files (<code>.pyi</code>, <code>py.typed</code>) and can be installed on any platform.</li>
+<li><strong><code>skip</code> on <code>linux-aarch64</code></strong> prevents rattler-build from trying to run stubs on a cross-compiled build where the <code>.so</code> cannot be imported natively.</li>
+<li><strong><code>${{ pin_subpackage("cpp_math") }}</code> in <code>host</code></strong> installs the native <code>.so</code> from the native package into the stub-generation build environment so <code>nanobind_add_stub</code> can import it to generate the stubs.</li>
+</ol>
+<hr />
+<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">#</a></h2>
+<h3 id="native-build-on-linux-64-host">Native build on linux-64 host<a class="headerlink" href="#native-build-on-linux-64-host" title="Permanent link">#</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>build<span class="w"> </span>--output-dir<span class="w"> </span>output
+</span></code></pre></div>
+<p>This produces two packages under <code>output/</code>:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>output/
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>└── cpp_math-0.1.0-Linux64Hash_0.conda          ← compiled extension for linux-64
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>└── cpp_math-stubs-0.1.0-Linux64Hash_0.conda    ← stubs (platform-independent)
+</span></code></pre></div>
+<h3 id="cross-compilation-build-on-linux-64-host">Cross-compilation build on linux-64 host<a class="headerlink" href="#cross-compilation-build-on-linux-64-host" title="Permanent link">#</a></h3>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>build<span class="w"> </span>--target-platform<span class="w"> </span>linux-aarch64<span class="w"> </span>--output-dir<span class="w"> </span>output
+</span></code></pre></div>
+<p>A third package is added:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>output/
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>└── cpp_math-0.1.0-Linux64Hash_0.conda          ← compiled extension for linux-64
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>└── cpp_math-stubs-0.1.0-Linux64Hash_0.conda    ← stubs (platform-independent)
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>└── cpp_math-0.1.0-LinuxAarch64Hash_0.conda     ← compiled extension for linux-64
+</span></code></pre></div>
+<p>The stubs package is <strong>not</strong> rebuilt: since it is <code>noarch</code>, the one produced during the native build can be reused on <code>linux-aarch64</code> as well.</p>
+<h3 id="verifying-the-elf-architecture">Verifying the ELF architecture<a class="headerlink" href="#verifying-the-elf-architecture" title="Permanent link">#</a></h3>
+<p>To check that the packages have the correct architecture, run :</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">cd</span><span class="w"> </span>output<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>rattler-build<span class="w"> </span>package<span class="w"> </span>extract<span class="w"> </span>YOUR_PACKAGE_NAME
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>jq<span class="w"> </span><span class="s1">&#39;.platform, .subdir&#39;</span><span class="w"> </span>YOUR_PACKAGE_DIR/info/index.json<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>rm<span class="w"> </span>-rf<span class="w"> </span>YOUR_PACKAGE_DIR<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="nb">cd</span><span class="w"> </span>..
+</span></code></pre></div>
+<p>Example using <code>cpp_math</code> project :
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="nb">cd</span><span class="w"> </span>output<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>rattler-build<span class="w"> </span>package<span class="w"> </span>extract<span class="w"> </span>cpp_math-0.1.0-hb0f4dca_0.conda
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>jq<span class="w"> </span><span class="s1">&#39;.platform, .subdir&#39;</span><span class="w"> </span>cpp_math-0.1.0-hb0f4dca_0/info/index.json<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>rm<span class="w"> </span>-rf<span class="w"> </span>cpp_math-0.1.0-hb0f4dca_0<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="nb">cd</span><span class="w"> </span>..
+</span></code></pre></div></p>
+<p>For the <code>linux-64</code> package, output should be
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="s2">&quot;linux&quot;</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="s2">&quot;linux-64&quot;</span>
+</span></code></pre></div></p>
+<p>For the <code>linux-aarch64</code> package, output should be
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="s2">&quot;linux&quot;</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="s2">&quot;linux-aarch64&quot;</span>
+</span></code></pre></div></p>
+<p>For the <code>stub</code> package, output should be
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="s2">&quot;null&quot;</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="s2">&quot;noarch&quot;</span>
+</span></code></pre></div></p>
+<hr />
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cross-compilation breaks <code>find_package(Python)</code></td>
+<td>Locate nanobind/Python manually via <code>$PREFIX</code></td>
+</tr>
+<tr>
+<td>Stubs require importing the platform-specific <code>.so</code></td>
+<td>Separate <code>noarch</code> package for stubs, skipped on cross builds</td>
+</tr>
+<tr>
+<td>Single CMakeLists to build both packages</td>
+<td><code>STUBS_ONLY</code> option switches behavior</td>
+</tr>
+<tr>
+<td>Stubs still available on other platform</td>
+<td><code>noarch: python</code> package is platform-independent</td>
+</tr>
+</tbody>
+</table>
 
 
 
@@ -4163,9 +4652,9 @@ system level packages.</p>
           
             
             <a
-              href="../../CHANGELOG/"
+              href="../advanced_cpp/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Changelog"
+              aria-label="Previous: Advanced Building Using rattler-build"
             >
               <div class="md-footer__button md-icon">
                 
@@ -4176,7 +4665,7 @@ system level packages.</p>
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Changelog
+                  Advanced Building Using rattler-build
                 </div>
               </div>
             </a>
@@ -4186,16 +4675,16 @@ system level packages.</p>
           
             
             <a
-              href="../packaging/"
+              href="../dependency_types/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Packaging Pixi"
+              aria-label="Next: Dependency Types"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Packaging Pixi
+                  Dependency Types
                 </div>
               </div>
               <div class="md-footer__button md-icon">

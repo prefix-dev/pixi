@@ -57,6 +57,7 @@ for further details on how to use the software.
 - [Advanced Building Using rattler-build](https://prefix-dev.github.io/pixi/latest/build/advanced_cpp/index.md)
 - [Overview](https://prefix-dev.github.io/pixi/latest/build/backends/index.md)
 - [Building a C++ Package](https://prefix-dev.github.io/pixi/latest/build/cpp/index.md)
+- [Cross Compilation using rattler-build](https://prefix-dev.github.io/pixi/latest/build/cross_compilation/index.md)
 - [Dependency Types](https://prefix-dev.github.io/pixi/latest/build/dependency_types/index.md)
 - [Dev Packages](https://prefix-dev.github.io/pixi/latest/build/dev/index.md)
 - [Getting Started](https://prefix-dev.github.io/pixi/latest/build/getting_started/index.md)
