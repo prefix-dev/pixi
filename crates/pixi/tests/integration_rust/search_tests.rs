@@ -310,6 +310,66 @@ async fn test_search_multiple_packages_compact_view() {
 }
 
 #[tokio::test]
+async fn test_search_limit_zero_names_only() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+
+    package_database.add_package(
+        Package::build("cargo-edit", "1.0.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("cargo-edit", "2.0.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("cargo-audit", "0.5.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("cargo-watch", "3.0.0")
+            .with_subdir(Platform::NoArch)
+            .finish(),
+    );
+
+    let temp_dir = TempDir::new().unwrap();
+    let channel_dir = temp_dir.path().join("channel");
+    package_database.write_repodata(&channel_dir).await.unwrap();
+    let channel = Url::from_file_path(channel_dir).unwrap();
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-limit-zero"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    "#
+    ))
+    .unwrap();
+
+    // Multi-package: limit=0 should print only names
+    let mut out = Vec::new();
+    let mut builder = pixi.search("cargo*".to_string());
+    builder.args.limit = 0;
+    builder.args.limit_packages = -1;
+    let _result = search::execute_impl(builder.args, &mut out).await.unwrap();
+    let output = strip_ansi(&String::from_utf8(out).unwrap());
+    assert_eq!(output.trim(), "cargo-audit\ncargo-edit\ncargo-watch");
+
+    // Single package: limit=0 should also print only name
+    let mut out = Vec::new();
+    let mut builder = pixi.search("cargo-edit".to_string());
+    builder.args.limit = 0;
+    let _result = search::execute_impl(builder.args, &mut out).await.unwrap();
+    let output = strip_ansi(&String::from_utf8(out).unwrap());
+    assert_eq!(output.trim(), "cargo-edit");
+}
+
+#[tokio::test]
 async fn test_search_json_output() {
     setup_tracing();
 
