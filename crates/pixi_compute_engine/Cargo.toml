@@ -14,7 +14,7 @@ cmp_any = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt", "sync"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
 serde = { workspace = true, optional = true, features = ["derive"] }
 
 [dev-dependencies]

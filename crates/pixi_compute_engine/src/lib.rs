@@ -46,26 +46,16 @@
 //!                 |ctx| ctx.compute(&Fib(n - 2)).boxed(),
 //!             )
 //!             .await;
-//!         // Outer `Result` is `ComputeError` (cycles/cancellation; impossible
-//!         // here), inner is our user error.
-//!         Ok(a.unwrap()? + b.unwrap()?)
+//!         // `ctx.compute` returns the child's `Value` directly (no
+//!         // framework-error `Result` wrapper). Our `Value` is a
+//!         // `Result<u64, &str>`; propagate its error.
+//!         Ok(a? + b?)
 //!     }
 //! }
 //!
 //! # tokio_test::block_on(async {
 //! let engine = ComputeEngine::new();
 //! assert_eq!(engine.compute(&Fib(10)).await.unwrap(), Ok(55));
-//!
-//! // After a compute settles, the engine's dependency graph can be
-//! // snapshotted via `DependencyGraph::from_engine`. The snapshot is a
-//! // detached clone, so subsequent computes do not mutate it.
-//! use pixi_compute_engine::DependencyGraph;
-//! let graph = DependencyGraph::from_engine(&engine);
-//!
-//! // Render the snapshot to Graphviz `.dot` for visualization. Use
-//! // `write_dot(path)` to write straight to a file, or `write_dot_to`
-//! // for any `std::io::Write` (here, stderr).
-//! graph.write_dot_to(&mut std::io::stderr()).unwrap();
 //! # });
 //! ```
 //!
@@ -77,20 +67,122 @@
 //! owned container as a `Value` will clone the entire payload on every
 //! dedup hit.
 //!
-//! # Spawn-driven progress
+//! # Cancellation and progress
 //!
-//! Each compute runs as a [`tokio::spawn`]-ed task. The cache layer uses a
-//! two-tier split: in-flight tasks are tracked via weak shared-future
-//! references (so they do not keep the task alive on their own), while
-//! completed values are promoted into a strong-ref cache. Progress is
-//! independent of subscriber polling, so callers can freely embed
-//! `ctx.compute(..)` inside cancellable `tokio::select!` arms without
-//! starving other subscribers.
+//! A compute makes progress independently of any one caller's polling.
+//! Dropping a caller's future just unsubscribes that caller; if every
+//! subscriber to an in-flight compute drops, the engine may cancel the
+//! compute, and a later request for the same key will run it again.
 //!
-//! When the last subscriber drops, the last strong shared-future clone is
-//! dropped, the underlying future drops, and an `AbortOnDrop` guard
-//! cancels the spawned task. The weak entry in the in-flight map then
-//! fails to upgrade on the next request, which spawns a fresh task.
+//! This makes `ctx.compute(..)` safe to embed inside cancellable
+//! `tokio::select!` branches without starving other subscribers.
+//!
+//! # Cycles
+//!
+//! The dependency graph must be a DAG. If a Key's `compute` body requests
+//! another Key whose own compute is already in-flight further up the
+//! call chain, the two tasks would deadlock waiting on each other. The
+//! engine detects that the moment the closing edge is requested and
+//! converts the deadlock into a reportable error.
+//!
+//! Cycles are detected synchronously on the `ctx.compute(..)` call
+//! that would close them. There is no timeout and no liveness poll:
+//! if a cycle is possible, the call that closes it is the one that
+//! reports it.
+//!
+//! ## Default: surface at the engine boundary
+//!
+//! If no compute body on the cycle path opts in to handling the
+//! cycle, it is reported to callers of [`ComputeEngine::compute`] as
+//! [`Err(ComputeError::Cycle(..))`](ComputeError::Cycle). The wrapped
+//! [`CycleError`] carries the full ring of keys in the form
+//! `[closing_key, next, ..., closing_key]`.
+//!
+//! Why default to a returned error rather than a panic or a `Result`
+//! on every `ctx.compute`? Two reasons:
+//!
+//! 1. **Keep the common case ergonomic.** The vast majority of compute
+//!    bodies have an acyclic dependency structure by construction.
+//!    Forcing every `ctx.compute` call to match on a `Result` would
+//!    clutter code with a failure mode that cannot actually occur in
+//!    correctly-shaped graphs. [`ComputeCtx::compute`] therefore
+//!    returns `K::Value` directly, and framework errors surface only
+//!    where the engine hands a value back to the application, at
+//!    [`ComputeEngine::compute`].
+//! 2. **Panics are not a user-recoverable control flow.** A panic tears
+//!    down the task and, depending on the runtime configuration, the
+//!    whole process. Applications that want to report "this build has
+//!    a cyclic dependency" to a user need a structured error they can
+//!    catch, format, and continue from. Returning
+//!    [`ComputeError::Cycle`] gives them that.
+//!
+//! ## Opting in: [`ComputeCtx::with_cycle_guard`]
+//!
+//! A compute body whose key may legitimately participate in a cycle
+//! can wrap the suspect scope in [`ComputeCtx::with_cycle_guard`]. The
+//! guard races the inner future against a cycle-notification channel.
+//! When a cycle fires on this key, the scope's `select!` takes the
+//! cycle arm and returns `Err(CycleError)`, which the compute body
+//! can fold into its `Value`:
+//!
+//! ```
+//! use std::fmt;
+//! use futures::FutureExt;
+//! use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
+//!
+//! #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+//! struct Node(u32);
+//!
+//! impl fmt::Display for Node {
+//!     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//!         write!(f, "{}", self.0)
+//!     }
+//! }
+//!
+//! impl Key for Node {
+//!     // User-visible errors live inside the Value. Here the domain
+//!     // value is a `u32` and cycles are folded into a `String`.
+//!     type Value = Result<u32, String>;
+//!     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+//!         // A toy graph: every `Node(n)` depends on itself. Without
+//!         // a guard, `engine.compute(&Node(..))` would return
+//!         // `Err(ComputeError::Cycle(..))`. With one, the compute
+//!         // body sees the cycle as a normal `Err` and recovers.
+//!         let me = self.0;
+//!         match ctx
+//!             .with_cycle_guard(|ctx| {
+//!                 async move { ctx.compute(&Node(me)).await }.boxed()
+//!             })
+//!             .await
+//!         {
+//!             Ok(inner) => inner,
+//!             Err(cycle) => Err(format!("cycle at Node({me}): {cycle}")),
+//!         }
+//!     }
+//! }
+//!
+//! # tokio_test::block_on(async {
+//! let engine = ComputeEngine::new();
+//! let value = engine.compute(&Node(0)).await.unwrap();
+//! assert!(value.unwrap_err().starts_with("cycle at Node(0)"));
+//! # });
+//! ```
+//!
+//! ## Strict scope: a guard only catches cycles its own key is on
+//!
+//! A [`ComputeCtx::with_cycle_guard`] scope fires only when the
+//! guarding key is itself on the detected cycle path. A cycle that
+//! occurs deeper in the graph, below a `ctx.compute(&X)` the caller
+//! wrapped in a guard, is not rewound into the caller's guard: the
+//! caller is not on the cycle, so its guard is not notified, and
+//! the deep cycle still surfaces to [`ComputeEngine::compute`] as
+//! [`ComputeError::Cycle`].
+//!
+//! A guard is a local claim that *this* key may participate in a
+//! cycle and knows how to recover from one; it is not a catch-all
+//! for failures anywhere below it. If you want a deep cycle caught
+//! at a higher level, install a guard on the key that is actually
+//! on the cycle.
 //!
 //! # Global data
 //!
@@ -163,12 +255,20 @@
 //! // Computed keys can read this via ctx.compute(&DbUrl("primary".into()))
 //! // inside their compute body.
 //! ```
+//!
+//! # Introspection
+//!
+//! The engine's current dependency graph can be snapshotted with
+//! [`DependencyGraph::from_engine`]; see the [`introspection`] module
+//! for iteration, Graphviz output, and `serde::Serialize` support.
 
 mod abort_on_drop;
 mod any_key;
 mod builder;
 mod ctx;
+mod cycle;
 mod data;
+mod demand;
 mod engine;
 mod error;
 mod injected;
@@ -180,9 +280,11 @@ mod short_type_name;
 pub use any_key::AnyKey;
 pub use builder::ComputeEngineBuilder;
 pub use ctx::ComputeCtx;
+pub use cycle::CycleError;
 pub use data::DataStore;
+pub use demand::Demand;
 pub use engine::ComputeEngine;
-pub use error::{ComputeError, CycleStack};
+pub use error::ComputeError;
 pub use injected::InjectedKey;
 pub use introspection::{DependencyGraph, GraphNode, NodeState};
 pub use key::{Key, StorageType};

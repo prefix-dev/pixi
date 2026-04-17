@@ -76,7 +76,7 @@ pub struct PlusTenKey(pub u32);
 impl Key for PlusTenKey {
     type Value = u32;
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-        let base = ctx.compute(&BaseKey(self.0)).await.unwrap();
+        let base = ctx.compute(&BaseKey(self.0)).await;
         base + 10
     }
 }

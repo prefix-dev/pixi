@@ -2,7 +2,10 @@
 
 use std::sync::Arc;
 
-use crate::{ComputeEngine, DataStore, engine::EngineInner, key_graph::KeyGraph};
+use crate::{
+    ComputeEngine, DataStore, cycle::active_edges::ActiveEdges, engine::EngineInner,
+    key_graph::KeyGraph,
+};
 
 /// Builder for [`ComputeEngine`].
 ///
@@ -75,6 +78,7 @@ impl ComputeEngineBuilder {
         ComputeEngine {
             inner: Arc::new(EngineInner {
                 graph: KeyGraph::default(),
+                active_edges: Arc::new(ActiveEdges::new()),
                 sequential_branches: self.sequential_branches,
                 global_data: self.global_data,
             }),

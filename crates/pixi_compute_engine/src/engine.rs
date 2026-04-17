@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::{
     ComputeCtx, ComputeEngineBuilder, ComputeError, DataStore, InjectedKey, Key,
+    cycle::active_edges::ActiveEdges,
     key_graph::{KeyGraph, Lookup},
 };
 
@@ -70,6 +71,12 @@ pub(crate) struct EngineInner {
     /// Keyed graph storage. Doubles as the value cache and the
     /// dependency graph.
     pub(crate) graph: KeyGraph,
+    /// Global active-edge graph used by synchronous cycle detection
+    /// in [`ComputeCtx::compute`](crate::ComputeCtx::compute). Each
+    /// edge carries the notify target that was active when the edge
+    /// was created, so detection does not need a separate per-key
+    /// guard registry to route cycles to cross-task scopes.
+    pub(crate) active_edges: Arc<ActiveEdges>,
     /// Set via [`ComputeEngineBuilder::sequential_branches`]. When
     /// `true`, the parallel combinators on [`ComputeCtx`] run their
     /// branches one at a time in mint order instead of concurrently.
@@ -114,21 +121,36 @@ impl ComputeEngine {
     ///
     /// # Errors
     ///
-    /// - [`ComputeError::Cycle`] if `key` participates in a dependency
-    ///   cycle (direct or transitive).
     /// - [`ComputeError::Canceled`] if the underlying spawned task was
     ///   aborted before producing a value. This happens when the final
     ///   subscriber to an in-flight compute drops its handle.
+    /// - [`ComputeError::Cycle`] if a dependency cycle was detected
+    ///   that no
+    ///   [`ComputeCtx::with_cycle_guard`](crate::ComputeCtx::with_cycle_guard)
+    ///   scope on the cycle path caught. The wrapped
+    ///   [`CycleError`](crate::CycleError) carries the full ring of
+    ///   keys.
     ///
     /// The returned future uses precise capture (`use<K>`), so temporary
     /// key references like `engine.compute(&MyKey(..))` work seamlessly.
     ///
+    /// # Do not call from within a compute body
+    ///
+    /// The root ctx this method builds has no `current` key, so any
+    /// edges it would add are not seen by cycle detection. A nested
+    /// call from inside a running [`Key::compute`](crate::Key::compute)
+    /// body can therefore create a cross-task dedup deadlock that the
+    /// detector will not catch.
+    ///
+    /// Inside a `Key::compute` body, use
+    /// [`ComputeCtx::compute`](crate::ComputeCtx::compute), which
+    /// does participate in cycle detection.
     pub fn compute<K: Key>(
         &self,
         key: &K,
     ) -> impl Future<Output = Result<K::Value, ComputeError>> + use<K> {
         let mut ctx = ComputeCtx::new(self.inner.clone());
-        ctx.compute(key)
+        ctx.compute_root(key)
     }
 
     /// Inject a value for an [`InjectedKey`].
