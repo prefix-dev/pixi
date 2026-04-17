@@ -67,7 +67,7 @@ struct Reader(u32);
 impl Key for Reader {
     type Value = u64;
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-        let val = ctx.compute(&Param(self.0)).await.unwrap();
+        let val = ctx.compute(&Param(self.0)).await;
         val + 1
     }
 }
@@ -216,7 +216,7 @@ impl Key for ParallelInjectedReader {
                 |ctx| ctx.compute(&Param(n + 1)).boxed(),
             )
             .await;
-        a.unwrap() + b.unwrap()
+        a + b
     }
 }
 

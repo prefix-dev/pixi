@@ -192,7 +192,7 @@ async fn try_compute2_cancels_losing_branch() {
             ctx.try_compute2(
                 move |ctx| {
                     ctx.compute(&SlowKey { id: 99 })
-                        .map(|r| r.map_err(|_| "compute-err"))
+                        .map(Ok::<u32, &'static str>)
                         .boxed()
                 },
                 move |_ctx| {

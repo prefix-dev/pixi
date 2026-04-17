@@ -13,7 +13,7 @@ use std::{
 
 use cmp_any::PartialEqAny;
 
-use crate::Key;
+use crate::{Demand, Key};
 
 /// A type-erased, reference-counted handle to a [`Key`].
 ///
@@ -87,6 +87,30 @@ impl AnyKey {
     pub fn key_type_name(&self) -> &'static str {
         self.inner.key_type_name()
     }
+
+    /// Request a value of type `T` from the wrapped Key.
+    ///
+    /// Calls the Key's [`Key::provide`](crate::Key::provide)
+    /// implementation and returns the value it provided, or `None` if
+    /// the Key does not provide a value of type `T`.
+    pub fn request_value<T: 'static>(&self) -> Option<T> {
+        let mut slot: Option<T> = None;
+        let mut demand = Demand::new_value::<T>(&mut slot);
+        self.inner.dyn_provide(&mut demand);
+        slot
+    }
+
+    /// Request a reference of type `&T` from the wrapped Key.
+    ///
+    /// Calls the Key's [`Key::provide`](crate::Key::provide)
+    /// implementation and returns the reference it provided, or `None`
+    /// if the Key does not provide a `&T`.
+    pub fn request_ref<T: ?Sized + 'static>(&self) -> Option<&T> {
+        let mut slot: Option<&T> = None;
+        let mut demand = Demand::new_ref::<T>(&mut slot);
+        self.inner.dyn_provide(&mut demand);
+        slot
+    }
 }
 
 impl fmt::Debug for AnyKey {
@@ -132,6 +156,7 @@ pub(crate) trait AnyKeyDyn: Send + Sync {
     fn dyn_hash(&self, state: &mut dyn Hasher);
     fn dyn_display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
     fn dyn_debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
+    fn dyn_provide<'a, 's>(&'a self, demand: &mut Demand<'a, 's>);
 }
 
 impl<K: Key> AnyKeyDyn for K {
@@ -155,5 +180,9 @@ impl<K: Key> AnyKeyDyn for K {
 
     fn dyn_debug(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self, f)
+    }
+
+    fn dyn_provide<'a, 's>(&'a self, demand: &mut Demand<'a, 's>) {
+        Key::provide(self, demand);
     }
 }
