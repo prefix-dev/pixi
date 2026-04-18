@@ -136,6 +136,10 @@ pub enum WorkspaceLocatorError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     InvalidRequiresPixi(#[from] Box<pixi_manifest::InvalidRequiresPixiError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MemberDiscovery(#[from] Box<pixi_manifest::MemberDiscoveryError>),
 }
 
 impl WorkspaceLocator {
@@ -238,6 +242,9 @@ impl WorkspaceLocator {
             }
             Err(WorkspaceDiscoveryError::InvalidRequiresPixi(err)) => {
                 return Err(WorkspaceLocatorError::InvalidRequiresPixi(err));
+            }
+            Err(WorkspaceDiscoveryError::MemberDiscovery(err)) => {
+                return Err(WorkspaceLocatorError::MemberDiscovery(err));
             }
         };
 
