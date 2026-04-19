@@ -22,6 +22,11 @@ pub enum MetadataError {
     PyProjectToml(#[from] toml::de::Error),
     #[error("failed to parse version from pyproject.toml, {0}")]
     ParseVersion(ParseVersionError),
+    #[error("`pixi-build-python` requires a `pyproject.toml` in {0}")]
+    #[diagnostic(help(
+        "Add a PEP 517/518 `pyproject.toml` to the package source directory, or use a different build backend."
+    ))]
+    MissingPyProjectToml(PathBuf),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
@@ -72,8 +77,15 @@ impl PyprojectMetadataProvider {
     /// Ensures that the manifest is loaded
     fn ensure_manifest(&self) -> Result<&PyProjectToml, MetadataError> {
         self.pyproject_manifest.get_or_try_init(move || {
+            let pyproject_toml_path = self.manifest_root.join("pyproject.toml");
             let pyproject_toml_content =
-                fs_err::read_to_string(self.manifest_root.join("pyproject.toml"))?;
+                fs_err::read_to_string(&pyproject_toml_path).map_err(|err| {
+                    if err.kind() == std::io::ErrorKind::NotFound {
+                        MetadataError::MissingPyProjectToml(pyproject_toml_path.clone())
+                    } else {
+                        MetadataError::Io(err)
+                    }
+                })?;
             toml::from_str(&pyproject_toml_content).map_err(MetadataError::PyProjectToml)
         })
     }
@@ -748,6 +760,32 @@ version = "1.0.0"
             MetadataError::PyProjectToml(_) => {}
             err => panic!("Expected PyProjectToml, got: {err:?}"),
         }
+    }
+
+    #[test]
+    fn test_missing_pyproject_toml_errors_clearly() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let mut provider = create_metadata_provider(temp_dir.path());
+
+        let err = provider
+            .name()
+            .expect_err("missing pyproject.toml should return an error");
+        let message = err.to_string();
+        let expected_path = temp_dir.path().join("pyproject.toml");
+
+        match &err {
+            MetadataError::MissingPyProjectToml(path) => assert_eq!(path, &expected_path),
+            other => panic!("Expected MissingPyProjectToml, got: {other:?}"),
+        }
+
+        assert!(
+            message.contains("requires a `pyproject.toml`"),
+            "unexpected error message: {message}"
+        );
+        assert!(
+            message.contains(&expected_path.display().to_string()),
+            "error should mention the manifest root: {message}"
+        );
     }
 
     #[test]
