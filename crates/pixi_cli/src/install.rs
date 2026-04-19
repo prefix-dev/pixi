@@ -226,5 +226,38 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     eprintln!("{message}.");
 
+    // Under the `hierarchical-tasks` preview feature, the workspace owns a
+    // tree of member workspaces. `pixi install` at the root is eager: we
+    // walk every reachable member and install its default environment,
+    // updating each member's own lockfile in the process. This matches
+    // the user-approved behaviour of "lazy install for tasks, eager
+    // install for `pixi install`".
+    //
+    // Errors from any member abort the command with the path prefix of
+    // the failing member so users can see exactly which project broke.
+    for (path, member_ws) in workspace.walk_members() {
+        let member_envs = vec![member_ws.default_environment()];
+        let prefix = path.join("::");
+        get_update_lock_file_and_prefixes(
+            &member_envs,
+            UpdateMode::Revalidate,
+            UpdateLockFileOptions {
+                lock_file_usage: args.lock_file_usage.to_usage(),
+                no_install: false,
+                max_concurrent_solves: member_ws.config().max_concurrent_solves(),
+            },
+            ReinstallPackages::default(),
+            &filter,
+        )
+        .await
+        .map_err(|e| e.wrap_err(format!("failed to install member workspace `{prefix}`")))?;
+
+        eprintln!(
+            "{} The {} member's default environment has been installed",
+            console::style(console::Emoji("✔ ", "")).green(),
+            console::style(&prefix).bold(),
+        );
+    }
+
     Ok(())
 }

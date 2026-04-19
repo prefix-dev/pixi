@@ -1,17 +1,22 @@
-//! Recursive downward discovery of nested member packages under a workspace
-//! root.
+//! Recursive downward discovery of nested member workspaces under a
+//! workspace root.
 //!
-//! This module implements part of the `hierarchical-tasks` preview feature
-//! described in issue [#5003](https://github.com/prefix-dev/pixi/issues/5003).
-//! A "member" is a subdirectory that contains its own pixi-compatible manifest
-//! (`pixi.toml`, `pyproject.toml`, or `mojoproject.toml`) with a
-//! `[package].name` declaration. Members form a tree: when a member contains
-//! another member under it, the inner one becomes a child in the tree.
+//! This module implements the structural discovery side of the
+//! `hierarchical-tasks` preview feature described in issue
+//! [#5003](https://github.com/prefix-dev/pixi/issues/5003).
 //!
-//! Discovery is purely structural — it does not parse the full manifest (which
-//! may depend on workspace inheritance), it only peeks at the TOML pointers
-//! needed to extract the package name and detect nested `[workspace]` blocks
-//! (which are not supported).
+//! **Model 2 — federated member workspaces.** A "member" is a subdirectory
+//! that contains its own pixi-compatible manifest (`pixi.toml`,
+//! `pyproject.toml`, or `mojoproject.toml`) with a top-level `[workspace]`
+//! block (or `[tool.pixi.workspace]` for pyproject). Members have their
+//! own environments, channels, and lockfile — they are fully standalone
+//! pixi projects. Running `pixi run test` inside a member directory
+//! treats that member as the root workspace, without any knowledge of
+//! the outer aggregation.
+//!
+//! This module produces only **structural metadata** — names and paths.
+//! Actual loading of each member as a `pixi_core::Workspace` happens in a
+//! later layer, keyed off the tree returned here.
 
 use std::{
     path::{Path, PathBuf},
@@ -24,27 +29,28 @@ use pixi_consts::consts;
 use thiserror::Error;
 
 use crate::{
-    ManifestKind, ManifestProvenance, ProvenanceError, TomlError, utils::WithSourceCode,
+    ManifestKind, ManifestProvenance, ProvenanceError, TomlError,
+    utils::WithSourceCode,
 };
 
-/// A tree of member packages rooted under a workspace directory.
+/// A tree of member workspaces rooted under a workspace directory.
 #[derive(Debug, Default, Clone)]
 pub struct MemberTree {
     members: IndexMap<String, MemberNode>,
 }
 
-/// A single member package node in the tree.
+/// A single member node in the tree. Holds only structural metadata —
+/// the member is loaded as a full `pixi_core::Workspace` later.
 #[derive(Debug, Clone)]
 pub struct MemberNode {
-    /// The `[package].name` (or `[tool.pixi.package].name`) declared in the
-    /// member manifest.
+    /// The workspace name declared in this member's manifest (from
+    /// `[workspace].name`, `[tool.pixi.workspace].name`, or `[project].name`
+    /// as a pyproject fallback).
     pub name: String,
     /// Absolute path to the manifest file for this member.
     pub manifest_path: PathBuf,
     /// Absolute path to the directory containing the manifest.
     pub dir: PathBuf,
-    /// Discriminates between pixi.toml / pyproject.toml / mojoproject.toml.
-    pub kind: ManifestKind,
     /// Nested child members (unbounded depth).
     pub children: IndexMap<String, MemberNode>,
 }
@@ -77,9 +83,7 @@ impl MemberTree {
     }
 
     /// Yields every reachable member as `(path_segments, node)` in
-    /// depth-first, insertion order. `path_segments` is the chain of member
-    /// names from the root (e.g. `vec!["a", "c"]` for a member addressable as
-    /// `a::c`).
+    /// depth-first, insertion order.
     pub fn walk(&self) -> Vec<(Vec<String>, &MemberNode)> {
         fn visit<'a>(
             prefix: &[String],
@@ -115,28 +119,29 @@ pub enum MemberDiscoveryError {
     ProvenanceError(#[from] ProvenanceError),
 
     #[error(
-        "duplicate member package name `{name}`: found at `{first}` and `{second}`"
+        "duplicate member workspace name `{name}`: found at `{first}` and `{second}`"
     )]
     DuplicateSibling {
         name: String,
         first: PathBuf,
         second: PathBuf,
     },
-
-    #[error(
-        "nested workspace is not supported under `hierarchical-tasks`: `{dir}` declares its own `[workspace]`"
-    )]
-    NestedWorkspace { dir: PathBuf },
 }
 
-/// Discovers nested member packages rooted at `workspace_dir`.
+/// Discovers nested member workspaces rooted at `workspace_dir`.
 ///
 /// Walks the directory tree under `workspace_dir`, skipping common build /
 /// cache / VCS directories. When a directory contains a pixi-compatible
-/// manifest with a `[package].name`, that directory becomes a member and
-/// descent continues inside it for further nested members.
+/// manifest with a `[workspace]` block that declares a name, that
+/// directory becomes a member and descent continues inside it for further
+/// nested members.
 ///
-/// Returns an empty tree if no members are found. The root manifest at
+/// Manifests without `[workspace]` (for example, a `pixi.toml` that only
+/// declares `[package]` or is otherwise a non-workspace manifest) are
+/// transparent — discovery walks through them as if they weren't there
+/// and keeps searching deeper.
+///
+/// Returns an empty tree when no members are found. The root manifest at
 /// `workspace_dir/pixi.toml` (or equivalent) is never treated as a member —
 /// only descendants are considered.
 pub fn discover_members(workspace_dir: &Path) -> Result<MemberTree, MemberDiscoveryError> {
@@ -149,7 +154,6 @@ fn walk(
     dir: &Path,
     members: &mut IndexMap<String, MemberNode>,
 ) -> Result<(), MemberDiscoveryError> {
-    // Deterministic order.
     let mut entries: Vec<PathBuf> = std::fs::read_dir(dir)?
         .filter_map(|e| e.ok())
         .map(|e| e.path())
@@ -160,66 +164,22 @@ fn walk(
 
     for entry in entries {
         let Some(provenance) = provenance_from_dir(&entry) else {
-            // Not a manifest-carrying dir itself, but members may exist deeper.
             walk(&entry, members)?;
             continue;
         };
 
-        // Peek at the TOML. We do NOT run the full manifest deserializer here
-        // because sub-members may rely on workspace inheritance that isn't
-        // resolved at this layer. We only need the package name and a check
-        // for a nested `[workspace]`.
-        let contents = provenance
-            .read()?
-            .map(Arc::<str>::from);
-        let source_name = provenance.absolute_path().to_string_lossy().into_owned();
-        let inner: Arc<str> = match &contents {
-            crate::ManifestSource::PixiToml(s)
-            | crate::ManifestSource::PyProjectToml(s)
-            | crate::ManifestSource::MojoProjectToml(s) => s.clone(),
-        };
+        let parsed = parse_member_manifest(&provenance)?;
 
-        let toml = match toml_span::parse(inner.as_ref()) {
-            Ok(t) => t,
-            Err(e) => {
-                let source = NamedSource::new(source_name, inner).with_language("toml");
-                return Err(MemberDiscoveryError::Toml(Box::new(WithSourceCode {
-                    error: TomlError::from(e),
-                    source,
-                })));
-            }
-        };
-
-        let (has_workspace, name) = match provenance.kind {
-            ManifestKind::Pixi | ManifestKind::MojoProject => (
-                toml.pointer("/workspace").is_some()
-                    || toml.pointer("/project").is_some(),
-                toml.pointer("/package/name")
-                    .and_then(|v| v.as_str().map(|s| s.to_string())),
-            ),
-            ManifestKind::Pyproject => (
-                toml.pointer("/tool/pixi/workspace").is_some()
-                    || toml.pointer("/tool/pixi/project").is_some(),
-                toml.pointer("/tool/pixi/package/name")
-                    .and_then(|v| v.as_str().map(|s| s.to_string()))
-                    .or_else(|| {
-                        toml.pointer("/project/name")
-                            .and_then(|v| v.as_str().map(|s| s.to_string()))
-                    }),
-            ),
-        };
-
-        if has_workspace {
-            return Err(MemberDiscoveryError::NestedWorkspace { dir: entry.clone() });
-        }
-
-        let Some(name) = name else {
-            // No package name = not a member. Keep descending.
+        // Under Model 2, a directory is a member iff its manifest has
+        // [workspace]. Anything else — including `[package]`-only
+        // manifests — is transparent: we walk right through it to find
+        // any deeper members.
+        let Some(name) = parsed.workspace_name else {
             walk(&entry, members)?;
             continue;
         };
 
-        // Recurse to find nested members under this one.
+        // Recurse into this member for further nested members.
         let mut children = IndexMap::new();
         walk(&entry, &mut children)?;
 
@@ -227,7 +187,6 @@ fn walk(
             name: name.clone(),
             manifest_path: provenance.path.clone(),
             dir: entry.clone(),
-            kind: provenance.kind,
             children,
         };
 
@@ -243,6 +202,61 @@ fn walk(
     }
 
     Ok(())
+}
+
+/// Structured view of a member manifest used during discovery.
+///
+/// `workspace_name` is `Some(name)` only when the manifest contains a
+/// `[workspace]` block that declares a name. Anything else is `None`.
+struct ParsedMember {
+    workspace_name: Option<String>,
+}
+
+fn parse_member_manifest(
+    provenance: &ManifestProvenance,
+) -> Result<ParsedMember, MemberDiscoveryError> {
+    let contents = provenance.read()?.map(Arc::<str>::from);
+    let source_name = provenance.absolute_path().to_string_lossy().into_owned();
+    let inner: Arc<str> = match &contents {
+        crate::ManifestSource::PixiToml(s)
+        | crate::ManifestSource::PyProjectToml(s)
+        | crate::ManifestSource::MojoProjectToml(s) => s.clone(),
+    };
+
+    let toml = match toml_span::parse(inner.as_ref()) {
+        Ok(t) => t,
+        Err(e) => {
+            let source = NamedSource::new(source_name, inner).with_language("toml");
+            return Err(MemberDiscoveryError::Toml(Box::new(WithSourceCode {
+                error: TomlError::from(e),
+                source,
+            })));
+        }
+    };
+
+    let (workspace_ptr, workspace_name_ptr): (&'static str, &'static str) = match provenance.kind {
+        ManifestKind::Pixi | ManifestKind::MojoProject => ("/workspace", "/workspace/name"),
+        ManifestKind::Pyproject => ("/tool/pixi/workspace", "/tool/pixi/workspace/name"),
+    };
+
+    // `[workspace]` is the sole membership signal.
+    if toml.pointer(workspace_ptr).is_none() {
+        return Ok(ParsedMember { workspace_name: None });
+    }
+
+    let workspace_name = toml
+        .pointer(workspace_name_ptr)
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .or_else(|| {
+            if matches!(provenance.kind, ManifestKind::Pyproject) {
+                toml.pointer("/project/name")
+                    .and_then(|v| v.as_str().map(|s| s.to_string()))
+            } else {
+                None
+            }
+        });
+
+    Ok(ParsedMember { workspace_name })
 }
 
 /// Directories we never descend into. Dot-prefixed names are skipped
@@ -293,8 +307,17 @@ mod tests {
         fs::write(path, contents).unwrap();
     }
 
-    fn pkg_toml(name: &str) -> String {
-        format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\n")
+    /// Minimal valid `[workspace]` block for a member fixture.
+    fn member_workspace_toml(name: &str) -> String {
+        format!(
+            "[workspace]\nname = \"{name}\"\nchannels = []\nplatforms = []\n"
+        )
+    }
+
+    fn member_workspace_with_task(name: &str, task_body: &str) -> String {
+        format!(
+            "[workspace]\nname = \"{name}\"\nchannels = []\nplatforms = []\n\n[tasks]\n{task_body}\n"
+        )
     }
 
     #[test]
@@ -307,8 +330,8 @@ mod tests {
     #[test]
     fn discovers_top_level_members() {
         let tmp = tempfile::tempdir().unwrap();
-        write(&tmp.path().join("a/pixi.toml"), &pkg_toml("a"));
-        write(&tmp.path().join("b/pixi.toml"), &pkg_toml("b"));
+        write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("a"));
+        write(&tmp.path().join("b/pixi.toml"), &member_workspace_toml("b"));
 
         let tree = discover_members(tmp.path()).unwrap();
         let names: Vec<_> = tree.members().keys().cloned().collect();
@@ -321,8 +344,8 @@ mod tests {
     #[test]
     fn discovers_nested_members() {
         let tmp = tempfile::tempdir().unwrap();
-        write(&tmp.path().join("a/pixi.toml"), &pkg_toml("a"));
-        write(&tmp.path().join("a/c/pixi.toml"), &pkg_toml("c"));
+        write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("a"));
+        write(&tmp.path().join("a/c/pixi.toml"), &member_workspace_toml("c"));
 
         let tree = discover_members(tmp.path()).unwrap();
         let a = tree.resolve(["a"]).expect("a should exist");
@@ -332,9 +355,8 @@ mod tests {
 
     #[test]
     fn intermediate_dir_without_manifest_is_transparent() {
-        // b/ has no manifest; b/c/pixi.toml becomes a top-level member `c`.
         let tmp = tempfile::tempdir().unwrap();
-        write(&tmp.path().join("b/c/pixi.toml"), &pkg_toml("c"));
+        write(&tmp.path().join("b/c/pixi.toml"), &member_workspace_toml("c"));
 
         let tree = discover_members(tmp.path()).unwrap();
         assert!(tree.resolve(["c"]).is_some());
@@ -342,12 +364,41 @@ mod tests {
     }
 
     #[test]
+    fn package_only_manifest_is_transparent() {
+        // A manifest with only [package] and no [workspace] is NOT a
+        // member and discovery descends through it as if the manifest
+        // weren't there.
+        let tmp = tempfile::tempdir().unwrap();
+        write(
+            &tmp.path().join("tools/pixi.toml"),
+            "[package]\nname = \"tools\"\nversion = \"0.1.0\"\n",
+        );
+        write(
+            &tmp.path().join("tools/inner/pixi.toml"),
+            &member_workspace_toml("inner"),
+        );
+
+        let tree = discover_members(tmp.path()).unwrap();
+        assert!(tree.resolve(["inner"]).is_some());
+        assert!(tree.resolve(["tools"]).is_none());
+    }
+
+    #[test]
     fn skips_common_build_and_hidden_dirs() {
         let tmp = tempfile::tempdir().unwrap();
-        write(&tmp.path().join("target/pixi.toml"), &pkg_toml("should_not_appear"));
-        write(&tmp.path().join(".pixi/pixi.toml"), &pkg_toml("should_not_appear_either"));
-        write(&tmp.path().join("node_modules/pixi.toml"), &pkg_toml("also_nope"));
-        write(&tmp.path().join("ok/pixi.toml"), &pkg_toml("ok"));
+        write(
+            &tmp.path().join("target/pixi.toml"),
+            &member_workspace_toml("should_not_appear"),
+        );
+        write(
+            &tmp.path().join(".pixi/pixi.toml"),
+            &member_workspace_toml("should_not_appear_either"),
+        );
+        write(
+            &tmp.path().join("node_modules/pixi.toml"),
+            &member_workspace_toml("also_nope"),
+        );
+        write(&tmp.path().join("ok/pixi.toml"), &member_workspace_toml("ok"));
 
         let tree = discover_members(tmp.path()).unwrap();
         let names: Vec<_> = tree.members().keys().cloned().collect();
@@ -355,30 +406,10 @@ mod tests {
     }
 
     #[test]
-    fn manifest_without_package_name_is_not_a_member_but_is_transparent() {
-        // A pixi.toml without [package] is ignored as a member, but we still
-        // descend beneath it to find deeper members.
-        let tmp = tempfile::tempdir().unwrap();
-        write(
-            &tmp.path().join("tools/pixi.toml"),
-            "[workspace]\nchannels=[]\nplatforms=[]\n",
-        );
-        // Actually [workspace] triggers NestedWorkspace; use a bare file instead.
-        // Overwrite with something that has neither [workspace] nor [package].
-        write(&tmp.path().join("tools/pixi.toml"), "# empty\n");
-        write(&tmp.path().join("tools/inner/pixi.toml"), &pkg_toml("inner"));
-
-        let tree = discover_members(tmp.path()).unwrap();
-        // `tools` is not a member, but `inner` is found beneath it.
-        assert!(tree.resolve(["inner"]).is_some());
-        assert!(tree.resolve(["tools"]).is_none());
-    }
-
-    #[test]
     fn duplicate_sibling_name_errors() {
         let tmp = tempfile::tempdir().unwrap();
-        write(&tmp.path().join("a/pixi.toml"), &pkg_toml("same"));
-        write(&tmp.path().join("b/pixi.toml"), &pkg_toml("same"));
+        write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("same"));
+        write(&tmp.path().join("b/pixi.toml"), &member_workspace_toml("same"));
 
         let err = discover_members(tmp.path()).unwrap_err();
         assert!(
@@ -387,22 +418,22 @@ mod tests {
     }
 
     #[test]
-    fn nested_workspace_errors() {
+    fn nested_workspaces_are_expected() {
+        // A member may itself contain members with [workspace]. This is
+        // the expected Model-2 shape; no error is returned.
         let tmp = tempfile::tempdir().unwrap();
-        write(
-            &tmp.path().join("sub/pixi.toml"),
-            "[workspace]\nchannels=[]\nplatforms=[]\n",
-        );
-        let err = discover_members(tmp.path()).unwrap_err();
-        assert!(matches!(err, MemberDiscoveryError::NestedWorkspace { .. }));
+        write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("a"));
+        write(&tmp.path().join("a/c/pixi.toml"), &member_workspace_toml("c"));
+        let tree = discover_members(tmp.path()).unwrap();
+        assert!(tree.resolve(["a", "c"]).is_some());
     }
 
     #[test]
     fn deeply_nested_transparent_chain() {
-        // root/a(member)/mid(no manifest)/c(member)
         let tmp = tempfile::tempdir().unwrap();
-        write(&tmp.path().join("a/pixi.toml"), &pkg_toml("a"));
-        write(&tmp.path().join("a/mid/c/pixi.toml"), &pkg_toml("c"));
+        write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("a"));
+        // mid has no manifest; c sits under a/mid/c
+        write(&tmp.path().join("a/mid/c/pixi.toml"), &member_workspace_toml("c"));
 
         let tree = discover_members(tmp.path()).unwrap();
         assert!(tree.resolve(["a", "c"]).is_some());
@@ -411,9 +442,9 @@ mod tests {
     #[test]
     fn walk_yields_paths_in_insertion_order() {
         let tmp = tempfile::tempdir().unwrap();
-        write(&tmp.path().join("a/pixi.toml"), &pkg_toml("a"));
-        write(&tmp.path().join("a/c/pixi.toml"), &pkg_toml("c"));
-        write(&tmp.path().join("b/pixi.toml"), &pkg_toml("b"));
+        write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("a"));
+        write(&tmp.path().join("a/c/pixi.toml"), &member_workspace_toml("c"));
+        write(&tmp.path().join("b/pixi.toml"), &member_workspace_toml("b"));
 
         let tree = discover_members(tmp.path()).unwrap();
         let paths: Vec<Vec<String>> = tree.walk().into_iter().map(|(p, _)| p).collect();
@@ -425,5 +456,20 @@ mod tests {
                 vec!["b".to_string()],
             ]
         );
+    }
+
+    #[test]
+    fn member_with_tasks_still_discovered_structurally() {
+        // Discovery doesn't parse or return tasks — task extraction
+        // happens during Workspace loading in pixi_core. This test just
+        // confirms a tasks block doesn't confuse discovery.
+        let tmp = tempfile::tempdir().unwrap();
+        write(
+            &tmp.path().join("a/pixi.toml"),
+            &member_workspace_with_task("a", "greet = \"echo hi\""),
+        );
+
+        let tree = discover_members(tmp.path()).unwrap();
+        assert!(tree.resolve(["a"]).is_some());
     }
 }

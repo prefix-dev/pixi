@@ -14,9 +14,8 @@ use thiserror::Error;
 use toml_span::Deserialize;
 
 use crate::{
-    AssociateProvenance, KnownPreviewFeature, ManifestKind, ManifestProvenance, ManifestSource,
-    MemberDiscoveryError, MemberTree, PackageManifest, ProvenanceError, TomlError, WithProvenance,
-    WithWarnings, WorkspaceManifest, discover_members,
+    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
+    ProvenanceError, TomlError, WithProvenance, WithWarnings, WorkspaceManifest,
     pyproject::PyProjectManifest,
     toml::{ExternalWorkspaceProperties, PackageDefaults, TomlManifest},
     utils::WithSourceCode,
@@ -53,14 +52,6 @@ pub struct Manifests {
     /// If not requested this might still contain the package manifest stored in
     /// the same manifest as the workspace.
     pub package: Option<WithProvenance<PackageManifest>>,
-
-    /// Hierarchical tree of nested member packages discovered under the
-    /// workspace root.
-    ///
-    /// Populated only when the workspace enables the
-    /// [`KnownPreviewFeature::HierarchicalTasks`] preview feature. Otherwise
-    /// this is an empty tree and should be ignored.
-    pub members: MemberTree,
 }
 
 /// An error that may occur when loading a discovered workspace directly from a
@@ -167,12 +158,6 @@ impl Manifests {
                 provenance,
                 value: workspace_manifest,
             },
-            // `from_workspace_source` loads from an in-memory or single-file
-            // source and does not walk the filesystem, so no members are
-            // discovered here. The disk-walking entrypoint
-            // [`WorkspaceDiscoverer::discover`] is responsible for populating
-            // this tree when the preview feature is enabled.
-            members: MemberTree::default(),
         })
         .with_warnings(warnings))
     }
@@ -210,10 +195,6 @@ pub enum WorkspaceDiscoveryError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     InvalidRequiresPixi(#[from] Box<InvalidRequiresPixiError>),
-
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    MemberDiscovery(#[from] Box<MemberDiscoveryError>),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -665,28 +646,10 @@ impl WorkspaceDiscoverer {
                 }
             };
 
-            // Optionally discover nested member packages. This is gated
-            // behind the `hierarchical-tasks` preview feature so existing
-            // workspaces see no behavior change.
-            let members = if workspace_manifest
-                .workspace
-                .preview
-                .is_enabled(KnownPreviewFeature::HierarchicalTasks)
-            {
-                let workspace_dir = provenance
-                    .path
-                    .parent()
-                    .expect("a manifest file must have a parent directory");
-                discover_members(workspace_dir).map_err(Box::new)?
-            } else {
-                MemberTree::default()
-            };
-
             return Ok(Some(
                 WithWarnings::from(Manifests {
                     workspace: WithProvenance::new(workspace_manifest, provenance),
                     package: closest_package_manifest,
-                    members,
                 })
                 .with_warnings(warnings),
             ));
@@ -929,102 +892,4 @@ mod test {
         )
     }
 
-    /// Builds a minimal on-disk workspace layout for hierarchical-tasks
-    /// tests. Returns the tempdir; members live at `<tmp>/a`, `<tmp>/b`,
-    /// and `<tmp>/a/c`.
-    fn build_hierarchical_workspace(tmp: &Path, preview: &str) {
-        std::fs::write(
-            tmp.join("pixi.toml"),
-            format!(
-                "[workspace]\nchannels = []\nplatforms = []\npreview = [{preview}]\n"
-            ),
-        )
-        .unwrap();
-
-        for (rel, name) in [
-            ("a", "a"),
-            ("b", "b"),
-            ("a/c", "c"),
-        ] {
-            let dir = tmp.join(rel);
-            std::fs::create_dir_all(&dir).unwrap();
-            std::fs::write(
-                dir.join("pixi.toml"),
-                format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\n"),
-            )
-            .unwrap();
-        }
-    }
-
-    #[test]
-    fn test_discovers_members_when_preview_enabled() {
-        let tmp = tempfile::tempdir().unwrap();
-        build_hierarchical_workspace(tmp.path(), "\"hierarchical-tasks\"");
-
-        let manifests =
-            WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(tmp.path().to_path_buf()))
-                .discover()
-                .expect("workspace should discover")
-                .expect("workspace should exist")
-                .value;
-
-        let members = &manifests.members;
-        assert!(!members.is_empty(), "members should be populated");
-        assert!(members.resolve(["a"]).is_some(), "expected member a");
-        assert!(members.resolve(["b"]).is_some(), "expected member b");
-        assert!(
-            members.resolve(["a", "c"]).is_some(),
-            "expected nested member a::c"
-        );
-        assert!(
-            members.resolve(["c"]).is_none(),
-            "nested member must not appear at root level"
-        );
-    }
-
-    #[test]
-    fn test_members_empty_without_preview() {
-        let tmp = tempfile::tempdir().unwrap();
-        // No preview flag enabled — member discovery must be skipped.
-        build_hierarchical_workspace(tmp.path(), "");
-
-        let manifests =
-            WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(tmp.path().to_path_buf()))
-                .discover()
-                .expect("workspace should discover")
-                .expect("workspace should exist")
-                .value;
-
-        assert!(
-            manifests.members.is_empty(),
-            "members must stay empty when preview flag is off"
-        );
-    }
-
-    #[test]
-    fn test_member_discovery_errors_bubble_through_discoverer() {
-        // Two sibling members with the same name should surface as a
-        // discovery error rather than a silent overwrite.
-        let tmp = tempfile::tempdir().unwrap();
-        std::fs::write(
-            tmp.path().join("pixi.toml"),
-            "[workspace]\nchannels = []\nplatforms = []\npreview = [\"hierarchical-tasks\"]\n",
-        )
-        .unwrap();
-        for rel in ["a", "b"] {
-            let dir = tmp.path().join(rel);
-            std::fs::create_dir_all(&dir).unwrap();
-            std::fs::write(
-                dir.join("pixi.toml"),
-                "[package]\nname = \"same\"\nversion = \"0.1.0\"\n",
-            )
-            .unwrap();
-        }
-
-        let err = WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(tmp.path().to_path_buf()))
-            .discover()
-            .expect_err("expected a member discovery error");
-
-        assert!(matches!(err, WorkspaceDiscoveryError::MemberDiscovery(_)));
-    }
 }

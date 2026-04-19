@@ -127,6 +127,7 @@ nav:
   - Concepts:
       - Environments: workspace/environment.md
       - Tasks: workspace/advanced_tasks.md
+      - Hierarchical Tasks (preview): workspace/hierarchical_tasks.md
       - Multi Platform: workspace/multi_platform_configuration.md
       - Multi Environment: workspace/multi_environment.md
       - Lock File: workspace/lockfile.md

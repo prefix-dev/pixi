@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::{Path, PathBuf}, sync::Arc};
 
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
@@ -10,7 +10,7 @@ use pixi_manifest::{
 use thiserror::Error;
 
 use crate::workspace::WorkspaceRegistry;
-use crate::workspace::{Workspace, WorkspaceRegistryError};
+use crate::workspace::{MemberWorkspace, Workspace, WorkspaceRegistryError};
 
 /// Defines where the search for the workspace should start.
 #[derive(Debug, Clone, Default)]
@@ -243,9 +243,6 @@ impl WorkspaceLocator {
             Err(WorkspaceDiscoveryError::InvalidRequiresPixi(err)) => {
                 return Err(WorkspaceLocatorError::InvalidRequiresPixi(err));
             }
-            Err(WorkspaceDiscoveryError::MemberDiscovery(err)) => {
-                return Err(WorkspaceLocatorError::MemberDiscovery(err));
-            }
         };
 
         // Extract the warnings from the discovered workspace.
@@ -300,7 +297,30 @@ impl WorkspaceLocator {
             );
         }
 
-        let workspace = Workspace::from_manifests(discovered_manifests);
+        let mut workspace = Workspace::from_manifests(discovered_manifests);
+
+        // If the `hierarchical-tasks` preview feature is enabled on the
+        // discovered root workspace, recursively load each discovered
+        // member's own standalone Workspace and attach it to the root's
+        // member tree. Under Model 2 every member has its own [workspace]
+        // and is fully self-contained — we just load it via the same
+        // locator machinery, then key the results by member name.
+        if workspace
+            .workspace
+            .value
+            .workspace
+            .preview
+            .is_enabled(pixi_manifest::KnownPreviewFeature::HierarchicalTasks)
+        {
+            // Find the MemberTree that was populated during manifest
+            // discovery and load each member. This runs the full
+            // `WorkspaceLocator` for each member directory, which means
+            // each member gets the same discovery/canonicalisation/
+            // requires-pixi treatment as any standalone workspace.
+            let workspace_dir = workspace.root().to_path_buf();
+            let members = load_members_recursively(&workspace_dir)?;
+            workspace.set_members(members);
+        }
 
         Ok(workspace)
     }
@@ -346,6 +366,60 @@ impl WorkspaceLocator {
 
         Ok(discovered_workspace.map(WithWarnings::from))
     }
+}
+
+/// Recursively load each discovered member as its own standalone
+/// [`Workspace`], keyed by the member's `[workspace].name`.
+///
+/// This is called by [`WorkspaceLocator::locate`] once the root workspace
+/// has been constructed and the `hierarchical-tasks` preview feature is
+/// enabled. Each member goes through the same [`WorkspaceLocator`] path as
+/// a standalone workspace — so the member's own manifest discovery,
+/// canonicalisation, and `requires-pixi` check all run unchanged.
+///
+/// The `workspace_dir` argument is the already-canonicalised root of the
+/// outer workspace. Member discovery only descends from here; it never
+/// climbs back upward, so a member's own upward walk reliably stops at
+/// the member's `[workspace]` (and not the outer root).
+fn load_members_recursively(
+    workspace_dir: &Path,
+) -> Result<indexmap::IndexMap<String, MemberWorkspace>, WorkspaceLocatorError> {
+    // Structural discovery: names + directories only, no Workspace load yet.
+    let tree = pixi_manifest::discover_members(workspace_dir)
+        .map_err(Box::new)
+        .map_err(WorkspaceLocatorError::MemberDiscovery)?;
+
+    fn build(
+        nodes: &indexmap::IndexMap<String, pixi_manifest::MemberNode>,
+    ) -> Result<indexmap::IndexMap<String, MemberWorkspace>, WorkspaceLocatorError> {
+        let mut out = indexmap::IndexMap::with_capacity(nodes.len());
+        for (name, node) in nodes {
+            // Load this member as its own standalone Workspace. We
+            // deliberately avoid `with_consider_environment` / warning
+            // emission so member loads don't pollute the root's output.
+            let member_ws = WorkspaceLocator::for_cli()
+                .with_consider_environment(false)
+                .with_emit_warnings(false)
+                .with_search_start(DiscoveryStart::SearchRoot(node.dir.clone()))
+                .locate()?;
+
+            // Recurse into this member's own nested members. Each level
+            // owns its own loaded Workspace; the tree mirrors the
+            // structure returned by `discover_members`.
+            let children = build(&node.children)?;
+
+            out.insert(
+                name.clone(),
+                MemberWorkspace {
+                    workspace: member_ws,
+                    children,
+                },
+            );
+        }
+        Ok(out)
+    }
+
+    build(tree.members())
 }
 
 #[cfg(test)]
