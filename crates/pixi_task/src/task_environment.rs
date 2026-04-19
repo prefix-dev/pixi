@@ -613,7 +613,7 @@ mod tests {
             .expect("a::test must resolve");
         // Model 2: the returned Environment belongs to the **member's**
         // workspace, not the root. Verify by comparing workspace roots.
-        let expected_root = std::fs::canonicalize(tmp.path().join("a")).unwrap();
+        let expected_root = dunce::canonicalize(tmp.path().join("a")).unwrap();
         assert_eq!(
             env.workspace().root(),
             expected_root,
@@ -643,7 +643,7 @@ mod tests {
             .expect("a::c::test must resolve");
         // The returned env must belong to the inner member `a/c`, not to
         // `a` or the root.
-        let expected_root = std::fs::canonicalize(tmp.path().join("a/c")).unwrap();
+        let expected_root = dunce::canonicalize(tmp.path().join("a/c")).unwrap();
         assert_eq!(env.workspace().root(), expected_root);
         use pixi_manifest::task::CmdArgs;
         match task.as_command() {
