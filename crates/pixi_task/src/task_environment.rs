@@ -705,9 +705,6 @@ mod tests {
         );
         // `::foo` splits to ["", "foo"]: degenerate but handled — caller
         // will fail at member-resolve time since `""` isn't a member.
-        assert_eq!(
-            parse_qualified_task_name("::foo"),
-            Some((vec![""], "foo"))
-        );
+        assert_eq!(parse_qualified_task_name("::foo"), Some((vec![""], "foo")));
     }
 }

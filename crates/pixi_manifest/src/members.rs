@@ -28,10 +28,7 @@ use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
 use thiserror::Error;
 
-use crate::{
-    ManifestKind, ManifestProvenance, ProvenanceError, TomlError,
-    utils::WithSourceCode,
-};
+use crate::{ManifestKind, ManifestProvenance, ProvenanceError, TomlError, utils::WithSourceCode};
 
 /// A tree of member workspaces rooted under a workspace directory.
 #[derive(Debug, Default, Clone)]
@@ -118,9 +115,7 @@ pub enum MemberDiscoveryError {
     #[diagnostic(transparent)]
     ProvenanceError(#[from] ProvenanceError),
 
-    #[error(
-        "duplicate member workspace name `{name}`: found at `{first}` and `{second}`"
-    )]
+    #[error("duplicate member workspace name `{name}`: found at `{first}` and `{second}`")]
     DuplicateSibling {
         name: String,
         first: PathBuf,
@@ -241,7 +236,9 @@ fn parse_member_manifest(
 
     // `[workspace]` is the sole membership signal.
     if toml.pointer(workspace_ptr).is_none() {
-        return Ok(ParsedMember { workspace_name: None });
+        return Ok(ParsedMember {
+            workspace_name: None,
+        });
     }
 
     let workspace_name = toml
@@ -308,9 +305,7 @@ mod tests {
 
     /// Minimal valid `[workspace]` block for a member fixture.
     fn member_workspace_toml(name: &str) -> String {
-        format!(
-            "[workspace]\nname = \"{name}\"\nchannels = []\nplatforms = []\n"
-        )
+        format!("[workspace]\nname = \"{name}\"\nchannels = []\nplatforms = []\n")
     }
 
     fn member_workspace_with_task(name: &str, task_body: &str) -> String {
@@ -344,7 +339,10 @@ mod tests {
     fn discovers_nested_members() {
         let tmp = tempfile::tempdir().unwrap();
         write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("a"));
-        write(&tmp.path().join("a/c/pixi.toml"), &member_workspace_toml("c"));
+        write(
+            &tmp.path().join("a/c/pixi.toml"),
+            &member_workspace_toml("c"),
+        );
 
         let tree = discover_members(tmp.path()).unwrap();
         let a = tree.resolve(["a"]).expect("a should exist");
@@ -355,7 +353,10 @@ mod tests {
     #[test]
     fn intermediate_dir_without_manifest_is_transparent() {
         let tmp = tempfile::tempdir().unwrap();
-        write(&tmp.path().join("b/c/pixi.toml"), &member_workspace_toml("c"));
+        write(
+            &tmp.path().join("b/c/pixi.toml"),
+            &member_workspace_toml("c"),
+        );
 
         let tree = discover_members(tmp.path()).unwrap();
         assert!(tree.resolve(["c"]).is_some());
@@ -397,7 +398,10 @@ mod tests {
             &tmp.path().join("node_modules/pixi.toml"),
             &member_workspace_toml("also_nope"),
         );
-        write(&tmp.path().join("ok/pixi.toml"), &member_workspace_toml("ok"));
+        write(
+            &tmp.path().join("ok/pixi.toml"),
+            &member_workspace_toml("ok"),
+        );
 
         let tree = discover_members(tmp.path()).unwrap();
         let names: Vec<_> = tree.members().keys().cloned().collect();
@@ -407,8 +411,14 @@ mod tests {
     #[test]
     fn duplicate_sibling_name_errors() {
         let tmp = tempfile::tempdir().unwrap();
-        write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("same"));
-        write(&tmp.path().join("b/pixi.toml"), &member_workspace_toml("same"));
+        write(
+            &tmp.path().join("a/pixi.toml"),
+            &member_workspace_toml("same"),
+        );
+        write(
+            &tmp.path().join("b/pixi.toml"),
+            &member_workspace_toml("same"),
+        );
 
         let err = discover_members(tmp.path()).unwrap_err();
         assert!(
@@ -422,7 +432,10 @@ mod tests {
         // the expected Model-2 shape; no error is returned.
         let tmp = tempfile::tempdir().unwrap();
         write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("a"));
-        write(&tmp.path().join("a/c/pixi.toml"), &member_workspace_toml("c"));
+        write(
+            &tmp.path().join("a/c/pixi.toml"),
+            &member_workspace_toml("c"),
+        );
         let tree = discover_members(tmp.path()).unwrap();
         assert!(tree.resolve(["a", "c"]).is_some());
     }
@@ -432,7 +445,10 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("a"));
         // mid has no manifest; c sits under a/mid/c
-        write(&tmp.path().join("a/mid/c/pixi.toml"), &member_workspace_toml("c"));
+        write(
+            &tmp.path().join("a/mid/c/pixi.toml"),
+            &member_workspace_toml("c"),
+        );
 
         let tree = discover_members(tmp.path()).unwrap();
         assert!(tree.resolve(["a", "c"]).is_some());
@@ -442,7 +458,10 @@ mod tests {
     fn walk_yields_paths_in_insertion_order() {
         let tmp = tempfile::tempdir().unwrap();
         write(&tmp.path().join("a/pixi.toml"), &member_workspace_toml("a"));
-        write(&tmp.path().join("a/c/pixi.toml"), &member_workspace_toml("c"));
+        write(
+            &tmp.path().join("a/c/pixi.toml"),
+            &member_workspace_toml("c"),
+        );
         write(&tmp.path().join("b/pixi.toml"), &member_workspace_toml("b"));
 
         let tree = discover_members(tmp.path()).unwrap();

@@ -891,5 +891,4 @@ mod test {
                 .contains("Missing table in manifest pyproject.toml")
         )
     }
-
 }

@@ -325,9 +325,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             } else {
                 member_lock_files
                     .get(executable_task.workspace.root())
-                    .expect(
-                        "member lockfile must have been populated before the task loop runs",
-                    )
+                    .expect("member lockfile must have been populated before the task loop runs")
             };
 
         // check task cache
@@ -393,7 +391,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     args.clean_env || executable_task.task().clean_env(),
                     Some(task_lock_file.as_lock_file()),
                     task_workspace.config().force_activate(),
-                    task_workspace.config().experimental_activation_cache_usage(),
+                    task_workspace
+                        .config()
+                        .experimental_activation_cache_usage(),
                 )
                 .await?;
                 entry.insert(command_env)
