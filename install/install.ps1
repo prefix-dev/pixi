@@ -190,7 +190,7 @@ Write-Host "The binary will be installed into '$BinDir'"
 $TEMP_FILE = [System.IO.Path]::GetTempFileName()
 
 try {
-    Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $TEMP_FILE
+    curl.exe -L --fail --show-error -o $TEMP_FILE $DOWNLOAD_URL
 
     # Create the install dir if it doesn't exist
     if (!(Test-Path -Path $BinDir)) {
