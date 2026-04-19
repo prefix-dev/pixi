@@ -298,13 +298,12 @@ fn provenance_from_dir(dir: &Path) -> Option<ManifestProvenance> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     fn write(path: &Path, contents: &str) {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).unwrap();
+            fs_err::create_dir_all(parent).unwrap();
         }
-        fs::write(path, contents).unwrap();
+        fs_err::write(path, contents).unwrap();
     }
 
     /// Minimal valid `[workspace]` block for a member fixture.

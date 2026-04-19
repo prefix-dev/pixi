@@ -565,7 +565,7 @@ mod tests {
         } else {
             "preview = []"
         };
-        std::fs::write(
+        fs_err::write(
             tmp.path().join("pixi.toml"),
             format!(
                 "[workspace]\nname = \"ht-root\"\nchannels = []\nplatforms = [\"linux-64\", \"osx-64\", \"osx-arm64\", \"win-64\"]\n{preview_line}\n\n[tasks]\ngreet = \"echo hi\"\nall_tests = {{ depends-on = [\"a::test\", \"a::c::test\", \"b::test\"] }}\n"
@@ -579,8 +579,8 @@ mod tests {
             ("a/c", "c", "echo c"),
         ] {
             let dir = tmp.path().join(rel);
-            std::fs::create_dir_all(&dir).unwrap();
-            std::fs::write(
+            fs_err::create_dir_all(&dir).unwrap();
+            fs_err::write(
                 dir.join("pixi.toml"),
                 format!(
                     "[workspace]\nname = \"{name}\"\nchannels = []\nplatforms = [\"linux-64\", \"osx-64\", \"osx-arm64\", \"win-64\"]\n\n[tasks]\ntest = \"{task}\"\n"
