@@ -5598,7 +5598,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.67.0"
+version = "0.67.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6753,6 +6753,7 @@ dependencies = [
  "fs-err",
  "itertools 0.14.0",
  "miette 7.6.0",
+ "pixi_consts",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_package_streaming",

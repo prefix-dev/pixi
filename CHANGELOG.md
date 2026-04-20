@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.67.1] - 2026-04-20
+#### Changed
+
+- Show only package names when using `-l 0` by @niklasmarderx in [#5820](https://github.com/prefix-dev/pixi/pull/5820)
+- Handle missing PATH environment variable by @Hofer-Julian in [#5915](https://github.com/prefix-dev/pixi/pull/5915)
+
+
+#### Documentation
+
+- Fix `global expose remove` snippet by @Hofer-Julian in [#5869](https://github.com/prefix-dev/pixi/pull/5869)
+- Add best practices section to tasks chapter in docs by @pya in [#5880](https://github.com/prefix-dev/pixi/pull/5880)
+- Some minor improvements to the python tutorial by @AVHopp in [#5875](https://github.com/prefix-dev/pixi/pull/5875)
+- Fix npm build example in pixi manifest by @dk-tanio in [#5879](https://github.com/prefix-dev/pixi/pull/5879)
+- Fixed typos and capitals and added clarification for channels in Rust tutorial by @carecodeconnect in [#5874](https://github.com/prefix-dev/pixi/pull/5874)
+- Clarify scheduled CVE scanning and two threat models in security guide by @dk-moriha in [#5877](https://github.com/prefix-dev/pixi/pull/5877)
+- Improve VS Code support documentation by @AmineChr54 in [#5884](https://github.com/prefix-dev/pixi/pull/5884)
+- Fix the description of `pixi run` with duplicate tasks by @wulmer in [#5892](https://github.com/prefix-dev/pixi/pull/5892)
+- Use `canonical_version: latest` in mike by @AVHopp in [#5888](https://github.com/prefix-dev/pixi/pull/5888)
+- Fix conda package build string explanation graphic by @wulmer in [#5886](https://github.com/prefix-dev/pixi/pull/5886)
+- Add crosscompiling example by @toprinse in [#5793](https://github.com/prefix-dev/pixi/pull/5793)
+
+
+#### Fixed
+
+- Schema for exclude-newer by @pavelzw in [#5852](https://github.com/prefix-dev/pixi/pull/5852)
+- `pixi-build` using detached environments location for cache by @ruben-arts in [#5855](https://github.com/prefix-dev/pixi/pull/5855)
+- Exclude pytest-temp from basedpyright checks by @chrisburr in [#5868](https://github.com/prefix-dev/pixi/pull/5868)
+- Add exclude-newer to build test fixtures and remove maturin test by @chrisburr in [#5867](https://github.com/prefix-dev/pixi/pull/5867)
+- Show requires-newer-pixi error before schema validation errors by @chrisburr in [#5864](https://github.com/prefix-dev/pixi/pull/5864)
+- Improve quoting in build script for paths with spaces by @ruben-arts in [#5890](https://github.com/prefix-dev/pixi/pull/5890)
+- Enable sigstore for pixi upload, publish by @wolfv in [#5904](https://github.com/prefix-dev/pixi/pull/5904)
+- Update egg link path for editable package detection by @ruben-arts in [#5910](https://github.com/prefix-dev/pixi/pull/5910)
+- Improve pixi download speed in install.ps1 by @baszalmstra in [#5920](https://github.com/prefix-dev/pixi/pull/5920)
+- Avoid resolving symlinks on windows trampoline by @ruben-arts in [#5924](https://github.com/prefix-dev/pixi/pull/5924)
+
+
+#### New Contributors
+* @toprinse made their first contribution in [#5793](https://github.com/prefix-dev/pixi/pull/5793)
+* @niklasmarderx made their first contribution in [#5820](https://github.com/prefix-dev/pixi/pull/5820)
+* @wulmer made their first contribution in [#5886](https://github.com/prefix-dev/pixi/pull/5886)
+* @AVHopp made their first contribution in [#5888](https://github.com/prefix-dev/pixi/pull/5888)
+* @AmineChr54 made their first contribution in [#5884](https://github.com/prefix-dev/pixi/pull/5884)
+* @dk-moriha made their first contribution in [#5877](https://github.com/prefix-dev/pixi/pull/5877)
+* @carecodeconnect made their first contribution in [#5874](https://github.com/prefix-dev/pixi/pull/5874)
+* @dk-tanio made their first contribution in [#5879](https://github.com/prefix-dev/pixi/pull/5879)
+
 ### [0.67.0] - 2026-04-08
 #### ✨ Highlights
 
