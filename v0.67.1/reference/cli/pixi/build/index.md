@@ -1,0 +1,85 @@
+# [pixi](../) build
+
+Build a conda package from a Pixi package.
+
+## Usage
+
+```text
+pixi build [OPTIONS]
+```
+
+## Options
+
+- [`--target-platform (-t) <TARGET_PLATFORM>`](#arg---target-platform) : The target platform to build for (defaults to the current platform)
+
+  ```
+  **default**: `current_platform`
+  ```
+
+- [`--build-platform <BUILD_PLATFORM>`](#arg---build-platform) : The build platform to use for building (defaults to the current platform)
+
+  ```
+  **default**: `current_platform`
+  ```
+
+- [`--output-dir (-o) <OUTPUT_DIR>`](#arg---output-dir) : The output directory to place the built artifacts
+
+  ```
+  **default**: `.`
+  ```
+
+- [`--build-dir (-b) <BUILD_DIR>`](#arg---build-dir) : The directory to use for incremental builds artifacts
+
+- [`--clean (-c)`](#arg---clean) : Whether to clean the build directory before building
+
+- [`--path <PATH>`](#arg---path) : The path to a directory containing a package manifest, or to a specific manifest file
+
+## Config Options
+
+- [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
+
+- [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
+
+- [`--concurrent-solves <CONCURRENT_SOLVES>`](#arg---concurrent-solves) : Max concurrent solves, default is the number of CPUs
+
+- [`--pinning-strategy <PINNING_STRATEGY>`](#arg---pinning-strategy) : Set pinning strategy
+
+  ```
+  **options**: `semver`, `minor`, `major`, `latest-up`, `exact-version`, `no-pin`
+  ```
+
+- [`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`](#arg---pypi-keyring-provider) : Specifies whether to use the keyring to look up credentials for PyPI
+
+  ```
+  **options**: `disabled`, `subprocess`
+  ```
+
+- [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
+
+- [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
+
+- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+
+  ```
+  **env**: `PIXI_TLS_ROOT_CERTS`
+  ```
+
+- [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
+
+## Update Options
+
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+
+  ```
+  **env**: `PIXI_FROZEN`
+  ```
+
+- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+
+  ```
+  **env**: `PIXI_LOCKED`
+  ```
+
+- [`--as-is`](#arg---as-is) : Shorthand for the combination of --no-install and --frozen

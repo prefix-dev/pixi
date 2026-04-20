@@ -1,0 +1,26 @@
+[workspace]
+channels = ["conda-forge"]
+name = "task-arguments-partial"
+
+# --8<-- [start:project_tasks]
+# --8<-- [start:project_tasks_with_arg]
+[tasks.base-task]
+args = [
+  { "arg" = "arg1", "default" = "default1" }, # First argument with default
+  { "arg" = "arg2", "default" = "default2" }, # Second argument with default
+]
+cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}"
+
+[tasks.partial-override]
+# Only override the first argument
+depends-on = [{ "task" = "base-task", "args" = ["override1"] }]
+
+# --8<-- [end:project_tasks]
+[tasks.partial-override-with-arg]
+# Only override the first argument
+args = [
+  { arg = "arg2", default = "new-default2" }, # Argument with new default
+]
+depends-on = [{ task = "base-task", args = ["override1", "{{ arg2 }}"] }]
+
+# --8<-- [end:project_tasks_with_arg]
