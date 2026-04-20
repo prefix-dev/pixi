@@ -20,21 +20,20 @@ use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_record::{FullSourceRecordData, PixiRecord, SourceRecord};
 use pixi_spec::{
-    BinarySpec, PixiSpec, ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec, SourceTimestamps,
+    BinarySpec, PixiSpec, ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec,
     SpecConversionError,
 };
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::{VariantSelector, VariantValue};
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, HasArtifactIdentificationRefs, InvalidPackageNameError, MatchSpec,
-    PackageName, PackageRecord, package::RunExportsJson,
+    ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
+    package::RunExportsJson,
 };
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use thiserror::Error;
 use tracing::instrument;
-use url::Url;
 
 /// A request for the resolved metadata of a single source record, identified
 /// by package name and variant combination.
@@ -145,7 +144,7 @@ impl SourceRecordSpec {
         //
         // Skip the cache entirely when exclude_newer is not set, because without a fixed timestamp
         // the resolved dependencies are non-deterministic.
-        let stale_cached_entry = if let Some(ref exclude_newer) = self.exclude_newer
+        let stale_cached_entry = if let Some(_exclude_newer) = &self.exclude_newer
             && !build_backend_metadata.skip_cache
         {
             let cache_key: CacheKey<SourceRecordCache> = SourceRecordCacheKey {
@@ -155,7 +154,6 @@ impl SourceRecordSpec {
                 build_environment: self.backend_metadata.build_environment.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
                 source: build_backend_metadata.source.clone().into(),
-                exclude_newer: Some(exclude_newer.clone()),
             };
             let cached_metadata = command_dispatcher
                 .source_record_cache()
@@ -251,23 +249,8 @@ impl SourceRecordSpec {
             )
             .await?;
 
-        // Skip caching when there is no timestamp (no host/build deps).
-        // Without a timestamp there is nothing to soft-lock, and the result
-        // is fully determined by the source manifest content alone.
-        let Some(record_timestamp) = record.timestamp.clone() else {
-            return Ok(ResolvedSourceRecord {
-                record: Self::amend_cached_source_record(&build_backend_metadata.source, record),
-                source: build_backend_metadata.source.clone(),
-            });
-        };
-
         // Write back to cache using the record's resolved timestamp as key.
         if !build_backend_metadata.skip_cache {
-            let mut resolved_exclude_newer: ResolvedExcludeNewer = record_timestamp.clone().into();
-            if let Some(input_exclude_newer) = &self.exclude_newer {
-                resolved_exclude_newer.include_unknown_timestamp =
-                    input_exclude_newer.include_unknown_timestamp;
-            }
             let write_cache_key: CacheKey<SourceRecordCache> = SourceRecordCacheKey {
                 package: self.package.clone(),
                 variants: self.variants.clone(),
@@ -275,33 +258,12 @@ impl SourceRecordSpec {
                 build_environment: self.backend_metadata.build_environment.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
                 source: build_backend_metadata.source.clone().into(),
-                exclude_newer: Some(resolved_exclude_newer.clone()),
             };
 
             // If we previously did not read the right cache entry, compare
             // the resolved timestamps (converted to ResolvedExcludeNewer) with
             // the input exclude_newer.
-            let (is_stale, cached_entry) = if Some(resolved_exclude_newer) != self.exclude_newer {
-                let prev_cached_entry = command_dispatcher
-                    .source_record_cache()
-                    .read(&write_cache_key)
-                    .await
-                    .map_err(SourceRecordError::Cache)
-                    .map_err(CommandDispatcherError::Failed)?;
-
-                match Self::verify_cache_freshness(
-                    prev_cached_entry,
-                    &build_backend_metadata.metadata.revision,
-                )
-                .await?
-                {
-                    CacheFreshness::Fresh(prev) => (false, Some(prev)),
-                    CacheFreshness::MismatchedBackendMetadata(prev) => (true, Some(prev)),
-                    CacheFreshness::Missing => (true, None),
-                }
-            } else {
-                (true, stale_cached_entry)
-            };
+            let (is_stale, cached_entry) = (true, stale_cached_entry);
 
             // Reuse the previous revision if the record content hasn't
             // changed. This keeps downstream caches valid when inputs
@@ -316,7 +278,7 @@ impl SourceRecordSpec {
                     None
                 }
                 (_, Some(prev)) => {
-                    // Record doesnt match, write with a new revision
+                    // Record doesn't match, write with a new revision
                     Some((Some(prev.cache_version), CacheRevision::new()))
                 }
                 (_, None) => Some((None, CacheRevision::new())),
@@ -370,7 +332,6 @@ impl SourceRecordSpec {
             package_record,
             variants,
             sources,
-            timestamp,
         } = record;
         SourceRecord {
             data: FullSourceRecordData {
@@ -378,7 +339,6 @@ impl SourceRecordSpec {
                 sources,
             },
             variants,
-            timestamp,
             manifest_source: source.manifest_source().clone(),
             build_source: source.build_source().cloned(),
             identifier_hash: None,
@@ -606,9 +566,6 @@ impl SourceRecordSpec {
             strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
-        // Compute the timestamp of the newest package that was used in the build/host environment.
-        let timestamp = Self::extract_timestamp(exclude_newer, &build_records, &host_records);
-
         Ok(CachedSourceRecord {
             package_record: PackageRecord {
                 size: None,
@@ -649,7 +606,6 @@ impl SourceRecordSpec {
                 legacy_bz2_size: None,
                 experimental_extra_depends: Default::default(),
             },
-            timestamp,
             sources: sources
                 .into_iter()
                 .map(|(name, source)| (name.as_source().to_string(), source))
@@ -660,92 +616,6 @@ impl SourceRecordSpec {
                 .iter()
                 .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
                 .collect(),
-        })
-    }
-
-    fn extract_timestamp(
-        exclude_newer: ResolvedExcludeNewer,
-        build_records: &[PixiRecord],
-        host_records: &[PixiRecord],
-    ) -> Option<SourceTimestamps> {
-        let mut highest_timestamp_by_channel = exclude_newer
-            .channel_cutoffs
-            .keys()
-            .map(|channel_url| (channel_url.clone(), None))
-            .collect::<BTreeMap<ChannelUrl, _>>();
-        let mut highest_timestamp_by_name = exclude_newer
-            .package_cutoffs
-            .keys()
-            .map(|name| (name.clone(), None))
-            .collect::<BTreeMap<_, _>>();
-        let mut highest_timestamp = None;
-        for record in host_records.iter().chain(build_records.iter()) {
-            match record {
-                PixiRecord::Binary(repo_data_record) => {
-                    let Some(timestamp) = repo_data_record.package_record.timestamp else {
-                        // Skip if a timestamp is not available.
-                        continue;
-                    };
-                    let timestamp = timestamp.into_datetime();
-                    let channel = repo_data_record
-                        .channel
-                        .as_ref()
-                        .and_then(|channel_str| Some(Url::parse(channel_str).ok()?.into()));
-                    if let Some(entry) = highest_timestamp_by_name.get_mut(repo_data_record.name())
-                    {
-                        *entry = Some(entry.map_or(timestamp, |previous| timestamp.max(previous)));
-                    } else if let Some(channel) = &channel
-                        && let Some(entry) = highest_timestamp_by_channel.get_mut(channel)
-                    {
-                        *entry = Some(entry.map_or(timestamp, |previous| timestamp.max(previous)));
-                    } else {
-                        highest_timestamp = Some(
-                            highest_timestamp.map_or(timestamp, |previous| timestamp.max(previous)),
-                        );
-                    }
-                }
-                PixiRecord::Source(source) => {
-                    let Some(timestamp) = &source.timestamp else {
-                        // Skip if source has no timestamp.
-                        continue;
-                    };
-                    highest_timestamp = Some(
-                        highest_timestamp
-                            .map_or(timestamp.latest, |previous| timestamp.latest.max(previous)),
-                    );
-                    for (channel, timestamp) in &timestamp.channels {
-                        let Some(timestamp) = timestamp else { continue };
-                        if let Some(entry) = highest_timestamp_by_channel.get_mut(channel) {
-                            *entry = Some(
-                                entry.map_or(*timestamp, |previous| (*timestamp).max(previous)),
-                            );
-                        }
-                    }
-                    for (package, timestamp) in &timestamp.packages {
-                        let Some(timestamp) = timestamp else { continue };
-                        if let Some(entry) = highest_timestamp_by_name.get_mut(package) {
-                            *entry = Some(
-                                entry.map_or(*timestamp, |previous| (*timestamp).max(previous)),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        let default_timestamp = highest_timestamp.or_else(|| {
-            highest_timestamp_by_channel
-                .values()
-                .chain(highest_timestamp_by_name.values())
-                .copied()
-                .flatten()
-                .max()
-        });
-
-        default_timestamp.map(move |latest| SourceTimestamps {
-            latest,
-            channels: highest_timestamp_by_channel,
-            packages: highest_timestamp_by_name,
         })
     }
 
@@ -792,7 +662,6 @@ impl SourceRecordSpec {
                 variant_files: self.backend_metadata.variant_files.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
                 preferred_build_source,
-                source_timestamp_hints: Default::default(),
             })
             .await
         {

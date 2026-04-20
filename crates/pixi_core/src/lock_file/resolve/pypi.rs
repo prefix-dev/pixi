@@ -39,7 +39,8 @@ use pypi_modifiers::{
 };
 use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
 use rattler_lock::{
-    PackageHashes, PypiDistributionData, PypiPackageData, PypiSourceData, UrlOrPath, Verbatim,
+    PackageHashes, PypiDistributionData, PypiPackageData, PypiSourceData, SourceData, UrlOrPath,
+    Verbatim,
 };
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -1255,6 +1256,7 @@ async fn lock_pypi_packages(
                                             metadata.requires_dist.iter(),
                                         )
                                         .into_diagnostic()?,
+                                        source_data: SourceData::default(),
                                     },
                                 )))
                                 .lock(locked_version),

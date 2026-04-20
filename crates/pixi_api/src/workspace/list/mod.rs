@@ -9,7 +9,7 @@ use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_package_name};
 use rattler_conda_types::Platform;
-use rattler_lock::LockedPackageRef;
+use rattler_lock::LockedPackage;
 use uv_distribution::RegistryWheelIndex;
 use uv_distribution_types::{
     ConfigSettings, ExtraBuildRequires, ExtraBuildVariables, PackageConfigSettings,
@@ -59,11 +59,11 @@ pub async fn list(
     let locked_deps_ext = locked_deps
         .into_iter()
         .map(|p| match p {
-            LockedPackageRef::Pypi(pypi_data) => {
+            LockedPackage::Pypi(pypi_data) => {
                 let name = to_uv_normalize(pypi_data.name())?;
                 Ok(PackageExt::PyPI(pypi_data.clone().into(), name))
             }
-            LockedPackageRef::Conda(c) => Ok(PackageExt::Conda(c.clone())),
+            LockedPackage::Conda(c) => Ok(PackageExt::Conda(c.clone())),
         })
         .collect::<Result<Vec<_>, ConversionError>>()
         .into_diagnostic()?;

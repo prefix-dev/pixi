@@ -21,8 +21,8 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, DevSourceMetadataError, DevSourceMetadataSpec,
-    ResolvedSourceRecord, SourceCheckoutError, SourceRecordError, SourceRecordReuseKey,
-    SourceRecordSpec, executor::CancellationAwareFutures,
+    ResolvedSourceRecord, SourceCheckoutError, SourceRecordError, SourceRecordSpec,
+    executor::CancellationAwareFutures,
 };
 use pixi_config::Config;
 use pixi_git::url::RepositoryUrl;
@@ -38,8 +38,7 @@ use pixi_record::{
     UnresolvedSourceRecord, VariantValue,
 };
 use pixi_spec::{
-    PixiSpec, ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec, SourceSpec,
-    SpecConversionError, Subdirectory,
+    PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError, Subdirectory,
 };
 use pixi_utils::variants::VariantConfig;
 use pixi_uv_conversions::{
@@ -51,7 +50,7 @@ use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Matches, NamedChannelOrUrl, PackageName,
     ParseChannelError, ParseMatchSpecError, ParseStrictness::Lenient, Platform,
 };
-use rattler_lock::{FileFormatVersion, LockedPackageRef, PackageHashes, PypiIndexes, UrlOrPath};
+use rattler_lock::{FileFormatVersion, LockedPackage, PackageHashes, PypiIndexes, UrlOrPath};
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -211,37 +210,6 @@ fn verify_exclude_newer(
                     timestamp: (*timestamp).into(),
                     exclude_newer: exclude_newer
                         .cutoff_for_package(&record.name, channel.as_deref()),
-                });
-            }
-        }
-    }
-
-    Ok(())
-}
-
-/// Checks that the timestamps stored in locked source records are compatible
-/// with the environment's exclude-newer configuration. If a source record's
-/// timestamps exceed the cutoff, the environment needs re-solving.
-fn verify_source_exclude_newer(
-    exclude_newer: Option<&ResolvedExcludeNewer>,
-    locked_environment: &rattler_lock::Environment<'_>,
-) -> Result<(), SourceExcludeNewerMismatch> {
-    let Some(exclude_newer) = exclude_newer else {
-        return Ok(());
-    };
-
-    for (_platform, packages) in locked_environment.conda_packages_by_platform() {
-        for package in packages {
-            let Some(source) = package.as_source() else {
-                continue;
-            };
-            let Some(timestamps) = &source.timestamp else {
-                continue;
-            };
-
-            if !exclude_newer.is_satisfied_by(timestamps) {
-                return Err(SourceExcludeNewerMismatch {
-                    package: source.name().as_source().to_string(),
                 });
             }
         }
@@ -833,12 +801,6 @@ pub fn verify_environment_satisfiability(
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
     }
 
-    if let Err(err) =
-        verify_source_exclude_newer(resolved_exclude_newer.as_ref(), &locked_environment)
-    {
-        return Err(EnvironmentUnsat::SourceExcludeNewerMismatch(err));
-    }
-
     Ok(())
 }
 
@@ -860,7 +822,7 @@ impl PypiWheelTagsCheck {
                     packages.map(move |package| (platform, package))
                 })
                 .filter_map(|(platform, package)| match package {
-                    LockedPackageRef::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
+                    LockedPackage::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
                         Some((platform, package))
                     }
                     _ => None,
@@ -1073,15 +1035,10 @@ pub struct VerifySatisfiabilityContext<'a> {
     pub static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
-pub type ValidatedSourceTimestamps = HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>;
-
-pub struct PlatformSatisfiabilityOutcome {
-    pub validated_source_timestamps: ValidatedSourceTimestamps,
-    pub result: Result<
-        (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
-        CommandDispatcherError<Box<PlatformUnsat>>,
-    >,
-}
+pub type PlatformSatisfiabilityResult = Result<
+    (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
+    CommandDispatcherError<Box<PlatformUnsat>>,
+>;
 
 #[derive(Clone)]
 struct PlatformVerificationSetup {
@@ -1151,14 +1108,11 @@ fn build_platform_verification_setup(
 pub async fn verify_platform_satisfiability(
     ctx: &VerifySatisfiabilityContext<'_>,
     locked_environment: rattler_lock::Environment<'_>,
-) -> PlatformSatisfiabilityOutcome {
+) -> PlatformSatisfiabilityResult {
     let platform_setup = match build_platform_verification_setup(ctx) {
         Ok(setup) => setup,
         Err(err) => {
-            return PlatformSatisfiabilityOutcome {
-                validated_source_timestamps: Default::default(),
-                result: Err(err),
-            };
+            return Err(err);
         }
     };
 
@@ -1175,7 +1129,7 @@ pub async fn verify_platform_satisfiability(
         .flatten()
     {
         match package {
-            LockedPackageRef::Conda(conda) => {
+            LockedPackage::Conda(conda) => {
                 let url = conda.location().clone();
                 let record = match UnresolvedPixiRecord::from_conda_package_data(
                     conda.clone(),
@@ -1183,17 +1137,14 @@ pub async fn verify_platform_satisfiability(
                 ) {
                     Ok(record) => record,
                     Err(e) => {
-                        return PlatformSatisfiabilityOutcome {
-                            validated_source_timestamps: Default::default(),
-                            result: Err(CommandDispatcherError::Failed(Box::new(
-                                PlatformUnsat::CorruptedEntry(url.to_string(), e),
-                            ))),
-                        };
+                        return Err(CommandDispatcherError::Failed(Box::new(
+                            PlatformUnsat::CorruptedEntry(url.to_string(), e),
+                        )));
                     }
                 };
                 unresolved_records.push(record);
             }
-            LockedPackageRef::Pypi(pypi) => {
+            LockedPackage::Pypi(pypi) => {
                 pypi_packages.push(pypi.clone().into());
             }
         }
@@ -1235,8 +1186,6 @@ pub async fn verify_platform_satisfiability(
         }
     }
 
-    // Await the resolution of any pending records and add them to the resolved records.
-    let mut validated_source_timestamps = ValidatedSourceTimestamps::new();
     let mut first_error: Option<Box<PlatformUnsat>> = None;
     while let Some(result) = pending_resolved_record.next().await {
         match result {
@@ -1248,17 +1197,6 @@ pub async fn verify_platform_satisfiability(
                     locked_environment.lock_file().version(),
                 ) {
                     Ok(()) => {
-                        // Store the validated source timestamp.
-                        if let Some(timestamp) = &resolved_record.record.timestamp {
-                            validated_source_timestamps.insert(
-                                SourceRecordReuseKey::new(
-                                    resolved_record.record.name().clone(),
-                                    resolved_record.record.variants.clone(),
-                                ),
-                                timestamp.clone(),
-                            );
-                        }
-
                         // Store the resolved record.
                         resolved_records.push(PixiRecord::Source(resolved_record.record.clone()))
                     }
@@ -1271,10 +1209,7 @@ pub async fn verify_platform_satisfiability(
             Err(err) => {
                 let Some(err) = err.into_failed() else {
                     // Propagate cancellation immediately.
-                    return PlatformSatisfiabilityOutcome {
-                        validated_source_timestamps,
-                        result: Err(CommandDispatcherError::Cancelled),
-                    };
+                    return Err(CommandDispatcherError::Cancelled);
                 };
                 first_error.get_or_insert_with(|| Box::new(PlatformUnsat::SourceRecord(err)));
             }
@@ -1284,10 +1219,7 @@ pub async fn verify_platform_satisfiability(
     // If we encountered a single error, we return it but also the validated source timestamps, so
     // that we can reuse any source records that were valid.
     if let Some(first_error) = first_error {
-        return PlatformSatisfiabilityOutcome {
-            validated_source_timestamps,
-            result: Err(CommandDispatcherError::Failed(first_error)),
-        };
+        return Err(CommandDispatcherError::Failed(first_error));
     }
 
     // Create a lookup table from package name to package record. Returns an error
@@ -1340,7 +1272,7 @@ pub async fn verify_platform_satisfiability(
                 .into_iter()
                 .flatten()
             {
-                if let LockedPackageRef::Conda(conda) = package {
+                if let LockedPackage::Conda(conda) = package {
                     let url = conda.location().clone();
                     let record = UnresolvedPixiRecord::from_conda_package_data(
                         conda.clone(),
@@ -1378,10 +1310,7 @@ pub async fn verify_platform_satisfiability(
         .await
     };
 
-    PlatformSatisfiabilityOutcome {
-        validated_source_timestamps,
-        result: package_verification_future.await,
-    }
+    package_verification_future.await
 }
 
 async fn resolve_unresolved_source_record(
@@ -1409,7 +1338,7 @@ async fn resolve_unresolved_source_record(
             variant_files: Some(platform_setup.variant_files.clone()),
             enabled_protocols: EnabledProtocols::default(),
         },
-        exclude_newer: source.timestamp.clone().map(ResolvedExcludeNewer::from),
+        exclude_newer: None,
     };
 
     let resolve_record = ctx.command_dispatcher.source_record(spec).await?;
@@ -1759,35 +1688,9 @@ pub struct VerifiedIndividualEnvironment {
 fn validate_partial_against_resolved(
     unresolved_source_record: &UnresolvedSourceRecord,
     resolved_record: &SourceRecord,
-    lock_file_version: FileFormatVersion,
+    _lock_file_version: FileFormatVersion,
 ) -> Result<(), Box<PlatformUnsat>> {
     let package_name = unresolved_source_record.name().as_source();
-
-    // If the resolved record gained a timestamp (host/build deps exist) but
-    // the locked record lacks one, the lock file needs re-solving. For v6
-    // lock files this is expected (they never had timestamps); for v7+ it
-    // indicates a corrupt or hand-edited lock file.
-    if resolved_record.timestamp.is_some()
-        && unresolved_source_record.timestamp.is_none()
-        && lock_file_version >= rattler_lock::FileFormatVersion::V7
-    {
-        return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
-            package_name.to_string(),
-            "host/build dependencies are not pinned with a timestamp".to_string(),
-        )));
-    }
-
-    // Check if the timestamps still match
-    if let (Some(current_timestamp), Some(source_timestamp)) = (
-        &unresolved_source_record.timestamp,
-        &resolved_record.timestamp,
-    ) && current_timestamp != source_timestamp
-    {
-        return Err(Box::new(PlatformUnsat::SourcePackageMetadataChanged(
-            package_name.to_string(),
-            "host/build dependencies are not pinned with the same timestamp".to_string(),
-        )));
-    }
 
     // Check if the build source location changed
     if unresolved_source_record.build_source() != resolved_record.build_source() {
@@ -3493,15 +3396,16 @@ mod tests {
                     build_caches: &build_caches,
                     static_metadata_cache: &static_metadata_cache,
                 };
-                let outcome = verify_platform_satisfiability(&ctx, locked_env).await;
-                let (verified_env, _locked_pypi) = outcome.result.map_err(|e| match e {
-                    CommandDispatcherError::Failed(e) => {
-                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
-                    }
-                    CommandDispatcherError::Cancelled => {
-                        panic!("operation was cancelled which should never happen here")
-                    }
-                })?;
+                let (verified_env, _locked_pypi) = verify_platform_satisfiability(&ctx, locked_env)
+                    .await
+                    .map_err(|e| match e {
+                        CommandDispatcherError::Failed(e) => {
+                            LockfileUnsat::PlatformUnsat(env.name().to_string(), platform, *e)
+                        }
+                        CommandDispatcherError::Cancelled => {
+                            panic!("operation was cancelled which should never happen here")
+                        }
+                    })?;
 
                 individual_verified_envs.insert((env.name(), platform), verified_env);
             }

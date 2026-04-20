@@ -10,7 +10,7 @@ use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
 use rattler_conda_types::{
     ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
 };
-use rattler_lock::{CondaPackageData, Environment, LockedPackageRef};
+use rattler_lock::{CondaPackageData, Environment, LockedPackage};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
@@ -121,17 +121,17 @@ fn render_env_platform(
 
     for package in packages {
         match package {
-            LockedPackageRef::Conda(CondaPackageData::Binary(p)) => {
+            LockedPackage::Conda(CondaPackageData::Binary(p)) => {
                 conda_packages_from_lockfile.push(p.clone())
             }
-            LockedPackageRef::Conda(CondaPackageData::Source(_)) => {
+            LockedPackage::Conda(CondaPackageData::Source(_)) => {
                 miette::bail!(
                     "Conda source packages are not supported in a conda explicit spec. \
                         Specify `--ignore-source-errors` to ignore this error and create \
                         a spec file containing only the binary conda dependencies from the lockfile."
                 );
             }
-            LockedPackageRef::Pypi(pypi) => {
+            LockedPackage::Pypi(pypi) => {
                 if ignore_pypi_errors {
                     tracing::warn!(
                         "ignoring PyPI package {} since PyPI packages are not supported",

@@ -9,7 +9,7 @@ use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt};
 use rattler_conda_types::Platform;
-use rattler_lock::{CondaPackageData, LockFile, LockedPackage, LockedPackageRef};
+use rattler_lock::{CondaPackageData, LockFile, LockedPackage};
 use serde::Serialize;
 use serde_json::Value;
 use tabwriter::TabWriter;
@@ -61,10 +61,10 @@ impl LockFileDiff {
                     .into_iter()
                     .flatten()
                     .partition_map(|p| match p {
-                        LockedPackageRef::Conda(conda_package_data) => {
+                        LockedPackage::Conda(conda_package_data) => {
                             Either::Left((conda_package_data.name().clone(), conda_package_data))
                         }
-                        LockedPackageRef::Pypi(pypi_package_data) => {
+                        LockedPackage::Pypi(pypi_package_data) => {
                             Either::Right((pypi_package_data.name().clone(), pypi_package_data))
                         }
                     });
@@ -74,30 +74,34 @@ impl LockFileDiff {
                 // Find new and changed packages
                 for package in packages {
                     match package {
-                        LockedPackageRef::Conda(data) => {
+                        LockedPackage::Conda(data) => {
                             let name = data.name();
                             match previous_conda_packages.remove(name) {
                                 Some(previous) if previous.location() != data.location() => {
-                                    diff.changed
-                                        .push((previous.clone().into(), data.clone().into()));
+                                    diff.changed.push((
+                                        LockedPackage::Conda(previous.clone()),
+                                        LockedPackage::Conda(data.clone()),
+                                    ));
                                 }
                                 None => {
-                                    diff.added.push(data.clone().into());
+                                    diff.added.push(LockedPackage::Conda(data.clone()));
                                 }
                                 _ => {}
                             }
                         }
-                        LockedPackageRef::Pypi(data) => {
+                        LockedPackage::Pypi(data) => {
                             let name = data.name();
                             match previous_pypi_packages.remove(name) {
                                 Some(previous_data)
                                     if previous_data.location() != data.location() =>
                                 {
-                                    diff.changed
-                                        .push((previous_data.clone().into(), data.clone().into()));
+                                    diff.changed.push((
+                                        LockedPackage::Pypi(previous_data.clone()),
+                                        LockedPackage::Pypi(data.clone()),
+                                    ));
                                 }
                                 None => {
-                                    diff.added.push(data.clone().into());
+                                    diff.added.push(LockedPackage::Pypi(data.clone()));
                                 }
                                 _ => {}
                             }
@@ -107,10 +111,10 @@ impl LockFileDiff {
 
                 // Determine packages that were removed
                 for (_, p) in previous_conda_packages {
-                    diff.removed.push(p.clone().into());
+                    diff.removed.push(LockedPackage::Conda(p.clone()));
                 }
                 for (_, data) in previous_pypi_packages {
-                    diff.removed.push(data.clone().into());
+                    diff.removed.push(LockedPackage::Pypi(data.clone()));
                 }
 
                 environment_diff.insert(platform, diff);
@@ -128,7 +132,7 @@ impl LockFileDiff {
                 let platform = lock_platform.subdir();
                 let mut diff = PackagesDiff::default();
                 for package in packages {
-                    diff.removed.push(package.into());
+                    diff.removed.push(package.clone());
                 }
                 environment_diff.insert(platform, diff);
             }
@@ -151,7 +155,7 @@ impl LockFileDiff {
             for (lock_platform, packages) in environment.packages_by_platform() {
                 let mut diff = PackagesDiff::default();
                 for package in packages {
-                    diff.removed.push(package.into());
+                    diff.removed.push(package.clone());
                 }
                 environment_diff.insert(lock_platform.subdir(), diff);
             }
