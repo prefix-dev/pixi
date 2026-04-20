@@ -22,7 +22,7 @@ pub enum MetadataError {
     PyProjectToml(#[from] toml::de::Error),
     #[error("failed to parse version from pyproject.toml, {0}")]
     ParseVersion(ParseVersionError),
-    #[error("`pixi-build-python` requires a `pyproject.toml` in {0}")]
+    #[error("`pixi-build-python` requires a `pyproject.toml` at {0}")]
     #[diagnostic(help(
         "Add a PEP 517/518 `pyproject.toml` to the package source directory, or use a different build backend."
     ))]
@@ -784,7 +784,7 @@ version = "1.0.0"
         );
         assert!(
             message.contains(&expected_path.display().to_string()),
-            "error should mention the manifest root: {message}"
+            "error should mention the `pyproject.toml` path: {message}"
         );
     }
 
