@@ -219,7 +219,9 @@ test-common-wheels = { cmd = "pytest -s --numprocesses=logical tests/wheel_tests
 ], description = "Run common wheel tests" }
 # CI tests add --showlocals, and -vv for better visibility in CI logs
 test-common-wheels-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose tests/wheel_tests/", description = "Run common wheel tests in CI" }
-test-integration-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose -m '{{ markers }}'", args = [{ arg = "markers", default = "not extra_slow" }], description = "Run integration tests in CI" }
+test-integration-ci = { cmd = "pytest --numprocesses=logical --dist loadgroup --showlocals -vv --verbose -m '{{ markers }}'", args = [
+  { arg = "markers", default = "not extra_slow" },
+], description = "Run integration tests in CI" }
 test-integration-extra-slow = { cmd = "pytest --numprocesses=logical", depends-on = [
   "build-workspace-release",
 ], description = "Run all integration tests including extra slow" }
@@ -386,7 +388,10 @@ pre-commit-install-minimal = { cmd = "lefthook install pre-commit", description 
 # Environment definitions
 #
 [environments]
-backends-release = { features = ["backends-release", "python"], solve-group = "python" }
+backends-release = { features = [
+  "backends-release",
+  "python",
+], solve-group = "python" }
 default = { features = [
   "rust",
   "compilers",
@@ -398,14 +403,34 @@ default = { features = [
 ], solve-group = "python" }
 dist = { features = ["dist"] }
 # TODO: get rid of rust in the docs env, figure out what to do with the docs generation code.
-docs = { features = ["rust", "compilers", "python", "docs"], solve-group = "python" }
-python-test = { features = ["pytest", "python-test-deps", "python"], solve-group = "python" }
+docs = { features = [
+  "rust",
+  "compilers",
+  "python",
+  "docs",
+], solve-group = "python" }
+python-test = { features = [
+  "pytest",
+  "python-test-deps",
+  "python",
+], solve-group = "python" }
 # TODO: Could this be mixed with the backend-release env?
 recipes = { features = ["recipes"] }
 release = { features = ["release"] }
 # TODO: Can rust-build and rust-test be merged?
-rust-build = { features = ["rust", "compilers", "python", "rust-build"], solve-group = "python" }
-rust-test = { features = ["rust", "compilers", "python", "dev", "rust-test"], solve-group = "python" }
+rust-build = { features = [
+  "rust",
+  "compilers",
+  "python",
+  "rust-build",
+], solve-group = "python" }
+rust-test = { features = [
+  "rust",
+  "compilers",
+  "python",
+  "dev",
+  "rust-test",
+], solve-group = "python" }
 schema = { features = ["schema"], solve-group = "python" }
 test = { features = ["test"], solve-group = "python" }
 # TODO: figure out why this is not in a rust-build env.
