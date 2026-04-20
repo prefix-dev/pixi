@@ -3,7 +3,7 @@ source: crates/pixi_manifest/src/discovery.rs
 assertion_line: 778
 expression: snapshot
 ---
-  × this project requires pixi '>=100', but you have pixi 0.67.0
+  × this project requires pixi '>=100', but you have pixi <PIXI_VERSION>
    ╭─[<CARGO_ROOT>/tests/data/workspace-discovery/requires-newer-pixi-pyproject/pyproject.toml:7:18]
  6 │ platforms = []
  7 │ requires-pixi = ">=100"
