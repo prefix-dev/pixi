@@ -1,11 +1,14 @@
 use crate::global::revert_environment_after_error;
 use clap::Parser;
 use fancy_display::FancyDisplay;
+use indexmap::IndexMap;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::common::check_all_exposed;
 use pixi_global::project::ExposedType;
 use pixi_global::{EnvironmentName, Project};
 use pixi_global::{StateChange, StateChanges};
+use pixi_utils::prefix::Executable;
+use rattler_conda_types::PackageName;
 
 /// Updates environments in the global environment.
 #[derive(Parser, Debug, Clone)]
@@ -17,68 +20,93 @@ pub struct Args {
     config: ConfigCli,
 }
 
+/// Result of the parallel install phase for a single environment.
+struct EnvInstallResult {
+    env_name: EnvironmentName,
+    expose_type: ExposedType,
+    environment_update: pixi_global::common::EnvironmentUpdate,
+}
+
+/// Phase 1: Check sync, determine expose type, and update the environment.
+async fn install_and_determine_expose_type(
+    project: &Project,
+    env_name: &EnvironmentName,
+) -> miette::Result<EnvInstallResult> {
+    let in_sync = project.environment_in_sync(env_name).await?;
+
+    let pre_update_bins: Option<IndexMap<PackageName, Vec<Executable>>> = if in_sync {
+        Some(project.executables_of_direct_dependencies(env_name).await?)
+    } else {
+        None
+    };
+
+    let environment_update = project.install_environment(env_name).await?;
+
+    let env_binaries = match pre_update_bins {
+        Some(bins) => bins,
+        None => project.executables_of_direct_dependencies(env_name).await?,
+    };
+
+    let exposed = &project
+        .environment(env_name)
+        .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?
+        .exposed;
+
+    let expose_type = if check_all_exposed(&env_binaries, exposed) {
+        ExposedType::All
+    } else {
+        ExposedType::Nothing
+    };
+
+    Ok(EnvInstallResult {
+        env_name: env_name.clone(),
+        expose_type,
+        environment_update,
+    })
+}
+
+/// Phase 2 (sequential): Update manifest, sync shortcuts, expose executables and sync completions.
+async fn apply_manifest_changes(
+    project: &mut Project,
+    result: EnvInstallResult,
+) -> miette::Result<StateChanges> {
+    let mut state_changes = StateChanges::default();
+
+    state_changes.insert_change(
+        &result.env_name,
+        StateChange::UpdatedEnvironment(result.environment_update),
+    );
+
+    project
+        .sync_exposed_names(&result.env_name, result.expose_type)
+        .await?;
+
+    state_changes |= project.sync_shortcuts(&result.env_name).await?;
+
+    state_changes |= project
+        .expose_executables_from_environment(&result.env_name)
+        .await?;
+
+    state_changes |= project.sync_completions(&result.env_name).await?;
+
+    Ok(state_changes)
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
-    async fn apply_changes(
-        env_name: &EnvironmentName,
-        project: &mut Project,
-    ) -> miette::Result<StateChanges> {
-        // If the environment isn't up-to-date our executable detection afterwards will not work
-        if !project.environment_in_sync(env_name).await? {
-            let _ = project.install_environment(env_name).await?;
+    let env_names: Vec<EnvironmentName> = match args.environments {
+        Some(env_names) => {
+            let mut seen = indexmap::IndexSet::new();
+            for name in env_names {
+                seen.insert(name);
+            }
+            seen.into_iter().collect()
         }
-
-        // See what executables were installed prior to update
-        let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
-
-        // Get the exposed binaries from mapping
-        let exposed_mapping_binaries = &project
-            .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?
-            .exposed;
-
-        // Check if they were all auto-exposed, or if the user manually exposed a subset of them
-        let expose_type = if check_all_exposed(&env_binaries, exposed_mapping_binaries) {
-            ExposedType::All
-        } else {
-            ExposedType::Nothing
-        };
-
-        // Reinstall the environment
-        let environment_update = project.install_environment(env_name).await?;
-
-        let mut state_changes = StateChanges::default();
-
-        state_changes.insert_change(
-            env_name,
-            StateChange::UpdatedEnvironment(environment_update),
-        );
-
-        // Sync executables exposed names with the manifest
-        project.sync_exposed_names(env_name, expose_type).await?;
-
-        state_changes |= project.sync_shortcuts(env_name).await?;
-
-        // Expose or prune executables of the new environment
-        state_changes |= project
-            .expose_executables_from_environment(env_name)
-            .await?;
-
-        // Sync completions
-        state_changes |= project.sync_completions(env_name).await?;
-
-        Ok(state_changes)
-    }
-
-    // Update all environments if the user did not specify any
-    let env_names = match args.environments {
-        Some(env_names) => env_names,
         None => {
-            // prune old environments and completions
             let state_changes = project_original.prune_old_environments().await?;
             state_changes.report();
             #[cfg(unix)]
@@ -90,21 +118,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    // Apply changes to each environment, only revert changes if an error occurs
-    let mut last_updated_project = project_original;
+    let project_ref = &project_original;
+    let install_results: Vec<miette::Result<EnvInstallResult>> =
+        futures::future::join_all(env_names.iter().map(|env_name| async move {
+            install_and_determine_expose_type(project_ref, env_name).await
+        }))
+        .await;
 
-    for env_name in env_names {
-        let mut project = last_updated_project.clone();
-
-        match apply_changes(&env_name, &mut project).await {
-            Ok(state_changes) => state_changes.report(),
+    let mut project = project_original.clone();
+    for result in install_results {
+        match result {
+            Ok(env_result) => {
+                let env_name = env_result.env_name.clone();
+                match apply_manifest_changes(&mut project, env_result).await {
+                    Ok(state_changes) => state_changes.report(),
+                    Err(err) => {
+                        revert_environment_after_error(&env_name, &project_original).await?;
+                        return Err(err);
+                    }
+                }
+            }
             Err(err) => {
-                revert_environment_after_error(&env_name, &last_updated_project).await?;
+                let _ = project.manifest.save().await;
                 return Err(err);
             }
         }
-        last_updated_project = project;
     }
-    last_updated_project.manifest.save().await?;
+
+    project.manifest.save().await?;
     Ok(())
 }
