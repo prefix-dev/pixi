@@ -74,13 +74,13 @@ Use `pixi run` or `pixi shell` to activate the environment and run ROS commands.
 
 ## Guides
 
-| Guide | Description |
-|---|---|
+| Guide | Description                                                           |
+|---|-----------------------------------------------------------------------|
 | [ROS 2 Tutorial](tutorials/ros2.md) | Set up a workspace, write Python and C++ nodes, use `pixi run` tasks. |
-| [Building a ROS Package](build/ros.md) | Package your ROS nodes as conda packages with `pixi-build-ros`. |
-| [pixi-build-ros Backend](build/backends/pixi-build-ros.md) | Backend reference for building ROS packages. |
-| [GitHub Actions](integration/ci/github_actions.md) | Run your ROS tests in CI. |
-| [Distributing with Pixi Pack](deployment/pixi_pack.md) | Bundle a workspace for offline or embedded deployment. |
+| [Building a ROS Package](build/ros.md) | Package your ROS nodes as conda packages based on your `package.xml`  |
+| [pixi-build-ros Backend](build/backends/pixi-build-ros.md) | Backend reference for building ROS packages.                          |
+| [GitHub Actions](integration/ci/github_actions.md) | Run your ROS tests in CI.                                             |
+| [Distributing with Pixi Pack](deployment/pixi_pack.md) | Bundle a workspace for offline or embedded deployment.                |
 
 ---
 
@@ -127,7 +127,7 @@ cd ros_ws
 pixi ros init
 ```
 
-It will take you through some setup and help you initialize your first Pixi ROS workspace.
+This will initialize a `pixi.toml` based on the `package.xml` files in your `src` folder, and add the necessary RoboStack channel automatically.
 
 ---
 
