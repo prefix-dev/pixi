@@ -2,770 +2,770 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/conda_ecosystem/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/first_workspace/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/getting_started/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/installation/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/security/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/advanced/channel_logic/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/advanced/explain_info_command/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/advanced/override/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/advanced/pixi_shell/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/advanced/shebang/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/advanced_cpp/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/backends/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/cpp/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/cross_compilation/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/dependency_types/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/dev/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/getting_started/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/package_source/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/python/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/ros/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/variants/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/workspace/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/backends/pixi-build-cmake/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/backends/pixi-build-mojo/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/backends/pixi-build-python/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/backends/pixi-build-r/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/backends/pixi-build-rattler-build/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/backends/pixi-build-ros/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/backends/pixi-build-rust/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/build/key_concepts/compilers/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/concepts/conda_pypi/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/concepts/package_specifications/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/deployment/artifactory/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/deployment/authentication/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/deployment/container/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/deployment/pixi_pack/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/deployment/prefix/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/deployment/s3/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/global_tools/introduction/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/global_tools/manifest/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/global_tools/trampolines/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/ci/github_actions/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/ci/updates_github_actions/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/editor/jetbrains/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/editor/jupyterlab/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/editor/r_studio/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/editor/vscode/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/editor/zed/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/extensions/introduction/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/extensions/pixi_browse/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/extensions/pixi_diff/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/extensions/pixi_inject/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/extensions/pixi_install_to_prefix/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/extensions/pixi_skills/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/third_party/conda_deny/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/third_party/direnv/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/integration/third_party/starship/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/misc/Community/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/misc/FAQ/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/misc/packaging/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/misc/vision/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/partials/conda-style-activation/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/python/pyproject_toml/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/python/pytorch/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/python/tutorial/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/environment_variables/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/pixi_configuration/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/pixi_manifest/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/__README/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/add/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/auth/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/build/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/clean/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/completion/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/config/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/exec/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/import/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/info/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/init/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/install/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/list/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/lock/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/publish/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/reinstall/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/remove/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/run/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/search/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/self-update/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/shell-hook/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/shell/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/task/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/tree/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/update/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/upgrade/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/upload/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/auth/login/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/auth/logout/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/clean/cache/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/config/append/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/config/edit/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/config/list/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/config/prepend/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/config/set/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/config/unset/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/add/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/edit/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/expose/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/install/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/list/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/remove/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/shortcut/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/sync/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/tree/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/uninstall/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/update/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/upgrade-all/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/upgrade/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/expose/add/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/expose/remove/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/shortcut/add/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/global/shortcut/remove/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/task/add/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/task/alias/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/task/list/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/task/remove/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/upload/anaconda/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/upload/artifactory/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/upload/cloudsmith/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/upload/conda-forge/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/upload/prefix/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/upload/quetz/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/upload/s3/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/channel/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/description/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/environment/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/export/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/feature/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/name/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/register/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/requires-pixi/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/system-requirements/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/version/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/channel/add/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/channel/list/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/channel/remove/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/description/get/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/description/set/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/environment/add/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/environment/list/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/environment/remove/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/export/conda-environment/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/export/conda-explicit-spec/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/feature/list/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/feature/remove/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/name/get/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/name/set/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/add/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/list/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/platform/remove/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/register/list/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/register/prune/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/register/remove/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/requires-pixi/get/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/requires-pixi/set/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/requires-pixi/unset/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/requires-pixi/verify/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/system-requirements/add/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/system-requirements/list/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/version/get/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/version/major/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/version/minor/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/version/patch/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/workspace/version/set/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/switching_from/conda/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/switching_from/poetry/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/switching_from/uv/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/tutorials/import/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/tutorials/multi_environment/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/tutorials/ros2/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/tutorials/rust/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/workspace/advanced_tasks/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/workspace/environment/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/workspace/lockfile/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/workspace/multi_environment/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/workspace/multi_platform_configuration/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/workspace/system_requirements/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/latest/CHANGELOG/</loc>
-         <lastmod>2026-04-20</lastmod>
+         <lastmod>2026-04-21</lastmod>
     </url>
 </urlset>
