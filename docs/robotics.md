@@ -139,7 +139,6 @@ Share the exact same environment across development machines and the robot:
 
 ```toml title="pixi.toml"
 [workspace]
-name = "my_robot"
 channels = ["https://prefix.dev/robostack-humble", "https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "osx-arm64"]
 
