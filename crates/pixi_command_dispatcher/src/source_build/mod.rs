@@ -1,9 +1,3 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
@@ -12,13 +6,19 @@ use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_path::AbsPath;
 use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, VariantValue};
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
+use pixi_variant::VariantSelector;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
-    Platform, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
+    ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageName,
+    PackageRecord, Platform, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use thiserror::Error;
 use tracing::instrument;
 use url::Url;
@@ -38,7 +38,6 @@ use crate::{
         PinnedSourceCodeLocation, PixiRunExports, SourceRecordOrCheckout, WorkDirKey, move_file,
     },
     input_hash::{ConfigurationHash, ProjectModelHash},
-    package_identifier::PackageIdentifier,
 };
 
 /// Describes all parameters required to build a conda package from a pixi
@@ -51,8 +50,8 @@ use crate::{
 /// be done serially.
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
 pub struct SourceBuildSpec {
-    /// The source to build
-    pub package: PackageIdentifier,
+    /// The name of the package to build.
+    pub name: PackageName,
 
     /// The manifest and optional build source location.
     pub source: PinnedSourceCodeLocation,
@@ -89,7 +88,7 @@ pub struct SourceBuildSpec {
     /// If provided, output matching uses (name, subdir, variants) instead of
     /// (name, version, build, subdir). The variants must be a subset of the
     /// output's variants.
-    pub variants: Option<BTreeMap<String, VariantValue>>,
+    pub variants: BTreeMap<String, VariantValue>,
 
     /// The directory where to place the built package.
     pub output_directory: Option<PathBuf>,
@@ -135,7 +134,7 @@ impl SourceBuildSpec {
         fields(
             manifest_source = %self.source.manifest_source(),
             build_source = self.source.build_source().as_ref().map(tracing::field::display),
-            package = %self.package,
+            package = %self.name.as_source(),
         )
     )]
     pub(crate) async fn build(
@@ -157,7 +156,7 @@ impl SourceBuildSpec {
             let build_cache = command_dispatcher
                 .clone()
                 .source_build_cache_status(SourceBuildCacheStatusSpec {
-                    package: self.package.clone(),
+                    name: self.name.clone(),
                     build_environment: self.build_environment.clone(),
                     source: self.source.clone(),
                     channels: self.channels.clone(),
@@ -193,13 +192,13 @@ impl SourceBuildSpec {
                 }
                 tracing::debug!(
                     "source build for {} is up to date, but force rebuild is set, rebuilding anyway",
-                    self.package.name.as_normalized()
+                    self.name.as_normalized()
                 );
             }
             if let CachedBuildStatus::New(cached_build) = &*build_cache.cached_build.lock().await {
                 tracing::debug!(
                     "source build for {} is already built and marked as new, reusing the cache entry",
-                    self.package.name.as_normalized()
+                    self.name.as_normalized()
                 );
                 tracing::debug!(
                     source = %self.source.manifest_source(),
@@ -344,7 +343,7 @@ impl SourceBuildSpec {
                     WorkDirKey {
                         source: SourceRecordOrCheckout::Record {
                             pinned: manifest_source.clone(),
-                            package_name: self.package.name.clone(),
+                            package_name: self.name.clone(),
                         },
                         host_platform: self.build_environment.host_platform,
                         build_backend: backend.identifier().to_string(),
@@ -523,7 +522,7 @@ impl SourceBuildSpec {
                 PixiRecord::Source(source) => {
                     let repodata_record = prefix
                         .resolved_source_records
-                        .get(&source.package_record.name)
+                        .get(&source.data.package_record.name)
                         .cloned()
                         .expect("the source record should be present in the result sources");
                     BuildHostPackage {
@@ -598,22 +597,19 @@ impl SourceBuildSpec {
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
-        // Find the output that we want to build.
-        let output = outputs
+        // Find the output that we want to build by matching on name and
+        // variants.
+        let selector = VariantSelector::new(self.variants.clone());
+        let package_outputs = outputs
             .outputs
             .into_iter()
-            .find(|output| {
-                output.metadata.name == self.package.name
-                    && output.metadata.version == self.package.version
-                    && output.metadata.build == self.package.build
-                    && output.metadata.subdir.as_str() == self.package.subdir
-            })
+            .filter(|o| o.metadata.name == self.name);
+        let output = selector
+            .find(package_outputs, |o| &o.metadata.variant)
             .ok_or_else(|| {
                 CommandDispatcherError::Failed(SourceBuildError::MissingOutput {
-                    subdir: self.package.subdir.clone(),
-                    name: self.package.name.as_normalized().to_string(),
-                    version: self.package.version.to_string(),
-                    build: self.package.build.clone(),
+                    name: self.name.as_normalized().to_string(),
+                    variants: self.variants.clone(),
                 })
             })?;
 
@@ -632,6 +628,13 @@ impl SourceBuildSpec {
         // Determine final directories for everything.
         let directories = Directories::new(&work_directory, host_platform);
 
+        // Create a common cut-off for the build and host environments. Use the passed in exclusion
+        // and fall-back to now.
+        let exclude_newer = self
+            .exclude_newer
+            .clone()
+            .unwrap_or_else(|| ResolvedExcludeNewer::from_datetime(chrono::Utc::now()));
+
         // Solve the build environment.
         let mut compatibility_map = HashMap::new();
         let build_dependencies = output
@@ -644,10 +647,11 @@ impl SourceBuildSpec {
             .unwrap_or_default();
         let mut build_records = self
             .solve_dependencies(
-                format!("{} (build)", self.package.name.as_source()),
+                format!("{} (build)", self.name.as_source()),
                 &command_dispatcher,
                 build_dependencies.clone(),
                 self.build_environment.to_build_from_build(),
+                exclude_newer.clone(),
             )
             .await
             .map_err_with(Box::new)
@@ -686,10 +690,11 @@ impl SourceBuildSpec {
             .extend_with_run_exports_from_build(&build_run_exports);
         let mut host_records = self
             .solve_dependencies(
-                format!("{} (host)", self.package.name.as_source()),
+                format!("{} (host)", self.name.as_source()),
                 &command_dispatcher,
                 host_dependencies.clone(),
                 self.build_environment.clone(),
+                exclude_newer.clone(),
             )
             .await
             .map_err_with(Box::new)
@@ -714,8 +719,8 @@ impl SourceBuildSpec {
             Some(
                 command_dispatcher
                     .install_pixi_environment(InstallPixiEnvironmentSpec {
-                        name: format!("{} (build)", self.package.name.as_source()),
-                        records: build_records.clone(),
+                        name: format!("{} (build)", self.name.as_source()),
+                        records: build_records.clone().into_iter().map(Into::into).collect(),
                         prefix: Prefix::create(&directories.build_prefix)
                             .map_err(|e| {
                                 SourceBuildError::CreateBuildEnvironmentDirectory(Arc::new(e))
@@ -725,7 +730,7 @@ impl SourceBuildSpec {
                         ignore_packages: None,
                         build_environment: self.build_environment.to_build_from_build(),
                         force_reinstall: Default::default(),
-                        exclude_newer: self.exclude_newer.clone(),
+                        exclude_newer: Some(exclude_newer.clone()),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
                         variant_configuration: self.variant_configuration.clone(),
@@ -749,14 +754,14 @@ impl SourceBuildSpec {
             Some(
                 command_dispatcher
                     .install_pixi_environment(InstallPixiEnvironmentSpec {
-                        name: format!("{} (host)", self.package.name.as_source()),
-                        records: host_records.clone(),
+                        name: format!("{} (host)", self.name.as_source()),
+                        records: host_records.clone().into_iter().map(Into::into).collect(),
                         prefix: host_prefix_directory,
                         installed: None,
                         ignore_packages: None,
                         build_environment: self.build_environment.clone(),
                         force_reinstall: Default::default(),
-                        exclude_newer: self.exclude_newer.clone(),
+                        exclude_newer: Some(exclude_newer),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
                         variant_configuration: self.variant_configuration,
@@ -827,7 +832,10 @@ impl SourceBuildSpec {
                     output_directory: self.output_directory,
                 }),
                 backend,
-                package: self.package,
+                name: output.metadata.name,
+                version: output.metadata.version,
+                build: output.metadata.build,
+                subdir: output.metadata.subdir.to_string(),
                 source_dir,
                 work_directory,
                 channels: self.channels,
@@ -859,6 +867,7 @@ impl SourceBuildSpec {
         command_dispatcher: &CommandDispatcher,
         dependencies: Dependencies,
         build_environment: BuildEnvironment,
+        exclude_newer: ResolvedExcludeNewer,
     ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
@@ -882,12 +891,13 @@ impl SourceBuildSpec {
                 channels: self.channels.clone(),
                 strategy: Default::default(),
                 channel_priority: Default::default(),
-                exclude_newer: self.exclude_newer.clone(),
+                exclude_newer: Some(exclude_newer.clone()),
                 channel_config: self.channel_config.clone(),
                 variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 preferred_build_source: BTreeMap::new(),
+                source_timestamp_hints: Default::default(),
             })
             .await
     }
@@ -997,13 +1007,11 @@ pub enum SourceBuildError {
     InstallHostEnvironment(#[source] Arc<InstallPixiEnvironmentError>),
 
     #[error(
-        "The build backend does not provide the requested output: {subdir}/{name}={version}={build}."
+        "The build backend does not provide an output matching '{name}' with variants {variants:?}."
     )]
     MissingOutput {
-        subdir: String,
         name: String,
-        version: String,
-        build: String,
+        variants: BTreeMap<String, VariantValue>,
     },
 
     #[error(
@@ -1087,5 +1095,108 @@ impl From<SourceBuildCacheStatusError> for SourceBuildError {
                 unreachable!("a build time cycle should never happen")
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_build_types::{
+        VariantValue as BuildVariantValue,
+        procedures::conda_outputs::{CondaOutput, CondaOutputMetadata},
+    };
+    use pixi_variant::VariantSelector;
+    use rattler_conda_types::VersionWithSource;
+    use std::str::FromStr;
+
+    fn make_output(name: &str, variants: &[(&str, &str)]) -> CondaOutput {
+        CondaOutput {
+            metadata: CondaOutputMetadata {
+                name: PackageName::try_from(name).unwrap(),
+                version: VersionWithSource::from_str("1.0.0").unwrap(),
+                build: "h1234_0".to_string(),
+                build_number: 0,
+                subdir: Platform::current(),
+                license: None,
+                license_family: None,
+                noarch: rattler_conda_types::NoArchType::none(),
+                purls: None,
+                python_site_packages_path: None,
+                variant: variants
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), BuildVariantValue::from(v.to_string())))
+                    .collect(),
+            },
+            build_dependencies: None,
+            host_dependencies: None,
+            run_dependencies: Default::default(),
+            ignore_run_exports: Default::default(),
+            run_exports: Default::default(),
+            input_globs: None,
+        }
+    }
+
+    fn find_output<'a>(
+        outputs: &'a [CondaOutput],
+        name: &PackageName,
+        variants: &BTreeMap<String, VariantValue>,
+    ) -> Option<&'a CondaOutput> {
+        let selector = VariantSelector::new(variants.clone());
+        selector.find(outputs.iter().filter(|o| o.metadata.name == *name), |o| {
+            &o.metadata.variant
+        })
+    }
+
+    #[test]
+    fn test_find_matching_output_by_name_only() {
+        let outputs = vec![make_output("foo", &[]), make_output("bar", &[])];
+        let name = PackageName::try_from("bar").unwrap();
+        let result = find_output(&outputs, &name, &BTreeMap::new());
+        assert_eq!(result.unwrap().metadata.name, name);
+    }
+
+    #[test]
+    fn test_find_matching_output_no_match() {
+        let outputs = vec![make_output("foo", &[])];
+        let name = PackageName::try_from("bar").unwrap();
+        let result = find_output(&outputs, &name, &BTreeMap::new());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_find_matching_output_by_variants() {
+        let outputs = vec![
+            make_output("foo", &[("python", "3.11")]),
+            make_output("foo", &[("python", "3.12")]),
+        ];
+        let name = PackageName::try_from("foo").unwrap();
+        let variants: BTreeMap<_, _> =
+            [("python".to_string(), VariantValue::from("3.12".to_string()))].into();
+        let result = find_output(&outputs, &name, &variants).unwrap();
+        assert_eq!(
+            result.metadata.variant.get("python").unwrap(),
+            &VariantValue::from("3.12".to_string())
+        );
+    }
+
+    #[test]
+    fn test_find_matching_output_variant_subset() {
+        // Output has more variants than the query -- should still match
+        let outputs = vec![make_output("foo", &[("python", "3.12"), ("numpy", "1.26")])];
+        let name = PackageName::try_from("foo").unwrap();
+        let variants: BTreeMap<_, _> =
+            [("python".to_string(), VariantValue::from("3.12".to_string()))].into();
+        let result = find_output(&outputs, &name, &variants);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn test_find_matching_output_variant_mismatch() {
+        let outputs = vec![make_output("foo", &[("python", "3.11")])];
+        let name = PackageName::try_from("foo").unwrap();
+        let variants: BTreeMap<_, _> =
+            [("python".to_string(), VariantValue::from("3.12".to_string()))].into();
+        let result = find_output(&outputs, &name, &variants);
+        assert!(result.is_none());
     }
 }

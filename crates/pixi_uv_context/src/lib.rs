@@ -128,17 +128,19 @@ impl UvResolutionContext {
     /// - `index_locations`: The index locations to use
     /// - `index_strategy`: The index strategy to use
     /// - `markers`: Optional marker environment for platform-specific resolution
+    /// - `connectivity`: Whether to allow network access
     pub fn build_registry_client(
         &self,
         allow_insecure_hosts: Vec<TrustedHost>,
         index_locations: &IndexLocations,
         index_strategy: IndexStrategy,
         markers: Option<&MarkerEnvironment>,
+        connectivity: Connectivity,
     ) -> Arc<RegistryClient> {
         let mut base_client_builder = BaseClientBuilder::default()
             .allow_insecure_host(allow_insecure_hosts)
             .keyring(self.keyring_provider)
-            .connectivity(Connectivity::Online)
+            .connectivity(connectivity)
             .native_tls(self.use_native_tls)
             .built_in_root_certs(self.use_builtin_certs)
             .extra_middleware(self.extra_middleware.clone());

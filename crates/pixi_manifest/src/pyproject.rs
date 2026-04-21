@@ -8,7 +8,7 @@ use miette::{IntoDiagnostic, Report, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use pyproject_toml::{self, Contact, ResolveError};
+use pyproject_toml::{self, Contact};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 
 use super::{
@@ -106,8 +106,11 @@ impl PyProjectManifest {
     /// dependencies and/or dependency groups:
     ///  - one environment is created per group with the same name
     ///  - each environment includes the feature of the same name
-    pub fn environments_from_groups(self) -> Result<HashMap<String, Vec<String>>, ResolveError> {
-        let resolved = self.project.into_inner().resolve()?;
+    pub fn environments_from_groups(
+        self,
+        working_dir: &Path,
+    ) -> Result<HashMap<String, Vec<String>>, TomlError> {
+        let resolved = self.project.into_inner(working_dir)?.resolve()?;
         let mut groups = resolved.optional_dependencies;
         groups.extend(resolved.dependency_groups);
 
@@ -133,9 +136,9 @@ impl PyProjectManifest {
     pub fn into_package_manifest(
         self,
         workspace: &WorkspaceManifest,
-        root_directory: Option<&Path>,
+        root_directory: &Path,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
-        let (pixi, _, package_defaults) = self.load_pixi_and_defaults()?;
+        let (pixi, _, package_defaults) = self.load_pixi_and_defaults(root_directory)?;
 
         pixi.into_package_manifest(
             workspace.workspace_package_properties(),
@@ -148,6 +151,7 @@ impl PyProjectManifest {
     /// Helper function to load the `[tool.pixi]` manifest and package defaults.
     fn load_pixi_and_defaults(
         self,
+        working_dir: &Path,
     ) -> Result<(TomlManifest, pyproject_toml::PyProjectToml, PackageDefaults), TomlError> {
         // Load the data nested under '[tool.pixi]' as pixi manifest
         let Some(Tool {
@@ -159,7 +163,7 @@ impl PyProjectManifest {
         };
 
         let poetry = poetry.unwrap_or_default();
-        let pyproject = self.project.into_inner();
+        let pyproject = self.project.into_inner(working_dir)?;
         let package_defaults = get_package_defaults(&pyproject, &poetry);
 
         Ok((pixi, pyproject, package_defaults))
@@ -168,9 +172,9 @@ impl PyProjectManifest {
     #[allow(clippy::result_large_err)]
     pub fn into_workspace_manifest(
         self,
-        root_directory: Option<&Path>,
+        root_directory: &Path,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
-        let (pixi, pyproject, package_defaults) = self.load_pixi_and_defaults()?;
+        let (pixi, pyproject, package_defaults) = self.load_pixi_and_defaults(root_directory)?;
         let resolved = pyproject.resolve()?;
         let mut groups = resolved.optional_dependencies;
         groups.extend(resolved.dependency_groups);
@@ -314,6 +318,7 @@ fn version_or_url_to_spec(
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
     use std::str::FromStr;
 
     use pep440_rs::VersionSpecifiers;
@@ -509,7 +514,7 @@ mod tests {
 
         let manifest =
             super::PyProjectManifest::from_toml_str(PYPROJECT_RECURSIVE_OPTIONALS).unwrap();
-        let (workspace_manifest, _, _) = manifest.into_workspace_manifest(None).unwrap();
+        let (workspace_manifest, _, _) = manifest.into_workspace_manifest(Path::new("")).unwrap();
 
         let feature = workspace_manifest
             .feature(&FeatureName::from("all"))
@@ -567,7 +572,7 @@ mod tests {
 
         let manifest =
             super::PyProjectManifest::from_toml_str(PYPROJECT_OPTIONAL_DEPENDENCIES).unwrap();
-        let (workspace_manifest, _, _) = manifest.into_workspace_manifest(None).unwrap();
+        let (workspace_manifest, _, _) = manifest.into_workspace_manifest(Path::new("")).unwrap();
 
         let feature = workspace_manifest
             .feature(&FeatureName::from("all"))

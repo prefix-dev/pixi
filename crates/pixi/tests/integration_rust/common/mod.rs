@@ -41,7 +41,7 @@ use pixi_task::{
     TaskGraphError, TaskName, get_task_env,
 };
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
-use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
+use rattler_lock::{CondaSourceData, LockFile, LockedPackageRef, UrlOrPath};
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -145,13 +145,25 @@ pub trait LockFileExt {
         package: &str,
     ) -> Option<LockedPackageRef<'_>>;
 
-    /// Check if a PyPI package is marked as editable in the lock file
-    fn is_pypi_package_editable(
+    /// Returns the [`CondaSourceData`] for a source package in the given
+    /// environment and platform, or `None` if the package is not found or is
+    /// not a source package.
+    fn get_conda_source_package(
         &self,
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<bool>;
+    ) -> Option<&CondaSourceData>;
+
+    /// Returns the timestamp of a source package in the given environment and
+    /// platform, or `None` if the package is not found or is not a source
+    /// package.
+    fn get_conda_source_timestamp(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<pixi_spec::SourceTimestamps>;
 }
 
 impl LockFileExt for LockFile {
@@ -159,23 +171,29 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
-            .any(|package| package.record().name.as_normalized() == name)
+            .any(|package| package.name().as_normalized() == name)
     }
     fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
         let Some(env) = self.environment(environment) else {
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(|(data, _)| data.name.as_ref() == name)
+            .any(|data| data.name().as_ref() == name)
     }
 
     fn contains_match_spec(
@@ -188,8 +206,11 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_conda)
@@ -206,12 +227,15 @@ impl LockFileExt for LockFile {
             eprintln!("environment not found: {environment}");
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
             .filter_map(LockedPackageRef::as_pypi)
-            .any(move |(data, _)| data.satisfies(&requirement))
+            .any(move |data| data.satisfies(&requirement))
     }
 
     fn get_pypi_package_version(
@@ -220,13 +244,13 @@ impl LockFileExt for LockFile {
         platform: Platform,
         package: &str,
     ) -> Option<String> {
+        let p = self.platform(&platform.to_string())?;
         self.environment(environment)
             .and_then(|env| {
-                env.pypi_packages(platform).and_then(|mut packages| {
-                    packages.find(|(data, _)| data.name.as_ref() == package)
-                })
+                env.pypi_packages(p)
+                    .and_then(|mut packages| packages.find(|data| data.name().as_ref() == package))
             })
-            .map(|(data, _)| data.version.to_string())
+            .map(|data| data.version_string())
     }
 
     fn get_pypi_package(
@@ -235,8 +259,9 @@ impl LockFileExt for LockFile {
         platform: Platform,
         package: &str,
     ) -> Option<LockedPackageRef<'_>> {
+        let p = self.platform(&platform.to_string())?;
         self.environment(environment).and_then(|env| {
-            env.packages(platform)
+            env.packages(p)
                 .and_then(|mut packages| packages.find(|p| p.name() == package))
         })
     }
@@ -247,27 +272,49 @@ impl LockFileExt for LockFile {
         platform: Platform,
         package: &str,
     ) -> Option<UrlOrPath> {
+        let p = self.platform(&platform.to_string())?;
         self.environment(environment)
             .and_then(|env| {
-                env.packages(platform)
+                env.packages(p)
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
             .map(|p| p.location().clone())
     }
 
-    fn is_pypi_package_editable(
+    fn get_conda_source_package(
         &self,
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<bool> {
-        self.environment(environment)
-            .and_then(|env| {
-                env.pypi_packages(platform).and_then(|mut packages| {
-                    packages.find(|(data, _)| data.name.as_ref() == package)
+    ) -> Option<&CondaSourceData> {
+        let p = self.platform(&platform.to_string())?;
+        self.environment(environment).and_then(|env| {
+            env.packages(p).and_then(|mut packages| {
+                packages.find_map(|p| match p {
+                    LockedPackageRef::Conda(conda) => {
+                        let source = conda.as_source()?;
+                        let matches = source.metadata.as_full().is_some_and(|full| {
+                            full.package_record.name.as_normalized() == package
+                        }) || source
+                            .metadata
+                            .as_partial()
+                            .is_some_and(|partial| partial.name.as_normalized() == package);
+                        matches.then_some(source)
+                    }
+                    LockedPackageRef::Pypi(_) => None,
                 })
             })
-            .map(|(data, _)| data.editable)
+        })
+    }
+
+    fn get_conda_source_timestamp(
+        &self,
+        environment: &str,
+        platform: Platform,
+        package: &str,
+    ) -> Option<pixi_spec::SourceTimestamps> {
+        self.get_conda_source_package(environment, platform, package)
+            .and_then(|source| source.timestamp.clone())
     }
 }
 

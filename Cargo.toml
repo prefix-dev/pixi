@@ -1,12 +1,11 @@
 [workspace]
-default-members = ["crates/pixi"]
+default-members = [
+  "crates/pixi",
+]
 exclude = [
   # Only pulled in when enabling certain features. We do not want to include
   # these crates when running workspace wide commands.
   "crates/pixi_allocator",
-  # Debug output directories that don't contain Cargo.toml
-  "crates/pixi-build-cmake",
-  "crates/pixi-build-python",
   # Standalone projects that should not be part of the workspace
   "docs",
   "examples",
@@ -43,6 +42,7 @@ clap = { version = "4.5.31", default-features = false }
 clap-verbosity-flag = "3.0.2"
 clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
+cmp_any = "0.8.1"
 comfy-table = "7.2.1"
 console = "0.16.1"
 console-subscriber = "0.5.0"
@@ -86,7 +86,7 @@ ordermap = "1.0.0"
 parking_lot = "0.12.4"
 pathdiff = "0.2.3"
 pep440_rs = "0.7.3"
-pep508_rs = "0.9.2"
+pep508_rs = { version = "0.9.2", features = ["non-pep508-extensions"] }
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.16"
 pixi_allocator = { path = "crates/pixi_allocator" }
@@ -100,6 +100,7 @@ pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
 pixi_build_types = { path = "crates/pixi_build_types" }
 pixi_cli = { path = "crates/pixi_cli" }
 pixi_command_dispatcher = { path = "crates/pixi_command_dispatcher" }
+pixi_compute_engine = { path = "crates/pixi_compute_engine" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_core = { path = "crates/pixi_core" }
@@ -130,7 +131,7 @@ pixi_variant = { path = "crates/pixi_variant" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
-rand = { version = "0.10.0", default-features = false }
+nanoid = "0.4.0"
 
 rayon = "1.10.0"
 regex = "1.11.1"
@@ -169,6 +170,7 @@ tempfile = "3.17.1"
 text_trees = "0.1.2"
 thiserror = "2.0.12"
 tokio = "1.43.0"
+tokio-test = "0.4.5"
 tokio-util = "0.7.13"
 toml = "1.0.0"
 toml-span = "0.7.0"
@@ -259,6 +261,30 @@ rattler_build_variant_config = { version = "0.1.3" }
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
+
+coalesced_map = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+file_url = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_cache = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_config = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_digest = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_index = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_lock = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_menuinst = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_networking = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_package_streaming = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_shell = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_solve = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_upload = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_redaction = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+rattler_s3 = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+simple_spawn_blocking = { git = "https://github.com/conda/rattler", branch="feature/lockfile-v7" }
+
+[patch."https://github.com/prefix-dev/rattler-build"]
+#rattler-build = { path = "/var/home/tobias/src/rattler-build" }
 
 [profile.ci]
 codegen-units = 16

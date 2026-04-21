@@ -1,19 +1,23 @@
 use std::{
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::Duration,
 };
 
 use futures::{Stream, StreamExt};
 use pixi_command_dispatcher::{
     BackendSourceBuildSpec, BuildBackendMetadataSpec, CondaSolveReporter, GitCheckoutReporter,
-    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
-    PixiEnvironmentSpec, PixiInstallReporter, PixiSolveReporter, Reporter, ReporterContext,
-    SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
+    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
+    PixiInstallReporter, PixiSolveReporter, Reporter, ReporterContext, SolveCondaEnvironmentSpec,
+    SourceBuildSpec, SourceMetadataSpec, SourceRecordSpec,
     reporter::{
         BackendSourceBuildId, BackendSourceBuildReporter, BuildBackendMetadataId,
-        BuildBackendMetadataReporter, CondaSolveId, GitCheckoutId, InstantiateToolEnvId,
-        InstantiateToolEnvironmentReporter, PixiInstallId, PixiSolveId, SourceBuildId,
-        SourceBuildReporter, SourceMetadataId, SourceMetadataReporter,
+        BuildBackendMetadataReporter, CondaSolveId, DedupGroupId, GitCheckoutId,
+        InstantiateToolEnvId, InstantiateToolEnvironmentReporter, PixiInstallId, PixiSolveId,
+        SourceBuildId, SourceBuildReporter, SourceMetadataId, SourceMetadataReporter,
+        SourceRecordId, SourceRecordReporter,
     },
 };
 use pixi_git::resolver::RepositoryReference;
@@ -107,6 +111,20 @@ pub enum Event {
         id: SourceMetadataId,
     },
 
+    SourceRecordQueued {
+        id: SourceRecordId,
+        #[serde(flatten)]
+        spec: SourceRecordSpec,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        context: Option<ReporterContext>,
+    },
+    SourceRecordStarted {
+        id: SourceRecordId,
+    },
+    SourceRecordFinished {
+        id: SourceRecordId,
+    },
+
     SourceBuildQueued {
         id: SourceBuildId,
         #[serde(flatten)]
@@ -125,7 +143,7 @@ pub enum Event {
         id: BackendSourceBuildId,
         #[serde(skip_serializing_if = "Option::is_none")]
         context: Option<ReporterContext>,
-        package: PackageIdentifier,
+        package: String,
     },
     BackendSourceBuildStarted {
         id: BackendSourceBuildId,
@@ -149,15 +167,36 @@ pub enum Event {
     },
 }
 
-#[derive(Clone)]
 pub struct EventReporter {
     events: EventStore,
-    next_conda_solve_id: usize,
-    next_pixi_solve_id: usize,
-    next_pixi_install_id: usize,
-    next_git_checkout_id: usize,
-    next_source_metadata_id: usize,
-    next_instantiate_tool_env_id: usize,
+    next_conda_solve_id: AtomicUsize,
+    next_pixi_solve_id: AtomicUsize,
+    next_pixi_install_id: AtomicUsize,
+    next_git_checkout_id: AtomicUsize,
+    next_source_metadata_id: AtomicUsize,
+    next_instantiate_tool_env_id: AtomicUsize,
+}
+
+impl Clone for EventReporter {
+    fn clone(&self) -> Self {
+        Self {
+            events: self.events.clone(),
+            next_conda_solve_id: AtomicUsize::new(self.next_conda_solve_id.load(Ordering::Relaxed)),
+            next_pixi_solve_id: AtomicUsize::new(self.next_pixi_solve_id.load(Ordering::Relaxed)),
+            next_pixi_install_id: AtomicUsize::new(
+                self.next_pixi_install_id.load(Ordering::Relaxed),
+            ),
+            next_git_checkout_id: AtomicUsize::new(
+                self.next_git_checkout_id.load(Ordering::Relaxed),
+            ),
+            next_source_metadata_id: AtomicUsize::new(
+                self.next_source_metadata_id.load(Ordering::Relaxed),
+            ),
+            next_instantiate_tool_env_id: AtomicUsize::new(
+                self.next_instantiate_tool_env_id.load(Ordering::Relaxed),
+            ),
+        }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -224,12 +263,12 @@ impl EventReporter {
         (
             Self {
                 events: events.clone(),
-                next_conda_solve_id: 0,
-                next_pixi_solve_id: 0,
-                next_pixi_install_id: 0,
-                next_git_checkout_id: 0,
-                next_source_metadata_id: 0,
-                next_instantiate_tool_env_id: 0,
+                next_conda_solve_id: AtomicUsize::new(0),
+                next_pixi_solve_id: AtomicUsize::new(0),
+                next_pixi_install_id: AtomicUsize::new(0),
+                next_git_checkout_id: AtomicUsize::new(0),
+                next_source_metadata_id: AtomicUsize::new(0),
+                next_instantiate_tool_env_id: AtomicUsize::new(0),
             },
             events,
         )
@@ -238,12 +277,11 @@ impl EventReporter {
 
 impl CondaSolveReporter for EventReporter {
     fn on_queued(
-        &mut self,
+        &self,
         context: Option<ReporterContext>,
         env: &SolveCondaEnvironmentSpec,
     ) -> CondaSolveId {
-        let next_id = CondaSolveId(self.next_conda_solve_id);
-        self.next_conda_solve_id += 1;
+        let next_id = CondaSolveId(self.next_conda_solve_id.fetch_add(1, Ordering::Relaxed));
 
         let event = Event::CondaSolveQueued {
             id: next_id,
@@ -255,13 +293,13 @@ impl CondaSolveReporter for EventReporter {
         next_id
     }
 
-    fn on_start(&mut self, solve_id: CondaSolveId) {
+    fn on_started(&self, solve_id: CondaSolveId) {
         let event = Event::CondaSolveStarted { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
     }
 
-    fn on_finished(&mut self, solve_id: CondaSolveId) {
+    fn on_finished(&self, solve_id: CondaSolveId) {
         let event = Event::CondaSolveFinished { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -270,12 +308,11 @@ impl CondaSolveReporter for EventReporter {
 
 impl PixiSolveReporter for EventReporter {
     fn on_queued(
-        &mut self,
+        &self,
         context: Option<ReporterContext>,
         env: &PixiEnvironmentSpec,
     ) -> PixiSolveId {
-        let next_id = PixiSolveId(self.next_pixi_solve_id);
-        self.next_pixi_solve_id += 1;
+        let next_id = PixiSolveId(self.next_pixi_solve_id.fetch_add(1, Ordering::Relaxed));
 
         let event = Event::PixiSolveQueued {
             id: next_id,
@@ -287,13 +324,13 @@ impl PixiSolveReporter for EventReporter {
         next_id
     }
 
-    fn on_start(&mut self, solve_id: PixiSolveId) {
+    fn on_started(&self, solve_id: PixiSolveId) {
         let event = Event::PixiSolveStarted { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
     }
 
-    fn on_finished(&mut self, solve_id: PixiSolveId) {
+    fn on_finished(&self, solve_id: PixiSolveId) {
         let event = Event::PixiSolveFinished { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -302,12 +339,11 @@ impl PixiSolveReporter for EventReporter {
 
 impl PixiInstallReporter for EventReporter {
     fn on_queued(
-        &mut self,
+        &self,
         context: Option<ReporterContext>,
         env: &InstallPixiEnvironmentSpec,
     ) -> PixiInstallId {
-        let next_id = PixiInstallId(self.next_pixi_install_id);
-        self.next_pixi_install_id += 1;
+        let next_id = PixiInstallId(self.next_pixi_install_id.fetch_add(1, Ordering::Relaxed));
 
         let event = Event::PixiInstallQueued {
             id: next_id,
@@ -319,13 +355,13 @@ impl PixiInstallReporter for EventReporter {
         next_id
     }
 
-    fn on_start(&mut self, solve_id: PixiInstallId) {
+    fn on_started(&self, solve_id: PixiInstallId) {
         let event = Event::PixiInstallStarted { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
     }
 
-    fn on_finished(&mut self, solve_id: PixiInstallId) {
+    fn on_finished(&self, solve_id: PixiInstallId) {
         let event = Event::PixiInstallFinished { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -334,12 +370,12 @@ impl PixiInstallReporter for EventReporter {
 
 impl GitCheckoutReporter for EventReporter {
     fn on_queued(
-        &mut self,
+        &self,
         context: Option<ReporterContext>,
         env: &RepositoryReference,
+        _dedup_id: DedupGroupId,
     ) -> GitCheckoutId {
-        let next_id = GitCheckoutId(self.next_git_checkout_id);
-        self.next_git_checkout_id += 1;
+        let next_id = GitCheckoutId(self.next_git_checkout_id.fetch_add(1, Ordering::Relaxed));
 
         let event = Event::GitCheckoutQueued {
             id: next_id,
@@ -351,13 +387,13 @@ impl GitCheckoutReporter for EventReporter {
         next_id
     }
 
-    fn on_start(&mut self, checkout_id: GitCheckoutId) {
+    fn on_started(&self, checkout_id: GitCheckoutId) {
         let event = Event::GitCheckoutStarted { id: checkout_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
     }
 
-    fn on_finished(&mut self, checkout_id: GitCheckoutId) {
+    fn on_finished(&self, checkout_id: GitCheckoutId) {
         let event = Event::GitCheckoutFinished { id: checkout_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -366,12 +402,13 @@ impl GitCheckoutReporter for EventReporter {
 
 impl BuildBackendMetadataReporter for EventReporter {
     fn on_queued(
-        &mut self,
+        &self,
         context: Option<ReporterContext>,
         spec: &BuildBackendMetadataSpec,
+        _dedup_id: DedupGroupId,
     ) -> BuildBackendMetadataId {
-        let next_id = BuildBackendMetadataId(self.next_source_metadata_id);
-        self.next_source_metadata_id += 1;
+        let next_id =
+            BuildBackendMetadataId(self.next_source_metadata_id.fetch_add(1, Ordering::Relaxed));
 
         let event = Event::BuildBackendMetadataQueued {
             id: next_id,
@@ -384,7 +421,7 @@ impl BuildBackendMetadataReporter for EventReporter {
     }
 
     fn on_started(
-        &mut self,
+        &self,
         id: BuildBackendMetadataId,
         mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     ) {
@@ -399,7 +436,7 @@ impl BuildBackendMetadataReporter for EventReporter {
         });
     }
 
-    fn on_finished(&mut self, id: BuildBackendMetadataId, _failed: bool) {
+    fn on_finished(&self, id: BuildBackendMetadataId, _failed: bool) {
         let event = Event::BuildBackendMetadataFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -408,12 +445,13 @@ impl BuildBackendMetadataReporter for EventReporter {
 
 impl SourceMetadataReporter for EventReporter {
     fn on_queued(
-        &mut self,
+        &self,
         context: Option<ReporterContext>,
         spec: &SourceMetadataSpec,
+        _dedup_id: DedupGroupId,
     ) -> SourceMetadataId {
-        let next_id = SourceMetadataId(self.next_source_metadata_id);
-        self.next_source_metadata_id += 1;
+        let next_id =
+            SourceMetadataId(self.next_source_metadata_id.fetch_add(1, Ordering::Relaxed));
 
         let event = Event::SourceMetadataQueued {
             id: next_id,
@@ -425,14 +463,46 @@ impl SourceMetadataReporter for EventReporter {
         next_id
     }
 
-    fn on_started(&mut self, id: SourceMetadataId) {
+    fn on_started(&self, id: SourceMetadataId) {
         let event = Event::SourceMetadataStarted { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
     }
 
-    fn on_finished(&mut self, id: SourceMetadataId) {
+    fn on_finished(&self, id: SourceMetadataId) {
         let event = Event::SourceMetadataFinished { id };
+        eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.push(event);
+    }
+}
+
+impl SourceRecordReporter for EventReporter {
+    fn on_queued(
+        &self,
+        context: Option<ReporterContext>,
+        spec: &SourceRecordSpec,
+        _dedup_id: DedupGroupId,
+    ) -> SourceRecordId {
+        let next_id = SourceRecordId(self.next_source_metadata_id.fetch_add(1, Ordering::Relaxed));
+
+        let event = Event::SourceRecordQueued {
+            id: next_id,
+            spec: spec.clone(),
+            context,
+        };
+        eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.push(event);
+        next_id
+    }
+
+    fn on_started(&self, id: SourceRecordId) {
+        let event = Event::SourceRecordStarted { id };
+        eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.push(event);
+    }
+
+    fn on_finished(&self, id: SourceRecordId) {
+        let event = Event::SourceRecordFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
     }
@@ -440,12 +510,15 @@ impl SourceMetadataReporter for EventReporter {
 
 impl InstantiateToolEnvironmentReporter for EventReporter {
     fn on_queued(
-        &mut self,
+        &self,
         context: Option<ReporterContext>,
         spec: &InstantiateToolEnvironmentSpec,
+        _dedup_id: DedupGroupId,
     ) -> InstantiateToolEnvId {
-        let next_id = InstantiateToolEnvId(self.next_instantiate_tool_env_id);
-        self.next_instantiate_tool_env_id += 1;
+        let next_id = InstantiateToolEnvId(
+            self.next_instantiate_tool_env_id
+                .fetch_add(1, Ordering::Relaxed),
+        );
 
         let event = Event::InstantiateToolEnvQueued {
             id: next_id,
@@ -457,13 +530,13 @@ impl InstantiateToolEnvironmentReporter for EventReporter {
         next_id
     }
 
-    fn on_started(&mut self, id: InstantiateToolEnvId) {
+    fn on_started(&self, id: InstantiateToolEnvId) {
         let event = Event::InstantiateToolEnvStarted { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
     }
 
-    fn on_finished(&mut self, id: InstantiateToolEnvId) {
+    fn on_finished(&self, id: InstantiateToolEnvId) {
         let event = Event::InstantiateToolEnvFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -472,12 +545,12 @@ impl InstantiateToolEnvironmentReporter for EventReporter {
 
 impl SourceBuildReporter for EventReporter {
     fn on_queued(
-        &mut self,
+        &self,
         context: Option<ReporterContext>,
         spec: &SourceBuildSpec,
+        _dedup_id: DedupGroupId,
     ) -> SourceBuildId {
-        let next_id = SourceBuildId(self.next_source_metadata_id);
-        self.next_source_metadata_id += 1;
+        let next_id = SourceBuildId(self.next_source_metadata_id.fetch_add(1, Ordering::Relaxed));
 
         let event = Event::SourceBuildQueued {
             id: next_id,
@@ -490,7 +563,7 @@ impl SourceBuildReporter for EventReporter {
     }
 
     fn on_started(
-        &mut self,
+        &self,
         id: SourceBuildId,
         backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     ) {
@@ -506,7 +579,7 @@ impl SourceBuildReporter for EventReporter {
         });
     }
 
-    fn on_finished(&mut self, id: SourceBuildId, _failed: bool) {
+    fn on_finished(&self, id: SourceBuildId, _failed: bool) {
         let event = Event::SourceBuildFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -515,17 +588,17 @@ impl SourceBuildReporter for EventReporter {
 
 impl BackendSourceBuildReporter for EventReporter {
     fn on_queued(
-        &mut self,
+        &self,
         context: Option<ReporterContext>,
         spec: &BackendSourceBuildSpec,
     ) -> BackendSourceBuildId {
-        let next_id = BackendSourceBuildId(self.next_source_metadata_id);
-        self.next_source_metadata_id += 1;
+        let next_id =
+            BackendSourceBuildId(self.next_source_metadata_id.fetch_add(1, Ordering::Relaxed));
 
         let event = Event::BackendSourceBuildQueued {
             id: next_id,
             context,
-            package: spec.package.clone(),
+            package: spec.name.as_source().to_string(),
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -533,7 +606,7 @@ impl BackendSourceBuildReporter for EventReporter {
     }
 
     fn on_started(
-        &mut self,
+        &self,
         id: BackendSourceBuildId,
         backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     ) {
@@ -549,7 +622,7 @@ impl BackendSourceBuildReporter for EventReporter {
         });
     }
 
-    fn on_finished(&mut self, id: BackendSourceBuildId, _failed: bool) {
+    fn on_finished(&self, id: BackendSourceBuildId, _failed: bool) {
         let event = Event::BackendSourceBuildFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.push(event);
@@ -557,41 +630,42 @@ impl BackendSourceBuildReporter for EventReporter {
 }
 
 impl Reporter for EventReporter {
-    fn as_git_reporter(&mut self) -> Option<&mut dyn GitCheckoutReporter> {
+    fn as_git_reporter(&self) -> Option<&dyn GitCheckoutReporter> {
         Some(self)
     }
 
-    fn as_conda_solve_reporter(&mut self) -> Option<&mut dyn CondaSolveReporter> {
+    fn as_conda_solve_reporter(&self) -> Option<&dyn CondaSolveReporter> {
         Some(self)
     }
 
-    fn as_pixi_solve_reporter(&mut self) -> Option<&mut dyn PixiSolveReporter> {
+    fn as_pixi_solve_reporter(&self) -> Option<&dyn PixiSolveReporter> {
         Some(self)
     }
 
-    fn as_pixi_install_reporter(&mut self) -> Option<&mut dyn PixiInstallReporter> {
+    fn as_pixi_install_reporter(&self) -> Option<&dyn PixiInstallReporter> {
         Some(self)
     }
 
     fn as_instantiate_tool_environment_reporter(
-        &mut self,
-    ) -> Option<&mut dyn InstantiateToolEnvironmentReporter> {
+        &self,
+    ) -> Option<&dyn InstantiateToolEnvironmentReporter> {
         Some(self)
     }
 
-    fn as_build_backend_metadata_reporter(
-        &mut self,
-    ) -> Option<&mut dyn BuildBackendMetadataReporter> {
+    fn as_build_backend_metadata_reporter(&self) -> Option<&dyn BuildBackendMetadataReporter> {
         Some(self)
     }
-    fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
+    fn as_source_metadata_reporter(&self) -> Option<&dyn SourceMetadataReporter> {
         Some(self)
     }
-    fn as_source_build_reporter(&mut self) -> Option<&mut dyn SourceBuildReporter> {
+    fn as_source_record_reporter(&self) -> Option<&dyn SourceRecordReporter> {
+        Some(self)
+    }
+    fn as_source_build_reporter(&self) -> Option<&dyn SourceBuildReporter> {
         Some(self)
     }
 
-    fn as_backend_source_build_reporter(&mut self) -> Option<&mut dyn BackendSourceBuildReporter> {
+    fn as_backend_source_build_reporter(&self) -> Option<&dyn BackendSourceBuildReporter> {
         Some(self)
     }
 }

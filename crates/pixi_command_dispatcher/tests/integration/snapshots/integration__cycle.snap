@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_command_dispatcher/tests/integration/main.rs
+assertion_line: 440
 expression: "format!(\"ERROR:\\n{}\\n\\nTRACE:\\n{}\", format_diagnostic(&error),\nevent_tree.to_string())"
 ---
 ERROR:
@@ -18,6 +19,10 @@ TRACE:
 Pixi solve (package_a)
 └── Source metadata (package_a @ package_a)
     ├── Build backend metadata (package_a)
-    └── Pixi solve (package_b)
-        └── Source metadata (package_b @ package_b)
-            └── Build backend metadata (package_b)
+    └── Source record (package_a @ package_a)
+        └── Pixi solve (package_b)
+            ├── Source metadata (package_b @ package_b)
+            │   ├── Build backend metadata (package_b)
+            │   └── Source record (package_b @ package_b)
+            └── Source metadata (package_a @ package_a)
+                └── Build backend metadata (package_a)
