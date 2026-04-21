@@ -970,7 +970,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@cafece8e6baf9247cf9b1bf95097b0b983cc558d # v2
+        uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2
         with:
           msystem: UCRT64
           install: unzip
@@ -994,7 +994,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@cafece8e6baf9247cf9b1bf95097b0b983cc558d # v2
+        uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2
         with:
           msystem: UCRT64
       - name: "Install"
@@ -1018,7 +1018,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@cafece8e6baf9247cf9b1bf95097b0b983cc558d # v2
+        uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2
         with:
           msystem: UCRT64
       - name: "Before Install"
