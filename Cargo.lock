@@ -6642,7 +6642,6 @@ dependencies = [
 name = "pixi_record"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "file_url",
  "insta",
  "itertools 0.14.0",

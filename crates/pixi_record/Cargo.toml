@@ -10,7 +10,6 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
-chrono = { workspace = true }
 file_url = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
