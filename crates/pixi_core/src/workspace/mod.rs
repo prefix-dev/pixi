@@ -974,7 +974,6 @@ mod tests {
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::{Platform, Version};
     use rattler_virtual_packages::{LibC, VirtualPackage};
-    use std::env;
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;

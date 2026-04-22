@@ -31,8 +31,8 @@ use pixi_git::sha::GitSha;
 use pixi_spec::{GitReference, SourceLocationSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord};
 use rattler_lock::{
-    CondaSourceData, GitShallowSpec, PackageBuildSource, PartialSourceMetadata, SourceData,
-    SourceMetadata,
+    CondaSourceData, EnvironmentPackages, GitShallowSpec, PackageBuildSource,
+    PartialSourceMetadata, SourceData, SourceMetadata,
 };
 use std::fmt::{Display, Formatter};
 use std::{
@@ -158,6 +158,14 @@ pub struct PartialSourceRecordData {
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
     pub sources: HashMap<String, SourceLocationSpec>,
+
+    /// Locked packages in the build environment of this source package.
+    #[serde(skip)]
+    pub build_packages: EnvironmentPackages,
+
+    /// Locked packages in the host environment of this source package.
+    #[serde(skip)]
+    pub host_packages: EnvironmentPackages,
 }
 
 /// Complete metadata for a fully-evaluated source package.
@@ -172,6 +180,14 @@ pub struct FullSourceRecordData {
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
     pub sources: HashMap<String, SourceLocationSpec>,
+
+    /// Locked packages in the build environment of this source package.
+    #[serde(skip)]
+    pub build_packages: EnvironmentPackages,
+
+    /// Locked packages in the host environment of this source package.
+    #[serde(skip)]
+    pub host_packages: EnvironmentPackages,
 }
 
 /// Runtime-checked variant used at the lock-file boundary.
@@ -328,12 +344,15 @@ impl SourceRecord<FullSourceRecordData> {
         let has_mutable = self.has_mutable_source();
         let mut unresolved = SourceRecord::<SourceRecordData>::from(self);
         if has_mutable {
-            // Downgrade full data to partial: keep only name, depends, and sources.
+            // Downgrade full data to partial: keep only name, depends, sources,
+            // and the build/host environment references.
             if let SourceRecordData::Full(full) = unresolved.data {
                 unresolved.data = SourceRecordData::Partial(PartialSourceRecordData {
                     name: full.package_record.name,
                     depends: full.package_record.depends,
                     sources: full.sources,
+                    build_packages: full.build_packages,
+                    host_packages: full.host_packages,
                 });
             }
         }
@@ -454,6 +473,8 @@ impl SourceRecord<SourceRecordData> {
                         name: full.package_record.name,
                         depends: full.package_record.depends,
                         sources: full.sources,
+                        build_packages: full.build_packages,
+                        host_packages: full.host_packages,
                     })
                 }
                 partial @ SourceRecordData::Partial(_) => partial,
@@ -462,10 +483,12 @@ impl SourceRecord<SourceRecordData> {
             self.data
         };
 
-        let (metadata, sources) = match data {
+        let (metadata, sources, build_packages, host_packages) = match data {
             SourceRecordData::Full(full) => (
                 SourceMetadata::Full(Box::new(full.package_record)),
                 full.sources,
+                full.build_packages,
+                full.host_packages,
             ),
             SourceRecordData::Partial(partial) => (
                 SourceMetadata::Partial(PartialSourceMetadata {
@@ -473,6 +496,8 @@ impl SourceRecord<SourceRecordData> {
                     depends: partial.depends,
                 }),
                 partial.sources,
+                partial.build_packages,
+                partial.host_packages,
             ),
         };
 
@@ -486,7 +511,10 @@ impl SourceRecord<SourceRecordData> {
                 .collect(),
             identifier_hash: self.identifier_hash,
             sources: sources.into_iter().map(|(k, v)| (k, v.into())).collect(),
-            source_data: SourceData::default(),
+            source_data: SourceData {
+                build_packages,
+                host_packages,
+            },
             metadata,
         }
     }
@@ -506,16 +534,25 @@ impl SourceRecord<SourceRecordData> {
             .map(|(k, v)| (k, SourceLocationSpec::from(v)))
             .collect();
 
+        let SourceData {
+            build_packages,
+            host_packages,
+        } = data.source_data;
+
         let record_data = match data.metadata {
             SourceMetadata::Full(package_record) => SourceRecordData::Full(FullSourceRecordData {
                 package_record: package_record.as_ref().clone(),
                 sources,
+                build_packages,
+                host_packages,
             }),
             SourceMetadata::Partial(partial) => {
                 SourceRecordData::Partial(PartialSourceRecordData {
                     name: partial.name,
                     depends: partial.depends,
                     sources,
+                    build_packages,
+                    host_packages,
                 })
             }
         };
@@ -719,10 +756,72 @@ mod tests {
 
     /// Load the lock file body from a static fixture file with full metadata.
     fn lock_source_from_fixture() -> String {
+        load_fixture("full_source_records.lock")
+    }
+
+    fn load_fixture(name: &str) -> String {
         let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("src/test_fixtures/full_source_records.lock");
+            .join("src/test_fixtures")
+            .join(name);
         #[allow(clippy::disallowed_methods)]
         std::fs::read_to_string(fixture_path).expect("failed to read fixture file")
+    }
+
+    /// Fixture `source_build_host_packages.lock` contains a single source
+    /// package whose `build_packages` and `host_packages` reference two
+    /// binary packages in the same lock file. This asserts that those
+    /// references survive the round-trip through pixi's `SourceRecord` types.
+    #[test]
+    fn roundtrip_source_data_build_host_packages() {
+        let workspace_root = Path::new("/workspace");
+
+        let lock_source = load_fixture("source_build_host_packages.lock");
+        let lock_file = LockFile::from_str_with_base_directory(&lock_source, Some(workspace_root))
+            .expect("failed to load lock file fixture");
+
+        let environment = lock_file
+            .default_environment()
+            .expect("expected default environment");
+
+        let original = environment
+            .conda_packages_by_platform()
+            .flat_map(|(_, packages)| packages.filter_map(|pkg| pkg.as_source().cloned()))
+            .next()
+            .expect("fixture should contain a source package");
+
+        let original_source_data = original.source_data.clone();
+        assert_eq!(
+            original_source_data.build_packages.iter().count(),
+            1,
+            "fixture has exactly one build package",
+        );
+        assert_eq!(
+            original_source_data.host_packages.iter().count(),
+            1,
+            "fixture has exactly one host package",
+        );
+
+        let record = super::SourceRecord::<SourceRecordData>::from_conda_source_data(
+            original,
+            workspace_root,
+        )
+        .expect("from_conda_source_data should succeed");
+        let (build_packages, host_packages) = match &record.data {
+            SourceRecordData::Full(full) => (&full.build_packages, &full.host_packages),
+            SourceRecordData::Partial(partial) => (&partial.build_packages, &partial.host_packages),
+        };
+        assert_eq!(build_packages, &original_source_data.build_packages);
+        assert_eq!(host_packages, &original_source_data.host_packages);
+
+        // A path-based source is mutable, so the write-back downgrades the
+        // metadata to partial. The build/host package references must still
+        // round-trip intact.
+        let roundtripped = record.into_conda_source_data(workspace_root);
+        assert!(
+            matches!(roundtripped.metadata, SourceMetadata::Partial(_)),
+            "path source should downgrade to partial on write-back",
+        );
+        assert_eq!(roundtripped.source_data, original_source_data);
     }
 
     /// Build a lock file string from a set of SourceRecords.
@@ -825,6 +924,8 @@ mod tests {
                 name: PackageName::from_str("my-package").unwrap(),
                 depends: vec!["numpy >=1.0".to_string()],
                 sources: HashMap::new(),
+                build_packages: EnvironmentPackages::default(),
+                host_packages: EnvironmentPackages::default(),
             }),
             manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
                 path: typed_path::Utf8TypedPathBuf::from("./my-package"),
@@ -897,6 +998,8 @@ mod tests {
                 name: PackageName::from_str("partial-pkg").unwrap(),
                 depends: vec![],
                 sources: HashMap::new(),
+                build_packages: EnvironmentPackages::default(),
+                host_packages: EnvironmentPackages::default(),
             }),
             manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
                 path: typed_path::Utf8TypedPathBuf::from("./partial-pkg"),
@@ -932,6 +1035,8 @@ mod tests {
             data: FullSourceRecordData {
                 package_record: record,
                 sources: HashMap::new(),
+                build_packages: EnvironmentPackages::default(),
+                host_packages: EnvironmentPackages::default(),
             },
             manifest_source,
             build_source,

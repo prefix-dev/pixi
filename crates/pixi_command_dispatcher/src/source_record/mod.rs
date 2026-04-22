@@ -337,6 +337,8 @@ impl SourceRecordSpec {
             data: FullSourceRecordData {
                 package_record,
                 sources,
+                build_packages: Default::default(),
+                host_packages: Default::default(),
             },
             variants,
             manifest_source: source.manifest_source().clone(),
