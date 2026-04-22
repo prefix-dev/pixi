@@ -54,7 +54,7 @@ use pixi_utils::{
 };
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
-use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_lock::{LockFile, LockedPackage};
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
@@ -808,8 +808,8 @@ impl Workspace {
         filter_lock_file(self, lock_file, |env, platform, package| {
             if affected_environments.contains(&(env.name().as_str(), platform)) {
                 match package {
-                    LockedPackageRef::Conda(package) => !conda_packages.contains(package.name()),
-                    LockedPackageRef::Pypi(package) => !pypi_packages.contains(package.name()),
+                    LockedPackage::Conda(package) => !conda_packages.contains(package.name()),
+                    LockedPackage::Pypi(package) => !pypi_packages.contains(package.name()),
                 }
             } else {
                 true

@@ -15,7 +15,7 @@ pub use pixi_python_status::PythonStatus;
 use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_lock::{LockFile, LockedPackage};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::{
@@ -186,9 +186,9 @@ impl LockedEnvironmentHash {
                 // Always has the url or path
                 package.location().to_owned().to_string().hash(&mut hasher);
 
-                match package {
+                match &package {
                     // A select set of fields are used to hash the package
-                    LockedPackageRef::Conda(pack) => {
+                    LockedPackage::Conda(pack) => {
                         if let Some(record) = pack.record() {
                             if let Some(sha) = record.sha256 {
                                 sha.hash(&mut hasher);
@@ -197,7 +197,7 @@ impl LockedEnvironmentHash {
                             }
                         }
                     }
-                    LockedPackageRef::Pypi(_) => {}
+                    LockedPackage::Pypi(_) => {}
                 }
             }
         }

@@ -235,7 +235,6 @@ impl InstallPixiEnvironmentSpec {
             data,
             manifest_source,
             build_source,
-            timestamp,
             ..
         }: UnresolvedSourceRecord,
     ) -> Result<RepoDataRecord, CommandDispatcherError<SourceBuildError>> {
@@ -259,11 +258,7 @@ impl InstallPixiEnvironmentSpec {
                 variant_configuration: self.variant_configuration.clone(),
                 variant_files: self.variant_files.clone(),
                 variants,
-                // We use the timestamp of the record itself here, or the environment specific
-                // exclude newer if no timestamp is present.
-                exclude_newer: timestamp
-                    .map(Into::into)
-                    .or_else(|| self.exclude_newer.clone()),
+                exclude_newer: self.exclude_newer.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: None,
                 work_directory: None,

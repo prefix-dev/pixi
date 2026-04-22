@@ -24,8 +24,7 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    PixiEnvironmentSpec, SolvePixiEnvironmentError, SourceRecordReuseKey,
-    executor::CancellationAwareFutures,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError, executor::CancellationAwareFutures,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -46,7 +45,7 @@ use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
-use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
+use rattler_lock::{LockFile, LockedPackage, ParseCondaLockError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
@@ -744,8 +743,8 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let (ignored_conda, ignored_pypi): (HashSet<_>, HashSet<_>) =
                     ignored.into_iter().partition_map(|p| match p {
-                        LockedPackageRef::Conda(data) => Either::Left(data.name().clone()),
-                        LockedPackageRef::Pypi(data) => Either::Right(data.name().clone()),
+                        LockedPackage::Conda(data) => Either::Left(data.name().clone()),
+                        LockedPackage::Pypi(data) => Either::Right(data.name().clone()),
                     });
 
                 let pixi_records =
@@ -758,7 +757,7 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let pypi_records = pypi_packages
                     .into_iter()
-                    .filter_map(LockedPackageRef::as_pypi)
+                    .filter_map(LockedPackage::as_pypi)
                     .map(move |data| {
                         let version = data
                             .version()
@@ -1041,7 +1040,7 @@ impl PackageFilterNames {
             .filter(lock_platform.and_then(|p| environment.packages(p)))
             .ok()?;
 
-        // Map to names, dedupe and sort for stable output.
+        // Map to names, deduplicate and sort for stable output.
         let retained = filtered
             .install
             .into_iter()
@@ -1062,12 +1061,12 @@ impl PackageFilterNames {
 }
 
 fn locked_packages_to_unresolved_records(
-    conda_packages: Vec<LockedPackageRef<'_>>,
+    conda_packages: Vec<&'_ LockedPackage>,
     workspace_root: &std::path::Path,
 ) -> Result<Vec<UnresolvedPixiRecord>, Report> {
     conda_packages
         .into_iter()
-        .filter_map(LockedPackageRef::as_conda)
+        .filter_map(LockedPackage::as_conda)
         .cloned()
         .map(|data| UnresolvedPixiRecord::from_conda_package_data(data, workspace_root))
         .collect::<Result<Vec<_>, _>>()
@@ -1133,7 +1132,6 @@ pub struct UpdateContext<'p> {
 
     /// The mapping client to use when fetching pypi mappings.
     mapping_client: MappingClient,
-
     /// A semaphore to limit the number of concurrent pypi solves.
     /// TODO(tim): we need this semaphore, to limit the number of concurrent
     ///     solves. This is a problem when using source dependencies
@@ -1155,36 +1153,11 @@ pub struct UpdateContext<'p> {
     /// The progress bar where all the command dispatcher progress will be
     /// placed.
     dispatcher_progress_bar: ProgressBar,
-
     /// Optional list of packages explicitly targeted for update.
     update_targets: Option<std::collections::HashSet<String>>,
 }
 
 impl<'p> UpdateContext<'p> {
-    fn merge_source_timestamp_hints<'a>(
-        timestamp_sets: impl IntoIterator<
-            Item = &'a HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>,
-        >,
-    ) -> HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps> {
-        let mut merged: HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps> = HashMap::new();
-
-        for timestamps in timestamp_sets {
-            for (key, value) in timestamps {
-                merged
-                    .entry(key.clone())
-                    .and_modify(|existing| {
-                        // Keep the entry with the newer default timestamp.
-                        if value.latest > existing.latest {
-                            *existing = value.clone();
-                        }
-                    })
-                    .or_insert(value.clone());
-            }
-        }
-
-        merged
-    }
-
     /// Returns a future that will resolve to the solved repodata records for
     /// the given environment group or `None` if the records do not exist
     /// and are also not in the process of being updated.
@@ -1234,28 +1207,6 @@ impl<'p> UpdateContext<'p> {
         }
 
         None
-    }
-
-    fn source_timestamp_hints_for_group(
-        &self,
-        group: &GroupedEnvironment<'p>,
-        platform: Platform,
-    ) -> HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps> {
-        match group {
-            GroupedEnvironment::Environment(env) => self
-                .outdated_envs
-                .validated_source_timestamps
-                .get(&(env.clone(), platform))
-                .cloned()
-                .unwrap_or_default(),
-            GroupedEnvironment::Group(group) => {
-                Self::merge_source_timestamp_hints(group.environments().filter_map(|env| {
-                    self.outdated_envs
-                        .validated_source_timestamps
-                        .get(&(env, platform))
-                }))
-            }
-        }
     }
 
     /// Takes the latest repodata records for the given environment and
@@ -1402,7 +1353,6 @@ pub struct UpdateContextBuilder<'p> {
 
     /// The mapping client to use for fetching pypi mappings.
     mapping_client: Option<MappingClient>,
-
     /// The io concurrency semaphore to use when updating environments
     io_concurrency_limit: Option<IoConcurrencyLimit>,
 
@@ -1411,7 +1361,6 @@ pub struct UpdateContextBuilder<'p> {
 
     /// Set the command dispatcher to use for the update process.
     command_dispatcher: CommandDispatcher,
-
     /// Optional list of package names explicitly targeted for update.
     update_targets: Option<std::collections::HashSet<String>>,
 }
@@ -1859,8 +1808,6 @@ impl<'p> UpdateContext<'p> {
                 let mapping_client = self.mapping_client.clone();
                 let command_dispatcher = self.command_dispatcher.clone();
                 let source_clone = source.clone();
-                let source_timestamp_hints =
-                    self.source_timestamp_hints_for_group(&source, platform);
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source_clone,
                     locked_group_records,
@@ -1869,7 +1816,6 @@ impl<'p> UpdateContext<'p> {
                     channel_priority,
                     command_dispatcher,
                     pin_overrides,
-                    source_timestamp_hints,
                 )
                 .map(|result| result.map_err_with(Report::new))
                 .boxed_local();
@@ -2074,10 +2020,10 @@ impl<'p> UpdateContext<'p> {
         // A loop on the main task is used versus individually spawning all tasks for
         // two reasons:
         //
-        // 1. This provides some control over when data is polled and broadcasted to
-        //    other tasks. No data is broadcasted until we start polling futures here.
+        // 1. This provides some control over when data is polled and broadcast to
+        //    other tasks. No data is broadcast until we start polling futures here.
         //    This reduces the risk of race-conditions where data has already been
-        //    broadcasted before a task subscribes to it.
+        //    broadcast before a task subscribes to it.
         // 2. The futures stored in `pending_futures` do not necessarily have to be
         //    `'static`. Which makes them easier to work with.
         while let Some(result) = pending_futures.next().await {
@@ -2407,7 +2353,6 @@ async fn spawn_solve_conda_environment_task(
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
     pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
-    source_timestamp_hints: HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>,
 ) -> Result<TaskResult, CommandDispatcherError<SolveCondaEnvironmentError>> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -2530,7 +2475,6 @@ async fn spawn_solve_conda_environment_task(
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
             preferred_build_source: pin_overrides,
-            source_timestamp_hints,
         })
         .await
         .map_err_with(|source| SolveCondaEnvironmentError::SolveFailed {
@@ -2956,27 +2900,8 @@ fn is_editable_from_manifest(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{TimeZone, Utc};
     use pixi_manifest::PyPiDependencies;
     use pixi_pypi_spec::PixiPypiSpec;
-    use pixi_record::VariantValue;
-    use rattler_conda_types::PackageName;
-    use std::collections::BTreeMap;
-
-    fn source_key(package: &str, variants: &[(&str, &str)]) -> SourceRecordReuseKey {
-        SourceRecordReuseKey::new(
-            PackageName::from_str(package).unwrap(),
-            variants
-                .iter()
-                .map(|(key, value)| {
-                    (
-                        (*key).to_string(),
-                        VariantValue::String((*value).to_string()),
-                    )
-                })
-                .collect::<BTreeMap<_, _>>(),
-        )
-    }
 
     #[test]
     fn test_editable_path_spec_with_registry_spec() {
@@ -3047,68 +2972,6 @@ mod tests {
         assert!(
             !is_editable_from_manifest(&deps, &pep508_name),
             "Higher-priority feature's explicit editable=false should take precedence"
-        );
-    }
-
-    #[test]
-    fn test_merge_source_timestamp_hints_keeps_distinct_variants() {
-        use pixi_spec::SourceTimestamps;
-
-        let early = SourceTimestamps::from(Utc.with_ymd_and_hms(2026, 4, 1, 12, 0, 0).unwrap());
-        let later = SourceTimestamps::from(Utc.with_ymd_and_hms(2026, 4, 1, 13, 0, 0).unwrap());
-
-        let first = HashMap::from([(
-            source_key("my-package", &[("python", "3.11")]),
-            early.clone(),
-        )]);
-        let second = HashMap::from([(
-            source_key("my-package", &[("python", "3.12")]),
-            later.clone(),
-        )]);
-
-        let merged = UpdateContext::merge_source_timestamp_hints([&first, &second]);
-
-        assert_eq!(merged.len(), 2);
-        assert_eq!(
-            merged.get(&source_key("my-package", &[("python", "3.11")])),
-            Some(&early)
-        );
-        assert_eq!(
-            merged.get(&source_key("my-package", &[("python", "3.12")])),
-            Some(&later)
-        );
-    }
-
-    #[test]
-    fn test_merge_source_timestamp_hints_takes_max_for_same_output() {
-        use pixi_spec::SourceTimestamps;
-
-        let early = SourceTimestamps::from(Utc.with_ymd_and_hms(2026, 4, 1, 12, 0, 0).unwrap());
-        let later = SourceTimestamps::from(Utc.with_ymd_and_hms(2026, 4, 1, 13, 0, 0).unwrap());
-        let stable = SourceTimestamps::from(Utc.with_ymd_and_hms(2026, 4, 1, 14, 0, 0).unwrap());
-
-        let first = HashMap::from([
-            (source_key("my-package", &[("python", "3.11")]), early),
-            (
-                source_key("other-package", &[("python", "3.11")]),
-                stable.clone(),
-            ),
-        ]);
-        let second = HashMap::from([(
-            source_key("my-package", &[("python", "3.11")]),
-            later.clone(),
-        )]);
-
-        let merged = UpdateContext::merge_source_timestamp_hints([&first, &second]);
-
-        assert_eq!(
-            merged.get(&source_key("my-package", &[("python", "3.11")])),
-            Some(&later),
-            "should keep the entry with the newer default timestamp when environments disagree"
-        );
-        assert_eq!(
-            merged.get(&source_key("other-package", &[("python", "3.11")])),
-            Some(&stable)
         );
     }
 }

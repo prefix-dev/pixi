@@ -1701,7 +1701,7 @@ dependencies = [
 [[package]]
 name = "coalesced_map"
 version = "0.1.2"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2747,7 +2747,7 @@ checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
 [[package]]
 name = "file_url"
 version = "0.2.7"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -3684,7 +3684,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -3704,7 +3704,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.59.0",
 ]
 
 [[package]]
@@ -5435,7 +5435,7 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 [[package]]
 name = "path_resolver"
 version = "0.2.7"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "ahash",
  "fs-err",
@@ -6642,7 +6642,6 @@ dependencies = [
 name = "pixi_record"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "file_url",
  "insta",
  "itertools 0.14.0",
@@ -7323,7 +7322,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -7361,7 +7360,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.3",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -7496,7 +7495,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.40.4"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "anyhow",
  "clap",
@@ -7810,7 +7809,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.6.19"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -7842,7 +7841,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.44.4"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "ahash",
  "chrono",
@@ -7884,7 +7883,7 @@ dependencies = [
 [[package]]
 name = "rattler_config"
 version = "0.3.7"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "console",
  "fs-err",
@@ -7901,7 +7900,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.2.3"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "blake2",
  "digest",
@@ -7940,7 +7939,7 @@ dependencies = [
 [[package]]
 name = "rattler_index"
 version = "0.27.21"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -7977,7 +7976,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.27.5"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "ahash",
  "chrono",
@@ -8004,7 +8003,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.12"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "quote",
  "syn",
@@ -8013,7 +8012,7 @@ dependencies = [
 [[package]]
 name = "rattler_menuinst"
 version = "0.2.54"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "chrono",
  "configparser",
@@ -8043,7 +8042,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.26.7"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -8076,7 +8075,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.24.7"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "astral-tokio-tar 0.6.0",
  "astral_async_zip",
@@ -8128,7 +8127,7 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.9"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "libc",
  "nix 0.30.1",
@@ -8139,7 +8138,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.13"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "reqwest 0.12.28",
  "reqwest-middleware",
@@ -8149,7 +8148,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.27.4"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -8211,7 +8210,7 @@ dependencies = [
 [[package]]
 name = "rattler_s3"
 version = "0.1.30"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "aws-config",
  "aws-credential-types",
@@ -8227,7 +8226,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.26.7"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -8248,7 +8247,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "5.2.0"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "chrono",
  "futures",
@@ -8266,7 +8265,7 @@ dependencies = [
 [[package]]
 name = "rattler_upload"
 version = "0.5.5"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "base64 0.22.1",
  "clap",
@@ -8302,7 +8301,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "2.3.16"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "archspec",
  "libloading",
@@ -9969,7 +9968,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#a2da747a352ca3fdc60970afd3fe4f731a8aa865"
+source = "git+https://github.com/conda/rattler?branch=feature%2Flockfile-v7#f54edf6153ffdf38f347448a764108e93284e61b"
 dependencies = [
  "tokio",
 ]

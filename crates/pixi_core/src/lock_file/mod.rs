@@ -45,7 +45,8 @@ mod tests {
     use pep440_rs::VersionSpecifiers;
     use pep508_rs::Requirement;
     use rattler_lock::{
-        PackageHashes, PypiDistributionData, PypiPackageData, PypiSourceData, UrlOrPath, Verbatim,
+        PackageHashes, PypiDistributionData, PypiPackageData, PypiSourceData, SourceData,
+        UrlOrPath, Verbatim,
     };
 
     use crate::Workspace;
@@ -102,6 +103,7 @@ mod tests {
             location,
             requires_dist,
             requires_python,
+            source_data: SourceData::default(),
         }))
     }
 

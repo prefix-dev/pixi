@@ -30,7 +30,7 @@ use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, MatchSpecCondition, NamedChannelOrUrl, NamelessMatchSpec,
     ParseChannelError, StringMatcher, VersionSpec,
 };
-pub use rattler_lock::{SourceTimestamps, Verbatim};
+pub use rattler_lock::Verbatim;
 pub use source_anchor::SourceAnchor;
 pub use subdirectory::{Subdirectory, SubdirectoryError};
 use thiserror::Error;

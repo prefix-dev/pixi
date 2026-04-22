@@ -63,11 +63,6 @@ pub struct SourceRecordCacheKey {
 
     /// The pinned source location
     pub source: CanonicalSourceCodeLocation,
-
-    /// The exclude-newer cutoff that was used when resolving. Different cutoffs
-    /// can yield different dependency sets. `None` when there are no host or
-    /// build dependencies.
-    pub exclude_newer: Option<pixi_spec::ResolvedExcludeNewer>,
 }
 
 impl SourceRecordCache {
@@ -111,7 +106,6 @@ impl MetadataCacheKey<SourceRecordCache> for SourceRecordCacheKey {
 
         self.enabled_protocols.hash(&mut hasher);
         self.variants.hash(&mut hasher);
-        self.exclude_newer.hash(&mut hasher);
 
         let source_dir = self.source.cache_unique_key();
         CacheKeyString::new(format!(
@@ -170,10 +164,6 @@ pub struct CachedSourceRecord {
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
     pub sources: HashMap<String, SourceLocationSpec>,
-
-    /// The timestamps of the newest packages in the build/host environments,
-    /// or `None` when there are no host or build dependencies.
-    pub timestamp: Option<pixi_spec::SourceTimestamps>,
 }
 
 impl MetadataCacheEntry<SourceRecordCache> for SourceRecordCacheEntry {

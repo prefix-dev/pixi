@@ -14,7 +14,7 @@ use pixi_core::{
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use pixi_manifest::EnvironmentName;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_lock::{LockFile, LockedPackage};
 
 use crate::cli_config::WorkspaceConfig;
 
@@ -64,7 +64,7 @@ pub struct UpdateSpecsArgs {
 }
 
 /// A distilled version of `UpdateSpecsArgs`.
-/// TODO: In the future if we want to add `--recursive` this datastructure could
+/// TODO: In the future if we want to add `--recursive` this data structure could
 ///     be used to store information about recursive packages.
 struct UpdateSpecs {
     packages: Option<HashSet<String>>,
@@ -89,7 +89,7 @@ impl UpdateSpecs {
         &self,
         environment_name: &EnvironmentName,
         platform: &Platform,
-        package: LockedPackageRef<'_>,
+        package: &'_ LockedPackage,
     ) -> bool {
         // Check if the platform is in the list of platforms to update.
         if let Some(platforms) = &self.platforms

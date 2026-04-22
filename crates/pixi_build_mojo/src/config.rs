@@ -50,14 +50,9 @@ impl BackendConfig for MojoBackendConfig {
     ///   Any bins found only in target_config will be kept
     /// - pkg: Any set-settings on the platform specific pkg override base
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
-        let pkg = if target_config.pkg.is_some() {
-            if self.pkg.is_some() {
-                Some(
-                    self.pkg
-                        .as_ref()
-                        .unwrap()
-                        .merge_with_target_config(target_config.pkg.as_ref().unwrap())?,
-                )
+        let pkg = if let Some(target_config_pkg) = &target_config.pkg {
+            if let Some(pkg) = &self.pkg {
+                Some(pkg.merge_with_target_config(target_config_pkg)?)
             } else {
                 target_config.pkg.clone()
             }
@@ -65,26 +60,20 @@ impl BackendConfig for MojoBackendConfig {
             self.pkg.clone()
         };
 
-        let bins = if target_config.bins.is_some() {
-            if self.bins.is_some() {
+        let bins = if let Some(target_config_bins) = &target_config.bins {
+            if let Some(bins) = &self.bins {
                 // Both base and target have binaries configured
                 // Override base with anything found in both target and base.
                 // If something is found only in base, drop it.
                 // If something is found only in target, drop it.
-                let base_bins: HashMap<_, _> = self
-                    .bins
-                    .as_ref()
-                    .unwrap()
+                let base_bins: HashMap<_, _> = bins
                     .iter()
                     .filter(|p| p.name.is_some())
                     .map(|p| (p.name.clone().unwrap(), p.clone()))
                     .collect();
 
                 Some(
-                    target_config
-                        .bins
-                        .as_ref()
-                        .unwrap()
+                    target_config_bins
                         .iter()
                         .map(|p| match p.name.as_ref() {
                             Some(name) => {
@@ -285,8 +274,10 @@ impl MojoBinConfig {
     ///
     /// **Note** bins must have the same name to be merged.
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
-        if self.name.is_some() && target_config.name.is_some() {
-            if self.name.as_ref().unwrap() != target_config.name.as_ref().unwrap() {
+        if let Some(name) = &self.name
+            && let Some(target_config_name) = &target_config.name
+        {
+            if name != target_config_name {
                 miette::bail!("Both bins must have a set name to be merged");
             }
         } else {
