@@ -31,7 +31,7 @@ use pixi_git::sha::GitSha;
 use pixi_spec::{GitReference, SourceLocationSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord};
 use rattler_lock::{
-    CondaSourceData, FullSourceMetadata, GitShallowSpec, PackageBuildSource, PartialSourceMetadata,
+    CondaSourceData, GitShallowSpec, PackageBuildSource, PartialSourceMetadata, SourceData,
     SourceMetadata,
 };
 use std::fmt::{Display, Formatter};
@@ -113,15 +113,6 @@ pub struct SourceRecord<D> {
 
     /// The variants that uniquely identify the way this package was built.
     pub variants: BTreeMap<String, VariantValue>,
-
-    /// The timestamps of the newest packages in the build/host environments at
-    /// the time this record was solved. Reusing these timestamps when
-    /// re-solving should yield roughly the same environment, soft-locking the
-    /// build/host dependencies.
-    ///
-    /// `None` when the source package has no host or build dependencies,
-    /// meaning there is nothing to soft-lock.
-    pub timestamp: Option<pixi_spec::SourceTimestamps>,
 
     /// The short hash that was originally parsed from the lock file (e.g.
     /// the 9f3c2a7b part of numba-cuda[9f3c2a7b] @ .).
@@ -264,7 +255,6 @@ impl<D> SourceRecord<D> {
             manifest_source: self.manifest_source,
             build_source: self.build_source,
             variants: self.variants,
-            timestamp: self.timestamp,
             identifier_hash: self.identifier_hash,
         }
     }
@@ -283,7 +273,6 @@ impl<D> SourceRecord<D> {
             manifest_source,
             build_source,
             variants,
-            timestamp,
             identifier_hash,
         } = self;
         let shared = (manifest_source, build_source, variants, identifier_hash);
@@ -293,7 +282,6 @@ impl<D> SourceRecord<D> {
                 manifest_source: shared.0,
                 build_source: shared.1,
                 variants: shared.2,
-                timestamp,
                 identifier_hash: shared.3,
             }),
             Err(err_data) => Err(SourceRecord {
@@ -301,7 +289,6 @@ impl<D> SourceRecord<D> {
                 manifest_source: shared.0,
                 build_source: shared.1,
                 variants: shared.2,
-                timestamp,
                 identifier_hash: shared.3,
             }),
         }
@@ -475,24 +462,18 @@ impl SourceRecord<SourceRecordData> {
             self.data
         };
 
-        let metadata = match data {
-            SourceRecordData::Full(full) => SourceMetadata::Full(Box::new(FullSourceMetadata {
-                package_record: full.package_record,
-                sources: full
-                    .sources
-                    .into_iter()
-                    .map(|(k, v)| (k, v.into()))
-                    .collect(),
-            })),
-            SourceRecordData::Partial(partial) => SourceMetadata::Partial(PartialSourceMetadata {
-                name: partial.name,
-                depends: partial.depends,
-                sources: partial
-                    .sources
-                    .into_iter()
-                    .map(|(k, v)| (k, v.into()))
-                    .collect(),
-            }),
+        let (metadata, sources) = match data {
+            SourceRecordData::Full(full) => (
+                SourceMetadata::Full(Box::new(full.package_record)),
+                full.sources,
+            ),
+            SourceRecordData::Partial(partial) => (
+                SourceMetadata::Partial(PartialSourceMetadata {
+                    name: partial.name,
+                    depends: partial.depends,
+                }),
+                partial.sources,
+            ),
         };
 
         CondaSourceData {
@@ -504,7 +485,8 @@ impl SourceRecord<SourceRecordData> {
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
             identifier_hash: self.identifier_hash,
-            timestamp: self.timestamp,
+            sources: sources.into_iter().map(|(k, v)| (k, v.into())).collect(),
+            source_data: SourceData::default(),
             metadata,
         }
     }
@@ -518,28 +500,25 @@ impl SourceRecord<SourceRecordData> {
         let build_source =
             package_build_source_to_build_source(data.package_build_source, &manifest_source)?;
 
+        let sources = data
+            .sources
+            .into_iter()
+            .map(|(k, v)| (k, SourceLocationSpec::from(v)))
+            .collect();
+
         let record_data = match data.metadata {
-            SourceMetadata::Full(full) => SourceRecordData::Full(FullSourceRecordData {
-                package_record: full.package_record,
-                sources: full
-                    .sources
-                    .into_iter()
-                    .map(|(k, v)| (k, SourceLocationSpec::from(v)))
-                    .collect(),
+            SourceMetadata::Full(package_record) => SourceRecordData::Full(FullSourceRecordData {
+                package_record: package_record.as_ref().clone(),
+                sources,
             }),
             SourceMetadata::Partial(partial) => {
                 SourceRecordData::Partial(PartialSourceRecordData {
                     name: partial.name,
                     depends: partial.depends,
-                    sources: partial
-                        .sources
-                        .into_iter()
-                        .map(|(k, v)| (k, SourceLocationSpec::from(v)))
-                        .collect(),
+                    sources,
                 })
             }
         };
-
         Ok(Self {
             data: record_data,
             manifest_source,
@@ -549,7 +528,6 @@ impl SourceRecord<SourceRecordData> {
                 .into_iter()
                 .map(|(k, v)| (k, VariantValue::from(v)))
                 .collect(),
-            timestamp: data.timestamp,
             identifier_hash: data.identifier_hash,
         })
     }
@@ -720,7 +698,6 @@ mod tests {
                         manifest_source: unresolved.manifest_source,
                         build_source: unresolved.build_source,
                         variants: unresolved.variants,
-                        timestamp: unresolved.timestamp,
                         identifier_hash: unresolved.identifier_hash,
                     },
                     SourceRecordData::Partial(_) => {
@@ -857,7 +834,6 @@ mod tests {
                 "python".into(),
                 crate::VariantValue::from("3.12".to_string()),
             )]),
-            timestamp: Some(pixi_spec::SourceTimestamps::from(chrono::Utc::now())),
             identifier_hash: Some("abcd1234".to_string()),
         };
 
@@ -927,7 +903,6 @@ mod tests {
             }),
             build_source: None,
             variants: BTreeMap::new(),
-            timestamp: Some(pixi_spec::SourceTimestamps::from(chrono::Utc::now())),
             identifier_hash: None,
         });
 
@@ -961,7 +936,6 @@ mod tests {
             manifest_source,
             build_source,
             variants,
-            timestamp: Some(pixi_spec::SourceTimestamps::from(chrono::Utc::now())),
             identifier_hash: None,
         }
     }

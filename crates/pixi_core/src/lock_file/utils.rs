@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockFileBuilder, LockedPackageRef};
+use rattler_lock::{LockFile, LockFileBuilder, LockedPackage};
 use tokio::sync::Semaphore;
 
 use crate::{
@@ -31,7 +31,7 @@ impl From<IoConcurrencyLimit> for Arc<Semaphore> {
 pub fn filter_lock_file<
     'p,
     'lock,
-    F: FnMut(&Environment<'p>, Platform, LockedPackageRef<'lock>) -> bool,
+    F: FnMut(&Environment<'p>, Platform, &'lock LockedPackage) -> bool,
 >(
     workspace: &'p Workspace,
     lock_file: &'lock LockFile,
@@ -75,7 +75,7 @@ pub fn filter_lock_file<
             for package in packages {
                 if filter(&project_env, platform, package) {
                     builder
-                        .add_package(environment_name, &platform_str, package.into())
+                        .add_package(environment_name, &platform_str, package.clone())
                         .expect("platform was registered");
                 }
             }

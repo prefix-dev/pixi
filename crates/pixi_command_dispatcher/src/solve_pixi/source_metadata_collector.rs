@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     path::PathBuf,
     sync::Arc,
 };
@@ -17,7 +17,6 @@ use thiserror::Error;
 use crate::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
     PackageNotProvidedError, SourceCheckoutError, SourceMetadataSpec, SourceRecordError,
-    SourceRecordReuseKey,
     executor::CancellationAwareFutures,
     source_metadata::{CycleEnvironment, SourceMetadata, SourceMetadataError},
 };
@@ -34,7 +33,6 @@ pub struct SourceMetadataCollector {
     variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
     variant_files: Option<Vec<PathBuf>>,
     preferred_build_sources: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
-    source_timestamp_hints: HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>,
 }
 
 #[derive(Default)]
@@ -81,7 +79,6 @@ impl SourceMetadataCollector {
         variant_files: Option<Vec<PathBuf>>,
         enabled_protocols: EnabledProtocols,
         preferred_build_sources: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
-        source_timestamp_hints: HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>,
     ) -> Self {
         Self {
             command_queue,
@@ -93,7 +90,6 @@ impl SourceMetadataCollector {
             variant_configuration,
             variant_files,
             preferred_build_sources,
-            source_timestamp_hints,
         }
     }
 
@@ -223,7 +219,6 @@ impl SourceMetadataCollector {
                     enabled_protocols: self.enabled_protocols.clone(),
                 },
                 exclude_newer: self.exclude_newer.clone(),
-                source_exclude_newer_hints: self.source_timestamp_hints.clone(),
             })
             .await
         {

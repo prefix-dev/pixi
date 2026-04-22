@@ -12,7 +12,6 @@ pub use pinned_source::{
     LockedGitUrl, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout, PinnedGitSpec,
     PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
 };
-pub use pixi_spec::SourceTimestamps;
 pub use pixi_variant::VariantValue;
 use rattler_conda_types::{
     MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord, RepoDataRecord,

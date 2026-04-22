@@ -8,8 +8,7 @@ use super::{
     CondaPrefixUpdater,
     resolve::build_dispatch::LazyBuildDispatchDependencies,
     satisfiability::{
-        ValidatedSourceTimestamps, VerifySatisfiabilityContext, pypi_metadata,
-        verify_environment_satisfiability,
+        VerifySatisfiabilityContext, pypi_metadata, verify_environment_satisfiability,
     },
     verify_platform_satisfiability,
 };
@@ -32,7 +31,7 @@ use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt};
 use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_lock::{LockFile, LockedPackage};
 
 /// Cache for build-related resources that can be shared between
 /// satisfiability checking and PyPI resolution.
@@ -94,11 +93,6 @@ pub struct OutdatedEnvironments<'p> {
     /// Locked pypi records with metadata, resolved during the satisfiability
     /// check. Forwarded to the update path to avoid re-reading source trees.
     pub locked_pypi_records: HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
-
-    /// Source record timestamps that were validated unchanged during
-    /// satisfiability checking.
-    pub validated_source_timestamps:
-        HashMap<(Environment<'p>, Platform), ValidatedSourceTimestamps>,
 }
 
 /// A struct that stores whether the locked content of certain environments
@@ -142,7 +136,6 @@ impl<'p> OutdatedEnvironments<'p> {
             build_caches,
             static_metadata_cache,
             locked_pypi_records,
-            validated_source_timestamps,
         ) = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file).await;
 
         // Extend the outdated targets to include the solve groups
@@ -201,7 +194,6 @@ impl<'p> OutdatedEnvironments<'p> {
             build_caches,
             static_metadata_cache,
             locked_pypi_records,
-            validated_source_timestamps,
         }
     }
 
@@ -235,11 +227,9 @@ async fn find_unsatisfiable_targets<'p>(
     HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
     HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
     HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
-    HashMap<(Environment<'p>, Platform), ValidatedSourceTimestamps>,
 ) {
     let mut verified_environments = HashMap::new();
     let mut locked_pypi_by_env_platform = HashMap::new();
-    let mut validated_source_timestamps = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
 
     // Create UV context lazily for building dynamic metadata
@@ -368,14 +358,7 @@ async fn find_unsatisfiable_targets<'p>(
         while let Some(result) = platform_futures.next().await {
             match result {
                 Ok((platform, outcome)) => {
-                    if !outcome.validated_source_timestamps.is_empty() {
-                        validated_source_timestamps.insert(
-                            (environment.clone(), platform),
-                            outcome.validated_source_timestamps,
-                        );
-                    }
-
-                    match outcome.result {
+                    match outcome {
                         Ok((verified_env, locked_pypi)) => {
                             verified_environments
                                 .insert((environment.clone(), platform), verified_env);
@@ -476,7 +459,6 @@ async fn find_unsatisfiable_targets<'p>(
         build_caches.into_iter().collect(),
         static_metadata_cache.into_iter().collect(),
         locked_pypi_by_env_platform,
-        validated_source_timestamps,
     )
 }
 
@@ -581,7 +563,7 @@ fn find_inconsistent_solve_groups<'p>(
                 .flatten()
             {
                 match package {
-                    LockedPackageRef::Conda(pkg) => match conda_packages_by_name.get(pkg.name()) {
+                    LockedPackage::Conda(pkg) => match conda_packages_by_name.get(pkg.name()) {
                         None => {
                             conda_packages_by_name
                                 .insert(pkg.name().clone(), pkg.location().clone());
@@ -591,7 +573,7 @@ fn find_inconsistent_solve_groups<'p>(
                         }
                         _ => {}
                     },
-                    LockedPackageRef::Pypi(pkg) => match pypi_packages_by_name.get(pkg.name()) {
+                    LockedPackage::Pypi(pkg) => match pypi_packages_by_name.get(pkg.name()) {
                         None => {
                             pypi_packages_by_name
                                 .insert(pkg.name().clone(), pkg.location().clone());

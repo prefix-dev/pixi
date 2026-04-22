@@ -219,7 +219,6 @@ impl InstantiateToolEnvironmentSpec {
                 variant_files: self.variant_files.clone(),
                 strategy: SolveStrategy::default(),
                 preferred_build_source: BTreeMap::new(),
-                source_timestamp_hints: Default::default(),
             })
             .await
             .map_err_with(|e| InstantiateToolEnvironmentError::SolveEnvironment(Arc::new(e)))?;

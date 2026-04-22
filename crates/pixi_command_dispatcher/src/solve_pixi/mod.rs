@@ -1,13 +1,7 @@
 mod reporter;
 mod source_metadata_collector;
 
-use std::{
-    borrow::Borrow,
-    collections::{BTreeMap, HashMap},
-    path::PathBuf,
-    sync::Arc,
-    time::Instant,
-};
+use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, sync::Arc, time::Instant};
 
 use indexmap::IndexMap;
 use miette::Diagnostic;
@@ -26,7 +20,7 @@ use tracing::instrument;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    Cycle, SolveCondaEnvironmentSpec, SourceMetadataError, SourceRecordReuseKey,
+    Cycle, SolveCondaEnvironmentSpec, SourceMetadataError,
     solve_conda::SolveCondaEnvironmentError,
     solve_pixi::source_metadata_collector::{
         CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
@@ -104,11 +98,6 @@ pub struct PixiEnvironmentSpec {
     #[serde(skip)]
     pub preferred_build_source:
         BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
-
-    /// Validated timestamp hints for specific source outputs. These are used
-    /// to reuse source-record cache entries across lock-file recomputes.
-    #[serde(skip)]
-    pub source_timestamp_hints: HashMap<SourceRecordReuseKey, pixi_spec::SourceTimestamps>,
 }
 
 impl Default for PixiEnvironmentSpec {
@@ -129,7 +118,6 @@ impl Default for PixiEnvironmentSpec {
             variant_files: None,
             enabled_protocols: EnabledProtocols::default(),
             preferred_build_source: BTreeMap::new(),
-            source_timestamp_hints: HashMap::new(),
         }
     }
 }
@@ -185,7 +173,6 @@ impl PixiEnvironmentSpec {
             self.variant_files.clone(),
             self.enabled_protocols.clone(),
             self.preferred_build_source.clone(),
-            self.source_timestamp_hints.clone(),
         )
         .collect(
             source_specs

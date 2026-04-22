@@ -1642,7 +1642,7 @@ async fn test_exclude_newer() {
     ))
     .unwrap();
 
-    // Relock and check that an older version of the package is selected
+    // Re-lock and check that an older version of the package is selected
     pixi.lock().await.unwrap();
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(

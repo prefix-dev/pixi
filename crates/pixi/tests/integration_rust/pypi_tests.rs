@@ -174,10 +174,10 @@ index-url = "{index_url}"
     let lock = pixi.update_lock_file().await.unwrap();
 
     match lock.get_pypi_package("default", platform, "mine").unwrap() {
-        rattler_lock::LockedPackageRef::Conda(_) => {
+        rattler_lock::LockedPackage::Conda(_) => {
             panic!("Got a Conda package when I expected a pypi one")
         }
-        rattler_lock::LockedPackageRef::Pypi(pkg) => {
+        rattler_lock::LockedPackage::Pypi(pkg) => {
             assert_eq!(pkg.name().as_dist_info_name(), "mine");
             assert_eq!(pkg.location().given(), Some("./mine"));
             assert!(
@@ -190,10 +190,10 @@ index-url = "{index_url}"
         .get_pypi_package("default", platform, "also-mine")
         .unwrap()
     {
-        rattler_lock::LockedPackageRef::Conda(_) => {
+        rattler_lock::LockedPackage::Conda(_) => {
             panic!("Got a Conda package when I expected a pypi one")
         }
-        rattler_lock::LockedPackageRef::Pypi(pkg) => {
+        rattler_lock::LockedPackage::Pypi(pkg) => {
             assert_eq!(pkg.name().as_dist_info_name(), "also_mine");
             assert_eq!(pkg.location().given(), Some("./also_mine"));
             assert!(
@@ -269,7 +269,7 @@ setup(version="42.23.12")
         .expect("dynamic-dep should be in the lock file");
 
     match pkg {
-        rattler_lock::LockedPackageRef::Pypi(data) => {
+        rattler_lock::LockedPackage::Pypi(data) => {
             eprintln!("dynamic-dep version in lock file: {:?}", data.version());
             // A source dependency with dynamic version should have no version in the lock file
             assert!(
@@ -307,7 +307,7 @@ version = "42.23.12"
         .get_pypi_package("default", platform, "dynamic-dep")
         .expect("dynamic-dep should be in the lock file after making version static")
     {
-        rattler_lock::LockedPackageRef::Pypi(data) => {
+        rattler_lock::LockedPackage::Pypi(data) => {
             assert!(
                 data.version().is_none(),
                 "version should remain None for local source dependency even after making version static, got {:?}",
@@ -344,7 +344,7 @@ setup(version="99.0.0")
         .get_pypi_package("default", platform, "dynamic-dep")
         .expect("dynamic-dep should be in the lock file after switching back to dynamic version")
     {
-        rattler_lock::LockedPackageRef::Pypi(data) => {
+        rattler_lock::LockedPackage::Pypi(data) => {
             assert!(
                 data.version().is_none(),
                 "version should be None after switching back to dynamic version, got {:?}",
@@ -361,7 +361,7 @@ setup(version="99.0.0")
         .get_pypi_package("default", platform, "dynamic-dep")
         .expect("dynamic-dep should survive round-trip")
     {
-        rattler_lock::LockedPackageRef::Pypi(data) => {
+        rattler_lock::LockedPackage::Pypi(data) => {
             assert!(
                 data.version().is_none(),
                 "version should be None after round-trip, got {:?}",
@@ -434,7 +434,7 @@ another-dep = {{ path = "./another-dep" }}
         .get_pypi_package("default", platform, "dynamic-dep")
         .expect("dynamic-dep should survive re-resolve")
     {
-        rattler_lock::LockedPackageRef::Pypi(data) => {
+        rattler_lock::LockedPackage::Pypi(data) => {
             assert!(
                 data.version().is_none(),
                 "version should be None after re-resolve, got {:?}",
@@ -489,7 +489,7 @@ version = "50.0.0"
         .get_pypi_package("default", platform, "dynamic-dep")
         .expect("dynamic-dep should be in the re-resolved lock")
     {
-        rattler_lock::LockedPackageRef::Pypi(data) => {
+        rattler_lock::LockedPackage::Pypi(data) => {
             assert!(
                 data.version().is_none(),
                 "dynamic-dep version should be None, got {:?}",
@@ -502,7 +502,7 @@ version = "50.0.0"
         .get_pypi_package("default", platform, "another-dep")
         .expect("another-dep should be in the re-resolved lock")
     {
-        rattler_lock::LockedPackageRef::Pypi(data) => {
+        rattler_lock::LockedPackage::Pypi(data) => {
             assert!(
                 data.version().is_none(),
                 "another-dep version should be None for local source dep, got {:?}",
@@ -2018,7 +2018,7 @@ test-static-pkg = {{ path = ".", editable = true }}
         .get_pypi_package("default", platform, "test-static-pkg")
         .expect("test-static-pkg should be in lock file")
     {
-        rattler_lock::LockedPackageRef::Pypi(data) => {
+        rattler_lock::LockedPackage::Pypi(data) => {
             assert!(
                 data.version().is_none(),
                 "local path dep should have version=None in lock file, got {:?}",
