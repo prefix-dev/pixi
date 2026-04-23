@@ -14,6 +14,7 @@ mod manifests;
 mod package;
 mod preview;
 pub mod pypi;
+mod pypi_txt_expand;
 pub mod pyproject;
 mod s3;
 mod solve_group;
@@ -48,6 +49,7 @@ pub use manifests::{
 use miette::Diagnostic;
 pub use package::Package;
 pub use preview::{KnownPreviewFeature, Preview};
+pub use pypi_txt_expand::{PypiTxtExpandError, pypi_txt_paths_to_requirements, requirements_txt_to_requirements};
 use rattler_conda_types::Platform;
 pub use s3::S3Options;
 pub use spec_type::SpecType;

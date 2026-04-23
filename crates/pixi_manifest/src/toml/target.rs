@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use indexmap::IndexMap;
 use pixi_spec::{PixiSpec, SourceSpec, TomlLocationSpec};
@@ -7,10 +8,13 @@ use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use crate::{
-    Activation, KnownPreviewFeature, SpecType, TargetSelector, Task, TaskName, TomlError, Warning,
-    WithWarnings, WorkspaceTarget,
+    Activation, InternalDependencyBehavior, KnownPreviewFeature, SpecType, TargetSelector, Task,
+    TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
-    toml::{preview::TomlPreview, task::TomlTask},
+    pypi_txt_expand::expand_pypi_txt_paths_blocking,
+    toml::{
+        conda_dependency_table::CondaDependencyTable, preview::TomlPreview, task::TomlTask,
+    },
     utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -18,7 +22,7 @@ use rattler_conda_types::PackageName;
 
 #[derive(Debug, Default)]
 pub struct TomlTarget {
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dependencies: Option<PixiSpanned<CondaDependencyTable>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
@@ -44,6 +48,7 @@ impl TomlTarget {
         self,
         target: Option<TargetSelector>,
         preview: &TomlPreview,
+        manifest_dir: Option<&Path>,
     ) -> Result<WithWarnings<WorkspaceTarget>, TomlError> {
         let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
 
@@ -118,28 +123,64 @@ impl TomlTarget {
             })
             .transpose()?;
 
+        let (run_dependencies, pypi_txt_paths) = match self.dependencies {
+            Some(spanned) => {
+                let span = spanned.span;
+                let (conda, paths) = spanned.value.into_spanned_unique_map(span);
+                (conda, paths)
+            }
+            None => (None, Vec::new()),
+        };
+
+        let mut workspace_target = WorkspaceTarget {
+            dependencies: combine_target_dependencies(
+                [
+                    (SpecType::Run, run_dependencies),
+                    (SpecType::Host, self.host_dependencies),
+                    (SpecType::Build, self.build_dependencies),
+                ],
+                pixi_build_enabled,
+            )?,
+            pypi_dependencies: self.pypi_dependencies.map(|index_map| {
+                // Convert IndexMap to DependencyMap
+                index_map.into_iter().collect()
+            }),
+            dev_dependencies: dev_dependencies.map(|index_map| {
+                // Convert IndexMap to DependencyMap
+                index_map.into_iter().collect()
+            }),
+            constraints,
+            activation: self.activation,
+            tasks: self.tasks,
+        };
+
+        if !pypi_txt_paths.is_empty() {
+            let Some(manifest_dir) = manifest_dir else {
+                return Err(TomlError::Generic(
+                    GenericError::new(
+                        "the `pypi-txt` key in `[dependencies]` requires a manifest directory",
+                    )
+                    .with_help(
+                        "This usually means the manifest was parsed without a path on disk; use a file-backed manifest.",
+                    ),
+                ));
+            };
+            let expanded = expand_pypi_txt_paths_blocking(&pypi_txt_paths, manifest_dir)?;
+            // Inline `[pypi-dependencies]` were converted above; append `pypi-txt` specs so both
+            // sources coexist (alternate specs for the same package name are merged by DependencyMap).
+            for req in expanded {
+                let name = PypiPackageName::from_normalized(req.name.clone());
+                let spec = PixiPypiSpec::try_from(req).map_err(|e| {
+                    TomlError::Generic(GenericError::new(format!(
+                        "failed to convert dependency from `pypi-txt`: {e}"
+                    )))
+                })?;
+                workspace_target.add_pypi_dependency(name, spec, InternalDependencyBehavior::Append);
+            }
+        }
+
         Ok(WithWarnings {
-            value: WorkspaceTarget {
-                dependencies: combine_target_dependencies(
-                    [
-                        (SpecType::Run, self.dependencies),
-                        (SpecType::Host, self.host_dependencies),
-                        (SpecType::Build, self.build_dependencies),
-                    ],
-                    pixi_build_enabled,
-                )?,
-                pypi_dependencies: self.pypi_dependencies.map(|index_map| {
-                    // Convert IndexMap to DependencyMap
-                    index_map.into_iter().collect()
-                }),
-                dev_dependencies: dev_dependencies.map(|index_map| {
-                    // Convert IndexMap to DependencyMap
-                    index_map.into_iter().collect()
-                }),
-                constraints,
-                activation: self.activation,
-                tasks: self.tasks,
-            },
+            value: workspace_target,
             warnings: self.warnings,
         })
     }

@@ -99,7 +99,6 @@ uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
-uv-requirements-txt = { workspace = true }
 which = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 

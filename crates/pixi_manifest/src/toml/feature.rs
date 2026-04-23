@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
@@ -11,8 +12,8 @@ use crate::{
     pypi::pypi_options::PypiOptions,
     toml::{
         PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
-        create_unsupported_selector_warning, platform::TomlPlatform, preview::TomlPreview,
-        task::TomlTask,
+        conda_dependency_table::CondaDependencyTable, create_unsupported_selector_warning,
+        platform::TomlPlatform, preview::TomlPreview, task::TomlTask,
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
@@ -28,7 +29,7 @@ pub struct TomlFeature {
     pub system_requirements: SystemRequirements,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlTarget>,
     pub solve_strategy: Option<SolveStrategy>,
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dependencies: Option<PixiSpanned<CondaDependencyTable>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
@@ -57,6 +58,7 @@ impl TomlFeature {
         name: FeatureName,
         preview: &TomlPreview,
         workspace: &TomlWorkspace,
+        manifest_dir: Option<&Path>,
     ) -> Result<WithWarnings<Feature>, TomlError> {
         let WithWarnings {
             value: default_target,
@@ -72,7 +74,7 @@ impl TomlFeature {
             tasks: self.tasks,
             warnings: self.warnings,
         }
-        .into_workspace_target(None, preview)?;
+        .into_workspace_target(None, preview, manifest_dir)?;
 
         let mut targets = IndexMap::new();
         for (selector, target) in self.target {
@@ -111,7 +113,7 @@ impl TomlFeature {
             let WithWarnings {
                 value: target,
                 warnings: mut target_warnings,
-            } = target.into_workspace_target(Some(selector.value.clone()), preview)?;
+            } = target.into_workspace_target(Some(selector.value.clone()), preview, manifest_dir)?;
             targets.insert(selector, target);
             warnings.append(&mut target_warnings);
         }

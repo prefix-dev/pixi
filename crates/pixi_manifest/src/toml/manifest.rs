@@ -27,8 +27,8 @@ use crate::{
     pypi::pypi_options::PypiOptions,
     toml::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
-        WorkspacePackageProperties, create_unsupported_selector_warning,
-        environment::TomlEnvironmentList, task::TomlTask,
+        WorkspacePackageProperties, conda_dependency_table::CondaDependencyTable,
+        create_unsupported_selector_warning, environment::TomlEnvironmentList, task::TomlTask,
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
     warning::Deprecation,
@@ -43,7 +43,7 @@ pub struct TomlManifest {
 
     pub system_requirements: Option<PixiSpanned<SystemRequirements>>,
     pub target: Option<PixiSpanned<IndexMap<PixiSpanned<TargetSelector>, TomlTarget>>>,
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dependencies: Option<PixiSpanned<CondaDependencyTable>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
 
@@ -172,7 +172,7 @@ impl TomlManifest {
             tasks: self.tasks.map(PixiSpanned::into_inner).unwrap_or_default(),
             warnings: self.warnings,
         }
-        .into_workspace_target(None, preview)?;
+        .into_workspace_target(None, preview, root_directory)?;
 
         let mut workspace_targets = IndexMap::new();
         for (selector, target) in self.target.map(|t| t.value).unwrap_or_default() {
@@ -196,7 +196,7 @@ impl TomlManifest {
             let WithWarnings {
                 value: workspace_target,
                 warnings: mut target_warnings,
-            } = target.into_workspace_target(Some(selector.value.clone()), preview)?;
+            } = target.into_workspace_target(Some(selector.value.clone()), preview, root_directory)?;
             workspace_targets.insert(selector, workspace_target);
             warnings.append(&mut target_warnings);
         }
@@ -249,7 +249,12 @@ impl TomlManifest {
                 let WithWarnings {
                     value: feature,
                     warnings: mut feature_warnings,
-                } = feature.into_feature(name.value.clone(), preview, &workspace.value)?;
+                } = feature.into_feature(
+                    name.value.clone(),
+                    preview,
+                    &workspace.value,
+                    root_directory,
+                )?;
                 warnings.append(&mut feature_warnings);
                 feature_name_to_span
                     .entry(name.value.clone().to_string())
@@ -673,6 +678,7 @@ pub struct ExternalWorkspaceProperties {
 mod test {
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
+    use std::str::FromStr;
 
     use super::*;
     use crate::{toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
@@ -1273,6 +1279,40 @@ mod test {
         5 │
           ╰────
         "#
+        );
+    }
+
+    #[test]
+    fn pypi_txt_merged_into_default_feature_pypi_deps() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        fs_err::write(root.join("requirements.txt"), "requests>=2\n").unwrap();
+        let toml = r#"
+        [workspace]
+        name = "pypi-txt-ws"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dependencies]
+        pypi-txt = "requirements.txt"
+        "#;
+        let manifest = TomlManifest::from_toml_str(toml).unwrap();
+        let (wm, _, _) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Some(root),
+            )
+            .unwrap();
+        let req_name = PypiPackageName::from_str("requests").unwrap();
+        let deps = wm
+            .default_feature()
+            .pypi_dependencies(Some(Platform::Linux64))
+            .expect("expected pypi dependencies from pypi-txt");
+        assert!(
+            deps.as_ref().contains_key(&req_name),
+            "{:?}",
+            deps.as_ref().iter().map(|(n, _)| n).collect::<Vec<_>>()
         );
     }
 }

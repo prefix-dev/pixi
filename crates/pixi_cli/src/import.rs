@@ -4,14 +4,11 @@ use std::str::FromStr;
 use clap::{Parser, ValueEnum};
 use pixi_config::{Config, ConfigCli};
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
-use pixi_manifest::{EnvironmentName, FeatureName, HasFeaturesIter, PrioritizedChannel};
+use pixi_manifest::{
+    EnvironmentName, FeatureName, HasFeaturesIter, PrioritizedChannel, requirements_txt_to_requirements,
+};
 use pixi_utils::conda_environment_file::CondaEnvFile;
-use pixi_uv_conversions::convert_uv_requirements_to_pep508;
 use rattler_conda_types::Platform;
-
-use tracing::warn;
-use uv_client::BaseClientBuilder;
-use uv_requirements_txt::RequirementsTxt;
 
 use miette::{Diagnostic, IntoDiagnostic, Result};
 use thiserror::Error;
@@ -101,31 +98,6 @@ fn get_feature_and_environment(
     ))
 }
 
-fn convert_uv_requirements_txt_to_pep508(
-    reqs_txt: uv_requirements_txt::RequirementsTxt,
-) -> Result<Vec<pep508_rs::Requirement>, miette::Error> {
-    let uv_requirements: Vec<uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl>> = reqs_txt
-        .requirements
-        .into_iter()
-        .map(|r| match r.requirement {
-            uv_requirements_txt::RequirementsTxtRequirement::Named(req) => Ok(req),
-            uv_requirements_txt::RequirementsTxtRequirement::Unnamed(_) => Err(miette::miette!(
-                "Error parsing input file: unnamed requirements are currently unsupported."
-            )),
-        })
-        .collect::<Result<_, _>>()?;
-    if !reqs_txt.constraints.is_empty() {
-        warn!(
-            "Constraints detected in input file, but these are currently unsupported. Continuing without applying constraints..."
-        )
-    }
-
-    let requirements =
-        convert_uv_requirements_to_pep508(uv_requirements.iter()).into_diagnostic()?;
-
-    Ok(requirements)
-}
-
 async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
     let (input_file, platforms, workspace_config) =
         (args.file, args.platforms, args.workspace_config);
@@ -198,14 +170,9 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
             (conda_deps, pypi_deps)
         }
         ProcessedInput::PypiTxt => {
-            let reqs_txt = RequirementsTxt::parse(
-                &input_file,
-                workspace.workspace().root(),
-                &BaseClientBuilder::default(),
-            )
-            .await
-            .into_diagnostic()?;
-            let pypi_deps = convert_uv_requirements_txt_to_pep508(reqs_txt)?;
+            let pypi_deps = requirements_txt_to_requirements(&input_file, workspace.workspace().root())
+                .await
+                .map_err(|e| miette::miette!("{e}"))?;
 
             (vec![], pypi_deps)
         }

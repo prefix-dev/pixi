@@ -29,6 +29,9 @@ pixi_allocator = { workspace = true, optional = true }
 pixi_cli = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 
+[[bin]]
+name = "r-pixi"
+path = "src/main.rs"
 
 [dev-dependencies]
 async-trait = { workspace = true }

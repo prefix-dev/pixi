@@ -6108,7 +6108,6 @@ dependencies = [
  "uv-configuration",
  "uv-pep508",
  "uv-pypi-types",
- "uv-requirements-txt",
  "which",
  "zip 8.5.1",
 ]
@@ -6550,10 +6549,15 @@ dependencies = [
  "strum",
  "tempfile",
  "thiserror 2.0.18",
+ "tokio",
  "toml-span",
  "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
  "url",
+ "uv-client",
+ "uv-pep508",
+ "uv-pypi-types",
+ "uv-requirements-txt",
 ]
 
 [[package]]
