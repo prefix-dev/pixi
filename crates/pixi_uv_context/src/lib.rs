@@ -9,7 +9,6 @@ use pixi_utils::reqwest::{
     LazyReqwestClient, should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares,
 };
 use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
-use tracing::debug;
 use uv_cache::Cache;
 use uv_client::{
     BaseClientBuilder, Connectivity, ExtraMiddleware, RegistryClient, RegistryClientBuilder,
@@ -62,7 +61,7 @@ fn read_usize_env(var: &str) -> Option<usize> {
     let val = std::env::var(var).ok()?;
     match val.parse::<usize>() {
         Ok(n) if n > 0 => {
-            debug!("using {var}={n}");
+            tracing::debug!("using {var}={n}");
             Some(n)
         }
         _ => {
@@ -85,14 +84,14 @@ fn read_http_timeout_from_env() -> Option<Duration> {
         if let Ok(val) = std::env::var(var) {
             match val.parse::<u64>() {
                 Ok(secs) => {
-                    debug!("using {var}={secs}s for HTTP timeout");
+                    tracing::debug!("using {var}={secs}s for HTTP timeout");
                     return Some(Duration::from_secs(secs));
                 }
                 Err(_) => {
                     // Also try parsing as float for values like "30.5"
                     match val.parse::<f64>() {
                         Ok(secs) if secs >= 0.0 => {
-                            debug!("using {var}={secs}s for HTTP timeout");
+                            tracing::debug!("using {var}={secs}s for HTTP timeout");
                             return Some(Duration::from_secs_f64(secs));
                         }
                         _ => {
@@ -116,7 +115,7 @@ fn read_http_retries_from_env() -> Option<u32> {
     let val = std::env::var("UV_HTTP_RETRIES").ok()?;
     match val.parse::<u32>() {
         Ok(n) => {
-            debug!("using UV_HTTP_RETRIES={n}");
+            tracing::debug!("using UV_HTTP_RETRIES={n}");
             Some(n)
         }
         Err(_) => {
@@ -166,11 +165,11 @@ impl UvResolutionContext {
 
         let keyring_provider = match config.pypi_config.use_keyring() {
             pixi_config::KeyringProvider::Subprocess => {
-                debug!("using uv keyring (subprocess) provider");
+                tracing::debug!("using uv keyring (subprocess) provider");
                 uv_configuration::KeyringProviderType::Subprocess
             }
             pixi_config::KeyringProvider::Disabled => {
-                debug!("uv keyring provider is disabled");
+                tracing::debug!("uv keyring provider is disabled");
                 uv_configuration::KeyringProviderType::Disabled
             }
         };
