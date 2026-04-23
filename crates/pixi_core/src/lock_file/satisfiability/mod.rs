@@ -1134,6 +1134,10 @@ pub async fn verify_platform_satisfiability(
                 let record = match UnresolvedPixiRecord::from_conda_package_data(
                     conda.clone(),
                     ctx.project_root,
+                    // TODO: resolve build/host packages once the lock-file
+                    // exposes the package table publicly.
+                    Vec::new(),
+                    Vec::new(),
                 ) {
                     Ok(record) => record,
                     Err(e) => {
@@ -1272,6 +1276,10 @@ pub async fn verify_platform_satisfiability(
                     let record = UnresolvedPixiRecord::from_conda_package_data(
                         conda.clone(),
                         ctx.project_root,
+                        // TODO: resolve build/host packages once the lock-file
+                        // exposes the package table publicly.
+                        Vec::new(),
+                        Vec::new(),
                     )
                     .map_err(|e| {
                         CommandDispatcherError::Failed(Box::new(PlatformUnsat::CorruptedEntry(

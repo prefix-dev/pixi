@@ -345,6 +345,8 @@ impl SourceRecordSpec {
             manifest_source: source.manifest_source().clone(),
             build_source: source.build_source().cloned(),
             identifier_hash: None,
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
         }
     }
 

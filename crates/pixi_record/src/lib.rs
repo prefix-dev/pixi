@@ -210,6 +210,8 @@ impl UnresolvedPixiRecord {
     pub fn from_conda_package_data(
         data: CondaPackageData,
         workspace_root: &std::path::Path,
+        build_packages: Vec<UnresolvedPixiRecord>,
+        host_packages: Vec<UnresolvedPixiRecord>,
     ) -> Result<Self, ParseLockFileError> {
         match data {
             CondaPackageData::Binary(value) => {
@@ -226,7 +228,12 @@ impl UnresolvedPixiRecord {
                 Ok(UnresolvedPixiRecord::Binary(Arc::new(record)))
             }
             CondaPackageData::Source(value) => Ok(UnresolvedPixiRecord::Source(Arc::new(
-                UnresolvedSourceRecord::from_conda_source_data(*value, workspace_root)?,
+                UnresolvedSourceRecord::from_conda_source_data(
+                    *value,
+                    workspace_root,
+                    build_packages,
+                    host_packages,
+                )?,
             ))),
         }
     }
