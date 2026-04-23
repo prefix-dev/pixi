@@ -24,6 +24,7 @@ for further details on how to use the software.
 - [Installation](https://prefix-dev.github.io/pixi/latest/installation/index.md)
 - [Basic Usage](https://prefix-dev.github.io/pixi/latest/getting_started/index.md)
 - [First Workspace](https://prefix-dev.github.io/pixi/latest/first_workspace/index.md)
+- [Robotics](https://prefix-dev.github.io/pixi/latest/robotics/index.md)
 
 ## Tutorials documentation
 

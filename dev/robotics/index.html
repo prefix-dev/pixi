@@ -10,27 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/config/set/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/robotics/">
       
       
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../installation/">
       
       
         
       
       
-      <link rel="icon" href="../../../../../assets/pixi.png">
+      <link rel="icon" href="../assets/pixi.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
     
     
       
-        <title>pixi config set - Pixi</title>
+        <title>Robotics - Pixi</title>
       
     
     
-      <link rel="stylesheet" href="../../../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -49,9 +53,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -76,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pixi-config-set" class="md-skip">
+        <a href="#pixi-for-robotics" class="md-skip">
           Skip to content
         </a>
       
@@ -96,9 +100,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../../.." title="Pixi" class="md-header__button md-logo" aria-label="Pixi" data-md-component="logo">
+    <a href=".." title="Pixi" class="md-header__button md-logo" aria-label="Pixi" data-md-component="logo">
       
-  <img src="../../../../../assets/pixi-logo.svg" alt="logo">
+  <img src="../assets/pixi-logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -115,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              pixi config set
+              Robotics
             
           </span>
         </div>
@@ -241,9 +245,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../../.." title="Pixi" class="md-nav__button md-logo" aria-label="Pixi" data-md-component="logo">
+    <a href=".." title="Pixi" class="md-nav__button md-logo" aria-label="Pixi" data-md-component="logo">
       
-  <img src="../../../../../assets/pixi-logo.svg" alt="logo">
+  <img src="../assets/pixi-logo.svg" alt="logo">
 
     </a>
     Pixi
@@ -270,7 +274,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../.." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -294,10 +298,37 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../../../robotics/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Robotics
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -313,6 +344,153 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-pixi-for-robotics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Pixi for Robotics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-pixi-compares" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Pixi Compares
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#guides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Guides
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#robostack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RoboStack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#multi-machine-workspace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-machine workspace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-pixi-with-colcon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Pixi with colcon
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automate-your-workflow-with-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automate your workflow with tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mixing-ros-with-python-ml-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mixing ROS with Python ML libraries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#community-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Community &amp; Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -381,7 +559,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../installation/" class="md-nav__link">
+      <a href="../installation/" class="md-nav__link">
         
   
   
@@ -409,7 +587,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../first_workspace/" class="md-nav__link">
+      <a href="../first_workspace/" class="md-nav__link">
         
   
   
@@ -437,7 +615,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../getting_started/" class="md-nav__link">
+      <a href="../getting_started/" class="md-nav__link">
         
   
   
@@ -465,7 +643,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../conda_ecosystem/" class="md-nav__link">
+      <a href="../conda_ecosystem/" class="md-nav__link">
         
   
   
@@ -618,7 +796,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../python/tutorial/" class="md-nav__link">
+      <a href="../python/tutorial/" class="md-nav__link">
         
   
   
@@ -646,7 +824,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../python/pyproject_toml/" class="md-nav__link">
+      <a href="../python/pyproject_toml/" class="md-nav__link">
         
   
   
@@ -674,7 +852,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../python/pytorch/" class="md-nav__link">
+      <a href="../python/pytorch/" class="md-nav__link">
         
   
   
@@ -710,7 +888,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../tutorials/ros2/" class="md-nav__link">
+      <a href="../tutorials/ros2/" class="md-nav__link">
         
   
   
@@ -738,7 +916,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../tutorials/rust/" class="md-nav__link">
+      <a href="../tutorials/rust/" class="md-nav__link">
         
   
   
@@ -821,7 +999,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../switching_from/uv/" class="md-nav__link">
+      <a href="../switching_from/uv/" class="md-nav__link">
         
   
   
@@ -849,7 +1027,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../switching_from/poetry/" class="md-nav__link">
+      <a href="../switching_from/poetry/" class="md-nav__link">
         
   
   
@@ -877,7 +1055,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../switching_from/conda/" class="md-nav__link">
+      <a href="../switching_from/conda/" class="md-nav__link">
         
   
   
@@ -913,7 +1091,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../tutorials/multi_environment/" class="md-nav__link">
+      <a href="../tutorials/multi_environment/" class="md-nav__link">
         
   
   
@@ -941,7 +1119,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../global_tools/introduction/" class="md-nav__link">
+      <a href="../global_tools/introduction/" class="md-nav__link">
         
   
   
@@ -969,7 +1147,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../tutorials/import/" class="md-nav__link">
+      <a href="../tutorials/import/" class="md-nav__link">
         
   
   
@@ -1071,7 +1249,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/environment/" class="md-nav__link">
+      <a href="../workspace/environment/" class="md-nav__link">
         
   
   
@@ -1099,7 +1277,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/advanced_tasks/" class="md-nav__link">
+      <a href="../workspace/advanced_tasks/" class="md-nav__link">
         
   
   
@@ -1127,7 +1305,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/multi_platform_configuration/" class="md-nav__link">
+      <a href="../workspace/multi_platform_configuration/" class="md-nav__link">
         
   
   
@@ -1155,7 +1333,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/multi_environment/" class="md-nav__link">
+      <a href="../workspace/multi_environment/" class="md-nav__link">
         
   
   
@@ -1183,7 +1361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/lockfile/" class="md-nav__link">
+      <a href="../workspace/lockfile/" class="md-nav__link">
         
   
   
@@ -1211,7 +1389,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/system_requirements/" class="md-nav__link">
+      <a href="../workspace/system_requirements/" class="md-nav__link">
         
   
   
@@ -1239,7 +1417,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../concepts/package_specifications/" class="md-nav__link">
+      <a href="../concepts/package_specifications/" class="md-nav__link">
         
   
   
@@ -1267,7 +1445,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../concepts/conda_pypi/" class="md-nav__link">
+      <a href="../concepts/conda_pypi/" class="md-nav__link">
         
   
   
@@ -1348,7 +1526,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../global_tools/manifest/" class="md-nav__link">
+      <a href="../global_tools/manifest/" class="md-nav__link">
         
   
   
@@ -1376,7 +1554,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../global_tools/trampolines/" class="md-nav__link">
+      <a href="../global_tools/trampolines/" class="md-nav__link">
         
   
   
@@ -1482,7 +1660,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/getting_started/" class="md-nav__link">
+      <a href="../build/getting_started/" class="md-nav__link">
         
   
   
@@ -1573,7 +1751,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/python/" class="md-nav__link">
+      <a href="../build/python/" class="md-nav__link">
         
   
   
@@ -1601,7 +1779,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/cpp/" class="md-nav__link">
+      <a href="../build/cpp/" class="md-nav__link">
         
   
   
@@ -1629,7 +1807,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/ros/" class="md-nav__link">
+      <a href="../build/ros/" class="md-nav__link">
         
   
   
@@ -1657,7 +1835,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/workspace/" class="md-nav__link">
+      <a href="../build/workspace/" class="md-nav__link">
         
   
   
@@ -1685,7 +1863,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/variants/" class="md-nav__link">
+      <a href="../build/variants/" class="md-nav__link">
         
   
   
@@ -1713,7 +1891,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/advanced_cpp/" class="md-nav__link">
+      <a href="../build/advanced_cpp/" class="md-nav__link">
         
   
   
@@ -1741,7 +1919,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/cross_compilation/" class="md-nav__link">
+      <a href="../build/cross_compilation/" class="md-nav__link">
         
   
   
@@ -1777,7 +1955,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/dependency_types/" class="md-nav__link">
+      <a href="../build/dependency_types/" class="md-nav__link">
         
   
   
@@ -1870,7 +2048,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/backends/" class="md-nav__link">
+      <a href="../build/backends/" class="md-nav__link">
         
   
   
@@ -1898,7 +2076,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/backends/pixi-build-cmake/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-cmake/" class="md-nav__link">
         
   
   
@@ -1926,7 +2104,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/backends/pixi-build-python/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-python/" class="md-nav__link">
         
   
   
@@ -1954,7 +2132,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/backends/pixi-build-rattler-build/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-rattler-build/" class="md-nav__link">
         
   
   
@@ -1982,7 +2160,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/backends/pixi-build-ros/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-ros/" class="md-nav__link">
         
   
   
@@ -2010,7 +2188,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/backends/pixi-build-r/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-r/" class="md-nav__link">
         
   
   
@@ -2038,7 +2216,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/backends/pixi-build-rust/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-rust/" class="md-nav__link">
         
   
   
@@ -2066,7 +2244,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/backends/pixi-build-mojo/" class="md-nav__link">
+      <a href="../build/backends/pixi-build-mojo/" class="md-nav__link">
         
   
   
@@ -2153,7 +2331,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/key_concepts/compilers/" class="md-nav__link">
+      <a href="../build/key_concepts/compilers/" class="md-nav__link">
         
   
   
@@ -2189,7 +2367,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/package_source/" class="md-nav__link">
+      <a href="../build/package_source/" class="md-nav__link">
         
   
   
@@ -2217,7 +2395,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/dev/" class="md-nav__link">
+      <a href="../build/dev/" class="md-nav__link">
         
   
   
@@ -2313,7 +2491,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/prefix/" class="md-nav__link">
+      <a href="../deployment/prefix/" class="md-nav__link">
         
   
   
@@ -2341,7 +2519,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/pixi_pack/" class="md-nav__link">
+      <a href="../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -2369,7 +2547,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/authentication/" class="md-nav__link">
+      <a href="../deployment/authentication/" class="md-nav__link">
         
   
   
@@ -2397,7 +2575,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/container/" class="md-nav__link">
+      <a href="../deployment/container/" class="md-nav__link">
         
   
   
@@ -2425,7 +2603,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/s3/" class="md-nav__link">
+      <a href="../deployment/s3/" class="md-nav__link">
         
   
   
@@ -2453,7 +2631,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/artifactory/" class="md-nav__link">
+      <a href="../deployment/artifactory/" class="md-nav__link">
         
   
   
@@ -2604,7 +2782,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/editor/vscode/" class="md-nav__link">
+      <a href="../integration/editor/vscode/" class="md-nav__link">
         
   
   
@@ -2632,7 +2810,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/editor/jetbrains/" class="md-nav__link">
+      <a href="../integration/editor/jetbrains/" class="md-nav__link">
         
   
   
@@ -2660,7 +2838,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/editor/zed/" class="md-nav__link">
+      <a href="../integration/editor/zed/" class="md-nav__link">
         
   
   
@@ -2688,7 +2866,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/editor/r_studio/" class="md-nav__link">
+      <a href="../integration/editor/r_studio/" class="md-nav__link">
         
   
   
@@ -2716,7 +2894,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/editor/jupyterlab/" class="md-nav__link">
+      <a href="../integration/editor/jupyterlab/" class="md-nav__link">
         
   
   
@@ -2805,7 +2983,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/ci/github_actions/" class="md-nav__link">
+      <a href="../integration/ci/github_actions/" class="md-nav__link">
         
   
   
@@ -2833,7 +3011,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/ci/updates_github_actions/" class="md-nav__link">
+      <a href="../integration/ci/updates_github_actions/" class="md-nav__link">
         
   
   
@@ -2934,7 +3112,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/extensions/introduction/" class="md-nav__link">
+      <a href="../integration/extensions/introduction/" class="md-nav__link">
         
   
   
@@ -2962,7 +3140,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/extensions/pixi_browse/" class="md-nav__link">
+      <a href="../integration/extensions/pixi_browse/" class="md-nav__link">
         
   
   
@@ -2990,7 +3168,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/extensions/pixi_diff/" class="md-nav__link">
+      <a href="../integration/extensions/pixi_diff/" class="md-nav__link">
         
   
   
@@ -3018,7 +3196,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/ci/updates_github_actions/" class="md-nav__link">
+      <a href="../integration/ci/updates_github_actions/" class="md-nav__link">
         
   
   
@@ -3046,7 +3224,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/extensions/pixi_inject/" class="md-nav__link">
+      <a href="../integration/extensions/pixi_inject/" class="md-nav__link">
         
   
   
@@ -3074,7 +3252,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/extensions/pixi_install_to_prefix/" class="md-nav__link">
+      <a href="../integration/extensions/pixi_install_to_prefix/" class="md-nav__link">
         
   
   
@@ -3102,7 +3280,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/pixi_pack/" class="md-nav__link">
+      <a href="../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -3130,7 +3308,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/extensions/pixi_skills/" class="md-nav__link">
+      <a href="../integration/extensions/pixi_skills/" class="md-nav__link">
         
   
   
@@ -3221,7 +3399,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/third_party/conda_deny/" class="md-nav__link">
+      <a href="../integration/third_party/conda_deny/" class="md-nav__link">
         
   
   
@@ -3249,7 +3427,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/third_party/direnv/" class="md-nav__link">
+      <a href="../integration/third_party/direnv/" class="md-nav__link">
         
   
   
@@ -3277,7 +3455,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/third_party/starship/" class="md-nav__link">
+      <a href="../integration/third_party/starship/" class="md-nav__link">
         
   
   
@@ -3381,7 +3559,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../security/" class="md-nav__link">
+      <a href="../security/" class="md-nav__link">
         
   
   
@@ -3409,7 +3587,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../advanced/channel_logic/" class="md-nav__link">
+      <a href="../advanced/channel_logic/" class="md-nav__link">
         
   
   
@@ -3437,7 +3615,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../advanced/explain_info_command/" class="md-nav__link">
         
   
   
@@ -3465,7 +3643,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../advanced/override/" class="md-nav__link">
+      <a href="../advanced/override/" class="md-nav__link">
         
   
   
@@ -3493,7 +3671,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../advanced/shebang/" class="md-nav__link">
+      <a href="../advanced/shebang/" class="md-nav__link">
         
   
   
@@ -3521,7 +3699,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../advanced/pixi_shell/" class="md-nav__link">
+      <a href="../advanced/pixi_shell/" class="md-nav__link">
         
   
   
@@ -3613,7 +3791,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../pixi_manifest/" class="md-nav__link">
+      <a href="../reference/pixi_manifest/" class="md-nav__link">
         
   
   
@@ -3641,7 +3819,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../pixi_configuration/" class="md-nav__link">
+      <a href="../reference/pixi_configuration/" class="md-nav__link">
         
   
   
@@ -3669,7 +3847,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../" class="md-nav__link">
+      <a href="../reference/cli/pixi/" class="md-nav__link">
         
   
   
@@ -3697,7 +3875,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../environment_variables/" class="md-nav__link">
+      <a href="../reference/environment_variables/" class="md-nav__link">
         
   
   
@@ -3791,7 +3969,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../CHANGELOG/" class="md-nav__link">
+      <a href="../CHANGELOG/" class="md-nav__link">
         
   
   
@@ -3819,7 +3997,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../misc/vision/" class="md-nav__link">
+      <a href="../misc/vision/" class="md-nav__link">
         
   
   
@@ -3847,7 +4025,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../misc/packaging/" class="md-nav__link">
+      <a href="../misc/packaging/" class="md-nav__link">
         
   
   
@@ -3875,7 +4053,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../misc/Community/" class="md-nav__link">
+      <a href="../misc/Community/" class="md-nav__link">
         
   
   
@@ -3903,7 +4081,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../misc/FAQ/" class="md-nav__link">
+      <a href="../misc/FAQ/" class="md-nav__link">
         
   
   
@@ -3958,10 +4136,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#usage" class="md-nav__link">
+  <a href="#quick-start" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Usage
+        Quick Start
       
     </span>
   </a>
@@ -3969,10 +4147,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#arguments" class="md-nav__link">
+  <a href="#why-pixi-for-robotics" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Arguments
+        Why Pixi for Robotics
       
     </span>
   </a>
@@ -3980,10 +4158,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#config-options" class="md-nav__link">
+  <a href="#how-pixi-compares" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Config Options
+        How Pixi Compares
       
     </span>
   </a>
@@ -3991,10 +4169,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#global-options" class="md-nav__link">
+  <a href="#guides" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Global Options
+        Guides
       
     </span>
   </a>
@@ -4002,10 +4180,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#description" class="md-nav__link">
+  <a href="#robostack" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Description
+        RoboStack
       
     </span>
   </a>
@@ -4013,10 +4191,71 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
+  <a href="#common-patterns" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Examples
+        Common Patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#multi-machine-workspace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-machine workspace
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-pixi-with-colcon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using Pixi with colcon
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automate-your-workflow-with-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automate your workflow with tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mixing-ros-with-python-ml-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mixing ROS with Python ML libraries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#community-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Community &amp; Support
       
     </span>
   </a>
@@ -4040,7 +4279,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/reference/cli/pixi/config/set.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/robotics.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -4048,84 +4287,274 @@
   
 
 
-<!--- This file is autogenerated. Do not edit manually! -->
-<h1 id="pixi-config-set"><a href="../../">pixi</a> <a href="../">config</a> set<a class="headerlink" href="#pixi-config-set" title="Permanent link">#</a></h1>
-<p>Set a configuration value</p>
-<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi config set [OPTIONS] &lt;KEY&gt; [VALUE]
+<h1 id="pixi-for-robotics">Pixi for Robotics<a class="headerlink" href="#pixi-for-robotics" title="Permanent link">#</a></h1>
+<p><strong>Pixi is not only for robotics</strong>, but it's a great fit for it!</p>
+<p>Pixi is a fast, reproducible package manager built on the conda ecosystem, and a natural fit for robotics development.</p>
+<p>If you're familiar with the traditional ROS setup, here's the mental model:</p>
+<ul>
+<li><strong><code>apt</code></strong> installs <strong>Debian packages</strong> from the <strong>Ubuntu distribution</strong>. The <strong>official ROS apt repository</strong> (<code>packages.ros.org</code>) is an additional channel built on top of it.</li>
+<li><strong>Pixi</strong> installs <strong>conda packages</strong> from the <strong><a href="https://conda-forge.org">conda-forge</a> distribution</strong>, <strong><a href="https://robostack.github.io/">RoboStack</a></strong> is an additional conda channel built on top of it in exactly the same way: it repackages the ROS ecosystem as conda packages, resolving all native dependencies against <code>conda-forge</code>.</li>
+</ul>
+<p>The structure is identical: a base distribution (<code>Ubuntu</code> / <code>conda-forge</code>) with a ROS channel layered on top (<code>packages.ros.org</code> / <code>robostack-&lt;distro&gt;</code>).
+The key difference is that conda packages are cross-platform and not tied to a specific OS, so the same <code>pixi.toml</code> can work on Linux, macOS, and Windows without a system-wide install.</p>
+<p>Pixi and RoboStack are currently a Tier 3 platform in the ROS ecosystem, which means they are community-supported but not officially supported by Open Robotics.
+<a href="https://www.openrobotics.org/technology-strategy-2026">Open Robotics has communicated</a> that Pixi will be part of their strategy to expand accessibility and ease of use.
+So with your help, we can grow the community and make it a first-class way to use ROS on any platform.</p>
+<hr />
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">#</a></h2>
+<p>Get ROS 2 Humble running in no time:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_ros_ws<span class="w"> </span>-c<span class="w"> </span>https://prefix.dev/robostack-humble<span class="w"> </span>-c<span class="w"> </span>https://prefix.dev/conda-forge
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_ros_ws
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-desktop
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>pixi<span class="w"> </span>run<span class="w"> </span>rviz2
 </span></code></pre></div>
-<h2 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">#</a></h2>
-<ul>
-<li>
-<dl>
-<dt><a id="arg-\<KEY>" href="#arg-\<KEY>"><code>&lt;KEY&gt;</code></a></dt>
-<dd>Configuration key to set
-<br><strong>required</strong>: <code>true</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg-\<VALUE>" href="#arg-\<VALUE>"><code>&lt;VALUE&gt;</code></a></dt>
-<dd>Configuration value to set (key will be unset if value not provided)</dd>
-</dl>
-</li>
+<p>ROS 2 is installed, isolated to this workspace, and reproducible on any machine with Pixi.
+A <code>pixi.toml</code> file is created with the dependencies and channels, and a <code>pixi.lock</code> file is generated to pin exact versions.
+Use <code>pixi run</code> or <code>pixi shell</code> to activate the environment and run ROS commands.</p>
+<hr />
+<h2 id="why-pixi-for-robotics">Why Pixi for Robotics<a class="headerlink" href="#why-pixi-for-robotics" title="Permanent link">#</a></h2>
+<ul class="task-list">
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>No system-wide ROS installation</strong> <br>
+    All dependencies live in the workspace. New team members clone the repo and run <code>pixi install</code>. No more additional setup instructions, no version incompatibilities.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong><a href="../workspace/lockfile/">Reproducible environments</a></strong> <br>
+    Pixi generates a lockfile (<code>pixi.lock</code>) that pins every dependency, including transitive ones. The same environment is guaranteed on your laptop, CI, and the robot itself.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong><a href="../workspace/multi_platform_configuration/">Works on Linux, macOS, and Windows</a></strong> <br>
+    RoboStack supports ROS packages for Linux, macOS and Windows. A single <code>pixi.toml</code> can declare support for all three platforms simultaneously.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong><a href="../workspace/advanced_tasks/">Built-in task runner</a></strong> <br>
+    Define your <code>colcon build</code>, launch files, and simulation commands as named tasks in <code>pixi.toml</code>, no Makefiles or shell scripts needed.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong>Mix ROS and non-ROS dependencies</strong> <br>
+    Python libraries, OpenCV, PyTorch, compilers, GUI's and ROS packages all managed together.</li>
+<li class="task-list-item"><label class="task-list-control"><input type="checkbox" disabled checked/><span class="task-list-indicator"></span></label> <strong><a href="../build/ros/">Package and distribute your own nodes</a></strong> <br>
+    Build your ROS packages as conda packages with the <a href="../build/backends/pixi-build-ros/"><code>pixi-build-ros</code></a> backend and publish them to a private channel.</li>
 </ul>
-<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
+<hr />
+<h2 id="how-pixi-compares">How Pixi Compares<a class="headerlink" href="#how-pixi-compares" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><code>apt</code></th>
+<th><code>pip</code></th>
+<th>Docker</th>
+<th><strong>Pixi</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Installs ROS</td>
+<td>✅</td>
+<td>❌</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Works on macOS &amp; Windows</td>
+<td>❌</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Reproducible lockfile</td>
+<td>❌</td>
+<td>❌</td>
+<td>⚠️(pre-baked images)</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Per-project isolation</td>
+<td>❌</td>
+<td>⚠️ venvs</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Mix C++, Python, system libs</td>
+<td>✅</td>
+<td>❌</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Native performance (no VM/container)</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>GUI / hardware access out of the box</td>
+<td>✅</td>
+<td>✅</td>
+<td>⚠️ (requires setup)</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Single install command for new devs</td>
+<td>❌</td>
+<td>❌</td>
+<td>⚠️</td>
+<td>✅</td>
+</tr>
+</tbody>
+</table>
 <ul>
-<li>
-<dl>
-<dt><a id="arg---local" href="#arg---local"><code>--local (-l)</code></a></dt>
-<dd>Operation on project-local configuration</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---global" href="#arg---global"><code>--global (-g)</code></a></dt>
-<dd>Operation on global configuration</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---system" href="#arg---system"><code>--system (-s)</code></a></dt>
-<dd>Operation on system configuration</dd>
-</dl>
-</li>
+<li><code>apt</code> is Debian-only and install packages globally, making it hard to run different ROS versions side by side or reproduce the exact same setup across machines.</li>
+<li><code>pip</code> can't install ROS or non-Python system libraries at all.</li>
+<li>Docker gives you isolation and improves cross-platform support but adds overhead, complicates GPU and hardware access, and requires a separate toolchain.</li>
+<li>Pixi gives you the package isolation and reproducibility of Docker with the native performance and hardware access of a local install, on any platform.</li>
 </ul>
-<h2 id="global-options">Global Options<a class="headerlink" href="#global-options" title="Permanent link">#</a></h2>
+<hr />
+<h2 id="guides">Guides<a class="headerlink" href="#guides" title="Permanent link">#</a></h2>
+<table>
+<thead>
+<tr>
+<th>Guide</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="../tutorials/ros2/">ROS 2 Tutorial</a></td>
+<td>Set up a workspace, write Python and C++ nodes, use <code>pixi run</code> tasks.</td>
+</tr>
+<tr>
+<td><a href="../build/ros/">Building a ROS Package</a></td>
+<td>Package your ROS nodes as conda packages based on your <code>package.xml</code></td>
+</tr>
+<tr>
+<td><a href="../build/backends/pixi-build-ros/">pixi-build-ros Backend</a></td>
+<td>Backend reference for building ROS packages.</td>
+</tr>
+<tr>
+<td><a href="../integration/ci/github_actions/">GitHub Actions</a></td>
+<td>Run your ROS tests in CI.</td>
+</tr>
+<tr>
+<td><a href="../deployment/pixi_pack/">Distributing with Pixi Pack</a></td>
+<td>Bundle a workspace for offline or embedded deployment.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="robostack">RoboStack<a class="headerlink" href="#robostack" title="Permanent link">#</a></h2>
+<p><a href="https://robostack.github.io/">RoboStack</a> is the community that maintains the conda ROS packages Pixi depends on.</p>
+<h4 id="finding-packages">Finding packages<a class="headerlink" href="#finding-packages" title="Permanent link">#</a></h4>
+<p>Browse available packages for each distribution on <a href="https://prefix.dev/channels/">prefix.dev</a>.
+Package names follow the pattern <code>ros-&lt;distro&gt;-&lt;package-name&gt;</code>, mirroring the apt naming convention.
+There are more packages on the <code>prefix.dev</code> channels so some might normally come from <code>apt</code> or <code>pip</code> instead, but they are all available in a single place for Pixi:</p>
+<table>
+<thead>
+<tr>
+<th><code>pixi</code></th>
+<th><code>apt</code></th>
+<th><code>pip</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pixi add ros-humble-rviz2</code></td>
+<td><code>apt install ros-humble-rviz2</code></td>
+<td>❌</td>
+</tr>
+<tr>
+<td><code>pixi add opencv</code></td>
+<td><code>apt install python3-opencv</code></td>
+<td><code>pip install opencv-python</code></td>
+</tr>
+<tr>
+<td><code>pixi add pytorch</code></td>
+<td>❌</td>
+<td><code>pip install torch --index-url https://download.pytorch.org/whl/cpu</code></td>
+</tr>
+</tbody>
+</table>
+<h4 id="what-to-do-if-a-package-is-missing">What to do if a package is missing<a class="headerlink" href="#what-to-do-if-a-package-is-missing" title="Permanent link">#</a></h4>
+<p>Not all ROS packages are available in RoboStack yet. If you need a package that is not in the channel:</p>
 <ul>
-<li>
-<dl>
-<dt><a id="arg---manifest-path" href="#arg---manifest-path"><code>--manifest-path (-m) &lt;MANIFEST_PATH&gt;</code></a></dt>
-<dd>The path to <code>pixi.toml</code>, <code>pyproject.toml</code>, or the workspace directory</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---workspace" href="#arg---workspace"><code>--workspace (-w) &lt;WORKSPACE&gt;</code></a></dt>
-<dd>Name of the workspace</dd>
-</dl>
-</li>
+<li>Check the <a href="https://github.com/RoboStack">RoboStack GitHub</a> to see if there is an open issue or PR for it.</li>
+<li>Contribute to RoboStack to add it. See the <a href="https://robostack.github.io/Contributing.html">RoboStack contributing guide</a>.</li>
+<li>Package it yourself with Pixi using the <a href="../build/backends/pixi-build-ros/"><code>pixi-build-ros</code> backend</a> and publish it to your own conda channel.</li>
 </ul>
-<h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">#</a></h2>
-<p>Set a configuration value</p>
-<p>Example: <code>pixi config set default-channels '["conda-forge", "bioconda"]'</code></p>
-<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>default-channels<span class="w"> </span><span class="s1">&#39;[&quot;conda-forge&quot;, &quot;bioconda&quot;]&#39;</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--global<span class="w"> </span>mirrors<span class="w"> </span><span class="s1">&#39;{&quot;https://conda.anaconda.org/conda-forge&quot;: [&quot;https://prefix.dev/conda-forge&quot;]}&#39;</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>repodata-config.disable-zstd<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--system
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--global<span class="w"> </span>detached-environments<span class="w"> </span><span class="s2">&quot;/opt/pixi/envs&quot;</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>detached-environments<span class="w"> </span><span class="nb">false</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>s3-options.my-bucket<span class="w"> </span><span class="s1">&#39;{&quot;endpoint-url&quot;: &quot;http://localhost:9000&quot;, &quot;force-path-style&quot;: true, &quot;region&quot;: &quot;auto&quot;}&#39;</span>
+<h4 id="rosdep-is-not-supported"><code>rosdep</code> is not supported<a class="headerlink" href="#rosdep-is-not-supported" title="Permanent link">#</a></h4>
+<p><code>rosdep</code> calls <code>apt</code> or <code>pip</code> under the hood, which bypasses Pixi's environment.
+Use <code>pixi add</code> to add any missing dependencies instead.</p>
+<h4 id="pixi-ros"><code>pixi-ros</code><a class="headerlink" href="#pixi-ros" title="Permanent link">#</a></h4>
+<p><a href="https://github.com/ruben-arts/pixi-ros"><code>pixi-ros</code></a> can be used to quickstart a ROS workspace.
+This project can initialize a workspace with the correct RoboStack channels and ROS dependencies, and generate <code>pixi.toml</code> files for ROS packages.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Install the pixi-ros CLI tool globally</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-ros
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># Move to your existing ros workspace that contains the src folder</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nb">cd</span><span class="w"> </span>ros_ws
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="c1"># Initialize the workspace</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>pixi<span class="w"> </span>ros<span class="w"> </span>init
 </span></code></pre></div>
+<p>This will initialize a <code>pixi.toml</code> based on the <code>package.xml</code> files in your <code>src</code> folder, and add the necessary RoboStack channel automatically.</p>
+<hr />
+<h2 id="common-patterns">Common Patterns<a class="headerlink" href="#common-patterns" title="Permanent link">#</a></h2>
+<h3 id="multi-machine-workspace">Multi-machine workspace<a class="headerlink" href="#multi-machine-workspace" title="Permanent link">#</a></h3>
+<p>Share the exact same environment across development machines and the robot:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/robostack-humble&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">]</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="k">[dependencies]</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="n">ros-humble-desktop</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="n">colcon-common-extensions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span></code></pre></div>
+<h3 id="using-pixi-with-colcon">Using Pixi with colcon<a class="headerlink" href="#using-pixi-with-colcon" title="Permanent link">#</a></h3>
+<p>Assuming you have a workspace with a <code>src</code> folder containing your ROS packages, you can define the following manifest in the root of your workspace:
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/robostack-humble&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">[dependencies]</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">ros-humble-desktop</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">colcon-common-extensions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="k">[tasks]</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="c1"># A simple colcon build task</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;colcon build --symlink-install&quot;</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="k">[activation]</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="c1"># After you use colcon to build your workspace, Pixi has to source the setup script to make the new packages available in the environment</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;install/setup.sh&quot;</span><span class="p">]</span>
+</span></code></pre></div></p>
+<p>The activation scripts will be run on <code>pixi run</code> or <code>pixi shell</code>, so after the first build, you can run your ROS nodes with <code>pixi run</code> without needing to source the setup script manually.</p>
+<h3 id="automate-your-workflow-with-tasks">Automate your workflow with tasks<a class="headerlink" href="#automate-your-workflow-with-tasks" title="Permanent link">#</a></h3>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># A simple alias for running the turtlesim simulator</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">sim</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ros2 run turtlesim turtlesim_node&quot;</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># Use inputs to cache the build task and only rerun it when files in src change</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;colcon build --symlink-install&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;src&quot;</span><span class="p">]}</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># A task that depends on the build task, so it will only run after a successful build</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">run</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ros2 run my_package my_node&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">depends-on</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;build&quot;</span><span class="p">]}</span>
+</span></code></pre></div>
+<p><div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>sim
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>run
+</span></code></pre></div>
+<code>run</code> runs both the <code>build</code> and <code>run</code> commands in sequence, but if you run it again without changing any files in <code>src</code>, it will skip the build step since the inputs haven't changed.</p>
+<h3 id="mixing-ros-with-python-ml-libraries">Mixing ROS with Python ML libraries<a class="headerlink" href="#mixing-ros-with-python-ml-libraries" title="Permanent link">#</a></h3>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Tell pixi that it can install CUDA dependencies in this workspace</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>system-requirements<span class="w"> </span>add<span class="w"> </span>cuda<span class="w"> </span><span class="m">12</span>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># (re)install ROS and your ML dependencies together</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>pixi<span class="w"> </span>add<span class="w"> </span>ros-humble-desktop<span class="w"> </span>pytorch<span class="w"> </span>torchvision<span class="w"> </span>opencv
+</span></code></pre></div>
+<hr />
+<h2 id="community-support">Community &amp; Support<a class="headerlink" href="#community-support" title="Permanent link">#</a></h2>
+<ul>
+<li><a href="https://discord.gg/kKV8ZxyzY4">Pixi Discord</a>: get help and share your projects</li>
+<li><a href="https://conda-forge.org/">conda-forge</a>: the conda distribution Pixi is built on, with thousands of packages</li>
+<li><a href="https://robostack.github.io/">RoboStack</a>: the conda channel that packages ROS for Pixi</li>
+<li><a href="https://github.com/prefix-dev/pixi">Pixi GitHub</a>: report issues, contribute, and follow development</li>
+</ul>
 
 
 
 
 
 
-
-  
-  
 
 
 
@@ -4177,6 +4606,60 @@
     <!-- Link to previous and/or next page -->
     
       
+        
+        <nav
+          class="md-footer__inner md-grid"
+          aria-label="Footer"
+          
+        >
+
+          <!-- Link to previous page -->
+          
+            
+            <a
+              href=".."
+              class="md-footer__link md-footer__link--prev"
+              aria-label="Previous: Home"
+            >
+              <div class="md-footer__button md-icon">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+              </div>
+              <div class="md-footer__title">
+                <span class="md-footer__direction">
+                  Previous
+                </span>
+                <div class="md-ellipsis">
+                  Home
+                </div>
+              </div>
+            </a>
+          
+
+          <!-- Link to next page -->
+          
+            
+            <a
+              href="../installation/"
+              class="md-footer__link md-footer__link--next"
+              aria-label="Next: Installation"
+            >
+              <div class="md-footer__title">
+                <span class="md-footer__direction">
+                  Next
+                </span>
+                <div class="md-ellipsis">
+                  Installation
+                </div>
+              </div>
+              <div class="md-footer__button md-icon">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+              </div>
+            </a>
+          
+        </nav>
+      
     
 
     <!-- Further information -->
@@ -4192,8 +4675,8 @@
         <!-- prefix logo -->
         <div class="md-footer-meta__item md-footer-meta__item--prefix-logo">
           <a href="https://prefix.dev" target="_blank">
-            <img class="prefix-logo prefix-logo__dark" src="../../../../../assets/prefix_logo_dark.svg" alt="">
-            <img class="prefix-logo prefix-logo__light" src="../../../../../assets/prefix_logo_light.svg" alt="">
+            <img class="prefix-logo prefix-logo__dark" src="../assets/prefix_logo_dark.svg" alt="">
+            <img class="prefix-logo prefix-logo__light" src="../assets/prefix_logo_light.svg" alt="">
           </a>
         </div>
 
@@ -4277,12 +4760,12 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../../../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.indexes", "navigation.top", "navigation.footer"], "search": "../../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.indexes", "navigation.top", "navigation.footer"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../../../../javascripts/extra.js"></script>
+        <script src="../javascripts/extra.js"></script>
       
     
   </body>
