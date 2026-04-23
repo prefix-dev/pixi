@@ -11338,7 +11338,7 @@ More examples
 For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.67.1 AS build
+FROM ghcr.io/prefix-dev/pixi:0.67.2 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
@@ -11991,7 +11991,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.4
   with:
-    pixi-version: v0.67.1
+    pixi-version: v0.67.2
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -12801,7 +12801,7 @@ Create a new directory `.devcontainer` in the root of your workspace. Then, crea
 ```dockerfile
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.67.1
+ARG PIXI_VERSION=v0.67.2
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -21605,6 +21605,25 @@ pixi workspace version set <VERSION>
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.67.2] - 2026-04-23
+
+#### Added
+
+- Add HTTP timeout, retries, and concurrency env var support by @wolfv in [#5581](https://github.com/prefix-dev/pixi/pull/5581)
+- Support PIXI_NO_INSTALL environment variable by @Shardz4 in [#5919](https://github.com/prefix-dev/pixi/pull/5919)
+
+#### Changed
+
+- Clarify missing pyproject error by @lawrence3699 in [#5922](https://github.com/prefix-dev/pixi/pull/5922)
+
+#### Documentation
+
+- Adding a starting point for robotics users by @ruben-arts in [#5941](https://github.com/prefix-dev/pixi/pull/5941)
+
+#### New Contributors
+
+- @lawrence3699 made their first contribution in [#5922](https://github.com/prefix-dev/pixi/pull/5922)
 
 ### [0.67.1] - 2026-04-20
 
