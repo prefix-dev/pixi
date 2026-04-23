@@ -138,6 +138,7 @@ impl SolveCondaEnvironmentSpec {
                 .filter_map(|record| record.into_binary())
                 // Filter any record we want as a source record
                 .filter(|record| !package_names_from_source.contains(&record.package_record.name))
+                .map(Arc::unwrap_or_clone)
                 .collect();
 
             // Create direct dependencies on the source packages to feed to the solver.
@@ -203,7 +204,7 @@ impl SolveCondaEnvironmentSpec {
                         },
                         channel: None,
                     };
-                    let mut record = record.clone();
+                    let mut record = SourceRecord::clone(record);
                     record.build_source = source_metadata.source.build_source().cloned();
                     url_to_source_package.insert(url, (record, repodata_record));
                 }
@@ -317,13 +318,13 @@ impl SolveCondaEnvironmentSpec {
                         if let Some(source_record) = url_to_source_package.remove(&record.url) {
                             // This is a source package, we want to return the source record
                             // instead of the binary record.
-                            return Some(PixiRecord::Source(source_record.0.clone()));
+                            return Some(PixiRecord::Source(Arc::new(source_record.0)));
                         } else if let Some(_dev_source) = url_to_dev_source.remove(&record.url) {
                             // This is a dev source, we don't want to return it.
                             return None;
                         }
 
-                        Some(PixiRecord::Binary(record))
+                        Some(PixiRecord::Binary(Arc::new(record)))
                     })
                     .collect_vec(),
             )
