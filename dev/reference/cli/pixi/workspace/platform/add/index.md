@@ -21,4 +21,9 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 ## Options
 
 - [`--no-install`](#arg---no-install) : Don't update the environment, only add changed packages to the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to add the platform to

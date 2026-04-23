@@ -5276,6 +5276,7 @@ You may want to have more control over the interplay between the manifest, the l
 
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../../reference/pixi_manifest/). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../../reference/pixi_manifest/). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--no-install`: don't modify the environment, only modify the lock-file. It can also be controlled by the `PIXI_NO_INSTALL` environment variable (example: `PIXI_NO_INSTALL=true`).
 
 ## Committing your lockfile
 
@@ -16112,6 +16113,10 @@ pixi add [OPTIONS] <SPEC>...
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   ```
@@ -16346,6 +16351,10 @@ pixi build [OPTIONS]
 ## Update Options
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
 
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
@@ -16958,6 +16967,10 @@ pixi list [OPTIONS] [REGEX]
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -17031,6 +17044,10 @@ pixi lock [OPTIONS]
 ## Update Options
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
 
 ## Global Options
 
@@ -17142,6 +17159,10 @@ pixi publish [OPTIONS] --to <TO>
 ## Update Options
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
 
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
@@ -17453,6 +17474,10 @@ pixi remove [OPTIONS] <SPEC>...
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   ```
@@ -17563,6 +17588,10 @@ pixi run [OPTIONS] [TASK]...
 ## Update Options
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
 
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
@@ -17823,6 +17852,10 @@ pixi shell-hook [OPTIONS]
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   ```
@@ -17953,6 +17986,10 @@ pixi shell [OPTIONS]
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   ```
@@ -18042,6 +18079,10 @@ pixi tree [OPTIONS] [REGEX]
   ```
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
 
 ## Global Options
 
@@ -18174,6 +18215,10 @@ pixi update [OPTIONS] [PACKAGES]...
 ## Options
 
 - [`--no-install`](#arg---no-install) : Don't install the (solve) environments needed for pypi-dependencies solving
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
 
 - [`--dry-run (-n)`](#arg---dry-run) : Don't actually write the lockfile or update any environment
 
@@ -18341,6 +18386,10 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Update Options
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
 
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
@@ -20876,6 +20925,10 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   ```
@@ -20963,6 +21016,10 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 ## Update Options
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
 
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
@@ -21201,6 +21258,10 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -21291,6 +21352,11 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 ## Options
 
 - [`--no-install`](#arg---no-install) : Don't update the environment, only add changed packages to the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to add the platform to
 
 # [pixi](../../../) [workspace](../../) [platform](../) list
@@ -21326,6 +21392,11 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
 ## Options
 
 - [`--no-install`](#arg---no-install) : Don't update the environment, only remove the platform(s) from the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to remove the platform from
 
 # [pixi](../../../) [workspace](../../) [register](../) list

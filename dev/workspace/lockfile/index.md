@@ -50,6 +50,7 @@ You may want to have more control over the interplay between the manifest, the l
 
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../../reference/pixi_manifest/). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../../reference/pixi_manifest/). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
+- `--no-install`: don't modify the environment, only modify the lock-file. It can also be controlled by the `PIXI_NO_INSTALL` environment variable (example: `PIXI_NO_INSTALL=true`).
 
 ## Committing your lockfile
 

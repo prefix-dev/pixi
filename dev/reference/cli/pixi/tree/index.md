@@ -34,6 +34,10 @@ pixi tree [OPTIONS] [REGEX]
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory

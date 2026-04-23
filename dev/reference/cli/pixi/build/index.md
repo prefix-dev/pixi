@@ -70,6 +70,10 @@ pixi build [OPTIONS]
 
 - [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
 
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   ```

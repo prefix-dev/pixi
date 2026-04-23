@@ -21,4 +21,9 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
 ## Options
 
 - [`--no-install`](#arg---no-install) : Don't update the environment, only remove the platform(s) from the lock-file
+
+  ```
+  **env**: `PIXI_NO_INSTALL`
+  ```
+
 - [`--feature (-f) <FEATURE>`](#arg---feature) : The name of the feature to remove the platform from
