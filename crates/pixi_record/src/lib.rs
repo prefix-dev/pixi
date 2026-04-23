@@ -1,10 +1,12 @@
 mod canonical_spec;
 mod dev_source_record;
+mod lock_file_resolver;
 mod pinned_source;
 mod source_record;
 
 pub use canonical_spec::{CanonicalGit, CanonicalPath, CanonicalSourceLocation, CanonicalUrl};
 pub use dev_source_record::DevSourceRecord;
+pub use lock_file_resolver::{LockFileResolver, LockFileResolverError};
 
 use std::{path::Path, sync::Arc};
 
