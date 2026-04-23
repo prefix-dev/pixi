@@ -30,7 +30,7 @@ pixi_cli = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 
 [[bin]]
-name = "r-pixi"
+name = "pixi"
 path = "src/main.rs"
 
 [dev-dependencies]
