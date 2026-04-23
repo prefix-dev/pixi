@@ -1421,8 +1421,8 @@ async fn test_multiple_prefix_update() {
     );
 
     let pixi_records = Vec::from([
-        PixiRecord::Binary(wheel_repo_data_record),
-        PixiRecord::Binary(python_repo_data_record),
+        PixiRecord::from(wheel_repo_data_record),
+        PixiRecord::from(python_repo_data_record),
     ]);
 
     let mut sets = JoinSet::new();

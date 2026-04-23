@@ -13,9 +13,9 @@ version = "0.1.0"
 cmp_any = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
+serde = { workspace = true, optional = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
-serde = { workspace = true, optional = true, features = ["derive"] }
 
 [dev-dependencies]
 derive_more = { workspace = true, features = ["display"] }

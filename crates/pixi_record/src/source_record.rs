@@ -891,20 +891,22 @@ mod tests {
     #[test]
     fn try_into_resolved_with_partial_record() {
         use crate::{PinnedPathSpec, PinnedSourceSpec, UnresolvedPixiRecord};
+        use std::sync::Arc;
 
-        let partial = UnresolvedPixiRecord::Source(super::SourceRecord::<SourceRecordData> {
-            data: SourceRecordData::Partial(PartialSourceRecordData {
-                name: PackageName::from_str("partial-pkg").unwrap(),
-                depends: vec![],
-                sources: HashMap::new(),
-            }),
-            manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
-                path: typed_path::Utf8TypedPathBuf::from("./partial-pkg"),
-            }),
-            build_source: None,
-            variants: BTreeMap::new(),
-            identifier_hash: None,
-        });
+        let partial =
+            UnresolvedPixiRecord::Source(Arc::new(super::SourceRecord::<SourceRecordData> {
+                data: SourceRecordData::Partial(PartialSourceRecordData {
+                    name: PackageName::from_str("partial-pkg").unwrap(),
+                    depends: vec![],
+                    sources: HashMap::new(),
+                }),
+                manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
+                    path: typed_path::Utf8TypedPathBuf::from("./partial-pkg"),
+                }),
+                build_source: None,
+                variants: BTreeMap::new(),
+                identifier_hash: None,
+            }));
 
         let result = partial.try_into_resolved();
         assert!(result.is_err());

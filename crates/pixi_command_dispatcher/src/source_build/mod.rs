@@ -516,7 +516,7 @@ impl SourceBuildSpec {
             .into_iter()
             .map(|record| match record {
                 PixiRecord::Binary(repodata_record) => BuildHostPackage {
-                    repodata_record,
+                    repodata_record: Arc::unwrap_or_clone(repodata_record),
                     source: None,
                 },
                 PixiRecord::Source(source) => {
@@ -524,7 +524,9 @@ impl SourceBuildSpec {
                         .resolved_source_records
                         .get(&source.data.package_record.name)
                         .cloned()
+                        .map(Arc::unwrap_or_clone)
                         .expect("the source record should be present in the result sources");
+                    let source = Arc::unwrap_or_clone(source);
                     BuildHostPackage {
                         repodata_record,
                         source: Some(PinnedSourceCodeLocation::new(

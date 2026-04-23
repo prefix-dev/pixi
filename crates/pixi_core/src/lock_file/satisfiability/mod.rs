@@ -1159,28 +1159,23 @@ pub async fn verify_platform_satisfiability(
                 resolved_records.push(PixiRecord::Binary(record))
             }
             UnresolvedPixiRecord::Source(record) => {
-                if record.has_mutable_source() {
-                    // If the record is mutable, we always resolve it.
+                if record.has_mutable_source() || record.data.is_partial() {
+                    // Mutable sources always need re-resolution; partial records
+                    // have no full metadata yet.
                     pending_resolved_record.push(resolve_unresolved_source_record(
                         ctx,
                         &platform_setup,
-                        record,
+                        Arc::unwrap_or_clone(record),
                     ))
                 } else {
-                    // Otherwise we only resolve it if it is not already resolved.
-                    match record.try_map_data(|data| match data {
-                        SourceRecordData::Partial(data) => Err(data),
-                        SourceRecordData::Full(data) => Ok(data),
-                    }) {
-                        Ok(full_record) => resolved_records.push(PixiRecord::Source(full_record)),
-                        Err(partial_record) => {
-                            pending_resolved_record.push(resolve_unresolved_source_record(
-                                ctx,
-                                &platform_setup,
-                                partial_record.map_data(SourceRecordData::Partial),
-                            ))
+                    // Immutable and already full: downcast in place.
+                    let full_record = Arc::unwrap_or_clone(record).map_data(|data| match data {
+                        SourceRecordData::Full(data) => data,
+                        SourceRecordData::Partial(_) => {
+                            unreachable!("guarded by is_partial() check above")
                         }
-                    }
+                    });
+                    resolved_records.push(PixiRecord::Source(Arc::new(full_record)))
                 }
             }
         }

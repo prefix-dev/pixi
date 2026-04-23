@@ -256,9 +256,9 @@ impl Dependencies {
         // Determine the records that have missing run exports.
         let records_missing_run_exports = relevant_records
             .iter_mut()
-            .flat_map(|r| match *r {
-                PixiRecord::Binary(repo_data_record) => Some(repo_data_record),
-                PixiRecord::Source(_source_record) => None,
+            .flat_map(|r| match r {
+                PixiRecord::Binary(repo_data_record) => Some(Arc::make_mut(repo_data_record)),
+                PixiRecord::Source(_) => None,
             })
             .filter(|r| r.package_record.run_exports.is_none());
         gateway

@@ -6,7 +6,7 @@ mod source_record;
 pub use canonical_spec::{CanonicalGit, CanonicalPath, CanonicalSourceLocation, CanonicalUrl};
 pub use dev_source_record::DevSourceRecord;
 
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 pub use pinned_source::{
     LockedGitUrl, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout, PinnedGitSpec,
@@ -28,12 +28,11 @@ use thiserror::Error;
 /// binary file or something that still requires building.
 ///
 /// This is basically a superset of a regular [`RepoDataRecord`].
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum PixiRecord {
-    Binary(RepoDataRecord),
-    Source(SourceRecord),
+    Binary(Arc<RepoDataRecord>),
+    Source(Arc<SourceRecord>),
 }
 impl PixiRecord {
     /// The name of the package
@@ -53,10 +52,10 @@ impl PixiRecord {
     /// This should be used when writing to the lock file.
     pub fn into_conda_package_data(self, workspace_root: &Path) -> CondaPackageData {
         match self {
-            PixiRecord::Binary(record) => record.into(),
-            PixiRecord::Source(record) => {
-                CondaPackageData::Source(Box::new(record.into_conda_source_data(workspace_root)))
-            }
+            PixiRecord::Binary(record) => Arc::unwrap_or_clone(record).into(),
+            PixiRecord::Source(record) => CondaPackageData::Source(Box::new(
+                Arc::unwrap_or_clone(record).into_conda_source_data(workspace_root),
+            )),
         }
     }
 
@@ -69,7 +68,7 @@ impl PixiRecord {
     }
 
     /// Converts this instance into a binary record if it is a binary record.
-    pub fn into_binary(self) -> Option<RepoDataRecord> {
+    pub fn into_binary(self) -> Option<Arc<RepoDataRecord>> {
         match self {
             PixiRecord::Binary(record) => Some(record),
             PixiRecord::Source(_) => None,
@@ -77,7 +76,7 @@ impl PixiRecord {
     }
 
     /// Converts this instance into a source record if it is a source
-    pub fn into_source(self) -> Option<SourceRecord> {
+    pub fn into_source(self) -> Option<Arc<SourceRecord>> {
         match self {
             PixiRecord::Binary(_) => None,
             PixiRecord::Source(record) => Some(record),
@@ -86,9 +85,12 @@ impl PixiRecord {
 
     /// Returns a mutable reference to the binary record if it is a binary
     /// record.
+    ///
+    /// If other `Arc` clones of the record exist, this clones the inner value
+    /// first (clone-on-write).
     pub fn as_binary_mut(&mut self) -> Option<&mut RepoDataRecord> {
         match self {
-            PixiRecord::Binary(record) => Some(record),
+            PixiRecord::Binary(record) => Some(Arc::make_mut(record)),
             PixiRecord::Source(_) => None,
         }
     }
@@ -104,12 +106,24 @@ impl PixiRecord {
 
 impl From<SourceRecord> for PixiRecord {
     fn from(value: SourceRecord) -> Self {
+        PixiRecord::Source(Arc::new(value))
+    }
+}
+
+impl From<Arc<SourceRecord>> for PixiRecord {
+    fn from(value: Arc<SourceRecord>) -> Self {
         PixiRecord::Source(value)
     }
 }
 
 impl From<RepoDataRecord> for PixiRecord {
     fn from(value: RepoDataRecord) -> Self {
+        PixiRecord::Binary(Arc::new(value))
+    }
+}
+
+impl From<Arc<RepoDataRecord>> for PixiRecord {
+    fn from(value: Arc<RepoDataRecord>) -> Self {
         PixiRecord::Binary(value)
     }
 }
@@ -123,11 +137,10 @@ impl From<RepoDataRecord> for PixiRecord {
 ///
 /// Call [`try_into_resolved`](Self::try_into_resolved) to attempt the
 /// conversion to a fully-resolved [`PixiRecord`].
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum UnresolvedPixiRecord {
-    Binary(RepoDataRecord),
-    Source(UnresolvedSourceRecord),
+    Binary(Arc<RepoDataRecord>),
+    Source(Arc<UnresolvedSourceRecord>),
 }
 
 impl UnresolvedPixiRecord {
@@ -201,33 +214,30 @@ impl UnresolvedPixiRecord {
         match data {
             CondaPackageData::Binary(value) => {
                 let location = value.location.clone();
-                Ok(UnresolvedPixiRecord::Binary((*value).try_into().map_err(
-                    |err| match err {
-                        ConversionError::Missing(field) => {
-                            ParseLockFileError::Missing(location, field)
-                        }
-                        ConversionError::LocationToUrlConversionError(err) => {
-                            ParseLockFileError::InvalidRecordUrl(location, err)
-                        }
-                        ConversionError::InvalidBinaryPackageLocation => {
-                            ParseLockFileError::InvalidArchiveFilename(location)
-                        }
-                    },
-                )?))
+                let record: RepoDataRecord = (*value).try_into().map_err(|err| match err {
+                    ConversionError::Missing(field) => ParseLockFileError::Missing(location, field),
+                    ConversionError::LocationToUrlConversionError(err) => {
+                        ParseLockFileError::InvalidRecordUrl(location, err)
+                    }
+                    ConversionError::InvalidBinaryPackageLocation => {
+                        ParseLockFileError::InvalidArchiveFilename(location)
+                    }
+                })?;
+                Ok(UnresolvedPixiRecord::Binary(Arc::new(record)))
             }
-            CondaPackageData::Source(value) => Ok(UnresolvedPixiRecord::Source(
+            CondaPackageData::Source(value) => Ok(UnresolvedPixiRecord::Source(Arc::new(
                 UnresolvedSourceRecord::from_conda_source_data(*value, workspace_root)?,
-            )),
+            ))),
         }
     }
 
     /// Convert to `CondaPackageData` for lock-file write.
     pub fn into_conda_package_data(self, workspace_root: &Path) -> CondaPackageData {
         match self {
-            UnresolvedPixiRecord::Binary(record) => record.into(),
-            UnresolvedPixiRecord::Source(record) => {
-                CondaPackageData::Source(Box::new(record.into_conda_source_data(workspace_root)))
-            }
+            UnresolvedPixiRecord::Binary(record) => Arc::unwrap_or_clone(record).into(),
+            UnresolvedPixiRecord::Source(record) => CondaPackageData::Source(Box::new(
+                Arc::unwrap_or_clone(record).into_conda_source_data(workspace_root),
+            )),
         }
     }
 
@@ -237,17 +247,25 @@ impl UnresolvedPixiRecord {
     /// with full metadata. Returns `Err(self)` if this is a partial source
     /// record that still needs metadata resolution (i.e. re-evaluation of
     /// the mutable source).
-    #[allow(clippy::result_large_err)]
     pub fn try_into_resolved(self) -> Result<PixiRecord, Self> {
         match self {
             UnresolvedPixiRecord::Binary(record) => Ok(PixiRecord::Binary(record)),
-            UnresolvedPixiRecord::Source(source) => source
-                .try_map_data(|data| match data {
-                    SourceRecordData::Full(full) => Ok(full),
-                    SourceRecordData::Partial(partial) => Err(SourceRecordData::Partial(partial)),
-                })
-                .map(PixiRecord::Source)
-                .map_err(UnresolvedPixiRecord::Source),
+            UnresolvedPixiRecord::Source(source) => {
+                if source.data.is_full() {
+                    // Downcast SourceRecord<SourceRecordData> -> SourceRecord<FullSourceRecordData>.
+                    // This has to reassemble the struct so a fresh Arc allocation is needed.
+                    let full = Arc::unwrap_or_clone(source).map_data(|data| match data {
+                        SourceRecordData::Full(full) => full,
+                        SourceRecordData::Partial(_) => {
+                            unreachable!("guarded by is_full() check above")
+                        }
+                    });
+                    Ok(PixiRecord::Source(Arc::new(full)))
+                } else {
+                    // Partial: return the same Arc untouched.
+                    Err(UnresolvedPixiRecord::Source(source))
+                }
+            }
         }
     }
 }
@@ -256,7 +274,10 @@ impl From<PixiRecord> for UnresolvedPixiRecord {
     fn from(record: PixiRecord) -> Self {
         match record {
             PixiRecord::Binary(r) => UnresolvedPixiRecord::Binary(r),
-            PixiRecord::Source(r) => UnresolvedPixiRecord::Source(r.into()),
+            PixiRecord::Source(r) => {
+                let full = Arc::unwrap_or_clone(r);
+                UnresolvedPixiRecord::Source(Arc::new(full.into()))
+            }
         }
     }
 }
@@ -279,8 +300,8 @@ pub enum ParseLockFileError {
 impl Matches<PixiRecord> for NamelessMatchSpec {
     fn matches(&self, record: &PixiRecord) -> bool {
         match record {
-            PixiRecord::Binary(record) => self.matches(record),
-            PixiRecord::Source(record) => self.matches(record),
+            PixiRecord::Binary(record) => self.matches(record.as_ref()),
+            PixiRecord::Source(record) => self.matches(record.as_ref()),
         }
     }
 }
@@ -288,8 +309,8 @@ impl Matches<PixiRecord> for NamelessMatchSpec {
 impl Matches<PixiRecord> for MatchSpec {
     fn matches(&self, record: &PixiRecord) -> bool {
         match record {
-            PixiRecord::Binary(record) => self.matches(record),
-            PixiRecord::Source(record) => self.matches(record),
+            PixiRecord::Binary(record) => self.matches(record.as_ref()),
+            PixiRecord::Source(record) => self.matches(record.as_ref()),
         }
     }
 }
@@ -297,8 +318,8 @@ impl Matches<PixiRecord> for MatchSpec {
 impl AsRef<PackageRecord> for PixiRecord {
     fn as_ref(&self) -> &PackageRecord {
         match self {
-            PixiRecord::Binary(record) => record.as_ref(),
-            PixiRecord::Source(record) => record.as_ref(),
+            PixiRecord::Binary(record) => &record.package_record,
+            PixiRecord::Source(record) => record.as_ref().as_ref(),
         }
     }
 }
