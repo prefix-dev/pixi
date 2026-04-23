@@ -266,7 +266,13 @@ packages:
             segments.last(),
             "cycle path should close on itself: {path}"
         );
-        assert!(path.contains("foo"), "cycle path should mention foo: {path}");
-        assert!(path.contains("bar"), "cycle path should mention bar: {path}");
+        assert!(
+            path.contains("foo"),
+            "cycle path should mention foo: {path}"
+        );
+        assert!(
+            path.contains("bar"),
+            "cycle path should mention bar: {path}"
+        );
     }
 }
