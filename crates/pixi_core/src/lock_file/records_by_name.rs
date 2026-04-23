@@ -212,7 +212,9 @@ impl PixiRecordsByName {
     /// no such record exists.
     pub(crate) fn python_interpreter_record(&self) -> Option<&RepoDataRecord> {
         self.records.iter().find_map(|record| match record {
-            PixiRecord::Binary(record) if is_python_record(record) => Some(record),
+            PixiRecord::Binary(record) if is_python_record(record.as_ref()) => {
+                Some(record.as_ref())
+            }
             _ => None,
         })
     }

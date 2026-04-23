@@ -395,7 +395,7 @@ mod tests {
             flags: vec![],
         };
 
-        PixiRecord::Binary(RepoDataRecord {
+        PixiRecord::from(RepoDataRecord {
             package_record,
             identifier: DistArchiveIdentifier::try_from_filename(&format!(
                 "{}-{}-{}.conda",

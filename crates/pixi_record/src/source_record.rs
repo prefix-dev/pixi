@@ -121,6 +121,23 @@ pub struct SourceRecord<D> {
     /// updates. If this field is None when serializing to the lock-file, it
     /// will be regenerated based on the contents of this struct itself.
     pub identifier_hash: Option<String>,
+
+    /// Packages in the build environment used to build this source package
+    /// (compilers, build tools, etc.), as recorded in the lock file.
+    ///
+    /// Skipped by serde: `UnresolvedPixiRecord` does not implement
+    /// `Serialize`/`Deserialize`; the canonical form lives in the lock file
+    /// via `rattler_lock::SourceData`'s package index sets, and callers
+    /// resolve them when building the in-memory record.
+    #[serde(skip)]
+    pub build_packages: Vec<crate::UnresolvedPixiRecord>,
+
+    /// Packages in the host environment used to build this source package
+    /// (libraries to link against, etc.), as recorded in the lock file.
+    ///
+    /// Skipped by serde — see `build_packages`.
+    #[serde(skip)]
+    pub host_packages: Vec<crate::UnresolvedPixiRecord>,
 }
 
 /// A fully-resolved source record with all metadata available.
@@ -256,6 +273,8 @@ impl<D> SourceRecord<D> {
             build_source: self.build_source,
             variants: self.variants,
             identifier_hash: self.identifier_hash,
+            build_packages: self.build_packages,
+            host_packages: self.host_packages,
         }
     }
 
@@ -274,22 +293,27 @@ impl<D> SourceRecord<D> {
             build_source,
             variants,
             identifier_hash,
+            build_packages,
+            host_packages,
         } = self;
-        let shared = (manifest_source, build_source, variants, identifier_hash);
         match f(data) {
             Ok(new_data) => Ok(SourceRecord {
                 data: new_data,
-                manifest_source: shared.0,
-                build_source: shared.1,
-                variants: shared.2,
-                identifier_hash: shared.3,
+                manifest_source,
+                build_source,
+                variants,
+                identifier_hash,
+                build_packages,
+                host_packages,
             }),
             Err(err_data) => Err(SourceRecord {
                 data: err_data,
-                manifest_source: shared.0,
-                build_source: shared.1,
-                variants: shared.2,
-                identifier_hash: shared.3,
+                manifest_source,
+                build_source,
+                variants,
+                identifier_hash,
+                build_packages,
+                host_packages,
             }),
         }
     }
@@ -492,9 +516,16 @@ impl SourceRecord<SourceRecordData> {
     }
 
     /// Create from lock-file `CondaSourceData<SourceMetadata>`.
+    ///
+    /// `build_packages` and `host_packages` must be resolved by the caller
+    /// from the lock file's package table, since `CondaSourceData` only
+    /// carries index sets and the full list of packages is not available
+    /// here.
     pub fn from_conda_source_data(
         data: CondaSourceData,
         _workspace_root: &std::path::Path,
+        build_packages: Vec<crate::UnresolvedPixiRecord>,
+        host_packages: Vec<crate::UnresolvedPixiRecord>,
     ) -> Result<Self, ParseLockFileError> {
         let manifest_source: PinnedSourceSpec = data.location.try_into()?;
         let build_source =
@@ -529,6 +560,8 @@ impl SourceRecord<SourceRecordData> {
                 .map(|(k, v)| (k, VariantValue::from(v)))
                 .collect(),
             identifier_hash: data.identifier_hash,
+            build_packages,
+            host_packages,
         })
     }
 }
@@ -690,6 +723,8 @@ mod tests {
                 let unresolved = super::SourceRecord::<SourceRecordData>::from_conda_source_data(
                     conda_data.clone(),
                     workspace_root,
+                    Vec::new(),
+                    Vec::new(),
                 )
                 .expect("from_conda_source_data should succeed");
                 match unresolved.data {
@@ -699,6 +734,8 @@ mod tests {
                         build_source: unresolved.build_source,
                         variants: unresolved.variants,
                         identifier_hash: unresolved.identifier_hash,
+                        build_packages: unresolved.build_packages,
+                        host_packages: unresolved.host_packages,
                     },
                     SourceRecordData::Partial(_) => {
                         panic!("fixture should only contain full source records")
@@ -835,6 +872,8 @@ mod tests {
                 crate::VariantValue::from("3.12".to_string()),
             )]),
             identifier_hash: Some("abcd1234".to_string()),
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
         };
 
         assert_eq!(partial.name().as_source(), "my-package");
@@ -844,6 +883,8 @@ mod tests {
         let roundtripped = super::SourceRecord::<SourceRecordData>::from_conda_source_data(
             conda_data,
             workspace_root,
+            Vec::new(),
+            Vec::new(),
         )
         .expect("from_conda_source_data should succeed");
 
@@ -880,6 +921,8 @@ mod tests {
         let unresolved = UnresolvedPixiRecord::from_conda_package_data(
             CondaPackageData::Source(Box::new(conda_source)),
             workspace_root,
+            Vec::new(),
+            Vec::new(),
         )
         .expect("from_conda_package_data should succeed");
 
@@ -891,20 +934,24 @@ mod tests {
     #[test]
     fn try_into_resolved_with_partial_record() {
         use crate::{PinnedPathSpec, PinnedSourceSpec, UnresolvedPixiRecord};
+        use std::sync::Arc;
 
-        let partial = UnresolvedPixiRecord::Source(super::SourceRecord::<SourceRecordData> {
-            data: SourceRecordData::Partial(PartialSourceRecordData {
-                name: PackageName::from_str("partial-pkg").unwrap(),
-                depends: vec![],
-                sources: HashMap::new(),
-            }),
-            manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
-                path: typed_path::Utf8TypedPathBuf::from("./partial-pkg"),
-            }),
-            build_source: None,
-            variants: BTreeMap::new(),
-            identifier_hash: None,
-        });
+        let partial =
+            UnresolvedPixiRecord::Source(Arc::new(super::SourceRecord::<SourceRecordData> {
+                data: SourceRecordData::Partial(PartialSourceRecordData {
+                    name: PackageName::from_str("partial-pkg").unwrap(),
+                    depends: vec![],
+                    sources: HashMap::new(),
+                }),
+                manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
+                    path: typed_path::Utf8TypedPathBuf::from("./partial-pkg"),
+                }),
+                build_source: None,
+                variants: BTreeMap::new(),
+                identifier_hash: None,
+                build_packages: Vec::new(),
+                host_packages: Vec::new(),
+            }));
 
         let result = partial.try_into_resolved();
         assert!(result.is_err());
@@ -937,6 +984,8 @@ mod tests {
             build_source,
             variants,
             identifier_hash: None,
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
         }
     }
 
@@ -1106,6 +1155,8 @@ mod tests {
         let unresolved = super::SourceRecord::<SourceRecordData>::from_conda_source_data(
             conda_source,
             workspace_root,
+            Vec::new(),
+            Vec::new(),
         )
         .expect("from_conda_source_data should succeed");
         assert!(unresolved.data.is_full());
@@ -1115,6 +1166,8 @@ mod tests {
         let roundtripped = super::SourceRecord::<SourceRecordData>::from_conda_source_data(
             conda_data,
             workspace_root,
+            Vec::new(),
+            Vec::new(),
         )
         .expect("roundtrip should succeed");
 

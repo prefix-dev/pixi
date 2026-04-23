@@ -1068,7 +1068,18 @@ fn locked_packages_to_unresolved_records(
         .into_iter()
         .filter_map(LockedPackage::as_conda)
         .cloned()
-        .map(|data| UnresolvedPixiRecord::from_conda_package_data(data, workspace_root))
+        .map(|data| {
+            // TODO: resolve build_packages/host_packages from `data.source_data`
+            // once the lock-file exposes the full package table for
+            // `PackageHandle::get`. Today only indices are available through
+            // the public API.
+            UnresolvedPixiRecord::from_conda_package_data(
+                data,
+                workspace_root,
+                Vec::new(),
+                Vec::new(),
+            )
+        })
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()
 }
@@ -1476,7 +1487,15 @@ impl<'p> UpdateContextBuilder<'p> {
                         let unresolved = records
                             .cloned()
                             .map(|data| {
-                                UnresolvedPixiRecord::from_conda_package_data(data, workspace_root)
+                                // TODO: resolve build/host packages from the
+                                // lock file once `PackageHandle` resolution is
+                                // exposed publicly.
+                                UnresolvedPixiRecord::from_conda_package_data(
+                                    data,
+                                    workspace_root,
+                                    Vec::new(),
+                                    Vec::new(),
+                                )
                             })
                             .collect::<Result<Vec<_>, _>>()?;
                         Ok((platform, unresolved))

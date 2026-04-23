@@ -35,7 +35,7 @@ pub struct CondaPrefixInstallResult {
 
     /// For each source package that was built, the resulting binary record.
     /// Binary packages from the input are *not* included here.
-    pub resolved_source_records: HashMap<PackageName, RepoDataRecord>,
+    pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
 }
 
 /// A struct that contains the result of updating a conda prefix.
@@ -49,7 +49,7 @@ pub struct CondaPrefixUpdated {
     /// Any change to the python interpreter.
     pub python_status: Box<PythonStatus>,
     /// Fully-resolved records for source packages that were built.
-    pub resolved_source_records: HashMap<PackageName, RepoDataRecord>,
+    pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
 }
 
 impl CondaPrefixUpdated {

@@ -5,6 +5,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     ffi::OsStr,
     path::PathBuf,
+    sync::Arc,
 };
 
 use futures::StreamExt;
@@ -104,7 +105,7 @@ pub struct InstallPixiEnvironmentResult {
     /// If source records where specified as part of the input they will be
     /// built. This map contains the resulting repodata record for a build
     /// source record.
-    pub resolved_source_records: HashMap<PackageName, RepoDataRecord>,
+    pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
 }
 
 impl InstallPixiEnvironmentSpec {
@@ -166,6 +167,7 @@ impl InstallPixiEnvironmentSpec {
             build_futures.push(async move {
                 let name = source_record.name().clone();
                 let manifest_source = source_record.manifest_source().clone();
+                let source_record = Arc::unwrap_or_clone(source_record);
                 this.build_unresolved_source(command_dispatcher, source_record)
                     .await
                     .map_err_with(move |build_err| {
@@ -180,7 +182,7 @@ impl InstallPixiEnvironmentSpec {
 
         let mut resolved_source_records = HashMap::new();
         while let Some(build_result) = build_futures.next().await {
-            let build_result = build_result?;
+            let build_result = Arc::new(build_result?);
             resolved_source_records.insert(
                 build_result.package_record.name.clone(),
                 build_result.clone(),
@@ -207,7 +209,10 @@ impl InstallPixiEnvironmentSpec {
         }
 
         let result = installer
-            .install(self.prefix.path(), binary_records)
+            .install(
+                self.prefix.path(),
+                binary_records.into_iter().map(Arc::unwrap_or_clone),
+            )
             .await
             .map_err(|err| match err {
                 InstallerError::FailedToDetectInstalledPackages(err) => {

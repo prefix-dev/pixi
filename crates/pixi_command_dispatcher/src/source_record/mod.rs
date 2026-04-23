@@ -95,7 +95,7 @@ pub struct ResolvedSourceRecord {
     pub source: PinnedSourceCodeLocation,
 
     /// The resolved source record.
-    pub record: SourceRecord,
+    pub record: Arc<SourceRecord>,
 }
 
 enum CacheFreshness {
@@ -172,10 +172,10 @@ impl SourceRecordSpec {
                     tracing::debug!("Using cached source record");
                     return Ok(ResolvedSourceRecord {
                         source: build_backend_metadata.source.clone(),
-                        record: Self::amend_cached_source_record(
+                        record: Arc::new(Self::amend_cached_source_record(
                             &build_backend_metadata.source,
                             entry.record,
-                        ),
+                        )),
                     });
                 }
                 CacheFreshness::MismatchedBackendMetadata(entry) => {
@@ -317,7 +317,10 @@ impl SourceRecordSpec {
         }
 
         Ok(ResolvedSourceRecord {
-            record: Self::amend_cached_source_record(&build_backend_metadata.source, record),
+            record: Arc::new(Self::amend_cached_source_record(
+                &build_backend_metadata.source,
+                record,
+            )),
             source: build_backend_metadata.source.clone(),
         })
     }
@@ -342,6 +345,8 @@ impl SourceRecordSpec {
             manifest_source: source.manifest_source().clone(),
             build_source: source.build_source().cloned(),
             identifier_hash: None,
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
         }
     }
 

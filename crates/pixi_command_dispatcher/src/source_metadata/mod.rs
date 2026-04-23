@@ -1,5 +1,7 @@
 pub(crate) mod cycle;
 
+use std::sync::Arc;
+
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, PackageNotProvidedError,
@@ -34,7 +36,7 @@ pub struct SourceMetadata {
     pub source: PinnedSourceCodeLocation,
 
     /// The metadata that was acquired from the build backend.
-    pub records: Vec<SourceRecord>,
+    pub records: Vec<Arc<SourceRecord>>,
 }
 
 impl SourceMetadataSpec {
