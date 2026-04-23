@@ -31,7 +31,7 @@ pub struct Args {
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
-    #[arg(long)]
+    #[arg(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
     /// Don't actually write the lockfile or update any environment.
