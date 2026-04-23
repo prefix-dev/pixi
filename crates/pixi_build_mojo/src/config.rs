@@ -44,17 +44,12 @@ impl BackendConfig for MojoBackendConfig {
     /// Target-specific values override base values using the following rules:
     ///
     /// - env: Platform env vars override base, others merge
-    /// - debug_dir: Not allowed to have target specific value
     /// - extra_input_globs: Platform-specific completely replaces base
     /// - bins: Any bins with matching not-None names will be merged,
     ///   Any set-settings on the platform specific pkg override base
     ///   Any bins found only in target_config will be kept
     /// - pkg: Any set-settings on the platform specific pkg override base
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
-        if target_config.debug_dir.is_some() {
-            miette::bail!("`debug_dir` cannot have a target specific value");
-        }
-
         let pkg = if target_config.pkg.is_some() {
             if self.pkg.is_some() {
                 Some(

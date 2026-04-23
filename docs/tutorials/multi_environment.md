@@ -104,9 +104,9 @@ Now you don't have to specify the environment when running the test command.
 ```shell
 pixi run test
 ```
-In this example similar to running `pixi run --environment test pytest`
+In this example this is equivalent to running `pixi run --environment test pytest`.
 
-This works as long as there is only one of the environments that has the `test` task.
+If there are multiple environments with the same task, pixi will prompt you for the environment in which it should run the task.
 
 ## Using multiple environments to test multiple versions of a package
 In this example we will use multiple environments to test a package against multiple versions of Python.

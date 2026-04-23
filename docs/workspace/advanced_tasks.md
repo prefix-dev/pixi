@@ -231,6 +231,38 @@ pixi run deploy auth-service
 pixi run deploy auth-service production
 ✨ Pixi task (deploy in default): echo Deploying auth-service to production
 ```
+### Passing Extra Arguments with `--`
+
+When a task defines typed `args`, all command-line values are matched against those definitions. If you need to pass *additional* flags or arguments directly to the underlying command on top of the typed args, use `--` as a separator. Everything after `--` is forwarded verbatim to the command, regardless of the task's `args` definition.
+
+```toml
+[tasks.test]
+cmd = "pytest {{ target }} -v"
+args = [{ arg = "target", default = "tests/unit" }]
+```
+
+```shell
+# Without --, extra flags would cause an error:
+# × task 'test' received more arguments than expected
+#   hint: use `--` to separate task arguments from extra passthrough arguments
+pixi run test tests/integration --tb=short --maxfail=5
+
+# With --, the typed arg is filled and the rest is forwarded:
+pixi run test tests/integration -- --tb=short --maxfail=5
+✨ Pixi task (test in default): pytest tests/integration -v --tb=short --maxfail=5
+```
+
+You can also use `--` when relying on a default argument value:
+
+```shell
+# "target" uses its default, "--maxfail=5" is forwarded to the command
+pixi run test -- --maxfail=5
+✨ Pixi task (test in default): pytest tests/unit -v --maxfail=5
+```
+
+!!! note "Tasks without typed args"
+    For tasks that do **not** define `args`, `--` is passed through to the underlying command unchanged. This preserves its meaning for programs that use `--` themselves (e.g. `git log -- somefile`).
+
 ### Restricting Values with Choices
 
 You can restrict the allowed values of an argument using the `choices` field. If a value is provided that is not in the list, Pixi will report an error instead of running the task.
@@ -300,7 +332,7 @@ pixi run partial-override-with-arg cli-arg
 
 ### MiniJinja Templating for Task Arguments
 
-Task commands defined in the manifest support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
+Task commands and env variables defined in the manifest support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
 
 !!! note "Templating and ad-hoc CLI commands"
     MiniJinja templating is only applied to tasks defined in your manifest file (`pixi.toml` / `pyproject.toml`).
@@ -437,6 +469,7 @@ and how those ways interact with each other.
 
 Notes on environment variables in tasks:
 - Values set via `tasks.<name>.env` are interpreted by `deno_task_shell` when the task runs. Shell-style expansions like `env = { VAR = "$FOO" }` therefore work the same on all operating systems.
+- Templating is allowed in env variables, when you have something like `{ cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] }`. The arg `{{ backend }}` value is interpreted by the `backend` values passed in.
 
 !!! warning
 
@@ -554,3 +587,85 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
   - `echo data[0-9].csv` will echo all filenames that have a single number after `data` and before `.csv`
 
 More info in [`deno_task_shell` documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner).
+
+## Best Practices
+
+Task can be very handy and may even replace simple Makefiles.
+There are a few principles that can make tasks more useful.
+
+### Use a `description`
+
+It is a good habit to add a description to your task:
+
+```toml title="pixi.toml"
+[tasks]
+echo = { cmd = "echo Hello Pixi user", description = "Friendly greeting to a Pixi user" }
+build = { cmd = "build", description = "Build everything" }
+test = { cmd = "test", description = "Run all tests" }
+```
+
+Now, the command `pixi task list` will not only list all task names but also
+the their descriptions.
+
+```shell
+pixi task list
+Tasks that can run on this machine:
+-----------------------------------
+build, echo, test
+Task   Description
+build  Build everything
+echo   Friendly greeting to a Pixi user
+test   Run all tests
+```
+
+This list can be very helpful to quickly find the right tasks.
+
+### Use different TOML syntax for long commands
+
+Tasks can get quite long:
+
+```toml title="pixi.toml"
+echo-arg = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello"}], description = "Display the given argument" }
+```
+
+While it is possible to add line breaks inside the task in your `pixi.toml` to
+make the task more readable:
+
+```toml title="pixi.toml"
+echo-arg = {
+    cmd = "echo {{ ARGUMENT }}",
+    args = [{"arg" = "ARGUMENT", "default" = "hello"}],
+    description = "Display the given argument"
+}
+```
+
+it will not work in `pyproject.toml` because it supports only TOML 1.0,
+that doesn't allow line breaks inside the task specification.
+Other tools can't parse the `pyproject.toml` anymore.
+So if you use an editable dependency:
+
+```toml title="pyproject.toml"
+[tool.pixi.pypi-dependencies]
+myproject = { path = ".", editable = true }
+```
+
+Pixi will use your build system and reports an error:
+
+```shell
+Error:   × Failed to update PyPI packages for environment 'default'
+  ├─▶ Failed to prepare distributions
+  ├─▶ Failed to build `proj1 @ file:///.../proj1`
+  ├─▶ The build backend returned an error
+  ╰─▶ Call to `hatchling.build.build_editable` failed (exit status: 1)
+```
+
+There is an alternative syntax, adding the task name to the table header:
+
+```toml title="pyproject.toml"
+[tool.pixi.tasks.echo-arg]
+cmd = "echo {{ ARGUMENT }}"
+args = [{"arg" = "ARGUMENT", "default" = "hello"}]
+description = "Display the given argument"
+```
+
+This is valid  TOML 1.0 syntax and makes more complex task better readable.

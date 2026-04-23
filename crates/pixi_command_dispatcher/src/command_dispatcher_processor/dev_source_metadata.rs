@@ -23,6 +23,10 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::DevSourceMetadataTask`]
     /// task was received.
     pub(crate) fn on_dev_source_metadata(&mut self, task: DevSourceMetadataTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Lookup the id of the request to avoid duplication.
         let dev_source_metadata_id = {
             match self.dev_source_metadata_ids.get(&task.spec) {
@@ -45,10 +49,6 @@ impl CommandDispatcherProcessor {
                 PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
                 PendingDeduplicatingTask::Completed(result, _) => {
                     let _ = task.tx.send(result.clone());
-                }
-                PendingDeduplicatingTask::Cancelled => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(task.tx);
                 }
             },
             Entry::Vacant(entry) => {
@@ -111,9 +111,13 @@ impl CommandDispatcherProcessor {
         self.parent_contexts.remove(&context);
         self.remove_cancellation_token(context);
 
-        self.dev_source_metadata
+        if !self
+            .dev_source_metadata
             .get_mut(&id)
             .expect("cannot find pending task")
-            .on_pending_result(result);
+            .on_pending_result(result)
+        {
+            self.dev_source_metadata.remove(&id);
+        }
     }
 }

@@ -24,6 +24,10 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::SourceBuildTask`]
     /// task was received.
     pub(crate) fn on_source_build(&mut self, task: SourceBuildTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Lookup the id of the source metadata to avoid duplication.
         let source_build_id = {
             match self.source_build_ids.get(&task.spec) {
@@ -37,10 +41,6 @@ impl CommandDispatcherProcessor {
                 PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
                 PendingDeduplicatingTask::Completed(result, _) => {
                     let _ = task.tx.send(result.clone());
-                }
-                PendingDeduplicatingTask::Cancelled => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(task.tx);
                 }
             },
             Entry::Vacant(entry) => {
@@ -141,9 +141,13 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id, failed);
         }
 
-        self.source_build
+        if !self
+            .source_build
             .get_mut(&id)
             .expect("cannot find pending task")
             .on_pending_result(result)
+        {
+            self.source_build.remove(&id);
+        }
     }
 }

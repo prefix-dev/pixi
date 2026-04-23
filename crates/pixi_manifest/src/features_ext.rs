@@ -1,19 +1,22 @@
 use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use miette::Diagnostic;
+use pixi_spec::{ExcludeNewer, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
 };
 
 use crate::{
-    CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
+    CondaConstraints, CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType,
+    SystemRequirements,
     dependencies::CondaDevDependencies,
     has_features_iter::HasFeaturesIter,
     has_manifest_ref::HasWorkspaceManifest,
-    pypi::pypi_options::PypiOptions,
+    pypi::{ResolvedPypiExcludeNewer, pypi_options::PypiOptions},
     workspace::{ChannelPriority, SolveStrategy},
 };
 
@@ -35,6 +38,28 @@ pub struct ChannelPriorityCombinationError;
 /// There is blanket implementation available for all types that implement
 /// [`HasWorkspaceManifest`] and [`HasFeaturesIter`]
 pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<'source> {
+    /// Returns the channels associated with this collection, preserving the
+    /// effective metadata for the first winning entry of every unique channel.
+    fn prioritized_channels(
+        &self,
+    ) -> IndexMap<&'source NamedChannelOrUrl, &'source PrioritizedChannel> {
+        let channels = self.features().flat_map(|feature| match &feature.channels {
+            Some(channels) => channels,
+            None => &self.workspace_manifest().workspace.channels,
+        });
+
+        let mut prioritized = IndexMap::new();
+        for channel in channels.into_iter().sorted_by(|a, b| {
+            let a = a.priority.unwrap_or(0);
+            let b = b.priority.unwrap_or(0);
+            b.cmp(&a)
+        }) {
+            prioritized.entry(&channel.channel).or_insert(channel);
+        }
+
+        prioritized
+    }
+
     /// Returns the channels associated with this collection.
     ///
     /// Users can specify custom channels on a per-feature basis. This method
@@ -44,14 +69,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// If a feature does not specify any channel the default channels from the
     /// project metadata are used instead.
     fn channels(&self) -> IndexSet<&'source NamedChannelOrUrl> {
-        // Collect all the channels from the features in one set,
-        // deduplicate them and sort them on feature index, default feature comes last.
-        let channels = self.features().flat_map(|feature| match &feature.channels {
-            Some(channels) => channels,
-            None => &self.workspace_manifest().workspace.channels,
-        });
-
-        PrioritizedChannel::sort_channels_by_priority(channels).collect()
+        self.prioritized_channels().into_keys().collect()
     }
 
     /// Returns the channels associated with this collection.
@@ -88,12 +106,65 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         Ok(channel_priority)
     }
 
-    /// Returns whether packages should be excluded newer than a certain date.
-    fn exclude_newer(&self) -> Option<DateTime<Utc>> {
-        self.workspace_manifest()
+    /// Returns the raw workspace exclude-newer configuration before channel and
+    /// package-specific overrides are applied.
+    fn exclude_newer_raw(&self) -> Option<ExcludeNewer> {
+        self.workspace_manifest().workspace.exclude_newer
+    }
+
+    /// Returns the effective exclude-newer solver configuration.
+    fn exclude_newer_config(
+        &self,
+    ) -> Result<Option<rattler_solve::ExcludeNewer>, ParseChannelError> {
+        self.exclude_newer_config_resolved()
+            .map(|exclude_newer| exclude_newer.map(Into::into))
+    }
+
+    /// Returns the effective exclude-newer solver configuration with absolute cutoffs.
+    fn exclude_newer_config_resolved(
+        &self,
+    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
+        exclude_newer_config_resolved_impl(self, |channel| Ok(channel.channel.to_string()))
+    }
+
+    /// Returns the effective exclude-newer configuration keyed by resolved channel URLs.
+    fn exclude_newer_config_resolved_with_channel_config(
+        &self,
+        channel_config: &ChannelConfig,
+    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
+        exclude_newer_config_resolved_impl(self, |channel| {
+            Ok(channel
+                .channel
+                .clone()
+                .into_base_url(channel_config)?
+                .to_string())
+        })
+    }
+
+    /// Returns the effective PyPI exclude-newer solver configuration with absolute cutoffs.
+    fn pypi_exclude_newer_config_resolved(&self) -> ResolvedPypiExcludeNewer {
+        let mut exclude_newer = self
+            .exclude_newer_raw()
+            .map(|config| ResolvedPypiExcludeNewer::from_datetime(config.cutoff()))
+            .unwrap_or_default();
+
+        for (name, package_exclude_newer) in &self
+            .workspace_manifest()
             .workspace
-            .exclude_newer
-            .map(Into::into)
+            .pypi_exclude_newer_package_overrides
+        {
+            exclude_newer = match package_exclude_newer {
+                ExcludeNewer::Timestamp(dt) => {
+                    exclude_newer.with_package_cutoff(name.as_normalized().clone(), *dt)
+                }
+                ExcludeNewer::Duration(duration) => exclude_newer.with_package_cutoff(
+                    name.as_normalized().clone(),
+                    ExcludeNewer::Duration(*duration).cutoff(),
+                ),
+            };
+        }
+
+        exclude_newer
     }
 
     /// Returns the strategy for solving packages.
@@ -166,6 +237,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
         let deps: Vec<_> = self
             .features()
+            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.pypi_dependencies(platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -183,6 +255,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> CondaDependencies {
         let deps: Vec<_> = self
             .features()
+            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.dependencies(kind, platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -203,6 +276,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn combined_dependencies(&self, platform: Option<Platform>) -> CondaDependencies {
         let deps: Vec<_> = self
             .features()
+            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.combined_dependencies(platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -216,10 +290,28 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn combined_dev_dependencies(&self, platform: Option<Platform>) -> CondaDevDependencies {
         let deps: Vec<_> = self
             .features()
+            .filter(|f| f.supports_platform(platform))
             .filter_map(|f| f.dev_dependencies(platform))
             .collect();
 
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
+    }
+
+    /// Returns the combined version constraints for this collection.
+    ///
+    /// Constraints from all features are combined. If multiple features define
+    /// a constraint for the same package, all constraints are retained and the
+    /// solver must satisfy all of them simultaneously.
+    ///
+    /// If the `platform` is `None`, no platform specific constraints are taken
+    /// into consideration.
+    fn combined_constraints(&self, platform: Option<Platform>) -> CondaConstraints {
+        let constraints: Vec<_> = self
+            .features()
+            .filter(|f| f.supports_platform(platform))
+            .filter_map(|f| f.constraints(platform))
+            .collect();
+        DependencyMap::merge_all(constraints.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the pypi options for this collection.
@@ -255,4 +347,52 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
 impl<'source, FeatureCollection> FeaturesExt<'source> for FeatureCollection where
     FeatureCollection: HasWorkspaceManifest<'source> + HasFeaturesIter<'source>
 {
+}
+
+fn exclude_newer_config_resolved_impl<'source, T, F>(
+    features: &T,
+    mut channel_key: F,
+) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError>
+where
+    T: FeaturesExt<'source> + ?Sized,
+    F: FnMut(&PrioritizedChannel) -> Result<String, ParseChannelError>,
+{
+    let mut exclude_newer = features
+        .exclude_newer_raw()
+        .map(|config| ResolvedExcludeNewer::from_datetime(config.cutoff()));
+
+    for channel in features.prioritized_channels().into_values() {
+        let Some(channel_exclude_newer) = channel.exclude_newer else {
+            continue;
+        };
+
+        let channel_key = channel_key(channel)?;
+        let config = exclude_newer
+            .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
+
+        *config = match channel_exclude_newer {
+            ExcludeNewer::Timestamp(dt) => config.clone().with_channel_cutoff(channel_key, dt),
+            ExcludeNewer::Duration(duration) => config
+                .clone()
+                .with_channel_cutoff(channel_key, ExcludeNewer::Duration(duration).cutoff()),
+        };
+    }
+
+    for (name, package_exclude_newer) in &features
+        .workspace_manifest()
+        .workspace
+        .exclude_newer_package_overrides
+    {
+        let config = exclude_newer
+            .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
+
+        *config = match package_exclude_newer {
+            ExcludeNewer::Timestamp(dt) => config.clone().with_package_cutoff(name.clone(), *dt),
+            ExcludeNewer::Duration(duration) => config
+                .clone()
+                .with_package_cutoff(name.clone(), ExcludeNewer::Duration(*duration).cutoff()),
+        };
+    }
+
+    Ok(exclude_newer)
 }

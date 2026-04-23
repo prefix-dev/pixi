@@ -4,12 +4,11 @@
 use std::{collections::HashSet, fmt::Display, ops::Deref};
 
 use itertools::Itertools;
-use rattler_build::NormalizedKey;
-use rattler_conda_types::Platform;
-use recipe_stage0::{
-    matchspec::PackageDependency,
-    recipe::{Item, Value},
+use rattler_build_recipe::stage0::{
+    ConditionalList, Item, JinjaTemplate, SerializableMatchSpec, Value,
 };
+use rattler_build_types::NormalizedKey;
+use rattler_conda_types::Platform;
 
 pub enum Language<'a> {
     C,
@@ -68,11 +67,16 @@ pub fn default_compiler(platform: &Platform, language: &str) -> String {
     .to_string()
 }
 
+/// Create a jinja template item for a matchspec.
+fn template_item(template: JinjaTemplate) -> Item<SerializableMatchSpec> {
+    Item::Value(Value::new_template(template, None))
+}
+
 /// Returns the compiler template function for the specified language.
-pub fn compiler_requirement(language: &Language) -> Item<PackageDependency> {
-    format!("${{{{ compiler('{language}') }}}}")
-        .parse()
-        .expect("Failed to parse compiler requirement")
+pub fn compiler_requirement(language: &Language) -> Item<SerializableMatchSpec> {
+    let template = JinjaTemplate::new(format!("${{{{ compiler('{language}') }}}}"))
+        .expect("valid jinja template");
+    template_item(template)
 }
 
 /// Add configured compilers to build requirements if they are not already
@@ -86,18 +90,21 @@ pub fn compiler_requirement(language: &Language) -> Item<PackageDependency> {
 ///   names
 pub fn add_compilers_to_requirements<S>(
     compilers: &[String],
-    requirements: &mut Vec<Item<PackageDependency>>,
+    requirements: &mut ConditionalList<SerializableMatchSpec>,
     dependencies: &crate::traits::targets::Dependencies<S>,
     host_platform: &Platform,
 ) {
     for compiler_str in compilers {
         // Check if the specific compiler is already present in build dependencies
         let language_compiler = default_compiler(host_platform, compiler_str);
-        let source_package_name = pixi_build_types::SourcePackageName::from(language_compiler);
+        let source_package_name = pixi_build_types::SourcePackageName::from(
+            rattler_conda_types::PackageName::new_unchecked(language_compiler),
+        );
 
         if !dependencies.build.contains_key(&source_package_name) {
-            let template = format!("${{{{ compiler('{compiler_str}') }}}}");
-            requirements.push(Item::Value(Value::Template(template)));
+            let template = JinjaTemplate::new(format!("${{{{ compiler('{compiler_str}') }}}}"))
+                .expect("valid jinja template");
+            requirements.push(template_item(template));
         }
     }
 }
@@ -115,7 +122,7 @@ fn stdlib_for_language(lang: &str) -> Option<&'static str> {
 
 pub fn add_stdlib_to_requirements(
     compilers: &[String],
-    requirements: &mut Vec<Item<PackageDependency>>,
+    requirements: &mut ConditionalList<SerializableMatchSpec>,
     variants: &HashSet<NormalizedKey>,
 ) {
     // For each compiler check if there is a variant stdlib(compiler) key.
@@ -131,8 +138,9 @@ pub fn add_stdlib_to_requirements(
         }
 
         // If the stdlib key exists, add it to the requirements
-        let template = format!("${{{{ stdlib('{stdlib}') }}}}");
-        requirements.push(Item::Value(Value::Template(template)));
+        let template = JinjaTemplate::new(format!("${{{{ stdlib('{stdlib}') }}}}"))
+            .expect("valid jinja template");
+        requirements.push(template_item(template));
     }
 }
 

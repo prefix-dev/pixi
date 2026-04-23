@@ -5,6 +5,7 @@ use miette::IntoDiagnostic;
 use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec};
 use pixi_manifest::FeaturesExt;
 use pixi_record::PixiRecord;
+use pixi_spec::ResolvedExcludeNewer;
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use rattler::install::link_script::LinkScriptType;
 use rattler_conda_types::{
@@ -44,6 +45,7 @@ pub struct CondaPrefixUpdaterInner {
     pub platform: Platform,
     pub virtual_packages: Vec<GenericVirtualPackage>,
     pub variant_config: VariantConfig,
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
     pub command_dispatcher: CommandDispatcher,
 
     /// A flag that indicates if the prefix was created.
@@ -69,6 +71,10 @@ impl CondaPrefixUpdaterBuilder<'_> {
         let name = self.group.name();
         let prefix = self.group.prefix();
         let variant_config = self.group.workspace().variants(self.platform)?;
+        let exclude_newer = self
+            .group
+            .exclude_newer_config_resolved_with_channel_config(&self.group.channel_config())
+            .into_diagnostic()?;
 
         Ok(CondaPrefixUpdater::new(
             channels,
@@ -78,6 +84,7 @@ impl CondaPrefixUpdaterBuilder<'_> {
             self.platform,
             self.virtual_packages,
             variant_config,
+            exclude_newer,
             self.command_dispatcher,
         ))
     }
@@ -114,6 +121,7 @@ impl CondaPrefixUpdater {
         platform: Platform,
         virtual_packages: Vec<GenericVirtualPackage>,
         variant_config: VariantConfig,
+        exclude_newer: Option<ResolvedExcludeNewer>,
         command_dispatcher: CommandDispatcher,
     ) -> Self {
         Self {
@@ -125,6 +133,7 @@ impl CondaPrefixUpdater {
                 platform,
                 virtual_packages,
                 variant_config,
+                exclude_newer,
                 command_dispatcher,
                 created: Default::default(),
             }),
@@ -156,6 +165,7 @@ impl CondaPrefixUpdater {
                     self.inner.platform,
                     self.inner.virtual_packages.clone(),
                     self.inner.variant_config.clone(),
+                    self.inner.exclude_newer.clone(),
                     self.inner.command_dispatcher.clone(),
                     reinstall_packages,
                     ignore_packages,
@@ -187,6 +197,7 @@ pub async fn update_prefix_conda(
     host_platform: Platform,
     host_virtual_packages: Vec<GenericVirtualPackage>,
     variant_config: VariantConfig,
+    exclude_newer: Option<ResolvedExcludeNewer>,
     command_dispatcher: CommandDispatcher,
     reinstall_packages: Option<HashSet<PackageName>>,
     ignore_packages: Option<HashSet<PackageName>>,
@@ -209,6 +220,7 @@ pub async fn update_prefix_conda(
             force_reinstall: reinstall_packages.unwrap_or_default(),
             ignore_packages,
             build_environment,
+            exclude_newer,
             channels,
             channel_config,
             variant_configuration: Some(variant_configuration),

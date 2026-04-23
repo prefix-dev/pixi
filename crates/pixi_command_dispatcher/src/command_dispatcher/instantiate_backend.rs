@@ -18,7 +18,7 @@ use pixi_build_types::{
     PixiBuildApiVersion, ProjectModel, TargetSelector, procedures::initialize::InitializeParams,
 };
 use pixi_path::{AbsPresumedDirPathBuf, AbsPresumedFilePathBuf};
-use pixi_spec::SpecConversionError;
+use pixi_spec::{ResolvedExcludeNewer, SpecConversionError};
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator},
@@ -54,6 +54,9 @@ pub struct InstantiateBackendSpec {
     /// The channel configuration to use for any source packages required by the
     /// backend.
     pub channel_config: ChannelConfig,
+
+    /// Exclude packages newer than the configured cutoffs when solving backend environments.
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// The protocols that are enabled for discovering source packages
     pub enabled_protocols: EnabledProtocols,
@@ -132,7 +135,7 @@ impl CommandDispatcher {
                             build_virtual_packages: tool_platform_virtual_packages.to_vec(),
                         },
                         channels: env_spec.channels,
-                        exclude_newer: None,
+                        exclude_newer: spec.exclude_newer,
                         variant_configuration: None,
                         variant_files: None,
                         channel_config: spec.channel_config,

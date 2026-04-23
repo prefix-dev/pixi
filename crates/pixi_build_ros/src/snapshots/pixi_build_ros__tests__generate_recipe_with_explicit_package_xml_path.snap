@@ -1,0 +1,92 @@
+---
+source: crates/pixi_build_ros/src/main.rs
+expression: generated.recipe
+---
+schema_version: 1
+package:
+  name: ros-noetic-custom-ros
+  version: 0.0.1
+build:
+  script: "[script]"
+  python:
+    entry_points: []
+    skip_pyc_compilation: []
+    use_python_app_entrypoint: false
+  skip: []
+  always_copy_files: []
+  always_include_files: []
+  merge_build_and_host_envs: false
+  files: []
+  dynamic_linking:
+    rpaths: []
+    binary_relocation: true
+    missing_dso_allowlist: []
+    rpath_allowlist: []
+  variant:
+    use_keys: []
+    ignore_keys: []
+  prefix_detection:
+    force_file_type:
+      text: []
+      binary: []
+    ignore: false
+    ignore_binary_files: false
+  post_process: []
+requirements:
+  build:
+    - ros-noetic-catkin
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - "qt-main >=5.15.0,<5.16.0"
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - ninja
+    - python
+    - setuptools
+    - git
+    - git-lfs
+    - cmake
+    - cpython
+    - patch
+    - make
+    - coreutils
+    - "${{ compiler('c') }}"
+    - "${{ compiler('cxx') }}"
+  host:
+    - ros-noetic-catkin
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - "qt-main >=5.15.0,<5.16.0"
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - python
+    - numpy
+    - pip
+    - pkg-config
+    - ros-distro-mutex
+  run:
+    - ros-noetic-ros-package <=2.0.0
+    - ros-noetic-ros-package-msgs <=2.0.0
+    - ros-noetic-ros-package2 <2.0.0a0
+    - "qt-main >=5.15.0,<5.16.0"
+    - libgl-devel
+    - libopengl-devel
+    - xorg-libx11
+    - xorg-libxext
+    - tinyxml2 ==10.0.0
+    - asio <10.0.0
+    - ros-distro-mutex
+about:
+  summary: Demo
+  description: Demo
+extra: {}

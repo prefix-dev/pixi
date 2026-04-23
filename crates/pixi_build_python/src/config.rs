@@ -34,6 +34,11 @@ pub struct PythonBackendConfig {
     /// Defaults to `true` (mapping disabled).
     #[serde(default)]
     pub ignore_pypi_mapping: Option<bool>,
+    /// Whether the package uses the Python Stable ABI (abi3).
+    /// When true, adds `python_abi` to host requirements.
+    /// Only meaningful for packages with compiled extensions (non-noarch).
+    #[serde(default)]
+    pub abi3: Option<bool>,
 }
 
 impl PythonBackendConfig {
@@ -69,13 +74,8 @@ impl BackendConfig for PythonBackendConfig {
     /// - noarch: Platform-specific takes precedence (critical for cross-platform)
     /// - env: Platform env vars override base, others merge
     /// - extra_args: Platform-specific completely replaces base
-    /// - debug_dir: Not allowed to have target specific value
     /// - extra_input_globs: Platform-specific completely replaces base
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
-        if target_config.debug_dir.is_some() {
-            miette::bail!("`debug_dir` cannot have a target specific value");
-        }
-
         Ok(Self {
             noarch: target_config.noarch.or(self.noarch),
             env: {
@@ -104,6 +104,7 @@ impl BackendConfig for PythonBackendConfig {
             ignore_pypi_mapping: target_config
                 .ignore_pypi_mapping
                 .or(self.ignore_pypi_mapping),
+            abi3: target_config.abi3.or(self.abi3),
         })
     }
 }
@@ -136,6 +137,7 @@ mod tests {
             compilers: Some(vec!["c".to_string()]),
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
+            abi3: Some(true),
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -151,6 +153,7 @@ mod tests {
             compilers: Some(vec!["cxx".to_string(), "rust".to_string()]),
             ignore_pyproject_manifest: Some(false),
             ignore_pypi_mapping: Some(false),
+            abi3: Some(false),
         };
 
         let merged = base_config
@@ -186,6 +189,8 @@ mod tests {
         assert_eq!(merged.ignore_pyproject_manifest, Some(false));
         // ignore_pypi_mapping should use target value
         assert_eq!(merged.ignore_pypi_mapping, Some(false));
+        // abi3 should use target value
+        assert_eq!(merged.abi3, Some(false));
     }
 
     #[test]
@@ -202,6 +207,7 @@ mod tests {
             compilers: None,
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
+            abi3: None,
         };
 
         let empty_target_config = PythonBackendConfig::default();
@@ -218,6 +224,50 @@ mod tests {
         assert_eq!(merged.compilers, None);
         assert_eq!(merged.ignore_pyproject_manifest, Some(true));
         assert_eq!(merged.ignore_pypi_mapping, Some(true));
+    }
+
+    #[test]
+    fn test_merge_abi3_behavior() {
+        // Target overrides base
+        let base = PythonBackendConfig {
+            abi3: Some(true),
+            ..Default::default()
+        };
+        let target = PythonBackendConfig {
+            abi3: Some(false),
+            ..Default::default()
+        };
+        let merged = base.merge_with_target_config(&target).unwrap();
+        assert_eq!(merged.abi3, Some(false));
+
+        // Target None keeps base
+        let target_none = PythonBackendConfig {
+            abi3: None,
+            ..Default::default()
+        };
+        let merged = base.merge_with_target_config(&target_none).unwrap();
+        assert_eq!(merged.abi3, Some(true));
+
+        // Both None stays None
+        let base_none = PythonBackendConfig::default();
+        let merged = base_none.merge_with_target_config(&target_none).unwrap();
+        assert_eq!(merged.abi3, None);
+    }
+
+    #[test]
+    fn test_deserialize_abi3_field() {
+        let json_data = json!({"abi3": true});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.abi3, Some(true));
+
+        let json_data = json!({"abi3": false});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.abi3, Some(false));
+
+        // Not specified should be None
+        let json_data = json!({});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.abi3, None);
     }
 
     #[test]
@@ -274,23 +324,5 @@ mod tests {
 
         // Target value should override base value
         assert_eq!(merged.noarch, Some(false));
-    }
-
-    #[test]
-    fn test_merge_target_debug_dir_error() {
-        let base_config = PythonBackendConfig {
-            debug_dir: Some(PathBuf::from("/base/debug")),
-            ..Default::default()
-        };
-
-        let target_config = PythonBackendConfig {
-            debug_dir: Some(PathBuf::from("/target/debug")),
-            ..Default::default()
-        };
-
-        let result = base_config.merge_with_target_config(&target_config);
-        assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("`debug_dir` cannot have a target specific value"));
     }
 }

@@ -3,13 +3,9 @@ description = "A Rust build backend for Pixi"
 documentation = "https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-rust/"
 edition.workspace = true
 license.workspace = true
-name = "pixi_build_rust"
-repository.workspace = true
-version = "0.4.6"
-
-[[bin]]
 name = "pixi-build-rust"
-path = "src/main.rs"
+repository.workspace = true
+version = "0.4.8"
 
 [package.metadata.dist]
 dist = false
@@ -35,7 +31,7 @@ serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 
-recipe_stage0 = { workspace = true }
+rattler_build_recipe = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }

@@ -38,8 +38,9 @@ channels = ["https://prefix.dev/conda-forge"]
 
 The backend expects a rattler-build recipe file in one of these locations (searched in order):
 
-1. `recipe.yaml` or `recipe.yml` in the same directory as the package manifest
-2. `recipe/recipe.yaml` or `recipe/recipe.yml` in a subdirectory of the package manifest
+1. `package.build.config.recipe` if given.
+2. `recipe.yaml` or `recipe.yml` in the same directory as the package manifest
+3. `recipe/recipe.yaml` or `recipe/recipe.yml` in a subdirectory of the package manifest
 
 If the package is defined in the same location as the workspace, it is heavily encouraged to place the recipe file in its own directory `recipe`.
 Learn more about the `rattler-build`, and its recipe format in its [high level overview](https://rattler.build/latest/highlevel).
@@ -101,6 +102,21 @@ experimental = true
 
 Note: This option cannot be set in target-specific configurations. It must be set at the root `[package.build.config]` level only.
 
+### `recipe`
+
+- **Type**: `String` (path)
+- **Default**: checks for `recipe.yaml`, `recipe.yml`, `recipe/recipe.yaml`, `recipe/recipe.yml` in order.
+- **Target Merge Behavior**: Not allowed - must be set at root level only
+
+Path to the recipe YAML file.
+
+```toml
+[package.build.config]
+recipe = "../template/recipe.yaml"
+```
+
+Note: This option cannot be set in target-specific configurations. It must be set at the root `[package.build.config]` level only.
+
 ### `debug-dir`
 
 The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside the work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored; if it is still set in a manifest the backend emits a warning to make the change explicit.
@@ -143,6 +159,33 @@ The rattler-build backend follows this build process:
 4. **Build Execution**: Runs the build script specified in the recipe
 5. **Package Creation**: Creates conda packages according to the recipe specification
 
+
+## Custom Build Variants as Environment Variables
+
+When using `[workspace.build-variants]`, any variant key that is not a recognized language key (like `python`, `numpy`, `r`, etc.) is automatically exported as an environment variable during the build.
+
+This is useful for passing configuration to build scripts without modifying the recipe.
+For example, to override the macOS sysroot used during compilation:
+
+```toml title="pixi.toml"
+[workspace.target.osx.build-variants]
+CONDA_BUILD_SYSROOT = ["/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk"]
+```
+
+During the build, `CONDA_BUILD_SYSROOT` will be set as an environment variable available to the build script.
+Custom variant keys can also be used in recipe templates via Jinja:
+
+```yaml title="recipe.yaml"
+build:
+  script:
+    env:
+      MY_FLAG: ${{ my_custom_flag }}
+```
+
+```toml title="pixi.toml"
+[workspace.build-variants]
+my_custom_flag = ["enabled"]
+```
 
 ## Limitations
 

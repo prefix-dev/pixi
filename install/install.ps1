@@ -22,7 +22,7 @@
 .LINK
     https://github.com/prefix-dev/pixi
 .NOTES
-    Version: v0.65.0
+    Version: v0.67.1
 #>
 param (
     [string] $PixiVersion = 'latest',
@@ -188,9 +188,10 @@ Write-Host "Getting it from this url: $(Mask-Credentials $DOWNLOAD_URL)"
 Write-Host "The binary will be installed into '$BinDir'"
 
 $TEMP_FILE = [System.IO.Path]::GetTempFileName()
+$webClient = New-Object System.Net.WebClient
 
 try {
-    Invoke-WebRequest -Uri $DOWNLOAD_URL -OutFile $TEMP_FILE
+    $webClient.DownloadFile($DOWNLOAD_URL, $TEMP_FILE)
 
     # Create the install dir if it doesn't exist
     if (!(Test-Path -Path $BinDir)) {
@@ -206,6 +207,7 @@ try {
     Write-Host "Error: '$(Mask-Credentials $DOWNLOAD_URL)' is not available or failed to download"
     exit 1
 } finally {
+    $webClient.Dispose()
     Remove-Item -Path $ZIP_FILE
 }
 

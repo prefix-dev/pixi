@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import sys
 import json
 from copy import deepcopy
 from pathlib import Path
 import tomllib
-from typing import Annotated, Any, Literal, ClassVar, override
+from typing import Annotated, Any, Literal, ClassVar, override, TYPE_CHECKING
 from enum import Enum
 
 from pydantic import (
@@ -18,12 +19,25 @@ from pydantic import (
     StringConstraints,
 )
 
+if TYPE_CHECKING:
+    from pydantic.config import JsonDict
+
+HERE = Path(__file__).parent
+PIXI_SCHEMA = HERE / "schema.json"
+PYPROJECT_SCHEMA = HERE / "pyproject/schema.json"
+PYPROJECT_PARTIAL_SCHEMA = HERE / "pyproject/partial-pixi.json"
+
 #: latest version currently supported by the `taplo` TOML linter and language server
 SCHEMA_DRAFT = "http://json-schema.org/draft-07/schema#"
 CARGO_TOML = Path(__file__).parent.parent / "crates" / "pixi" / "Cargo.toml"
 CARGO_TOML_DATA = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))
 VERSION = CARGO_TOML_DATA["package"]["version"]
-SCHEMA_URI = f"https://pixi.sh/v{VERSION}/schema/manifest/schema.json"
+
+URI_TEMPLATE = "https://pixi.sh/v{}/schema/manifest/{}schema.json"
+
+SCHEMA_URI = URI_TEMPLATE.format(VERSION, "")
+PYPROJECT_SCHEMA_URI = URI_TEMPLATE.format(VERSION, "pyproject/")
+PARTIAL_PYPROJECT_SCHEMA_URI = "https://json.schemastore.org/partial-pixi.json"
 
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
 Md5Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{32}$")]
@@ -36,7 +50,13 @@ GitUrl = Annotated[
 ]
 ExcludeNewer = Annotated[
     str,
-    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$"),
+    StringConstraints(
+        # Matches either:
+        # - An RFC 3339 timestamp, e.g. YYYY-MM-DDTHH:MM:SSZ or with fractional seconds
+        # - A date, e.g. YYYY-MM-DD
+        # - A duration token sequence accepted by humantime, e.g. 7d, 1h, 30m, 1h30m, 1ms
+        pattern=r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})|\d{4}-\d{2}-\d{2}|(\d+\s*[A-Za-z]+\s*)+)$"
+    ),
 ]
 
 
@@ -90,6 +110,10 @@ class ChannelInlineTable(StrictBaseModel):
 
     channel: ChannelName = Field(description="The channel the packages needs to be fetched from")
     priority: int | None = Field(None, description="The priority of the channel")
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        description="Override the workspace-level `exclude-newer` cutoff for this channel only",
+    )
 
 
 Channel = ChannelName | ChannelInlineTable
@@ -156,8 +180,19 @@ class Workspace(StrictBaseModel):
     )
     exclude_newer: ExcludeNewer | None = Field(
         None,
-        examples=["2023-11-03", "2023-11-03T03:33:12Z"],
-        description="Exclude any package newer than this date",
+        examples=[
+            "2023-11-03T03:33:12Z",
+            "2026-04-01",
+            "0d",
+            "1 week",
+            "2w",
+            "1 month",
+            "1M",
+            "72h",
+            "72 hours",
+            "1h30m",
+        ],
+        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
     )
     platforms: list[Platform] | None = Field(
         None, description="The platforms that the project supports"
@@ -344,6 +379,10 @@ DependenciesField = Field(
     None,
     description="The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
 )
+ConstraintsField = Field(
+    None,
+    description="The `conda` version constraints. These constrain the versions of packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+)
 HostDependenciesField = Field(
     None,
     description="The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
@@ -370,7 +409,10 @@ class ReservedTaskArgName(str, Enum):
     pixi = "pixi"
 
 
-TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
+TaskName = Annotated[
+    NonEmptyStr,
+    Field(pattern=r"^[^\s\$]+$", description="A valid task name."),
+]
 NotReservedSchema: Any = {"not": {"enum": sorted(r.value for r in ReservedTaskArgName)}}
 TaskArgName = Annotated[
     str,
@@ -460,6 +502,7 @@ class TaskInlineTable(StrictBaseModel):
         examples=[
             ["arg1", "arg2"],
             ["arg", {"arg": "arg2", "default": "2"}],
+            ["arg", {"arg": "arg2", "default": "2", "choices": ["1", "2", "4"]}],
         ],
     )
 
@@ -555,6 +598,7 @@ class Target(StrictBaseModel):
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
+    constraints: Dependencies = ConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
@@ -602,6 +646,7 @@ class Feature(StrictBaseModel):
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
+    constraints: Dependencies = ConstraintsField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
     )
@@ -873,38 +918,24 @@ class PackageTarget(StrictBaseModel):
 #######################
 
 
-class BaseManifest(StrictBaseModel):
-    """The configuration for a [`pixi`](https://pixi.sh) project."""
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(
-        json_schema_extra={
-            "$id": SCHEMA_URI,
-            "$schema": SCHEMA_DRAFT,
-            "title": "`pixi.toml` manifest file",
-            "anyOf": [
-                {"required": ["project"]},
-                {"required": ["workspace"]},
-                {"required": ["package"]},
-            ],
-        }
-    )
-
-    schema_: str | None = Field(  # pyright: ignore[reportCallIssue, reportUnknownVariableType]
-        SCHEMA_URI,
-        alias="$schema",
-        title="Schema",
-        description="The schema identifier for the project's configuration",
-        format="uri-reference",
-    )
-
+class BaseManifest(BaseModel):
     workspace: Workspace | None = Field(None, description="The workspace's metadata information")
     project: Workspace | None = Field(None, description="The project's metadata information")
     package: Package | None = Field(None, description="The package's metadata information")
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
+    constraints: Dependencies = ConstraintsField
+    exclude_newer: dict[CondaPackageName, ExcludeNewer] | None = Field(
+        None,
+        description="Workspace-wide per-package `exclude-newer` overrides for conda packages",
+    )
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
+    )
+    pypi_exclude_newer: dict[PyPIPackageName, ExcludeNewer] | None = Field(
+        None,
+        description="Workspace-wide per-package `exclude-newer` overrides for PyPI packages",
     )
     dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
         None,
@@ -937,6 +968,91 @@ class BaseManifest(StrictBaseModel):
     pypi_options: PyPIOptions | None = Field(
         None,
         description="Options related to PyPI indexes, on the default feature",
+    )
+
+
+ANY_OF_TOP_LEVEL: JsonDict = {
+    "anyOf": [
+        {"required": ["package"]},
+        {"required": ["project"]},
+        {"required": ["workspace"]},
+    ]
+}
+
+
+class PixiTomlManifest(StrictBaseModel, BaseManifest):
+    """The configuration for a [`pixi`](https://pixi.sh) project."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        alias_generator=hyphenize,
+        json_schema_extra={
+            "$id": SCHEMA_URI,
+            "$schema": SCHEMA_DRAFT,
+            "title": "`pixi.toml` manifest file",
+            **ANY_OF_TOP_LEVEL,
+        },
+    )
+
+    schema_: str | None = Field(
+        SCHEMA_URI,
+        alias="$schema",
+        title="Schema",
+        description="The schema identifier for the project's configuration",
+        json_schema_extra={"format": "uri-reference"},
+    )
+
+
+##################################
+# The Manifest in pyproject.toml #
+##################################
+
+
+class PyProjectPixiTool(BaseManifest):
+    """Fields from `pixi.toml` supported in `[tool.pixi]`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(json_schema_extra=ANY_OF_TOP_LEVEL)
+
+
+class PyProjectToolTable(BaseModel):
+    """A `[tool]` table which includes `pixi`."""
+
+    pixi: PyProjectPixiTool | None = Field(None, description="`pixi` configuration")
+
+
+class PyProjectManifest(BaseModel):
+    """A `pyproject.toml` with `[tool.pixi]`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        alias_generator=hyphenize,
+        json_schema_extra={
+            "$id": PYPROJECT_SCHEMA_URI,
+            "$schema": SCHEMA_DRAFT,
+            "title": "`pyproject.toml` manifest file for `pixi`",
+        },
+    )
+
+    tool: PyProjectToolTable | None = Field(
+        None,
+        description=(
+            "Every tool that is used by the project can have users specify"
+            " configuration data as long as they use a sub-table within `[tool]`."
+            " Generally a project can use the subtable `tool.$NAME` if, and only"
+            " if, they own the entry for `$NAME` in the Cheeseshop/PyPI."
+        ),
+    )
+
+
+class PyProjectPartial(PyProjectPixiTool):
+    """The `[tool.pixi]` section of a `pyproject.toml`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        alias_generator=hyphenize,
+        json_schema_extra={
+            "$id": PARTIAL_PYPROJECT_SCHEMA_URI,
+            "$comment": f"Generated from `pixi` v{VERSION}",
+            "$schema": SCHEMA_DRAFT,
+            "title": "`[tool.pixi]` for `pyproject.toml`",
+        },
     )
 
 
@@ -1078,9 +1194,25 @@ class SchemaJsonEncoder(json.JSONEncoder):
         return obj
 
 
+def dump_schema(path: Path, raw: dict[str, Any]) -> None:
+    """Write out a raw Pydantic JSON object to disk."""
+    raw_json = json.dumps(raw, indent=2, cls=SchemaJsonEncoder) + "\n"
+    path.write_text(raw_json, encoding="utf-8", newline="\n")
+    kb = round(len(raw_json) / 1024, 2)
+    print(f"... wrote {kb}kb to {path}", file=sys.stderr)
+
+
+def update_schema_files() -> int:
+    """Generate JSON schema files."""
+    dump_schema(PIXI_SCHEMA, PixiTomlManifest.model_json_schema())
+    dump_schema(PYPROJECT_SCHEMA, PyProjectManifest.model_json_schema())
+    dump_schema(PYPROJECT_PARTIAL_SCHEMA, PyProjectPartial.model_json_schema())
+    return 0
+
+
 ##########################
 # Command Line Interface #
 ##########################
 
 if __name__ == "__main__":
-    print(json.dumps(BaseManifest.model_json_schema(), indent=2, cls=SchemaJsonEncoder))
+    sys.exit(update_schema_files())

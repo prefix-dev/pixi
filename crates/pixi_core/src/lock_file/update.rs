@@ -13,14 +13,14 @@ use std::{
 use barrier_cell::BarrierCell;
 use dashmap::DashMap;
 use fancy_display::FancyDisplay;
-use futures::{FutureExt, StreamExt, TryFutureExt, stream::FuturesUnordered};
+use futures::{FutureExt, StreamExt, TryFutureExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError, executor::CancellationAwareFutures,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -34,8 +34,8 @@ use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
-    to_uv_normalize,
+    ConversionError, to_exclude_newer, to_extra_name, to_marker_environment, to_normalize,
+    to_uv_extra_name, to_uv_normalize,
 };
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
@@ -407,7 +407,7 @@ pub enum SolveCondaEnvironmentError {
         platform: Platform,
         #[source]
         #[diagnostic_source]
-        source: Box<CommandDispatcherError<SolvePixiEnvironmentError>>,
+        source: Box<SolvePixiEnvironmentError>,
     },
 
     #[error(
@@ -422,6 +422,17 @@ pub enum SolveCondaEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Variants(#[from] VariantsError),
+
+    #[error(
+        "source specifications are not supported in the `[constraints]` table, but a source constraint was found for '{0}'"
+    )]
+    SourceConstraintNotSupported(String),
+}
+
+impl From<ParseChannelError> for SolveCondaEnvironmentError {
+    fn from(value: ParseChannelError) -> Self {
+        SolveCondaEnvironmentError::ParseChannels(Box::new(value))
+    }
 }
 
 /// Options to pass to [`Workspace::update_lock_file`].
@@ -697,11 +708,7 @@ impl<'p> LockFileDerivedData<'p> {
                     .filter_map(LockedPackageRef::as_pypi)
                     .map(|(data, env_data)| {
                         let mut data = data.clone();
-                        data.editable = manifest_pypi_deps
-                            .get(&data.name)
-                            .and_then(|specs| specs.last())
-                            .and_then(|spec| spec.editable())
-                            .unwrap_or(false);
+                        data.editable = is_editable_from_manifest(&manifest_pypi_deps, &data.name);
                         (data, env_data.clone())
                     })
                     .collect::<Vec<_>>();
@@ -751,7 +758,12 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let uv_context = self
                     .uv_context
-                    .get_or_try_init(|| UvResolutionContext::from_config(self.workspace.config()))?
+                    .get_or_try_init(|| {
+                        UvResolutionContext::from_config(
+                            self.workspace.config(),
+                            self.workspace.client()?.clone(),
+                        )
+                    })?
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
 
@@ -771,7 +783,7 @@ impl<'p> LockFileDerivedData<'p> {
                 {
                     let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
                     let index_strategy = environment.pypi_options().index_strategy.clone();
-                    let exclude_newer = environment.exclude_newer();
+                    let pypi_exclude_newer = environment.pypi_exclude_newer_config_resolved();
                     let skip_wheel_filename_check =
                         environment.pypi_options().skip_wheel_filename_check;
 
@@ -788,7 +800,7 @@ impl<'p> LockFileDerivedData<'p> {
                         no_build: &no_build,
                         no_binary: &no_binary,
                         index_strategy: index_strategy.as_ref(),
-                        exclude_newer: exclude_newer.as_ref(),
+                        exclude_newer: &pypi_exclude_newer,
                         skip_wheel_filename_check,
                     };
 
@@ -1571,7 +1583,7 @@ impl<'p> UpdateContext<'p> {
         // This will keep track of all outstanding tasks that we need to wait for. All
         // tasks are added to this list after they are spawned. This function blocks
         // until all pending tasks have either completed or errored.
-        let mut pending_futures = FuturesUnordered::new();
+        let mut pending_futures = CancellationAwareFutures::new(self.command_dispatcher.executor());
 
         // Spawn tasks for all the conda targets that are out of date.
         for (environment, platforms) in self.outdated_envs.conda.iter() {
@@ -1645,16 +1657,19 @@ impl<'p> UpdateContext<'p> {
                 })()
                 .unwrap_or_default();
 
+                let mapping_client = self.mapping_client.clone();
+                let command_dispatcher = self.command_dispatcher.clone();
+                let source_clone = source.clone();
                 let group_solve_task = spawn_solve_conda_environment_task(
-                    source.clone(),
+                    source_clone,
                     locked_group_records,
-                    self.mapping_client.clone(),
+                    mapping_client,
                     platform,
                     channel_priority,
-                    self.command_dispatcher.clone(),
+                    command_dispatcher,
                     pin_overrides,
                 )
-                .map_err(Report::new)
+                .map(|result| result.map_err_with(Report::new))
                 .boxed_local();
 
                 // Store the task so we can poll it later.
@@ -1742,7 +1757,9 @@ impl<'p> UpdateContext<'p> {
                 };
 
             let uv_context = uv_context
-                .get_or_try_init(|| UvResolutionContext::from_config(project.config()))?
+                .get_or_try_init(|| {
+                    UvResolutionContext::from_config(project.config(), project.client()?.clone())
+                })?
                 .clone();
 
             let locked_group_records = self
@@ -1768,7 +1785,11 @@ impl<'p> UpdateContext<'p> {
                 self.no_install,
             );
 
-            pending_futures.push(pypi_solve_future.boxed_local());
+            pending_futures.push(
+                pypi_solve_future
+                    .map_err(CommandDispatcherError::Failed)
+                    .boxed_local(),
+            );
 
             let previous_cell = self
                 .grouped_solved_pypi_records
@@ -1814,7 +1835,11 @@ impl<'p> UpdateContext<'p> {
                 grouped_pypi_records,
                 self.command_dispatcher.clone(),
             );
-            pending_futures.push(extract_resolution_task.boxed_local());
+            pending_futures.push(
+                extract_resolution_task
+                    .map_err(CommandDispatcherError::Failed)
+                    .boxed_local(),
+            );
 
             // Create a cell that will be used to store the result of the extraction.
             let previous_cell = self
@@ -1866,7 +1891,16 @@ impl<'p> UpdateContext<'p> {
         //    `'static`. Which makes them easier to work with.
         while let Some(result) = pending_futures.next().await {
             top_level_progress.inc(1);
-            match result? {
+            let task_result = match result {
+                Ok(task_result) => task_result,
+                Err(CommandDispatcherError::Cancelled) => {
+                    unreachable!(
+                        "If we get a cancellation error here it means the error that caused the cancellation did not propagate."
+                    );
+                }
+                Err(CommandDispatcherError::Failed(report)) => return Err(report),
+            };
+            match task_result {
                 TaskResult::CondaGroupSolved(group_name, platform, records, duration) => {
                     let group = GroupedEnvironment::from_name(project, &group_name)
                         .expect("group should exist");
@@ -2024,7 +2058,6 @@ impl<'p> UpdateContext<'p> {
                         .unwrap_or_default()
                         .unwrap_or_default()
                         .into(),
-                    exclude_newer: grouped_env.exclude_newer(),
                     pypi_prerelease_mode: Some(pypi_prerelease_mode.into()),
                 },
             );
@@ -2167,15 +2200,32 @@ async fn spawn_solve_conda_environment_task(
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
     pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
-) -> Result<TaskResult, SolveCondaEnvironmentError> {
+) -> Result<TaskResult, CommandDispatcherError<SolveCondaEnvironmentError>> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
     // Get the dev dependencies for this platform
     let dev_dependencies = group.combined_dev_dependencies(Some(platform));
 
+    // Get the constraints for this platform and convert to binary specs.
+    // Source specs are not meaningful as constraints and are an error.
+    let constraints = {
+        let conda_constraints = group.combined_constraints(Some(platform));
+        let (source_constraints, binary_constraints) =
+            pixi_record::DevSourceRecord::split_into_source_and_binary_requirements(
+                conda_constraints.into_specs(),
+            );
+        if let Some((name, _)) = source_constraints.iter_specs().next() {
+            return Err(CommandDispatcherError::Failed(
+                SolveCondaEnvironmentError::SourceConstraintNotSupported(
+                    name.as_source().to_string(),
+                ),
+            ));
+        }
+        binary_constraints
+    };
+
     // Get solve options
-    let exclude_newer = group.exclude_newer();
     let strategy = group.solve_strategy().into();
 
     // Get the environment name
@@ -2201,7 +2251,11 @@ async fn spawn_solve_conda_environment_task(
     let pypi_name_mapping_location = group
         .workspace()
         .pypi_name_mapping_source()
-        .map_err(|err| SolveCondaEnvironmentError::PypiMappingFailed(err.into()))?
+        .map_err(|err| {
+            CommandDispatcherError::Failed(SolveCondaEnvironmentError::PypiMappingFailed(
+                err.into(),
+            ))
+        })?
         .clone();
 
     // The list of channels and platforms we need for this task
@@ -2209,19 +2263,28 @@ async fn spawn_solve_conda_environment_task(
 
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
+    let exclude_newer = group
+        .exclude_newer_config_resolved_with_channel_config(&channel_config)
+        .map_err(SolveCondaEnvironmentError::from)
+        .map_err(CommandDispatcherError::Failed)?;
 
     // Resolve the channel URLs for the channels we need.
     let channels = channels
         .iter()
         .map(|c| c.clone().into_base_url(&channel_config))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(Box::new)?;
+        .map_err(SolveCondaEnvironmentError::from)
+        .map_err(CommandDispatcherError::Failed)?;
 
     // Determine the build variants
     let VariantConfig {
         variant_configuration,
         variant_files,
-    } = group.workspace().variants(platform)?;
+    } = group
+        .workspace()
+        .variants(platform)
+        .map_err(SolveCondaEnvironmentError::from)
+        .map_err(CommandDispatcherError::Failed)?;
 
     // Convert dev dependencies to DevSourceSpecs
     let dev_sources: IndexMap<_, _> = dev_dependencies
@@ -2246,7 +2309,7 @@ async fn spawn_solve_conda_environment_task(
         .solve_pixi_environment(PixiEnvironmentSpec {
             name: Some(group_name.to_string()),
             dependencies,
-            constraints: Default::default(),
+            constraints,
             dev_sources,
             installed: existing_repodata_records.records.clone(),
             build_environment: BuildEnvironment::simple(platform, virtual_packages),
@@ -2261,7 +2324,7 @@ async fn spawn_solve_conda_environment_task(
             preferred_build_source: pin_overrides,
         })
         .await
-        .map_err(|source| SolveCondaEnvironmentError::SolveFailed {
+        .map_err_with(|source| SolveCondaEnvironmentError::SolveFailed {
             environment_name: group_name.clone(),
             platform,
             source: Box::new(source),
@@ -2278,7 +2341,11 @@ async fn spawn_solve_conda_environment_task(
                 None,
             )
             .await
-            .map_err(|err| SolveCondaEnvironmentError::PypiMappingFailed(err.into()))?;
+            .map_err(|err| {
+                CommandDispatcherError::Failed(SolveCondaEnvironmentError::PypiMappingFailed(
+                    err.into(),
+                ))
+            })?;
     }
 
     // Turn the records into a map by name
@@ -2557,7 +2624,7 @@ async fn spawn_solve_pypi_task<'p>(
         ));
     }
 
-    let exclude_newer = grouped_environment.exclude_newer();
+    let exclude_newer = to_exclude_newer(&grouped_environment.pypi_exclude_newer_config_resolved());
 
     // Get the system requirements for this environment
     let system_requirements = grouped_environment.system_requirements();
@@ -2654,4 +2721,102 @@ async fn spawn_solve_pypi_task<'p>(
         duration,
         prefix_task_result,
     ))
+}
+
+/// Check if a package should be installed as editable based on the manifest's
+/// pypi dependencies.
+///
+/// When multiple specs exist for a package (from merged features or duplicate
+/// entries from `project.dependencies` and `tool.pixi.pypi-dependencies`),
+/// we take the first spec that has an explicit editable value. This respects
+/// feature priority ordering (non-default features come first) while also
+/// handling the same-feature case where a registry spec from
+/// `project.dependencies` lacks an editable field.
+fn is_editable_from_manifest(
+    manifest_pypi_deps: &pixi_manifest::PyPiDependencies,
+    package_name: &pep508_rs::PackageName,
+) -> bool {
+    manifest_pypi_deps
+        .get(package_name)
+        .and_then(|specs| specs.iter().find_map(|spec| spec.editable()))
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_manifest::PyPiDependencies;
+    use pixi_pypi_spec::PixiPypiSpec;
+
+    #[test]
+    fn test_editable_path_spec_with_registry_spec() {
+        let mut deps = PyPiDependencies::default();
+        let name = pixi_pypi_spec::PypiPackageName::from_str("requests").unwrap();
+        let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
+
+        // Simulate tool.pixi.pypi-dependencies (added first)
+        let path_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
+            path: "./requests".into(),
+            editable: Some(true),
+        });
+        deps.insert(name.clone(), path_spec);
+
+        // Simulate project.dependencies (added second, no editable field)
+        let registry_spec: PixiPypiSpec = pep508_rs::Requirement::from_str("requests>=2.0")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        deps.insert(name.clone(), registry_spec);
+
+        // The first explicit editable value (Some(true)) should win
+        assert!(
+            is_editable_from_manifest(&deps, &pep508_name),
+            "Package should be editable when an editable path spec exists alongside a registry spec"
+        );
+    }
+
+    #[test]
+    fn test_not_editable_when_only_registry_spec() {
+        let mut deps = PyPiDependencies::default();
+        let name = pixi_pypi_spec::PypiPackageName::from_str("requests").unwrap();
+        let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
+
+        let registry_spec: PixiPypiSpec = pep508_rs::Requirement::from_str("requests>=2.0")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        deps.insert(name.clone(), registry_spec);
+
+        assert!(
+            !is_editable_from_manifest(&deps, &pep508_name),
+            "Package should not be editable when no spec has editable=true"
+        );
+    }
+
+    #[test]
+    fn test_feature_priority_explicit_non_editable_wins() {
+        let mut deps = PyPiDependencies::default();
+        let name = pixi_pypi_spec::PypiPackageName::from_str("requests").unwrap();
+        let pep508_name = pep508_rs::PackageName::new("requests".to_string()).unwrap();
+
+        // Higher-priority feature explicitly sets editable=false (inserted first)
+        let non_editable_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
+            path: "./requests".into(),
+            editable: Some(false),
+        });
+        deps.insert(name.clone(), non_editable_spec);
+
+        // Lower-priority feature has editable=true (inserted second)
+        let editable_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
+            path: "./requests".into(),
+            editable: Some(true),
+        });
+        deps.insert(name.clone(), editable_spec);
+
+        // The first explicit editable value (Some(false)) should win
+        assert!(
+            !is_editable_from_manifest(&deps, &pep508_name),
+            "Higher-priority feature's explicit editable=false should take precedence"
+        );
+    }
 }

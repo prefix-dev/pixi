@@ -2,11 +2,25 @@
 
 ## Python Extension
 
-First, install the Python extension from the [marketplace](https://marketplace.visualstudio.com/items?itemName=ms-python.python).
-Typically, the extension will detect and select the Pixi default environment automatically as soon as you open a Python file.
-In case it doesn't or you want to select a different environment, you can open the environment selector to select the environment of your choice.
+The [Python extension](https://marketplace.visualstudio.com/items?itemName=ms-python.python) can automatically detect Pixi environments via the `.pixi` folder in your project root.
+
+!!! tip "Manual Selection"
+    If it isn't detected automatically, you can manually select the interpreter (e.g. `.pixi/envs/default/bin/python`) via the **Python: Select Interpreter** command in the Command Palette.
 
 ![VSCode Python Environment Selector](../../assets/vscode-python-env-selector.png)
+
+## Pixi VS Code Extension
+
+For a more integrated experience, use the community-maintained [Pixi extension](https://marketplace.visualstudio.com/items?itemName=renan-r-santos.pixi-code). It adds:
+
+- **Task Explorer**: Run Pixi tasks directly from the UI.
+- **Dependency Management**: Add or remove packages without leaving the editor.
+
+## Tips & Tricks
+
+### C++ Support (CMake)
+
+For C++ projects, use [CMake Presets](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html) to point to the Pixi environment tools (like `ninja` or `clang`).
 
 ## Direnv Extension
 
@@ -28,7 +42,7 @@ Then, create the following two files in the `.devcontainer` directory:
 ```dockerfile title=".devcontainer/Dockerfile"
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.65.0
+ARG PIXI_VERSION=v0.67.1
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \

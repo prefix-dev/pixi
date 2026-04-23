@@ -28,11 +28,11 @@ use pixi_build_types::{
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
 };
-use rattler_build::{
+use rattler_build_core::{
     DiscoveredOutput,
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
-    metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
+    metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
     tool_configuration::Configuration,
     types::{PackageIdentifier, PackagingSettings},
 };
@@ -431,7 +431,6 @@ impl Protocol for RattlerBuildBackend {
                 store_recipe: false,
                 force_colors: true,
                 sandbox_config: None,
-                debug: Debug::new(false),
                 exclude_newer: None,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
@@ -445,7 +444,10 @@ impl Protocol for RattlerBuildBackend {
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
             build_summary: Arc::default(),
-            system_tools: Default::default(),
+            system_tools: rattler_build_core::system_tools::SystemTools::new(
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+            ),
             extra_meta: None,
         };
 
@@ -608,7 +610,7 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
                         match spec {
                             pixi_build_types::PackageSpec::Source(source_spec) => {
                                 // Source dependencies are allowed - they represent workspace packages
-                                workspace_deps.insert(name, source_spec);
+                                workspace_deps.insert(name.to_string(), source_spec);
                             }
                             pixi_build_types::PackageSpec::Binary(_) => {
                                 // Binary dependencies must be specified in the recipe, not here
@@ -678,7 +680,7 @@ mod tests {
     use fs_err as fs;
     use pixi_build_backend::utils::test::conda_outputs_snapshot;
     use pixi_build_types::{VariantValue, procedures::initialize::InitializeParams};
-    use rattler_build::console_utils::LoggingOutputHandler;
+    use rattler_build_core::console_utils::LoggingOutputHandler;
     use tempfile::tempdir;
 
     use super::*;
@@ -989,13 +991,14 @@ numpy:
 
     async fn try_initialize(
         manifest_path: impl AsRef<Path>,
+        config: Option<RattlerBuildBackendConfig>,
     ) -> miette::Result<RattlerBuildBackend> {
         RattlerBuildBackend::new(
             None,
             manifest_path.as_ref(),
             LoggingOutputHandler::default(),
             None,
-            RattlerBuildBackendConfig::default(),
+            config.unwrap_or_default(),
         )
     }
 
@@ -1005,7 +1008,7 @@ numpy:
         let recipe = tmp.path().join("recipe.yaml");
         fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
-            try_initialize(&tmp.path().join("pixi.toml"))
+            try_initialize(&tmp.path().join("pixi.toml"), None)
                 .await
                 .unwrap()
                 .recipe_source
@@ -1013,7 +1016,11 @@ numpy:
             recipe
         );
         assert_eq!(
-            try_initialize(&recipe).await.unwrap().recipe_source.path,
+            try_initialize(&recipe, None)
+                .await
+                .unwrap()
+                .recipe_source
+                .path,
             recipe
         );
 
@@ -1021,7 +1028,7 @@ numpy:
         let recipe = tmp.path().join("recipe.yml");
         fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
-            try_initialize(&tmp.path().join("pixi.toml"))
+            try_initialize(&tmp.path().join("pixi.toml"), None)
                 .await
                 .unwrap()
                 .recipe_source
@@ -1029,7 +1036,11 @@ numpy:
             recipe
         );
         assert_eq!(
-            try_initialize(&recipe).await.unwrap().recipe_source.path,
+            try_initialize(&recipe, None)
+                .await
+                .unwrap()
+                .recipe_source
+                .path,
             recipe
         );
 
@@ -1039,7 +1050,7 @@ numpy:
         fs::create_dir(&recipe_dir).unwrap();
         fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
-            try_initialize(&tmp.path().join("pixi.toml"))
+            try_initialize(&tmp.path().join("pixi.toml"), None)
                 .await
                 .unwrap()
                 .recipe_source
@@ -1053,7 +1064,62 @@ numpy:
         fs::create_dir(&recipe_dir).unwrap();
         fs::write(&recipe, FAKE_RECIPE).unwrap();
         assert_eq!(
-            try_initialize(&tmp.path().join("pixi.toml"))
+            try_initialize(&tmp.path().join("pixi.toml"), None)
+                .await
+                .unwrap()
+                .recipe_source
+                .path,
+            recipe
+        );
+
+        // Test custom recipe path (relative)
+        let tmp = tempdir().unwrap();
+        let custom_recipe = tmp.path().join("custom").join("my_recipe.yaml");
+        fs::create_dir_all(custom_recipe.parent().unwrap()).unwrap();
+        fs::write(&custom_recipe, FAKE_RECIPE).unwrap();
+        let config = RattlerBuildBackendConfig {
+            recipe: Some(PathBuf::from("custom/my_recipe.yaml")),
+            ..Default::default()
+        };
+        assert_eq!(
+            try_initialize(&tmp.path().join("pixi.toml"), Some(config))
+                .await
+                .unwrap()
+                .recipe_source
+                .path,
+            custom_recipe
+        );
+
+        // Test custom recipe path overrides autodiscovery
+        let tmp = tempdir().unwrap();
+        let default_recipe = tmp.path().join("recipe.yaml");
+        fs::write(&default_recipe, FAKE_RECIPE).unwrap();
+        let custom_recipe = tmp.path().join("custom").join("recipe.yaml");
+        fs::create_dir_all(custom_recipe.parent().unwrap()).unwrap();
+        fs::write(&custom_recipe, FAKE_RECIPE).unwrap();
+        let config = RattlerBuildBackendConfig {
+            recipe: Some(PathBuf::from("custom/recipe.yaml")),
+            ..Default::default()
+        };
+        assert_eq!(
+            try_initialize(&tmp.path().join("pixi.toml"), Some(config))
+                .await
+                .unwrap()
+                .recipe_source
+                .path,
+            custom_recipe
+        );
+
+        // Test custom recipe path (absolute)
+        let tmp = tempdir().unwrap();
+        let recipe = tmp.path().join("abs_recipe.yaml");
+        fs::write(&recipe, FAKE_RECIPE).unwrap();
+        let config = RattlerBuildBackendConfig {
+            recipe: Some(recipe.clone()),
+            ..Default::default()
+        };
+        assert_eq!(
+            try_initialize(&tmp.path().join("pixi.toml"), Some(config))
                 .await
                 .unwrap()
                 .recipe_source
@@ -1137,6 +1203,14 @@ numpy:
                 String::from("pkg/dir/**")
             ])
         );
+
+        // Case 3: source is a file in a subdirectory (custom recipe path)
+        let custom_dir = base_path.join("custom");
+        let custom_recipe = custom_dir.join("my_recipe.yaml");
+        fs::create_dir_all(&custom_dir).unwrap();
+        fs::write(&custom_recipe, "fake").unwrap();
+        let globs = super::build_input_globs(base_path, &custom_recipe, None, Vec::new()).unwrap();
+        assert_eq!(globs, BTreeSet::from([String::from("custom/**")]));
     }
 
     #[test]
@@ -1218,6 +1292,14 @@ numpy:
         let path = PathBuf::from("/foo/bar/recipe.yaml");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
         assert_eq!(globs, BTreeSet::from([String::from("bar/recipe.yaml")]));
+        // Case: custom recipe in nested subdir
+        let manifest_root = PathBuf::from("/tmp/xxx");
+        let path = PathBuf::from("/tmp/xxx/custom/my_recipe.yaml");
+        let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
+        assert_eq!(
+            globs,
+            BTreeSet::from([String::from("custom/my_recipe.yaml")])
+        );
     }
 
     #[test]

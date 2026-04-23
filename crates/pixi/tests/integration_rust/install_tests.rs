@@ -1331,6 +1331,7 @@ async fn test_multiple_prefix_update() {
         current_platform,
         virtual_packages,
         variant_config,
+        None,
         command_dispatcher,
     );
 
@@ -1524,6 +1525,142 @@ async fn test_exclude_newer() {
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
         "foo ==1"
+    ));
+}
+
+#[tokio::test]
+async fn test_exclude_newer_per_package_dependency_override() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-per-package-dependency-override"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+
+    [exclude-newer]
+    foo = "0d"
+    "#,
+        channel = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==2"
+    ));
+}
+
+#[tokio::test]
+async fn test_exclude_newer_url_channel_override() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-url-channel-override"
+    channels = [{{ channel = "{channel}", exclude-newer = "0d" }}]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==2"
+    ));
+}
+
+#[tokio::test]
+async fn test_exclude_newer_per_package_constraint_override() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("bar", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("bar", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .with_dependency("bar >=1")
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-per-package-constraint-override"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+
+    [exclude-newer]
+    bar = "0d"
+    "#,
+        channel = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "bar ==2"
     ));
 }
 

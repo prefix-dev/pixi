@@ -8,7 +8,7 @@ use futures::{FutureExt, StreamExt};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::{PinnedSourceSpec, VariantValue};
-use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
+use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, MatchSpec, PackageNameMatcher, ParseStrictness,
 };
@@ -17,7 +17,7 @@ use thiserror::Error;
 use crate::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
     PackageNotProvidedError, SourceCheckoutError, SourceMetadataSpec,
-    executor::ExecutorFutures,
+    executor::CancellationAwareFutures,
     source_metadata::{CycleEnvironment, SourceMetadata, SourceMetadataError},
 };
 
@@ -28,6 +28,7 @@ pub struct SourceMetadataCollector {
     channel_config: ChannelConfig,
     channels: Vec<ChannelUrl>,
     build_environment: BuildEnvironment,
+    exclude_newer: Option<ResolvedExcludeNewer>,
     enabled_protocols: EnabledProtocols,
     variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
     variant_files: Option<Vec<PathBuf>>,
@@ -73,6 +74,7 @@ impl SourceMetadataCollector {
         channel_urls: Vec<ChannelUrl>,
         channel_config: ChannelConfig,
         build_environment: BuildEnvironment,
+        exclude_newer: Option<ResolvedExcludeNewer>,
         variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
         variant_files: Option<Vec<PathBuf>>,
         enabled_protocols: EnabledProtocols,
@@ -82,6 +84,7 @@ impl SourceMetadataCollector {
             command_queue,
             channels: channel_urls,
             build_environment,
+            exclude_newer,
             enabled_protocols,
             channel_config,
             variant_configuration,
@@ -94,7 +97,7 @@ impl SourceMetadataCollector {
         self,
         specs: impl IntoIterator<Item = (rattler_conda_types::PackageName, SourceSpec)>,
     ) -> Result<CollectedSourceMetadata, CommandDispatcherError<CollectSourceMetadataError>> {
-        let mut source_futures = ExecutorFutures::new(self.command_queue.executor());
+        let mut source_futures = CancellationAwareFutures::new(self.command_queue.executor());
         let mut specs = specs
             .into_iter()
             .map(|(name, spec)| (name, spec, Vec::new()))
@@ -113,7 +116,9 @@ impl SourceMetadataCollector {
                 }
             }
 
-            // Wait for the next future to finish.
+            // Wait for the next future to finish. Cancelled results are
+            // transparently skipped by the `CancellationAwareFutures` adapter
+            // Only real errors or successes arrive here.
             let Some(source_metadata) = source_futures.next().await else {
                 // No more pending futures, we are done.
                 return Ok(result);
@@ -129,7 +134,7 @@ impl SourceMetadataCollector {
                     SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
                 for depend in &record.package_record.depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
-                        let (Some(PackageNameMatcher::Exact(name)), nameless_spec) =
+                        let (PackageNameMatcher::Exact(name), nameless_spec) =
                             spec.clone().into_nameless()
                         else {
                             unimplemented!(
@@ -196,6 +201,7 @@ impl SourceMetadataCollector {
                     channel_config: self.channel_config.clone(),
                     channels: self.channels.clone(),
                     build_environment: self.build_environment.clone(),
+                    exclude_newer: self.exclude_newer.clone(),
                     variant_configuration: self.variant_configuration.clone(),
                     variant_files: self.variant_files.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),

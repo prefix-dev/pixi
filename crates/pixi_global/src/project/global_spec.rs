@@ -51,14 +51,10 @@ impl GlobalSpec {
         channel_config: &rattler_conda_types::ChannelConfig,
     ) -> Result<Self, FromMatchSpecError> {
         let (name_matcher, nameless_spec) = match_spec.into_nameless();
-        if let Some(name_matcher) = name_matcher {
-            let name = name_matcher
-                .as_exact()
-                .ok_or_else(|| FromMatchSpecError::NameRequired(Box::new(nameless_spec.clone())))?;
-            let pixi_spec = PixiSpec::from_nameless_matchspec(nameless_spec, channel_config);
-            Ok(GlobalSpec::new(name.clone(), pixi_spec))
-        } else {
-            Err(FromMatchSpecError::NameRequired(Box::new(nameless_spec)))
-        }
+        let name = name_matcher
+            .as_exact()
+            .ok_or_else(|| FromMatchSpecError::NameRequired(Box::new(nameless_spec.clone())))?;
+        let pixi_spec = PixiSpec::from_nameless_matchspec(nameless_spec, channel_config);
+        Ok(GlobalSpec::new(name.clone(), pixi_spec))
     }
 }

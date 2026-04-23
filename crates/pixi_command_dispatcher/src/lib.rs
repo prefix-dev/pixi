@@ -41,7 +41,7 @@ mod command_dispatcher;
 mod command_dispatcher_processor;
 mod dev_source_metadata;
 mod discover_backend_cache;
-mod executor;
+pub mod executor;
 mod input_hash;
 mod install_pixi;
 mod instantiate_tool_env;

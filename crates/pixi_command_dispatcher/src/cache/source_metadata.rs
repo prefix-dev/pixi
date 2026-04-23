@@ -7,7 +7,7 @@ use crate::{BuildEnvironment, cache::common::VersionedMetadata};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_path::AbsPathBuf;
-use pixi_spec::SourceLocationSpec;
+use pixi_spec::{ResolvedExcludeNewer, SourceLocationSpec};
 use pixi_variant::VariantValue;
 use rattler_conda_types::{ChannelUrl, PackageName, PackageRecord};
 use serde::{Deserialize, Serialize};
@@ -55,6 +55,9 @@ pub struct SourceMetadataCacheShard {
     /// The build environment
     pub build_environment: BuildEnvironment,
 
+    /// Exclude packages newer than the configured cutoffs when solving backend environments.
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
+
     /// The protocols that are enabled for source packages
     pub enabled_protocols: EnabledProtocols,
 
@@ -90,6 +93,7 @@ impl CacheKey for SourceMetadataCacheShard {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
         self.build_environment.build_platform.hash(&mut hasher);
+        self.exclude_newer.hash(&mut hasher);
 
         let mut build_virtual_packages = self.build_environment.build_virtual_packages.clone();
         build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));

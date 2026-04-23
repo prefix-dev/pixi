@@ -6,7 +6,6 @@ mod discovery;
 mod environment;
 mod environments;
 mod error;
-mod exclude_newer;
 mod feature;
 mod features_ext;
 mod has_features_iter;
@@ -30,10 +29,10 @@ pub use activation::Activation;
 pub use build_system::BuildBackend;
 pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
-pub use dependencies::{CondaDependencies, PyPiDependencies};
+pub use dependencies::{CondaConstraints, CondaDependencies, PyPiDependencies};
 pub use discovery::{
-    DiscoveryStart, ExplicitManifestError, LoadManifestsError, Manifests, WorkspaceDiscoverer,
-    WorkspaceDiscoveryError,
+    DiscoveryStart, ExplicitManifestError, InvalidRequiresPixiError, LoadManifestsError, Manifests,
+    PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
 pub use environment::{Environment, EnvironmentName};
 pub use error::TomlError;

@@ -11,4 +11,4 @@ pub mod signals;
 
 pub use environment::InstallFilter;
 pub use lock_file::UpdateLockFileOptions;
-pub use workspace::{DependencyType, Workspace, WorkspaceLocator};
+pub use workspace::{DependencyType, Workspace, WorkspaceLocator, WorkspaceLocatorError};

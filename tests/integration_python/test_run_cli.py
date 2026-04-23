@@ -916,10 +916,11 @@ def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) ->
     }
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
-    # If the non existing argument is passed to a filter, minijinja doesn't error
-    # Even though we don't like this behaviour we want to make sure that it stays that way
+    # Non existing arguments with filters should also fail
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "mixed_args", "test.py"],
+        ExitCode.FAILURE,
+        stderr_contains="this part can't be replaced",
     )
 
 

@@ -11,9 +11,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use pixi_command_dispatcher::{
-    CommandDispatcherError, MissingChannelError, SolvePixiEnvironmentError::MissingChannel,
-};
+use pixi_command_dispatcher::{MissingChannelError, SolvePixiEnvironmentError::MissingChannel};
 use pixi_config::PinningStrategy;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
@@ -200,7 +198,11 @@ impl WorkspaceMut {
     /// to continue the modification.
     async fn save_inner(&mut self) -> Result<(), std::io::Error> {
         let new_contents = self.workspace_manifest_document.to_string();
-        fs_err::tokio::write(&self.workspace().workspace.provenance.path, new_contents).await?;
+        pixi_utils::atomic_write::atomic_write(
+            &self.workspace().workspace.provenance.path,
+            new_contents,
+        )
+        .await?;
         self.modified = true;
         Ok(())
     }
@@ -218,7 +220,11 @@ impl WorkspaceMut {
         let mut workspace = self.workspace.take().expect("workspace is not available");
         if let Some(original) = self.original.take() {
             workspace.workspace.value = original.manifest;
-            fs_err::tokio::write(&workspace.workspace.provenance.path, original.source).await?;
+            pixi_utils::atomic_write::atomic_write(
+                &workspace.workspace.provenance.path,
+                original.source,
+            )
+            .await?;
         }
 
         Ok(workspace)
@@ -381,11 +387,11 @@ impl WorkspaceMut {
             .map_err(|mut e| {
                 if let Some(SolveCondaEnvironmentError::SolveFailed { source, .. }) =
                     e.downcast_mut::<SolveCondaEnvironmentError>()
-                    && let CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
+                    && let MissingChannel(MissingChannelError {
                         package: _,
                         channel,
                         advice,
-                    })) = source.as_mut()
+                    }) = source.as_mut()
                 {
                     *advice = Some(format!(
                         "To add the missing channel to a workspace, use:\n\n  {}",
@@ -475,12 +481,7 @@ impl WorkspaceMut {
     ) -> Result<(), miette::Error> {
         for spec in conda_deps {
             // Determine the name of the package to add
-            let (Some(name_matcher), spec) = spec.clone().into_nameless() else {
-                miette::bail!(
-                    "{} does not support wildcard dependencies",
-                    pixi_utils::executable_name()
-                );
-            };
+            let (name_matcher, spec) = spec.clone().into_nameless();
             let Some(name) = name_matcher.as_exact() else {
                 miette::bail!(
                     "{} does not support wildcard dependencies",
@@ -672,7 +673,7 @@ impl Drop for WorkspaceMut {
             && self.modified
         {
             let path = workspace.workspace.provenance.path;
-            if let Err(err) = fs_err::write(&path, &original.source) {
+            if let Err(err) = pixi_utils::atomic_write::atomic_write_sync(&path, &original.source) {
                 tracing::error!(
                     "Failed to revert manifest changes to {}: {}",
                     path.display(),

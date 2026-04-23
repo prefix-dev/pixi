@@ -8,6 +8,7 @@ on:
     paths:
       - "pixi-build-backends/**"
       - "crates/pixi_build_python/**"
+      - "crates/pixi_build_r/**"
       - "crates/pixi_build_rattler_build/**"
       - "crates/pixi_build_cmake/**"
       - "crates/pixi_build_rust/**"
@@ -37,10 +38,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - target: linux-64
-            os: ubuntu-latest
-          - target: linux-aarch64
-            os: ubuntu-latest
           - target: win-64
             os: windows-latest
           - target: osx-64
@@ -53,11 +50,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           environments: backends-release
       - name: Configure sccache
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');
@@ -87,7 +84,7 @@ jobs:
         run: rm -rf output/build_cache
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: conda-packages-${{ matrix.target }}
           path: output/**/*.conda
@@ -106,8 +103,70 @@ jobs:
           # Wait a moment for handles to be released
           Start-Sleep -Seconds 2
 
+  build-linux:
+    if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'release:backends')}}
+    timeout-minutes: 80
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      REPO_NAME: "prefix-dev/pixi"
+    strategy:
+      matrix:
+        include:
+          - target: linux-64
+          - target: linux-aarch64
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
+        with:
+          environments: backends-release
+      - name: Set package version environment variables
+        shell: bash
+        run: pixi run -e backends-release generate-versions >> $GITHUB_ENV
+
+      - name: Build all backends for ${{ matrix.target }}
+        shell: bash
+        env:
+          RATTLER_BUILD_ENABLE_GITHUB_INTEGRATION: "true"
+          RATTLER_BUILD_COLOR: "always"
+        run: |
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -v "${{ github.workspace }}:${{ github.workspace }}" \
+            -v "$HOME/.pixi:$HOME/.pixi" \
+            -v "$HOME/.cache:$HOME/.cache" \
+            -w "${{ github.workspace }}" \
+            -e HOME="$HOME" \
+            -e RATTLER_BUILD_ENABLE_GITHUB_INTEGRATION \
+            -e RATTLER_BUILD_COLOR \
+            -e PIXI_BUILD_CMAKE_VERSION \
+            -e PIXI_BUILD_MOJO_VERSION \
+            -e PIXI_BUILD_PYTHON_VERSION \
+            -e PIXI_BUILD_R_VERSION \
+            -e PIXI_BUILD_RATTLER_BUILD_VERSION \
+            -e PIXI_BUILD_RUST_VERSION \
+            -e PY_PIXI_BUILD_BACKEND_VERSION \
+            -e PIXI_BUILD_ROS_VERSION \
+            quay.io/pypa/manylinux2014_x86_64 \
+            "$HOME/.pixi/bin/pixi" run -e backends-release build-backend-packages ${{ matrix.target }}
+
+      - name: Remove build cache
+        shell: bash
+        run: rm -rf output/build_cache
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: conda-packages-${{ matrix.target }}
+          path: output/**/*.conda
+
   upload:
-    needs: build
+    needs: [build, build-linux]
     runs-on: ubuntu-latest
     if: github.repository == 'prefix-dev/pixi'
     permissions:
@@ -118,13 +177,13 @@ jobs:
         with:
           persist-credentials: false
       - name: Download all conda packages
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: conda-packages-*
           path: conda-packages
           merge-multiple: true
           run-id: ${{ github.run_id }}
-      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           environments: backends-release
       - name: Upload packages
