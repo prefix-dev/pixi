@@ -11,6 +11,7 @@ mod global_specs;
 pub mod install;
 mod list;
 mod remove;
+mod shell_init;
 mod shortcut;
 mod sync;
 mod tree;
@@ -39,6 +40,8 @@ pub enum Command {
     #[command(subcommand)]
     Shortcut(shortcut::SubCommand),
     Update(update::Args),
+    /// Configure your shell to put the pixi global bin directory on PATH
+    ShellInit(shell_init::Args),
     #[command(hide = true)]
     Upgrade(upgrade::Args),
     #[clap(alias = "ua")]
@@ -71,6 +74,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Expose(subcommand) => expose::execute(subcommand).await?,
         Command::Shortcut(subcommand) => shortcut::execute(subcommand).await?,
         Command::Update(args) => update::execute(args).await?,
+        Command::ShellInit(args) => shell_init::execute(args).await?,
         Command::Upgrade(args) => upgrade::execute(args).await?,
         Command::UpgradeAll(args) => upgrade_all::execute(args).await?,
         Command::Tree(args) => tree::execute(args).await?,
