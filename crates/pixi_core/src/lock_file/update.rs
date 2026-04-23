@@ -2287,12 +2287,9 @@ impl<'p> UpdateContext<'p> {
                 let platform_str = platform.to_string();
                 if let Some(records) = self.take_latest_repodata_records(&environment, platform) {
                     for record in records.into_inner() {
+                        let data = record.into_conda_package_data(&mut builder, project.root());
                         builder
-                            .add_conda_package(
-                                &environment_name,
-                                &platform_str,
-                                record.into_conda_package_data(project.root()),
-                            )
+                            .add_conda_package(&environment_name, &platform_str, data)
                             .expect("platform was registered");
                     }
                 }
