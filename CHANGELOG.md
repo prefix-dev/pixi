@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.67.2] - 2026-04-23
+#### Added
+
+- Add HTTP timeout, retries, and concurrency env var support by @wolfv in [#5581](https://github.com/prefix-dev/pixi/pull/5581)
+- Support PIXI_NO_INSTALL environment variable by @Shardz4 in [#5919](https://github.com/prefix-dev/pixi/pull/5919)
+
+#### Changed
+
+- Clarify missing pyproject error by @lawrence3699 in [#5922](https://github.com/prefix-dev/pixi/pull/5922)
+
+#### Documentation
+
+- Adding a starting point for robotics users by @ruben-arts in [#5941](https://github.com/prefix-dev/pixi/pull/5941)
+
+#### New Contributors
+* @lawrence3699 made their first contribution in [#5922](https://github.com/prefix-dev/pixi/pull/5922)
+
 ### [0.67.1] - 2026-04-20
 #### Changed
 
