@@ -10,4 +10,6 @@ channels = []
 platforms = []
 
 [dependency-groups]
-cuda = ["numpy>=1.20.0"]
+cuda = [
+    "numpy>=1.20.0",
+]
