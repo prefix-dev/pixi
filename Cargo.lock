@@ -5788,6 +5788,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
+ "nix 0.29.0",
  "pixi_consts",
  "rattler",
  "rattler_conda_types",
