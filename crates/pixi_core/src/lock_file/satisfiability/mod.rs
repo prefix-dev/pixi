@@ -33,9 +33,9 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::PixiPypiSource;
 use pixi_record::{
-    DevSourceRecord, LockedGitUrl, ParseLockFileError, PinnedBuildSourceSpec, PinnedSourceSpec,
-    PixiRecord, SourceMismatchError, SourceRecord, SourceRecordData, UnresolvedPixiRecord,
-    UnresolvedSourceRecord, VariantValue,
+    DevSourceRecord, LockFileResolver, LockedGitUrl, ParseLockFileError, PinnedBuildSourceSpec,
+    PinnedSourceSpec, PixiRecord, SourceMismatchError, SourceRecord, SourceRecordData,
+    UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue,
 };
 use pixi_spec::{
     PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError, Subdirectory,
@@ -1033,6 +1033,10 @@ pub struct VerifySatisfiabilityContext<'a> {
     /// Cache for static metadata extracted from pyproject.toml files.
     /// This is shared across platforms since static metadata is platform-independent.
     pub static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+    /// Resolver for the lock-file being verified. Built once at the top of
+    /// `find_unsatisfiable_targets` and shared across all per-platform
+    /// contexts.
+    pub resolver: &'a LockFileResolver,
 }
 
 pub type PlatformSatisfiabilityResult = Result<
@@ -1120,6 +1124,7 @@ pub async fn verify_platform_satisfiability(
     // Read as UnresolvedPixiRecord first, then resolve any partial source records.
     let mut unresolved_records: Vec<UnresolvedPixiRecord> = Vec::new();
     let mut pypi_packages: Vec<UnresolvedPypiRecord> = Vec::new();
+    let resolver = ctx.resolver;
     let lock_platform = locked_environment
         .lock_file()
         .platform(&ctx.platform.to_string());
@@ -1129,23 +1134,10 @@ pub async fn verify_platform_satisfiability(
         .flatten()
     {
         match package {
-            LockedPackage::Conda(conda) => {
-                let url = conda.location().clone();
-                let record = match UnresolvedPixiRecord::from_conda_package_data(
-                    conda.clone(),
-                    ctx.project_root,
-                    // TODO: resolve build/host packages once the lock-file
-                    // exposes the package table publicly.
-                    Vec::new(),
-                    Vec::new(),
-                ) {
-                    Ok(record) => record,
-                    Err(e) => {
-                        return Err(CommandDispatcherError::Failed(Box::new(
-                            PlatformUnsat::CorruptedEntry(url.to_string(), e),
-                        )));
-                    }
-                };
+            LockedPackage::Conda(_) => {
+                let record = resolver
+                    .get_for_package(package)
+                    .expect("conda package from lock file not found in resolver");
                 unresolved_records.push(record);
             }
             LockedPackage::Pypi(pypi) => {
@@ -1271,22 +1263,10 @@ pub async fn verify_platform_satisfiability(
                 .into_iter()
                 .flatten()
             {
-                if let LockedPackage::Conda(conda) = package {
-                    let url = conda.location().clone();
-                    let record = UnresolvedPixiRecord::from_conda_package_data(
-                        conda.clone(),
-                        ctx.project_root,
-                        // TODO: resolve build/host packages once the lock-file
-                        // exposes the package table publicly.
-                        Vec::new(),
-                        Vec::new(),
-                    )
-                    .map_err(|e| {
-                        CommandDispatcherError::Failed(Box::new(PlatformUnsat::CorruptedEntry(
-                            url.to_string(),
-                            e,
-                        )))
-                    })?;
+                if let LockedPackage::Conda(_) = package {
+                    let record = resolver
+                        .get_for_package(package)
+                        .expect("conda package from lock file not found in resolver");
                     // Partial source records (e.g. packages that haven't
                     // been built yet) cannot be resolved. Skip them — only
                     // fully resolved records are needed as build
@@ -3197,8 +3177,8 @@ pub fn verify_solve_group_satisfiability(
 
     // Group all conda requested packages and pypi requested packages
     for env in environments {
-        expected_conda_packages.extend(env.expected_conda_packages.into_iter());
-        conda_packages_used_by_pypi.extend(env.conda_packages_used_by_pypi.into_iter());
+        expected_conda_packages.extend(env.expected_conda_packages);
+        conda_packages_used_by_pypi.extend(env.conda_packages_used_by_pypi);
     }
 
     // Check if all conda packages are also requested by another conda package.
@@ -3336,6 +3316,9 @@ mod tests {
             "solve group '{0}' does not satisfy the requirements of the project for platform '{1}'"
         )]
         SolveGroupUnsat(String, Platform, #[source] SolveGroupUnsat),
+
+        #[error("failed to build the lock-file resolver: {0}")]
+        ResolverBuild(String),
     }
 
     async fn verify_lockfile_satisfiability(
@@ -3379,6 +3362,9 @@ mod tests {
         let static_metadata_cache: DashMap<PathBuf, pypi_metadata::LocalPackageMetadata> =
             DashMap::new();
 
+        let resolver = LockFileResolver::build(lock_file, project.root())
+            .map_err(|err| LockfileUnsat::ResolverBuild(err.to_string()))?;
+
         // Verify individual environment satisfiability
         for env in project.environments() {
             let locked_env = lock_file
@@ -3398,6 +3384,7 @@ mod tests {
                     project_env_vars: project.env_vars().clone(),
                     build_caches: &build_caches,
                     static_metadata_cache: &static_metadata_cache,
+                    resolver: &resolver,
                 };
                 let (verified_env, _locked_pypi) = verify_platform_satisfiability(&ctx, locked_env)
                     .await
