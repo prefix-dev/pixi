@@ -118,6 +118,8 @@ static ENV_NO_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
 static USE_PROXY_FROM_ENV: LazyLock<bool> =
     LazyLock::new(|| (*ENV_HTTPS_PROXY).is_some() || (*ENV_HTTP_PROXY).is_some());
 
+static NETFS_REDIRECT_WARN: std::sync::Once = std::sync::Once::new();
+
 /// Get pixi home directory, default to `$HOME/.pixi`
 ///
 /// It may be overridden by the `PIXI_HOME` environment variable.
@@ -143,18 +145,139 @@ pub fn pixi_home() -> Option<PathBuf> {
 /// - If that is not set, the default cache directory of
 ///   [`rattler::default_cache_dir`] is used.
 pub fn get_cache_dir() -> miette::Result<PathBuf> {
-    std::env::var("PIXI_CACHE_DIR")
-        .ok()
-        .map(PathBuf::from)
-        .or_else(|| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from).ok())
-        .or_else(|| {
-            let pixi_cache_dir = dirs::cache_dir().map(|d| d.join(consts::PIXI_DIR));
-            // Only use the xdg cache pixi directory when it exists
-            pixi_cache_dir.and_then(|d| d.exists().then_some(d))
-        })
-        .or_else(|| rattler::default_cache_dir().ok())
+    resolve_cache_dir()
+        .map(|(path, _)| path)
         .ok_or_else(|| miette::miette!("could not determine default cache directory"))
 }
+
+/// How the cache directory was resolved.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CacheDirSource {
+    /// User explicitly pinned via `PIXI_CACHE_DIR` or `RATTLER_CACHE_DIR`.
+    UserPinned,
+    /// XDG default / rattler default
+    Default,
+}
+
+/// Return the cache dir and how it was resolved.
+fn resolve_cache_dir() -> Option<(PathBuf, CacheDirSource)> {
+    if let Ok(dir) = std::env::var("PIXI_CACHE_DIR") {
+        return Some((PathBuf::from(dir), CacheDirSource::UserPinned));
+    }
+    if let Ok(dir) = std::env::var("RATTLER_CACHE_DIR") {
+        return Some((PathBuf::from(dir), CacheDirSource::UserPinned));
+    }
+    if let Some(xdg) = dirs::cache_dir()
+        .map(|d| d.join(consts::PIXI_DIR))
+        .and_then(|d| d.exists().then_some(d))
+    {
+        return Some((xdg, CacheDirSource::Default));
+    }
+    rattler::default_cache_dir()
+        .ok()
+        .map(|p| (p, CacheDirSource::Default))
+}
+
+/// Returns `true` when `path` (or its first existing ancestor) lives on a
+/// network-backed filesystem.
+pub fn is_network_filesystem(path: &Path) -> bool {
+    if std::env::var_os("PIXI_DISABLE_NETFS_REDIRECT").is_some() {
+        return false;
+    }
+    if std::env::var_os("PIXI_FORCE_NETFS_REDIRECT").is_some() {
+        return true;
+    }
+    detect_network_filesystem(path).unwrap_or(false)
+}
+
+#[cfg(target_os = "linux")]
+fn detect_network_filesystem(path: &Path) -> Option<bool> {
+    use nix::sys::statfs::{
+        AUTOFS_SUPER_MAGIC, CIFS_MAGIC_NUMBER, FUSE_SUPER_MAGIC, NFS_SUPER_MAGIC, SMB_SUPER_MAGIC,
+    };
+    let fs = statfs_nearest_existing(path)?.filesystem_type();
+    Some(
+        fs == NFS_SUPER_MAGIC
+            || fs == SMB_SUPER_MAGIC
+            || fs == CIFS_MAGIC_NUMBER
+            || fs == FUSE_SUPER_MAGIC
+            || fs == AUTOFS_SUPER_MAGIC,
+    )
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn detect_network_filesystem(path: &Path) -> Option<bool> {
+    let stat = statfs_nearest_existing(path)?;
+    Some(matches!(
+        stat.filesystem_type_name(),
+        "nfs" | "smbfs" | "webdav" | "afpfs" | "macfuse" | "osxfuse"
+    ))
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "ios")))]
+fn detect_network_filesystem(_path: &Path) -> Option<bool> {
+    None
+}
+
+#[cfg(unix)]
+fn statfs_nearest_existing(path: &Path) -> Option<nix::sys::statfs::Statfs> {
+    // Walk upward until we find an ancestor that actually exists
+    let mut current = Some(path);
+    while let Some(p) = current {
+        if p.exists() {
+            return nix::sys::statfs::statfs(p).ok();
+        }
+        current = p.parent();
+    }
+    None
+}
+
+/// Returns a directory suitable for node-local scratch caching on HPC nodes.
+///
+/// Prefers scheduler-provided tmp dirs (`SLURM_TMPDIR`, `PBS_JOBFS`,
+/// `SCRATCH`)
+pub fn node_local_scratch_dir() -> PathBuf {
+    for var in ["SLURM_TMPDIR", "PBS_JOBFS", "SCRATCH", "TMPDIR"] {
+        if let Some(dir) = std::env::var_os(var) {
+            let path = PathBuf::from(dir);
+            if !detect_network_filesystem(&path).unwrap_or(false) {
+                return path;
+            }
+        }
+    }
+    std::env::temp_dir()
+}
+
+/// Returns a cache sub-directory to use even when the pixi cache root
+/// lives on a network filesystem (NFS, SMB/CIFS, FUSE, autofs)
+pub fn netfs_safe_cache_subdir(subdir: &str) -> miette::Result<PathBuf> {
+    let (base, source) = resolve_cache_dir()
+        .ok_or_else(|| miette::miette!("could not determine default cache directory"))?;
+    let pinned = matches!(source, CacheDirSource::UserPinned);
+    if pinned || !is_network_filesystem(&base) {
+        return Ok(base.join(subdir));
+    }
+
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "pixi".to_string());
+    let redirected = node_local_scratch_dir()
+        .join(format!("pixi-cache-{user}"))
+        .join(subdir);
+
+    let original = base.join(subdir);
+    NETFS_REDIRECT_WARN.call_once(|| {
+        tracing::warn!(
+            "cache at {} is on a network filesystem (NFS/SMB/FUSE), \
+            Redirected to {} for this run. Set PIXI_CACHE_DIR to override, \
+             or PIXI_DISABLE_NETFS_REDIRECT=1 to keep the original path.",
+            original.display(),
+            redirected.display()
+        );
+    });
+    Ok(redirected)
+}
+
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {
     /// Path to the file containing the authentication token.
@@ -3022,5 +3145,113 @@ UNUSED = "unused"
                 compression_level: CompressionLevel::Lowest
             }
         );
+    }
+
+    // Serialize env-var-sensitive tests so they don't race against each other.
+    // Parallel cargo-test threads share the process environment, and
+    // netfs_safe_cache_subdir/is_network_filesystem read several env vars.
+    static NETFS_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct ScopedEnv {
+        key: &'static str,
+        prev: Option<std::ffi::OsString>,
+    }
+
+    impl ScopedEnv {
+        fn set(key: &'static str, value: &str) -> Self {
+            let prev = std::env::var_os(key);
+            // SAFETY: tests take NETFS_ENV_LOCK before touching the process env,
+            // so no other thread is reading/writing env simultaneously.
+            unsafe { std::env::set_var(key, value) };
+            Self { key, prev }
+        }
+
+        fn unset(key: &'static str) -> Self {
+            let prev = std::env::var_os(key);
+            // SAFETY: see `set` above.
+            unsafe { std::env::remove_var(key) };
+            Self { key, prev }
+        }
+    }
+
+    impl Drop for ScopedEnv {
+        fn drop(&mut self) {
+            // SAFETY: see `ScopedEnv::set`.
+            unsafe {
+                match &self.prev {
+                    Some(v) => std::env::set_var(self.key, v),
+                    None => std::env::remove_var(self.key),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn netfs_force_redirect_env_wins() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        assert!(is_network_filesystem(&PathBuf::from("/tmp")));
+    }
+
+    #[test]
+    fn netfs_disable_beats_force() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _disable = ScopedEnv::set("PIXI_DISABLE_NETFS_REDIRECT", "1");
+        assert!(!is_network_filesystem(&PathBuf::from("/tmp")));
+    }
+
+    #[test]
+    fn netfs_local_tempdir_is_not_network() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::unset("PIXI_FORCE_NETFS_REDIRECT");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        // CI runners and local dev both have /tmp (or macOS equivalent) on
+        // local disk. If this ever fails the test runner is itself on NFS.
+        assert!(!is_network_filesystem(&std::env::temp_dir()));
+    }
+
+    #[test]
+    fn netfs_safe_cache_subdir_honors_user_pinned_cache_dir() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        // Even with force-redirect set, an explicit user pin must win.
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _pin = ScopedEnv::set("PIXI_CACHE_DIR", "/some/user/path");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+
+        let got = netfs_safe_cache_subdir("conda-pypi-mapping").unwrap();
+        assert_eq!(got, PathBuf::from("/some/user/path/conda-pypi-mapping"));
+    }
+
+    #[test]
+    fn netfs_safe_cache_subdir_redirects_when_network_detected() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+
+        let got = netfs_safe_cache_subdir("conda-pypi-mapping").unwrap();
+
+        // With no user pin, resolve_cache_dir returns a Default source; the
+        // forced netfs flag then routes us to node_local_scratch_dir(). We
+        // don't assert against the un-redirected base because it depends on
+        // the test machine's XDG / rattler default.
+        assert!(got.ends_with("conda-pypi-mapping"));
+        assert!(got.starts_with(node_local_scratch_dir()));
+    }
+
+    #[test]
+    fn netfs_safe_cache_subdir_passes_through_when_local() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::unset("PIXI_FORCE_NETFS_REDIRECT");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+
+        let got = netfs_safe_cache_subdir("conda-pypi-mapping").unwrap();
+        let expected = get_cache_dir().unwrap().join("conda-pypi-mapping");
+        assert_eq!(got, expected);
     }
 }
