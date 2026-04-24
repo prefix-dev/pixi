@@ -192,17 +192,12 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
             }
             Dist::Source(source_dist) => {
                 match source_dist {
-                    SourceDist::Path(p) => {
-                        // Validate that the path exists.
-                        if !p.install_path.exists() {
-                            return Ok(None);
-                        }
+                    // Validate that the path exists.
+                    SourceDist::Path(p) if !p.install_path.exists() => {
+                        return Ok(None);
                     }
-                    SourceDist::Directory(p) => {
-                        // Validate that the path exists.
-                        if !p.install_path.exists() {
-                            return Ok(None);
-                        }
+                    SourceDist::Directory(p) if !p.install_path.exists() => {
+                        return Ok(None);
                     }
                     _ => {}
                 }
