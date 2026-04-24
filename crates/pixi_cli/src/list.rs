@@ -219,8 +219,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Sort according to the sorting strategy
     match args.sort_by {
         SortBy::Size => {
-            packages_to_output
-                .sort_by(|a, b| a.size_bytes.unwrap_or(0).cmp(&b.size_bytes.unwrap_or(0)));
+            packages_to_output.sort_by_key(|a| a.size_bytes.unwrap_or(0));
         }
         SortBy::Name => {
             packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
