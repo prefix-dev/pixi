@@ -336,7 +336,9 @@ impl<'p> Environment<'p> {
         self.features()
             .map(|f| f.activation_env(platform))
             .fold(IndexMap::new(), |mut acc, env| {
-                acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
+                for (k, v) in env {
+                    acc.entry(k).or_insert(v);
+                }
                 acc
             })
     }
@@ -651,6 +653,43 @@ mod tests {
                 "DEFAULT_VAR".to_string() => "1".to_string(),
             }
         );
+    }
+
+    #[test]
+    fn test_activation_env_feature_precedence() {
+        // First-listed feature should win when multiple features define the same key,
+        // matching task resolution precedence (see issue #5926).
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+            [project]
+            name = "foobar"
+            channels = []
+            platforms = ["linux-64"]
+
+            [activation.env]
+            SHARED_VAR = "default"
+
+            [feature.test1.activation.env]
+            SHARED_VAR = "test1"
+            TEST1_VAR = "1"
+
+            [feature.test2.activation.env]
+            SHARED_VAR = "test2"
+            TEST2_VAR = "2"
+
+            [environments]
+            myenv = ["test1", "test2"]
+            "#,
+        )
+        .unwrap();
+
+        let env = manifest.environment("myenv").unwrap();
+        let activation = env.activation_env(None);
+        // test1 is listed first, so its value must win over test2 and default
+        assert_eq!(activation.get("SHARED_VAR").map(String::as_str), Some("test1"));
+        assert_eq!(activation.get("TEST1_VAR").map(String::as_str), Some("1"));
+        assert_eq!(activation.get("TEST2_VAR").map(String::as_str), Some("2"));
     }
 
     #[test]
