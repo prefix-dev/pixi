@@ -8,7 +8,6 @@ use std::{
 
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
 use parking_lot::RwLock;
-use pixi_command_dispatcher::SourceBuildSpec;
 use pixi_progress::ProgressBarPlacement;
 use rattler_conda_types::RepoDataRecord;
 
@@ -139,14 +138,14 @@ impl BuildDownloadVerifyReporter {
         }
     }
 
-    pub fn on_build_queued(&mut self, spec: &SourceBuildSpec) -> usize {
+    pub fn on_build_queued(&mut self, package_name: &str) -> usize {
         let mut entries = self.entries.write();
         let id = self.next_entry_id;
         self.next_entry_id += 1;
         entries.insert(
             id,
             Entry {
-                name: format!("building {}", spec.name.as_source()),
+                name: format!("building {package_name}"),
                 size: None,
                 state: EntryState::Pending,
             },

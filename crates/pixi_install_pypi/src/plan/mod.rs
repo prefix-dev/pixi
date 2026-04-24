@@ -7,13 +7,13 @@
 //! - Avoiding unnecessary downloads when possible
 //!
 //! The core types include:
-//! - [`PixiInstallPlan`]: The final plan of installation operations
+//! - `PixiInstallPlan`: The final plan of installation operations
 //! - [`InstallPlanner`]: Builds installation plans from the current state
 //! - [`InstallReason`]: Why a specific package is being installed
 //! - [`NeedReinstall`]: Why a package needs reinstallation
 //!
 //! ## Getting Started
-//! Start with the [`PixiInstallPlan`] struct to understand the planning output,
+//! Start with the `PixiInstallPlan` struct to understand the planning output,
 //! then explore [`InstallPlanner`] to see how these plans are built. The
 //! `planner.rs` file contains the main coordination logic.
 //!

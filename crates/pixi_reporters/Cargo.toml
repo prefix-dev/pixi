@@ -31,7 +31,6 @@ tracing = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_git = { workspace = true }
 pixi_progress = { workspace = true }
-pixi_spec = { workspace = true }
 
 # Rattler ecosystem
 rattler = { workspace = true }

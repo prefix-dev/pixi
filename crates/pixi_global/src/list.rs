@@ -274,7 +274,8 @@ pub async fn list_specific_global_environment(
 
     // Sort according to the sorting strategy
     if sort_by_size {
-        packages_to_output.sort_by_key(|a| a.size_bytes.unwrap_or(0));
+        packages_to_output
+            .sort_by(|a, b| a.size_bytes.unwrap_or(0).cmp(&b.size_bytes.unwrap_or(0)));
     } else {
         packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
     }

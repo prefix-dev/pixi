@@ -1,24 +1,21 @@
-use std::{cmp::Ordering, collections::HashMap, sync::Arc};
-
-use futures::{Stream, StreamExt};
-use indicatif::MultiProgress;
-use parking_lot::Mutex;
-use pixi_command_dispatcher::{
-    BackendSourceBuildSpec, ReporterContext, SourceBuildSpec,
-    reporter::{
-        BackendSourceBuildId, BackendSourceBuildReporter, DedupGroupId, SourceBuildId,
-        SourceBuildReporter,
-    },
-};
-use pixi_progress::ProgressBarPlacement;
-use rattler::{install::Transaction, package_cache::CacheReporter};
-use rattler_conda_types::{PrefixRecord, RepoDataRecord};
-use tokio::sync::mpsc::UnboundedReceiver;
-
 use crate::{
     download_verify_reporter::BuildDownloadVerifyReporter,
     main_progress_bar::{MainProgressBar, Tracker},
 };
+use futures::{Stream, StreamExt};
+use indicatif::MultiProgress;
+use parking_lot::Mutex;
+use pixi_command_dispatcher::{
+    BackendSourceBuildSpec, ReporterContext,
+    reporter::{BackendSourceBuildId, BackendSourceBuildReporter},
+};
+use pixi_progress::ProgressBarPlacement;
+use rattler::{install::Transaction, package_cache::CacheReporter};
+use rattler_conda_types::{PrefixRecord, RepoDataRecord};
+use std::sync::LazyLock;
+use std::{cmp::Ordering, collections::HashMap, sync::Arc};
+use tokio::sync::mpsc::UnboundedReceiver;
+use uv_configuration::RAYON_INITIALIZE;
 
 #[derive(Clone)]
 pub struct SyncReporter {
@@ -55,6 +52,11 @@ impl SyncReporter {
             .lock()
             .next_id
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+        // Installing a pixi environment uses rayon. We only want to initialize the
+        // rayon thread pool when we absolutely need it.
+        LazyLock::force(&RAYON_INITIALIZE);
+
         InstallReporter {
             id: TransactionId::new(id),
             combined: Arc::clone(&self.combined_inner),
@@ -77,20 +79,23 @@ impl SyncReporter {
 impl BackendSourceBuildReporter for SyncReporter {
     fn on_queued(
         &self,
-        reason: Option<ReporterContext>,
-        _env: &BackendSourceBuildSpec,
+        _reason: Option<ReporterContext>,
+        env: &BackendSourceBuildSpec,
     ) -> BackendSourceBuildId {
-        // Find the source build that was the reason for this build. This has queued a
-        // task to the progress bar.
-        let Some(ReporterContext::SourceBuild(source_build)) = reason else {
-            unreachable!("SourceBuildReporter should only be called with a SourceBuild context");
-        };
-        BackendSourceBuildId(source_build.0)
+        // Drive the "building <pkg>" progress entry directly from the
+        // backend-build event. The legacy SourceBuildSpec reporter that
+        // used to own this bar has been retired alongside the Key-based
+        // migration.
+        let mut inner = self.combined_inner.lock();
+        let id = inner
+            .preparing_progress_bar
+            .on_build_queued(env.name.as_source());
+        BackendSourceBuildId(id)
     }
 
     fn on_started(
         &self,
-        _id: BackendSourceBuildId,
+        id: BackendSourceBuildId,
         mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     ) {
         // Enable streaming of the logs from the backend
@@ -101,9 +106,12 @@ impl BackendSourceBuildReporter for SyncReporter {
         // Create a sender to buffer the output lines so we can output them later if
         // needed.
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-        if !print_backend_output {
+        {
             let mut inner = self.combined_inner.lock();
-            inner.build_output_receiver = Some(rx);
+            inner.preparing_progress_bar.on_build_start(id.0);
+            if !print_backend_output {
+                inner.build_output_receiver = Some(rx);
+            }
         }
 
         tokio::spawn(async move {
@@ -122,11 +130,12 @@ impl BackendSourceBuildReporter for SyncReporter {
         });
     }
 
-    fn on_finished(&self, _id: BackendSourceBuildId, failed: bool) {
+    fn on_finished(&self, id: BackendSourceBuildId, failed: bool) {
         // Take the stream that receives the output from the backend so we can drop the
         // memory.
         let build_output_receiver = {
             let mut inner = self.combined_inner.lock();
+            inner.preparing_progress_bar.on_build_finished(id.0);
             inner.build_output_receiver.take()
         };
 
@@ -139,67 +148,6 @@ impl BackendSourceBuildReporter for SyncReporter {
                     progress_bar.suspend(|| eprintln!("{line}"));
                 }
             });
-        }
-    }
-}
-
-impl SourceBuildReporter for SyncReporter {
-    fn on_queued(
-        &self,
-        _reason: Option<ReporterContext>,
-        env: &SourceBuildSpec,
-        _dedup_id: DedupGroupId,
-    ) -> SourceBuildId {
-        let mut inner = self.combined_inner.lock();
-        let id = inner.preparing_progress_bar.on_build_queued(env);
-        SourceBuildId(id)
-    }
-
-    fn on_started(
-        &self,
-        id: SourceBuildId,
-        mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
-    ) {
-        // Notify the progress bar that the build has started.
-        let print_backend_output = tracing::event_enabled!(tracing::Level::WARN);
-        let progress_bar = self.multi_progress.clone();
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-
-        {
-            let mut inner = self.combined_inner.lock();
-            inner.preparing_progress_bar.on_build_start(id.0);
-            if !print_backend_output {
-                inner.build_output_receiver = Some(rx);
-            }
-        }
-
-        tokio::spawn(async move {
-            while let Some(line) = backend_output_stream.next().await {
-                if print_backend_output {
-                    progress_bar.suspend(|| eprintln!("{line}"));
-                } else if tx.send(line).is_err() {
-                    break;
-                }
-            }
-        });
-    }
-
-    fn on_finished(&self, id: SourceBuildId, failed: bool) {
-        let build_output_receiver = {
-            let mut inner = self.combined_inner.lock();
-            inner.preparing_progress_bar.on_build_finished(id.0);
-            inner.build_output_receiver.take()
-        };
-
-        if failed {
-            let progress_bar = self.multi_progress.clone();
-            if let Some(mut build_output_receiver) = build_output_receiver {
-                tokio::spawn(async move {
-                    while let Some(line) = build_output_receiver.recv().await {
-                        progress_bar.suspend(|| eprintln!("{line}"));
-                    }
-                });
-            }
         }
     }
 }

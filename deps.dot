@@ -1,0 +1,6 @@
+digraph deps {
+    "BackendOverrideKey(BackendOverride)" [label="BackendOverrideKey(BackendOverride)"];
+    "ChannelConfigKey(ChannelConfig)" [label="ChannelConfigKey(ChannelConfig)"];
+    "EnabledProtocolsKey(EnabledProtocols)" [label="EnabledProtocolsKey(EnabledProtocols)"];
+    "ToolBuildEnvironmentKey(ToolBuildEnvironment)" [label="ToolBuildEnvironmentKey(ToolBuildEnvironment)"];
+}

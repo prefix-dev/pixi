@@ -14,7 +14,6 @@
 use std::sync::{Arc, Mutex};
 
 use derive_more::Display;
-use futures::FutureExt;
 use pixi_compute_engine::{ComputeCtx, ComputeEngine, DataStore, Key};
 
 /// Shared execution log stored in the engine's DataStore.
@@ -69,7 +68,7 @@ impl Key for Aggregator {
             .iter()
             .map(|&(id, yields)| Tag { id, yields })
             .collect();
-        ctx.compute_join(tags, |ctx, tag| ctx.compute(&tag).boxed())
+        ctx.compute_join(tags, async |ctx, tag| ctx.compute(&tag).await)
             .await
     }
 }
@@ -139,21 +138,15 @@ async fn compute2_serial_overrides_completion_order() {
             let log_a = log.clone();
             let log_b = log;
             ctx.compute2(
-                move |_ctx| {
-                    async move {
-                        tokio::task::yield_now().await;
-                        tokio::task::yield_now().await;
-                        log_a.lock().unwrap().push(1);
-                        1u32
-                    }
-                    .boxed()
+                async move |_ctx| {
+                    tokio::task::yield_now().await;
+                    tokio::task::yield_now().await;
+                    log_a.lock().unwrap().push(1);
+                    1u32
                 },
-                move |_ctx| {
-                    async move {
-                        log_b.lock().unwrap().push(2);
-                        2u32
-                    }
-                    .boxed()
+                async move |_ctx| {
+                    log_b.lock().unwrap().push(2);
+                    2u32
                 },
             )
             .await
@@ -222,13 +215,9 @@ async fn sequential_try_compute_join_short_circuits() {
         type Value = Result<Vec<u32>, &'static str>;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
             let log = ctx.global_data().execution_log().clone();
-            ctx.try_compute_join(vec![1u32, 2, 3], |_ctx, id| {
-                let log = log.clone();
-                async move {
-                    log.lock().unwrap().push(id);
-                    if id == 2 { Err("boom at 2") } else { Ok(id) }
-                }
-                .boxed()
+            ctx.try_compute_join(vec![1u32, 2, 3], async move |_ctx, id| {
+                log.lock().unwrap().push(id);
+                if id == 2 { Err("boom at 2") } else { Ok(id) }
             })
             .await
         }
@@ -267,13 +256,9 @@ async fn sequential_dropped_mid_chain_branch_does_not_deadlock() {
             let log = ctx.global_data().execution_log().clone();
             let mut futs = ctx.compute_many((1u32..=3).map(|id| {
                 let log = log.clone();
-                ComputeCtx::declare_closure(move |_ctx: &mut ComputeCtx| {
-                    let log = log.clone();
-                    async move {
-                        log.lock().unwrap().push(id);
-                        id
-                    }
-                    .boxed()
+                ComputeCtx::declare_closure(async move |_ctx: &mut ComputeCtx| {
+                    log.lock().unwrap().push(id);
+                    id
                 })
             }));
             // Drop the middle future before polling. Its `done_tx`

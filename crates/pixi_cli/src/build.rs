@@ -1,13 +1,19 @@
-use std::{ffi::OsStr, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ffi::OsStr,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use clap::Parser;
 use fs_err::tokio as tokio_fs;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{BackendOverride, types::procedures::conda_outputs::CondaOutput};
+use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
-    build::PinnedSourceCodeLocation,
+    BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, ComputeResultExt,
+    EnvironmentRef, EnvironmentSpec, EphemeralEnv,
+    keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpecV2},
 };
 use pixi_config::ConfigCli;
 use pixi_consts::consts::{
@@ -20,6 +26,7 @@ use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
+use pixi_spec::SourceLocationSpec;
 use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 
@@ -182,11 +189,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // to the path's directory, not the current working directory.
     let workspace_locator = determine_discovery_start(&args.path).await?;
 
-    let workspace = WorkspaceLocator::for_cli()
+    let mut workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_locator.clone())
         .with_closest_package(false)
         .locate()?
         .with_cli_config(args.config_cli);
+    if let Some(backend_override) = args.backend_override.clone() {
+        workspace = workspace.with_backend_override(backend_override);
+    }
 
     // Sanity check of workspace, ensuring .pixi directory and .gitignore exist
     sanity_check_workspace(&workspace).await?;
@@ -205,7 +215,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let build_dir = AbsPathBuf::new(build_dir)
             .expect("build dir is not absolute")
             .into_assume_dir();
-        cache_dirs.set_working_dirs(build_dir);
+        cache_dirs.set_backend_metadata(build_dir);
     }
     let command_dispatcher = workspace
         .command_dispatcher_builder()?
@@ -284,18 +294,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .into();
 
     // Create the build backend metadata specification.
+    // When running `pixi build`, the exclude_newer config is ignored; it
+    // only matters when using the package as a source dependency.
+    let env_ref = EnvironmentRef::Ephemeral(EphemeralEnv::new(
+        manifest_source.to_string(),
+        EnvironmentSpec {
+            channels: channels.clone(),
+            build_environment: build_environment.clone(),
+            variants: pixi_utils::variants::VariantConfig {
+                variant_configuration: variant_configuration.clone(),
+                variant_files: variant_files.clone(),
+            },
+            exclude_newer: None,
+            channel_priority: Default::default(),
+        },
+    ));
     let backend_metadata_spec = BuildBackendMetadataSpec {
         manifest_source: manifest_source.clone(),
         preferred_build_source: None,
-        channels: channels.clone(),
-        channel_config: channel_config.clone(),
-        // When running `pixi build`, the exclude_newer config will be ignored.
-        // It will only be used when using the package as a source dependency.
-        exclude_newer: None,
-        build_environment: build_environment.clone(),
-        variant_configuration: Some(variant_configuration.clone()),
-        variant_files: Some(variant_files.clone()),
-        enabled_protocols: Default::default(),
+        env_ref: env_ref.clone(),
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -311,41 +328,68 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
-    // Build the individual packages
-    for CondaOutput { metadata, .. } in &backend_metadata.metadata.outputs {
-        let built_package = command_dispatcher
-            .source_build(SourceBuildSpec {
-                name: metadata.name.clone(),
-                variants: metadata
-                    .variant
-                    .iter()
-                    .map(|(key, value)| (key.clone(), value.clone().into()))
-                    .collect(),
+    // Resolve a fully-assembled SourceRecord per output. Unique package
+    // names dedupe via the compute engine; each RSP call returns every
+    // variant the backend declares for that package.
+    let unique_names: BTreeSet<_> = backend_metadata
+        .metadata
+        .outputs
+        .iter()
+        .map(|o| o.metadata.name.clone())
+        .collect();
+    let source_location: SourceLocationSpec = manifest_source.clone().into();
+    let mut resolved_records = Vec::new();
+    for name in unique_names {
+        let rsp = ResolveSourcePackageSpec {
+            package: name,
+            source_location: source_location.clone(),
+            preferred_build_source: Arc::new(BTreeMap::new()),
+            env_ref: env_ref.clone(),
+            installed_source_hints: Default::default(),
+        };
+        let records = command_dispatcher
+            .engine()
+            .compute(&ResolveSourcePackageKey::new(rsp))
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
+            .into_diagnostic()?;
+        resolved_records.extend(records.iter().cloned());
+    }
 
-                output_directory: None,
-                source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
-                channels: channels.clone(),
-                // When running `pixi build`, the exclude_newer config will be ignored.
-                // It will only be used when using the package as a source dependency.
-                exclude_newer: None,
-                channel_config: channel_config.clone(),
-                build_environment: build_environment.clone(),
-                enabled_protocols: Default::default(),
-                work_directory: None,
-                clean: args.clean,
-                force: false,
-                build_profile: BuildProfile::Release,
-
-                // Is this actually useful? Shouldn't that already be captured in the `variants` itself?
-                variant_configuration: Some(variant_configuration.clone()),
-                variant_files: Some(variant_files.clone()),
-            })
-            .await?;
+    // `--clean` nukes the per-package artifact + workspace caches so
+    // the upcoming SourceBuildKey calls see an empty cache and rebuild
+    // from scratch.
+    if args.clean {
+        for record in &resolved_records {
+            command_dispatcher
+                .clear_source_build_cache(&record.data.package_record.name)
+                .into_diagnostic()?;
+        }
+    }
+    for record in resolved_records {
+        let record = Arc::unwrap_or_clone(record);
+        let build_spec = SourceBuildSpecV2 {
+            record: Arc::new(record.into()),
+            channels: channels.clone(),
+            // `pixi build` ignores exclude_newer (it's only meaningful
+            // when the package is consumed as a source dependency).
+            exclude_newer: None,
+            build_environment: build_environment.clone(),
+            build_profile: BuildProfile::Release,
+            variant_configuration: Some(variant_configuration.clone()),
+            variant_files: Some(variant_files.clone()),
+        };
+        let built = command_dispatcher
+            .engine()
+            .compute(&SourceBuildKey::new(build_spec))
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
+            .into_diagnostic()?;
 
         // Clear the top level progress
         command_dispatcher.clear_reporter().await;
 
-        let package_path = dunce::canonicalize(&built_package.output_file)
+        let package_path = dunce::canonicalize(&built.artifact)
             .expect("failed to canonicalize output file which must now exist");
 
         // Destination inside the user-requested output directory

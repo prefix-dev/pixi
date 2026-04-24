@@ -17,12 +17,15 @@ use crate::AnyKey;
 /// A detected dependency cycle, delivered to the nearest enclosing
 /// [`ComputeCtx::with_cycle_guard`](crate::ComputeCtx::with_cycle_guard).
 ///
-/// The [`path`](Self::path) forms the ring of keys that closed the cycle:
-/// `[caller, target, ..., caller]`, where `caller` and `target` are the
-/// endpoints of the edge that closed the loop.
+/// The [`path`](Self::path) lists the distinct keys on the cycle in
+/// traversal order, starting with the key that closed the cycle:
+/// `[caller, target, ...]`. Each entry appears at most once; the
+/// closing edge is from `path.last()` back to `path.first()`. A
+/// self-loop yields a single-entry path: `[caller]`.
 #[derive(Clone, Debug)]
 pub struct CycleError {
-    /// The keys on the cycle, starting and ending with the closing key.
+    /// The distinct keys on the cycle in order. The cycle closes from
+    /// the last entry back to the first.
     pub path: Vec<AnyKey>,
 }
 

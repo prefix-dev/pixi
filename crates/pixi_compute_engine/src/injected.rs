@@ -2,7 +2,7 @@
 //!
 //! An injected key is a value fed into the engine externally via
 //! [`ComputeEngine::inject`](crate::ComputeEngine::inject), rather than
-//! being produced by a [`Key::compute`](crate::Key::compute) body. Other
+//! being produced by a [`Key::compute`] body. Other
 //! Keys depend on injected values through the normal
 //! [`ComputeCtx::compute`](crate::ComputeCtx::compute) call; the engine
 //! short-circuits the lookup and returns the pre-populated value without
@@ -94,7 +94,7 @@ pub trait InjectedKey: Hash + Eq + Clone + Display + Debug + Send + Sync + 'stat
 /// [`ComputeCtx::compute`](crate::ComputeCtx::compute) alongside
 /// regular computed keys. The engine never actually calls `compute` on
 /// an injected key; it short-circuits via
-/// [`StorageType::Injected`](crate::StorageType::Injected) and returns
+/// [`StorageType::Injected`] and returns
 /// the value pre-populated by
 /// [`ComputeEngine::inject`](crate::ComputeEngine::inject), or panics
 /// if the value was not injected.

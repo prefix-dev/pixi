@@ -14,10 +14,11 @@ use once_cell::sync::OnceCell;
 
 use futures::FutureExt;
 
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
+use ordermap::OrderSet;
 use pixi_consts::consts;
 use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
 use pixi_manifest::{
@@ -288,7 +289,7 @@ See https://pixi.sh/latest/concepts/conda_pypi/#pinned-package-conflicts for mor
 pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
-    dependencies: IndexMap<uv_normalize::PackageName, IndexSet<PixiPypiSpec>>,
+    dependencies: IndexMap<uv_normalize::PackageName, OrderSet<PixiPypiSpec>>,
     system_requirements: SystemRequirements,
     locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[UnresolvedPypiRecord],

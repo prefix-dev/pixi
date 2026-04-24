@@ -22,9 +22,12 @@ use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
+use ordermap::{OrderMap, OrderSet};
 use pixi_command_dispatcher::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    PixiEnvironmentSpec, SolvePixiEnvironmentError, executor::CancellationAwareFutures,
+    ComputeResultExt, EnvironmentRef, EnvironmentSpec, SolvePixiEnvironmentError,
+    executor::CancellationAwareFutures,
+    keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -2506,7 +2509,7 @@ async fn spawn_solve_conda_environment_task(
         .map_err(CommandDispatcherError::Failed)?;
 
     // Convert dev dependencies to DevSourceSpecs
-    let dev_sources: IndexMap<_, _> = dev_dependencies
+    let dev_sources: OrderMap<_, _> = dev_dependencies
         .into_iter()
         .flat_map(|(name, source_specs)| {
             source_specs.into_iter().map(move |source_spec| {
@@ -2522,32 +2525,49 @@ async fn spawn_solve_conda_environment_task(
 
     let start = Instant::now();
 
-    // Solve the environment using the command dispatcher.
-    // Determine if we should override the pinned source for the current package
-    let mut records = command_dispatcher
-        .solve_pixi_environment(PixiEnvironmentSpec {
-            name: Some(group_name.to_string()),
+    // Solve the environment.
+    let env_ref = EnvironmentRef::Workspace(command_dispatcher.workspace_env_registry().allocate(
+        group_name.to_string(),
+        platform,
+        EnvironmentSpec {
+            channels,
+            build_environment: BuildEnvironment::simple(platform, virtual_packages),
+            variants: pixi_utils::variants::VariantConfig {
+                variant_configuration,
+                variant_files,
+            },
+            exclude_newer,
+            channel_priority: channel_priority.into(),
+        },
+    ));
+    let installed: Arc<[pixi_record::UnresolvedPixiRecord]> = existing_repodata_records
+        .records
+        .iter()
+        .cloned()
+        .map(pixi_record::UnresolvedPixiRecord::from)
+        .collect();
+    let installed_source_hints = pixi_command_dispatcher::PtrArc::from_value(
+        pixi_command_dispatcher::InstalledSourceHints::from_records(&installed),
+    );
+    let records_arc = command_dispatcher
+        .engine()
+        .compute(&SolvePixiEnvironmentKey::new(SolvePixiEnvironmentSpec {
             dependencies,
             constraints,
             dev_sources,
-            installed: existing_repodata_records.records.clone(),
-            build_environment: BuildEnvironment::simple(platform, virtual_packages),
-            channels,
+            installed,
+            installed_source_hints,
             strategy,
-            channel_priority: channel_priority.into(),
-            exclude_newer,
-            channel_config,
-            variant_configuration: Some(variant_configuration),
-            variant_files: Some(variant_files),
-            enabled_protocols: Default::default(),
-            preferred_build_source: pin_overrides,
-        })
+            preferred_build_source: Arc::new(pin_overrides),
+            env_ref,
+        }))
         .await
-        .map_err_with(|source| SolveCondaEnvironmentError::SolveFailed {
+        .map_err_into_dispatcher(|source| SolveCondaEnvironmentError::SolveFailed {
             environment_name: group_name.clone(),
             platform,
             source: Box::new(source),
         })?;
+    let mut records: Vec<PixiRecord> = (*records_arc).clone();
 
     // Add purl's for the conda packages that are also available as pypi packages if
     // we need them.
@@ -2662,15 +2682,37 @@ async fn spawn_extract_environment_task(
 
         let build_environment = BuildEnvironment::simple(platform, virtual_packages);
 
+        let exclude_newer = environment
+            .exclude_newer_config_resolved(&channel_config)
+            .into_diagnostic()
+            .wrap_err("failed to resolve exclude-newer")?;
+        let channel_priority = environment
+            .channel_priority()
+            .into_diagnostic()
+            .wrap_err("failed to resolve channel priority")?
+            .unwrap_or_default();
+
+        let workspace_env_ref = command_dispatcher.workspace_env_registry().allocate(
+            environment.name().as_str().to_string(),
+            platform,
+            EnvironmentSpec {
+                channels,
+                build_environment,
+                variants: pixi_utils::variants::VariantConfig {
+                    variant_configuration,
+                    variant_files,
+                },
+                exclude_newer,
+                channel_priority: channel_priority.into(),
+            },
+        );
+
         // Resolve dev dependencies
         let resolved_dev_deps = super::resolve_dev_dependencies(
             dev_dependencies,
             &command_dispatcher,
             &channel_config,
-            &channels,
-            &build_environment,
-            &variant_configuration,
-            &variant_files,
+            workspace_env_ref,
         )
         .await
         .into_diagnostic()
@@ -2883,7 +2925,7 @@ async fn spawn_solve_pypi_task<'p>(
 
         let start = Instant::now();
 
-        let dependencies: Vec<(uv_normalize::PackageName, IndexSet<_>)> = dependencies
+        let dependencies: Vec<(uv_normalize::PackageName, OrderSet<_>)> = dependencies
             .into_iter()
             .map(|(name, requirement)| Ok((to_uv_normalize(name.as_normalized())?, requirement)))
             .collect::<Result<_, ConversionError>>()

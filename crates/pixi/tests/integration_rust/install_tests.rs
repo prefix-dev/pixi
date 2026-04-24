@@ -1410,7 +1410,6 @@ async fn test_multiple_prefix_update() {
 
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
-        group.workspace().channel_config(),
         name,
         prefix,
         current_platform,

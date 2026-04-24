@@ -1,21 +1,7 @@
 use std::fmt::{self, Display, Formatter};
 
 use itertools::Itertools;
-use pixi_record::PinnedSourceSpec;
 use rattler_conda_types::PackageName;
-
-/// Identifies an in-flight source request for cycle detection.
-///
-/// Two requests with the same `(package, source)` pair are considered the
-/// same for cycle purposes, regardless of differences in variants,
-/// exclude_newer, channels, or other spec fields. This makes cycle detection
-/// robust against incidental spec differences that would otherwise produce
-/// different dedup keys.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct SourceCycleKey {
-    pub package: PackageName,
-    pub source: PinnedSourceSpec,
-}
 
 /// Defines a package and in which dependency set the cycle occurred.
 #[derive(Debug, Clone)]

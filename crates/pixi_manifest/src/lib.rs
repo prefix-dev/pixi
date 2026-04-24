@@ -133,7 +133,7 @@ pub enum PypiDependencyLocation {
     DependencyGroups,
 }
 
-/// Converts an array of Platforms to a non-empty Vec of Option<Platform>
+/// Converts an array of `Platform`s to a non-empty `Vec` of `Option<Platform>`.
 fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
     match platforms.is_empty() {
         true => vec![None],

@@ -10,7 +10,7 @@ use pixi_spec::ResolvedExcludeNewer;
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use rattler::install::link_script::LinkScriptType;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageName, Platform, RepoDataRecord,
+    ChannelUrl, GenericVirtualPackage, PackageName, Platform, RepoDataRecord,
 };
 
 use super::{
@@ -77,7 +77,6 @@ impl CondaPrefixUpdated {
 /// A task that updates the prefix for a given environment.
 pub struct CondaPrefixUpdaterInner {
     pub channels: Vec<ChannelUrl>,
-    pub channel_config: ChannelConfig,
     pub name: GroupedEnvironmentName,
     pub prefix: Prefix,
     pub platform: Platform,
@@ -116,7 +115,6 @@ impl CondaPrefixUpdaterBuilder<'_> {
 
         Ok(CondaPrefixUpdater::new(
             channels,
-            self.group.channel_config(),
             name,
             prefix,
             self.platform,
@@ -153,7 +151,6 @@ impl CondaPrefixUpdater {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         channels: Vec<ChannelUrl>,
-        channel_config: ChannelConfig,
         name: GroupedEnvironmentName,
         prefix: Prefix,
         platform: Platform,
@@ -165,7 +162,6 @@ impl CondaPrefixUpdater {
         Self {
             inner: Arc::new(CondaPrefixUpdaterInner {
                 channels,
-                channel_config,
                 name,
                 prefix,
                 platform,
@@ -199,7 +195,6 @@ impl CondaPrefixUpdater {
                     &self.inner.prefix,
                     pixi_records,
                     channels,
-                    self.inner.channel_config.clone(),
                     self.inner.platform,
                     self.inner.virtual_packages.clone(),
                     self.inner.variant_config.clone(),
@@ -232,7 +227,6 @@ pub async fn update_prefix_conda(
     prefix: &Prefix,
     pixi_records: Vec<UnresolvedPixiRecord>,
     channels: Vec<ChannelUrl>,
-    channel_config: ChannelConfig,
     host_platform: Platform,
     host_virtual_packages: Vec<GenericVirtualPackage>,
     variant_config: VariantConfig,
@@ -250,21 +244,32 @@ pub async fn update_prefix_conda(
         variant_configuration,
         variant_files,
     } = variant_config;
+    let force_reinstall = reinstall_packages.unwrap_or_default();
+
+    // Force-reinstall also invalidates the source-build caches. The
+    // prefix installer handles binary reinstalls itself; source
+    // packages need their artifact + workspace entries wiped so
+    // SourceBuildKey sees a cache miss. clear_source_build_cache is a
+    // no-op on packages that were never built from source.
+    for name in &force_reinstall {
+        command_dispatcher
+            .clear_source_build_cache(name)
+            .into_diagnostic()?;
+    }
+
     let result = command_dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
             name,
             records: pixi_records,
             prefix: rattler_conda_types::prefix::Prefix::create(prefix.root()).into_diagnostic()?,
             installed: None,
-            force_reinstall: reinstall_packages.unwrap_or_default(),
+            force_reinstall,
             ignore_packages,
             build_environment,
             exclude_newer,
             channels,
-            channel_config,
             variant_configuration: Some(variant_configuration),
             variant_files: Some(variant_files),
-            enabled_protocols: Default::default(),
         })
         .await?;
 

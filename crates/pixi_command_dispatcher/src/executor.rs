@@ -67,7 +67,7 @@ impl<Fut> ExecutorFutures<Fut> {
     /// # Recommendation
     ///
     /// Instead of hardcoding `Executor::Concurrent` or `Executor::Serial`, prefer
-    /// obtaining the executor from [`CommandDispatcher::executor()`]:
+    /// obtaining the executor from [`CommandDispatcher::executor()`](crate::CommandDispatcher::executor):
     ///
     /// ```ignore
     /// let mut futures = ExecutorFutures::new(command_dispatcher.executor());
