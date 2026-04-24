@@ -227,7 +227,6 @@ impl<'p> ExecutableTask<'p> {
             out
         }
 
-
         // Convert the task into an executable string
         let context = self.render_context();
         let task = self
