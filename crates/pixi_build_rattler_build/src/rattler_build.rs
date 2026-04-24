@@ -22,6 +22,7 @@ pub struct RattlerBuildBackend {
     pub(crate) config: RattlerBuildBackendConfig,
     /// Workspace dependencies from the project model
     pub(crate) workspace_dependencies: HashMap<String, SourcePackageSpec>,
+    pub(crate) package_version: Option<String>,
 }
 
 impl RattlerBuildBackend {
@@ -97,6 +98,7 @@ impl RattlerBuildBackend {
             cache_dir,
             config,
             workspace_dependencies: HashMap::new(),
+            package_version: None,
         })
     }
 }
