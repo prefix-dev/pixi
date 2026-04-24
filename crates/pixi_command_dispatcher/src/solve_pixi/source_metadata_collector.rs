@@ -205,6 +205,8 @@ impl SourceMetadataCollector {
                     variant_configuration: self.variant_configuration.clone(),
                     variant_files: self.variant_files.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
+                    build_number_override: None,
+                    build_string_prefix: None,
                 },
             })
             .await

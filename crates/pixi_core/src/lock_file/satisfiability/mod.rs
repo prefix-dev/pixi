@@ -1262,6 +1262,8 @@ async fn verify_source_metadata(
                     variant_configuration: Some(variants),
                     variant_files: Some(variant_files),
                     enabled_protocols: EnabledProtocols::default(),
+                    build_number_override: None,
+                    build_string_prefix: None,
                 },
             };
 
@@ -1646,6 +1648,8 @@ async fn resolve_single_dev_dependency(
             variant_configuration: Some(variants),
             variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
+            build_number_override: None,
+            build_string_prefix: None,
         },
     };
 
