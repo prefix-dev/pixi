@@ -104,36 +104,73 @@ Please attach the logs when [filing a bug report](https://github.com/pavelzw/pix
 In some cases, you might only want to install `pixi-pycharm` on your local dev-machines but not in production.
 To achieve this, we can use [multiple environments](../../workspace/multi_environment.md).
 
-```toml
-[workspace]
-name = "multi-env"
-version = "0.1.0"
-requires-python = ">=3.12"
-dependencies = ["numpy"]
+=== "pixi.toml"
 
-[tool.pixi.workspace]
-channels = ["conda-forge"]
-platforms = ["linux-64"]
+    ```toml
+    [workspace]
+    name = "multi-env"
+    version = "0.1.0"
+    requires-python = ">=3.12"
+    dependencies = ["numpy"]
+    
+    [tool.pixi.workspace]
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    
+    [tool.pixi.feature.lint.dependencies]
+    ruff =  "*"
+    
+    [tool.pixi.feature.dev.dependencies]
+    pixi-pycharm = "*"
+    
+    [tool.pixi.environments]
+    # The production environment is the default feature set.
+    # Adding a solve group to make sure the same versions are used in the `default` and `prod` environments.
+    prod = { solve-group = "main" }
+    
+    # Setup the default environment to include the dev features.
+    # By using `default` instead of `dev` you'll not have to specify the `--environment` flag when running `pixi run`.
+    default = { features = ["dev"], solve-group = "main" }
+    
+    # The lint environment doesn't need the default feature set but only the `lint` feature
+    # and thus can also be excluded from the solve group.
+    lint = { features = ["lint"], no-default-feature = true }
+    ```
 
-[tool.pixi.feature.lint.dependencies]
-ruff =  "*"
+=== "pyproject.toml"
 
-[tool.pixi.feature.dev.dependencies]
-pixi-pycharm = "*"
-
-[tool.pixi.environments]
-# The production environment is the default feature set.
-# Adding a solve group to make sure the same versions are used in the `default` and `prod` environments.
-prod = { solve-group = "main" }
-
-# Setup the default environment to include the dev features.
-# By using `default` instead of `dev` you'll not have to specify the `--environment` flag when running `pixi run`.
-default = { features = ["dev"], solve-group = "main" }
-
-# The lint environment doesn't need the default feature set but only the `lint` feature
-# and thus can also be excluded from the solve group.
-lint = { features = ["lint"], no-default-feature = true }
-```
+    ```toml
+    [project]
+    name = "multi-env"
+    version = "0.1.0"
+    
+    [tool.pixi.workspace]
+    requires-python = ">=3.12"
+    dependencies = ["numpy"]
+    
+    [tool.pixi.tool.pixi.workspace]
+    channels = ["conda-forge"]
+    platforms = ["linux-64"]
+    
+    [tool.pixi.tool.pixi.feature.lint.dependencies]
+    ruff =  "*"
+    
+    [tool.pixi.tool.pixi.feature.dev.dependencies]
+    pixi-pycharm = "*"
+    
+    [tool.pixi.tool.pixi.environments]
+    # The production environment is the default feature set.
+    # Adding a solve group to make sure the same versions are used in the `default` and `prod` environments.
+    prod = { solve-group = "main" }
+    
+    # Setup the default environment to include the dev features.
+    # By using `default` instead of `dev` you'll not have to specify the `--environment` flag when running `pixi run`.
+    default = { features = ["dev"], solve-group = "main" }
+    
+    # The lint environment doesn't need the default feature set but only the `lint` feature
+    # and thus can also be excluded from the solve group.
+    lint = { features = ["lint"], no-default-feature = true }
+    ```
 
 Now you as a user can run `pixi shell`, which will start the default environment.
 In production, you then just run `pixi run -e prod COMMAND`, and the minimal prod environment is installed.
@@ -180,3 +217,4 @@ make sure to [exclude the `.pixi` directory from PyCharm indexing](#exclude-.pix
 In order to use Direnv with [Jetbrains](https://www.jetbrains.com/ides/) products you first have to install the [Direnv plugin](https://plugins.jetbrains.com/plugin/15285-direnv-integration).
 Then follow the instructions in our [Direnv doc page](../third_party/direnv.md).
 Now your Jetbrains IDE will be run within the selected Pixi environment.
+

@@ -6,10 +6,19 @@ Some `pixi-build` backends support configurable compiler selection through the `
     `pixi-build` is a preview feature, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
-    ```toml
-    [workspace]
-    preview = ["pixi-build"]
-    ```
+    === "pixi.toml"
+
+        ```toml
+            [workspace]
+            preview = ["pixi-build"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+            [tool.pixi.workspace]
+            preview = ["pixi-build"]
+        ```
 
 ## How Conda-forge Compilers Work
 
@@ -40,31 +49,65 @@ This allows users to customize compiler selection without modifying individual p
 
 To overwrite the default C compiler you can modify your `pixi.toml` file in the workspace root:
 
-```toml
-# pixi.toml
-[workspace.build-variants]
-c_compiler = ["clang"]
-c_compiler_version = ["11.4"]
-```
+=== "pixi.toml"
+
+    ```toml
+    # pixi.toml
+    [workspace.build-variants]
+    c_compiler = ["clang"]
+    c_compiler_version = ["11.4"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    # pixi.toml
+    [tool.pixi.workspace.build-variants]
+    c_compiler = ["clang"]
+    c_compiler_version = ["11.4"]
+    ```
 
 To overwrite the c/cxx compiler specifically for Windows you can use the `workspace.target` section to specify platform-specific compiler variants:
 
-```toml
-# pixi.toml
-[workspace.target.win.build-variants]
-c_compiler = ["vs2022"]
-cxx_compiler = ["vs2022"]
-```
+=== "pixi.toml"
+
+    ```toml
+    # pixi.toml
+    [workspace.target.win.build-variants]
+    c_compiler = ["vs2022"]
+    cxx_compiler = ["vs2022"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    # pixi.toml
+    [tool.pixi.workspace.target.win.build-variants]
+    c_compiler = ["vs2022"]
+    cxx_compiler = ["vs2022"]
+    ```
 
 Or
 
-```toml
-[workspace.target.win.build-variants]
-c_compiler = ["vs"]
-cxx_compiler = ["vs"]
-c_compiler_version = ["2022"]
-cxx_compiler_version = ["2022"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace.target.win.build-variants]
+    c_compiler = ["vs"]
+    cxx_compiler = ["vs"]
+    c_compiler_version = ["2022"]
+    cxx_compiler_version = ["2022"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace.target.win.build-variants]
+    c_compiler = ["vs"]
+    cxx_compiler = ["vs"]
+    c_compiler_version = ["2022"]
+    cxx_compiler_version = ["2022"]
+    ```
 
 #### How Compilers Are Selected
 
@@ -86,11 +129,21 @@ When you specify `compilers = ["c"]` in your pixi-build configuration, the syste
    Each variant can have multiple values and each combination of these values are outputs that can be selected.
    For example with the following example multiple `gcc` versions could be used to build this package.
 
-   ```toml
-   [workspace.build-variants]
-   c_compiler = ["gcc"]
-   c_compiler_version = ["11.4", "14.0"]
-   ```
+   === "pixi.toml"
+
+       ```toml
+          [workspace.build-variants]
+          c_compiler = ["gcc"]
+          c_compiler_version = ["11.4", "14.0"]
+       ```
+
+   === "pyproject.toml"
+
+       ```toml
+          [tool.pixi.workspace.build-variants]
+          c_compiler = ["gcc"]
+          c_compiler_version = ["11.4", "14.0"]
+       ```
 
    If `{language}_compiler_version` is not set, then there's no constraint on the compiler version.
 
@@ -157,6 +210,7 @@ Compiler configuration is only available in backends that have specifically impl
 
 ### Basic Compiler Configuration
 
+<!-- no-pyproject -->
 ```toml
 # Use default compilers for the backend
 [package.build.config]
@@ -169,6 +223,7 @@ compilers = ["c", "cxx", "fortran"]
 
 ### Platform-Specific Compiler Configuration
 
+<!-- no-pyproject -->
 ```toml
 # Base configuration for most platforms
 [package.build.config]
@@ -182,3 +237,5 @@ compilers = ["cxx", "cuda"]
 [package.build.target.win-64.config]
 compilers = ["c", "cxx"]
 ```
+
+

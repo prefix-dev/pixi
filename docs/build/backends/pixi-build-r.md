@@ -6,10 +6,19 @@ The `pixi-build-r` backend is designed for building R packages using `R CMD INST
     `pixi-build` is a preview feature, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
-    ```toml
-    [workspace]
-    preview = ["pixi-build"]
-    ```
+    === "pixi.toml"
+
+        ```toml
+            [workspace]
+            preview = ["pixi-build"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+            [tool.pixi.workspace]
+            preview = ["pixi-build"]
+        ```
 
 
 ## Overview
@@ -25,6 +34,7 @@ This backend automatically generates conda packages from R projects by:
 
 To use the R backend in your `pixi.toml`, add it to your package's build configuration:
 
+<!-- no-pyproject -->
 ```toml
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
@@ -63,6 +73,7 @@ Dependencies listed in `Imports`, `Depends`, and `LinkingTo` fields of the `DESC
 
 You can add additional dependencies to your [`host-dependencies`](https://pixi.sh/latest/build/dependency_types/) if needed:
 
+<!-- no-pyproject -->
 ```toml
 [package.host-dependencies]
 r-base = ">=4.1"
@@ -80,6 +91,7 @@ You can customize the R backend behavior using the `[package.build.config]` sect
 
 Extra arguments to pass to `R CMD INSTALL`.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-args = ["--no-multiarch", "--no-test-load"]
@@ -87,6 +99,7 @@ extra-args = ["--no-multiarch", "--no-test-load"]
 
 For target-specific configuration, platform-specific args completely replace the base:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-args = ["--no-multiarch"]
@@ -104,6 +117,7 @@ extra-args = ["--no-multiarch", "--no-test-load"]
 
 Environment variables to set during the build process. These variables are available during `R CMD INSTALL`.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { R_LIBS_USER = "$PREFIX/lib/R/library" }
@@ -111,6 +125,7 @@ env = { R_LIBS_USER = "$PREFIX/lib/R/library" }
 
 For target-specific configuration, platform environment variables are merged with base variables:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { COMMON_VAR = "base" }
@@ -128,6 +143,7 @@ env = { COMMON_VAR = "windows", WIN_SPECIFIC = "value" }
 
 Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include R source files, documentation, and build-related files.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-input-globs = [
@@ -150,6 +166,7 @@ List of compilers to use for the build. By default, the backend auto-detects whe
 
 If either is found, compilers default to `["c", "cxx", "fortran"]`. Otherwise, no compilers are added.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 compilers = ["c", "cxx"]  # Override auto-detection
@@ -157,6 +174,7 @@ compilers = ["c", "cxx"]  # Override auto-detection
 
 For target-specific configuration, platform compilers completely replace the base configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 compilers = ["c"]
@@ -171,6 +189,7 @@ compilers = ["c", "cxx", "fortran"]
 
     You can override this by explicitly setting the `compilers` option:
 
+    <!-- no-pyproject -->
     ```toml
     # Force no compilers even if src/ exists
     [package.build.config]
@@ -192,6 +211,7 @@ compilers = ["c", "cxx", "fortran"]
 
 Channels to use for resolving R package dependencies.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 channels = ["conda-forge", "r"]
@@ -237,3 +257,5 @@ The R backend follows this build process:
 - [Build Backends Overview](../backends.md) - Overview of all available build backends
 - [Compilers](../key_concepts/compilers.md) - How pixi-build integrates with conda-forge's compiler infrastructure
 - [CRAN](https://cran.r-project.org/) - The Comprehensive R Archive Network
+
+

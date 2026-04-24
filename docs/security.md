@@ -48,27 +48,55 @@ Use [`exclude-newer`](reference/pixi_manifest.md#exclude-newer-optional) to put 
 
 The delay is useful even when public ecosystems already run security checks, because those checks are often asynchronous. Package indexes may publish first and only then run third-party analysis that later flags a release. A cooldown of a few days gives those external checks, user reports, and ecosystem response processes time to surface problems before your resolver consumes the new artifact. Pixi can apply that delay across your workspace and still let you opt specific channels or packages back in immediately when needed, which is useful when you want a conservative trust window for public ecosystems while still allowing trusted internal channels or urgent fixes through without delay.
 
-```toml
-[workspace]
-name = "my-workspace"
-channels = [
-  "conda-forge",
-  # get most recent versions of packages you control
-  { channel = "https://prefix.dev/my-internal-channel", exclude-newer = "0d" },
-]
-exclude-newer = "14d"
-platforms = ["linux-64", "osx-arm64", "win-64"]
+=== "pixi.toml"
 
-[dependencies]
-# CVE-XXXX-YYYY: allow the fresh fixed build immediately
-python = "3.12.*"
+    ```toml
+    [workspace]
+    name = "my-workspace"
+    channels = [
+      "conda-forge",
+      # get most recent versions of packages you control
+      { channel = "https://prefix.dev/my-internal-channel", exclude-newer = "0d" },
+    ]
+    exclude-newer = "14d"
+    platforms = ["linux-64", "osx-arm64", "win-64"]
+    
+    [dependencies]
+    # CVE-XXXX-YYYY: allow the fresh fixed build immediately
+    python = "3.12.*"
+    
+    [exclude-newer]
+    # CVE-XXXX-YYYY: allow the fresh fixed build immediately
+    python = "0d"
+    # CVE-XXXX-YYYY: allow the fresh fixed build immediately
+    openssl = "0d"
+    ```
 
-[exclude-newer]
-# CVE-XXXX-YYYY: allow the fresh fixed build immediately
-python = "0d"
-# CVE-XXXX-YYYY: allow the fresh fixed build immediately
-openssl = "0d"
-```
+=== "pyproject.toml"
+
+    ```toml
+    [project]
+    name = "my-workspace"
+    
+    [tool.pixi.workspace]
+    channels = [
+      "conda-forge",
+      # get most recent versions of packages you control
+      { channel = "https://prefix.dev/my-internal-channel", exclude-newer = "0d" },
+    ]
+    exclude-newer = "14d"
+    platforms = ["linux-64", "osx-arm64", "win-64"]
+    
+    [tool.pixi.dependencies]
+    # CVE-XXXX-YYYY: allow the fresh fixed build immediately
+    python = "3.12.*"
+    
+    [tool.pixi.exclude-newer]
+    # CVE-XXXX-YYYY: allow the fresh fixed build immediately
+    python = "0d"
+    # CVE-XXXX-YYYY: allow the fresh fixed build immediately
+    openssl = "0d"
+    ```
 
 In that example:
 
@@ -89,11 +117,21 @@ This is how you respond when a vulnerable version is already known, especially i
 !!! note "PyPI-only for now"
     We are planning to support a similar feature like this for Conda packages as well. For more information, see [pixi#4891](https://github.com/prefix-dev/pixi/issues/4891).
 
-```toml
-[pypi-options.dependency-overrides]
-# force all packages to depend on urllib3 >=2.2.2
-urllib3 = ">=2.2.2"
-```
+=== "pixi.toml"
+
+    ```toml
+    [pypi-options.dependency-overrides]
+    # force all packages to depend on urllib3 >=2.2.2
+    urllib3 = ">=2.2.2"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.pypi-options.dependency-overrides]
+    # force all packages to depend on urllib3 >=2.2.2
+    urllib3 = ">=2.2.2"
+    ```
 
 Do not trust overrides blindly. In the best case, maintainers publish a patch release on the same minor version you are already using, so the compatibility risk stays small. In practice, the available fix can sometimes be in a newer major version, and forcing that version through an override can break compatibility with other packages. Treat overrides as a short-term mitigation: apply the smallest possible change, test the affected environment, and remove the override once upstream metadata or upstream releases make it unnecessary.
 
@@ -210,3 +248,4 @@ If you want a conservative default posture, we recommend:
 - update or override dependencies when advisories land;
 - scan the installed environment with Syft and your vulnerability scanner;
 - generate attestations for packages you publish.
+

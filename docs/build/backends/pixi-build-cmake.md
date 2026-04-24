@@ -6,10 +6,19 @@ The `pixi-build-cmake` backend is designed for building C and C++ projects using
     `pixi-build` is a preview feature, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
-    ```toml
-    [workspace]
-    preview = ["pixi-build"]
-    ```
+    === "pixi.toml"
+
+        ```toml
+            [workspace]
+            preview = ["pixi-build"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+            [tool.pixi.workspace]
+            preview = ["pixi-build"]
+        ```
 
 
 ## Overview
@@ -25,6 +34,7 @@ This backend automatically generates conda packages from CMake-based projects by
 
 To use the CMake backend in your `pixi.toml`, add it to your package's build configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package]
 name = "cmake_package"
@@ -47,6 +57,7 @@ The backend automatically includes the following build tools:
 
 You can add these to your [`build-dependencies`](https://pixi.sh/latest/build/dependency_types/) if you need specific versions:
 
+<!-- no-pyproject -->
 ```toml
 [package.build-dependencies]
 ninja = "1.13"
@@ -64,6 +75,7 @@ You can customize the CMake backend behavior using the `[package.build.config]` 
 
 Additional command-line arguments to pass to the CMake configuration step. These arguments are inserted into the `cmake` command that configures your project.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-args = [
@@ -74,6 +86,7 @@ extra-args = [
 
 For target-specific configuration, platform arguments completely replace the base configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-args = ["-DCMAKE_BUILD_TYPE=Release"]
@@ -91,6 +104,7 @@ extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DLINUX_FLAG=ON"]
 
 Environment variables to set during the build process. These variables are available to both the CMake configuration and build steps.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { CMAKE_VERBOSE_MAKEFILE = "ON", CXXFLAGS = "-O3 -march=native" }
@@ -98,6 +112,7 @@ env = { CMAKE_VERBOSE_MAKEFILE = "ON", CXXFLAGS = "-O3 -march=native" }
 
 For target-specific configuration, platform environment variables are merged with base variables:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { CMAKE_VERBOSE_MAKEFILE = "OFF", COMMON_VAR = "base" }
@@ -119,6 +134,7 @@ The backend always writes JSON-RPC request/response logs and the generated inter
 
 Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include source files (`**/*.{c,cc,cxx,cpp,h,hpp,hxx}`), CMake files (`**/*.{cmake,cmake.in}`, `**/CMakeFiles.txt`), and other build-related files.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-input-globs = [
@@ -130,6 +146,7 @@ extra-input-globs = [
 
 For target-specific configuration, platform-specific globs completely replace the base:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-input-globs = ["*.txt"]
@@ -147,6 +164,7 @@ extra-input-globs = ["*.txt", "*.linux", "linux-configs/**/*"]
 
 List of compilers to use for the build. The backend automatically generates appropriate compiler dependencies using conda-forge's compiler infrastructure.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 compilers = ["c", "cxx", "fortran"]
@@ -154,6 +172,7 @@ compilers = ["c", "cxx", "fortran"]
 
 For target-specific configuration, platform compilers completely replace the base configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 compilers = ["cxx"]
@@ -189,6 +208,7 @@ The `pixi-build-cmake` backend places `extra-args` after the default CMake flags
 
 For example, to switch from the default Release build to Debug mode:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-args = ["-DCMAKE_BUILD_TYPE=Debug"]
@@ -209,11 +229,21 @@ The `vs2022` compiler is more widely supported on modern GitHub runners and buil
 
 You can override these defaults by explicitly setting variants using [`[workspace.build-variants]`](https://pixi.sh/latest/reference/pixi_manifest/#build-variants-optional) in your `pixi.toml`:
 
-```toml
-[workspace.build-variants]
-c_compiler = ["vs2019"]
-cxx_compiler = ["vs2019"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace.build-variants]
+    c_compiler = ["vs2019"]
+    cxx_compiler = ["vs2019"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace.build-variants]
+    c_compiler = ["vs2019"]
+    cxx_compiler = ["vs2019"]
+    ```
 
 ## Limitations
 
@@ -224,3 +254,5 @@ cxx_compiler = ["vs2019"]
 
 - [Building C++ Packages](https://pixi.sh/latest/build/cpp/) - Tutorial for building C++ packages with Pixi
 - [CMake Documentation](https://cmake.org/documentation/) - Official CMake documentation
+
+

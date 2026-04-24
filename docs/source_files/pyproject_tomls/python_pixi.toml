@@ -1,0 +1,23 @@
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+preview = ["pixi-build"]
+
+[tool.pixi.dependencies] # (2)!
+python_rich = { path = "." }
+
+[tool.pixi.tasks] # (3)!
+start = "rich-example-main"
+
+[tool.pixi.package] # (4)!
+name = "python_rich"
+version = "0.1.0"
+
+[tool.pixi.package.build] # (5)!
+backend = { name = "pixi-build-python", version = "0.4.*" }
+
+[tool.pixi.package.host-dependencies] # (6)!
+hatchling = "==1.26.3"
+
+[tool.pixi.package.run-dependencies] # (7)!
+rich = "13.9.*"

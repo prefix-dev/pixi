@@ -1,15 +1,20 @@
 # Contributing to Pixi
+
 ## Introduction
+
 Thank you for your interest in contributing to Pixi! We value the contributions from our community and look forward to collaborating with you.
 
 ## Code of Conduct
+
 Before contributing, please read our [Code of Conduct](https://github.com/prefix-dev/pixi/blob/main/CODE_OF_CONDUCT.md). We expect all our contributors to follow it to ensure a welcoming and inclusive environment.
 
 ## Getting Started
+
 **Familiarize yourself with Pixi:** Understand its functionality and codebase.
 **Set up your environment:** Ensure you have the necessary tools and dependencies.
 
 ## How to Contribute
+
 - **Find an Issue:** Look for open issues or create a new issue to discuss your idea.
 - **Fork the Repository:** Make a copy of the repository to your account.
 - **Create a Branch:** Create a branch in your fork to work on your changes.
@@ -22,32 +27,39 @@ Before contributing, please read our [Code of Conduct](https://github.com/prefix
 > This will help speedup the actual pull request review.
 
 ## Pull Request Process
+
 - Ensure your code adheres to the project's coding standards, we use automated tooling for that, try `pixi run lint`.
 - Document new code using the Rust docstrings like we do in most places.
 - Update the `README.md` or documentation (`docs/`) with details of changes to the interface, if applicable.
 - Your pull request will be reviewed by maintainers, who may suggest changes.
 
 ## Reporting Bugs
+
 - Use the issue tracker to report bugs.
 - Clearly describe the issue, including steps to reproduce the bug.
 - Include any relevant logs or error messages.
 
 ## Feature Requests
+
 - Use the issue tracker to suggest new features.
 - Explain how the feature would be beneficial to the project.
 
 ## Questions and Discussions
+
 For general questions, consider using our chat platform: [Discord](https://discord.gg/kKV8ZxyzY4)
 
 ## Acknowledgments
+
 Your contributions are highly appreciated and will be credited accordingly.
 
 ## License
+
 By contributing to Pixi, you agree that your contributions will be licensed under its [LICENSE](https://github.com/prefix-dev/pixi/blob/main/LICENSE).
 
 # Tips while developing on `pixi`
 
 ## Pixi is a Pixi project itself, so use a preinstalled `pixi` to run the predefined tasks
+
 ```shell
 pixi run build-debug # or `pixi run build-release` to build with optimizations
 pixi run lint
@@ -58,6 +70,7 @@ pixi run install # only works on unix systems as on windows you can't overwrite 
 ### Installing the target binaries to a custom location
 
 Use the Pixi task `install-as` which invokes a python script to build the project and copy the executable to a custom location.
+
 ```shell
 $ pixi run install-as
 usage: install.py [-h] [--dest DEST] name
@@ -73,6 +86,7 @@ options:
 ```
 
 ## Get your code ready for a PR
+
 We use [`lefthook`](https://lefthook.dev/) to run all the formatters and linters that we use.
 You can run `pixi run pre-commit-install` to automatically run the formatters and linters before you commit.
 This also installs a pre-push hook which runs `cargo clippy` —
@@ -85,6 +99,7 @@ pixi run lint
 
 When you commit your code, please try to come up with a good commit message.
 The maintainers (try to) use [conventional-commits](https://www.conventionalcommits.org/en/v1.0.0/).
+
 ```shell
 git add FILES_YOU_CHANGED
 # This is the conventional commit convention:
@@ -94,24 +109,28 @@ git commit -m "feat(exec): add xxx option"
 ```
 
 ## Color decisions in the ui code
+
 We use the `console::style` function to colorize the output of the ui.
+
 ```rust
 use console::style;
 println!("{} {}", style("Hello").green(), style("world").red());
 ```
 
 To sync the colors of the different parts of the ui, we use the following rules:
+
 - `style("environment").magenta()`: The environment name
 - `style("feature").cyan()`: The feature name
 - `style("task").blue()`: The task name
 
 These styles are put in the `consts` module or are a `.fancy_display()` on the names. If you want to add a new generic color, please add it there.
 
-
 ## Comment for Breaking Change
+
 If you have a work-around for a potential breaking change, please add a comment in the code where you think the breaking change will happen. And what needs to be done when we **actually** want to break it. Use `BREAK:` in the comment to denote this.
 
 For example:
+
 ```rust
 // an enum to sort by size or name
 #[derive(clap::ValueEnum, Clone, Debug, Serialize)]
@@ -127,26 +146,34 @@ pub enum SortBy {
 ## Tests
 
 To run all tests, use:
+
 ```bash
 pixi run test
 ```
+
 But if you have modified recipe data under the tests/data/channels directory, you need to update the test channel before running tests:
+
 ```bash
 pixi run update-test-channel <channel_name>
 ```
+
 > [!NOTE]
 > This task currently only works on unix systems. If you are on Windows, it is recommended to use [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 
 For example, if you modified data for dummy_channel_1:
+
 ```bash
 pixi run update-test-channel dummy_channel_1
 ```
+
 After updating the test channel, run the tests again:
+
 ```
 pixi run test
 ```
 
 ## CLI documentation
+
 The CLI reference is automatically generated from the code documentation of CLI commands under `src/cli`.
 
 If you need to update this documentation, be sure to edit the docs under `src/cli`
@@ -160,20 +187,38 @@ You must commit the generated files as well as part of your PR.
 The `*_extender` files under `docs/reference/cli` are meant as extensions of the autogenerated documentation.
 Those are meant to be updated manually.
 
+## TOML docs snippets
+
+Documentation examples that show `pixi.toml` can be rendered as tabbed snippets (`pixi.toml` and `pyproject.toml`).
+When you change docs, run this before opening a PR:
+
+```bash
+python scripts/switchable_toml_snippets.py
+```
+
+If it rewrites files under `docs/`, commit those changes.
+CI runs the same script and fails when docs would be modified, which means generated snippet updates are missing from the PR.
+
+If a specific example should stay `pixi.toml`-only, add this marker immediately above that TOML block:
+
+```md
+<!-- no-pyproject -->
+```
+
 ## Python test snapshots
 
 Snapshots can be included in Python tests using `inline-snapshot`, following the pattern in
 https://github.com/prefix-dev/pixi/blob/main/tests/integration_python/test_import.py.
 
 1. To add a new snapshot, you first write `assert value == snapshot()`, where `value` is the
-string you are testing.
+   string you are testing.
 2. You can then run your tests with `pixi run test-specific-test your_test_name`. The test should
-error (this is expected), but also create a snapshot inline (inside the parentheses which follow
-`snapshot`), unless the test fails for another reason before hitting the `snapshot()` line.
-If the test fails for another reason, fix that reason and run the tests again.
+   error (this is expected), but also create a snapshot inline (inside the parentheses which follow
+   `snapshot`), unless the test fails for another reason before hitting the `snapshot()` line.
+   If the test fails for another reason, fix that reason and run the tests again.
 3. Running tests in the future will prompt you whenever actual values do not match the snapshots.
-If you want to fix all snapshots and review the diff afterwards, you can use `pixi run snapshot-update your_test_name`.
+   If you want to fix all snapshots and review the diff afterwards, you can use `pixi run snapshot-update your_test_name`.
 4. You may wish to redact parts of snapshots. This will be necessary when values are dependent on
-the machine running the tests, e.g. manifests created with `pixi init`. This can be done using
-`dirty-equals`: see documentation at https://15r10nk.github.io/inline-snapshot/0.23/eq_snapshot/#dirty-equals
-and examples in https://github.com/prefix-dev/pixi/blob/main/tests/integration_python/test_import.py.
+   the machine running the tests, e.g. manifests created with `pixi init`. This can be done using
+   `dirty-equals`: see documentation at https://15r10nk.github.io/inline-snapshot/0.23/eq_snapshot/#dirty-equals
+   and examples in https://github.com/prefix-dev/pixi/blob/main/tests/integration_python/test_import.py.
