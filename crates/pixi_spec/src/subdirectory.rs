@@ -77,15 +77,14 @@ impl Subdirectory {
             match component {
                 // Skip current directory components (`.`)
                 Component::CurDir => {}
-                // Handle parent directory components (`..`)
-                Component::ParentDir => {
-                    // If we can't pop (path is empty), the path escapes the root
-                    if !normalized.pop() {
-                        return Err(SubdirectoryError::EscapesRoot(
-                            path.to_string_lossy().into_owned(),
-                        ));
-                    }
+                // Handle parent directory components (`..`). Failing to pop
+                // means the path escapes the root.
+                Component::ParentDir if !normalized.pop() => {
+                    return Err(SubdirectoryError::EscapesRoot(
+                        path.to_string_lossy().into_owned(),
+                    ));
                 }
+                Component::ParentDir => {}
                 // Keep normal path segments
                 Component::Normal(segment) => normalized.push(segment),
                 // RootDir and Prefix shouldn't occur (we validate against absolute paths)
