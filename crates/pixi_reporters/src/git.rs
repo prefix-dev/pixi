@@ -53,7 +53,7 @@ impl GitCheckoutProgress {
 }
 
 impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
-    /// Called when a git checkout was queued on the [`CommandQueue`].
+    /// Called when a git checkout was queued on the command queue.
     fn on_queued(
         &self,
         _context: Option<ReporterContext>,

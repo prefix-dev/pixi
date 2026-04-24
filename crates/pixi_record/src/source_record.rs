@@ -111,7 +111,7 @@ pub struct SourceRecord<D> {
     pub variants: BTreeMap<String, VariantValue>,
 
     /// The short hash that was originally parsed from the lock file (e.g.
-    /// the 9f3c2a7b part of numba-cuda[9f3c2a7b] @ .).
+    /// the `9f3c2a7b` part of `numba-cuda[9f3c2a7b] @ .`).
     ///
     /// It's useful to reuse this identifier to avoid unnecessary lock-file
     /// updates. If this field is None when serializing to the lock-file, it

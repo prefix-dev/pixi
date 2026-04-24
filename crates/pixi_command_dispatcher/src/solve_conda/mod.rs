@@ -341,10 +341,9 @@ impl SolveCondaEnvironmentSpec {
     }
 }
 
-/// Error kinds returned by
-/// [`SolveCondaEnvironmentSpec::solve_on_blocking_pool`]. The outer
-/// [`SolveCondaEnvironmentSpec::solve`] maps these onto
-/// [`CommandDispatcherError`] for backwards compatibility; new
+/// Error kinds returned by `SolveCondaEnvironmentSpec::solve_on_blocking_pool`.
+/// The outer `SolveCondaEnvironmentSpec::solve` maps these onto
+/// [`crate::CommandDispatcherError`] for backwards compatibility; new
 /// compute-engine call sites handle these directly.
 #[derive(Debug)]
 pub enum SolveCondaBlockingError {
@@ -412,7 +411,7 @@ pub enum SolveCondaEnvironmentError {
     /// Used by the compute-engine path
     /// ([`crate::keys::SolveCondaKey`]) where the binary repodata
     /// fetch is done inside the key's compute body. The legacy
-    /// [`SolveCondaEnvironmentSpec::solve`] receives repodata
+    /// `SolveCondaEnvironmentSpec::solve` receives repodata
     /// pre-fetched by its caller, so this variant is not produced on
     /// the legacy path.
     #[error(transparent)]

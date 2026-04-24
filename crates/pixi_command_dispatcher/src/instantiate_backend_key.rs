@@ -340,7 +340,7 @@ impl InstantiateBackendKey {
 
     /// Build an [`EphemeralEnvSpec`] from the backend's
     /// [`EnvironmentSpec`]: merge `requirement` into `dependencies`,
-    /// append the [`PIXI_BUILD_API_VERSION`] constraint so the solved
+    /// append the `PIXI_BUILD_API_VERSION` constraint so the solved
     /// env surfaces the negotiated API version, and carry through the
     /// key's exclude-newer cutoff.
     fn ephemeral_env_spec_for(&self, env_spec: &EnvironmentSpec) -> EphemeralEnvSpec {

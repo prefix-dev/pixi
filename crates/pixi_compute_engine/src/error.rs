@@ -9,7 +9,7 @@
 //! A detected cycle is first offered to every
 //! [`ComputeCtx::with_cycle_guard`](crate::ComputeCtx::with_cycle_guard)
 //! scope that sits on the cycle path, as a
-//! [`CycleError`](crate::CycleError). If no user guard catches, the
+//! [`CycleError`]. If no user guard catches, the
 //! cycle surfaces at the engine boundary as [`ComputeError::Cycle`],
 //! carrying the full ring of keys.
 

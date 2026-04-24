@@ -1,6 +1,6 @@
 //! `ctx.solve_conda` extension trait. Runs a conda solve on the
 //! blocking-task pool, subject to the `max_concurrent_solves` limit
-//! enforced by [`CondaSolveSemaphore`], and drives the
+//! enforced by the command dispatcher's semaphore, and drives the
 //! [`CondaSolveReporter`] lifecycle (`on_queued` → `on_started` →
 //! `on_finished`).
 //!
@@ -8,7 +8,7 @@
 //! it slots into the current reporter contract without any translation
 //! layer. It does **not** fetch repodata; callers pre-fetch and pass
 //! it via `spec.binary_repodata`, matching the existing
-//! [`SolveCondaEnvironmentSpec::solve`] contract.
+//! `SolveCondaEnvironmentSpec` solver contract.
 
 use std::sync::Arc;
 

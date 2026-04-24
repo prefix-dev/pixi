@@ -18,7 +18,7 @@
 //! The graph therefore stores a [`Vec`] of edge records per
 //! `(caller, target)` pair. Each record has a unique [`EdgeId`]
 //! minted by [`ActiveEdges::try_add`] and held by the caller's
-//! [`EdgeGuard`]. Removal targets exactly that record, so sibling
+//! `EdgeGuard`. Removal targets exactly that record, so sibling
 //! waits on the same pair are independent.
 //!
 //! # Edge-captured notify targets

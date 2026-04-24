@@ -9,9 +9,9 @@
 //! ```
 //!
 //! Features are split into Known and Unknown features. Basically you can use
-//! any string as a feature but only the features defined in [`KnownFeature`]
+//! any string as a feature but only the features defined in [`KnownPreviewFeature`]
 //! can be used. We do this for backwards compatibility with the old features
-//! that may have been used in the past. The [`KnownFeature`] enum contains all
+//! that may have been used in the past. The [`KnownPreviewFeature`] enum contains all
 //! the known features. Extend this if you want to add support for new features.
 
 use serde::{Deserialize, Serialize};

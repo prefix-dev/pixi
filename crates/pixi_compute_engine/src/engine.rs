@@ -163,7 +163,7 @@ impl ComputeEngine {
     ///
     /// The root ctx this method builds has no `current` key, so any
     /// edges it would add are not seen by cycle detection. A nested
-    /// call from inside a running [`Key::compute`](crate::Key::compute)
+    /// call from inside a running [`Key::compute`]
     /// body can therefore create a cross-task dedup deadlock that the
     /// detector will not catch.
     ///

@@ -23,7 +23,7 @@ tokio::task_local! {
 }
 
 /// Read the current task's [`ReporterContext`], if one has been
-/// installed via [`CURRENT_REPORTER_CONTEXT::scope`].
+/// installed via `CURRENT_REPORTER_CONTEXT::scope`.
 ///
 /// Returns `None` when no scope is active on the current task.
 pub(crate) fn current_reporter_context() -> Option<ReporterContext> {
