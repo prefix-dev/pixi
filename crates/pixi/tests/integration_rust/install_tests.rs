@@ -4,10 +4,13 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
     sync::LazyLock,
+    time::Duration,
 };
 
 use dunce::canonicalize;
 use fs_err::tokio as tokio_fs;
+use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
+use pixi_build_frontend::BackendOverride;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
     LockFileUsageConfig,
@@ -42,6 +45,78 @@ use crate::common::{
 };
 use crate::setup_tracing;
 use pixi_test_utils::{MockRepoData, Package};
+
+fn count_build_events(events: &[BackendEvent]) -> usize {
+    events
+        .iter()
+        .filter(|event| matches!(event, BackendEvent::CondaBuildV1Called))
+        .count()
+}
+
+#[tokio::test]
+async fn install_with_relative_exclude_newer_does_not_rebuild_unchanged_source_packages() {
+    setup_tracing();
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let backend_override = BackendOverride::from_memory(instantiator);
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs_err::create_dir_all(&source_dir).unwrap();
+
+    fs_err::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "0.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#,
+    )
+    .unwrap();
+
+    fs_err::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+name = "my-package"
+channels = []
+# exclude-newer = "7d"
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+            Platform::current()
+        ),
+    )
+    .unwrap();
+
+    pixi.install().await.unwrap();
+    let first_build_events = observer.events();
+    assert_eq!(
+        count_build_events(&first_build_events),
+        1,
+        "first install should build the source package once"
+    );
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    pixi.install().await.unwrap();
+    let second_build_events = observer.events();
+    assert_eq!(
+        count_build_events(&second_build_events),
+        0,
+        "second install should reuse the existing build cache for an unchanged source package"
+    );
+}
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
