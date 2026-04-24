@@ -1,0 +1,21 @@
+[workspace]
+authors = ["pixi contributors <hi@prefix.dev>"]
+channels = ["conda-forge"]
+description = "Pull PyPI pins from requirements.txt via the pypi-txt key (phased migration / conda-style -r includes)"
+name = "pypi-txt"
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+version = "0.1.0"
+
+[dependencies]
+python = ">=3.11"
+pypi-txt = ["requirements.txt", "more-requirements.txt"]
+
+[feature.dev.dependencies]
+python = ">=3.11"
+pypi-txt = "dev-requirements.txt"
+
+[tasks]
+check = { cmd = "python -c \"import attrs; import packaging; print('ok', attrs.__version__, packaging)\"" }
+
+[environments]
+dev = { features = ["dev"] }

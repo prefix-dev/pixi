@@ -1,8 +1,0 @@
-typing-extensions>=4.12.0
-pandas
-boto3
-click
-matplotlib
-pydantic
-fastmcp
-django
