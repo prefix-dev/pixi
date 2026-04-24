@@ -128,10 +128,10 @@ async fn install_inner(
     // `force_reinstall` for source packages must invalidate the
     // source-build caches before the SourceBuildKey fanout below.
     if !spec.force_reinstall.is_empty() {
-        let source_builds_root = ctx.global_data().cache_dirs().source_builds();
-        let artifact_cache = ArtifactCache::new(source_builds_root.as_std_path().join("artifacts"));
+        let cache_dirs = ctx.global_data().cache_dirs();
+        let artifact_cache = ArtifactCache::new(cache_dirs.source_build_artifacts().as_std_path());
         let workspace_cache =
-            WorkspaceCache::new(source_builds_root.as_std_path().join("workspaces"));
+            WorkspaceCache::new(cache_dirs.source_build_workspaces().as_std_path());
         for package in source_records
             .iter()
             .filter(|record| spec.force_reinstall.contains(record.name()))

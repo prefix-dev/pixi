@@ -129,7 +129,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let build_dir = AbsPathBuf::new(build_dir)
             .expect("build dir is not absolute")
             .into_assume_dir();
-        cache_dirs.set_working_dirs(build_dir);
+        cache_dirs.set_backend_metadata(build_dir);
     }
     let command_dispatcher = workspace
         .command_dispatcher_builder()?

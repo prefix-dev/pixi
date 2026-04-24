@@ -172,8 +172,7 @@ async fn compute_inner(
     // Force-rebuild is handled by wiping the cache entry before calling;
     // this body honors whatever state it finds on disk.
     let cache_dirs = ctx.global_data().cache_dirs().clone();
-    let artifact_cache =
-        ArtifactCache::new(cache_dirs.source_builds().as_std_path().join("artifacts"));
+    let artifact_cache = ArtifactCache::new(cache_dirs.source_build_artifacts().as_std_path());
     let source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
@@ -204,8 +203,7 @@ async fn compute_inner(
         spec.build_environment.host_platform,
         &backend_identifier,
     );
-    let workspace_cache =
-        WorkspaceCache::new(cache_dirs.source_builds().as_std_path().join("workspaces"));
+    let workspace_cache = WorkspaceCache::new(cache_dirs.source_build_workspaces().as_std_path());
     // ensure_dir_locked holds an exclusive cross-process lock for the
     // guard's lifetime, so a concurrent pixi process building the same
     // (source, deps, variants, backend) combination blocks here.

@@ -258,8 +258,8 @@ pub trait MetadataCacheKey<C: MetadataCache> {
 
 /// Convenience alias for the key type of a [`MetadataCache`].
 ///
-/// Allows writing `CacheKey<SourceRecordCache>` instead of the concrete
-/// `SourceRecordCacheKey`.
+/// Allows writing `CacheKey<BuildBackendMetadataCache>` instead of the
+/// concrete `BuildBackendMetadataCacheKey`.
 pub type CacheKey<C> = <C as MetadataCache>::Key;
 
 /// Convenience alias for the entry type of a [`MetadataCache`].
@@ -431,11 +431,6 @@ impl<'de, C: ?Sized> Deserialize<'de> for CacheKeyString<C> {
         String::deserialize(deserializer).map(|s| Self(s, PhantomData))
     }
 }
-
-/// A reference to a specific entry in an upstream cache, combining the
-/// cache key string (to locate the file) with the revision (to check
-/// staleness).
-pub type UpstreamCacheRef<C> = (CacheKeyString<C>, CacheRevision<C>);
 
 /// Trait for cache-specific error types.
 ///

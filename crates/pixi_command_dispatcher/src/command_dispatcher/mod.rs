@@ -25,7 +25,7 @@ use crate::{
     BackendHandle, BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
     DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec, Executor,
     InstantiateBackendError, InstantiateBackendKey, Reporter,
-    cache::{build_backend_metadata::BuildBackendMetadataCache, source_record::SourceRecordCache},
+    cache::build_backend_metadata::BuildBackendMetadataCache,
     cache_dirs::CacheDirs,
     environment::WorkspaceEnvRegistry,
     install_pixi::{
@@ -94,9 +94,6 @@ pub(crate) struct CommandDispatcherData {
 
     /// Backend metadata cache used to store metadata for source packages.
     pub build_backend_metadata_cache: BuildBackendMetadataCache,
-
-    /// Source metadata cache used to store metadata for source packages.
-    pub source_record_cache: SourceRecordCache,
 
     /// The resolver of git repositories.
     pub git_resolver: GitResolver,
@@ -190,36 +187,21 @@ impl CommandDispatcher {
         &self.data.build_backend_metadata_cache
     }
 
-    /// Returns the cache for source metadata.
-    pub fn source_record_cache(&self) -> &SourceRecordCache {
-        &self.data.source_record_cache
-    }
-
     /// Returns the source-build artifact cache rooted at
-    /// `cache_dirs.source_builds()/artifacts`. Use this to invalidate
+    /// `cache_dirs.source_build_artifacts()`. Use this to invalidate
     /// cached build outputs for a package (e.g. when implementing
     /// `--force-reinstall` or `--clean` at the CLI layer).
     pub fn source_build_artifact_cache(&self) -> crate::keys::ArtifactCache {
-        crate::keys::ArtifactCache::new(
-            self.data
-                .cache_dirs
-                .source_builds()
-                .as_std_path()
-                .join("artifacts"),
-        )
+        crate::keys::ArtifactCache::new(self.data.cache_dirs.source_build_artifacts().as_std_path())
     }
 
     /// Returns the source-build workspace cache rooted at
-    /// `cache_dirs.source_builds()/workspaces`. Use this to wipe
+    /// `cache_dirs.source_build_workspaces()`. Use this to wipe
     /// per-package workspace state so the next build starts from a
     /// clean backend-managed tree.
     pub fn source_build_workspace_cache(&self) -> crate::keys::WorkspaceCache {
         crate::keys::WorkspaceCache::new(
-            self.data
-                .cache_dirs
-                .source_builds()
-                .as_std_path()
-                .join("workspaces"),
+            self.data.cache_dirs.source_build_workspaces().as_std_path(),
         )
     }
 

@@ -394,6 +394,7 @@ impl BuildBackendMetadataInner {
         &self,
         cache_dirs: &crate::CacheDirs,
         build_source_checkout: &SourceCheckout,
+        source_unique_key: &str,
         backend: BackendHandle,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<RawCondaOutputs, BuildBackendMetadataError> {
@@ -418,8 +419,12 @@ impl BuildBackendMetadataInner {
                     .collect(),
             ),
             variant_files: Some(self.variant_files.clone()),
+            // Work dir nests under the per-source slot of the metadata
+            // cache, so cache entries for this source and the backend's
+            // scratch for the same source live side by side (single
+            // `rm -rf` cleans both).
             work_directory: cache_dirs
-                .working_dirs()
+                .backend_metadata_work_dir(source_unique_key)
                 .join(
                     WorkDirKey {
                         source: SourceRecordOrCheckout::Checkout {
@@ -811,10 +816,28 @@ impl BuildBackendMetadataInner {
         // Snapshot cache dirs for the conda_outputs call (work-dir path
         // derivation). Cheap clone: `CacheDirs` is a handful of paths.
         let cache_dirs = ctx.global_data().cache_dirs().clone();
+
+        // Compute the source's cache_unique_key up front: the work dir
+        // is nested under the same `<source>/` slot the metadata cache
+        // uses, so both live in one tree per source.
+        let manifest_source_location = checkouts.manifest_source_location();
+        let canonical_manifest_source: CanonicalSourceLocation =
+            manifest_source_location.manifest_source().into();
+        let canonical_build_source =
+            CanonicalSourceLocation::from(checkouts.build_source_checkout.pinned.clone());
+        let canonical_build_source_opt = (canonical_manifest_source != canonical_build_source)
+            .then_some(canonical_build_source.clone());
+        let canonical_source = CanonicalSourceCodeLocation::new(
+            canonical_manifest_source.clone(),
+            canonical_build_source_opt.clone(),
+        );
+        let source_unique_key = canonical_source.cache_unique_key();
+
         let raw = self
             .call_conda_outputs(
                 &cache_dirs,
                 &checkouts.build_source_checkout,
+                &source_unique_key,
                 backend,
                 log_sink,
             )
@@ -827,14 +850,6 @@ impl BuildBackendMetadataInner {
             _ => CacheRevision::new(),
         };
 
-        let manifest_source_location = checkouts.manifest_source_location();
-        let canonical_manifest_source: CanonicalSourceLocation =
-            manifest_source_location.manifest_source().into();
-        let canonical_build_source =
-            CanonicalSourceLocation::from(checkouts.build_source_checkout.pinned.clone());
-        let canonical_build_source_opt =
-            (canonical_manifest_source != canonical_build_source).then_some(canonical_build_source);
-
         let prev_cache_version = stale.as_ref().map(|cache| cache.cache_version);
         let metadata = BuildBackendMetadataCacheEntry {
             revision,
@@ -844,10 +859,7 @@ impl BuildBackendMetadataInner {
             build_variant_files: self.variant_files.iter().cloned().collect(),
             input_globs: raw.input_globs,
             input_files: raw.input_files,
-            source: CanonicalSourceCodeLocation::new(
-                canonical_manifest_source,
-                canonical_build_source_opt,
-            ),
+            source: canonical_source,
             project_model_hash,
             configuration_hash,
             timestamp: raw.timestamp,

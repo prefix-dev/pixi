@@ -80,7 +80,6 @@ pub use cache::build_backend_metadata::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry,
 };
 pub use cache::common::{CacheEntry, CacheRevision, MetadataCache};
-pub use cache::source_record::{SourceRecordCache, SourceRecordCacheEntry};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,

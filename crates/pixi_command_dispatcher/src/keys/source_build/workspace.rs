@@ -1,9 +1,12 @@
 //! Workspace cache for source builds.
 //!
-//! Layout (under `<cache_root>/source_builds/workspaces/`):
+//! Layout (under the workspace's `.pixi/bld/`, or the global cache
+//! root when no workspace is set). The short directory name is
+//! deliberate: backend build trees are deeply nested and the full
+//! path must stay under Windows' `MAX_PATH = 260`.
 //!
 //! ```text
-//! workspaces/<package_name>/<workspace_key>/
+//! <package_name>/<workspace_key>/
 //!     ... (backend-managed build tree: prefixes, ninja/cmake state, etc.)
 //! ```
 //!
@@ -32,9 +35,9 @@ use xxhash_rust::xxh3::Xxh3;
 
 /// Opaque handle identifying one workspace cache entry.
 ///
-/// Format: `<host_platform>-<xxh3-base64url>`. Scoped under a
-/// `<package_name>/` parent dir so per-package nuking is a single
-/// directory remove.
+/// Format: url-safe-base64 of the `xxh3_64` over all hashed inputs
+/// (see [`compute_workspace_key`]). Scoped under a `<package_name>/`
+/// parent dir so per-package nuking is a single directory remove.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WorkspaceKey(String);
 
@@ -70,8 +73,10 @@ pub fn compute_workspace_key(
     backend_identifier.hash(&mut hasher);
     record.build_packages.hash(&mut hasher);
     record.host_packages.hash(&mut hasher);
-    let hash = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
-    WorkspaceKey(format!("{host_platform}-{hash}"))
+    // `host_platform` is already folded into `hasher`, so the key
+    // hash alone uniquely identifies the workspace. No display-only
+    // prefix: keeps the on-disk path short on Windows.
+    WorkspaceKey(URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes()))
 }
 
 /// Workspace cache rooted at `<cache_root>/workspaces/`.
@@ -281,10 +286,15 @@ mod tests {
     }
 
     #[test]
-    fn key_contains_host_platform_prefix() {
+    fn key_changes_with_host_platform() {
+        // Host platform is folded into the hash but not displayed in
+        // the key (short-path policy). Two keys that differ only by
+        // host platform must therefore be distinct.
         let r = make_record("foo");
-        let k = compute_workspace_key(&r, Platform::Linux64, Platform::OsxArm64, "backend-v1");
-        assert!(k.to_string().starts_with("osx-arm64-"));
+        let linux = compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "backend-v1");
+        let osx_arm =
+            compute_workspace_key(&r, Platform::Linux64, Platform::OsxArm64, "backend-v1");
+        assert_ne!(linux, osx_arm);
     }
 
     #[test]

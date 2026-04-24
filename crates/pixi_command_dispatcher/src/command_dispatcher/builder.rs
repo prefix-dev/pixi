@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use crate::BuildEnvironment;
 use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
-use crate::cache::source_record::SourceRecordCache;
 use crate::compute_data::{
     AllowExecuteLinkScripts, BackendSourceBuildSemaphore, CondaSolveSemaphore,
 };
@@ -201,10 +200,9 @@ impl CommandDispatcherBuilder {
 
         let git_resolver = self.git_resolver.unwrap_or_default();
         let build_backend_metadata_cache =
-            BuildBackendMetadataCache::new(cache_dirs.build_backend_metadata().into());
+            BuildBackendMetadataCache::new(cache_dirs.backend_metadata().into());
 
         let url_resolver = self.url_resolver.unwrap_or_default();
-        let source_record_cache = SourceRecordCache::new(cache_dirs.source_metadata().into());
 
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
             let platform = Platform::current();
@@ -243,7 +241,6 @@ impl CommandDispatcherBuilder {
         let data = Arc::new(CommandDispatcherData {
             gateway,
             build_backend_metadata_cache,
-            source_record_cache,
             git_resolver,
             url_resolver,
             cache_dirs,

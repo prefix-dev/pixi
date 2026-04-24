@@ -1,9 +1,10 @@
 //! Artifact cache for source builds.
 //!
-//! Layout (under `<cache_root>/source_builds/artifacts/`):
+//! Layout (under the workspace's `.pixi/artifacts-v0/`, or the global
+//! cache root when no workspace is set):
 //!
 //! ```text
-//! artifacts/<package_name>/<cache_key>/
+//! <package_name>/<cache_key>/
 //!     <pkg>-<ver>-<build>.conda
 //!     sidecar.json
 //! ```
@@ -41,10 +42,9 @@ use xxhash_rust::xxh3::Xxh3;
 
 /// Opaque content-addressed handle for an artifact cache entry.
 ///
-/// Format: `<host_platform>-<xxh3-base64url>`. The leading platform makes the
-/// directory name human-scannable; the xxh3 suffix provides the actual
-/// collision resistance. Package name is not included because the entry
-/// lives under a `<package_name>/` parent directory.
+/// Format: url-safe-base64 of the `xxh3_64` over all hashed inputs
+/// (see [`compute_artifact_cache_key`]). Package name is not included
+/// because the entry lives under a `<package_name>/` parent directory.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArtifactCacheKey(String);
 
@@ -112,8 +112,10 @@ pub fn compute_artifact_cache_key(
         sha.hash(&mut hasher);
     }
 
-    let hash = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
-    ArtifactCacheKey(format!("{host_platform}-{hash}"))
+    // `host_platform` is already folded into `hasher`, so the hash
+    // alone uniquely identifies the artifact. Dropping the display-only
+    // prefix keeps the on-disk path short on Windows.
+    ArtifactCacheKey(URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes()))
 }
 
 /// On-disk record that lives next to a cached `.conda`.
@@ -1073,11 +1075,15 @@ mod cache_key_tests {
     }
 
     #[test]
-    fn cache_key_uses_host_platform_as_prefix() {
+    fn cache_key_changes_with_host_platform() {
+        // Host platform is hashed into the key but not displayed in
+        // it (short-path policy). Two keys that differ only by host
+        // platform must therefore be distinct.
         let r = record("foo");
-        let k =
-            compute_artifact_cache_key(&r, Platform::Linux64, Platform::OsxArm64, "b", &[], &[])
-                .to_string();
-        assert!(k.starts_with("osx-arm64-"), "got: {k}");
+        let linux =
+            compute_artifact_cache_key(&r, Platform::Linux64, Platform::Linux64, "b", &[], &[]);
+        let osx_arm =
+            compute_artifact_cache_key(&r, Platform::Linux64, Platform::OsxArm64, "b", &[], &[]);
+        assert_ne!(linux, osx_arm);
     }
 }
