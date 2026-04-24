@@ -9,6 +9,30 @@ use thiserror::Error;
 
 use crate::error::{AmbiguousTaskError, MissingTaskError};
 
+/// The separator used between member path segments and the task name in
+/// qualified task addresses, e.g. `member_a::build` or `a::c::test`.
+pub const MEMBER_TASK_SEPARATOR: &str = "::";
+
+/// Splits a task name on [`MEMBER_TASK_SEPARATOR`]. Returns `Some((member_path,
+/// task_name))` when the input contains at least one separator, otherwise
+/// `None`.
+///
+/// Examples:
+/// - `"build"` → `None`
+/// - `"a::build"` → `Some((vec!["a"], "build"))`
+/// - `"a::c::test"` → `Some((vec!["a", "c"], "test"))`
+pub fn parse_qualified_task_name(s: &str) -> Option<(Vec<&str>, &str)> {
+    if !s.contains(MEMBER_TASK_SEPARATOR) {
+        return None;
+    }
+    let mut parts: Vec<&str> = s.split(MEMBER_TASK_SEPARATOR).collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let task = parts.pop().expect("checked len >= 2");
+    Some((parts, task))
+}
+
 /// Defines where the task was defined when looking for a task.
 #[derive(Debug, Clone)]
 pub enum FindTaskSource<'p> {
@@ -122,6 +146,41 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
         source: FindTaskSource<'p>,
         task_specific_environment: Option<Environment<'p>>,
     ) -> Result<TaskAndEnvironment<'p>, FindTaskError> {
+        // `member::task` / `a::b::task` addressing for the hierarchical-tasks
+        // preview feature (Model 2 — federated member workspaces).
+        //
+        // If the name contains `::` and the first segment matches a known
+        // top-level member, we resolve the member path to the member's
+        // standalone Workspace and dispatch the lookup into that member's
+        // **own** default environment. The returned `Environment` carries
+        // a reference to the member workspace — so downstream task
+        // execution (activation, lockfile, install dir) naturally targets
+        // the member, not the root.
+        //
+        // Names without `::`, or with a first segment that isn't a
+        // member, fall through to the normal task search below —
+        // preserving backwards compatibility for any task name that
+        // happens to contain `::`.
+        if let Some((member_path, task_name)) = parse_qualified_task_name(name.as_str())
+            && self.project.members().contains_key(member_path[0])
+            && let Some(member_ws) = self.project.resolve_member(member_path.iter().copied())
+        {
+            let member_env = member_ws.default_environment();
+            let task_name_lookup = TaskName::from(task_name);
+            match member_env.task(&task_name_lookup, self.platform) {
+                Ok(task) => return Ok((member_env, task)),
+                Err(_) => {
+                    // Member path resolves but no task with that name.
+                    // Surface a MissingTask error tied to the
+                    // fully-qualified address so the user sees exactly
+                    // what we searched for.
+                    return Err(FindTaskError::MissingTask(MissingTaskError {
+                        task_name: name,
+                    }));
+                }
+            }
+        }
+
         // If no explicit environment was specified
         if self.explicit_environment.is_none() && task_specific_environment.is_none() {
             let default_env = self.project.default_environment();
@@ -226,6 +285,8 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+
+    use pixi_core::workspace::HasWorkspaceRef;
 
     use super::*;
 
@@ -487,5 +548,163 @@ mod tests {
             .find_task("test".into(), FindTaskSource::CmdArgs, None)
             .expect("should resolve to an environment");
         assert_eq!(result.0.name().as_str(), "test");
+    }
+
+    // ---- Hierarchical-tasks (`a::b::task`) end-to-end routing tests ----
+
+    /// Writes a workspace root + member layout used by the hierarchical-tasks
+    /// integration tests and returns the tempdir guard (drop = cleanup).
+    ///
+    /// Under Model 2 every member has its own `[workspace]` block — each
+    /// is a fully standalone pixi project. The root's role is purely to
+    /// aggregate so `a::c::test` resolves through the member tree.
+    fn build_hierarchical_fixture(preview_on: bool) -> tempfile::TempDir {
+        let tmp = tempfile::tempdir().unwrap();
+        let preview_line = if preview_on {
+            "preview = [\"hierarchical-tasks\"]"
+        } else {
+            "preview = []"
+        };
+        fs_err::write(
+            tmp.path().join("pixi.toml"),
+            format!(
+                "[workspace]\nname = \"ht-root\"\nchannels = []\nplatforms = [\"linux-64\", \"osx-64\", \"osx-arm64\", \"win-64\"]\n{preview_line}\n\n[tasks]\ngreet = \"echo hi\"\nall_tests = {{ depends-on = [\"a::test\", \"a::c::test\", \"b::test\"] }}\n"
+            ),
+        )
+        .unwrap();
+
+        for (rel, name, task) in [
+            ("a", "a", "echo a"),
+            ("b", "b", "echo b"),
+            ("a/c", "c", "echo c"),
+        ] {
+            let dir = tmp.path().join(rel);
+            fs_err::create_dir_all(&dir).unwrap();
+            fs_err::write(
+                dir.join("pixi.toml"),
+                format!(
+                    "[workspace]\nname = \"{name}\"\nchannels = []\nplatforms = [\"linux-64\", \"osx-64\", \"osx-arm64\", \"win-64\"]\n\n[tasks]\ntest = \"{task}\"\n"
+                ),
+            )
+            .unwrap();
+        }
+        tmp
+    }
+
+    fn locate_workspace(root: &Path) -> Workspace {
+        pixi_core::WorkspaceLocator::for_cli()
+            .with_consider_environment(false)
+            .with_emit_warnings(false)
+            .with_search_start(pixi_core::workspace::DiscoveryStart::SearchRoot(
+                root.to_path_buf(),
+            ))
+            .locate()
+            .expect("workspace should locate")
+    }
+
+    #[test]
+    fn qualified_task_routes_to_member() {
+        let tmp = build_hierarchical_fixture(true);
+        let project = locate_workspace(tmp.path());
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+
+        let (env, task) = search
+            .find_task("a::test".into(), FindTaskSource::CmdArgs, None)
+            .expect("a::test must resolve");
+        // Model 2: the returned Environment belongs to the **member's**
+        // workspace, not the root. Verify by comparing workspace roots.
+        let expected_root = dunce::canonicalize(tmp.path().join("a")).unwrap();
+        assert_eq!(
+            env.workspace().root(),
+            expected_root,
+            "member tasks must run in the member's own workspace"
+        );
+        assert!(
+            env.name().is_default(),
+            "member task should run in the member's default env"
+        );
+        // Confirm we routed to the member's task, not the workspace's.
+        // The member's `test` command is "echo a"; the root has no `test`.
+        use pixi_manifest::task::CmdArgs;
+        match task.as_command() {
+            Some(CmdArgs::Single(s)) => assert_eq!(s.source(), "echo a"),
+            other => panic!("expected `echo a`, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn nested_qualified_task_routes_to_grandchild() {
+        let tmp = build_hierarchical_fixture(true);
+        let project = locate_workspace(tmp.path());
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+
+        let (env, task) = search
+            .find_task("a::c::test".into(), FindTaskSource::CmdArgs, None)
+            .expect("a::c::test must resolve");
+        // The returned env must belong to the inner member `a/c`, not to
+        // `a` or the root.
+        let expected_root = dunce::canonicalize(tmp.path().join("a/c")).unwrap();
+        assert_eq!(env.workspace().root(), expected_root);
+        use pixi_manifest::task::CmdArgs;
+        match task.as_command() {
+            Some(CmdArgs::Single(s)) => assert_eq!(s.source(), "echo c"),
+            other => panic!("expected `echo c`, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn qualified_task_with_unknown_leaf_returns_missing() {
+        let tmp = build_hierarchical_fixture(true);
+        let project = locate_workspace(tmp.path());
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+
+        let err = search
+            .find_task("a::does_not_exist".into(), FindTaskSource::CmdArgs, None)
+            .expect_err("unknown leaf task must fail");
+        assert!(matches!(err, FindTaskError::MissingTask(_)));
+    }
+
+    #[test]
+    fn unqualified_task_still_works_with_preview_on() {
+        let tmp = build_hierarchical_fixture(true);
+        let project = locate_workspace(tmp.path());
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+
+        // Root has `greet`; should resolve against the workspace as normal.
+        let (env, _task) = search
+            .find_task("greet".into(), FindTaskSource::CmdArgs, None)
+            .expect("root task must still resolve");
+        assert!(env.name().is_default());
+    }
+
+    #[test]
+    fn qualified_task_is_unknown_when_preview_off() {
+        let tmp = build_hierarchical_fixture(false);
+        let project = locate_workspace(tmp.path());
+        let search = SearchEnvironments::from_opt_env(&project, None, None);
+
+        // Preview off → member tree is empty, so `a::test` falls through
+        // to the normal task search and reports a missing task (there is
+        // no root task literally named `a::test`).
+        let err = search
+            .find_task("a::test".into(), FindTaskSource::CmdArgs, None)
+            .expect_err("preview-off must not resolve member tasks");
+        assert!(matches!(err, FindTaskError::MissingTask(_)));
+    }
+
+    #[test]
+    fn parse_qualified_task_name_edge_cases() {
+        assert_eq!(parse_qualified_task_name("build"), None);
+        assert_eq!(
+            parse_qualified_task_name("a::build"),
+            Some((vec!["a"], "build"))
+        );
+        assert_eq!(
+            parse_qualified_task_name("a::b::c::t"),
+            Some((vec!["a", "b", "c"], "t"))
+        );
+        // `::foo` splits to ["", "foo"]: degenerate but handled — caller
+        // will fail at member-resolve time since `""` isn't a member.
+        assert_eq!(parse_qualified_task_name("::foo"), Some((vec![""], "foo")));
     }
 }

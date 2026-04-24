@@ -180,6 +180,27 @@ pub struct Workspace {
 
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+
+    /// Nested member workspaces, populated only when the workspace enables
+    /// the `hierarchical-tasks` preview feature. Empty otherwise. Each
+    /// member is itself a fully-loaded, standalone [`Workspace`] (with its
+    /// own envs, lockfile, `.pixi/` install dir) — the root simply
+    /// aggregates them so hierarchical task addresses (`a::b::task`) can
+    /// dispatch into the right member workspace.
+    members: indexmap::IndexMap<String, MemberWorkspace>,
+}
+
+/// A member workspace inside the root's hierarchical tree. The `workspace`
+/// field is a fully standalone pixi workspace — it can also be used
+/// directly (e.g. when the user runs pixi from inside the member's
+/// directory, the upward walk resolves to the member itself and the outer
+/// aggregation is invisible).
+#[derive(Clone, Debug)]
+pub struct MemberWorkspace {
+    /// The member's own loaded Workspace.
+    pub workspace: Workspace,
+    /// Further nested member workspaces under this one.
+    pub children: indexmap::IndexMap<String, MemberWorkspace>,
 }
 
 impl Debug for Workspace {
@@ -238,6 +259,11 @@ impl Workspace {
             .collect::<HashMap<String, s3_middleware::S3Config>>();
 
         let config = Config::load(&root);
+        // `from_manifests` is called for every Workspace construction,
+        // including member workspaces loaded recursively. The member tree
+        // is attached separately by `WorkspaceLocator::locate` so that the
+        // recursive load uses the same discovery/locator plumbing as any
+        // standalone workspace, without reimplementing it here.
         Self {
             root,
             manifest_location_name,
@@ -251,7 +277,60 @@ impl Workspace {
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
+            members: indexmap::IndexMap::new(),
         }
+    }
+
+    /// Hierarchical tree of nested member workspaces discovered under this
+    /// workspace. Empty unless the workspace enabled the
+    /// `hierarchical-tasks` preview feature.
+    pub fn members(&self) -> &indexmap::IndexMap<String, MemberWorkspace> {
+        &self.members
+    }
+
+    /// Walks a member path (e.g. `["a", "c"]`) and returns the matching
+    /// member's [`Workspace`], or `None` if any segment does not exist.
+    pub fn resolve_member<I, S>(&self, path: I) -> Option<&Workspace>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut iter = path.into_iter();
+        let first = iter.next()?;
+        let mut cursor = self.members.get(first.as_ref())?;
+        for seg in iter {
+            cursor = cursor.children.get(seg.as_ref())?;
+        }
+        Some(&cursor.workspace)
+    }
+
+    /// Yields every reachable member workspace as `(path_segments, workspace)`
+    /// in depth-first, insertion order. `path_segments` is the chain of
+    /// member names from the root (e.g. `vec!["a", "c"]` for `a::c`).
+    pub fn walk_members(&self) -> Vec<(Vec<String>, &Workspace)> {
+        fn visit<'a>(
+            prefix: &[String],
+            members: &'a indexmap::IndexMap<String, MemberWorkspace>,
+            out: &mut Vec<(Vec<String>, &'a Workspace)>,
+        ) {
+            for (name, node) in members {
+                let mut path = prefix.to_vec();
+                path.push(name.clone());
+                out.push((path.clone(), &node.workspace));
+                visit(&path, &node.children, out);
+            }
+        }
+        let mut out = Vec::new();
+        visit(&[], &self.members, &mut out);
+        out
+    }
+
+    /// Attaches the given member workspace tree. Used by
+    /// [`crate::WorkspaceLocator`] once each member has been loaded via
+    /// its own [`Workspace::from_path`] / [`crate::WorkspaceLocator::locate`]
+    /// call. Not intended for direct use outside of workspace loading.
+    pub(crate) fn set_members(&mut self, members: indexmap::IndexMap<String, MemberWorkspace>) {
+        self.members = members;
     }
 
     /// Loads a project from manifest file. The `manifest_path` is expected to

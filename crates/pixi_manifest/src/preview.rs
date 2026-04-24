@@ -73,4 +73,6 @@ impl Preview {
 pub enum KnownPreviewFeature {
     /// Build feature, to enable conda source builds
     PixiBuild,
+    /// Hierarchical task addressing across nested member packages
+    HierarchicalTasks,
 }

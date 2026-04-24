@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
     convert::identity,
     ffi::OsString,
+    path::PathBuf,
     string::String,
 };
 
@@ -19,8 +20,8 @@ use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_core::{
     Workspace, WorkspaceLocator,
     environment::sanity_check_workspace,
-    lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
-    workspace::{Environment, errors::UnsupportedPlatformError},
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
+    workspace::{Environment, HasWorkspaceRef, errors::UnsupportedPlatformError},
 };
 use pixi_manifest::{FeaturesExt, TaskName};
 use pixi_progress::global_multi_progress;
@@ -210,6 +211,39 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )?;
     tracing::debug!("Task graph: {}", task_graph);
 
+    // Under the `hierarchical-tasks` preview feature, tasks may run in
+    // member workspaces (e.g. `pixi run a::test`). Each member has its
+    // own lockfile and its own `.pixi/envs/` install dir — so we can't
+    // reuse the root's `lock_file` for a member task. Collect the
+    // distinct member workspaces referenced by the graph and lazily
+    // update each one's lockfile. We look these up by workspace root
+    // path when executing tasks. The root workspace always uses the
+    // `lock_file` already computed above.
+    //
+    // When no member is referenced by the graph (the common case), this
+    // map is empty and behaviour is identical to pre-preview pixi.
+    let mut member_lock_files: HashMap<PathBuf, LockFileDerivedData<'_>> = HashMap::new();
+    {
+        let root_path = workspace.root().to_path_buf();
+        let mut seen: HashSet<PathBuf> = HashSet::from([root_path.clone()]);
+        for task_id in task_graph.topological_order() {
+            let node_ws: &Workspace = task_graph[task_id].run_environment.workspace();
+            let node_root = node_ws.root().to_path_buf();
+            if !seen.insert(node_root.clone()) {
+                continue;
+            }
+            let member_lf = node_ws
+                .update_lock_file(UpdateLockFileOptions {
+                    lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+                    no_install: args.lock_and_install_config.no_install(),
+                    max_concurrent_solves: node_ws.config().max_concurrent_solves(),
+                })
+                .await?
+                .0;
+            member_lock_files.insert(node_root, member_lf);
+        }
+    }
+
     // Print dry-run message if dry-run mode is enabled
     if args.dry_run {
         pixi_progress::println!(
@@ -281,9 +315,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             continue;
         }
 
+        // Under `hierarchical-tasks`, the task may run in a member
+        // workspace; pick that workspace's lockfile instead of the
+        // root's. For the common case (task belongs to the root or the
+        // preview is off) this resolves to the root's `lock_file`.
+        let task_lock_file: &LockFileDerivedData<'_> =
+            if executable_task.workspace.root() == workspace.root() {
+                &lock_file
+            } else {
+                member_lock_files
+                    .get(executable_task.workspace.root())
+                    .expect("member lockfile must have been populated before the task loop runs")
+            };
+
         // check task cache
         let task_cache = match executable_task
-            .can_skip(lock_file.as_lock_file())
+            .can_skip(task_lock_file.as_lock_file())
             .await
             .into_diagnostic()?
         {
@@ -315,8 +362,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Vacant(entry) => {
                 // Check if we allow installs
                 if args.lock_and_install_config.allow_installs() {
-                    // Ensure there is a valid prefix
-                    lock_file
+                    // Ensure there is a valid prefix. `task_lock_file`
+                    // already matches `executable_task`'s workspace, so
+                    // the install dir, lockfile, and command dispatcher
+                    // all target the right workspace (root or member).
+                    task_lock_file
                         .prefix(
                             &executable_task.run_environment,
                             UpdateMode::QuickValidate,
@@ -327,17 +377,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
 
                 // Clear the current progress reports.
-                lock_file.command_dispatcher.clear_reporter().await;
+                task_lock_file.command_dispatcher.clear_reporter().await;
 
                 // Clear caches based on the filesystem. The tasks might change files on disk.
-                lock_file.command_dispatcher.clear_filesystem_caches().await;
+                task_lock_file
+                    .command_dispatcher
+                    .clear_filesystem_caches()
+                    .await;
 
+                let task_workspace = executable_task.workspace;
                 let command_env = get_task_env(
                     &executable_task.run_environment,
                     args.clean_env || executable_task.task().clean_env(),
-                    Some(lock_file.as_lock_file()),
-                    workspace.config().force_activate(),
-                    workspace.config().experimental_activation_cache_usage(),
+                    Some(task_lock_file.as_lock_file()),
+                    task_workspace.config().force_activate(),
+                    task_workspace
+                        .config()
+                        .experimental_activation_cache_usage(),
                 )
                 .await?;
                 entry.insert(command_env)

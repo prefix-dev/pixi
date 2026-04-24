@@ -11,6 +11,7 @@ mod features_ext;
 mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
+mod members;
 mod package;
 mod preview;
 pub mod pypi;
@@ -45,6 +46,7 @@ pub use manifests::{
     AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
     ProvenanceError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
 };
+pub use members::{MemberDiscoveryError, MemberNode, MemberTree, discover_members};
 use miette::Diagnostic;
 pub use package::Package;
 pub use preview::{KnownPreviewFeature, Preview};
