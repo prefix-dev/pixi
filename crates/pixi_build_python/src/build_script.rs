@@ -4,7 +4,7 @@ use minijinja::Environment;
 use pixi_build_types::SourcePackageName;
 use serde::Serialize;
 
-const UV: &str = "uv";
+const PIP: &str = "pip";
 #[derive(Serialize)]
 pub struct BuildScriptContext {
     pub installer: Installer,
@@ -17,9 +17,9 @@ pub struct BuildScriptContext {
 #[derive(Default, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Installer {
-    Uv,
-    #[default]
     Pip,
+    #[default]
+    Uv,
 }
 
 impl Installer {
@@ -36,12 +36,12 @@ impl Installer {
         mut package_names: impl Iterator<Item = &'a str>,
     ) -> Installer {
         // Check all dependency names for "uv" package
-        let has_uv = package_names.any(|name| name == UV);
+        let has_pip = package_names.any(|name| name == PIP);
 
-        if has_uv {
-            Installer::Uv
-        } else {
+        if has_pip {
             Installer::Pip
+        } else {
+            Installer::Uv
         }
     }
 }
