@@ -687,7 +687,10 @@ mod tests {
         let env = manifest.environment("myenv").unwrap();
         let activation = env.activation_env(None);
         // test1 is listed first, so its value must win over test2 and default
-        assert_eq!(activation.get("SHARED_VAR").map(String::as_str), Some("test1"));
+        assert_eq!(
+            activation.get("SHARED_VAR").map(String::as_str),
+            Some("test1")
+        );
         assert_eq!(activation.get("TEST1_VAR").map(String::as_str), Some("1"));
         assert_eq!(activation.get("TEST2_VAR").map(String::as_str), Some("2"));
     }
