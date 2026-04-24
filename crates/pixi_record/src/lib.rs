@@ -1,12 +1,10 @@
 mod canonical_spec;
 mod dev_source_record;
-mod lock_file_resolver;
 mod pinned_source;
 mod source_record;
 
 pub use canonical_spec::{CanonicalGit, CanonicalPath, CanonicalSourceLocation, CanonicalUrl};
 pub use dev_source_record::DevSourceRecord;
-pub use lock_file_resolver::{LockFileResolver, LockFileResolverError};
 
 use std::{path::Path, sync::Arc};
 
@@ -18,10 +16,7 @@ pub use pixi_variant::VariantValue;
 use rattler_conda_types::{
     MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord, RepoDataRecord,
 };
-use rattler_lock::{
-    CondaPackageData, ConversionError, EnvironmentPackages, LockFileBuilder, PackageHandle,
-    SourceData, UrlOrPath,
-};
+use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
 use serde::Serialize;
 pub use source_record::{
     FullSourceRecord as SourceRecord, FullSourceRecordData, PartialSourceRecord,
@@ -33,7 +28,7 @@ use thiserror::Error;
 /// binary file or something that still requires building.
 ///
 /// This is basically a superset of a regular [`RepoDataRecord`].
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 #[serde(untagged)]
 pub enum PixiRecord {
     Binary(Arc<RepoDataRecord>),
@@ -53,24 +48,14 @@ impl PixiRecord {
         }
     }
 
-    /// Convert to `CondaPackageData` with paths made relative to
-    /// `workspace_root`. For source records, each entry of `build_packages` /
-    /// `host_packages` is registered into `builder` first (recursively) so
-    /// the returned source data's `source_data` references them by handle.
-    pub fn into_conda_package_data(
-        self,
-        builder: &mut LockFileBuilder,
-        workspace_root: &Path,
-    ) -> CondaPackageData {
+    /// Convert to CondaPackageData with paths made relative to workspace_root.
+    /// This should be used when writing to the lock file.
+    pub fn into_conda_package_data(self, workspace_root: &Path) -> CondaPackageData {
         match self {
             PixiRecord::Binary(record) => Arc::unwrap_or_clone(record).into(),
-            PixiRecord::Source(record) => {
-                let mut source = Arc::unwrap_or_clone(record);
-                let source_data = register_source_deps(builder, &mut source, workspace_root);
-                let mut data = source.into_conda_source_data(workspace_root);
-                data.source_data = source_data;
-                CondaPackageData::Source(Box::new(data))
-            }
+            PixiRecord::Source(record) => CondaPackageData::Source(Box::new(
+                Arc::unwrap_or_clone(record).into_conda_source_data(workspace_root),
+            )),
         }
     }
 
@@ -152,7 +137,7 @@ impl From<Arc<RepoDataRecord>> for PixiRecord {
 ///
 /// Call [`try_into_resolved`](Self::try_into_resolved) to attempt the
 /// conversion to a fully-resolved [`PixiRecord`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum UnresolvedPixiRecord {
     Binary(Arc<RepoDataRecord>),
     Source(Arc<UnresolvedSourceRecord>),
@@ -176,10 +161,10 @@ impl UnresolvedPixiRecord {
     }
 
     /// Source dependency locations. Empty for binary records.
-    pub fn sources(&self) -> &std::collections::HashMap<String, pixi_spec::SourceLocationSpec> {
+    pub fn sources(&self) -> &std::collections::BTreeMap<String, pixi_spec::SourceLocationSpec> {
         static EMPTY: std::sync::LazyLock<
-            std::collections::HashMap<String, pixi_spec::SourceLocationSpec>,
-        > = std::sync::LazyLock::new(std::collections::HashMap::new);
+            std::collections::BTreeMap<String, pixi_spec::SourceLocationSpec>,
+        > = std::sync::LazyLock::new(std::collections::BTreeMap::new);
         match self {
             UnresolvedPixiRecord::Binary(_) => &EMPTY,
             UnresolvedPixiRecord::Source(record) => record.sources(),
@@ -253,24 +238,13 @@ impl UnresolvedPixiRecord {
         }
     }
 
-    /// Convert to `CondaPackageData` for lock-file write. For source records,
-    /// `build_packages` / `host_packages` are registered into `builder`
-    /// (recursively) so the returned source data's `source_data` references
-    /// them by handle.
-    pub fn into_conda_package_data(
-        self,
-        builder: &mut LockFileBuilder,
-        workspace_root: &Path,
-    ) -> CondaPackageData {
+    /// Convert to `CondaPackageData` for lock-file write.
+    pub fn into_conda_package_data(self, workspace_root: &Path) -> CondaPackageData {
         match self {
             UnresolvedPixiRecord::Binary(record) => Arc::unwrap_or_clone(record).into(),
-            UnresolvedPixiRecord::Source(record) => {
-                let mut source = Arc::unwrap_or_clone(record);
-                let source_data = register_source_deps(builder, &mut source, workspace_root);
-                let mut data = source.into_conda_source_data(workspace_root);
-                data.source_data = source_data;
-                CondaPackageData::Source(Box::new(data))
-            }
+            UnresolvedPixiRecord::Source(record) => CondaPackageData::Source(Box::new(
+                Arc::unwrap_or_clone(record).into_conda_source_data(workspace_root),
+            )),
         }
     }
 
@@ -301,46 +275,6 @@ impl UnresolvedPixiRecord {
             }
         }
     }
-}
-
-/// Register a source record's `build_packages` / `host_packages` into
-/// `builder` (recursively) and build a [`SourceData`] referencing the
-/// resulting handles. Leaves `source` with empty build/host package vecs —
-/// the canonical form lives in the lockfile from this point on.
-fn register_source_deps<D>(
-    builder: &mut LockFileBuilder,
-    source: &mut source_record::SourceRecord<D>,
-    workspace_root: &Path,
-) -> SourceData {
-    let build_handles = register_handles(
-        builder,
-        std::mem::take(&mut source.build_packages),
-        workspace_root,
-    );
-    let host_handles = register_handles(
-        builder,
-        std::mem::take(&mut source.host_packages),
-        workspace_root,
-    );
-    SourceData {
-        build_packages: EnvironmentPackages::from_handles(build_handles)
-            .expect("handles just produced by this builder"),
-        host_packages: EnvironmentPackages::from_handles(host_handles)
-            .expect("handles just produced by this builder"),
-    }
-}
-
-fn register_handles(
-    builder: &mut LockFileBuilder,
-    deps: Vec<UnresolvedPixiRecord>,
-    workspace_root: &Path,
-) -> Vec<PackageHandle> {
-    deps.into_iter()
-        .map(|dep| {
-            let data = dep.into_conda_package_data(builder, workspace_root);
-            builder.register_conda_package(data)
-        })
-        .collect()
 }
 
 impl From<PixiRecord> for UnresolvedPixiRecord {

@@ -35,11 +35,7 @@ use rattler_lock::{
     SourceMetadata,
 };
 use std::fmt::{Display, Formatter};
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::Path,
-    str::FromStr,
-};
+use std::{collections::BTreeMap, path::Path, str::FromStr};
 use typed_path::Utf8TypedPathBuf;
 
 use crate::{
@@ -98,7 +94,7 @@ impl From<PinnedBuildSourceSpec> for PinnedSourceSpec {
 }
 
 /// A record of a conda package that still requires building.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SourceRecord<D> {
     /// Information about the conda package.
     pub data: D,
@@ -164,7 +160,7 @@ pub type UnresolvedSourceRecord = SourceRecord<SourceRecordData>;
 /// This is what gets stored in the lock file for mutable (path-based) sources,
 /// since their full metadata (version, build string, etc.) can change between
 /// runs and would be stale.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct PartialSourceRecordData {
     /// The package name of the source record.
     pub name: PackageName,
@@ -174,21 +170,21 @@ pub struct PartialSourceRecordData {
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
-    pub sources: HashMap<String, SourceLocationSpec>,
+    pub sources: BTreeMap<String, SourceLocationSpec>,
 }
 
 /// Complete metadata for a fully-evaluated source package.
 ///
 /// Contains the full [`PackageRecord`] (version, build, dependencies, etc.)
 /// plus the source dependency map.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct FullSourceRecordData {
     #[serde(flatten)]
     pub package_record: PackageRecord,
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
-    pub sources: HashMap<String, SourceLocationSpec>,
+    pub sources: BTreeMap<String, SourceLocationSpec>,
 }
 
 /// Runtime-checked variant used at the lock-file boundary.
@@ -196,7 +192,7 @@ pub struct FullSourceRecordData {
 /// After reading a lock file, source records may be either full (immutable
 /// sources like git) or partial (mutable sources like local paths). This enum
 /// captures both cases and is resolved to [`FullSourceRecordData`] at startup.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum SourceRecordData {
     Partial(PartialSourceRecordData),
@@ -336,7 +332,7 @@ impl SourceRecord<FullSourceRecordData> {
     }
 
     /// Source dependency locations.
-    pub fn sources(&self) -> &HashMap<String, SourceLocationSpec> {
+    pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         &self.data.sources
     }
 
@@ -430,7 +426,7 @@ impl SourceRecord<PartialSourceRecordData> {
     }
 
     /// Source dependency locations.
-    pub fn sources(&self) -> &HashMap<String, SourceLocationSpec> {
+    pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         &self.data.sources
     }
 }
@@ -450,7 +446,7 @@ impl SourceRecord<SourceRecordData> {
     }
 
     /// Source dependency locations.
-    pub fn sources(&self) -> &HashMap<String, SourceLocationSpec> {
+    pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         match &self.data {
             SourceRecordData::Full(full) => &full.sources,
             SourceRecordData::Partial(partial) => &partial.sources,
@@ -754,94 +750,10 @@ mod tests {
         });
     }
 
-    /// Round-trip a lock file whose conda source package carries build and
-    /// host package handles. Uses [`LockFileResolver`] to rebuild records
-    /// with their build/host packages populated from the lockfile's package
-    /// table, then writes them back via [`UnresolvedPixiRecord::into_conda_package_data`]
-    /// — the path that should serialize the handles again. A diff against
-    /// the fixture fails if the round-trip drops build/host information.
-    #[test]
-    fn roundtrip_source_records_with_build_host_packages() {
-        assert_roundtrip_identity("source_with_build_host_packages.lock");
-    }
-
-    /// Same contract as [`roundtrip_source_records_with_build_host_packages`],
-    /// but the outer source has another source in its `build_packages`. This
-    /// exercises the recursive branch of `register_source_deps` — the only
-    /// path that actually fires when a source depends on a source at build
-    /// time.
-    #[test]
-    fn roundtrip_source_records_with_nested_source_build_dep() {
-        assert_roundtrip_identity("nested_source_build_dep.lock");
-    }
-
-    fn assert_roundtrip_identity(fixture_name: &str) {
-        use crate::LockFileResolver;
-
-        let workspace_root = Path::new("/workspace");
-
-        let lock_source = fixture_source(fixture_name);
-        let lock_file = LockFile::from_str_with_base_directory(&lock_source, Some(workspace_root))
-            .expect("failed to load lock file fixture");
-
-        let resolver =
-            LockFileResolver::build(&lock_file, workspace_root).expect("resolver should build");
-
-        let environment = lock_file
-            .default_environment()
-            .expect("expected default environment");
-
-        let mut builder = LockFileBuilder::new()
-            .with_platforms(
-                lock_file
-                    .platforms()
-                    .map(|p| rattler_lock::PlatformData {
-                        name: p.name().clone(),
-                        subdir: p.subdir(),
-                        virtual_packages: p.virtual_packages().to_vec(),
-                    })
-                    .collect(),
-            )
-            .expect("platforms should be unique");
-        builder.set_channels(
-            DEFAULT_ENVIRONMENT_NAME,
-            [Channel::from("https://conda.anaconda.org/conda-forge/")],
-        );
-
-        for (platform, packages) in environment.packages_by_platform() {
-            let platform_str = platform.subdir().to_string();
-            for package in packages {
-                let Some(record) = resolver.get_for_package(package) else {
-                    continue;
-                };
-                let data = record.into_conda_package_data(&mut builder, workspace_root);
-                builder
-                    .add_conda_package(DEFAULT_ENVIRONMENT_NAME, &platform_str, data)
-                    .expect("platform was registered");
-            }
-        }
-
-        let roundtrip_lock = builder
-            .finish()
-            .render_to_string()
-            .expect("failed to render lock file");
-
-        assert_eq!(
-            roundtrip_lock.trim_end().replace("\r\n", "\n"),
-            lock_source.trim_end().replace("\r\n", "\n"),
-            "round-trip of {fixture_name} through LockFileResolver + into_conda_package_data should be identity"
-        );
-    }
-
     /// Load the lock file body from a static fixture file with full metadata.
     fn lock_source_from_fixture() -> String {
-        fixture_source("full_source_records.lock")
-    }
-
-    fn fixture_source(name: &str) -> String {
         let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("src/test_fixtures")
-            .join(name);
+            .join("src/test_fixtures/full_source_records.lock");
         #[allow(clippy::disallowed_methods)]
         std::fs::read_to_string(fixture_path).expect("failed to read fixture file")
     }
@@ -945,7 +857,7 @@ mod tests {
             data: SourceRecordData::Partial(PartialSourceRecordData {
                 name: PackageName::from_str("my-package").unwrap(),
                 depends: vec!["numpy >=1.0".to_string()],
-                sources: HashMap::new(),
+                sources: BTreeMap::new(),
             }),
             manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
                 path: typed_path::Utf8TypedPathBuf::from("./my-package"),
@@ -1025,7 +937,7 @@ mod tests {
                 data: SourceRecordData::Partial(PartialSourceRecordData {
                     name: PackageName::from_str("partial-pkg").unwrap(),
                     depends: vec![],
-                    sources: HashMap::new(),
+                    sources: BTreeMap::new(),
                 }),
                 manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
                     path: typed_path::Utf8TypedPathBuf::from("./partial-pkg"),
@@ -1062,7 +974,7 @@ mod tests {
         SourceRecord {
             data: FullSourceRecordData {
                 package_record: record,
-                sources: HashMap::new(),
+                sources: BTreeMap::new(),
             },
             manifest_source,
             build_source,

@@ -653,6 +653,7 @@ impl Workspace {
                     .or_else(|| BackendOverride::from_env().ok().flatten())
                     .unwrap_or_default(),
             )
+            .with_channel_config(self.channel_config())
             .execute_link_scripts(match self.config.run_post_link_scripts() {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
@@ -974,6 +975,7 @@ mod tests {
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::{Platform, Version};
     use rattler_virtual_packages::{LibC, VirtualPackage};
+    use std::env;
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;

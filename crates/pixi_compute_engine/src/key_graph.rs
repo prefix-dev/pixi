@@ -353,17 +353,27 @@ impl Default for KeyGraph {
 
 /// Wrap a spawned `JoinHandle` into a compute future that converts a
 /// cancellation `JoinError` into [`ComputeError::Canceled`] and
-/// propagates panics. The task's own `Result` is passed through
-/// unchanged (so a task that ended via its outer cycle guard can
-/// surface [`ComputeError::Cycle`] to its awaiter).
+/// propagates panics. The typed result is carried out of band via
+/// `result_rx` so the spawned task itself can stay `()`-valued (so it
+/// can be wrapped by a [`SpawnHook`](crate::SpawnHook) that does not
+/// know the compute's `Value` type). The task's own `Result` is passed
+/// through unchanged (so a task that ended via its outer cycle guard
+/// can surface [`ComputeError::Cycle`] to its awaiter).
 pub(crate) fn boxed_compute_future<V: Send + 'static>(
-    handle: tokio::task::JoinHandle<Result<V, ComputeError>>,
+    handle: tokio::task::JoinHandle<()>,
+    result_rx: tokio::sync::oneshot::Receiver<Result<V, ComputeError>>,
 ) -> BoxFuture<'static, Result<V, ComputeError>> {
     use crate::abort_on_drop::AbortOnDrop;
 
     async move {
         match AbortOnDrop(handle).await {
-            Ok(result) => result,
+            Ok(()) => match result_rx.await {
+                Ok(result) => result,
+                // Task finished without sending: only happens if the
+                // task was dropped between its final send point and
+                // completion, which we treat as cancellation.
+                Err(_) => Err(ComputeError::Canceled),
+            },
             Err(e) if e.is_cancelled() => Err(ComputeError::Canceled),
             Err(e) => std::panic::resume_unwind(e.into_panic()),
         }

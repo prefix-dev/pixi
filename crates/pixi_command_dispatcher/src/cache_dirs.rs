@@ -1,9 +1,9 @@
-use crate::build::BuildCache;
 use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
 use crate::cache::source_record::SourceRecordCache;
 use pixi_consts::consts;
 use pixi_path::{AbsPresumedDirPath, AbsPresumedDirPathBuf};
 
+#[derive(Clone)]
 pub struct CacheDirs {
     /// The root cache directory, all other cache directories are derived from
     /// this.
@@ -165,14 +165,14 @@ impl CacheDirs {
     }
 
     /// Returns the directory where source builds are cached.
+    ///
+    /// Layout (managed by [`crate::keys::source_build`]):
+    /// - `artifacts/<pkg>/<cache_key>/` - content-addressed built packages
+    /// - `workspaces/<pkg>/<workspace_key>/` - backend incremental state
     pub fn source_builds(&self) -> AbsPresumedDirPathBuf {
         self.source_builds.clone().unwrap_or_else(|| {
             self.build()
-                .join(format!(
-                    "{}-{}",
-                    consts::CACHED_SOURCE_BUILDS,
-                    BuildCache::CACHE_SUFFIX
-                ))
+                .join(format!("{}-v0", consts::CACHED_SOURCE_BUILDS))
                 .into_assume_dir()
         })
     }

@@ -1,25 +1,17 @@
 use std::sync::Arc;
 
 use futures::Stream;
+use pixi_build_discovery::JsonRpcBackendSpec;
 use pixi_git::resolver::RepositoryReference;
+use pixi_spec::PixiSpec;
 use rattler_repodata_gateway::RunExportsReporter;
 use serde::Serialize;
 use url::Url;
 
 use crate::{
-    BackendSourceBuildSpec, BuildBackendMetadataSpec, DevSourceMetadataSpec, PixiEnvironmentSpec,
-    SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec, SourceRecordSpec,
-    install_pixi::InstallPixiEnvironmentSpec, instantiate_tool_env::InstantiateToolEnvironmentSpec,
+    BackendSourceBuildSpec, BuildBackendMetadataInner, SolveCondaEnvironmentSpec,
+    SourceMetadataSpec, SourceRecordSpec, install_pixi::InstallPixiEnvironmentSpec,
 };
-
-/// An opaque identifier for a group of deduplicated tasks.
-///
-/// When multiple callers request the same computation, they share a single
-/// execution. All callers in the same group receive the same `DedupGroupId`
-/// so reporter implementations can correlate them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
-#[serde(transparent)]
-pub struct DedupGroupId(pub usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
@@ -49,7 +41,23 @@ pub trait PixiInstallReporter {
 #[serde(transparent)]
 pub struct PixiSolveId(pub usize);
 
-pub trait PixiSolveReporter {
+/// Lightweight reporter-facing view of a pixi environment solve.
+///
+/// This intentionally carries only the fields used by solve reporters,
+/// so compute-engine call sites don't need to clone full solve specs
+/// just to emit lifecycle events.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct PixiSolveEnvironmentSpec {
+    pub name: String,
+    pub platform: rattler_conda_types::Platform,
+    /// Direct binary URL/path dependencies trigger package-cache
+    /// validation in the solve flow; that validation uses rayon, so
+    /// reporters use this bit to eagerly initialize rayon through uv's
+    /// initialization path before the validation work starts.
+    pub has_direct_conda_dependency: bool,
+}
+
+pub trait PixiSolveReporter: Send + Sync {
     /// Called when the [`crate::CommandDispatcher`] learns of a new pixi
     /// environment to solve.
     ///
@@ -60,7 +68,11 @@ pub trait PixiSolveReporter {
     /// This function should return an identifier which is used to identify this
     /// particular solve. Other functions in this trait will use this identifier
     /// to link the events to the particular solve.
-    fn on_queued(&self, reason: Option<ReporterContext>, env: &PixiEnvironmentSpec) -> PixiSolveId;
+    fn on_queued(
+        &self,
+        reason: Option<ReporterContext>,
+        env: &PixiSolveEnvironmentSpec,
+    ) -> PixiSolveId;
 
     /// Called when solving of the specified environment has started.
     fn on_started(&self, solve_id: PixiSolveId);
@@ -73,7 +85,7 @@ pub trait PixiSolveReporter {
 #[serde(transparent)]
 pub struct CondaSolveId(pub usize);
 
-pub trait CondaSolveReporter {
+pub trait CondaSolveReporter: Send + Sync {
     /// Called when the [`crate::CommandDispatcher`] learns of a new conda
     /// environment to solve.
     ///
@@ -101,14 +113,13 @@ pub trait CondaSolveReporter {
 #[serde(transparent)]
 pub struct GitCheckoutId(pub usize);
 
-pub trait GitCheckoutReporter {
+pub trait GitCheckoutReporter: Send + Sync {
     /// Called when a git checkout was queued on the
     /// [`crate::CommandDispatcher`].
     fn on_queued(
         &self,
         reason: Option<ReporterContext>,
         env: &RepositoryReference,
-        dedup_id: DedupGroupId,
     ) -> GitCheckoutId;
 
     /// Called when the git checkout has started.
@@ -122,15 +133,10 @@ pub trait GitCheckoutReporter {
 #[serde(transparent)]
 pub struct UrlCheckoutId(pub usize);
 
-pub trait UrlCheckoutReporter {
+pub trait UrlCheckoutReporter: Send + Sync {
     /// Called when a url checkout was queued on the
     /// [`crate::CommandDispatcher`].
-    fn on_queued(
-        &self,
-        reason: Option<ReporterContext>,
-        env: &Url,
-        dedup_id: DedupGroupId,
-    ) -> UrlCheckoutId;
+    fn on_queued(&self, reason: Option<ReporterContext>, env: &Url) -> UrlCheckoutId;
 
     /// Called when the url checkout has started.
     fn on_started(&self, checkout_id: UrlCheckoutId);
@@ -141,22 +147,30 @@ pub trait UrlCheckoutReporter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
-pub struct InstantiateToolEnvId(pub usize);
+pub struct InstantiateBackendId(pub usize);
 
-pub trait InstantiateToolEnvironmentReporter {
+/// Reporter for the compute-engine [`InstantiateBackendKey`](crate::InstantiateBackendKey).
+///
+/// Fires once per backend instantiation request, after the backend has
+/// been discovered and its spec resolved against any active
+/// [`BackendOverride`](pixi_build_frontend::BackendOverride). Child
+/// operations performed by the instantiation (conda solves, the binary
+/// install into the ephemeral prefix, etc.) attribute up to the
+/// returned [`InstantiateBackendId`] via the task-local reporter
+/// context.
+pub trait InstantiateBackendReporter: Send + Sync {
     /// Called when an operation was queued on the [`crate::CommandDispatcher`].
     fn on_queued(
         &self,
         reason: Option<ReporterContext>,
-        env: &InstantiateToolEnvironmentSpec,
-        dedup_id: DedupGroupId,
-    ) -> InstantiateToolEnvId;
+        spec: &JsonRpcBackendSpec,
+    ) -> InstantiateBackendId;
 
     /// Called when the operation has started.
-    fn on_started(&self, id: InstantiateToolEnvId);
+    fn on_started(&self, id: InstantiateBackendId);
 
     /// Called when the operation has finished.
-    fn on_finished(&self, id: InstantiateToolEnvId);
+    fn on_finished(&self, id: InstantiateBackendId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -168,8 +182,7 @@ pub trait BuildBackendMetadataReporter {
     fn on_queued(
         &self,
         reason: Option<ReporterContext>,
-        env: &BuildBackendMetadataSpec,
-        dedup_id: DedupGroupId,
+        env: &BuildBackendMetadataInner,
     ) -> BuildBackendMetadataId;
 
     /// Called when the operation has started.
@@ -187,14 +200,10 @@ pub trait BuildBackendMetadataReporter {
 #[serde(transparent)]
 pub struct SourceRecordId(pub usize);
 
-pub trait SourceRecordReporter {
+pub trait SourceRecordReporter: Send + Sync {
     /// Called when an operation was queued on the [`crate::CommandDispatcher`].
-    fn on_queued(
-        &self,
-        reason: Option<ReporterContext>,
-        spec: &SourceRecordSpec,
-        dedup_id: DedupGroupId,
-    ) -> SourceRecordId;
+    fn on_queued(&self, reason: Option<ReporterContext>, spec: &SourceRecordSpec)
+    -> SourceRecordId;
 
     /// Called when the operation has started.
     fn on_started(&self, id: SourceRecordId);
@@ -207,13 +216,12 @@ pub trait SourceRecordReporter {
 #[serde(transparent)]
 pub struct SourceMetadataId(pub usize);
 
-pub trait SourceMetadataReporter {
+pub trait SourceMetadataReporter: Send + Sync {
     /// Called when an operation was queued on the [`crate::CommandDispatcher`].
     fn on_queued(
         &self,
         reason: Option<ReporterContext>,
         spec: &SourceMetadataSpec,
-        dedup_id: DedupGroupId,
     ) -> SourceMetadataId;
 
     /// Called when the operation has started.
@@ -221,32 +229,6 @@ pub trait SourceMetadataReporter {
 
     /// Called when the operation has finished.
     fn on_finished(&self, id: SourceMetadataId);
-}
-
-/// A trait that is used to report the progress of a source build performed by
-/// the [`crate::CommandDispatcher`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
-#[serde(transparent)]
-pub struct SourceBuildId(pub usize);
-
-pub trait SourceBuildReporter {
-    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
-    fn on_queued(
-        &self,
-        reason: Option<ReporterContext>,
-        env: &SourceBuildSpec,
-        dedup_id: DedupGroupId,
-    ) -> SourceBuildId;
-
-    /// Called when the operation has started.
-    fn on_started(
-        &self,
-        id: SourceBuildId,
-        backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
-    );
-
-    /// Called when the operation has finished.
-    fn on_finished(&self, id: SourceBuildId, failed: bool);
 }
 
 /// A trait that is used to report the progress of a source build performed by
@@ -316,10 +298,9 @@ pub trait Reporter: Send + Sync {
         None
     }
     /// Returns a reference to a reporter that reports on the progress
-    /// of instantiating a tool environment.
-    fn as_instantiate_tool_environment_reporter(
-        &self,
-    ) -> Option<&dyn InstantiateToolEnvironmentReporter> {
+    /// of instantiating a build backend (discovery, override resolution,
+    /// ephemeral env, activation, JSON-RPC handshake).
+    fn as_instantiate_backend_reporter(&self) -> Option<&dyn InstantiateBackendReporter> {
         None
     }
 
@@ -366,392 +347,25 @@ pub trait Reporter: Send + Sync {
     }
 
     /// Returns a reference to a reporter that reports on the progress
-    /// of building source packages.
-    fn as_source_build_reporter(&self) -> Option<&dyn SourceBuildReporter> {
-        None
-    }
-
-    /// Returns a reference to a reporter that reports on the progress
     /// of a backend that is building source packages.
     fn as_backend_source_build_reporter(&self) -> Option<&dyn BackendSourceBuildReporter> {
         None
     }
 }
 
-/// Trait for task specs whose lifecycle events can be reported through
-/// [`Reporter`].
+/// Returns whether the environment has direct binary URL/path dependencies.
 ///
-/// Each implementation bridges to the appropriate specific reporter trait
-/// (e.g. `SourceBuildReporter`, `GitCheckoutReporter`) so that generic
-/// handler code can notify the reporter without knowing which trait to use.
-///
-/// The `report_queued` method takes an `Option<DedupGroupId>`:
-/// - `Some(id)` for deduplicated tasks (passed to reporters that accept it)
-/// - `None` for non-deduplicated tasks (ignored by the implementation)
-pub(crate) trait Reportable {
-    /// The reporter ID type returned by `report_queued`.
-    type ReporterId: Copy;
-
-    /// Notify the reporter that this task was queued.
-    ///
-    /// `dedup_group_id` is `Some` for deduplicated tasks, `None` otherwise.
-    fn report_queued(
-        &self,
-        reporter: &Option<Box<dyn Reporter>>,
-        parent: Option<ReporterContext>,
-        dedup_group_id: Option<DedupGroupId>,
-    ) -> Option<Self::ReporterId>;
-
-    /// Notify the reporter that this task has started.
-    fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId);
-
-    /// Notify the reporter that this task has finished.
-    fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, failed: bool);
-}
-
-// --- Reportable implementations ---
-
-macro_rules! impl_reportable {
-    // Dedup reporter with on_started(id) and on_finished(id)
-    ($spec:ty, $id:ty, $accessor:ident $(, queued_arg: $arg:expr)?) => {
-        impl Reportable for $spec {
-            type ReporterId = $id;
-            fn report_queued(
-                &self,
-                reporter: &Option<Box<dyn Reporter>>,
-                parent: Option<ReporterContext>,
-                dedup_group_id: Option<DedupGroupId>,
-            ) -> Option<Self::ReporterId> {
-                reporter.as_deref()
-                    .and_then(|r| r.$accessor())
-                    .map(|r| r.on_queued(parent, impl_reportable!(@queued_spec self $(, $arg)?), dedup_group_id.expect("dedup tasks must provide a DedupGroupId")))
-            }
-            fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId) {
-                if let Some(r) = reporter.as_deref().and_then(|r| r.$accessor()) { r.on_started(id); }
-            }
-            fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, _failed: bool) {
-                if let Some(r) = reporter.as_deref().and_then(|r| r.$accessor()) { r.on_finished(id); }
-            }
-        }
-    };
-    (@queued_spec $self:ident) => { $self };
-    (@queued_spec $self:ident, $arg:expr) => { $arg };
-}
-
-impl_reportable!(
-    InstantiateToolEnvironmentSpec,
-    InstantiateToolEnvId,
-    as_instantiate_tool_environment_reporter
-);
-impl_reportable!(SourceRecordSpec, SourceRecordId, as_source_record_reporter);
-impl_reportable!(
-    SourceMetadataSpec,
-    SourceMetadataId,
-    as_source_metadata_reporter
-);
-
-impl Reportable for pixi_git::GitUrl {
-    type ReporterId = GitCheckoutId;
-    fn report_queued(
-        &self,
-        reporter: &Option<Box<dyn Reporter>>,
-        parent: Option<ReporterContext>,
-        dedup_group_id: Option<DedupGroupId>,
-    ) -> Option<Self::ReporterId> {
-        let repo_ref = pixi_git::resolver::RepositoryReference::from(self);
-        reporter
-            .as_deref()
-            .and_then(|r| r.as_git_reporter())
-            .map(|r| {
-                r.on_queued(
-                    parent,
-                    &repo_ref,
-                    dedup_group_id.expect("dedup tasks must provide a DedupGroupId"),
-                )
-            })
-    }
-    fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId) {
-        if let Some(r) = reporter.as_deref().and_then(|r| r.as_git_reporter()) {
-            r.on_started(id);
-        }
-    }
-    fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, _failed: bool) {
-        if let Some(r) = reporter.as_deref().and_then(|r| r.as_git_reporter()) {
-            r.on_finished(id);
-        }
-    }
-}
-
-impl Reportable for pixi_spec::UrlSpec {
-    type ReporterId = UrlCheckoutId;
-    fn report_queued(
-        &self,
-        reporter: &Option<Box<dyn Reporter>>,
-        parent: Option<ReporterContext>,
-        dedup_group_id: Option<DedupGroupId>,
-    ) -> Option<Self::ReporterId> {
-        reporter
-            .as_deref()
-            .and_then(|r| r.as_url_reporter())
-            .map(|r| {
-                r.on_queued(
-                    parent,
-                    &self.url,
-                    dedup_group_id.expect("dedup tasks must provide a DedupGroupId"),
-                )
-            })
-    }
-    fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId) {
-        if let Some(r) = reporter.as_deref().and_then(|r| r.as_url_reporter()) {
-            r.on_started(id);
-        }
-    }
-    fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, _failed: bool) {
-        if let Some(r) = reporter.as_deref().and_then(|r| r.as_url_reporter()) {
-            r.on_finished(id);
-        }
-    }
-}
-
-impl Reportable for BuildBackendMetadataSpec {
-    type ReporterId = BuildBackendMetadataId;
-    fn report_queued(
-        &self,
-        reporter: &Option<Box<dyn Reporter>>,
-        parent: Option<ReporterContext>,
-        dedup_group_id: Option<DedupGroupId>,
-    ) -> Option<Self::ReporterId> {
-        reporter
-            .as_deref()
-            .and_then(|r| r.as_build_backend_metadata_reporter())
-            .map(|r| {
-                r.on_queued(
-                    parent,
-                    self,
-                    dedup_group_id.expect("dedup tasks must provide a DedupGroupId"),
-                )
-            })
-    }
-    fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId) {
-        if let Some(r) = reporter
-            .as_deref()
-            .and_then(|r| r.as_build_backend_metadata_reporter())
-        {
-            r.on_started(id, Box::new(futures::stream::empty()));
-        }
-    }
-    fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, failed: bool) {
-        if let Some(r) = reporter
-            .as_deref()
-            .and_then(|r| r.as_build_backend_metadata_reporter())
-        {
-            r.on_finished(id, failed);
-        }
-    }
-}
-
-impl Reportable for SourceBuildSpec {
-    type ReporterId = SourceBuildId;
-    fn report_queued(
-        &self,
-        reporter: &Option<Box<dyn Reporter>>,
-        parent: Option<ReporterContext>,
-        dedup_group_id: Option<DedupGroupId>,
-    ) -> Option<Self::ReporterId> {
-        reporter
-            .as_deref()
-            .and_then(|r| r.as_source_build_reporter())
-            .map(|r| {
-                r.on_queued(
-                    parent,
-                    self,
-                    dedup_group_id.expect("dedup tasks must provide a DedupGroupId"),
-                )
-            })
-    }
-    fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId) {
-        if let Some(r) = reporter
-            .as_deref()
-            .and_then(|r| r.as_source_build_reporter())
-        {
-            r.on_started(id, Box::new(futures::stream::empty()));
-        }
-    }
-    fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, failed: bool) {
-        if let Some(r) = reporter
-            .as_deref()
-            .and_then(|r| r.as_source_build_reporter())
-        {
-            r.on_finished(id, failed);
-        }
-    }
-}
-
-impl Reportable for crate::PixiEnvironmentSpec {
-    type ReporterId = PixiSolveId;
-    fn report_queued(
-        &self,
-        reporter: &Option<Box<dyn Reporter>>,
-        parent: Option<ReporterContext>,
-        _dedup_group_id: Option<DedupGroupId>,
-    ) -> Option<Self::ReporterId> {
-        reporter
-            .as_deref()
-            .and_then(|r| r.as_pixi_solve_reporter())
-            .map(|r| r.on_queued(parent, self))
-    }
-    fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId) {
-        if let Some(r) = reporter.as_deref().and_then(|r| r.as_pixi_solve_reporter()) {
-            r.on_started(id);
-        }
-    }
-    fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, _failed: bool) {
-        if let Some(r) = reporter.as_deref().and_then(|r| r.as_pixi_solve_reporter()) {
-            r.on_finished(id);
-        }
-    }
-}
-
-impl Reportable for SolveCondaEnvironmentSpec {
-    type ReporterId = CondaSolveId;
-    fn report_queued(
-        &self,
-        reporter: &Option<Box<dyn Reporter>>,
-        parent: Option<ReporterContext>,
-        _dedup_group_id: Option<DedupGroupId>,
-    ) -> Option<Self::ReporterId> {
-        reporter
-            .as_deref()
-            .and_then(|r| r.as_conda_solve_reporter())
-            .map(|r| r.on_queued(parent, self))
-    }
-    fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId) {
-        if let Some(r) = reporter
-            .as_deref()
-            .and_then(|r| r.as_conda_solve_reporter())
-        {
-            r.on_started(id);
-        }
-    }
-    fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, _failed: bool) {
-        if let Some(r) = reporter
-            .as_deref()
-            .and_then(|r| r.as_conda_solve_reporter())
-        {
-            r.on_finished(id);
-        }
-    }
-}
-
-impl Reportable for InstallPixiEnvironmentSpec {
-    type ReporterId = PixiInstallId;
-    fn report_queued(
-        &self,
-        reporter: &Option<Box<dyn Reporter>>,
-        parent: Option<ReporterContext>,
-        _dedup_group_id: Option<DedupGroupId>,
-    ) -> Option<Self::ReporterId> {
-        reporter
-            .as_deref()
-            .and_then(|r| r.as_pixi_install_reporter())
-            .map(|r| r.on_queued(parent, self))
-    }
-    fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId) {
-        if let Some(r) = reporter
-            .as_deref()
-            .and_then(|r| r.as_pixi_install_reporter())
-        {
-            r.on_started(id);
-        }
-    }
-    fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, _failed: bool) {
-        if let Some(r) = reporter
-            .as_deref()
-            .and_then(|r| r.as_pixi_install_reporter())
-        {
-            r.on_finished(id);
-        }
-    }
-}
-
-impl Reportable for BackendSourceBuildSpec {
-    type ReporterId = BackendSourceBuildId;
-    fn report_queued(
-        &self,
-        reporter: &Option<Box<dyn Reporter>>,
-        parent: Option<ReporterContext>,
-        _dedup_group_id: Option<DedupGroupId>,
-    ) -> Option<Self::ReporterId> {
-        reporter
-            .as_deref()
-            .and_then(|r| r.as_backend_source_build_reporter())
-            .map(|r| r.on_queued(parent, self))
-    }
-    fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId) {
-        if let Some(r) = reporter
-            .as_deref()
-            .and_then(|r| r.as_backend_source_build_reporter())
-        {
-            r.on_started(id, Box::new(futures::stream::empty()));
-        }
-    }
-    fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, failed: bool) {
-        if let Some(r) = reporter
-            .as_deref()
-            .and_then(|r| r.as_backend_source_build_reporter())
-        {
-            r.on_finished(id, failed);
-        }
-    }
-}
-
-/// Delegate to the inner type for boxed specs.
-impl Reportable for Box<BackendSourceBuildSpec> {
-    type ReporterId = BackendSourceBuildId;
-    fn report_queued(
-        &self,
-        reporter: &Option<Box<dyn Reporter>>,
-        parent: Option<ReporterContext>,
-        dedup_group_id: Option<DedupGroupId>,
-    ) -> Option<Self::ReporterId> {
-        (**self).report_queued(reporter, parent, dedup_group_id)
-    }
-    fn report_started(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId) {
-        BackendSourceBuildSpec::report_started(reporter, id);
-    }
-    fn report_finished(reporter: &Option<Box<dyn Reporter>>, id: Self::ReporterId, failed: bool) {
-        BackendSourceBuildSpec::report_finished(reporter, id, failed);
-    }
-}
-
-/// No-op reportable for tasks that have no reporter.
-impl Reportable for DevSourceMetadataSpec {
-    type ReporterId = ();
-    fn report_queued(
-        &self,
-        _: &Option<Box<dyn Reporter>>,
-        _: Option<ReporterContext>,
-        _: Option<DedupGroupId>,
-    ) -> Option<()> {
-        None
-    }
-    fn report_started(_: &Option<Box<dyn Reporter>>, _: ()) {}
-    fn report_finished(_: &Option<Box<dyn Reporter>>, _: (), _: bool) {}
-}
-
-/// No-op reportable for tasks that have no reporter.
-impl Reportable for crate::source_build_cache_status::SourceBuildCacheStatusSpec {
-    type ReporterId = ();
-    fn report_queued(
-        &self,
-        _: &Option<Box<dyn Reporter>>,
-        _: Option<ReporterContext>,
-        _: Option<DedupGroupId>,
-    ) -> Option<()> {
-        None
-    }
-    fn report_started(_: &Option<Box<dyn Reporter>>, _: ()) {}
-    fn report_finished(_: &Option<Box<dyn Reporter>>, _: (), _: bool) {}
+/// The top-level progress reporter uses this to initialize rayon through uv's
+/// initialization path before the solve later validates those direct binary
+/// package-cache entries in parallel.
+pub(crate) fn has_direct_conda_dependency(
+    dependencies: &pixi_spec_containers::DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
+) -> bool {
+    dependencies.iter_specs().any(|(_, spec)| match spec {
+        PixiSpec::Url(url) => url.is_binary(),
+        PixiSpec::Path(path) => path.is_binary(),
+        _ => false,
+    })
 }
 
 #[derive(Debug, Clone, Copy, Serialize, derive_more::From)]
@@ -763,7 +377,6 @@ pub enum ReporterContext {
     SourceMetadata(SourceMetadataId),
     SourceRecord(SourceRecordId),
     BuildBackendMetadata(BuildBackendMetadataId),
-    InstantiateToolEnv(InstantiateToolEnvId),
-    SourceBuild(SourceBuildId),
+    InstantiateBackend(InstantiateBackendId),
     BackendSourceBuild(BackendSourceBuildId),
 }

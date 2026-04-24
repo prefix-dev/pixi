@@ -378,7 +378,6 @@ impl WorkspaceMut {
             glob_hash_cache,
             io_concurrency_limit,
             build_caches,
-            ..
         } = UpdateContext::builder(self.workspace(), None)?
             .with_lock_file(unlocked_lock_file)
             .with_no_install(no_install || dry_run)
@@ -434,20 +433,18 @@ impl WorkspaceMut {
             self.save_inner().await.into_diagnostic()?;
         }
 
-        // Re-wrap the derived data under the longer-lived workspace
-        // reference.
-        let mut updated_lock_file = LockFileDerivedData::from_input_lock_file(
-            self.workspace(),
+        let updated_lock_file = LockFileDerivedData {
+            workspace: self.workspace(),
             lock_file,
             package_cache,
+            updated_conda_prefixes,
+            updated_pypi_prefixes,
+            uv_context,
+            io_concurrency_limit,
             command_dispatcher,
             glob_hash_cache,
-        );
-        updated_lock_file.updated_conda_prefixes = updated_conda_prefixes;
-        updated_lock_file.updated_pypi_prefixes = updated_pypi_prefixes;
-        updated_lock_file.uv_context = uv_context;
-        updated_lock_file.io_concurrency_limit = io_concurrency_limit;
-        updated_lock_file.build_caches = build_caches;
+            build_caches,
+        };
         if !dry_run {
             updated_lock_file.write_to_disk()?;
         }

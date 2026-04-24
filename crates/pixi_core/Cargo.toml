@@ -31,6 +31,7 @@ indicatif = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 once_cell = { workspace = true }
+ordermap = { workspace = true }
 pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }

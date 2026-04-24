@@ -1,36 +1,9 @@
-//! Common abstractions for file-backed metadata caches.
-//!
-//! This module provides a trait-based framework for caching serializable
-//! metadata to JSON files on disk. It is used to avoid expensive recomputation
-//! (e.g. invoking build backends) when the inputs have not changed.
-//!
-//! # Core concepts
-//!
-//! * [`MetadataCache`]: the main trait. Each implementation represents a
-//!   distinct cache with its own directory, key space, and entry type. Default
-//!   methods handle file I/O, locking, and serialization.
-//!
-//! * [`MetadataCacheKey`]: implemented by key types that produce a unique
-//!   string used as the cache file name.
-//!
-//! * [`MetadataCacheEntry`]: implemented by the data stored in each cache
-//!   file. Every entry carries a [`CacheRevision`] that identifies its
-//!   content.
-//!
-//! * [`CacheRevision`]: an opaque, type-safe identifier that changes when
-//!   the meaningful content of a cache entry changes. Downstream caches store
-//!   an upstream revision to detect staleness without re-reading the upstream
-//!   entry.
-//!
-//! * [`VersionedCacheEntry`]: extends [`MetadataCacheEntry`] with a
-//!   monotonically increasing version counter used for optimistic locking
-//!   across processes.
-//!
-//! # Type aliases
-//!
-//! [`CacheKey<C>`] and [`CacheEntry<C>`] are convenience aliases that let
-//! you refer to a cache's associated types through the cache type itself
-//! (e.g. `CacheKey<SourceRecordCache>` instead of `SourceRecordCacheKey`).
+//! Trait-based framework for caching serializable metadata to JSON files
+//! on disk. Implementors plug in a key, an entry (carrying a
+//! [`CacheRevision`] that downstream caches store to detect staleness),
+//! and an error type; the trait provides file I/O, locking, and
+//! serialization. [`VersionedCacheEntry`] adds a monotonic version counter
+//! for cross-process optimistic locking.
 
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};

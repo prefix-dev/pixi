@@ -14,7 +14,6 @@
 //!
 //! ```
 //! use std::fmt;
-//! use futures::FutureExt;
 //! use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
 //!
 //! #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -28,8 +27,7 @@
 //!
 //! impl Key for Fib {
 //!     // User errors live inside `Value`: here a `Result` carrying a
-//!     // static-str error. The `Result` shape also lets sub-computes be
-//!     // boxed directly with `.boxed()`, with no `async move` wrapping.
+//!     // static-str error.
 //!     type Value = Result<u64, &'static str>;
 //!
 //!     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
@@ -42,8 +40,8 @@
 //!         }
 //!         let (a, b) = ctx
 //!             .compute2(
-//!                 |ctx| ctx.compute(&Fib(n - 1)).boxed(),
-//!                 |ctx| ctx.compute(&Fib(n - 2)).boxed(),
+//!                 async |ctx| ctx.compute(&Fib(n - 1)).await,
+//!                 async |ctx| ctx.compute(&Fib(n - 2)).await,
 //!             )
 //!             .await;
 //!         // `ctx.compute` returns the child's `Value` directly (no
@@ -95,8 +93,9 @@
 //! If no compute body on the cycle path opts in to handling the
 //! cycle, it is reported to callers of [`ComputeEngine::compute`] as
 //! [`Err(ComputeError::Cycle(..))`](ComputeError::Cycle). The wrapped
-//! [`CycleError`] carries the full ring of keys in the form
-//! `[closing_key, next, ..., closing_key]`.
+//! [`CycleError`] carries the distinct keys on the cycle in order
+//! as `[closing_key, next, ...]`; the closing edge is from the last
+//! entry back to the first.
 //!
 //! Why default to a returned error rather than a panic or a `Result`
 //! on every `ctx.compute`? Two reasons:
@@ -127,7 +126,6 @@
 //!
 //! ```
 //! use std::fmt;
-//! use futures::FutureExt;
 //! use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
 //!
 //! #[derive(Clone, Debug, Hash, PartialEq, Eq)]
@@ -150,9 +148,7 @@
 //!         // body sees the cycle as a normal `Err` and recovers.
 //!         let me = self.0;
 //!         match ctx
-//!             .with_cycle_guard(|ctx| {
-//!                 async move { ctx.compute(&Node(me)).await }.boxed()
-//!             })
+//!             .with_cycle_guard(async |ctx| ctx.compute(&Node(me)).await)
 //!             .await
 //!         {
 //!             Ok(inner) => inner,
@@ -279,11 +275,11 @@ mod short_type_name;
 
 pub use any_key::AnyKey;
 pub use builder::ComputeEngineBuilder;
-pub use ctx::ComputeCtx;
+pub use ctx::{ComputeCtx, ParallelBuilder};
 pub use cycle::CycleError;
 pub use data::DataStore;
 pub use demand::Demand;
-pub use engine::ComputeEngine;
+pub use engine::{ComputeEngine, SpawnHook};
 pub use error::ComputeError;
 pub use injected::InjectedKey;
 pub use introspection::{DependencyGraph, GraphNode, NodeState};

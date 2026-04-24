@@ -74,11 +74,16 @@ struct EdgeRecord {
 
 /// A cycle reported by [`ActiveEdges::try_add`].
 ///
-/// `path` is the ring of keys starting and ending with the key that
-/// closed the cycle: `[caller, target, ..., caller]`. `targets` is
-/// the set of notify handles to fire: the would-be closing edge's
-/// target (the one passed into `try_add`) plus every live edge
-/// record encountered on the reconstructed ring. Where a
+/// `path` lists the distinct keys on the cycle in traversal order,
+/// starting with the `caller` (the key that closed the cycle) and
+/// ending with the last key before the ring wraps back to `caller`:
+/// `[caller, target, ...]`. Consumers reconstruct the closing edge
+/// by pairing the last entry with `caller` (index 0). A self-loop
+/// therefore has a single entry, `[caller]`.
+///
+/// `targets` is the set of notify handles to fire: the would-be
+/// closing edge's target (the one passed into `try_add`) plus every
+/// live edge record encountered on the reconstructed ring. Where a
 /// `(caller, target)` pair in the ring has multiple records (sibling
 /// parallel waits), every record's notify target is included.
 #[derive(Debug)]
@@ -112,7 +117,7 @@ impl ActiveEdges {
 
         if caller == target {
             return Err(DetectedCycle {
-                path: vec![caller.clone(), target.clone()],
+                path: vec![caller.clone()],
                 targets: vec![notify],
             });
         }
@@ -206,7 +211,11 @@ fn reconstruct(
     }
     mid_keys.push(target.clone());
     mid_keys.reverse();
-    // mid_keys now runs [target, first_visited, ..., caller]
+    // mid_keys now runs [target, first_visited, ..., caller]. Drop
+    // the trailing caller so the final `path` has no repeats — see
+    // `DetectedCycle::path`. Readers reconstruct the closing edge by
+    // pairing `path.last()` with `path.first()`.
+    mid_keys.pop();
     // mid_targets ran [notifies on prev→caller pair, ..., notifies on target→first pair];
     // reversing makes it run in ring order from target toward caller.
     mid_targets.reverse();
@@ -214,7 +223,7 @@ fn reconstruct(
     let mut path = Vec::with_capacity(mid_keys.len() + 1);
     path.push(caller.clone());
     path.extend(mid_keys);
-    // path is now [caller, target, first_visited, ..., caller]
+    // path is now [caller, target, first_visited, ...] (no repeat)
 
     let mut targets = Vec::with_capacity(mid_targets.len() + 1);
     targets.push(closing_notify); // the would-be caller→target edge
@@ -258,7 +267,7 @@ mod tests {
         let e = ActiveEdges::new();
         let notify = h();
         let err = e.try_add(&ak("a"), &ak("a"), notify.clone()).unwrap_err();
-        assert_eq!(err.path, vec![ak("a"), ak("a")]);
+        assert_eq!(err.path, vec![ak("a")]);
         assert_eq!(err.targets.len(), 1);
         assert!(Arc::ptr_eq(&err.targets[0], &notify));
         // Guards against a regression where a failed self-loop could
@@ -275,7 +284,7 @@ mod tests {
         e.try_add(&ak("c"), &ak("a"), ca.clone()).unwrap();
         let ab = h();
         let err = e.try_add(&ak("a"), &ak("b"), ab.clone()).unwrap_err();
-        assert_eq!(err.path, vec![ak("a"), ak("b"), ak("c"), ak("a")]);
+        assert_eq!(err.path, vec![ak("a"), ak("b"), ak("c")]);
         assert_eq!(err.targets.len(), 3);
         assert!(Arc::ptr_eq(&err.targets[0], &ab));
         assert!(Arc::ptr_eq(&err.targets[1], &bc));

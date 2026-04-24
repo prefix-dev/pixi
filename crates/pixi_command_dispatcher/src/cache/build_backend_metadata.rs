@@ -60,7 +60,7 @@ pub struct BuildBackendMetadataCacheKey {
     /// Exclude packages newer than the configured cutoffs when solving backend environments.
     pub exclude_newer: Option<ResolvedExcludeNewer>,
 
-    /// The protocols that are enabled for source packages
+    /// The protocols that were enabled for backend discovery.
     pub enabled_protocols: EnabledProtocols,
 
     /// The pinned source location

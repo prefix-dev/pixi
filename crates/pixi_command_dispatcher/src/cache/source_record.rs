@@ -1,6 +1,6 @@
 use super::common::{
     CacheError, CacheKeyString, CacheRevision, MetadataCache, MetadataCacheEntry, MetadataCacheKey,
-    UpstreamCacheRef, VersionedCacheEntry, WriteResult as CommonWriteResult,
+    UpstreamCacheRef, VersionedCacheEntry,
 };
 use crate::BuildEnvironment;
 use crate::build::CanonicalSourceCodeLocation;
@@ -12,16 +12,13 @@ use pixi_spec::SourceLocationSpec;
 use pixi_variant::VariantValue;
 use rattler_conda_types::{ChannelUrl, PackageName, PackageRecord};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     path::{Path, PathBuf},
     sync::Arc,
 };
 use thiserror::Error;
-
-// Re-export WriteResult with the correct type
-pub type WriteResult = CommonWriteResult<SourceRecordCacheEntry>;
 
 /// A cache for caching the resolved metadata of a single source record
 /// (a specific package name + variant combination).
@@ -58,7 +55,7 @@ pub struct SourceRecordCacheKey {
     /// The build environment
     pub build_environment: BuildEnvironment,
 
-    /// The protocols that are enabled for source packages
+    /// The protocols that were enabled for backend discovery.
     pub enabled_protocols: EnabledProtocols,
 
     /// The pinned source location
@@ -163,7 +160,7 @@ pub struct CachedSourceRecord {
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
-    pub sources: HashMap<String, SourceLocationSpec>,
+    pub sources: BTreeMap<String, SourceLocationSpec>,
 }
 
 impl MetadataCacheEntry<SourceRecordCache> for SourceRecordCacheEntry {

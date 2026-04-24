@@ -3,7 +3,9 @@
 use std::sync::Arc;
 
 use crate::{
-    ComputeEngine, DataStore, cycle::active_edges::ActiveEdges, engine::EngineInner,
+    ComputeEngine, DataStore,
+    cycle::active_edges::ActiveEdges,
+    engine::{EngineInner, SpawnHook},
     key_graph::KeyGraph,
 };
 
@@ -27,6 +29,7 @@ use crate::{
 pub struct ComputeEngineBuilder {
     sequential_branches: bool,
     global_data: DataStore,
+    spawn_hook: Option<Arc<dyn SpawnHook>>,
 }
 
 impl ComputeEngineBuilder {
@@ -73,6 +76,17 @@ impl ComputeEngineBuilder {
         self
     }
 
+    /// Register a [`SpawnHook`] that wraps every compute-task future
+    /// before it is handed to [`tokio::spawn`].
+    ///
+    /// The hook runs synchronously in the spawning task's context, so
+    /// it can capture caller-side task-locals and install them into the
+    /// spawned task via e.g. `task_local!::scope`.
+    pub fn with_spawn_hook(mut self, hook: Arc<dyn SpawnHook>) -> Self {
+        self.spawn_hook = Some(hook);
+        self
+    }
+
     /// Build the [`ComputeEngine`].
     pub fn build(self) -> ComputeEngine {
         ComputeEngine {
@@ -81,6 +95,7 @@ impl ComputeEngineBuilder {
                 active_edges: Arc::new(ActiveEdges::new()),
                 sequential_branches: self.sequential_branches,
                 global_data: self.global_data,
+                spawn_hook: self.spawn_hook,
             }),
         }
     }

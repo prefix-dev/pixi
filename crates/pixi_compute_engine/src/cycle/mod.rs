@@ -65,9 +65,10 @@
 //! On cycle, [`try_add`][try_add] returns a [`DetectedCycle`] with
 //! two pieces:
 //!
-//! - `path` — the ring of keys `[caller, target, …, caller]`,
-//!   rebuilt from the BFS's parent-edge map, used to render
-//!   [`CycleError`] for the user.
+//! - `path` — the distinct keys on the cycle in order,
+//!   `[caller, target, …]`, rebuilt from the BFS's parent-edge map.
+//!   The closing edge is from the last entry back to the first.
+//!   Used to render [`CycleError`] for the user.
 //! - `targets` — one [`GuardHandle`] per edge in the ring, starting
 //!   with the would-be closing edge's target (the `notify` the
 //!   caller passed in) and then every live record on each pair the

@@ -2,11 +2,33 @@
 
 use std::sync::Arc;
 
+use futures::future::BoxFuture;
+
 use crate::{
     ComputeCtx, ComputeEngineBuilder, ComputeError, DataStore, InjectedKey, Key,
     cycle::active_edges::ActiveEdges,
     key_graph::{KeyGraph, Lookup},
 };
+
+/// A hook invoked at every compute-task spawn site, just before the
+/// engine calls [`tokio::spawn`].
+///
+/// [`SpawnHook::wrap`] is called **synchronously in the spawning
+/// task's context**, so it can snapshot caller-side task-locals (e.g.
+/// a tracing span or a reporter context). The future it returns is
+/// what gets spawned; a typical implementation wraps `fut` with
+/// `tokio::task_local!`'s `LocalKey::scope` to install the captured
+/// task-local into the spawned task for its entire lifetime.
+///
+/// The future is required to be `'static` because it is handed to
+/// [`tokio::spawn`]; the engine boxes it at the spawn site so
+/// implementations do not need to impose a tighter bound.
+pub trait SpawnHook: Send + Sync + 'static {
+    /// Wrap the compute body future before it is spawned. The
+    /// returned future's output type must remain `()`; the engine
+    /// carries the typed compute result out of band.
+    fn wrap(&self, data: &DataStore, fut: BoxFuture<'static, ()>) -> BoxFuture<'static, ()>;
+}
 
 /// The top-level compute engine.
 ///
@@ -83,6 +105,9 @@ pub(crate) struct EngineInner {
     pub(crate) sequential_branches: bool,
     /// Engine-wide shared data, set at construction time.
     pub(crate) global_data: DataStore,
+    /// Optional hook invoked on every compute-task spawn. See
+    /// [`SpawnHook`] for the calling protocol.
+    pub(crate) spawn_hook: Option<Arc<dyn SpawnHook>>,
 }
 
 impl Default for ComputeEngine {
@@ -151,6 +176,91 @@ impl ComputeEngine {
     ) -> impl Future<Output = Result<K::Value, ComputeError>> + use<K> {
         let mut ctx = ComputeCtx::new(self.inner.clone());
         ctx.compute_root(key)
+    }
+
+    /// Run `f` with a fresh [`ComputeCtx`] bound to this engine and
+    /// return its value, or the first [`ComputeError`] that surfaces.
+    ///
+    /// This is the bridge from the [`ComputeEngine`] handle to APIs
+    /// defined as extension traits on [`ComputeCtx`]: the ctx is
+    /// available inside the closure, so `ctx.some_ext_method()` works
+    /// without the caller having to be inside a [`Key::compute`] body.
+    ///
+    /// # Errors
+    ///
+    /// - [`ComputeError::Cycle`] if a cycle is detected below any
+    ///   [`ctx.compute(..)`](ComputeCtx::compute) call made from
+    ///   inside `f`. A synthetic fallback on this scope catches the
+    ///   cycle, drops `f`'s future, and returns the ring of keys.
+    /// - The root ctx has no caller key, so [`ComputeError::Canceled`]
+    ///   cannot be produced here directly; it can still surface from
+    ///   inside `f` through a [`Key::compute`] body if one of the
+    ///   sub-computes it awaits is canceled.
+    ///
+    /// # Do not call from within a compute body
+    ///
+    /// Same caveat as [`ComputeEngine::compute`]: the ctx built here
+    /// has no `current` key, so edges it adds are invisible to the
+    /// cycle detector and a nested call from inside a running
+    /// [`Key::compute`] body can produce a dedup deadlock that will
+    /// not be caught. Inside a compute body, use the
+    /// [`ComputeCtx`] you were handed.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use std::fmt;
+    /// use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
+    ///
+    /// #[derive(Clone, Debug, Hash, PartialEq, Eq)]
+    /// struct Double(u32);
+    ///
+    /// impl fmt::Display for Double {
+    ///     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    ///         write!(f, "{}", self.0)
+    ///     }
+    /// }
+    ///
+    /// impl Key for Double {
+    ///     type Value = u32;
+    ///     async fn compute(&self, _ctx: &mut ComputeCtx) -> Self::Value {
+    ///         self.0 * 2
+    ///     }
+    /// }
+    ///
+    /// # tokio_test::block_on(async {
+    /// let engine = ComputeEngine::new();
+    /// let sum = engine
+    ///     .with_ctx(async |ctx| {
+    ///         let a = ctx.compute(&Double(10)).await;
+    ///         let b = ctx.compute(&Double(11)).await;
+    ///         a + b
+    ///     })
+    ///     .await
+    ///     .unwrap();
+    /// assert_eq!(sum, 42);
+    /// # });
+    /// ```
+    pub async fn with_ctx<F, T>(&self, f: F) -> Result<T, ComputeError>
+    where
+        F: AsyncFnOnce(&mut ComputeCtx) -> T,
+    {
+        let (mut ctx, fallback_rx) = ComputeCtx::new_root_with_fallback(self.inner.clone());
+
+        // `biased;` so a fired fallback wins even in the same-poll
+        // race where `f` also just finished. Without it the random
+        // pick would occasionally let a cycled scope return `Ok`.
+        tokio::select! {
+            biased;
+            cycle = fallback_rx => Err(ComputeError::Cycle(
+                // Sender lives in the ctx's guard stack, which is
+                // owned by this future for the whole select, so
+                // `Err` (sender dropped without firing) is
+                // structurally impossible.
+                cycle.expect("root fallback sender dropped while scope active"),
+            )),
+            value = f(&mut ctx) => Ok(value),
+        }
     }
 
     /// Inject a value for an [`InjectedKey`].

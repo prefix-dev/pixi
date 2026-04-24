@@ -3,6 +3,7 @@
 //! The input files are deemed not to change between calls.
 use std::{
     collections::BTreeSet,
+    convert::identity,
     hash::Hash,
     path::PathBuf,
     sync::{Arc, Weak},
@@ -78,10 +79,13 @@ impl GlobHashCache {
                     )
                 })
                 .await
-                .unwrap_or_else(|err| match err.try_into_panic() {
-                    Ok(panic) => std::panic::resume_unwind(panic),
-                    Err(_) => Err(GlobHashError::Cancelled),
-                })?;
+                .map_or_else(
+                    |err| match err.try_into_panic() {
+                        Ok(panic) => std::panic::resume_unwind(panic),
+                        Err(_) => Err(GlobHashError::Cancelled),
+                    },
+                    identity,
+                )?;
 
                 // Store the result in the cache
                 self.cache.insert(key, HashCacheEntry::Done(result.clone()));

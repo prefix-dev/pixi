@@ -1,0 +1,8 @@
+[workspace]
+name = "host-dep-binary"
+channels = []
+platforms = []
+preview = ["pixi-build"]
+
+[dependencies]
+foo = { path = "foo" }

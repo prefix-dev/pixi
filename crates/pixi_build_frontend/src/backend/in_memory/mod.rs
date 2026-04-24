@@ -36,7 +36,7 @@ pub trait InMemoryBackendInstantiator {
 }
 
 #[allow(unused_variables)]
-pub trait InMemoryBackend: Send {
+pub trait InMemoryBackend: Send + Sync {
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities::default()
     }

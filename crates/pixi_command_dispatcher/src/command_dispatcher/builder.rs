@@ -1,31 +1,43 @@
 use std::sync::Arc;
 
+use crate::BuildEnvironment;
 use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
 use crate::cache::source_record::SourceRecordCache;
-use crate::discover_backend_cache::DiscoveryCache;
+use crate::compute_data::{
+    AllowExecuteLinkScripts, BackendSourceBuildSemaphore, CondaSolveSemaphore,
+};
+use crate::environment::WorkspaceEnvRegistry;
+use crate::injected_config::{
+    BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
+};
+use crate::path::RootDir;
+use crate::reporter_context::CURRENT_REPORTER_CONTEXT;
 use crate::{
     CacheDirs, CommandDispatcher, Executor, Limits, Reporter,
-    build::BuildCache,
-    command_dispatcher::{CommandDispatcherChannel, CommandDispatcherData},
-    command_dispatcher_processor::CommandDispatcherProcessor,
+    command_dispatcher::{CommandDispatcherData, DepGraphDumpGuard},
     limits::ResolvedLimits,
+    source_checkout::{GitCheckoutSemaphore, UrlCheckoutSemaphore},
 };
+use futures::future::BoxFuture;
+use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::BackendOverride;
+use pixi_compute_engine::{ComputeEngine, DataStore, SpawnHook};
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
 use pixi_url::resolver::UrlResolver;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::{Gateway, MaxConcurrency};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use tokio::sync::Semaphore;
 
 #[derive(Default)]
 pub struct CommandDispatcherBuilder {
     gateway: Option<Gateway>,
     root_dir: Option<AbsPresumedDirPathBuf>,
-    reporter: Option<Box<dyn Reporter>>,
+    reporter: Option<Arc<dyn Reporter>>,
     git_resolver: Option<GitResolver>,
     url_resolver: Option<UrlResolver>,
     download_client: Option<LazyClient>,
@@ -36,6 +48,8 @@ pub struct CommandDispatcherBuilder {
     executor: Executor,
     tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
     execute_link_scripts: bool,
+    channel_config: Option<ChannelConfig>,
+    enabled_protocols: Option<EnabledProtocols>,
 }
 
 impl CommandDispatcherBuilder {
@@ -58,7 +72,7 @@ impl CommandDispatcherBuilder {
     /// Sets the reporter used by the [`CommandDispatcher`] to report progress.
     pub fn with_reporter<F: Reporter + 'static>(self, reporter: F) -> Self {
         Self {
-            reporter: Some(Box::new(reporter)),
+            reporter: Some(Arc::new(reporter)),
             ..self
         }
     }
@@ -143,6 +157,24 @@ impl CommandDispatcherBuilder {
         }
     }
 
+    /// Sets the channel configuration used to resolve channel names.
+    /// Injected into the compute engine as [`ChannelConfigKey`].
+    pub fn with_channel_config(self, channel_config: ChannelConfig) -> Self {
+        Self {
+            channel_config: Some(channel_config),
+            ..self
+        }
+    }
+
+    /// Sets the build-protocol discovery configuration. Injected into
+    /// the compute engine as [`EnabledProtocolsKey`].
+    pub fn with_enabled_protocols(self, enabled_protocols: EnabledProtocols) -> Self {
+        Self {
+            enabled_protocols: Some(enabled_protocols),
+            ..self
+        }
+    }
+
     /// Completes the builder and returns a new [`CommandDispatcher`].
     pub fn finish(self) -> CommandDispatcher {
         let root_dir = self.root_dir.unwrap_or_else(|| {
@@ -174,7 +206,6 @@ impl CommandDispatcherBuilder {
         let url_resolver = self.url_resolver.unwrap_or_default();
         let source_record_cache = SourceRecordCache::new(cache_dirs.source_metadata().into());
 
-        let build_cache = BuildCache::new(cache_dirs.source_builds());
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
             let platform = Platform::current();
             let virtual_packages =
@@ -185,32 +216,128 @@ impl CommandDispatcherBuilder {
             )
         });
 
+        let limits = ResolvedLimits::from(self.limits);
+        let git_checkout_semaphore = limits
+            .max_concurrent_git_checkouts
+            .map(|n| Arc::new(Semaphore::new(n)));
+        let url_checkout_semaphore = limits
+            .max_concurrent_url_checkouts
+            .map(|n| Arc::new(Semaphore::new(n)));
+        let conda_solve_semaphore = limits
+            .max_concurrent_solves
+            .map(|n| Arc::new(Semaphore::new(n)));
+        let backend_source_build_semaphore = limits
+            .max_concurrent_builds
+            .map(|n| Arc::new(Semaphore::new(n)));
+
+        let reporter = self.reporter;
+
+        let channel_config = self.channel_config.unwrap_or_else(|| {
+            let path: &std::path::Path = root_dir.as_ref();
+            ChannelConfig::default_with_root_dir(path.to_path_buf())
+        });
+        let enabled_protocols = self.enabled_protocols.unwrap_or_default();
+
+        let workspace_env_registry = Arc::new(WorkspaceEnvRegistry::new());
+
         let data = Arc::new(CommandDispatcherData {
             gateway,
             build_backend_metadata_cache,
             source_record_cache,
-            build_cache,
-            root_dir,
             git_resolver,
             url_resolver,
             cache_dirs,
             download_client,
             build_backend_overrides: self.build_backend_overrides,
             glob_hash_cache: GlobHashCache::default(),
-            discovery_cache: DiscoveryCache::default(),
-            limits: ResolvedLimits::from(self.limits),
             package_cache,
             tool_platform,
             execute_link_scripts: self.execute_link_scripts,
             executor: self.executor,
+            git_checkout_semaphore,
+            url_checkout_semaphore,
+            conda_solve_semaphore,
+            backend_source_build_semaphore,
+            workspace_env_registry,
         });
 
-        let (sender, join_handle) = CommandDispatcherProcessor::spawn(data.clone(), self.reporter);
-        CommandDispatcher {
-            channel: Some(CommandDispatcherChannel::Strong(sender)),
-            context: None,
-            data,
-            processor_handle: Some(Arc::new(join_handle)),
+        // Build the compute engine, populating its global data store with
+        // the individual shared resources that pixi-specific Keys read
+        // through the extension traits on DataStore (HasGateway,
+        // HasGitResolver, HasUrlResolver, HasCacheDirs, ...). Values are
+        // stored by `TypeId`, so tests can populate only the subset their
+        // Keys actually touch without constructing a full dispatcher. The
+        // spawn hook captures the calling task's
+        // `CURRENT_REPORTER_CONTEXT` task-local and scopes the spawned
+        // compute with it, so Keys can read their caller's reporter
+        // context even though the compute runs on a fresh tokio task.
+        let mut engine_builder = ComputeEngine::builder()
+            .sequential_branches(matches!(self.executor, Executor::Serial))
+            .with_data(data.gateway.clone())
+            .with_data(data.git_resolver.clone())
+            .with_data(data.url_resolver.clone())
+            .with_data(data.download_client.clone())
+            .with_data(data.cache_dirs.clone())
+            .with_data(data.build_backend_metadata_cache.clone())
+            .with_data(data.package_cache.clone())
+            .with_data(data.workspace_env_registry.clone())
+            .with_data(AllowExecuteLinkScripts(data.execute_link_scripts))
+            .with_data(RootDir(root_dir))
+            .with_spawn_hook(Arc::new(ReporterContextSpawnHook));
+        if let Some(reporter) = reporter.clone() {
+            engine_builder = engine_builder.with_data(reporter);
         }
+        if let Some(sem) = data.git_checkout_semaphore.clone() {
+            engine_builder = engine_builder.with_data(GitCheckoutSemaphore(sem));
+        }
+        if let Some(sem) = data.url_checkout_semaphore.clone() {
+            engine_builder = engine_builder.with_data(UrlCheckoutSemaphore(sem));
+        }
+        if let Some(sem) = data.conda_solve_semaphore.clone() {
+            engine_builder = engine_builder.with_data(CondaSolveSemaphore(sem));
+        }
+        if let Some(sem) = data.backend_source_build_semaphore.clone() {
+            engine_builder = engine_builder.with_data(BackendSourceBuildSemaphore(sem));
+        }
+        let engine = engine_builder.build();
+
+        // Inject engine-wide configuration values that Keys read through
+        // `ctx.compute(&ChannelConfigKey)` etc.
+        engine.inject(ChannelConfigKey, Arc::new(channel_config));
+        engine.inject(EnabledProtocolsKey, Arc::new(enabled_protocols));
+        let tool_build_environment = BuildEnvironment {
+            host_platform: data.tool_platform.0,
+            build_platform: data.tool_platform.0,
+            host_virtual_packages: data.tool_platform.1.clone(),
+            build_virtual_packages: data.tool_platform.1.clone(),
+        };
+        engine.inject(ToolBuildEnvironmentKey, Arc::new(tool_build_environment));
+        engine.inject(
+            BackendOverrideKey,
+            Arc::new(data.build_backend_overrides.clone()),
+        );
+
+        CommandDispatcher {
+            _dump_guard: Arc::new(DepGraphDumpGuard {
+                engine: engine.clone(),
+            }),
+            data,
+            engine,
+            reporter,
+        }
+    }
+}
+
+/// Snapshots the current reporter-context task-local on the calling
+/// task and re-installs it via `scope` on the spawned compute task.
+/// Lets compute-engine Keys read the caller's reporter context even
+/// though the compute runs on a fresh tokio task that would not
+/// otherwise inherit task-locals.
+pub struct ReporterContextSpawnHook;
+
+impl SpawnHook for ReporterContextSpawnHook {
+    fn wrap(&self, _data: &DataStore, fut: BoxFuture<'static, ()>) -> BoxFuture<'static, ()> {
+        let captured = CURRENT_REPORTER_CONTEXT.try_get().ok().flatten();
+        Box::pin(CURRENT_REPORTER_CONTEXT.scope(captured, fut))
     }
 }
