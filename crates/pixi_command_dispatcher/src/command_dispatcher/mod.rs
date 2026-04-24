@@ -389,11 +389,15 @@ impl CommandDispatcher {
     {
         use crate::command_dispatcher::error::flatten_with_ctx_result;
         use crate::install_pixi::InstallPixiEnvironmentExt;
-        flatten_with_ctx_result(
-            self.engine
-                .with_ctx(async |ctx| ctx.install_pixi_environment(spec).await)
-                .await,
-        )
+        // Heap-allocate the inline `with_ctx` + install pipeline so
+        // its async state machine does not pile onto the caller's
+        // stack. Without the `Box::pin`, a caller that is already
+        // deep in another compute pipeline (for example the PyPI
+        // resolve path invoking a conda prefix setup for build
+        // isolation) can exhaust its thread stack.
+        let future: std::pin::Pin<Box<dyn Future<Output = _> + Send + '_>> =
+            Box::pin(self.engine.with_ctx(async |ctx| ctx.install_pixi_environment(spec).await));
+        flatten_with_ctx_result(future.await)
     }
 
     /// Instantiates an environment for a tool based on the given spec. Reuses
