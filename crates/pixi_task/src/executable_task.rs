@@ -152,6 +152,43 @@ impl<'p> ExecutableTask<'p> {
 
     /// Returns the task as script
     fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
+        // Multi-line task strings are joined with `&&` so execution stops on
+        // the first failing command. `deno_task_shell` treats bare newlines
+        // as whitespace, so we need to rewrite them before parsing.
+        fn join_multiline_command(cmd: &str) -> String {
+            if !cmd.contains('\n') {
+                return cmd.to_string();
+            }
+
+            let merged = cmd.replace("\\\n", "");
+
+            let lines: Vec<&str> = merged
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                .collect();
+
+            let mut out = String::new();
+            for (i, line) in lines.iter().enumerate() {
+                if i > 0 {
+                    let prev = lines[i - 1];
+                    let already_terminated = prev.ends_with("&&")
+                        || prev.ends_with("||")
+                        || prev.ends_with('|')
+                        || prev.ends_with(';')
+                        || prev.ends_with('&');
+                    if already_terminated {
+                        out.push(' ');
+                    } else {
+                        out.push_str(" && ");
+                    }
+                }
+                out.push_str(line);
+            }
+            out
+        }
+
+
         // Convert the task into an executable string
         let context = self.render_context();
         let task = self
@@ -159,6 +196,7 @@ impl<'p> ExecutableTask<'p> {
             .as_single_command(&context)
             .map_err(FailedToParseShellScript::ArgumentReplacement)?;
         if let Some(task) = task {
+            let task = join_multiline_command(&task);
             // Get the export specific environment variables
             let export = get_export_specific_task_env(self.task.as_ref(), &context)
                 .map_err(FailedToParseShellScript::ArgumentReplacement)?;
@@ -701,6 +739,82 @@ mod tests {
 
         let script = executable_task.as_script().unwrap().unwrap();
         assert_eq!(script, "export \"FOO=bar\";\n\ntest");
+    }
+
+    #[test]
+    fn test_as_script_multiline() {
+        let file_contents = r#"
+            [tasks]
+            test = """
+            echo hello
+            echo hello2
+            """
+            "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("test".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            args: ArgValues::default(),
+            init_cwd: None,
+        };
+
+        let script = executable_task.as_script().unwrap().unwrap();
+        assert_eq!(script, "echo hello && echo hello2");
+    }
+
+    #[test]
+    fn test_as_script_multiline_preserves_existing_operator() {
+        let file_contents = r#"
+            [tasks]
+            test = """
+            echo hello &&
+            echo hello2
+            echo hello3 |
+            cat
+            # comment line is skipped
+
+            echo done
+            """
+            "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("test".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            args: ArgValues::default(),
+            init_cwd: None,
+        };
+
+        let script = executable_task.as_script().unwrap().unwrap();
+        assert_eq!(
+            script,
+            "echo hello && echo hello2 && echo hello3 | cat && echo done"
+        );
     }
 
     #[tokio::test]
