@@ -23,8 +23,8 @@ use rattler_conda_types::{MatchSpec, PackageName, PackageRecord, package::RunExp
 use rattler_solve::SolveStrategy;
 
 use crate::{
-    BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, Reporter, ReporterContext,
-    SourceRecordSpec,
+    BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, InstalledSourceHints, PtrArc,
+    Reporter, ReporterContext, SourceRecordSpec,
     build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports},
     compute_data::{HasGateway, HasReporter},
     injected_config::ChannelConfigKey,
@@ -53,8 +53,7 @@ pub(super) async fn assemble_source_record(
     output: &CondaOutput,
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     env_ref: &EnvironmentRef,
-    installed_build_packages: &Arc<Vec<UnresolvedPixiRecord>>,
-    installed_host_packages: &Arc<Vec<UnresolvedPixiRecord>>,
+    installed_source_hints: &PtrArc<InstalledSourceHints>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     // Reporter lifecycle for this variant's source-record assembly.
     // Build a `SourceRecordSpec` from the data flowing through here so
@@ -99,8 +98,7 @@ pub(super) async fn assemble_source_record(
         output,
         preferred_build_source,
         env_ref,
-        installed_build_packages,
-        installed_host_packages,
+        installed_source_hints,
     );
     match scope_ctx {
         Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
@@ -114,13 +112,27 @@ async fn assemble_source_record_inner(
     output: &CondaOutput,
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     env_ref: &EnvironmentRef,
-    installed_build_packages: &Arc<Vec<UnresolvedPixiRecord>>,
-    installed_host_packages: &Arc<Vec<UnresolvedPixiRecord>>,
+    installed_source_hints: &PtrArc<InstalledSourceHints>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
-    let source_anchor =
-        SourceAnchor::from(SourceLocationSpec::from(source.manifest_source().clone()));
+    let source_location = SourceLocationSpec::from(source.manifest_source().clone());
+    let source_anchor = SourceAnchor::from(source_location.clone());
     let channel_config = ctx.compute(&ChannelConfigKey).await;
     let pkg_name = output.metadata.name.clone();
+
+    // Look up this `(package, source_location)`'s install hint. The
+    // nested build / host solves use it as their prior-resolution
+    // seed; the full `installed_source_hints` still flows through
+    // for deeper layers.
+    let (installed_build_packages, installed_host_packages): (
+        Arc<[UnresolvedPixiRecord]>,
+        Arc<[UnresolvedPixiRecord]>,
+    ) = match installed_source_hints.get(&pkg_name, &source_location) {
+        Some(hint) => (
+            Arc::clone(&hint.build_packages),
+            Arc::clone(&hint.host_packages),
+        ),
+        None => (Arc::from([]), Arc::from([])),
+    };
 
     let mut compatibility_map = HashMap::new();
     let build_dependencies = output
@@ -139,7 +151,8 @@ async fn assemble_source_record_inner(
         DerivedEnvKind::Build,
         CycleEnvironment::Build,
         build_dependencies.clone(),
-        installed_build_packages.as_ref().clone(),
+        Arc::clone(&installed_build_packages),
+        installed_source_hints,
     )
     .await?;
 
@@ -182,7 +195,8 @@ async fn assemble_source_record_inner(
         DerivedEnvKind::Host,
         CycleEnvironment::Host,
         host_dependencies.clone(),
-        installed_host_packages.as_ref().clone(),
+        Arc::clone(&installed_host_packages),
+        installed_source_hints,
     )
     .await?;
 
@@ -392,6 +406,7 @@ async fn assemble_source_record_inner(
 /// from the outer solve) so pins for source deps reachable from the
 /// nested build/host env are honoured.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 async fn nested_solve(
     ctx: &mut ComputeCtx,
     pkg_name: &PackageName,
@@ -400,7 +415,8 @@ async fn nested_solve(
     kind: DerivedEnvKind,
     cycle_env: CycleEnvironment,
     dependencies: Dependencies,
-    installed: Vec<UnresolvedPixiRecord>,
+    installed: Arc<[UnresolvedPixiRecord]>,
+    installed_source_hints: &PtrArc<InstalledSourceHints>,
 ) -> Result<Vec<PixiRecord>, SourceRecordError> {
     if dependencies.dependencies.is_empty() {
         return Ok(vec![]);
@@ -424,6 +440,7 @@ async fn nested_solve(
         // resolution. Passing these keeps solver output stable when
         // the graph is unchanged; empty on first-ever resolution.
         installed,
+        installed_source_hints: installed_source_hints.clone(),
         strategy: SolveStrategy::default(),
         preferred_build_source: Arc::clone(preferred_build_source),
         env_ref: env_ref.derived(pkg_name.clone(), kind),
@@ -474,10 +491,10 @@ async fn nested_solve(
     Ok((*records).clone())
 }
 
-/// Build a [`Cycle`] (the existing box-drawing error type) from a
-/// compute-engine [`CycleError`]. Walks the ring of `AnyKey` frames
-/// and asks each one for a [`SourceCycleFrame`] (provided by
-/// `ResolveSourcePackageKey::provide`). Frames that don't supply one
+/// Build a [`crate::Cycle`] (the existing box-drawing error type) from a
+/// compute-engine [`pixi_compute_engine::CycleError`]. Walks the ring of
+/// `AnyKey` frames and asks each one for a [`SourceCycleFrame`] (provided
+/// by `ResolveSourcePackageKey::provide`). Frames that don't supply one
 /// (e.g. `SolvePixiEnvironmentKey` frames between RSP frames) are
 /// skipped.
 ///
@@ -505,7 +522,7 @@ pub(crate) fn render_cycle(
 }
 
 /// Per-frame cycle metadata exposed by
-/// [`ResolveSourcePackageKey::provide`]. The cycle-path walker in
+/// `ResolveSourcePackageKey::provide`. The cycle-path walker in
 /// [`render_cycle`] pulls one of these per RSP frame on the ring.
 #[derive(Clone, Debug)]
 pub(crate) struct SourceCycleFrame {

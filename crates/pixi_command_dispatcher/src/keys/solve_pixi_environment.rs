@@ -33,8 +33,9 @@ use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, DevSourceMetadataKey, DevSourceMetadataSpec,
-    EnvironmentRef, HasWorkspaceEnvRegistry, PixiSolveEnvironmentSpec, PixiSolveReporter, Reporter,
-    ReporterContext, SolvePixiEnvironmentError, SourceMetadata,
+    EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, PixiSolveEnvironmentSpec,
+    PixiSolveReporter, PtrArc, Reporter, ReporterContext, SolvePixiEnvironmentError,
+    SourceMetadata,
     build::PinnedSourceCodeLocation,
     compute_data::HasReporter,
     injected_config::ChannelConfigKey,
@@ -63,7 +64,18 @@ pub struct SolvePixiEnvironmentSpec {
     /// when the `PackageRecord` needs a fresh backend query. Partials
     /// are filtered out only at the `SolveCondaKey` boundary, where
     /// the solver needs a full `PackageRecord` to pin a version.
-    pub installed: Vec<UnresolvedPixiRecord>,
+    pub installed: Arc<[UnresolvedPixiRecord]>,
+    /// Deduplicated, depth-unified view of `installed`'s source-record
+    /// hints. Built once at the top-level caller via
+    /// [`InstalledSourceHints::from_records`] and propagated unchanged
+    /// through nested solves so every layer of the recursion agrees on
+    /// one canonical hint per `(PackageName, SourceLocationSpec)`.
+    ///
+    /// [`PtrArc`] (pointer-identity `Hash`/`Eq`) because the map flows
+    /// verbatim through the recursive solve; callers that share the
+    /// same `Arc` across nested spec construction dedup via
+    /// content-free pointer identity.
+    pub installed_source_hints: PtrArc<InstalledSourceHints>,
     pub strategy: SolveStrategy,
     /// Invariant: every `PinnedSourceSpec` here must also appear as
     /// the `build_source` of some [`PixiRecord::Source`] in
@@ -88,6 +100,7 @@ impl Hash for SolvePixiEnvironmentSpec {
             constraints,
             dev_sources,
             installed,
+            installed_source_hints,
             strategy,
             preferred_build_source,
             env_ref,
@@ -96,6 +109,7 @@ impl Hash for SolvePixiEnvironmentSpec {
         constraints.hash(state);
         dev_sources.hash(state);
         installed.hash(state);
+        installed_source_hints.hash(state);
         mem::discriminant(strategy).hash(state);
         preferred_build_source.hash(state);
         env_ref.hash(state);
@@ -109,6 +123,7 @@ impl PartialEq for SolvePixiEnvironmentSpec {
             && self.constraints == other.constraints
             && self.dev_sources == other.dev_sources
             && self.installed == other.installed
+            && self.installed_source_hints == other.installed_source_hints
             && mem::discriminant(&self.strategy) == mem::discriminant(&other.strategy)
             && self.preferred_build_source == other.preferred_build_source
             && self.env_ref == other.env_ref
@@ -265,21 +280,17 @@ async fn compute_inner(
         .chain(dev_source_source_specs.into_specs())
         .collect();
 
-    // Map each source package's name to its previously-recorded
-    // build / host env package sets (from the outer `installed`
-    // list). Used by the walk to seed nested build/host solves with
-    // an `installed` hint so their solutions stay stable when the
-    // graph hasn't changed. `UnresolvedPixiRecord::try_into_resolved`
-    // drops any still-partial records; those cannot be used as a
-    // solver hint until they're resolved.
-    let installed_by_source_pkg = build_installed_package_map(&spec.installed);
-
+    // Source-record hints for this solve. Keyed on
+    // `(PackageName, SourceLocationSpec)`; the same `Arc` flows
+    // through every nested solve so a given source package gets the
+    // same hint regardless of which branch of the recursion reached
+    // it.
     let resolved = walk_and_resolve(
         ctx,
         seeds,
         &spec.env_ref,
         &spec.preferred_build_source,
-        &installed_by_source_pkg,
+        &spec.installed_source_hints,
     )
     .await?;
 
@@ -390,10 +401,7 @@ async fn walk_and_resolve(
     seeds: Vec<(PackageName, SourceSpec)>,
     env_ref: &EnvironmentRef,
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
-    installed_by_source_pkg: &HashMap<
-        PackageName,
-        (Vec<UnresolvedPixiRecord>, Vec<UnresolvedPixiRecord>),
-    >,
+    installed_source_hints: &PtrArc<InstalledSourceHints>,
 ) -> Result<Vec<Arc<pixi_record::SourceRecord>>, SolvePixiEnvironmentError> {
     let mut all_records: Vec<Arc<pixi_record::SourceRecord>> = Vec::new();
     let mut seen_sources: HashSet<(PackageName, SourceLocationSpec)> = HashSet::new();
@@ -422,17 +430,12 @@ async fn walk_and_resolve(
         if !seen.insert((name.clone(), location.clone())) {
             return;
         }
-        let (installed_build_packages, installed_host_packages) = installed_by_source_pkg
-            .get(&name)
-            .cloned()
-            .unwrap_or_default();
         let key = ResolveSourcePackageKey::new(ResolveSourcePackageSpec {
             package: name.clone(),
             source_location: location,
             preferred_build_source: Arc::clone(preferred_build_source),
             env_ref: env_ref.clone(),
-            installed_build_packages,
-            installed_host_packages,
+            installed_source_hints: installed_source_hints.clone(),
         });
         pending.push(p.compute(async move |sub_ctx: &mut ComputeCtx| {
             // Per-push cycle guard. `sub_ctx` has a branch-local
@@ -601,41 +604,6 @@ fn reporter_view_spec(name: String, spec: &SolvePixiEnvironmentSpec) -> PixiSolv
         platform: spec.env_ref.display_platform(),
         has_direct_conda_dependency: has_direct_conda_dependency(&spec.dependencies),
     }
-}
-
-/// Build a lookup from source-package name to its prior-resolution
-/// build / host package sets by walking the outer env's `installed`
-/// list.
-///
-/// The walk pushes a [`ResolveSourcePackageKey`] for every source
-/// package the env depends on; each push carries the matching
-/// record's build / host package sets forward to seed the nested
-/// build / host solves' `installed` hints. This is what gives the
-/// nested solves the same "reuse previous versions" stability the
-/// top-level run env gets from its own `installed` list.
-///
-/// Both `Full` and `Partial` source records contribute; a partial
-/// record's `build_packages` / `host_packages` still carry names and
-/// pinned sources from the previous lockfile, which is useful for
-/// the walk even when the full `PackageRecord` needs a fresh backend
-/// fetch. Partials are filtered at the `SolveCondaKey` boundary, not
-/// here.
-fn build_installed_package_map(
-    installed: &[UnresolvedPixiRecord],
-) -> HashMap<PackageName, (Vec<UnresolvedPixiRecord>, Vec<UnresolvedPixiRecord>)> {
-    let mut map: HashMap<PackageName, (Vec<UnresolvedPixiRecord>, Vec<UnresolvedPixiRecord>)> =
-        HashMap::new();
-    for record in installed {
-        let UnresolvedPixiRecord::Source(source) = record else {
-            continue;
-        };
-        let name = source.name().clone();
-        map.insert(
-            name,
-            (source.build_packages.clone(), source.host_packages.clone()),
-        );
-    }
-    map
 }
 
 /// [`LifecycleKind`] wiring [`PixiSolveReporter`] events for a

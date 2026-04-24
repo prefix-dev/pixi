@@ -52,12 +52,28 @@ fn to_abs_dir(path: impl Into<PathBuf>) -> pixi_path::AbsPresumedDirPathBuf {
 /// few fields. Used with struct update syntax:
 /// `SolvePixiEnvironmentSpec { dependencies: ..., env_ref: env_ref_of(...),
 /// ..empty_pixi_env_spec() }`.
+/// Build matching `(installed, installed_source_hints)` from a `Vec`
+/// of records, the way a real caller does.
+fn installed_with_hints(
+    installed: Vec<pixi_record::UnresolvedPixiRecord>,
+) -> (
+    std::sync::Arc<[pixi_record::UnresolvedPixiRecord]>,
+    pixi_command_dispatcher::PtrArc<pixi_command_dispatcher::InstalledSourceHints>,
+) {
+    let installed: std::sync::Arc<[_]> = std::sync::Arc::from(installed);
+    let hints = pixi_command_dispatcher::PtrArc::from_value(
+        pixi_command_dispatcher::InstalledSourceHints::from_records(&installed),
+    );
+    (installed, hints)
+}
+
 fn empty_pixi_env_spec() -> SolvePixiEnvironmentSpec {
     SolvePixiEnvironmentSpec {
         dependencies: DependencyMap::default(),
         constraints: DependencyMap::default(),
         dev_sources: ordermap::OrderMap::new(),
-        installed: Vec::new(),
+        installed: std::sync::Arc::from([]),
+        installed_source_hints: Default::default(),
         strategy: Default::default(),
         preferred_build_source: std::sync::Arc::new(BTreeMap::new()),
         env_ref: EnvironmentRef::Ephemeral(EphemeralEnv::new(
@@ -2312,7 +2328,7 @@ pub async fn test_installed_pins_binary_version() {
                 "package".parse().unwrap(),
                 PixiSpec::Version(version),
             )]),
-            installed,
+            installed: std::sync::Arc::from(installed),
             env_ref: env_ref.clone(),
             ..empty_pixi_env_spec()
         }
@@ -2388,14 +2404,18 @@ pub async fn test_installed_host_packages_pin_nested_solve() {
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages);
     let env_ref = env_ref_of(vec![channel_url], build_env);
 
-    let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| SolvePixiEnvironmentSpec {
-        dependencies: DependencyMap::from_iter([(
-            "foo".parse().unwrap(),
-            PathSpec { path: "foo".into() }.into(),
-        )]),
-        installed,
-        env_ref: env_ref.clone(),
-        ..empty_pixi_env_spec()
+    let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| {
+        let (installed, installed_source_hints) = installed_with_hints(installed);
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "foo".parse().unwrap(),
+                PathSpec { path: "foo".into() }.into(),
+            )]),
+            installed,
+            installed_source_hints,
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        }
     };
 
     // Helper: find foo's resolved source record, pluck the `package`
@@ -2438,7 +2458,7 @@ pub async fn test_installed_host_packages_pin_nested_solve() {
                 "package".parse().unwrap(),
                 PixiSpec::Version("==0.1.0".parse::<VersionSpec>().unwrap()),
             )]),
-            installed: Vec::new(),
+            installed: std::sync::Arc::from([]),
             env_ref: env_ref.clone(),
             ..empty_pixi_env_spec()
         },
@@ -2543,14 +2563,18 @@ pub async fn test_installed_hint_reused_across_variants() {
         BuildEnvironment::simple(tool_platform, tool_virtual_packages),
     );
 
-    let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| SolvePixiEnvironmentSpec {
-        dependencies: DependencyMap::from_iter([(
-            "foo".parse().unwrap(),
-            PathSpec { path: "foo".into() }.into(),
-        )]),
-        installed,
-        env_ref: env_ref.clone(),
-        ..empty_pixi_env_spec()
+    let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| {
+        let (installed, installed_source_hints) = installed_with_hints(installed);
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "foo".parse().unwrap(),
+                PathSpec { path: "foo".into() }.into(),
+            )]),
+            installed,
+            installed_source_hints,
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        }
     };
 
     let host_package_version = |records: &[pixi_record::PixiRecord]| -> String {
@@ -2589,7 +2613,7 @@ pub async fn test_installed_hint_reused_across_variants() {
                 "package".parse().unwrap(),
                 PixiSpec::Version("==0.1.0".parse::<VersionSpec>().unwrap()),
             )]),
-            installed: Vec::new(),
+            installed: std::sync::Arc::from([]),
             env_ref: binary_env_ref,
             ..empty_pixi_env_spec()
         },
@@ -2633,7 +2657,6 @@ pub async fn test_installed_hint_reused_across_variants() {
 /// be normalized before the solve, so their input order does not affect
 /// the nested source resolution result.
 #[tokio::test]
-#[ignore = "expected to fail: installed hints are not yet normalized before the solve; tracked as follow-up work"]
 pub async fn test_duplicate_installed_source_hints_are_order_independent() {
     use rattler_conda_types::VersionSpec;
 
@@ -2655,14 +2678,18 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages);
     let env_ref = env_ref_of(vec![channel_url.clone()], build_env);
 
-    let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| SolvePixiEnvironmentSpec {
-        dependencies: DependencyMap::from_iter([(
-            "foo".parse().unwrap(),
-            PathSpec { path: "foo".into() }.into(),
-        )]),
-        installed,
-        env_ref: env_ref.clone(),
-        ..empty_pixi_env_spec()
+    let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| {
+        let (installed, installed_source_hints) = installed_with_hints(installed);
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "foo".parse().unwrap(),
+                PathSpec { path: "foo".into() }.into(),
+            )]),
+            installed,
+            installed_source_hints,
+            env_ref: env_ref.clone(),
+            ..empty_pixi_env_spec()
+        }
     };
 
     let host_package_version = |records: &[pixi_record::PixiRecord]| -> String {
@@ -2697,7 +2724,7 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
                 "package".parse().unwrap(),
                 PixiSpec::Version("==0.1.0".parse::<VersionSpec>().unwrap()),
             )]),
-            installed: Vec::new(),
+            installed: std::sync::Arc::from([]),
             env_ref: env_ref.clone(),
             ..empty_pixi_env_spec()
         },
@@ -2715,7 +2742,7 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
                 "package".parse().unwrap(),
                 PixiSpec::Version("==0.2.0".parse::<VersionSpec>().unwrap()),
             )]),
-            installed: Vec::new(),
+            installed: std::sync::Arc::from([]),
             env_ref: env_ref.clone(),
             ..empty_pixi_env_spec()
         },
@@ -2768,7 +2795,6 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
 /// not contain divergent `foo` instances depending on where they were
 /// reached from.
 #[tokio::test]
-#[ignore = "expected to fail: installed hints are not yet normalized before the solve; tracked as follow-up work"]
 pub async fn test_top_level_and_nested_source_hints_for_same_package_are_normalized() {
     use rattler_conda_types::VersionSpec;
 
@@ -2844,7 +2870,7 @@ foo = { path = "../foo" }
                 PathSpec { path: "bar".into() }.into(),
             ),
         ]),
-        installed,
+        installed: std::sync::Arc::from(installed),
         env_ref: env_ref.clone(),
         ..empty_pixi_env_spec()
     };
@@ -2882,7 +2908,7 @@ foo = { path = "../foo" }
                 "package".parse().unwrap(),
                 PixiSpec::Version("==0.1.0".parse::<VersionSpec>().unwrap()),
             )]),
-            installed: Vec::new(),
+            installed: std::sync::Arc::from([]),
             env_ref: env_ref.clone(),
             ..empty_pixi_env_spec()
         },
@@ -2900,7 +2926,7 @@ foo = { path = "../foo" }
                 "package".parse().unwrap(),
                 PixiSpec::Version("==0.2.0".parse::<VersionSpec>().unwrap()),
             )]),
-            installed: Vec::new(),
+            installed: std::sync::Arc::from([]),
             env_ref: env_ref.clone(),
             ..empty_pixi_env_spec()
         },

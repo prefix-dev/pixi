@@ -2540,18 +2540,23 @@ async fn spawn_solve_conda_environment_task(
             channel_priority: channel_priority.into(),
         },
     ));
+    let installed: Arc<[pixi_record::UnresolvedPixiRecord]> = existing_repodata_records
+        .records
+        .iter()
+        .cloned()
+        .map(pixi_record::UnresolvedPixiRecord::from)
+        .collect();
+    let installed_source_hints = pixi_command_dispatcher::PtrArc::from_value(
+        pixi_command_dispatcher::InstalledSourceHints::from_records(&installed),
+    );
     let records_arc = command_dispatcher
         .engine()
         .compute(&SolvePixiEnvironmentKey::new(SolvePixiEnvironmentSpec {
             dependencies,
             constraints,
             dev_sources,
-            installed: existing_repodata_records
-                .records
-                .iter()
-                .cloned()
-                .map(pixi_record::UnresolvedPixiRecord::from)
-                .collect(),
+            installed,
+            installed_source_hints,
             strategy,
             preferred_build_source: Arc::new(pin_overrides),
             env_ref,

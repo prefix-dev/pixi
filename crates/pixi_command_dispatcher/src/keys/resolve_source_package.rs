@@ -10,14 +10,14 @@ use std::{collections::BTreeMap, hash::Hash, sync::Arc};
 use derive_more::Display;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_compute_engine::{ComputeCtx, Key};
-use pixi_record::{PinnedSourceSpec, SourceRecord, UnresolvedPixiRecord};
+use pixi_record::{PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceLocationSpec;
 use rattler_conda_types::PackageName;
 use tracing::instrument;
 
 use crate::{
-    BuildBackendMetadataSpec, EnvironmentRef, Reporter, ReporterContext, SourceMetadataError,
-    SourceMetadataSpec,
+    BuildBackendMetadataSpec, EnvironmentRef, InstalledSourceHints, PtrArc, Reporter,
+    ReporterContext, SourceMetadataError, SourceMetadataSpec,
     build::PinnedSourceCodeLocation,
     compute_data::HasReporter,
     keys::{
@@ -43,15 +43,14 @@ pub struct ResolveSourcePackageSpec {
     pub source_location: SourceLocationSpec,
     pub preferred_build_source: Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     pub env_ref: EnvironmentRef,
-    /// `installed` hint for the nested build-env solve, from the outer
-    /// [`SolvePixiEnvironmentSpec::installed`](super::solve_pixi_environment::SolvePixiEnvironmentSpec::installed)'s
-    /// matching
-    /// [`SourceRecord::build_packages`](pixi_record::SourceRecord::build_packages).
-    /// Partials are kept (name + pinned source are still useful);
-    /// empty on fresh resolutions.
-    pub installed_build_packages: Vec<UnresolvedPixiRecord>,
-    /// Host-env counterpart to [`Self::installed_build_packages`].
-    pub installed_host_packages: Vec<UnresolvedPixiRecord>,
+    /// Source-record hints inherited from the enclosing SPEK; forwarded
+    /// verbatim into nested build/host solves so every layer of the
+    /// recursion agrees on one canonical hint per
+    /// `(PackageName, SourceLocationSpec)`. The hint matching
+    /// `(package, source_location)` seeds this RSP's nested build / host
+    /// solves with the previous resolution's `build_packages` /
+    /// `host_packages`; all other hints flow through for deeper layers.
+    pub installed_source_hints: PtrArc<InstalledSourceHints>,
 }
 
 /// Compute-engine Key returning every variant's assembled
@@ -154,22 +153,11 @@ async fn resolve_source_package_inner(
     let source: PinnedSourceCodeLocation = outputs.source.clone();
     let preferred = Arc::clone(&spec.preferred_build_source);
     let env_ref = spec.env_ref.clone();
-    let installed_build: Arc<Vec<UnresolvedPixiRecord>> =
-        Arc::new(spec.installed_build_packages.clone());
-    let installed_host: Arc<Vec<UnresolvedPixiRecord>> =
-        Arc::new(spec.installed_host_packages.clone());
+    let source_hints = spec.installed_source_hints.clone();
     let mapper = ComputeCtx::declare_join_closure(
         async move |bctx: &mut ComputeCtx, output: CondaOutput| {
-            assemble_source_record(
-                bctx,
-                &source,
-                &output,
-                &preferred,
-                &env_ref,
-                &installed_build,
-                &installed_host,
-            )
-            .await
+            assemble_source_record(bctx, &source, &output, &preferred, &env_ref, &source_hints)
+                .await
         },
     );
     let records = ctx

@@ -345,8 +345,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             source_location: source_location.clone(),
             preferred_build_source: Arc::new(BTreeMap::new()),
             env_ref: env_ref.clone(),
-            installed_build_packages: Vec::new(),
-            installed_host_packages: Vec::new(),
+            installed_source_hints: Default::default(),
         };
         let records = command_dispatcher
             .engine()

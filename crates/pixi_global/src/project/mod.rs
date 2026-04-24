@@ -621,7 +621,8 @@ impl Project {
             dependencies: pixi_specs,
             constraints: DependencyMap::default(),
             dev_sources: ordermap::OrderMap::new(),
-            installed: Vec::new(),
+            installed: Arc::from([]),
+            installed_source_hints: Default::default(),
             strategy: Default::default(),
             preferred_build_source: Arc::new(BTreeMap::new()),
             env_ref: EnvironmentRef::Ephemeral(EphemeralEnv::new(

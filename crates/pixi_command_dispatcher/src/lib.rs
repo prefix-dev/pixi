@@ -48,11 +48,13 @@ mod injected_config;
 mod input_hash;
 mod install_binary;
 mod install_pixi;
+mod installed_source_hints;
 mod instantiate_backend_key;
 mod instantiate_tool_env;
 pub mod keys;
 mod limits;
 mod path;
+mod ptr_arc;
 pub mod reporter;
 mod reporter_context;
 mod reporter_lifecycle;
@@ -105,9 +107,11 @@ pub use install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentExt, InstallPixiEnvironmentResult,
     InstallPixiEnvironmentSpec,
 };
+pub use installed_source_hints::{InstalledSourceHint, InstalledSourceHints};
 pub use instantiate_backend_key::{BackendHandle, InstantiateBackendError, InstantiateBackendKey};
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use limits::{Limit, Limits};
+pub use ptr_arc::PtrArc;
 pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,
     PixiSolveReporter, Reporter, ReporterContext,
