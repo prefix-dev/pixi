@@ -1,10 +1,10 @@
 //! Compute-engine Key that solves a pixi environment. Keyed on `env_ref`
 //! plus requirements (not content-addressed); cross-env dedup happens at the
-//! content-addressed inner layers ([`SolveCondaKey`](crate::keys::SolveCondaKey)
+//! content-addressed inner layers ([`SolveCondaKey`]
 //! and [`BuildBackendMetadataKey`](crate::BuildBackendMetadataKey)) where the
 //! expensive work runs.
 //!
-//! Recurses via [`ResolveSourcePackageKey`](crate::keys::ResolveSourcePackageKey)
+//! Recurses via [`ResolveSourcePackageKey`]
 //! into build/host envs; cycles are caught by the cycle guard in the
 //! private `resolve_source_record` module.
 

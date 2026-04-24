@@ -750,10 +750,94 @@ mod tests {
         });
     }
 
+    /// Round-trip a lock file whose conda source package carries build and
+    /// host package handles. Uses [`LockFileResolver`] to rebuild records
+    /// with their build/host packages populated from the lockfile's package
+    /// table, then writes them back via [`UnresolvedPixiRecord::into_conda_package_data`]
+    /// — the path that should serialize the handles again. A diff against
+    /// the fixture fails if the round-trip drops build/host information.
+    #[test]
+    fn roundtrip_source_records_with_build_host_packages() {
+        assert_roundtrip_identity("source_with_build_host_packages.lock");
+    }
+
+    /// Same contract as [`roundtrip_source_records_with_build_host_packages`],
+    /// but the outer source has another source in its `build_packages`. This
+    /// exercises the recursive branch of `register_source_deps` — the only
+    /// path that actually fires when a source depends on a source at build
+    /// time.
+    #[test]
+    fn roundtrip_source_records_with_nested_source_build_dep() {
+        assert_roundtrip_identity("nested_source_build_dep.lock");
+    }
+
+    fn assert_roundtrip_identity(fixture_name: &str) {
+        use crate::LockFileResolver;
+
+        let workspace_root = Path::new("/workspace");
+
+        let lock_source = fixture_source(fixture_name);
+        let lock_file = LockFile::from_str_with_base_directory(&lock_source, Some(workspace_root))
+            .expect("failed to load lock file fixture");
+
+        let resolver =
+            LockFileResolver::build(&lock_file, workspace_root).expect("resolver should build");
+
+        let environment = lock_file
+            .default_environment()
+            .expect("expected default environment");
+
+        let mut builder = LockFileBuilder::new()
+            .with_platforms(
+                lock_file
+                    .platforms()
+                    .map(|p| rattler_lock::PlatformData {
+                        name: p.name().clone(),
+                        subdir: p.subdir(),
+                        virtual_packages: p.virtual_packages().to_vec(),
+                    })
+                    .collect(),
+            )
+            .expect("platforms should be unique");
+        builder.set_channels(
+            DEFAULT_ENVIRONMENT_NAME,
+            [Channel::from("https://conda.anaconda.org/conda-forge/")],
+        );
+
+        for (platform, packages) in environment.packages_by_platform() {
+            let platform_str = platform.subdir().to_string();
+            for package in packages {
+                let Some(record) = resolver.get_for_package(package) else {
+                    continue;
+                };
+                let data = record.into_conda_package_data(&mut builder, workspace_root);
+                builder
+                    .add_conda_package(DEFAULT_ENVIRONMENT_NAME, &platform_str, data)
+                    .expect("platform was registered");
+            }
+        }
+
+        let roundtrip_lock = builder
+            .finish()
+            .render_to_string()
+            .expect("failed to render lock file");
+
+        assert_eq!(
+            roundtrip_lock.trim_end().replace("\r\n", "\n"),
+            lock_source.trim_end().replace("\r\n", "\n"),
+            "round-trip of {fixture_name} through LockFileResolver + into_conda_package_data should be identity"
+        );
+    }
+
     /// Load the lock file body from a static fixture file with full metadata.
     fn lock_source_from_fixture() -> String {
+        fixture_source("full_source_records.lock")
+    }
+
+    fn fixture_source(name: &str) -> String {
         let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("src/test_fixtures/full_source_records.lock");
+            .join("src/test_fixtures")
+            .join(name);
         #[allow(clippy::disallowed_methods)]
         std::fs::read_to_string(fixture_path).expect("failed to read fixture file")
     }

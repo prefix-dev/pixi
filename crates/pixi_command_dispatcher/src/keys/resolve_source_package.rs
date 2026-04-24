@@ -1,7 +1,7 @@
 //! Compute-engine Key that resolves every variant output of a single
 //! source package into fully assembled
-//! [`SourceRecord`](pixi_record::SourceRecord)s. Calls
-//! [`SourceMetadataKey`](crate::keys::SourceMetadataKey) once and fans
+//! [`SourceRecord`]s. Calls
+//! [`SourceMetadataKey`] once and fans
 //! out per variant. Keyed on
 //! `(package, source_location, preferred_build_source, env_ref)`.
 

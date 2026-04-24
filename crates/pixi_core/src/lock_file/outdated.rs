@@ -29,6 +29,7 @@ use pixi_command_dispatcher::executor::CancellationAwareFutures;
 use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_record::LockFileResolver;
 use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackage};
@@ -124,6 +125,7 @@ impl<'p> OutdatedEnvironments<'p> {
         workspace: &'p Workspace,
         command_dispatcher: CommandDispatcher,
         lock_file: &LockFile,
+        resolver: &LockFileResolver,
     ) -> Self {
         // Find all targets that are not satisfied by the lock-file
         let (
@@ -136,7 +138,7 @@ impl<'p> OutdatedEnvironments<'p> {
             build_caches,
             static_metadata_cache,
             locked_pypi_records,
-        ) = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file).await;
+        ) = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file, resolver).await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -221,6 +223,7 @@ async fn find_unsatisfiable_targets<'p>(
     project: &'p Workspace,
     command_dispatcher: CommandDispatcher,
     lock_file: &LockFile,
+    resolver: &LockFileResolver,
 ) -> (
     UnsatisfiableTargets<'p>,
     OnceCell<UvResolutionContext>,
@@ -347,6 +350,7 @@ async fn find_unsatisfiable_targets<'p>(
                 project_env_vars: project.env_vars().clone(),
                 build_caches: &build_caches,
                 static_metadata_cache: &static_metadata_cache,
+                resolver,
             };
             platform_futures.push(async move {
                 let result = verify_platform_satisfiability(&ctx, locked_environment).await;

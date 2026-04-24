@@ -395,8 +395,10 @@ impl CommandDispatcher {
         // deep in another compute pipeline (for example the PyPI
         // resolve path invoking a conda prefix setup for build
         // isolation) can exhaust its thread stack.
-        let future: std::pin::Pin<Box<dyn Future<Output = _> + Send + '_>> =
-            Box::pin(self.engine.with_ctx(async |ctx| ctx.install_pixi_environment(spec).await));
+        let future: std::pin::Pin<Box<dyn Future<Output = _> + Send + '_>> = Box::pin(
+            self.engine
+                .with_ctx(async |ctx| ctx.install_pixi_environment(spec).await),
+        );
         flatten_with_ctx_result(future.await)
     }
 

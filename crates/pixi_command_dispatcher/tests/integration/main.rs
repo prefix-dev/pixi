@@ -602,10 +602,7 @@ pub async fn test_cycle() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(
-                vec![],
-                BuildEnvironment::simple(Platform::Linux64, vec![]),
-            ),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -656,10 +653,7 @@ pub async fn test_cycle_three_packages() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(
-                vec![],
-                BuildEnvironment::simple(Platform::Linux64, vec![]),
-            ),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )

@@ -80,7 +80,7 @@ pub enum DerivedParent {
 }
 
 /// Inline environment spec outside the
-/// [`WorkspaceEnvRegistry`](super::WorkspaceEnvRegistry). `name` is
+/// [`WorkspaceEnvRegistry`]. `name` is
 /// display-only and excluded from identity; content-hashed on `spec`.
 #[derive(Debug, Clone)]
 pub struct EphemeralEnv {

@@ -15,6 +15,9 @@ exclude = [
 members = ["crates/*"]
 resolver = "3"
 
+[workspace.metadata.cargo-shear]
+ignored = ["pixi_compute_engine"]
+
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
 edition = "2024"
@@ -216,6 +219,7 @@ zip = { version = "8.0.0", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
 
 # Rattler crates
+coalesced_map = "0.1.2"
 file_url = "0.2.7"
 rattler = { version = "0.40.3", default-features = false }
 rattler_cache = { version = "0.6.18", default-features = false }

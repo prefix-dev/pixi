@@ -1,5 +1,5 @@
 //! Compute-engine Key that resolves a backend's [`JsonRpcBackendSpec`]
-//! against the injected [`BackendOverrideKey`](crate::BackendOverrideKey)
+//! against the injected [`BackendOverrideKey`]
 //! into a [`ResolvedBackendCommand`]: a concrete [`CommandSpec`] or an
 //! in-memory instantiator factory. The Key does not call the
 //! instantiator itself since `.initialize(..)` needs per-caller

@@ -37,7 +37,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
+use pixi_record::{LockFileResolver, ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -283,32 +283,29 @@ impl Workspace {
         // Get the package cache from the dispatcher.
         let package_cache = command_dispatcher.package_cache().clone();
 
+        // Stage the input lock-file into a derived-data wrapper so that
+        // every downstream consumer shares one lazily-built resolver.
+        let mut derived = LockFileDerivedData::from_input_lock_file(
+            self,
+            lock_file,
+            package_cache,
+            command_dispatcher.clone(),
+            glob_hash_cache,
+        );
+
         // should we check the lock-file in the first place?
         if !options.lock_file_usage.should_check_if_out_of_date() {
             tracing::info!("skipping check if lock-file is up-to-date");
-
-            return Ok((
-                LockFileDerivedData {
-                    workspace: self,
-                    lock_file,
-                    package_cache,
-                    updated_conda_prefixes: Default::default(),
-                    updated_pypi_prefixes: Default::default(),
-                    uv_context: Default::default(),
-                    io_concurrency_limit: IoConcurrencyLimit::default(),
-                    command_dispatcher,
-                    glob_hash_cache,
-                    build_caches: Default::default(),
-                },
-                false,
-            ));
+            return Ok((derived, false));
         }
 
         // Check which environments are out of date.
+        let resolver = derived.resolver()?;
         let mut outdated = OutdatedEnvironments::from_workspace_and_lock_file(
             self,
             command_dispatcher.clone(),
-            &lock_file,
+            &derived.lock_file,
+            &resolver,
         )
         .await;
         if outdated.is_empty() && !(needs_format_upgrade && options.upgrade_lock_file_format) {
@@ -316,30 +313,18 @@ impl Workspace {
                 tracing::warn!(
                     "the lock file is up-to-date but uses an older format (v{}), \
                      run `pixi update` to upgrade to v{} for improved reproducibility",
-                    lock_file.version(),
+                    derived.lock_file.version(),
                     rattler_lock::FileFormatVersion::LATEST,
                 );
             } else {
                 tracing::info!("the lock-file is up-to-date");
             }
 
-            // If no-environment is outdated we can return early.
-            // Pass the build_caches even if empty, in case conda_prefix needs them
-            return Ok((
-                LockFileDerivedData {
-                    workspace: self,
-                    lock_file,
-                    package_cache,
-                    updated_conda_prefixes: Default::default(),
-                    updated_pypi_prefixes: Default::default(),
-                    uv_context: outdated.uv_context,
-                    io_concurrency_limit: IoConcurrencyLimit::default(),
-                    command_dispatcher,
-                    glob_hash_cache,
-                    build_caches: outdated.build_caches,
-                },
-                false,
-            ));
+            // If no-environment is outdated we can return early. Pass the
+            // build_caches even if empty, in case conda_prefix needs them.
+            derived.uv_context = outdated.uv_context;
+            derived.build_caches = outdated.build_caches;
+            return Ok((derived, false));
         }
 
         // When upgrading the lock file format, force a full re-solve of all
@@ -350,7 +335,7 @@ impl Workspace {
             tracing::warn!(
                 "the lock file is up-to-date but uses an older format (v{}), \
                  re-solving all environments using locked content to upgrade to v{}",
-                lock_file.version(),
+                derived.lock_file.version(),
                 rattler_lock::FileFormatVersion::LATEST,
             );
             for env in self.environments() {
@@ -368,6 +353,13 @@ impl Workspace {
             miette::bail!("lock-file not up-to-date with the workspace");
         }
 
+        let LockFileDerivedData {
+            lock_file,
+            package_cache,
+            glob_hash_cache,
+            ..
+        } = derived;
+
         // Construct an update context and perform the actual update.
         let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))?
             .with_package_cache(package_cache)
@@ -375,6 +367,7 @@ impl Workspace {
             .with_outdated_environments(outdated)
             .with_lock_file(lock_file)
             .with_glob_hash_cache(glob_hash_cache)
+            .with_resolver(resolver)
             .finish()
             .await?
             .update()
@@ -551,6 +544,11 @@ pub struct LockFileDerivedData<'p> {
         lock_file::outdated::BuildCacheKey,
         Arc<lock_file::outdated::PypiEnvironmentBuildCache>,
     >,
+
+    /// Lazily-built resolver for `lock_file`. Built once on first access to
+    /// [`Self::resolver`] and reused across all downstream consumers. Kept
+    /// private so all interaction goes through the accessor method.
+    resolver: once_cell::sync::OnceCell<Arc<LockFileResolver>>,
 }
 
 /// The mode to use when updating a prefix.
@@ -568,6 +566,53 @@ pub enum UpdateMode {
 }
 
 impl<'p> LockFileDerivedData<'p> {
+    /// Construct a derived-data wrapper whose runtime state is empty. Intended
+    /// for the start of an update flow or any caller that needs the lazy
+    /// resolver cache but has no prefixes, caches, or solved records yet.
+    pub fn from_input_lock_file(
+        workspace: &'p Workspace,
+        lock_file: LockFile,
+        package_cache: PackageCache,
+        command_dispatcher: CommandDispatcher,
+        glob_hash_cache: GlobHashCache,
+    ) -> Self {
+        Self {
+            workspace,
+            lock_file,
+            package_cache,
+            updated_conda_prefixes: Default::default(),
+            updated_pypi_prefixes: Default::default(),
+            uv_context: Default::default(),
+            io_concurrency_limit: IoConcurrencyLimit::default(),
+            command_dispatcher,
+            glob_hash_cache,
+            build_caches: Default::default(),
+            resolver: Default::default(),
+        }
+    }
+
+    /// Returns a resolver for the current lock-file, building it on first
+    /// access and caching the result.
+    pub fn resolver(&self) -> miette::Result<Arc<LockFileResolver>> {
+        self.resolver
+            .get_or_try_init(|| {
+                LockFileResolver::build(&self.lock_file, self.workspace.root())
+                    .map(Arc::new)
+                    .into_diagnostic()
+            })
+            .cloned()
+    }
+
+    /// Seeds the resolver cache with a pre-built `Arc`, but only if the
+    /// cache is still empty. Used inside the update flow to forward a
+    /// resolver that was already built for the same lock-file, so later
+    /// `self.resolver()` calls return the same `Arc` without rebuilding.
+    ///
+    /// No-op if the cache already holds a value.
+    fn seed_resolver(&self, resolver: Arc<LockFileResolver>) {
+        let _ = self.resolver.set(resolver);
+    }
+
     /// Write the lock-file to disk.
     pub fn write_to_disk(&self) -> miette::Result<()> {
         let lock_file_path = self.workspace.lock_file_path();
@@ -750,8 +795,8 @@ impl<'p> LockFileDerivedData<'p> {
                         LockedPackage::Pypi(data) => Either::Right(data.name().clone()),
                     });
 
-                let pixi_records =
-                    locked_packages_to_unresolved_records(conda_packages, self.workspace.root())?;
+                let resolver = self.resolver()?;
+                let pixi_records = locked_packages_to_unresolved_records(conda_packages, &resolver);
 
                 // Get the manifest's pypi dependencies for this environment to look up editability.
                 // The lock file always stores editable=false, so we apply the actual
@@ -978,8 +1023,8 @@ impl<'p> LockFileDerivedData<'p> {
                 // source records are NOT resolved here — they are passed
                 // directly to the installer which builds them using
                 // variant-based output matching.
-                let records =
-                    locked_packages_to_unresolved_records(packages, self.workspace.root())?;
+                let resolver = self.resolver()?;
+                let records = locked_packages_to_unresolved_records(packages, &resolver);
 
                 // Update the conda prefix
                 conda_prefix_updater
@@ -1065,26 +1110,12 @@ impl PackageFilterNames {
 
 fn locked_packages_to_unresolved_records(
     conda_packages: Vec<&'_ LockedPackage>,
-    workspace_root: &std::path::Path,
-) -> Result<Vec<UnresolvedPixiRecord>, Report> {
+    resolver: &LockFileResolver,
+) -> Vec<UnresolvedPixiRecord> {
     conda_packages
         .into_iter()
-        .filter_map(LockedPackage::as_conda)
-        .cloned()
-        .map(|data| {
-            // TODO: resolve build_packages/host_packages from `data.source_data`
-            // once the lock-file exposes the full package table for
-            // `PackageHandle::get`. Today only indices are available through
-            // the public API.
-            UnresolvedPixiRecord::from_conda_package_data(
-                data,
-                workspace_root,
-                Vec::new(),
-                Vec::new(),
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()
+        .filter_map(|pkg| resolver.get_for_package(pkg))
+        .collect()
 }
 
 pub struct UpdateContext<'p> {
@@ -1377,6 +1408,10 @@ pub struct UpdateContextBuilder<'p> {
     command_dispatcher: CommandDispatcher,
     /// Optional list of package names explicitly targeted for update.
     update_targets: Option<std::collections::HashSet<String>>,
+
+    /// Pre-built resolver for the input lock-file, shared with the caller.
+    /// When `None`, the builder builds its own resolver in `finish`.
+    resolver: Option<Arc<LockFileResolver>>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -1432,6 +1467,16 @@ impl<'p> UpdateContextBuilder<'p> {
         }
     }
 
+    /// Provide a pre-built lock-file resolver to share with any computation
+    /// the builder performs. When omitted, the builder constructs its own
+    /// resolver inside `finish`.
+    pub fn with_resolver(self, resolver: Arc<LockFileResolver>) -> Self {
+        Self {
+            resolver: Some(resolver),
+            ..self
+        }
+    }
+
     /// Sets the io concurrency semaphore to use when updating environments.
     #[allow(unused)]
     pub fn with_io_concurrency_semaphore(self, io_concurrency_limit: IoConcurrencyLimit) -> Self {
@@ -1450,11 +1495,25 @@ impl<'p> UpdateContextBuilder<'p> {
                 pixi_config::get_cache_dir()?.join(consts::CONDA_PACKAGE_CACHE_DIR),
             ),
         };
-        let lock_file = self.lock_file;
         let glob_hash_cache = self.glob_hash_cache.unwrap_or_default();
 
         let multi_progress = pixi_progress::global_multi_progress();
         let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
+
+        // Route resolver construction through a `LockFileDerivedData`, seeding
+        // it with the caller's `Arc` when one was provided so we never build
+        // a second resolver for the same lock-file.
+        let input = LockFileDerivedData::from_input_lock_file(
+            project,
+            self.lock_file,
+            package_cache.clone(),
+            self.command_dispatcher.clone(),
+            glob_hash_cache.clone(),
+        );
+        if let Some(resolver) = self.resolver {
+            input.seed_resolver(resolver);
+        }
+        let resolver = input.resolver()?;
 
         let mut outdated = match self.outdated_environments {
             Some(outdated) => outdated,
@@ -1462,14 +1521,15 @@ impl<'p> UpdateContextBuilder<'p> {
                 OutdatedEnvironments::from_workspace_and_lock_file(
                     project,
                     self.command_dispatcher.clone(),
-                    &lock_file,
+                    &input.lock_file,
+                    &resolver,
                 )
                 .await
             }
         };
+        let lock_file = input.lock_file;
 
         // Extract the current conda records from the lock-file.
-        let workspace_root = project.root();
 
         // Collect unresolved records per environment and platform.
         #[allow(clippy::type_complexity)]
@@ -1481,31 +1541,19 @@ impl<'p> UpdateContextBuilder<'p> {
             .into_iter()
             .filter_map(|env| {
                 let locked_env = lock_file.environment(env.name().as_str())?;
-                let platforms: Result<Vec<_>, _> = locked_env
-                    .conda_packages_by_platform()
-                    .map(|(lock_platform, records)| {
+                let platforms: Vec<_> = locked_env
+                    .packages_by_platform()
+                    .map(|(lock_platform, packages)| {
                         let platform = lock_platform.subdir();
-                        let unresolved = records
-                            .cloned()
-                            .map(|data| {
-                                // TODO: resolve build/host packages from the
-                                // lock file once `PackageHandle` resolution is
-                                // exposed publicly.
-                                UnresolvedPixiRecord::from_conda_package_data(
-                                    data,
-                                    workspace_root,
-                                    Vec::new(),
-                                    Vec::new(),
-                                )
-                            })
-                            .collect::<Result<Vec<_>, _>>()?;
-                        Ok((platform, unresolved))
+                        let unresolved = packages
+                            .filter_map(|pkg| resolver.get_for_package(pkg))
+                            .collect::<Vec<_>>();
+                        (platform, unresolved)
                     })
                     .collect();
-                Some(platforms.map(|p| (env, p)))
+                Some((env, platforms))
             })
-            .collect::<Result<Vec<_>, ParseLockFileError>>()
-            .into_diagnostic()?;
+            .collect();
 
         // Step 2: Store the unresolved records directly. Partial source records
         // are kept as-is and resolved lazily only when needed. This avoids a
@@ -1723,6 +1771,7 @@ impl<'p> UpdateContext<'p> {
             mapping_client: None,
             command_dispatcher,
             update_targets: None,
+            resolver: None,
         })
     }
 
@@ -1800,10 +1849,32 @@ impl<'p> UpdateContext<'p> {
                 // Spawn a task to solve the group.
                 // Determine override pinned sources for source packages when performing
                 // a targeted update.
-                let pin_overrides = targeted_pin_overrides_from_locked_records(
-                    &locked_group_records,
-                    self.update_targets.as_ref(),
-                );
+                let pin_overrides = (|| {
+                    let targets = self.update_targets.as_ref()?;
+                    if targets.is_empty() {
+                        return None;
+                    }
+                    Some(
+                        locked_group_records
+                            .records
+                            .iter()
+                            .filter_map(|r| match r {
+                                PixiRecord::Source(src) => {
+                                    let name = src.name().clone();
+                                    if targets.contains(name.as_source()) {
+                                        src.build_source()
+                                            .cloned()
+                                            .map(|spec| (name, spec.into_pinned()))
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => None,
+                            })
+                            .collect(),
+                    )
+                })()
+                .unwrap_or_default();
 
                 let mapping_client = self.mapping_client.clone();
                 let command_dispatcher = self.command_dispatcher.clone();
@@ -2219,12 +2290,9 @@ impl<'p> UpdateContext<'p> {
                 let platform_str = platform.to_string();
                 if let Some(records) = self.take_latest_repodata_records(&environment, platform) {
                     for record in records.into_inner() {
+                        let data = record.into_conda_package_data(&mut builder, project.root());
                         builder
-                            .add_conda_package(
-                                &environment_name,
-                                &platform_str,
-                                record.into_conda_package_data(project.root()),
-                            )
+                            .add_conda_package(&environment_name, &platform_str, data)
                             .expect("platform was registered");
                     }
                 }
@@ -2264,6 +2332,7 @@ impl<'p> UpdateContext<'p> {
             command_dispatcher: self.command_dispatcher,
             glob_hash_cache: self.glob_hash_cache,
             build_caches: self.outdated_envs.build_caches,
+            resolver: Default::default(),
         })
     }
 }
@@ -2439,9 +2508,7 @@ async fn spawn_solve_conda_environment_task(
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
 
-    // Convert dev dependencies to DevSourceSpecs. `OrderMap` (not
-    // `IndexMap`) because `SolvePixiEnvironmentKey` needs a `Hash`-
-    // able container for its identity.
+    // Convert dev dependencies to DevSourceSpecs
     let dev_sources: OrderMap<_, _> = dev_dependencies
         .into_iter()
         .flat_map(|(name, source_specs)| {
@@ -2465,7 +2532,7 @@ async fn spawn_solve_conda_environment_task(
         EnvironmentSpec {
             channels,
             build_environment: BuildEnvironment::simple(platform, virtual_packages),
-            variants: VariantConfig {
+            variants: pixi_utils::variants::VariantConfig {
                 variant_configuration,
                 variant_files,
             },
@@ -2526,29 +2593,6 @@ async fn spawn_solve_conda_environment_task(
         records_by_name,
         end - start,
     ))
-}
-
-fn targeted_pin_overrides_from_locked_records(
-    locked_group_records: &PixiRecordsByName,
-    update_targets: Option<&std::collections::HashSet<String>>,
-) -> BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec> {
-    let Some(targets) = update_targets else {
-        return BTreeMap::new();
-    };
-    if targets.is_empty() {
-        return BTreeMap::new();
-    }
-
-    let mut result = BTreeMap::new();
-    for record in locked_group_records.records.iter() {
-        if let PixiRecord::Source(src) = record
-            && targets.contains(src.name().as_source())
-            && let Some(spec) = src.build_source().cloned()
-        {
-            result.insert(src.name().clone(), spec.into_pinned());
-        }
-    }
-    result
 }
 
 /// Distill the repodata that is applicable for the given `environment` from the
@@ -2633,20 +2677,28 @@ async fn spawn_extract_environment_task(
 
         let build_environment = BuildEnvironment::simple(platform, virtual_packages);
 
-        // Allocate a workspace-env ref so backend-metadata requests for
-        // this (env, platform) share a single stable identity.
+        let exclude_newer = environment
+            .exclude_newer_config_resolved(&channel_config)
+            .into_diagnostic()
+            .wrap_err("failed to resolve exclude-newer")?;
+        let channel_priority = environment
+            .channel_priority()
+            .into_diagnostic()
+            .wrap_err("failed to resolve channel priority")?
+            .unwrap_or_default();
+
         let workspace_env_ref = command_dispatcher.workspace_env_registry().allocate(
             environment.name().as_str().to_string(),
             platform,
             EnvironmentSpec {
                 channels,
                 build_environment,
-                variants: VariantConfig {
+                variants: pixi_utils::variants::VariantConfig {
                     variant_configuration,
                     variant_files,
                 },
-                exclude_newer: None,
-                channel_priority: Default::default(),
+                exclude_newer,
+                channel_priority: channel_priority.into(),
             },
         );
 
@@ -2953,53 +3005,6 @@ mod tests {
     use super::*;
     use pixi_manifest::PyPiDependencies;
     use pixi_pypi_spec::PixiPypiSpec;
-    use pixi_record::{
-        FullSourceRecordData, PinnedBuildSourceSpec, PinnedGitCheckout, PinnedGitSpec,
-        PinnedPathSpec, PinnedSourceSpec, PixiRecord, UnresolvedPixiRecord,
-    };
-    use pixi_spec::{GitReference, Subdirectory};
-    use pixi_test_utils::GitRepoFixture;
-    use rattler_conda_types::{PackageName, PackageRecord, VersionWithSource};
-    use std::{collections::BTreeMap, str::FromStr, sync::Arc};
-
-    fn make_full_source_record(
-        name: &str,
-        build_source: Option<PinnedSourceSpec>,
-        host_packages: Vec<UnresolvedPixiRecord>,
-    ) -> pixi_record::SourceRecord {
-        let mut package_record = PackageRecord::new(
-            PackageName::from_str(name).unwrap(),
-            "0.1.0".parse::<VersionWithSource>().unwrap(),
-            "h0".into(),
-        );
-        package_record.subdir = "linux-64".into();
-
-        pixi_record::SourceRecord {
-            data: FullSourceRecordData {
-                package_record,
-                sources: BTreeMap::new(),
-            },
-            manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
-                path: format!("{name}-manifest").into(),
-            }),
-            build_source: build_source.map(PinnedBuildSourceSpec::Absolute),
-            variants: BTreeMap::new(),
-            identifier_hash: None,
-            build_packages: Vec::new(),
-            host_packages,
-        }
-    }
-
-    fn git_pin(repo: &GitRepoFixture, commit: &str) -> PinnedSourceSpec {
-        PinnedSourceSpec::Git(PinnedGitSpec::new(
-            repo.base_url.clone(),
-            PinnedGitCheckout::new(
-                pixi_git::sha::GitSha::from_str(commit).unwrap(),
-                Subdirectory::default(),
-                GitReference::DefaultBranch,
-            ),
-        ))
-    }
 
     #[test]
     fn test_editable_path_spec_with_registry_spec() {
@@ -3070,31 +3075,6 @@ mod tests {
         assert!(
             !is_editable_from_manifest(&deps, &pep508_name),
             "Higher-priority feature's explicit editable=false should take precedence"
-        );
-    }
-
-    #[test]
-    #[ignore = "expected to fail: targeted pin overrides do not yet recurse into nested source dependencies; tracked as follow-up work"]
-    fn test_targeted_pin_overrides_include_nested_source_dependencies() {
-        let repo = GitRepoFixture::new("minimal-pypi-package");
-        let foo_pin = git_pin(&repo, repo.first_commit());
-
-        let nested_foo = make_full_source_record("foo", Some(foo_pin.clone()), Vec::new());
-        let bar = make_full_source_record(
-            "bar",
-            None,
-            vec![UnresolvedPixiRecord::Source(Arc::new(nested_foo.into()))],
-        );
-        let locked_records = PixiRecordsByName::from(vec![PixiRecord::Source(Arc::new(bar))]);
-
-        let update_targets = std::collections::HashSet::from([String::from("bar")]);
-        let pin_overrides =
-            targeted_pin_overrides_from_locked_records(&locked_records, Some(&update_targets));
-
-        assert_eq!(
-            pin_overrides.get(&PackageName::from_str("foo").unwrap()),
-            Some(&foo_pin),
-            "targeted update should preserve nested source-package build pins, not just top-level records"
         );
     }
 }

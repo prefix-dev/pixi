@@ -1,6 +1,6 @@
 //! `ctx.install_pixi_environment` extension trait. Installs a pixi
 //! environment by (a) concurrently building every source record via
-//! [`SourceBuildKey`](crate::keys::SourceBuildKey), then (b) running the
+//! [`SourceBuildKey`], then (b) running the
 //! rattler prefix installer over the resulting binary set.
 //!
 //! Reporter lifecycle, install reporter creation, and reporter-context
