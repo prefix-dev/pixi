@@ -105,6 +105,7 @@ extra:
 
 nav:
   - Home: index.md
+  - Robotics: robotics.md
   - Getting Started:
       - Installation: installation.md
       - First Workspace: first_workspace.md
@@ -311,6 +312,7 @@ plugins:
           - installation.md
           - getting_started.md
           - first_workspace.md
+          - robotics.md
         Tutorials documentation:
           - python/*.md
           - tutorials/*.md

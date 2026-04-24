@@ -141,7 +141,7 @@ impl LockFileUpdateConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct NoInstallConfig {
     /// Don't modify the environment, only modify the lock-file.
-    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[arg(long, env = "PIXI_NO_INSTALL", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
 }
 
