@@ -152,6 +152,81 @@ impl<'p> ExecutableTask<'p> {
 
     /// Returns the task as script
     fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
+        // Multi-line task strings are joined with `&&` so execution stops on
+        // the first failing command. `deno_task_shell` treats bare newlines
+        // as whitespace, so we rewrite unquoted newlines before parsing.
+        // Newlines inside single or double quotes are preserved so that
+        // embedded scripts (e.g. `python -c "..."`) keep working.
+        fn join_multiline_command(cmd: &str) -> String {
+            if !cmd.contains('\n') {
+                return cmd.to_string();
+            }
+
+            let mut logical_lines: Vec<String> = Vec::new();
+            let mut current = String::new();
+            let mut in_single = false;
+            let mut in_double = false;
+            let mut chars = cmd.chars().peekable();
+
+            while let Some(c) = chars.next() {
+                match c {
+                    '\\' if !in_single => {
+                        // Backslash line continuation outside single quotes:
+                        // drop both the backslash and the following newline.
+                        if chars.peek() == Some(&'\n') {
+                            chars.next();
+                        } else if let Some(&next) = chars.peek() {
+                            current.push(c);
+                            current.push(next);
+                            chars.next();
+                        } else {
+                            current.push(c);
+                        }
+                    }
+                    '\'' if !in_double => {
+                        in_single = !in_single;
+                        current.push(c);
+                    }
+                    '"' if !in_single => {
+                        in_double = !in_double;
+                        current.push(c);
+                    }
+                    '\n' if !in_single && !in_double => {
+                        logical_lines.push(std::mem::take(&mut current));
+                    }
+                    _ => current.push(c),
+                }
+            }
+            if !current.is_empty() {
+                logical_lines.push(current);
+            }
+
+            let filtered: Vec<String> = logical_lines
+                .into_iter()
+                .map(|line| line.trim().to_string())
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                .collect();
+
+            let mut out = String::new();
+            for (i, line) in filtered.iter().enumerate() {
+                if i > 0 {
+                    let prev = &filtered[i - 1];
+                    let already_terminated = prev.ends_with("&&")
+                        || prev.ends_with("||")
+                        || prev.ends_with('|')
+                        || prev.ends_with(';')
+                        || prev.ends_with('&');
+                    if already_terminated {
+                        out.push(' ');
+                    } else {
+                        out.push_str(" && ");
+                    }
+                }
+                out.push_str(line);
+            }
+            out
+        }
+
         // Convert the task into an executable string
         let context = self.render_context();
         let task = self
@@ -159,6 +234,7 @@ impl<'p> ExecutableTask<'p> {
             .as_single_command(&context)
             .map_err(FailedToParseShellScript::ArgumentReplacement)?;
         if let Some(task) = task {
+            let task = join_multiline_command(&task);
             // Get the export specific environment variables
             let export = get_export_specific_task_env(self.task.as_ref(), &context)
                 .map_err(FailedToParseShellScript::ArgumentReplacement)?;
@@ -701,6 +777,122 @@ mod tests {
 
         let script = executable_task.as_script().unwrap().unwrap();
         assert_eq!(script, "export \"FOO=bar\";\n\ntest");
+    }
+
+    #[test]
+    fn test_as_script_multiline() {
+        let file_contents = r#"
+            [tasks]
+            test = """
+            echo hello
+            echo hello2
+            """
+            "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("test".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            args: ArgValues::default(),
+            init_cwd: None,
+        };
+
+        let script = executable_task.as_script().unwrap().unwrap();
+        assert_eq!(script, "echo hello && echo hello2");
+    }
+
+    #[test]
+    fn test_as_script_multiline_preserves_newlines_inside_quotes() {
+        // Newlines inside a double-quoted argument (e.g. a `python -c` block)
+        // must be preserved, not treated as command separators.
+        let file_contents = r#"
+            [tasks]
+            test = """
+            python -c "import sys
+            print('hi')"
+            echo done
+            """
+            "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("test".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            args: ArgValues::default(),
+            init_cwd: None,
+        };
+
+        let script = executable_task.as_script().unwrap().unwrap();
+        assert_eq!(
+            script,
+            "python -c \"import sys\n            print('hi')\" && echo done"
+        );
+    }
+
+    #[test]
+    fn test_as_script_multiline_preserves_existing_operator() {
+        let file_contents = r#"
+            [tasks]
+            test = """
+            echo hello &&
+            echo hello2
+            echo hello3 |
+            cat
+            # comment line is skipped
+
+            echo done
+            """
+            "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("test".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            args: ArgValues::default(),
+            init_cwd: None,
+        };
+
+        let script = executable_task.as_script().unwrap().unwrap();
+        assert_eq!(
+            script,
+            "echo hello && echo hello2 && echo hello3 | cat && echo done"
+        );
     }
 
     #[tokio::test]
