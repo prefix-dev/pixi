@@ -1428,6 +1428,6 @@ mod tests {
         let _guard = EnvVarGuard;
 
         let env = workspace.default_environment();
-        let result = env.best_platform();
+        env.best_platform();
     }
 }
