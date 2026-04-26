@@ -146,6 +146,7 @@ impl GenerateRecipe for CMakeGenerator {
             // CMake files
             "**/*.{cmake,cmake.in}",
             "**/CMakeFiles.txt",
+            "**/CMakeLists.txt",
         ]
         .iter()
         .map(|s: &&str| s.to_string())
