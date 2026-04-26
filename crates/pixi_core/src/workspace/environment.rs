@@ -126,8 +126,10 @@ impl<'p> Environment<'p> {
     fn best_platform_with_current(&self, current: Platform) -> Platform {
         let current = std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
             .map(|val| {
-                val.parse::<Platform>()
-                    .unwrap_or_else(|_| panic!("Invalid value for PIXI_OVERRIDE_PLATFORM='{val}'."))
+                val.parse::<Platform>().unwrap_or_else(|_| {
+                    tracing::warn!("Invalid value for PIXI_OVERRIDE_PLATFORM='{val}', ignoring.");
+                    current
+                })
             })
             .unwrap_or(current);
 
@@ -1408,7 +1410,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Invalid value for PIXI_OVERRIDE_PLATFORM")]
     fn test_best_platform_override_invalid_value() {
         let _lock = ENV_VAR_MUTEX.lock().unwrap();
 
@@ -1426,6 +1427,7 @@ mod tests {
         let _guard = EnvVarGuard;
 
         let env = workspace.default_environment();
-        env.best_platform();
+        let result = env.best_platform();
+        assert_eq!(result, Platform::current());
     }
 }
