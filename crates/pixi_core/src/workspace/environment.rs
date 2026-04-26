@@ -125,11 +125,11 @@ impl<'p> Environment<'p> {
     /// platform string, that platform is used instead.
     fn best_platform_with_current(&self, current: Platform) -> Platform {
         let current = std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
-        .map(|val| {
-            val.parse::<Platform>()
-                .unwrap_or_else(|_| panic!("Invalid value for PIXI_OVERRIDE_PLATFORM='{val}'."))
-        })
-        .unwrap_or(current);
+            .map(|val| {
+                val.parse::<Platform>()
+                    .unwrap_or_else(|_| panic!("Invalid value for PIXI_OVERRIDE_PLATFORM='{val}'."))
+            })
+            .unwrap_or(current);
 
         // If the current platform is supported, return it.
         if self.platforms().contains(&current) {
@@ -1397,7 +1397,6 @@ mod tests {
         platforms = []
         "#;
         let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
-    
         unsafe {
             std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "linux-aarch64");
         }
@@ -1421,7 +1420,6 @@ mod tests {
         platforms = []
         "#;
         let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
-    
         unsafe {
             std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "not-a-platform");
         }
