@@ -17,12 +17,31 @@ SET {{ key }}={{ value }}
 {%- endif %}
 
 {%- if is_bash %}
-export PATH="{{ env("BUILD_PREFIX") }}/bin:{{ env("PREFIX") }}/bin:$PATH"
+CARGO="{{ env("BUILD_PREFIX") }}/bin/cargo"
+RUSTC="{{ env("BUILD_PREFIX") }}/bin/rustc"
+if [ ! -x "$CARGO" ]; then
+  CARGO="{{ env("PREFIX") }}/bin/cargo"
+fi
+if [ ! -x "$RUSTC" ]; then
+  RUSTC="{{ env("PREFIX") }}/bin/rustc"
+fi
+export RUSTC="$RUSTC"
 {%- else %}
-SET "PATH={{ env("BUILD_PREFIX") }}\Library\bin;{{ env("BUILD_PREFIX") }}\Scripts;{{ env("BUILD_PREFIX") }}\bin;{{ env("PREFIX") }}\Library\bin;{{ env("PREFIX") }}\Scripts;{{ env("PREFIX") }}\bin;%PATH%"
+SET "CARGO={{ env("BUILD_PREFIX") }}\bin\cargo.exe"
+IF NOT EXIST "%CARGO%" SET "CARGO={{ env("BUILD_PREFIX") }}\Scripts\cargo.exe"
+IF NOT EXIST "%CARGO%" SET "CARGO={{ env("PREFIX") }}\bin\cargo.exe"
+IF NOT EXIST "%CARGO%" SET "CARGO={{ env("PREFIX") }}\Scripts\cargo.exe"
+SET "RUSTC={{ env("BUILD_PREFIX") }}\bin\rustc.exe"
+IF NOT EXIST "%RUSTC%" SET "RUSTC={{ env("BUILD_PREFIX") }}\Scripts\rustc.exe"
+IF NOT EXIST "%RUSTC%" SET "RUSTC={{ env("PREFIX") }}\bin\rustc.exe"
+IF NOT EXIST "%RUSTC%" SET "RUSTC={{ env("PREFIX") }}\Scripts\rustc.exe"
 {%- endif %}
 
-cargo install --locked --root "{{ env("PREFIX") }}" --path "{{ source_dir }}" --target-dir target --no-track {{ extra_args | join(" ") }} --force
+{%- if is_bash %}
+"$CARGO" install --locked --root "{{ env("PREFIX") }}" --path "{{ source_dir }}" --target-dir target --no-track {{ extra_args | join(" ") }} --force
+{%- else %}
+"%CARGO%" install --locked --root "{{ env("PREFIX") }}" --path "{{ source_dir }}" --target-dir target --no-track {{ extra_args | join(" ") }} --force
+{%- endif %}
 {%- if not is_bash %}
 if errorlevel 1 exit 1
 {%- endif %}
