@@ -2,6 +2,13 @@
 source: crates/pixi_build_rust/src/build_script.rs
 expression: script
 ---
-export PATH="$BUILD_PREFIX/bin:$PREFIX/bin:$PATH"
-
-cargo install --locked --root "$PREFIX" --path "my-prefix-dir" --target-dir target --no-track  --force
+CARGO="$BUILD_PREFIX/bin/cargo"
+RUSTC="$BUILD_PREFIX/bin/rustc"
+if [ ! -x "$CARGO" ]; then
+  CARGO="$PREFIX/bin/cargo"
+fi
+if [ ! -x "$RUSTC" ]; then
+  RUSTC="$PREFIX/bin/rustc"
+fi
+export RUSTC="$RUSTC"
+"$CARGO" install --locked --root "$PREFIX" --path "my-prefix-dir" --target-dir target --no-track  --force
