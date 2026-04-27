@@ -145,7 +145,6 @@ impl GenerateRecipe for CMakeGenerator {
             "**/*.{c,cc,cxx,cpp,h,hpp,hxx}",
             // CMake files
             "**/*.{cmake,cmake.in}",
-            "**/CMakeFiles.txt",
             "**/CMakeLists.txt",
         ]
         .iter()

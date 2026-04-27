@@ -117,7 +117,7 @@ The backend always writes JSON-RPC request/response logs and the generated inter
 - **Default**: `[]`
 - **Target Merge Behavior**: `Overwrite` - Platform-specific globs completely replace base globs
 
-Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include source files (`**/*.{c,cc,cxx,cpp,h,hpp,hxx}`), CMake files (`**/*.{cmake,cmake.in}`, `**/CMakeFiles.txt`, `**/CMakeLists.txt`), and other build-related files.
+Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include source files (`**/*.{c,cc,cxx,cpp,h,hpp,hxx}`), CMake files (`**/*.{cmake,cmake.in}`, `**/CMakeLists.txt`), and other build-related files.
 
 ```toml
 [package.build.config]
