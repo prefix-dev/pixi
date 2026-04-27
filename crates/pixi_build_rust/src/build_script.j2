@@ -16,6 +16,12 @@ SET {{ key }}={{ value }}
 {{ export("RUSTC_WRAPPER", "sccache") }}
 {%- endif %}
 
+{%- if is_bash %}
+export PATH="{{ env("BUILD_PREFIX") }}/bin:{{ env("PREFIX") }}/bin:$PATH"
+{%- else %}
+SET "PATH={{ env("BUILD_PREFIX") }}\Library\bin;{{ env("BUILD_PREFIX") }}\Scripts;{{ env("BUILD_PREFIX") }}\bin;{{ env("PREFIX") }}\Library\bin;{{ env("PREFIX") }}\Scripts;{{ env("PREFIX") }}\bin;%PATH%"
+{%- endif %}
+
 cargo install --locked --root "{{ env("PREFIX") }}" --path "{{ source_dir }}" --target-dir target --no-track {{ extra_args | join(" ") }} --force
 {%- if not is_bash %}
 if errorlevel 1 exit 1
