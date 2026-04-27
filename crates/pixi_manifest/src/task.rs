@@ -866,7 +866,10 @@ impl Display for Task {
 pub fn quote(in_str: &str) -> Cow<'_, str> {
     if in_str.is_empty() {
         "\"\"".into()
-    } else if in_str.contains(['\t', '\r', '\n', ' ', '"', '[', ']', '(', ')', '{', '}', '&', '|', ';', '<', '>', '$', '*', '?', '!', '`']) {
+    } else if in_str.contains([
+        '\t', '\r', '\n', ' ', '"', '[', ']', '(', ')', '{', '}', '&', '|', ';', '<', '>', '$',
+        '*', '?', '!', '`',
+    ]) {
         let mut out: String = String::with_capacity(in_str.len() + 2);
         out.push('"');
         for c in in_str.chars() {
