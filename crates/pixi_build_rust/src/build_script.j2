@@ -27,14 +27,18 @@ if [ ! -x "$RUSTC" ]; then
 fi
 export RUSTC="$RUSTC"
 {%- else %}
-SET "CARGO={{ env("BUILD_PREFIX") }}\bin\cargo.exe"
+SET "CARGO={{ env("BUILD_PREFIX") }}\Library\bin\cargo.exe"
 IF NOT EXIST "%CARGO%" SET "CARGO={{ env("BUILD_PREFIX") }}\Scripts\cargo.exe"
-IF NOT EXIST "%CARGO%" SET "CARGO={{ env("PREFIX") }}\bin\cargo.exe"
+IF NOT EXIST "%CARGO%" SET "CARGO={{ env("BUILD_PREFIX") }}\bin\cargo.exe"
+IF NOT EXIST "%CARGO%" SET "CARGO={{ env("PREFIX") }}\Library\bin\cargo.exe"
 IF NOT EXIST "%CARGO%" SET "CARGO={{ env("PREFIX") }}\Scripts\cargo.exe"
-SET "RUSTC={{ env("BUILD_PREFIX") }}\bin\rustc.exe"
+IF NOT EXIST "%CARGO%" SET "CARGO={{ env("PREFIX") }}\bin\cargo.exe"
+SET "RUSTC={{ env("BUILD_PREFIX") }}\Library\bin\rustc.exe"
 IF NOT EXIST "%RUSTC%" SET "RUSTC={{ env("BUILD_PREFIX") }}\Scripts\rustc.exe"
-IF NOT EXIST "%RUSTC%" SET "RUSTC={{ env("PREFIX") }}\bin\rustc.exe"
+IF NOT EXIST "%RUSTC%" SET "RUSTC={{ env("BUILD_PREFIX") }}\bin\rustc.exe"
+IF NOT EXIST "%RUSTC%" SET "RUSTC={{ env("PREFIX") }}\Library\bin\rustc.exe"
 IF NOT EXIST "%RUSTC%" SET "RUSTC={{ env("PREFIX") }}\Scripts\rustc.exe"
+IF NOT EXIST "%RUSTC%" SET "RUSTC={{ env("PREFIX") }}\bin\rustc.exe"
 {%- endif %}
 
 {%- if is_bash %}
