@@ -3647,9 +3647,14 @@ UNUSED = "unused"
         // the per-kind [cache.pypi-mapping] path should override.
         let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
 
-        let mut config = Config::default();
-        config.cache.root = Some(PathBuf::from("/some/configured/root"));
-        config.cache.pypi_mapping = Some(PathBuf::from("/explicit/per/kind/path"));
+        let config = Config {
+            cache: CacheConfig {
+                root: Some(PathBuf::from("/some/configured/root")),
+                pypi_mapping: Some(PathBuf::from("/explicit/per/kind/path")),
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
 
         let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
         assert_eq!(got, PathBuf::from("/explicit/per/kind/path"));
@@ -3666,8 +3671,13 @@ UNUSED = "unused"
         // [cache.root] in config should behave like a user pin: no redirect
         // even with FORCE_NETFS_REDIRECT, because the user explicitly chose
         // this location.
-        let mut config = Config::default();
-        config.cache.root = Some(PathBuf::from("/configured/root"));
+        let config = Config {
+            cache: CacheConfig {
+                root: Some(PathBuf::from("/configured/root")),
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
 
         let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
         assert_eq!(got, PathBuf::from("/configured/root/conda-pypi-mapping"));
@@ -3681,8 +3691,13 @@ UNUSED = "unused"
         let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
         let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
 
-        let mut config = Config::default();
-        config.cache.netfs_redirect = NetfsRedirect::Never;
+        let config = Config {
+            cache: CacheConfig {
+                netfs_redirect: NetfsRedirect::Never,
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
 
         let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
         assert!(!got.starts_with(node_local_scratch_dir()));
@@ -3728,8 +3743,10 @@ UNUSED = "unused"
 
     #[test]
     fn cache_config_rejects_relative_paths_on_validate() {
-        let mut cfg = CacheConfig::default();
-        cfg.pypi_mapping = Some(PathBuf::from("not-absolute"));
+        let cfg = CacheConfig {
+            pypi_mapping: Some(PathBuf::from("not-absolute")),
+            ..CacheConfig::default()
+        };
         let err = cfg.validate().unwrap_err();
         let msg = format!("{err}");
         assert!(
@@ -3752,8 +3769,13 @@ UNUSED = "unused"
     fn config_validate_surfaces_cache_errors() {
         // Config::validate must propagate CacheConfig::validate failures so
         // bad cache paths are caught at load time, not at first cache use.
-        let mut config = Config::default();
-        config.cache.conda_packages = Some(PathBuf::from("relative/dir"));
+        let config = Config {
+            cache: CacheConfig {
+                conda_packages: Some(PathBuf::from("relative/dir")),
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
         let err = config.validate().unwrap_err();
         assert!(format!("{err}").contains("cache.conda-packages"));
     }
