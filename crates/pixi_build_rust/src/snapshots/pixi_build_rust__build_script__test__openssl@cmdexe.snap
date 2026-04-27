@@ -3,6 +3,7 @@ source: crates/pixi_build_rust/src/build_script.rs
 expression: script
 ---
 SET OPENSSL_DIR="%PREFIX%"
+SET "PATH=%BUILD_PREFIX%\Library\bin;%BUILD_PREFIX%\Scripts;%BUILD_PREFIX%\bin;%PREFIX%\Library\bin;%PREFIX%\Scripts;%PREFIX%\bin;%PATH%"
 
 cargo install --locked --root "%PREFIX%" --path "my-prefix-dir" --target-dir target --no-track  --force
 if errorlevel 1 exit 1

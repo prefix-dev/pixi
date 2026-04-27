@@ -3,6 +3,7 @@ source: crates/pixi_build_rust/src/build_script.rs
 expression: script
 ---
 export RUSTC_WRAPPER=sccache
+export PATH="$BUILD_PREFIX/bin:$PREFIX/bin:$PATH"
 
 cargo install --locked --root "$PREFIX" --path "my-prefix-dir" --target-dir target --no-track  --force
 
