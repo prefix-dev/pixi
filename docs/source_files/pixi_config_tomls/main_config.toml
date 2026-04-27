@@ -44,10 +44,7 @@ tool-platform = "win-64" # force tools like build backends to be installed for a
 # Per-kind fields below override this on a cache-by-cache basis.
 root = "/shared/hpc/pixi-cache"
 
-# Per-cache absolute path overrides. Useful on HPC where the conda package
-# cache benefits from being on a shared filesystem (so colleagues don't
-# redownload the same artifacts) while transient caches are better off on
-# node-local storage.
+# Per-cache absolute path overrides.
 build-tool-environments = "/local/scratch/cached-build-tool-envs"
 conda-packages = "/shared/hpc/pkgs"                               # conda package cache
 detached-environments = "/local/scratch/envs"

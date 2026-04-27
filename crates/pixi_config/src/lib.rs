@@ -376,6 +376,84 @@ impl CacheConfig {
             },
         }
     }
+
+    /// Iterate over every set `(field-name, path)` pair. Used by
+    /// [`Self::expand_paths`] and [`Self::validate`].
+    fn iter_paths_mut(&mut self) -> impl Iterator<Item = (&'static str, &mut PathBuf)> {
+        [
+            ("cache.root", &mut self.root),
+            ("cache.conda-packages", &mut self.conda_packages),
+            ("cache.repodata", &mut self.repodata),
+            ("cache.pypi-wheels", &mut self.pypi_wheels),
+            ("cache.pypi-mapping", &mut self.pypi_mapping),
+            ("cache.exec-environments", &mut self.exec_environments),
+            (
+                "cache.build-tool-environments",
+                &mut self.build_tool_environments,
+            ),
+            (
+                "cache.detached-environments",
+                &mut self.detached_environments,
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(name, opt)| opt.as_mut().map(|p| (name, p)))
+    }
+
+    /// Expand a leading `~` to the user's home directory in every set path.
+    ///
+    /// Mirrors the existing behavior of the top-level `detached-environments`
+    /// field. Called automatically by [`Config::from_toml`].
+    pub fn expand_paths(&mut self) -> miette::Result<()> {
+        for (name, path) in self.iter_paths_mut() {
+            if !path.to_string_lossy().starts_with('~') {
+                continue;
+            }
+            let home_dir = dirs::home_dir().ok_or_else(|| {
+                miette!(
+                    "could not resolve home directory for '~' in `{}` = {}",
+                    name,
+                    path.display()
+                )
+            })?;
+            // Safe unwrap: we just checked the path starts with '~'.
+            *path = home_dir.join(path.strip_prefix("~").unwrap());
+        }
+        Ok(())
+    }
+
+    /// Ensure every set path is absolute. `~` should already be expanded by
+    /// [`Self::expand_paths`] before calling this.
+    pub fn validate(&self) -> miette::Result<()> {
+        // iter_paths_mut takes &mut, so reuse the field list locally rather
+        // than cloning. Keep this in sync with `iter_paths_mut`.
+        let entries: [(&str, Option<&PathBuf>); 8] = [
+            ("cache.root", self.root.as_ref()),
+            ("cache.conda-packages", self.conda_packages.as_ref()),
+            ("cache.repodata", self.repodata.as_ref()),
+            ("cache.pypi-wheels", self.pypi_wheels.as_ref()),
+            ("cache.pypi-mapping", self.pypi_mapping.as_ref()),
+            ("cache.exec-environments", self.exec_environments.as_ref()),
+            (
+                "cache.build-tool-environments",
+                self.build_tool_environments.as_ref(),
+            ),
+            (
+                "cache.detached-environments",
+                self.detached_environments.as_ref(),
+            ),
+        ];
+        for (name, path) in entries.into_iter().filter_map(|(n, p)| p.map(|p| (n, p))) {
+            if !path.is_absolute() {
+                return Err(miette!(
+                    "`{}` must be an absolute path, got: {}",
+                    name,
+                    path.display()
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Policy for cache redirection when the cache root sits on a network
@@ -1533,6 +1611,11 @@ impl Config {
             config.shell.force_activate = config.force_activate;
         }
 
+        // Expand `~` in every [cache] path, matching how the top-level
+        // `detached-environments` field is handled. Validation that the
+        // expanded paths are absolute happens in `Config::validate`.
+        config.cache.expand_paths()?;
+
         Ok((config, unused_keys))
     }
 
@@ -1640,6 +1723,9 @@ impl Config {
         if let Some(detached_environments) = self.detached_environments.as_ref() {
             detached_environments.validate()?
         }
+
+        // Validate that all configured [cache] paths are absolute.
+        self.cache.validate()?;
 
         Ok(())
     }
@@ -2269,6 +2355,8 @@ impl Config {
                     } else {
                         self.cache = CacheConfig::default();
                     }
+                    self.cache.expand_paths()?;
+                    self.cache.validate()?;
                     return Ok(());
                 } else if !key.starts_with("cache.") {
                     return Err(err);
@@ -2296,6 +2384,8 @@ impl Config {
                     }
                     _ => return Err(err),
                 }
+                self.cache.expand_paths()?;
+                self.cache.validate()?;
             }
             _ => return Err(err),
         }
@@ -3618,5 +3708,53 @@ UNUSED = "unused"
             Some(PathBuf::from("/local/scratch/mapping"))
         );
         assert_eq!(config.cache.netfs_redirect, NetfsRedirect::Never);
+    }
+
+    #[test]
+    fn cache_config_expands_tilde_in_paths() {
+        let home_dir = dirs::home_dir().expect("home dir resolves on test host");
+        let toml = r#"
+            [cache]
+            root = "~/.cache/pixi"
+            pypi-mapping = "~/scratch/mapping"
+        "#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(config.cache.root, Some(home_dir.join(".cache/pixi")));
+        assert_eq!(
+            config.cache.pypi_mapping,
+            Some(home_dir.join("scratch/mapping"))
+        );
+    }
+
+    #[test]
+    fn cache_config_rejects_relative_paths_on_validate() {
+        let mut cfg = CacheConfig::default();
+        cfg.pypi_mapping = Some(PathBuf::from("not-absolute"));
+        let err = cfg.validate().unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("cache.pypi-mapping"),
+            "error should name the offending field, got: {msg}"
+        );
+        assert!(
+            msg.contains("must be an absolute path"),
+            "error should explain the requirement, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn cache_config_validate_passes_when_unset() {
+        // An empty CacheConfig is valid (no paths to check).
+        CacheConfig::default().validate().unwrap();
+    }
+
+    #[test]
+    fn config_validate_surfaces_cache_errors() {
+        // Config::validate must propagate CacheConfig::validate failures so
+        // bad cache paths are caught at load time, not at first cache use.
+        let mut config = Config::default();
+        config.cache.conda_packages = Some(PathBuf::from("relative/dir"));
+        let err = config.validate().unwrap_err();
+        assert!(format!("{err}").contains("cache.conda-packages"));
     }
 }

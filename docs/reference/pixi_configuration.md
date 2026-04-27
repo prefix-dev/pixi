@@ -395,6 +395,23 @@ The redirect target is chosen from the first non-netfs candidate among
 `$SLURM_TMPDIR`, `$PBS_JOBFS`, `$SCRATCH`, and `$TMPDIR`, falling back to the
 system temp directory.
 
+#### Path syntax
+
+All path fields under `[cache]` (including `root` and every per-kind
+override) follow the same rules:
+
+- **Absolute paths are required.** Relative paths are rejected at
+    config-load time with an error naming the offending field. This is
+    enforced because `config.toml` is loaded from many layered locations
+    (system, XDG, workspace) and "relative to which one?" is ambiguous.
+- **`~` is expanded to the user's home directory.** For example,
+    `pypi-mapping = "~/scratch/mapping"` resolves to
+    `<home>/scratch/mapping`. Expansion happens once, at config-load time.
+- **No environment-variable substitution.** Strings like `$HOME` or
+    `${SCRATCH}` are treated as literal directory names. If you need an
+    environment-variable-driven cache root, use the `PIXI_CACHE_DIR`
+    environment variable instead — it is consulted before `[cache.root]`.
+
 #### Environment-variable escape hatches
 
 Two environment variables override the netfs detection regardless of config:
