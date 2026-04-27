@@ -3,13 +3,17 @@ source: crates/pixi_build_rust/src/build_script.rs
 expression: script
 ---
 SET OPENSSL_DIR="%PREFIX%"
-SET "CARGO=%BUILD_PREFIX%\bin\cargo.exe"
+SET "CARGO=%BUILD_PREFIX%\Library\bin\cargo.exe"
 IF NOT EXIST "%CARGO%" SET "CARGO=%BUILD_PREFIX%\Scripts\cargo.exe"
-IF NOT EXIST "%CARGO%" SET "CARGO=%PREFIX%\bin\cargo.exe"
+IF NOT EXIST "%CARGO%" SET "CARGO=%BUILD_PREFIX%\bin\cargo.exe"
+IF NOT EXIST "%CARGO%" SET "CARGO=%PREFIX%\Library\bin\cargo.exe"
 IF NOT EXIST "%CARGO%" SET "CARGO=%PREFIX%\Scripts\cargo.exe"
-SET "RUSTC=%BUILD_PREFIX%\bin\rustc.exe"
+IF NOT EXIST "%CARGO%" SET "CARGO=%PREFIX%\bin\cargo.exe"
+SET "RUSTC=%BUILD_PREFIX%\Library\bin\rustc.exe"
 IF NOT EXIST "%RUSTC%" SET "RUSTC=%BUILD_PREFIX%\Scripts\rustc.exe"
-IF NOT EXIST "%RUSTC%" SET "RUSTC=%PREFIX%\bin\rustc.exe"
+IF NOT EXIST "%RUSTC%" SET "RUSTC=%BUILD_PREFIX%\bin\rustc.exe"
+IF NOT EXIST "%RUSTC%" SET "RUSTC=%PREFIX%\Library\bin\rustc.exe"
 IF NOT EXIST "%RUSTC%" SET "RUSTC=%PREFIX%\Scripts\rustc.exe"
+IF NOT EXIST "%RUSTC%" SET "RUSTC=%PREFIX%\bin\rustc.exe"
 "%CARGO%" install --locked --root "%PREFIX%" --path "my-prefix-dir" --target-dir target --no-track  --force
 if errorlevel 1 exit 1
