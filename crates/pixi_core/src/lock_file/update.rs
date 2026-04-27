@@ -1303,7 +1303,9 @@ impl<'p> UpdateContextBuilder<'p> {
         let package_cache = match self.package_cache {
             Some(package_cache) => package_cache,
             None => PackageCache::new(
-                pixi_config::get_cache_dir()?.join(consts::CONDA_PACKAGE_CACHE_DIR),
+                project
+                    .config()
+                    .cache_dir_for(pixi_config::CacheKind::CondaPackages)?,
             ),
         };
         let lock_file = self.lock_file;

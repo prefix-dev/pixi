@@ -38,6 +38,33 @@ run-post-link-scripts = "false" # set to "insecure" to allow running post-link s
 tool-platform = "win-64" # force tools like build backends to be installed for a specific platform
 #  --8<-- [end:tool-platform]
 
+#  --8<-- [start:cache]
+[cache]
+# Override for the cache root. Equivalent to setting PIXI_CACHE_DIR.
+# Per-kind fields below override this on a cache-by-cache basis.
+root = "/shared/hpc/pixi-cache"
+
+# Per-cache absolute path overrides. Useful on HPC where the conda package
+# cache benefits from being on a shared filesystem (so colleagues don't
+# redownload the same artifacts) while transient caches are better off on
+# node-local storage.
+build-tool-environments = "/local/scratch/cached-build-tool-envs"
+conda-packages = "/shared/hpc/pkgs"                               # conda package cache
+detached-environments = "/local/scratch/envs"
+exec-environments = "/local/scratch/cached-envs"
+pypi-mapping = "/local/scratch/conda-pypi-mapping"                # conda<->pypi name mapping
+pypi-wheels = "/shared/hpc/uv-cache"                              # uv wheel cache
+repodata = "/shared/hpc/repodata"                                 # repodata cache
+
+# How to handle a cache that lives on a network filesystem.
+# - "auto" (default): redirect kinds that prefer local storage to node-local
+#   scratch (chosen from $SLURM_TMPDIR / $PBS_JOBFS / $SCRATCH / $TMPDIR);
+#   leave shared-friendly kinds (conda-packages, repodata, pypi-wheels) put.
+# - "always": redirect every kind when the root looks like netfs.
+# - "never": never redirect.
+netfs-redirect = "auto"
+#  --8<-- [end:cache]
+
 #  --8<-- [start:repodata-config]
 [repodata-config]
 # disable fetching of jlap, bz2 or zstd repodata files.

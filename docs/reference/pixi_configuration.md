@@ -189,6 +189,12 @@ The environments will be stored in the [cache directory](../workspace/environmen
 is `true`.
 When you specify a custom path the environments will be stored in that directory.
 
+!!! tip "Per-kind path override"
+    You can also pin just the detached-environments path via the [`[cache]`](#cache) table
+    (`cache.detached-environments`), which is convenient on HPC where this cache typically
+    belongs on node-local scratch even when the rest of the pixi cache lives on a shared
+    network filesystem.
+
 The resulting directory structure will look like this:
 
 ```shell
@@ -331,6 +337,74 @@ architecture for which there is fewer support for certain build backends.
 !!! Note "Virtual packages"
 The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different
 operating system than the current system, no virtual packages will be used.
+
+### `cache`
+
+The `[cache]` table lets you redirect specific pixi caches independently.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:cache"
+```
+
+#### Resolution order
+
+For each cache kind, pixi resolves the directory in this order (highest
+priority first):
+
+1. The matching `[cache.<kind>]` path from this config, if set.
+2. The cache root, joined with the kind's subdirectory:
+    1. `PIXI_CACHE_DIR` environment variable
+    2. `RATTLER_CACHE_DIR` environment variable
+    3. `[cache.root]` from this config
+    4. `$XDG_CACHE_HOME/pixi` (when it exists)
+    5. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
+3. If the resolved path is on a network filesystem and the kind is not
+    "shared-friendly", auto-redirect to node-local scratch (see
+    `netfs-redirect` below).
+
+#### Cache kinds
+
+The fields under `[cache]` map one-to-one to the caches pixi maintains:
+
+| Field | Cache contents | Default behavior on netfs |
+|---|---|---|
+| `conda-packages` | Extracted conda packages (`pkgs`) | Stay shared |
+| `repodata` | `repodata.json` cache | Stay shared |
+| `pypi-wheels` | uv wheel cache (`uv-cache`) | Stay shared |
+| `pypi-mapping` | conda↔PyPI name mapping | Redirect to node-local |
+| `exec-environments` | Cached `pixi exec` envs | Redirect to node-local |
+| `build-tool-environments` | Cached build-tool envs | Redirect to node-local |
+| `detached-environments` | Workspace envs when [`detached-environments`](#detached-environments) is `true` | Redirect to node-local |
+
+
+#### `netfs-redirect`
+
+Controls the auto-redirect behavior when the resolved cache root lives on a
+network filesystem (NFS, SMB/CIFS, FUSE, autofs):
+
+- `"auto"` (default): redirect only the kinds that prefer node-local storage
+    (those marked "Redirect to node-local" above).
+- `"always"`: redirect every kind to node-local scratch when the root is on
+    netfs.
+- `"never"`: do not redirect anything, even when on netfs.
+
+A per-kind path override (`[cache.<kind>] = "..."`) always wins over the
+auto-redirect logic.
+
+The redirect target is chosen from the first non-netfs candidate among
+`$SLURM_TMPDIR`, `$PBS_JOBFS`, `$SCRATCH`, and `$TMPDIR`, falling back to the
+system temp directory.
+
+#### Environment-variable escape hatches
+
+Two environment variables override the netfs detection regardless of config:
+
+- `PIXI_DISABLE_NETFS_REDIRECT=1` — treat all paths as local; never redirect.
+- `PIXI_FORCE_NETFS_REDIRECT=1` — treat all paths as netfs; redirect kinds
+    that prefer local storage.
+
+These are intended for tests, CI, and one-off debugging; for persistent
+behavior, prefer `[cache.netfs-redirect]`.
 
 ## Experimental
 
