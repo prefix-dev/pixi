@@ -104,6 +104,9 @@ pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 test = "*"
 test1 = "*"
 
+[package.target.linux-64.run-dependencies]
+test = "*"
+
 [tasks]
 build = "conda build ."
 test = { cmd = "pytest", cwd = "tests", depends-on = [
