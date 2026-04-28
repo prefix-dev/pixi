@@ -107,7 +107,9 @@ pub use install_pixi::{
     InstallPixiEnvironmentSpec,
 };
 pub use installed_source_hints::{InstalledSourceHint, InstalledSourceHints};
-pub use instantiate_backend_key::{BackendHandle, InstantiateBackendError, InstantiateBackendKey};
+pub use instantiate_backend_key::{
+    BackendHandle, InstantiateBackendError, InstantiateBackendKey, resolve_backend_identifier,
+};
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use limits::{Limit, Limits};
 pub use ptr_arc::PtrArc;

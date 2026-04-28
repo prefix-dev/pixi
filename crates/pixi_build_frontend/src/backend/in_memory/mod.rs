@@ -87,6 +87,14 @@ impl BoxedInMemoryBackend {
     pub fn api_version(&self) -> PixiBuildApiVersion {
         self.api_version
     }
+
+    /// The backend identifier as supplied by the originating
+    /// [`InMemoryBackendInstantiator`]. Available without driving an
+    /// [`Self::initialize`], so callers that only need a stable name
+    /// for cache keying can read it cheaply.
+    pub fn identifier(&self) -> &str {
+        &self.identifier
+    }
 }
 
 impl Debug for BoxedInMemoryBackend {

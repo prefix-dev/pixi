@@ -344,26 +344,107 @@ impl InstantiateBackendKey {
     /// env surfaces the negotiated API version, and carry through the
     /// key's exclude-newer cutoff.
     fn ephemeral_env_spec_for(&self, env_spec: &EnvironmentSpec) -> EphemeralEnvSpec {
-        let mut dependencies: DependencyMap<PackageName, pixi_spec::PixiSpec> =
-            env_spec.additional_requirements.clone();
-        dependencies.insert(
-            env_spec.requirement.0.clone(),
-            env_spec.requirement.1.clone(),
-        );
+        ephemeral_env_spec_for(env_spec, self.exclude_newer.clone())
+    }
+}
 
-        let mut constraints = env_spec.constraints.clone();
-        constraints.insert(
-            PIXI_BUILD_API_VERSION_NAME.clone(),
-            BinarySpec::Version(PIXI_BUILD_API_VERSION_SPEC.clone()),
-        );
+/// Free-function form of `InstantiateBackendKey::ephemeral_env_spec_for`
+/// so the lightweight [`resolve_backend_identifier`] path can build the
+/// same `EphemeralEnvSpec` without owning an `InstantiateBackendKey`.
+fn ephemeral_env_spec_for(
+    env_spec: &EnvironmentSpec,
+    exclude_newer: Option<ResolvedExcludeNewer>,
+) -> EphemeralEnvSpec {
+    let mut dependencies: DependencyMap<PackageName, pixi_spec::PixiSpec> =
+        env_spec.additional_requirements.clone();
+    dependencies.insert(
+        env_spec.requirement.0.clone(),
+        env_spec.requirement.1.clone(),
+    );
 
-        EphemeralEnvSpec {
-            dependencies,
-            constraints,
-            channels: env_spec.channels.clone(),
-            exclude_newer: self.exclude_newer.clone(),
-            strategy: Default::default(),
-            channel_priority: Default::default(),
+    let mut constraints = env_spec.constraints.clone();
+    constraints.insert(
+        PIXI_BUILD_API_VERSION_NAME.clone(),
+        BinarySpec::Version(PIXI_BUILD_API_VERSION_SPEC.clone()),
+    );
+
+    EphemeralEnvSpec {
+        dependencies,
+        constraints,
+        channels: env_spec.channels.clone(),
+        exclude_newer,
+        strategy: Default::default(),
+        channel_priority: Default::default(),
+    }
+}
+
+/// Resolve the backend's identifier without spawning the JSON-RPC
+/// backend or running the activator.
+///
+/// Identifying the backend for cache-keying purposes goes through the
+/// same dependency-resolution pipeline as a real instantiation
+/// ([`DiscoveredBackendKey`] → [`ResolvedBackendCommandKey`] →
+/// [`EphemeralEnvKey`] for env-spec backends), but stops once the
+/// resolved version is known. All three are content-addressed compute
+/// keys, so when an actual instantiation runs later in the same
+/// process the work is shared via the engine's dedup; the only thing
+/// this skips is the spawn / handshake / activation step.
+///
+/// Returned format:
+/// - In-memory backends: the
+///   [`BoxedInMemoryBackend::identifier`] string.
+/// - System backends: the resolved system command name (the override
+///   command or, falling back, the discovered backend's name).
+/// - Environment-spec backends: `"<command>@<resolved_version>"`,
+///   where `command` is the backend command (the override command or,
+///   falling back, the backend's name) and `resolved_version` is the
+///   primary package's version as solved by [`EphemeralEnvKey`].
+///
+/// The string is suitable as input to a content-addressed cache key
+/// where "the same logical backend" should round-trip identically
+/// across processes — every component comes from a deterministic
+/// resolve step, none from an instance handle.
+pub async fn resolve_backend_identifier(
+    ctx: &mut ComputeCtx,
+    source_path: &std::path::Path,
+    manifest_source_anchor: SourceAnchor,
+    exclude_newer: Option<ResolvedExcludeNewer>,
+) -> Result<String, Arc<InstantiateBackendError>> {
+    let discovered = ctx
+        .compute(&DiscoveredBackendKey::new(source_path))
+        .await
+        .map_err(|e| Arc::new(InstantiateBackendError::Discovery(e)))?;
+
+    let BackendSpec::JsonRpc(resolved_spec) = discovered
+        .backend_spec
+        .clone()
+        .resolve(manifest_source_anchor);
+
+    let resolved_command = ctx
+        .compute(&ResolvedBackendCommandKey::new(resolved_spec.clone()))
+        .await;
+
+    match resolved_command.as_ref() {
+        ResolvedBackendCommand::InMemory(in_mem) => Ok(in_mem.identifier().to_string()),
+        ResolvedBackendCommand::Spec(CommandSpec::System(system_spec)) => Ok(system_spec
+            .command
+            .clone()
+            .unwrap_or_else(|| resolved_spec.name.clone())),
+        ResolvedBackendCommand::Spec(CommandSpec::EnvironmentSpec(env_spec)) => {
+            let ephemeral_spec = ephemeral_env_spec_for(env_spec, exclude_newer);
+            let installed = ctx
+                .compute(&EphemeralEnvKey::new(ephemeral_spec))
+                .await
+                .map_err(InstantiateBackendError::EphemeralEnv)
+                .map_err(Arc::new)?;
+            let version =
+                primary_package_version_from_records(&installed.records, &env_spec.requirement.0)
+                    .expect("solved env contains the requested primary package");
+            let cmd = env_spec
+                .command
+                .clone()
+                .unwrap_or_else(|| resolved_spec.name.clone());
+            Ok(format!("{cmd}@{version}"))
         }
     }
 }

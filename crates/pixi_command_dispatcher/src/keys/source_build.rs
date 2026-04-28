@@ -139,23 +139,32 @@ async fn compute_inner(
         None => manifest_checkout.clone(),
     };
 
-    // InstantiateBackendKey dedups so sibling builds of the same source
-    // share the spawn.
-    let backend = ctx
-        .compute(&InstantiateBackendKey::new(
-            manifest_checkout.path.as_std_path(),
-            SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone())),
-            build_source_checkout
-                .path
-                .as_dir_or_file_parent()
-                .to_path_buf(),
-            spec.exclude_newer.clone(),
-        ))
-        .await
-        .map_err(|err: Arc<crate::InstantiateBackendError>| {
-            SourceBuildError::Initialize((*err).clone())
-        })?;
-    let backend_identifier = backend.lock().await.identifier().to_string();
+    // Resolve a stable backend identifier WITHOUT spawning the JSON-RPC
+    // backend. Goes through the same dependency-resolution Keys
+    // (`DiscoveredBackendKey` -> `ResolvedBackendCommandKey` ->
+    // `EphemeralEnvKey` for env-spec backends) so when a real
+    // instantiation runs later in the same process the work is shared
+    // via the engine's dedup; what's skipped here is the spawn,
+    // JSON-RPC handshake, and activator run.
+    //
+    // We need this identifier only to form the artifact cache key — on
+    // a cache hit there's no further reason to talk to a backend, so
+    // doing the spawn before the lookup is pure waste.
+    let manifest_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
+    let build_source_dir = build_source_checkout
+        .path
+        .as_dir_or_file_parent()
+        .to_path_buf();
+    let backend_identifier = crate::resolve_backend_identifier(
+        ctx,
+        manifest_checkout.path.as_std_path(),
+        manifest_anchor.clone(),
+        spec.exclude_newer.clone(),
+    )
+    .await
+    .map_err(|err: Arc<crate::InstantiateBackendError>| {
+        SourceBuildError::Initialize((*err).clone())
+    })?;
 
     // Cache key covers structural identity + dep content addresses;
     // source-file freshness lives in the sidecar, not the key.
@@ -194,6 +203,22 @@ async fn compute_inner(
             record: hit.record,
         });
     }
+
+    // Cache miss: now spawn the backend. `InstantiateBackendKey`
+    // re-uses the discovery / ephemeral-env work the identifier
+    // resolve already cached, so this only pays for the JSON-RPC
+    // spawn + handshake + activator.
+    let backend = ctx
+        .compute(&InstantiateBackendKey::new(
+            manifest_checkout.path.as_std_path(),
+            manifest_anchor.clone(),
+            build_source_dir,
+            spec.exclude_newer.clone(),
+        ))
+        .await
+        .map_err(|err: Arc<crate::InstantiateBackendError>| {
+            SourceBuildError::Initialize((*err).clone())
+        })?;
 
     // Workspace dir is the backend's build root; state persists across
     // runs that share the same (source, deps, variants, backend).
