@@ -33,10 +33,20 @@ use crate::{
 pub struct SourceMetadataSpecV2 {
     /// The package whose outputs we want.
     pub package: PackageName,
-    /// Unpinned source location; pinned inside the compute.
+    /// Unpinned source location; pinned inside the compute unless
+    /// `manifest_pin_override` carries a compatible pin (see below).
     pub source_location: SourceLocationSpec,
     /// Optional override for the package's build source.
     pub preferred_build_source: Option<PinnedSourceSpec>,
+    /// Optional caller-supplied pin for the manifest source. When set
+    /// and compatible with `source_location` (see
+    /// [`PinnedSourceSpec::matches_source_spec`]), the compute body
+    /// uses [`checkout_pinned_source`](crate::source_checkout::SourceCheckoutExt::checkout_pinned_source)
+    /// at this exact pin instead of resolving `source_location` afresh.
+    /// Used to thread a previously-locked git/url commit through a
+    /// re-lock so commits don't drift when the manifest still points
+    /// at the same branch / ref.
+    pub manifest_pin_override: Option<PinnedSourceSpec>,
     /// Environment context (channels, build env, variants,
     /// exclude_newer, channel_priority).
     pub env_ref: EnvironmentRef,
@@ -94,10 +104,25 @@ impl Key for SourceMetadataKey {
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         let spec = self.0.clone();
 
-        let checkout = ctx
-            .pin_and_checkout(spec.source_location.clone())
-            .await
-            .map_err(SourceMetadataError::from)?;
+        // Use the caller-supplied manifest pin when it is compatible
+        // with the requested source location; otherwise resolve the
+        // location fresh. The override is the path that lets a re-lock
+        // reuse a previously-locked git commit instead of drifting to
+        // whatever the branch points at today.
+        let checkout = match spec
+            .manifest_pin_override
+            .as_ref()
+            .filter(|pin| pin.matches_source_spec(&spec.source_location))
+        {
+            Some(pin) => ctx
+                .checkout_pinned_source(pin.clone())
+                .await
+                .map_err(SourceMetadataError::from)?,
+            None => ctx
+                .pin_and_checkout(spec.source_location.clone())
+                .await
+                .map_err(SourceMetadataError::from)?,
+        };
 
         let backend_metadata_spec = BuildBackendMetadataSpec {
             manifest_source: checkout.pinned,

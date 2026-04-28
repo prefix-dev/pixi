@@ -1618,6 +1618,19 @@ impl<'p> UpdateContextBuilder<'p> {
             .filter_map(|group| {
                 // If any content of the environments in the group are outdated we need to
                 // disregard the locked content.
+                //
+                // This drop also reaches the build/host environments of every
+                // source record in the group: they live inside the source
+                // record (`build_packages` / `host_packages`), and dropping
+                // the source records here means
+                // `spawn_solve_conda_environment_task` receives empty
+                // `installed`, `InstalledSourceHints::from_records(&[])`
+                // produces an empty hint map, and the nested SPEK calls
+                // therefore start with empty installed slices too. So a
+                // workspace-level disregard (channel mismatch, strategy
+                // change, exclude-newer drift, ...) implicitly disregards
+                // every nested build/host env at the same time, without
+                // a separate per-build/host check.
                 if group
                     .environments()
                     .any(|e| outdated.disregard_locked_content.should_disregard_conda(&e))
@@ -1834,47 +1847,45 @@ impl<'p> UpdateContext<'p> {
                     continue;
                 }
                 // No, we need to spawn a task to update for the entire solve group.
-                // Convert to resolved records on a best-effort basis: partial
-                // source records are dropped (the solver only uses binary records
-                // from `installed` anyway).
+                // Pass the unresolved records straight through; partial
+                // source records carry pinned manifest sources and
+                // build/host package sets that must reach the solver
+                // as stability hints.
                 let locked_group_records = self
                     .locked_grouped_repodata_records
                     .get(&source)
                     .and_then(|records| records.get(&platform))
-                    .map(|unresolved| {
-                        Arc::new(unresolved.as_ref().clone().into_resolved_best_effort())
-                    })
+                    .cloned()
                     .unwrap_or_default();
 
-                // Spawn a task to solve the group.
-                // Determine override pinned sources for source packages when performing
-                // a targeted update.
-                let pin_overrides = (|| {
-                    let targets = self.update_targets.as_ref()?;
-                    if targets.is_empty() {
-                        return None;
-                    }
-                    Some(
-                        locked_group_records
-                            .records
-                            .iter()
-                            .filter_map(|r| match r {
-                                PixiRecord::Source(src) => {
-                                    let name = src.name().clone();
-                                    if targets.contains(name.as_source()) {
-                                        src.build_source()
-                                            .cloned()
-                                            .map(|spec| (name, spec.into_pinned()))
-                                    } else {
-                                        None
-                                    }
+                // Default `preferred_build_source` to every locked
+                // source record's build_source pin so out-of-tree
+                // builds stay stable across re-locks. Packages
+                // explicitly named in `update_targets` are excluded
+                // from the default so their build source is allowed
+                // to be re-pinned. (Manifest-source pin propagation
+                // for the same drift-avoidance goal is handled via
+                // `installed_source_hints`, threaded through
+                // `installed` below.)
+                let pin_overrides: BTreeMap<_, _> = {
+                    let targets = self.update_targets.as_ref();
+                    locked_group_records
+                        .records
+                        .iter()
+                        .filter_map(|r| match r {
+                            pixi_record::UnresolvedPixiRecord::Source(src) => {
+                                let name = src.name().clone();
+                                if targets.is_some_and(|t| t.contains(name.as_source())) {
+                                    return None;
                                 }
-                                _ => None,
-                            })
-                            .collect(),
-                    )
-                })()
-                .unwrap_or_default();
+                                src.build_source
+                                    .clone()
+                                    .map(|spec| (name, spec.into_pinned()))
+                            }
+                            _ => None,
+                        })
+                        .collect()
+                };
 
                 let mapping_client = self.mapping_client.clone();
                 let command_dispatcher = self.command_dispatcher.clone();
@@ -2413,10 +2424,20 @@ pub enum TaskResult {
 }
 
 /// A task that solves the conda dependencies for a given environment.
+///
+/// `existing_repodata_records` is the unresolved view of the lock file's
+/// records for this group/platform: binary records and full source
+/// records, plus partial source records (for mutable sources whose
+/// metadata is not stored in the lock file). The partial entries still
+/// carry their pinned manifest source and the build/host package sets
+/// they were last solved against, both of which are forwarded to the
+/// solver as stability hints (via `installed` and `installed_source_hints`)
+/// so re-locks stay incremental and don't drift the locked git/url
+/// commits when the user did not request an update.
 #[allow(clippy::too_many_arguments)]
 async fn spawn_solve_conda_environment_task(
     group: GroupedEnvironment<'_>,
-    existing_repodata_records: Arc<PixiRecordsByName>,
+    existing_repodata_records: Arc<UnresolvedPixiRecordsByName>,
     mapping_client: MappingClient,
     platform: Platform,
     channel_priority: ChannelPriority,
@@ -2540,12 +2561,14 @@ async fn spawn_solve_conda_environment_task(
             channel_priority: channel_priority.into(),
         },
     ));
-    let installed: Arc<[pixi_record::UnresolvedPixiRecord]> = existing_repodata_records
-        .records
-        .iter()
-        .cloned()
-        .map(pixi_record::UnresolvedPixiRecord::from)
-        .collect();
+    // Pass partial source records through alongside binary and full
+    // source records: their `manifest_source` and `build_packages` /
+    // `host_packages` flow into `InstalledSourceHints`, which the
+    // solver uses to keep nested build/host envs stable across
+    // re-locks. Dropping partials here would silently lose those
+    // hints and cause unnecessary version churn / commit drift.
+    let installed: Arc<[pixi_record::UnresolvedPixiRecord]> =
+        existing_repodata_records.records.iter().cloned().collect();
     let installed_source_hints = pixi_command_dispatcher::PtrArc::from_value(
         pixi_command_dispatcher::InstalledSourceHints::from_records(&installed),
     );

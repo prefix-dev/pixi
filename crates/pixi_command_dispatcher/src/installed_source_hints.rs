@@ -21,6 +21,20 @@
 //! representative via a deterministic sort; different source identities
 //! for the same name (`foo` from path and `foo` from git) coexist as
 //! distinct entries.
+//!
+//! ## Disregard semantics
+//!
+//! Each hint entry is sourced from a locked source record, so when the
+//! caller wants to discard locked content (e.g. workspace channels
+//! changed and the previous resolution is no longer trustworthy) it
+//! must drop the records before calling [`Self::from_records`]. There
+//! is no "disregard this hint" knob inside the map: passing the empty
+//! slice produces the singleton empty map shared by every "no hints"
+//! caller. Pixi's update path performs the drop one level up, in the
+//! `locked_grouped_repodata_records` filter, so a workspace-level
+//! `DisregardLockedContent` decision automatically empties every
+//! nested build/host env's hint (since those packages live inside the
+//! dropped source records).
 
 use std::{
     collections::{HashMap, hash_map::DefaultHasher},
@@ -91,6 +105,31 @@ impl InstalledSourceHints {
         location: &SourceLocationSpec,
     ) -> Option<&InstalledSourceHint> {
         self.by_key.get(&(name.clone(), location.clone()))
+    }
+
+    /// Find a hint that matches `(name, location)` where `location` may be
+    /// unpinned (e.g. `git+url?rev=main` from a manifest). The hint key is
+    /// stored using the locked `PinnedSourceSpec`'s
+    /// `SourceLocationSpec` projection (e.g. `git+url?rev=sha`), so a
+    /// direct `get` only matches when the caller already has a pinned
+    /// location. This method also accepts unpinned specs by checking
+    /// [`PinnedSourceSpec::matches_source_spec`] against each name-matched
+    /// hint, returning the first compatible one.
+    ///
+    /// Returns `None` when no hint with the given name has a
+    /// `manifest_source` that matches the requested location.
+    pub fn find_for_location(
+        &self,
+        name: &PackageName,
+        location: &SourceLocationSpec,
+    ) -> Option<&InstalledSourceHint> {
+        if let Some(hint) = self.by_key.get(&(name.clone(), location.clone())) {
+            return Some(hint);
+        }
+        self.by_key
+            .iter()
+            .find(|((n, _), hint)| n == name && hint.manifest_source.matches_source_spec(location))
+            .map(|(_, hint)| hint)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -284,6 +323,109 @@ mod tests {
         let name = PackageName::new_unchecked("foo".to_string());
         assert!(hints.get(&name, &path_location("./foo")).is_some());
         assert!(hints.get(&name, &path_location("./nested-foo")).is_some());
+    }
+
+    fn make_git_source(name: &str, url: &str, commit: &str) -> UnresolvedPixiRecord {
+        use pixi_git::sha::GitSha;
+        use pixi_record::{PinnedGitCheckout, PinnedGitSpec};
+        use pixi_spec::GitReference;
+        use std::str::FromStr;
+
+        let pinned = PinnedSourceSpec::Git(PinnedGitSpec {
+            git: url::Url::parse(url).expect("valid git url"),
+            source: PinnedGitCheckout {
+                commit: GitSha::from_str(commit).expect("valid sha"),
+                subdirectory: Default::default(),
+                reference: GitReference::Branch("main".into()),
+            },
+        });
+        let data = SourceRecordData::Partial(PartialSourceRecordData {
+            name: PackageName::new_unchecked(name.to_string()),
+            depends: Vec::new(),
+            sources: Default::default(),
+        });
+        UnresolvedPixiRecord::Source(Arc::new(UnresolvedSourceRecord {
+            data,
+            manifest_source: pinned,
+            build_source: None,
+            variants: Default::default(),
+            identifier_hash: None,
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
+        }))
+    }
+
+    fn unpinned_git_location(url: &str) -> SourceLocationSpec {
+        use pixi_spec::{GitReference, GitSpec};
+        SourceLocationSpec::Git(GitSpec {
+            git: url::Url::parse(url).expect("valid git url"),
+            rev: Some(GitReference::Branch("main".into())),
+            subdirectory: Default::default(),
+        })
+    }
+
+    #[test]
+    fn find_for_location_matches_unpinned_git_spec() {
+        // Hint stored from a locked record (with commit sha). A live walk
+        // queries with the manifest's unpinned spec (no commit). Lookup
+        // should still resolve the hint via `matches_source_spec`, so the
+        // caller can reuse the locked commit.
+        let url = "https://github.com/example/foo.git";
+        let foo = make_git_source("foo", url, "0000000000000000000000000000000000000001");
+        let hints = InstalledSourceHints::from_records(&[foo]);
+
+        let pkg = PackageName::new_unchecked("foo".to_string());
+        let unpinned = unpinned_git_location(url);
+        let hit = hints
+            .find_for_location(&pkg, &unpinned)
+            .expect("expected hint to match unpinned spec");
+        assert!(hit.manifest_source.is_immutable());
+    }
+
+    #[test]
+    fn find_for_location_does_not_match_different_repo() {
+        let foo = make_git_source(
+            "foo",
+            "https://github.com/example/foo.git",
+            "0000000000000000000000000000000000000001",
+        );
+        let hints = InstalledSourceHints::from_records(&[foo]);
+
+        let pkg = PackageName::new_unchecked("foo".to_string());
+        let other = unpinned_git_location("https://github.com/example/bar.git");
+        assert!(hints.find_for_location(&pkg, &other).is_none());
+    }
+
+    #[test]
+    fn find_for_location_disambiguates_by_spec_when_two_sources_share_name() {
+        // Same package name, two different hints. find_for_location must
+        // pick the matching one.
+        let path_foo = make_source("foo", "./foo", Vec::new(), Vec::new());
+        let git_foo = make_git_source(
+            "foo",
+            "https://github.com/example/foo.git",
+            "0000000000000000000000000000000000000001",
+        );
+        let hints = InstalledSourceHints::from_records(&[path_foo, git_foo]);
+
+        let pkg = PackageName::new_unchecked("foo".to_string());
+        // Path lookup hits the path hint.
+        let path_hit = hints
+            .find_for_location(&pkg, &path_location("./foo"))
+            .expect("path hit");
+        assert!(matches!(
+            path_hit.manifest_source,
+            PinnedSourceSpec::Path(_)
+        ));
+
+        // Unpinned-git lookup hits the git hint.
+        let git_hit = hints
+            .find_for_location(
+                &pkg,
+                &unpinned_git_location("https://github.com/example/foo.git"),
+            )
+            .expect("git hit");
+        assert!(matches!(git_hit.manifest_source, PinnedSourceSpec::Git(_)));
     }
 
     #[test]

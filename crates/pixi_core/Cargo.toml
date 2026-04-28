@@ -37,6 +37,7 @@ pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_build_discovery = { workspace = true }
 pixi_build_frontend = { workspace = true }
+pixi_build_types = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }

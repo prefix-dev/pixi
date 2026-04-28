@@ -1081,7 +1081,6 @@ my-package = {{ path = "./my-package" }}
 /// - purls, python_site_packages_path
 /// - run_exports
 #[tokio::test]
-#[ignore = "expected to fail: source packages always re-lock under the SourceRecordRequiresRebuild stopgap; tracked as follow-up work"]
 async fn test_source_package_lock_file_up_to_date() {
     use pixi_test_utils::create_conda_package;
     use rattler_conda_types::{NoArchType, package::RunExportsJson};
@@ -1222,7 +1221,6 @@ test-source-pkg = {{ path = "./source-package" }}
 /// The test uses ObservableBackend to verify that the backend is called again
 /// when the configuration changes.
 #[tokio::test]
-#[ignore = "expected to fail: source packages always re-lock under the SourceRecordRequiresRebuild stopgap; tracked as follow-up work"]
 async fn test_build_config_change_invalidates_cache() {
     setup_tracing();
 
@@ -1566,7 +1564,6 @@ renamed-package = {{ path = "./my-package" }}
 /// re-evaluates it, and the lock-file is written again. The source package
 /// should be present and equivalent in both lock-files.
 #[tokio::test]
-#[ignore = "expected to fail: source packages always re-lock under the SourceRecordRequiresRebuild stopgap; tracked as follow-up work"]
 async fn test_source_record_roundtrips_through_lock_file() {
     setup_tracing();
 
@@ -1705,6 +1702,190 @@ my-package = {{ path = "./my-package" }}
         my_pkg.package_build_source, my_pkg_2.package_build_source,
         "package_build_source should be identical after roundtrip"
     );
+}
+
+/// A re-lock that's triggered by a source's host/build-deps changing
+/// must keep already-locked build/host package versions when they
+/// still satisfy the new specs. This is the "incremental update"
+/// guarantee: the solver receives the locked build/host package set
+/// as installed hints (via `installed_source_hints`), so it prefers
+/// those versions over picking the latest available.
+///
+/// Without that hint, the new solve would pick `foo 2.0` (the highest
+/// version in the channel). With it, the locked `foo 1.0` is kept and
+/// only the newly-required `bar` is solved fresh.
+#[tokio::test]
+async fn test_relock_keeps_locked_build_packages_as_installed_hints() {
+    setup_tracing();
+
+    // Channel hosts two versions of `foo` plus one `bar`. The version
+    // gap on `foo` is what makes the test discriminate "preserved" from
+    // "re-resolved": with no installed hint a fresh solve would pick
+    // `foo 2.0`.
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1.0.0")
+            .with_timestamp("2025-01-01T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2.0.0")
+            .with_timestamp("2025-06-01T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("bar", "1.0.0")
+            .with_timestamp("2025-01-01T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+
+    // Initial source manifest: pin foo to 1.0 so the first solve can
+    // only pick that exact version, regardless of channel content.
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.build-dependencies]
+foo = "==1.0.0"
+"#,
+    )
+    .unwrap();
+
+    let workspace_manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    pixi.update_manifest(&workspace_manifest).unwrap();
+
+    // First solve. The build env should be locked with foo 1.0.
+    let workspace = pixi.workspace().unwrap();
+    let (lock_data, _) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("first solve should succeed");
+    let lock_v1 = lock_data.into_lock_file();
+    let foo_versions_v1 = collect_build_dep_versions(&lock_v1, "my-package", "foo");
+    assert_eq!(
+        foo_versions_v1,
+        vec!["1.0.0"],
+        "first solve must pin foo to 1.0.0; got {foo_versions_v1:?}"
+    );
+
+    // Now the source loosens its constraint on `foo` (any version is
+    // allowed) and adds a new build-dep `bar`. The added bar means
+    // the locked build_packages are no longer enough to satisfy the
+    // backend's specs, so satisfiability triggers a re-lock. The
+    // re-lock receives the locked `foo 1.0.0` as an installed hint;
+    // the solver should keep it instead of jumping to `foo 2.0.0`.
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.build-dependencies]
+foo = "*"
+bar = "*"
+"#,
+    )
+    .unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    let (lock_data, was_updated) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("second solve should succeed and re-lock");
+    assert!(
+        was_updated,
+        "second solve must re-lock since build-dependencies changed"
+    );
+    let lock_v2 = lock_data.into_lock_file();
+
+    let foo_versions_v2 = collect_build_dep_versions(&lock_v2, "my-package", "foo");
+    assert_eq!(
+        foo_versions_v2,
+        vec!["1.0.0"],
+        "re-lock must keep the locked foo 1.0.0 (installed hint), not jump to 2.0.0; got {foo_versions_v2:?}"
+    );
+    let bar_versions_v2 = collect_build_dep_versions(&lock_v2, "my-package", "bar");
+    assert_eq!(
+        bar_versions_v2,
+        vec!["1.0.0"],
+        "re-lock must add bar 1.0.0 to the build env; got {bar_versions_v2:?}"
+    );
+}
+
+/// Collect the versions of a binary package that appears in
+/// `source_pkg`'s `build_packages` slot, across every platform.
+/// Used by the incremental-relock tests to check what survived a
+/// re-lock.
+fn collect_build_dep_versions(
+    lock_file: &rattler_lock::LockFile,
+    source_pkg: &str,
+    binary_dep: &str,
+) -> Vec<String> {
+    use pixi_record::LockFileResolver;
+    use std::path::Path;
+
+    let resolver =
+        LockFileResolver::build(lock_file, Path::new("/")).expect("lockfile must resolve cleanly");
+    let mut out = Vec::new();
+    for (_env_name, env) in lock_file.environments() {
+        for (_platform, packages) in env.packages_by_platform() {
+            for package in packages {
+                let Some(record) = resolver.get_for_package(&package) else {
+                    continue;
+                };
+                let pixi_record::UnresolvedPixiRecord::Source(src) = record else {
+                    continue;
+                };
+                if src.name().as_normalized() != source_pkg {
+                    continue;
+                }
+                for build_pkg in &src.build_packages {
+                    if let pixi_record::UnresolvedPixiRecord::Binary(b) = build_pkg
+                        && b.package_record.name.as_normalized() == binary_dep
+                    {
+                        out.push(b.package_record.version.to_string());
+                    }
+                }
+            }
+        }
+    }
+    out.sort();
+    out
 }
 
 #[tokio::test]

@@ -4,4 +4,4 @@ expression: s
 ---
 environment 'default' does not satisfy the requirements of the project for platform 'win-64'
     Diagnostic severity: error
-    Caused by: source package 'child-package' requires rebuild or re-evaluation; forcing a full re-lock
+    Caused by: the locked source package 'child-package' does not match the requested source package, the locked source type does not match the requested type

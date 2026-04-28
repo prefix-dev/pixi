@@ -80,14 +80,33 @@ impl Key for ResolveSourcePackageKey {
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         let spec = self.0.clone();
 
+        // Reuse the previously-locked manifest pin when it is still
+        // compatible with the manifest's source spec. Without this,
+        // a `git+url?rev=main` spec would re-resolve `main` to its
+        // current HEAD on every solve, drifting commits even when
+        // nothing material changed.
+        let manifest_pin_override = spec
+            .installed_source_hints
+            .find_for_location(&spec.package, &spec.source_location)
+            .map(|hint| hint.manifest_source.clone());
+
         // Pin the source up front so the reporter's `on_queued` can
         // label the event with the resolved manifest source. SMK will
-        // re-run `pin_and_checkout` internally; the checkout layer
-        // caches, so the second call is effectively free.
-        let checkout = ctx
-            .pin_and_checkout(spec.source_location.clone())
-            .await
-            .map_err(SourceRecordError::SourceCheckout)?;
+        // re-run the checkout internally; the checkout layer caches,
+        // so the second call is effectively free.
+        let checkout = match manifest_pin_override
+            .as_ref()
+            .filter(|pin| pin.matches_source_spec(&spec.source_location))
+        {
+            Some(pin) => ctx
+                .checkout_pinned_source(pin.clone())
+                .await
+                .map_err(SourceRecordError::SourceCheckout)?,
+            None => ctx
+                .pin_and_checkout(spec.source_location.clone())
+                .await
+                .map_err(SourceRecordError::SourceCheckout)?,
+        };
         let own_pin = spec.preferred_build_source.get(&spec.package).cloned();
 
         // Reporter lifecycle for this package's source-metadata work.
@@ -117,7 +136,7 @@ impl Key for ResolveSourcePackageKey {
             .or(parent_reporter_ctx);
         let _lifecycle = lifecycle.start();
 
-        let work = resolve_source_package_inner(ctx, spec, own_pin);
+        let work = resolve_source_package_inner(ctx, spec, own_pin, manifest_pin_override);
         match scope_ctx {
             Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
             None => work.await,
@@ -134,6 +153,7 @@ async fn resolve_source_package_inner(
     ctx: &mut ComputeCtx,
     spec: Arc<ResolveSourcePackageSpec>,
     own_pin: Option<PinnedSourceSpec>,
+    manifest_pin_override: Option<PinnedSourceSpec>,
 ) -> Result<Arc<Vec<Arc<SourceRecord>>>, SourceRecordError> {
     // SMK only needs this package's pin as a checkout override;
     // the full pin map flows through assembly for recursion.
@@ -142,6 +162,7 @@ async fn resolve_source_package_inner(
             package: spec.package.clone(),
             source_location: spec.source_location.clone(),
             preferred_build_source: own_pin,
+            manifest_pin_override,
             env_ref: spec.env_ref.clone(),
         }))
         .await
