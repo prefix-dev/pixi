@@ -1,0 +1,18 @@
+[package]
+authors = ["Bas Zalmstra <bas@prefix.dev>"]
+description = "C++ implementations of particle emitters and modifiers"
+name = "particle_cpp"
+version = "0.1.0"
+
+[package.build.backend]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pixi-build-cmake"
+version = "0.3.*"
+
+[package.host-dependencies]
+particle_core = { path = "../particle_core" }
+
+[package.run-dependencies]
+# TODO: drop once pixi-build emits run-exports for source packages; for now we
+# have to repeat the host-deps so consumers pick up the runtime libraries.
+particle_core = { path = "../particle_core" }
