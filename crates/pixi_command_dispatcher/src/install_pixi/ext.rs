@@ -10,7 +10,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use pixi_compute_engine::{ComputeCtx, DataStore};
 use pixi_record::UnresolvedPixiRecord;
-use rattler::install::{Installer, InstallerError};
+use rattler::install::{Installer, InstallerError, PythonInfo, Transaction};
 use rattler_conda_types::{PackageName, RepoDataRecord};
 
 use crate::BuildProfile;
@@ -212,6 +212,30 @@ async fn install_inner(
         binary_records.iter().map(|arc| arc.as_ref()),
     );
 
+    // Fast path: when the prefix's stored fingerprint already matches
+    // the one we'd install and the caller hasn't asked for an explicit
+    // reinstall, skip the rattler installer entirely. Source builds
+    // above this point still ran (their content feeds the
+    // fingerprint), so any source change forces a fresh install via a
+    // fingerprint mismatch.
+    if spec.force_reinstall.is_empty()
+        && crate::EnvironmentFingerprint::read(spec.prefix.path()).as_ref()
+            == Some(&installed_fingerprint)
+    {
+        let transaction = unchanged_transaction(
+            spec.build_environment.host_platform,
+            &binary_records,
+        )
+        .map_err(CommandDispatcherError::Failed)?;
+        return Ok(InstallPixiEnvironmentResult {
+            transaction,
+            post_link_script_result: None,
+            pre_link_script_result: None,
+            resolved_source_records,
+            installed_fingerprint,
+        });
+    }
+
     // Run the rattler prefix installer against the fully-resolved binary
     // set. Resources come from the compute engine's DataStore.
     let data: &DataStore = ctx.global_data();
@@ -249,5 +273,34 @@ async fn install_inner(
         pre_link_script_result: result.pre_link_script_result,
         resolved_source_records,
         installed_fingerprint,
+    })
+}
+
+/// Build the [`Transaction`] returned to the caller when the install
+/// short-circuits on a fingerprint match. There's no work to perform,
+/// so `operations` is empty; only `python_info` and
+/// `current_python_info` need real values so downstream code that
+/// derives `PythonStatus` from the transaction sees `Unchanged`. We
+/// leave `unchanged` empty too: callers iterate it to inspect the
+/// install diff, and "no diff" is exactly what we want to signal.
+fn unchanged_transaction(
+    platform: rattler_conda_types::Platform,
+    records: &[Arc<RepoDataRecord>],
+) -> Result<
+    Transaction<rattler::install::InstallationResultRecord, RepoDataRecord>,
+    InstallPixiEnvironmentError,
+> {
+    let python_info = records
+        .iter()
+        .find(|r| r.package_record.name.as_normalized() == "python")
+        .map(|r| PythonInfo::from_python_record(&r.package_record, platform))
+        .transpose()
+        .map_err(|err| InstallPixiEnvironmentError::DetectPythonInfo(err.to_string()))?;
+    Ok(Transaction {
+        operations: Vec::new(),
+        python_info: python_info.clone(),
+        current_python_info: python_info,
+        platform,
+        unchanged: Vec::new(),
     })
 }

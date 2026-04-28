@@ -132,4 +132,7 @@ pub enum InstallPixiEnvironmentError {
     )]
     #[diagnostic(help("try `pixi clean` to reset the environment and run the command again"))]
     ConvertTransactionToPrefixRecord(Prefix, #[source] std::io::Error),
+
+    #[error("failed to determine python info for the installed environment: {0}")]
+    DetectPythonInfo(String),
 }
