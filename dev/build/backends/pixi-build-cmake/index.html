@@ -4459,7 +4459,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Default</strong>: <code>[]</code></li>
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific globs completely replace base globs</li>
 </ul>
-<p>Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include source files (<code>**/*.{c,cc,cxx,cpp,h,hpp,hxx}</code>), CMake files (<code>**/*.{cmake,cmake.in}</code>, <code>**/CMakeFiles.txt</code>), and other build-related files.</p>
+<p>Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include source files (<code>**/*.{c,cc,cxx,cpp,h,hpp,hxx}</code>), CMake files (<code>**/*.{cmake,cmake.in}</code>, <code>**/CMakeLists.txt</code>), and other build-related files.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[package.build.config]</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="s2">&quot;assets/**/*&quot;</span><span class="p">,</span>
