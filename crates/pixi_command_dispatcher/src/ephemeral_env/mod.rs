@@ -22,9 +22,10 @@ use pixi_spec::{BinarySpec, PixiSpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
 use rattler::install::InstallerError;
-use rattler_conda_types::{ChannelUrl, PackageName, prefix::Prefix};
+use rattler_conda_types::{ChannelUrl, PackageName, RepoDataRecord, prefix::Prefix};
 use rattler_repodata_gateway::{GatewayError, RepoData};
 use rattler_solve::{ChannelPriority, SolveStrategy};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
 
@@ -198,6 +199,28 @@ impl Key for EphemeralEnvKey {
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         let spec: &EphemeralEnvSpec = &self.0;
 
+        // Cross-process fast path: ephemeral env prefixes are
+        // content-addressed by `spec.cache_key()`, so an existing
+        // prefix at the derived path with a marker file recording
+        // the install records is fully reusable. The compute-engine
+        // cache only dedups within a single process, so without this
+        // marker every `pixi run` re-fetches repodata and re-solves
+        // the backend's binary deps — ~250 ms on Windows for
+        // pixi-build-cmake / pixi-build-python — even when the
+        // prefix on disk was already provisioned by a previous run.
+        //
+        // The borrow of `ctx.global_data()` is scoped here so the
+        // subsequent mutable `ctx.compute(...)` calls below can take
+        // their own borrow without conflict.
+        let cache_key = spec.cache_key();
+        let prefix_path = {
+            let data: &DataStore = ctx.global_data();
+            data.cache_dirs().build_backends().join(&cache_key)
+        };
+        if let Some(cached) = read_cached_marker(prefix_path.as_std_path()).await {
+            return Ok(Arc::new(cached));
+        }
+
         // 1. Reject source specs, get a binary-only dep map.
         let binary_specs = match split_into_binary(&spec.dependencies) {
             Ok(b) => b,
@@ -234,10 +257,9 @@ impl Key for EphemeralEnvKey {
             .await
             .map_err(|e| Arc::new(EphemeralEnvError::Solve(Arc::new(e))))?;
 
-        // 5. Compute prefix path and create it.
-        let cache_key = spec.cache_key();
-        let data: &DataStore = ctx.global_data();
-        let prefix_path = data.cache_dirs().build_backends().join(&cache_key);
+        // 5. Compute prefix path and create it. (`cache_key` and
+        //    `prefix_path` were already derived above for the
+        //    fast-path lookup.)
         let prefix_std = prefix_path.as_std_path().to_path_buf();
         let prefix = Prefix::create(prefix_std.clone()).map_err(|e| {
             Arc::new(EphemeralEnvError::CreatePrefix(
@@ -271,6 +293,7 @@ impl Key for EphemeralEnvKey {
                 PixiRecord::Source(_) => None,
             })
             .collect::<Vec<_>>();
+        let data: &DataStore = ctx.global_data();
         let install_reporter = data
             .reporter()
             .and_then(|r| r.create_install_reporter(current_reporter_context()));
@@ -296,8 +319,86 @@ impl Key for EphemeralEnvKey {
             ))
         })?;
 
+        // Persist a marker so the next process can hit the
+        // fast-path without re-fetching repodata or re-solving.
+        // Best-effort: a write failure just costs the next caller
+        // one solve.
+        let binary_records: Vec<RepoDataRecord> = records
+            .iter()
+            .filter_map(|r| match r {
+                PixiRecord::Binary(b) => Some(b.as_ref().clone()),
+                PixiRecord::Source(_) => None,
+            })
+            .collect();
+        write_cached_marker(prefix.path(), &binary_records).await;
+
         Ok(Arc::new(InstalledEphemeralEnv { prefix, records }))
     }
+}
+
+/// Marker filename written next to the ephemeral-env prefix's
+/// `conda-meta` directory. Encodes the records the prefix was
+/// provisioned with so a subsequent process can short-circuit the
+/// repodata fetch + solve when the prefix is reused.
+const CACHE_MARKER_FILENAME: &str = ".pixi-ephemeral-cache.json";
+
+/// Schema written to [`CACHE_MARKER_FILENAME`].
+///
+/// `version` lets us reject markers from an older / incompatible
+/// pixi without parsing their payload, so an in-place upgrade can
+/// invalidate the cache cleanly.
+#[derive(Serialize, Deserialize)]
+struct EphemeralEnvCacheMarker {
+    version: u32,
+    records: Vec<RepoDataRecord>,
+}
+
+const EPHEMERAL_ENV_CACHE_MARKER_VERSION: u32 = 1;
+
+/// Read and validate the per-prefix cache marker.
+///
+/// Returns `Some(InstalledEphemeralEnv)` only when the prefix
+/// directory exists, the marker parses, and the recorded
+/// `version` matches what this build of pixi understands. Any
+/// other failure (missing prefix / marker / parse error / version
+/// mismatch) returns `None` so the caller falls through to the
+/// full solve+install path.
+async fn read_cached_marker(prefix_path: &std::path::Path) -> Option<InstalledEphemeralEnv> {
+    let marker_path = prefix_path.join(CACHE_MARKER_FILENAME);
+    let bytes = tokio::fs::read(&marker_path).await.ok()?;
+    let marker: EphemeralEnvCacheMarker = serde_json::from_slice(&bytes).ok()?;
+    if marker.version != EPHEMERAL_ENV_CACHE_MARKER_VERSION {
+        return None;
+    }
+    // The prefix needs to actually exist; if it has been wiped
+    // (e.g. `pixi clean`) but the marker survived, we must
+    // re-install.
+    let prefix = Prefix::create(prefix_path.to_path_buf()).ok()?;
+    let records = marker
+        .records
+        .into_iter()
+        .map(|r| PixiRecord::Binary(Arc::new(r)))
+        .collect();
+    Some(InstalledEphemeralEnv { prefix, records })
+}
+
+/// Write the per-prefix cache marker atomically (write-temp +
+/// rename). Failures are swallowed: skipping the write only costs
+/// the next caller one extra solve, never correctness.
+async fn write_cached_marker(prefix_path: &std::path::Path, records: &[RepoDataRecord]) {
+    let marker = EphemeralEnvCacheMarker {
+        version: EPHEMERAL_ENV_CACHE_MARKER_VERSION,
+        records: records.to_vec(),
+    };
+    let Ok(bytes) = serde_json::to_vec(&marker) else {
+        return;
+    };
+    let dest = prefix_path.join(CACHE_MARKER_FILENAME);
+    let tmp = prefix_path.join(format!("{CACHE_MARKER_FILENAME}.tmp"));
+    if tokio::fs::write(&tmp, &bytes).await.is_err() {
+        return;
+    }
+    let _ = tokio::fs::rename(&tmp, &dest).await;
 }
 
 /// Fetch binary repodata for the spec's dependencies + constraints.
