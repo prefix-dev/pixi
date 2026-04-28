@@ -1,7 +1,9 @@
 mod ext;
+mod fingerprint;
 pub(crate) mod reporter;
 
 pub use ext::InstallPixiEnvironmentExt;
+pub use fingerprint::EnvironmentFingerprint;
 
 use std::{
     borrow::Cow,
@@ -69,6 +71,10 @@ pub struct InstallPixiEnvironmentResult {
 
     /// Built repodata records for source records present in the input.
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
+
+    /// Content fingerprint of every record that ended up in the
+    /// prefix; see [`EnvironmentFingerprint`].
+    pub installed_fingerprint: EnvironmentFingerprint,
 }
 
 impl InstallPixiEnvironmentSpec {

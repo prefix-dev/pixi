@@ -26,7 +26,7 @@ pub use satisfiability::{
 };
 pub use update::{
     LockFileDerivedData, PackageFilterNames, ReinstallEnvironment, ReinstallPackages,
-    SolveCondaEnvironmentError, UpdateContext, UpdateLockFileOptions, UpdateMode,
+    SolveCondaEnvironmentError, UpdateContext, UpdateLockFileOptions, UpdateMode, UpdatedPrefix,
 };
 pub use utils::filter_lock_file;
 

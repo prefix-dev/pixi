@@ -206,6 +206,12 @@ async fn install_inner(
         binary_records.push(record);
     }
 
+    // Fingerprint every record that will land in the prefix; the
+    // sha256s the records already carry are enough, no file I/O.
+    let installed_fingerprint = crate::EnvironmentFingerprint::compute(
+        binary_records.iter().map(|arc| arc.as_ref()),
+    );
+
     // Run the rattler prefix installer against the fully-resolved binary
     // set. Resources come from the compute engine's DataStore.
     let data: &DataStore = ctx.global_data();
@@ -242,5 +248,6 @@ async fn install_inner(
         post_link_script_result: result.post_link_script_result,
         pre_link_script_result: result.pre_link_script_result,
         resolved_source_records,
+        installed_fingerprint,
     })
 }
