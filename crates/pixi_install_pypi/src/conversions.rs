@@ -92,6 +92,19 @@ pub enum ConvertToUvDistError {
     UvPepTypes(#[from] ConversionError),
 }
 
+/// Convert an optional index URL from the lock file to a uv IndexUrl.
+/// Falls back to DEFAULT_PYPI_INDEX_URL if no index is stored.
+fn index_url_from_lock(index: Option<&url::Url>) -> IndexUrl {
+    match index {
+        Some(url) => IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(
+            uv_redacted::DisplaySafeUrl::from(url.clone()),
+        ))),
+        None => IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
+            uv_redacted::DisplaySafeUrl::from(consts::DEFAULT_PYPI_INDEX_URL.clone()),
+        ))),
+    }
+}
+
 /// Convert from a PypiPackageData to a uv [`distribution_types::Dist`]
 pub fn convert_to_dist(
     pkg: &PypiPackageData,
@@ -158,20 +171,15 @@ pub fn convert_to_dist(
             // If this errors this is not a valid wheel filename
             // and we should consider it a sdist
             let filename = WheelFilename::from_str(filename_decoded.as_ref());
+            // Use the index URL from the lock file if available, otherwise fall back to PyPI
+            let index = index_url_from_lock(pkg.index.as_ref());
+
             if let Ok(filename) = filename {
                 Dist::Built(BuiltDist::Registry(RegistryBuiltDist {
                     wheels: vec![RegistryBuiltWheel {
                         filename,
                         file: Box::new(file),
-                        // This should be fine because currently it is only used for caching
-                        // When upgrading uv and running into problems we would need to sort this
-                        // out but it would require adding the indexes to
-                        // the lock file
-                        index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                            uv_redacted::DisplaySafeUrl::from(
-                                consts::DEFAULT_PYPI_INDEX_URL.clone(),
-                            ),
-                        ))),
+                        index,
                     }],
                     best_wheel_index: 0,
                     sdist: None,
@@ -183,11 +191,7 @@ pub fn convert_to_dist(
                     name: pkg_name,
                     version: pkg_version,
                     file: Box::new(file),
-                    // This should be fine because currently it is only used for caching
-                    index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                        uv_redacted::DisplaySafeUrl::from(consts::DEFAULT_PYPI_INDEX_URL.clone()),
-                    ))),
-                    // I don't think this really matters for the install
+                    index,
                     wheels: vec![],
                     ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(|e| {
                         ConvertToUvDistError::Extension(e, filename_raw.to_string())

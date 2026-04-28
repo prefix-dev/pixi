@@ -1,0 +1,119 @@
+diff --git a/crates/rattler_lock/src/parse/deserialize.rs b/crates/rattler_lock/src/parse/deserialize.rs
+index 719cfe8a..ee3e2e86 100644
+--- a/crates/rattler_lock/src/parse/deserialize.rs
++++ b/crates/rattler_lock/src/parse/deserialize.rs
+@@ -57,6 +57,9 @@ pub struct PypiPackageDataRaw {
+     /// The location of the package. This can be a URL or a path.
+     pub location: Verbatim<UrlOrPath>,
+ 
++    /// The index URL from which this package was resolved.
++    pub index: Option<url::Url>,
++
+     /// Hashes of the file pointed to by `url`.
+     pub hash: Option<PackageHashes>,
+ 
+@@ -79,6 +82,7 @@ impl From<PypiPackageData> for PypiPackageDataRaw {
+             name: value.name.clone(),
+             version: value.version.clone(),
+             location: value.location.clone(),
++            index: value.index.clone(),
+             hash: value.hash.clone(),
+             requires_dist,
+             requires_python: value.requires_python.clone(),
+@@ -344,6 +348,7 @@ fn convert_raw_pypi_package(
+         name: raw_package.name,
+         version: raw_package.version,
+         location,
++        index: raw_package.index,
+         hash: raw_package.hash,
+         requires_dist,
+         requires_python: raw_package.requires_python,
+diff --git a/crates/rattler_lock/src/parse/models/v5/pypi_package_data.rs b/crates/rattler_lock/src/parse/models/v5/pypi_package_data.rs
+index f204af96..22d40cec 100644
+--- a/crates/rattler_lock/src/parse/models/v5/pypi_package_data.rs
++++ b/crates/rattler_lock/src/parse/models/v5/pypi_package_data.rs
+@@ -30,6 +30,7 @@ impl<'a> From<PypiPackageDataModel<'a>> for PypiPackageDataRaw {
+             name: value.name.into_owned(),
+             version: value.version.into_owned(),
+             location: Verbatim::new(value.location),
++            index: None, // V5 format doesn't have index information
+             hash: value.hash.into_owned(),
+             requires_dist: value.requires_dist.into_owned(),
+             requires_python: value.requires_python.into_owned(),
+diff --git a/crates/rattler_lock/src/parse/models/v6/pypi_package_data.rs b/crates/rattler_lock/src/parse/models/v6/pypi_package_data.rs
+index 533111fa..2dce9746 100644
+--- a/crates/rattler_lock/src/parse/models/v6/pypi_package_data.rs
++++ b/crates/rattler_lock/src/parse/models/v6/pypi_package_data.rs
+@@ -54,6 +54,7 @@ impl<'a> From<PypiPackageDataModel<'a>> for PypiPackageDataRaw {
+             name: value.name.into_owned(),
+             version: value.version.into_owned(),
+             location: value.location.into_owned(),
++            index: None, // V6 format doesn't have index information
+             hash: value.hash.into_owned(),
+             requires_dist: value.requires_dist.into_owned(),
+             requires_python: value.requires_python.into_owned(),
+diff --git a/crates/rattler_lock/src/parse/models/v7/pypi_package_data.rs b/crates/rattler_lock/src/parse/models/v7/pypi_package_data.rs
+index 55822874..f7e39138 100644
+--- a/crates/rattler_lock/src/parse/models/v7/pypi_package_data.rs
++++ b/crates/rattler_lock/src/parse/models/v7/pypi_package_data.rs
+@@ -34,6 +34,8 @@ pub(crate) struct PypiPackageDataModel<'a> {
+     pub location: Cow<'a, Verbatim<UrlOrPath>>,
+     pub name: Cow<'a, PackageName>,
+     pub version: Cow<'a, pep440_rs::Version>,
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub index: Cow<'a, Option<url::Url>>,
+     #[serde(default, skip_serializing_if = "Option::is_none", flatten)]
+     pub hash: Cow<'a, Option<PackageHashes>>,
+     #[serde(default, skip_serializing_if = "<[String]>::is_empty")]
+@@ -48,6 +50,7 @@ impl<'a> From<PypiPackageDataModel<'a>> for PypiPackageDataRaw {
+             name: value.name.into_owned(),
+             version: value.version.into_owned(),
+             location: value.location.into_owned(),
++            index: value.index.into_owned(),
+             hash: value.hash.into_owned(),
+             requires_dist: value.requires_dist.into_owned(),
+             requires_python: value.requires_python.into_owned(),
+@@ -66,6 +69,7 @@ impl<'a> From<&'a PypiPackageData> for PypiPackageDataModel<'a> {
+             name: Cow::Borrowed(&value.name),
+             version: Cow::Borrowed(&value.version),
+             location: Cow::Borrowed(&value.location),
++            index: Cow::Borrowed(&value.index),
+             hash: Cow::Borrowed(&value.hash),
+             requires_dist: requires_dist.into(),
+             requires_python: Cow::Borrowed(&value.requires_python),
+diff --git a/crates/rattler_lock/src/parse/v3.rs b/crates/rattler_lock/src/parse/v3.rs
+index 2164a089..ee8b2944 100644
+--- a/crates/rattler_lock/src/parse/v3.rs
++++ b/crates/rattler_lock/src/parse/v3.rs
+@@ -216,6 +216,7 @@ pub fn parse_v3_or_lower(
+                         requires_dist: pkg.requires_dist,
+                         requires_python: pkg.requires_python,
+                         location: Verbatim::new(UrlOrPath::Url(pkg.url)),
++                        index: None, // V3 format doesn't have index information
+                         hash: pkg.hash,
+                     })
+                     .0;
+diff --git a/crates/rattler_lock/src/pypi.rs b/crates/rattler_lock/src/pypi.rs
+index 5fc66d00..765c9a02 100644
+--- a/crates/rattler_lock/src/pypi.rs
++++ b/crates/rattler_lock/src/pypi.rs
+@@ -18,6 +18,11 @@ pub struct PypiPackageData {
+     /// The location of the package. This can be a URL or a path.
+     pub location: Verbatim<UrlOrPath>,
+ 
++    /// The index URL from which this package was resolved.
++    /// This is used to differentiate packages with the same name/version
++    /// from different PyPI repositories.
++    pub index: Option<url::Url>,
++
+     /// Hashes of the file pointed to by `url`.
+     pub hash: Option<PackageHashes>,
+ 
+@@ -40,6 +45,7 @@ impl Ord for PypiPackageData {
+             .cmp(&other.name)
+             .then_with(|| self.version.cmp(&other.version))
+             .then_with(|| self.location.cmp(&other.location))
++            .then_with(|| self.index.as_ref().map(|u| u.as_str()).cmp(&other.index.as_ref().map(|u| u.as_str())))
+             .then_with(|| self.hash.cmp(&other.hash))
+     }
+ }
