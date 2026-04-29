@@ -4125,6 +4125,14 @@
       </td>
     </tr>
     <tr>
+      <td><code>PIXI_OVERRIDE_PLATFORM</code></td>
+      <td>
+        Overrides the detected host platform used to select and install environments.
+        Accepts any valid platform string (e.g. <code>linux-aarch64</code>, <code>osx-arm64</code>, <code>win-64</code>).
+      </td>
+      <td>Not set, pixi detects the current platform automatically.</td>
+    </tr>
+    <tr>
       <td><code>RATTLER_AUTH_FILE</code></td>
       <td>Overrides the default location of the credentials file. When set, this is the only source of authentication data used by pixi. See <a href="../../deployment/authentication/#override-the-authentication-storage">authentication docs</a> for the file format.</td>
       <td>
