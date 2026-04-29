@@ -1233,28 +1233,30 @@ pub async fn verify_platform_satisfiability(
                 resolved_records.push(PixiRecord::Binary(record))
             }
             UnresolvedPixiRecord::Source(record) => {
-                let needs_backend_check = record.data.is_partial()
-                    || (record.has_mutable_source()
-                        && (!record.build_packages.is_empty() || !record.host_packages.is_empty()));
+                let needs_backend_check =
+                    record.data.is_partial() || record.has_mutable_source();
                 if needs_backend_check {
-                    // Either the record is partial (no version/build
-                    // material in the lockfile, must come from the
-                    // backend) or it is full+mutable AND carries
-                    // populated build/host packages we want to verify
-                    // against the backend's current declarations.
+                    // Partial records carry no version/build material in
+                    // the lockfile, so they must be resolved from the
+                    // backend. Mutable sources (path-based, or with a
+                    // path-based build source) must also re-evaluate via
+                    // the backend because the manifest can change without
+                    // any lockfile-visible signal — there is no
+                    // content-pinned identifier we can use to detect
+                    // edits to e.g. host-dependencies. Skipping the
+                    // backend here would silently accept stale lockfiles.
                     let resolved =
                         verify_partial_source_record_against_backend(ctx, &platform_setup, &record)
                             .await?;
                     resolved_records.push(PixiRecord::Source(resolved));
                 } else {
-                    // Either fully immutable, or full+mutable with no
-                    // recorded build/host envs (legacy lockfile shape).
-                    // In both cases we trust the locked metadata as-is:
-                    // there's nothing the backend would tell us that we
-                    // can't already read off the record. Reaching out to
-                    // the backend here would be expensive and would
-                    // force every legacy lockfile to require an
-                    // available backend just to pass satisfiability.
+                    // Fully immutable + full record: the source is
+                    // content-pinned (git commit / url+sha), so the
+                    // backend cannot tell us anything we can't already
+                    // read off the locked record. Trust the locked
+                    // metadata as-is and avoid contacting the backend
+                    // (which would otherwise require it to be available
+                    // just to pass satisfiability).
                     let full_record =
                         Arc::unwrap_or_clone(record).try_map_data(|data| match data {
                             SourceRecordData::Full(data) => Ok(data),
@@ -3242,48 +3244,45 @@ async fn verify_partial_source_record_against_backend(
             }))
         })?;
 
-    // Skip verification when the locked record carries no build/host
-    // package info. This is the case for lock files written before
-    // build/host packages were round-tripped: the lockfile-resolver
-    // produces empty `build_packages` / `host_packages` slices and we
-    // have nothing to check against the backend's declarations.
-    // Trusting the locked record here lets older lock files keep
-    // satisfying without an unconditional re-lock; once the user
-    // re-solves at least once on this branch, the populated build/host
-    // package sets will trigger the proper check on subsequent runs.
-    let has_locked_build_host_info =
-        !record.build_packages.is_empty() || !record.host_packages.is_empty();
-    if has_locked_build_host_info {
-        // Verify that every backend-declared build dep is satisfied by
-        // the locked build_packages, and same for host. Source-spec
-        // deps must map to a locked source record at a compatible
-        // location; PyPI shapes are rejected (impossible at the type
-        // level today, but the check guards against future shape
-        // additions).
-        let source_anchor =
-            SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
-        if let Some(build_deps) = matching_output.build_dependencies.as_ref() {
-            verify_locked_against_backend_specs(
-                build_deps,
-                &record.build_packages,
-                &platform_setup.channel_config,
-                &source_anchor,
-                &pkg_name,
-                BuildOrHostEnv::Build,
-            )
-            .map_err(CommandDispatcherError::Failed)?;
-        }
-        if let Some(host_deps) = matching_output.host_dependencies.as_ref() {
-            verify_locked_against_backend_specs(
-                host_deps,
-                &record.host_packages,
-                &platform_setup.channel_config,
-                &source_anchor,
-                &pkg_name,
-                BuildOrHostEnv::Host,
-            )
-            .map_err(CommandDispatcherError::Failed)?;
-        }
+    // Verify that every backend-declared build dep is satisfied by the
+    // locked build_packages, and same for host. Source-spec deps must
+    // map to a locked source record at a compatible location; PyPI
+    // shapes are rejected (impossible at the type level today, but the
+    // check guards against future shape additions).
+    //
+    // Empty `record.build_packages` / `record.host_packages` is not a
+    // pass: it just means every backend-declared spec has nothing to
+    // satisfy it, so verification fails and a re-lock is forced. This
+    // is intentional. Lock files written before build/host packages
+    // were round-tripped carry empty slices regardless of what the
+    // backend actually declares, and for mutable sources (the only
+    // shape that reaches this code path) we cannot tell whether those
+    // empty slices reflect the truth or a stale snapshot. Forcing one
+    // re-lock populates the canonical slices so subsequent runs hit
+    // the fast verification path.
+    let source_anchor =
+        SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
+    if let Some(build_deps) = matching_output.build_dependencies.as_ref() {
+        verify_locked_against_backend_specs(
+            build_deps,
+            &record.build_packages,
+            &platform_setup.channel_config,
+            &source_anchor,
+            &pkg_name,
+            BuildOrHostEnv::Build,
+        )
+        .map_err(CommandDispatcherError::Failed)?;
+    }
+    if let Some(host_deps) = matching_output.host_dependencies.as_ref() {
+        verify_locked_against_backend_specs(
+            host_deps,
+            &record.host_packages,
+            &platform_setup.channel_config,
+            &source_anchor,
+            &pkg_name,
+            BuildOrHostEnv::Host,
+        )
+        .map_err(CommandDispatcherError::Failed)?;
     }
 
     // Synthesize a full record from the matching output. We use the
