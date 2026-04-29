@@ -53,7 +53,7 @@ pixi_pypi_spec = { workspace = true }
 pixi_python_status = { workspace = true }
 pixi_record = { workspace = true }
 pixi_reporters = { workspace = true }
-pixi_spec = { workspace = true }
+pixi_spec = { workspace = true, features = ["pixi_build_types"] }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_context = { workspace = true }
 pixi_uv_conversions = { workspace = true }

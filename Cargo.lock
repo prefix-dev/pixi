@@ -6703,6 +6703,7 @@ dependencies = [
  "humantime",
  "insta",
  "itertools 0.14.0",
+ "pixi_build_types",
  "pixi_consts",
  "pixi_git",
  "pixi_path",

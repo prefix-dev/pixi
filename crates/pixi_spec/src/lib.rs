@@ -13,6 +13,7 @@ mod dev_source;
 mod exclude_newer;
 mod git;
 mod path;
+mod pin;
 mod source_anchor;
 mod subdirectory;
 mod toml;
@@ -26,6 +27,7 @@ pub use exclude_newer::{ExcludeNewer, ResolvedExcludeNewer};
 pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
+pub use pin::{Pin, PinBound, PinError, PinExpression};
 use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, MatchSpec, MatchSpecCondition, NamedChannelOrUrl,
     NamelessMatchSpec, PackageName, ParseChannelError, StringMatcher, VersionSpec,

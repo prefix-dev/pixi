@@ -56,7 +56,7 @@ pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
 pixi_path = { workspace = true }
 pixi_record = { workspace = true }
-pixi_spec = { workspace = true }
+pixi_spec = { workspace = true, features = ["pixi_build_types"] }
 pixi_spec_containers = { workspace = true }
 pixi_stable_hash = { workspace = true, features = ["serde_json"] }
 pixi_url = { workspace = true }

@@ -3290,6 +3290,7 @@ async fn verify_partial_source_record_against_backend(
         verify_locked_against_backend_specs(
             build_deps,
             &record.build_packages,
+            &[],
             &platform_setup.channel_config,
             &source_anchor,
             &pkg_name,
@@ -3301,6 +3302,7 @@ async fn verify_partial_source_record_against_backend(
         verify_locked_against_backend_specs(
             host_deps,
             &record.host_packages,
+            &record.build_packages,
             &platform_setup.channel_config,
             &source_anchor,
             &pkg_name,
@@ -3598,44 +3600,55 @@ fn format_variants(
         .join(", ")
 }
 
-/// Adapter around a slice of `UnresolvedPixiRecord` that exposes the
-/// "does any record satisfy this spec" predicates the satisfiability
-/// path uses. The same surface area is what the main-environment
-/// walker re-implements over `PixiRecordsByName` (for the
-/// already-resolved case): when that walker is one day rewritten to
-/// speak directly to `UnresolvedPixiRecord`, both call sites can
-/// share this view.
+/// Name-indexed view over a slice of `UnresolvedPixiRecord`. Three of
+/// the four queries the satisfiability path runs (`satisfies_binary`,
+/// `satisfies_source`, `find_package_record`) start by filtering on
+/// name, so we build the index once and let each query do an O(1)
+/// HashMap lookup followed by a per-candidate predicate.
+///
+/// The same surface area is what the main-environment walker
+/// re-implements over `PixiRecordsByName` (for the already-resolved
+/// case): when that walker is one day rewritten to speak directly to
+/// `UnresolvedPixiRecord`, both call sites can share this view.
 struct LockedConda<'a> {
-    records: &'a [pixi_record::UnresolvedPixiRecord],
+    /// Multiple records may share a name (different builds of the
+    /// same package), hence the `Vec`.
+    by_name: std::collections::HashMap<&'a PackageName, Vec<&'a pixi_record::UnresolvedPixiRecord>>,
 }
 
 impl<'a> LockedConda<'a> {
     fn new(records: &'a [pixi_record::UnresolvedPixiRecord]) -> Self {
-        Self { records }
+        let mut by_name: std::collections::HashMap<
+            &'a PackageName,
+            Vec<&'a pixi_record::UnresolvedPixiRecord>,
+        > = std::collections::HashMap::new();
+        for record in records {
+            by_name.entry(record.name()).or_default().push(record);
+        }
+        Self { by_name }
+    }
+
+    fn records_for(&self, name: &PackageName) -> &[&'a pixi_record::UnresolvedPixiRecord] {
+        self.by_name.get(name).map(Vec::as_slice).unwrap_or(&[])
     }
 
     /// Returns `true` if any locked record with `name` satisfies
     /// `spec` (matched against the record's `PackageRecord`).
     ///
     /// `NamelessMatchSpec` doesn't carry the package name, so the
-    /// caller's `name` is the source of truth: a record with a
-    /// different name is rejected even if its version satisfies the
-    /// spec contents.
+    /// caller's `name` is the source of truth.
     ///
     /// Locked partial source records match by name only: their
     /// version/build aren't materialized in the lockfile, but they
     /// will be re-evaluated when the solver runs, so accepting them
     /// here avoids spurious unsat for the deferred case.
     fn satisfies_binary(&self, name: &PackageName, spec: &NamelessMatchSpec) -> bool {
-        self.records.iter().any(|r| match r {
-            pixi_record::UnresolvedPixiRecord::Binary(b) => {
-                &b.package_record.name == name && spec.matches(b.as_ref())
-            }
-            pixi_record::UnresolvedPixiRecord::Source(s) if s.name() == name => match &s.data {
+        self.records_for(name).iter().any(|r| match r {
+            pixi_record::UnresolvedPixiRecord::Binary(b) => spec.matches(b.as_ref()),
+            pixi_record::UnresolvedPixiRecord::Source(s) => match &s.data {
                 SourceRecordData::Full(full) => spec.matches(&full.package_record),
                 SourceRecordData::Partial(_) => true,
             },
-            _ => false,
         })
     }
 
@@ -3643,20 +3656,25 @@ impl<'a> LockedConda<'a> {
     /// `name` has a pinned manifest source compatible with
     /// `location` (per [`PinnedSourceSpec::matches_source_spec`]).
     fn satisfies_source(&self, name: &PackageName, location: &SourceLocationSpec) -> bool {
-        self.records.iter().any(|r| match r {
+        self.records_for(name).iter().any(|r| match r {
             pixi_record::UnresolvedPixiRecord::Source(s) => {
-                s.name() == name && s.manifest_source.matches_source_spec(location)
+                s.manifest_source.matches_source_spec(location)
             }
             _ => false,
         })
     }
 
-    /// Returns `true` if any record (binary or source) carries the
-    /// given name. Used by the `pin_compatible` check, which only
-    /// requires the package's presence — the solver verifies the
-    /// resolved spec downstream.
-    fn contains_name(&self, name: &PackageName) -> bool {
-        self.records.iter().any(|r| r.name() == name)
+    /// Returns the resolved `PackageRecord` of the first locked record
+    /// whose name matches. Returns `None` for partial source records,
+    /// which carry no version/build material the satisfiability check
+    /// can apply `pin_compatible` against.
+    fn find_package_record(
+        &self,
+        name: &PackageName,
+    ) -> Option<&rattler_conda_types::PackageRecord> {
+        self.records_for(name)
+            .iter()
+            .find_map(|r| r.package_record())
     }
 }
 
@@ -3667,8 +3685,10 @@ impl<'a> LockedConda<'a> {
 ///   record whose `PackageRecord` matches.
 /// - `Source`: accept the first locked source record with the same
 ///   name whose pinned manifest source matches the resolved location.
-/// - `PinCompatible`: deferred to the deeper solve; here we accept as
-///   long as the named package is present.
+/// - `PinCompatible`: resolve the pin against `pin_compatible_locked`
+///   (the env that pin_compatible looks up — the build env when
+///   verifying host deps, empty when verifying build deps), then
+///   verify the resolved spec against `locked`.
 ///
 /// Returns `Box<PlatformUnsat>` directly so the caller can choose how
 /// to wrap (`CommandDispatcherError::Failed`, or propagated as part of
@@ -3676,6 +3696,7 @@ impl<'a> LockedConda<'a> {
 fn verify_locked_against_backend_specs(
     deps: &pixi_build_types::procedures::conda_outputs::CondaOutputDependencies,
     locked: &[pixi_record::UnresolvedPixiRecord],
+    pin_compatible_locked: &[pixi_record::UnresolvedPixiRecord],
     channel_config: &rattler_conda_types::ChannelConfig,
     source_anchor: &SourceAnchor,
     package: &PackageName,
@@ -3683,8 +3704,10 @@ fn verify_locked_against_backend_specs(
 ) -> Result<(), Box<PlatformUnsat>> {
     use pixi_build_types::PackageSpec;
     use pixi_command_dispatcher::build::conversion::{from_binary_spec_v1, from_source_spec_v1};
+    use pixi_spec::Pin;
 
     let locked_view = LockedConda::new(locked);
+    let pin_view = LockedConda::new(pin_compatible_locked);
     let unsat = |spec: String| -> Box<PlatformUnsat> {
         Box::new(PlatformUnsat::SourceBuildHostUnsat {
             package: package.as_source().to_string(),
@@ -3727,12 +3750,36 @@ fn verify_locked_against_backend_specs(
                     }));
                 }
             }
-            PackageSpec::PinCompatible(_) => {
-                // PinCompatible resolves to whatever ended up in the
-                // build/host env; if the named record is present, the
-                // deeper solver will verify the resolved spec downstream.
-                if !locked_view.contains_name(&dep_name) {
-                    return Err(unsat(format!("{} (pin_compatible)", dep_name.as_source())));
+            PackageSpec::PinCompatible(pin) => {
+                // pin_compatible's compatibility env is the build env
+                // when verifying host deps, and empty when verifying
+                // build deps; either way the resolved version comes
+                // from `pin_compatible_locked`, not `locked`.
+                let Some(pin_record) = pin_view.find_package_record(&dep_name) else {
+                    return Err(unsat(format!(
+                        "{} (pin_compatible: not resolved in build env)",
+                        dep_name.as_source()
+                    )));
+                };
+                let pin = Pin::try_from(pin.clone()).map_err(|err| {
+                    unsat(format!("{} (pin_compatible: {err})", dep_name.as_source()))
+                })?;
+                let resolved =
+                    pin.resolve(&pin_record.version, &pin_record.build).map_err(|err| {
+                        unsat(format!("{} (pin_compatible: {err})", dep_name.as_source()))
+                    })?;
+                let nameless = resolved
+                    .try_into_nameless_match_spec(channel_config)
+                    .map_err(|e| {
+                        failed_to_parse_match_spec_unsat(
+                            dep.name.as_str(),
+                            spec_conversion_to_match_spec_error(e),
+                        )
+                    })?
+                    .expect("pin_compatible always produces a binary spec");
+                if !locked_view.satisfies_binary(&dep_name, &nameless) {
+                    let match_spec = MatchSpec::from_nameless(nameless, dep_name.clone().into());
+                    return Err(unsat(format!("{match_spec} (pin_compatible)")));
                 }
             }
         }
@@ -4621,14 +4668,18 @@ mod tests {
         }
 
         fn pin_compatible_dep(name: &str) -> NamedSpec<PackageSpec> {
+            pin_compatible_dep_with(name, PinCompatibleSpec {
+                lower_bound: None,
+                upper_bound: None,
+                exact: false,
+                build: None,
+            })
+        }
+
+        fn pin_compatible_dep_with(name: &str, spec: PinCompatibleSpec) -> NamedSpec<PackageSpec> {
             NamedSpec {
                 name: SourcePackageName::from(PackageName::from_str(name).expect("valid name")),
-                spec: PackageSpec::PinCompatible(PinCompatibleSpec {
-                    lower_bound: None,
-                    upper_bound: None,
-                    exact: false,
-                    build: None,
-                }),
+                spec: PackageSpec::PinCompatible(spec),
             }
         }
 
@@ -4738,6 +4789,7 @@ mod tests {
             let result = verify_locked_against_backend_specs(
                 &deps,
                 &locked,
+                &[],
                 &CHANNEL_CONFIG,
                 &anchor,
                 &PackageName::from_str("pkg").unwrap(),
@@ -4766,6 +4818,7 @@ mod tests {
             let err = verify_locked_against_backend_specs(
                 &deps,
                 &locked,
+                &[],
                 &CHANNEL_CONFIG,
                 &anchor,
                 &PackageName::from_str("pkg").unwrap(),
@@ -4807,6 +4860,7 @@ mod tests {
             let err = verify_locked_against_backend_specs(
                 &deps,
                 &locked,
+                &[],
                 &CHANNEL_CONFIG,
                 &anchor,
                 &PackageName::from_str("pkg").unwrap(),
@@ -4840,6 +4894,7 @@ mod tests {
             let err = verify_locked_against_backend_specs(
                 &deps,
                 &locked,
+                &[],
                 &CHANNEL_CONFIG,
                 &anchor,
                 &PackageName::from_str("pkg").unwrap(),
@@ -4880,28 +4935,61 @@ mod tests {
             assert_eq!(full.manifest_source, partial.manifest_source);
         }
 
-        /// `pin_compatible(foo)` in *host* dependencies pins to the
-        /// version of `foo` resolved in the *build* environment, so a
-        /// stale lock where the build env has no `foo` is impossible
-        /// to satisfy: the next solve would fail with
-        /// `PinCompatibleError::PackageNotFound`.
-        ///
-        /// This test sets up exactly that situation: backend declares
-        /// `pin_compatible(numpy)` in host_dependencies, locked
-        /// build_packages is empty, locked host_packages happens to
-        /// carry a `numpy` record (e.g. pulled in by an unrelated dep
-        /// in a prior solve). The verifier should reject the lock.
-        ///
-        /// Currently it accepts: `verify_locked_against_backend_specs`
-        /// only receives the *host* slice, and its `contains_name`
-        /// check finds `numpy` there. Fixing this requires the
-        /// function to also receive the env that `pin_compatible`
-        /// resolves against (the build slice for host deps), and to
-        /// run the `contains_name` check against that slice instead.
+        /// `pin_compatible(foo)` in *host* dependencies pins against
+        /// the version of `foo` resolved in the *build* environment.
+        /// If the locked build env has no `foo`, no re-solve can
+        /// succeed (the resolver would fail with
+        /// `PinCompatibleError::PackageNotFound`), so the lock must
+        /// be rejected even when the host env happens to carry a
+        /// `foo` from another dep.
         #[test]
-        #[ignore = "demonstrates pin_compatible bug: host pin_compatible must check build_packages, not host_packages"]
-        fn pin_compatible_host_dep_resolves_against_build_env() {
+        fn pin_compatible_host_dep_rejects_when_build_lacks_package() {
             let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
+                Arc::new(make_binary_record("numpy", "1.5")),
+            )];
+            let build_locked: Vec<UnresolvedPixiRecord> = Vec::new();
+
+            let host_deps = CondaOutputDependencies {
+                depends: vec![pin_compatible_dep("numpy")],
+                constraints: Vec::new(),
+            };
+            let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
+                PinnedPathSpec {
+                    path: "./pkg".into(),
+                },
+            )));
+
+            let err = verify_locked_against_backend_specs(
+                &host_deps,
+                &host_locked,
+                &build_locked,
+                &CHANNEL_CONFIG,
+                &anchor,
+                &PackageName::from_str("pkg").unwrap(),
+                BuildOrHostEnv::Host,
+            )
+            .expect_err(
+                "pin_compatible(numpy) must resolve against the (empty) build env, \
+                 not the host env that happens to contain numpy",
+            );
+            assert!(
+                matches!(
+                    *err,
+                    super::super::PlatformUnsat::SourceBuildHostUnsat { .. }
+                ),
+                "expected SourceBuildHostUnsat, got: {err}"
+            );
+        }
+
+        /// Happy path: locked build env has `numpy 1.5`, locked host
+        /// env also has `numpy 1.5`, host dep is `pin_compatible(numpy)`
+        /// with no bounds (resolves to `*`). Verification passes.
+        #[test]
+        fn pin_compatible_host_dep_satisfied() {
+            let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
+                Arc::new(make_binary_record("numpy", "1.5")),
+            )];
+            let build_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
                 Arc::new(make_binary_record("numpy", "1.5")),
             )];
 
@@ -4918,19 +5006,68 @@ mod tests {
             let result = verify_locked_against_backend_specs(
                 &host_deps,
                 &host_locked,
+                &build_locked,
                 &CHANNEL_CONFIG,
                 &anchor,
                 &PackageName::from_str("pkg").unwrap(),
                 BuildOrHostEnv::Host,
             );
+            assert!(result.is_ok(), "verification should pass: {result:?}");
+        }
 
+        /// Resolution-then-verification: build env has `numpy 2.0`, the
+        /// pin is `exact=true`, and host env still carries `numpy 1.5`
+        /// from before the user bumped the build env. The resolved
+        /// spec is `numpy ==2.0`, which the locked host record does
+        /// not satisfy.
+        #[test]
+        fn pin_compatible_host_dep_rejects_version_drift() {
+            use pixi_build_types::PinCompatibleSpec;
+
+            let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
+                Arc::new(make_binary_record("numpy", "1.5")),
+            )];
+            let build_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
+                Arc::new(make_binary_record("numpy", "2.0")),
+            )];
+
+            let host_deps = CondaOutputDependencies {
+                depends: vec![pin_compatible_dep_with(
+                    "numpy",
+                    PinCompatibleSpec {
+                        lower_bound: None,
+                        upper_bound: None,
+                        exact: true,
+                        build: None,
+                    },
+                )],
+                constraints: Vec::new(),
+            };
+            let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
+                PinnedPathSpec {
+                    path: "./pkg".into(),
+                },
+            )));
+
+            let err = verify_locked_against_backend_specs(
+                &host_deps,
+                &host_locked,
+                &build_locked,
+                &CHANNEL_CONFIG,
+                &anchor,
+                &PackageName::from_str("pkg").unwrap(),
+                BuildOrHostEnv::Host,
+            )
+            .expect_err(
+                "host's locked numpy 1.5 cannot satisfy pin_compatible(numpy, exact) \
+                 against build's numpy 2.0",
+            );
             assert!(
-                result.is_err(),
-                "pin_compatible(numpy) in host deps must resolve against the \
-                 build env (which is empty here), not the host env where numpy \
-                 happens to be present. The current implementation silently \
-                 accepts this stale lock; a re-solve would fail with \
-                 PinCompatibleError::PackageNotFound."
+                matches!(
+                    *err,
+                    super::super::PlatformUnsat::SourceBuildHostUnsat { .. }
+                ),
+                "expected SourceBuildHostUnsat, got: {err}"
             );
         }
 
