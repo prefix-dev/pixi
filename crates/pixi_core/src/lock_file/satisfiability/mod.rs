@@ -4959,5 +4959,209 @@ mod tests {
                  PinCompatibleError::PackageNotFound."
             );
         }
+
+        // -- Unit tests for run-dependency / run-constraint drift -----------
+
+        use super::super::{
+            SourceRunDepKind, diff_multisets, verify_locked_run_deps_against_backend,
+        };
+        use pixi_record::FullSourceRecordData;
+
+        #[test]
+        fn diff_multisets_passes_when_equal() {
+            let result = diff_multisets(
+                &["a >=1".to_string(), "b ==2".to_string()],
+                &["b ==2".to_string(), "a >=1".to_string()],
+            );
+            assert!(result.is_ok(), "order should not matter: {result:?}");
+        }
+
+        #[test]
+        fn diff_multisets_reports_only_addition() {
+            let (added, removed) = diff_multisets(
+                &["a >=1".to_string()],
+                &["a >=1".to_string(), "b ==2".to_string()],
+            )
+            .expect_err("expected drift");
+            assert_eq!(added, vec!["b ==2".to_string()]);
+            assert!(removed.is_empty());
+        }
+
+        #[test]
+        fn diff_multisets_reports_only_removal() {
+            let (added, removed) = diff_multisets(
+                &["a >=1".to_string(), "b ==2".to_string()],
+                &["a >=1".to_string()],
+            )
+            .expect_err("expected drift");
+            assert!(added.is_empty());
+            assert_eq!(removed, vec!["b ==2".to_string()]);
+        }
+
+        #[test]
+        fn diff_multisets_reports_both_directions() {
+            let (added, removed) = diff_multisets(
+                &["a >=1".to_string(), "b ==2".to_string()],
+                &["a >=1".to_string(), "c <=3".to_string()],
+            )
+            .expect_err("expected drift");
+            assert_eq!(added, vec!["c <=3".to_string()]);
+            assert_eq!(removed, vec!["b ==2".to_string()]);
+        }
+
+        #[test]
+        fn diff_multisets_treats_duplicates_as_distinct() {
+            // Locked carries the same spec twice but the expected set
+            // only carries it once; the extra copy must surface as a
+            // removal.
+            let (added, removed) = diff_multisets(
+                &["a >=1".to_string(), "a >=1".to_string()],
+                &["a >=1".to_string()],
+            )
+            .expect_err("expected drift");
+            assert!(added.is_empty());
+            assert_eq!(removed, vec!["a >=1".to_string()]);
+        }
+
+        /// Build a Full source record with the supplied `depends` and
+        /// `constrains` strings. Build/host packages are empty, which
+        /// is enough for the constrains-only test cases below.
+        fn make_full_source_record(
+            name: &str,
+            depends: Vec<String>,
+            constrains: Vec<String>,
+        ) -> UnresolvedSourceRecord {
+            let pkg_name = PackageName::from_str(name).unwrap();
+            let mut pr = PackageRecord::new(
+                pkg_name.clone(),
+                "1.0.0".parse::<rattler_conda_types::VersionWithSource>().unwrap(),
+                "h0_0".into(),
+            );
+            pr.subdir = "linux-64".into();
+            pr.depends = depends;
+            pr.constrains = constrains;
+            UnresolvedSourceRecord {
+                data: SourceRecordData::Full(FullSourceRecordData {
+                    package_record: pr,
+                    sources: Default::default(),
+                }),
+                manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
+                    path: "./pkg".into(),
+                }),
+                build_source: None,
+                variants: Default::default(),
+                identifier_hash: None,
+                build_packages: Vec::new(),
+                host_packages: Vec::new(),
+            }
+        }
+
+        /// Helper to build a `CondaOutput` whose `run_dependencies` has
+        /// the given `depends` and `constraints`. Other fields default
+        /// to empty.
+        fn make_conda_output_with_run_deps(
+            name: &str,
+            depends: Vec<NamedSpec<PackageSpec>>,
+            constraints: Vec<NamedSpec<pixi_build_types::ConstraintSpec>>,
+        ) -> CondaOutput {
+            let mut output = make_conda_output(name, Vec::new());
+            output.build_dependencies = None;
+            output.run_dependencies = CondaOutputDependencies {
+                depends,
+                constraints,
+            };
+            output
+        }
+
+        fn binary_constraint(
+            name: &str,
+            spec_str: &str,
+        ) -> NamedSpec<pixi_build_types::ConstraintSpec> {
+            NamedSpec {
+                name: SourcePackageName::from(PackageName::from_str(name).unwrap()),
+                spec: pixi_build_types::ConstraintSpec::Binary(BinaryPackageSpec {
+                    version: Some(
+                        VersionSpec::from_str(
+                            spec_str,
+                            rattler_conda_types::ParseStrictness::Lenient,
+                        )
+                        .unwrap(),
+                    ),
+                    ..Default::default()
+                }),
+            }
+        }
+
+        #[test]
+        fn verify_locked_run_deps_passes_when_match() {
+            // Backend declares run_deps `numpy >=1` and constrains
+            // `openssl ==3.0`; locked record has the same. No drift.
+            let record = make_full_source_record(
+                "pkg",
+                vec!["numpy >=1".to_string()],
+                vec!["openssl ==3.0".to_string()],
+            );
+            let output = make_conda_output_with_run_deps(
+                "pkg",
+                vec![binary_dep("numpy", ">=1")],
+                vec![binary_constraint("openssl", "==3.0")],
+            );
+
+            let result =
+                verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+            assert!(result.is_ok(), "expected no drift: {result:?}");
+        }
+
+        #[test]
+        fn verify_locked_run_deps_detects_constrain_addition() {
+            // Backend declares a new constrain `bar <2` that the locked
+            // record does not carry. Drift surfaces with `kind =
+            // RunConstrains` and `added = ["bar <2"]`.
+            let record = make_full_source_record("pkg", Vec::new(), Vec::new());
+            let output = make_conda_output_with_run_deps(
+                "pkg",
+                Vec::new(),
+                vec![binary_constraint("bar", "<2")],
+            );
+
+            let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+                .expect_err("backend declared a new constraint, locked has none");
+            match *err {
+                super::super::PlatformUnsat::SourceRunDependenciesChanged {
+                    kind: SourceRunDepKind::RunConstrains,
+                    added,
+                    removed,
+                    ..
+                } => {
+                    assert_eq!(added, vec!["bar <2".to_string()]);
+                    assert!(removed.is_empty());
+                }
+                other => panic!("expected RunConstrains drift, got: {other}"),
+            }
+        }
+
+        #[test]
+        fn verify_locked_run_deps_detects_constrain_removal() {
+            // Locked record carries a constrain that the backend no
+            // longer declares. Drift surfaces with `removed`.
+            let record =
+                make_full_source_record("pkg", Vec::new(), vec!["bar <2".to_string()]);
+            let output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
+
+            let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+                .expect_err("backend dropped a constraint that's still locked");
+            match *err {
+                super::super::PlatformUnsat::SourceRunDependenciesChanged {
+                    kind: SourceRunDepKind::RunConstrains,
+                    added,
+                    removed,
+                    ..
+                } => {
+                    assert!(added.is_empty());
+                    assert_eq!(removed, vec!["bar <2".to_string()]);
+                }
+                other => panic!("expected RunConstrains drift, got: {other}"),
+            }
+        }
     }
 }
