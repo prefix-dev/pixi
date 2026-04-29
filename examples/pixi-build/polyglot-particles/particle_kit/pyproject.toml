@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "particle_kit"
+version = "0.1.0"
+description = "High-level Python kit that ties the polyglot particle packages together"
+requires-python = ">=3.11"
+
+[tool.pixi.package.build.backend]
+name = "pixi-build-python"
+version = "0.4.*"
+channels = ["https://prefix.dev/conda-forge"]
+
+[tool.pixi.package.host-dependencies]
+hatchling = ">=1.27,<2.0"
+python = ">=3.11"
+
+[tool.pixi.package.run-dependencies]
+python = ">=3.11"
+particle_cpp_py = { path = "../particle_cpp_py" }
+particle_rs = { path = "../particle_rs" }
+particle_view = { path = "../particle_view" }
