@@ -1396,6 +1396,109 @@ dep-a = ">=1.0"
     );
 }
 
+/// Removing a host-dependency that contributes a `weak_constrains`
+/// run-export must invalidate the lock-file, even though pixi's manifest
+/// schema doesn't currently expose `[package.run-constraints]` directly.
+///
+/// The locked source record's `constrains` field is the union of any
+/// manifest-declared run-constraints (none today) and `weak_constrains`
+/// contributed by host packages' run-exports. Dropping the host-dep
+/// removes the run-export contribution, so the freshly-derived expected
+/// `constrains` shrinks to empty while the locked record still carries
+/// the run-export-derived spec. The drift detector must catch that.
+///
+/// This is the integration mirror of the unit-level
+/// `verify_locked_run_deps_detects_constrain_removal` test: same shape
+/// of drift, but driven through the real backend / build / lockfile
+/// pipeline instead of synthesised inputs.
+#[tokio::test]
+async fn test_host_run_export_constraint_removal_invalidates_lock_file() {
+    setup_tracing();
+
+    // Channel hosts `libfoo`; its `weak_constrains` run-export adds
+    // `bar <2` to the run-time constraints of any package that has
+    // `libfoo` in its host env.
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("libfoo", "1.0.0")
+            .with_run_exports(RunExportsJson {
+                weak_constrains: vec!["bar <2".to_string()],
+                ..Default::default()
+            })
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Source package starts with `libfoo` as a host dep so the build
+    // pipeline applies its weak_constrains to the built record's
+    // `constrains`.
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let initial_source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "passthrough", version = "*" }
+
+[package.host-dependencies]
+libfoo = "*"
+"#;
+    fs::write(source_dir.join("pixi.toml"), initial_source_manifest).unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("initial lock-file generation should succeed");
+    assert!(was_updated, "initial solve must create the lock-file");
+
+    // Drop the host-dependency. The backend now declares no host deps,
+    // so no run-export contributes to the built record's `constrains`,
+    // but the locked record still carries `bar <2` from the previous
+    // solve.
+    let updated_source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "passthrough", version = "*" }
+"#;
+    fs::write(source_dir.join("pixi.toml"), updated_source_manifest).unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated_after_drop) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("second lock-file check should succeed");
+    assert!(
+        was_updated_after_drop,
+        "removing a host-dep that contributed a weak_constrains run-export must invalidate the lock-file",
+    );
+}
+
 /// Test that verifies changing `[package.build.config]` invalidates the metadata cache
 /// and causes the build backend to be re-queried.
 ///

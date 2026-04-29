@@ -3409,45 +3409,50 @@ fn verify_locked_run_deps_against_backend(
         );
 
     // Stringify both halves with the same pipeline that produces
-    // locked.depends / locked.constrains at solve time, then compare
-    // as multisets. No `MatchSpec::from_str` on the locked side.
-    let expected_depends = stringify_pixi_dep_map(&assembled, channel_config, |d| {
-        d.dependencies
-            .clone()
-            .into_specs()
-            .map(|(name, withspec)| (name, withspec.value))
-    })?;
-    diff_dep_sequences(record.depends(), &expected_depends).map_err(|diff| {
-        Box::new(PlatformUnsat::SourceRunDependenciesChanged {
-            package: record.name().as_source().to_string(),
-            kind: SourceRunDepKind::RunDepends,
-            added: diff.added,
-            removed: diff.removed,
-            reordered: diff.reordered,
-            locked: diff.locked,
-            expected: diff.expected,
+    // `locked.depends` / `locked.constrains` at solve time, then
+    // compare as ordered sequences (no `MatchSpec::from_str` on the
+    // locked side, and a reorder is real drift since `DependencyMap`
+    // iteration is the source of locked order).
+    let expected_depends = assembled
+        .dependencies
+        .iter_specs()
+        .map(|(name, withspec)| {
+            withspec
+                .value
+                .clone()
+                .to_match_spec(name, channel_config)
+                .map(|m| m.to_string())
+                .map_err(|err| spec_unsat(name, &err))
         })
-    })?;
+        .collect::<Result<Vec<_>, _>>()?;
+    diff_dep_sequences(record.depends(), &expected_depends)
+        .map_err(|diff| diff.into_unsat(record.name(), SourceRunDepKind::RunDepends))?;
 
-    let expected_constrains = stringify_binary_dep_map(&assembled, channel_config, |d| {
-        d.constraints
-            .clone()
-            .into_specs()
-            .map(|(name, withspec)| (name, withspec.value))
-    })?;
-    diff_dep_sequences(record.constrains(), &expected_constrains).map_err(|diff| {
-        Box::new(PlatformUnsat::SourceRunDependenciesChanged {
-            package: record.name().as_source().to_string(),
-            kind: SourceRunDepKind::RunConstrains,
-            added: diff.added,
-            removed: diff.removed,
-            reordered: diff.reordered,
-            locked: diff.locked,
-            expected: diff.expected,
+    let expected_constrains = assembled
+        .constraints
+        .iter_specs()
+        .map(|(name, withspec)| {
+            withspec
+                .value
+                .clone()
+                .to_match_spec(name, channel_config)
+                .map(|m| m.to_string())
+                .map_err(|err| spec_unsat(name, &err))
         })
-    })?;
+        .collect::<Result<Vec<_>, _>>()?;
+    diff_dep_sequences(record.constrains(), &expected_constrains)
+        .map_err(|diff| diff.into_unsat(record.name(), SourceRunDepKind::RunConstrains))?;
 
     Ok(())
+}
+
+/// Build a `SourcePackageMetadataChanged` unsat from a per-spec
+/// conversion error, so the spec stringify call sites stay one-liners.
+fn spec_unsat(name: &PackageName, err: &SpecConversionError) -> Box<PlatformUnsat> {
+    Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+        name.as_source().to_string(),
+        err.to_string(),
+    ))
 }
 
 /// Drop unresolvable partial source records and clone the rest into a
@@ -3502,61 +3507,6 @@ fn collect_direct_run_exports(
     out
 }
 
-/// Stringify a `(PackageName, PixiSpec)` projection of a [`Dependencies`]
-/// into the same `Vec<String>` shape the solve path produces for
-/// `depends`. Source-typed specs round-trip through
-/// [`PixiSpec::to_match_spec`] just like at solve time, so locked
-/// entries with relative paths / git revs match byte-for-byte.
-fn stringify_pixi_dep_map<F, I>(
-    deps: &Dependencies,
-    channel_config: &rattler_conda_types::ChannelConfig,
-    project: F,
-) -> Result<Vec<String>, Box<PlatformUnsat>>
-where
-    F: FnOnce(&Dependencies) -> I,
-    I: IntoIterator<Item = (PackageName, PixiSpec)>,
-{
-    project(deps)
-        .into_iter()
-        .map(|(name, spec)| {
-            spec.to_match_spec(&name, channel_config)
-                .map(|m| m.to_string())
-                .map_err(|err| {
-                    Box::new(PlatformUnsat::SourcePackageMetadataChanged(
-                        name.as_source().to_string(),
-                        err.to_string(),
-                    ))
-                })
-        })
-        .collect()
-}
-
-/// Stringify a `(PackageName, BinarySpec)` projection of a
-/// [`Dependencies`] (used for `constrains`).
-fn stringify_binary_dep_map<F, I>(
-    deps: &Dependencies,
-    channel_config: &rattler_conda_types::ChannelConfig,
-    project: F,
-) -> Result<Vec<String>, Box<PlatformUnsat>>
-where
-    F: FnOnce(&Dependencies) -> I,
-    I: IntoIterator<Item = (PackageName, pixi_spec::BinarySpec)>,
-{
-    project(deps)
-        .into_iter()
-        .map(|(name, spec)| {
-            spec.to_match_spec(&name, channel_config)
-                .map(|m| m.to_string())
-                .map_err(|err| {
-                    Box::new(PlatformUnsat::SourcePackageMetadataChanged(
-                        name.as_source().to_string(),
-                        err.to_string(),
-                    ))
-                })
-        })
-        .collect()
-}
-
 /// Compare two `Vec<String>` as ordered sequences. The locked record's
 /// `depends`/`constrains` are produced by iterating a `DependencyMap`
 /// at solve time, so a re-derivation that lands on the same specs but
@@ -3564,8 +3514,8 @@ where
 ///
 /// On mismatch the function returns a [`DepDiff`] carrying the
 /// symmetric multiset difference (the common case: a spec was added or
-/// removed) plus a `reordered` flag for the rarer case where the sets
-/// agree but the sequences don't.
+/// removed) plus a [`DepDiffReorder`] payload for the rarer case where
+/// the sets agree but the sequences don't.
 fn diff_dep_sequences(locked: &[String], expected: &[String]) -> Result<(), DepDiff> {
     if locked == expected {
         return Ok(());
@@ -3592,32 +3542,63 @@ fn diff_dep_sequences(locked: &[String], expected: &[String]) -> Result<(), DepD
     }
     added.sort();
     removed.sort();
-    let reordered = added.is_empty() && removed.is_empty();
+    // Only clone the full sequences when the diagnostic actually needs
+    // them: a reorder-only mismatch must show both sides for the user,
+    // but a normal add/remove diff already names the offending specs.
+    let reorder = (added.is_empty() && removed.is_empty()).then(|| DepDiffReorder {
+        locked: locked.to_vec(),
+        expected: expected.to_vec(),
+    });
     Err(DepDiff {
         added,
         removed,
-        reordered,
-        locked: locked.to_vec(),
-        expected: expected.to_vec(),
+        reorder,
     })
 }
 
 /// Symmetric diff between locked and re-derived dependency sequences.
-/// Carries enough information to populate
-/// [`PlatformUnsat::SourceRunDependenciesChanged`] without re-walking
-/// either sequence.
+/// `added` / `removed` cover the common manifest-edit cases; `reorder`
+/// is only populated when the sets are equal but the order differs.
 #[derive(Debug)]
 struct DepDiff {
     /// Specs the backend now declares but the lockfile lacks.
     added: Vec<String>,
     /// Specs the lockfile carries but the backend no longer declares.
     removed: Vec<String>,
-    /// `true` when the sets are equal but the sequences are not.
-    reordered: bool,
-    /// Locked sequence, retained for diagnostic output.
+    /// `Some` only when `added` and `removed` are both empty: the sets
+    /// agree but the sequences don't, so the renderer needs both
+    /// sequences to show the user.
+    reorder: Option<DepDiffReorder>,
+}
+
+/// Locked vs re-derived sequences for a reorder-only mismatch. Allocated
+/// only when the diff is purely a reordering, so the common add/remove
+/// path doesn't pay for two unused `Vec<String>` clones.
+#[derive(Debug)]
+struct DepDiffReorder {
     locked: Vec<String>,
-    /// Expected sequence, retained for diagnostic output.
     expected: Vec<String>,
+}
+
+impl DepDiff {
+    /// Convert the diff into the `PlatformUnsat` variant. Splits the
+    /// `reorder` payload into `(reordered, locked, expected)` so the
+    /// variant's flat field shape stays unchanged.
+    fn into_unsat(self, package: &PackageName, kind: SourceRunDepKind) -> Box<PlatformUnsat> {
+        let (reordered, locked, expected) = match self.reorder {
+            Some(r) => (true, r.locked, r.expected),
+            None => (false, Vec::new(), Vec::new()),
+        };
+        Box::new(PlatformUnsat::SourceRunDependenciesChanged {
+            package: package.as_source().to_string(),
+            kind,
+            added: self.added,
+            removed: self.removed,
+            reordered,
+            locked,
+            expected,
+        })
+    }
 }
 
 /// Compare a locked record's variants (`pixi_record::VariantValue`)
@@ -5024,12 +5005,18 @@ mod tests {
                 &["b ==2".to_string(), "a >=1".to_string()],
             )
             .expect_err("reorder must surface as drift");
-            assert!(diff.reordered, "should be flagged as reordered");
+            let reorder = diff
+                .reorder
+                .as_ref()
+                .expect("should be flagged as reordered");
             assert!(diff.added.is_empty());
             assert!(diff.removed.is_empty());
-            assert_eq!(diff.locked, vec!["a >=1".to_string(), "b ==2".to_string()]);
             assert_eq!(
-                diff.expected,
+                reorder.locked,
+                vec!["a >=1".to_string(), "b ==2".to_string()]
+            );
+            assert_eq!(
+                reorder.expected,
                 vec!["b ==2".to_string(), "a >=1".to_string()]
             );
         }
@@ -5043,7 +5030,7 @@ mod tests {
             .expect_err("expected drift");
             assert_eq!(diff.added, vec!["b ==2".to_string()]);
             assert!(diff.removed.is_empty());
-            assert!(!diff.reordered);
+            assert!(diff.reorder.is_none());
         }
 
         #[test]
@@ -5055,7 +5042,7 @@ mod tests {
             .expect_err("expected drift");
             assert!(diff.added.is_empty());
             assert_eq!(diff.removed, vec!["b ==2".to_string()]);
-            assert!(!diff.reordered);
+            assert!(diff.reorder.is_none());
         }
 
         #[test]
@@ -5067,7 +5054,7 @@ mod tests {
             .expect_err("expected drift");
             assert_eq!(diff.added, vec!["c <=3".to_string()]);
             assert_eq!(diff.removed, vec!["b ==2".to_string()]);
-            assert!(!diff.reordered);
+            assert!(diff.reorder.is_none());
         }
 
         #[test]
@@ -5082,7 +5069,7 @@ mod tests {
             .expect_err("expected drift");
             assert!(diff.added.is_empty());
             assert_eq!(diff.removed, vec!["a >=1".to_string()]);
-            assert!(!diff.reordered);
+            assert!(diff.reorder.is_none());
         }
 
         /// Build a Full source record with the supplied `depends` and
