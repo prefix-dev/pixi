@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, path::Path, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc};
 
 use pixi_command_dispatcher::{
     CommandDispatcher, CommandDispatcherError, ComputeResultExt, EnvironmentRef,
@@ -27,7 +27,6 @@ pub async fn reify_legacy_source_envs(
     records: &mut [UnresolvedPixiRecord],
     lock_file_version: FileFormatVersion,
     workspace_env_ref: &WorkspaceEnvRef,
-    workspace_root: &Path,
 ) -> Result<(), CommandDispatcherError<LegacySourceEnvError>> {
     if lock_file_version >= FileFormatVersion::V7 {
         return Ok(());
@@ -68,7 +67,6 @@ pub async fn reify_legacy_source_envs(
     let installed_source_hints = PtrArc::<InstalledSourceHints>::default();
 
     let env_ref = EnvironmentRef::Workspace(workspace_env_ref.clone());
-    let workspace_root = Arc::new(workspace_root.to_path_buf());
 
     // Build one Key per source record, then dispatch all of them in
     // parallel inside a single `with_ctx` scope. Sharing a scope keeps
@@ -89,7 +87,6 @@ pub async fn reify_legacy_source_envs(
                 env_ref: env_ref.clone(),
                 preferred_build_source: pin_overrides.clone(),
                 installed_source_hints: installed_source_hints.clone(),
-                workspace_root: workspace_root.clone(),
             }
         })
         .collect();

@@ -1,5 +1,4 @@
-//! On-disk cache for [`LegacySourceEnv`] results, scoped to a single
-//! workspace under `.pixi/legacy-source-env/`.
+//! On-disk cache for [`LegacySourceEnv`] results.
 //!
 //! Each entry is a JSON file named after a stable hash of the inputs
 //! that affect correctness of the underlying
@@ -7,6 +6,11 @@
 //! dispatch. Cache files round-trip the full transitive
 //! `build_packages` / `host_packages` tree, so a cache hit avoids both
 //! the build-backend metadata fetch and any nested solves.
+//!
+//! The cache directory is supplied by the dispatcher's [`CacheDirs`]
+//! (see [`CacheDirs::legacy_source_env`]), so workspace, root-only,
+//! and test-tempdir layouts all funnel through the same configuration
+//! used by the rest of the build pipeline.
 //!
 //! The cache is best-effort: read errors, parse errors, and write
 //! errors are logged at trace level and treated as cache misses.
@@ -16,6 +20,9 @@
 //!
 //! The file format embeds a `schema_version` field; bumps invalidate
 //! older entries (they fail to parse and we recompute).
+//!
+//! [`CacheDirs`]: pixi_command_dispatcher::CacheDirs
+//! [`CacheDirs::legacy_source_env`]: pixi_command_dispatcher::CacheDirs::legacy_source_env
 
 use std::{
     collections::BTreeMap,
@@ -35,9 +42,6 @@ use super::key::LegacySourceEnv;
 /// Bumped on any incompatible change to the on-disk format. Older
 /// entries fail to parse and are treated as cache misses.
 const CACHE_SCHEMA_VERSION: u32 = 1;
-
-/// Cache directory, relative to the workspace root.
-const CACHE_DIRNAME: &str = ".pixi/legacy-source-env";
 
 /// On-disk shape for a cached [`LegacySourceEnv`].
 #[derive(Serialize, Deserialize)]
@@ -116,11 +120,9 @@ fn from_wire_source(wire: WireSource) -> UnresolvedSourceRecord {
     }
 }
 
-/// Path to the cache file for a given workspace + key hash.
-pub(super) fn cache_file_path(workspace_root: &Path, key_hash: u64) -> PathBuf {
-    workspace_root
-        .join(CACHE_DIRNAME)
-        .join(format!("{key_hash:016x}.json"))
+/// Path to the cache file for a given cache directory + key hash.
+pub(super) fn cache_file_path(cache_dir: &Path, key_hash: u64) -> PathBuf {
+    cache_dir.join(format!("{key_hash:016x}.json"))
 }
 
 /// Try to load a cached [`LegacySourceEnv`] from disk. Returns `None`

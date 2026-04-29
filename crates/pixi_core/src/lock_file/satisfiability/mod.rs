@@ -1236,7 +1236,6 @@ pub async fn verify_platform_satisfiability(
         &mut unresolved_records,
         locked_environment.lock_file().version(),
         &platform_setup.workspace_env_ref,
-        ctx.project_root,
     )
     .await
     .map_err(|err| match err {

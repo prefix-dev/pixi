@@ -2177,7 +2177,7 @@ fn collect_source_dep_versions(
     for (_env_name, env) in lock_file.environments() {
         for (_platform, packages) in env.packages_by_platform() {
             for package in packages {
-                let Some(record) = resolver.get_for_package(&package) else {
+                let Some(record) = resolver.get_for_package(package) else {
                     continue;
                 };
                 let pixi_record::UnresolvedPixiRecord::Source(src) = record else {

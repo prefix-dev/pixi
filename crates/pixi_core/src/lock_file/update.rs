@@ -1107,7 +1107,6 @@ impl<'p> LockFileDerivedData<'p> {
                     &mut records,
                     self.lock_file.version(),
                     &setup.workspace_env_ref,
-                    self.workspace.root(),
                 )
                 .await
                 .into_diagnostic()?;

@@ -2,7 +2,6 @@ use std::{
     collections::BTreeMap,
     fmt::{self, Display},
     hash::{Hash, Hasher},
-    path::PathBuf,
     sync::Arc,
 };
 
@@ -10,6 +9,7 @@ use miette::Diagnostic;
 use pixi_command_dispatcher::{
     ComputeCtx, EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, Key, PtrArc,
     SourceRecordError, WorkspaceEnvRegistry,
+    compute_data::HasCacheDirs,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec},
 };
 use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, UnresolvedPixiRecord, VariantValue};
@@ -68,15 +68,6 @@ pub struct LegacySourceEnvKey {
     /// so two calls with the same logical hints but different `Arc`
     /// allocations dedup independently in the in-memory cache.
     pub installed_source_hints: PtrArc<InstalledSourceHints>,
-
-    /// Workspace root, used to locate the on-disk cache file under
-    /// `<workspace_root>/.pixi/legacy-source-env/`. Wrapped in `Arc` so
-    /// clones across records of one workspace are cheap; participates
-    /// in the engine's in-memory dedup so two workspaces with otherwise
-    /// identical inputs don't share an in-memory entry. Excluded from
-    /// the disk cache key because the path itself already separates
-    /// workspaces.
-    pub workspace_root: Arc<PathBuf>,
 }
 
 /// Build and host environments produced for a single locked source
@@ -124,9 +115,9 @@ impl LegacySourceEnvKey {
     /// [`EnvironmentRef`] to its underlying [`EnvironmentSpec`] via the
     /// registry so the hash is content-driven (registry ids are
     /// allocation-order-dependent and thus unstable across runs).
-    /// Excludes `installed_source_hints` (optimization input only) and
-    /// `workspace_root` (the on-disk path already separates
-    /// workspaces).
+    /// Excludes `installed_source_hints` (optimization input only); the
+    /// cache directory itself already separates workspaces, so it does
+    /// not participate in the hash either.
     fn cache_key_hash(&self, registry: &WorkspaceEnvRegistry) -> u64 {
         let mut hasher = Xxh3::new();
         self.package.hash(&mut hasher);
@@ -156,8 +147,9 @@ impl Key for LegacySourceEnvKey {
         // Try the on-disk cache first. A miss here (file absent, schema
         // bump, parse error) just falls through to recompute.
         let registry = ctx.global_data().workspace_env_registry().clone();
+        let cache_dir = ctx.global_data().cache_dirs().legacy_source_env();
         let cache_hash = self.cache_key_hash(&registry);
-        let cache_path = cache::cache_file_path(&self.workspace_root, cache_hash);
+        let cache_path = cache::cache_file_path(cache_dir.as_std_path(), cache_hash);
         if let Some(env) = cache::load(&cache_path) {
             tracing::debug!(
                 package = %self.package.as_source(),

@@ -197,6 +197,18 @@ impl CacheDirs {
         })
     }
 
+    /// Returns the directory holding cached legacy (pre-v7) source
+    /// build/host environments.
+    ///
+    /// Layout: `<workspace or root>/legacy-source-env/<hash>.json`
+    /// (managed by
+    /// `pixi_core::lock_file::satisfiability::legacy::cache`).
+    pub fn legacy_source_env(&self) -> AbsPresumedDirPathBuf {
+        self.workspace_or_root()
+            .join(consts::LEGACY_SOURCE_ENV_DIR)
+            .into_assume_dir()
+    }
+
     /// Helper: the `.pixi/` workspace directory when set, otherwise the
     /// global cache root. Distinct from `build()`, which unconditionally
     /// appends `build/` to the workspace path.

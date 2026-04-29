@@ -60,6 +60,11 @@ pub const SOURCE_BUILD_ARTIFACTS_DIR: &str = "artifacts-v0";
 /// and named tersely to keep the full path short on Windows
 /// (`MAX_PATH = 260`).
 pub const SOURCE_BUILD_WORKSPACES_DIR: &str = "bld";
+/// Per-workspace cache for legacy (pre-v7) source-record build/host
+/// environments. Each entry is keyed by a stable hash of the inputs
+/// that drive the underlying `ResolveSourcePackageKey` dispatch; entry
+/// schema is versioned in-file so the directory itself is unversioned.
+pub const LEGACY_SOURCE_ENV_DIR: &str = "legacy-source-env";
 pub const WORKSPACES_REGISTRY: &str = "workspaces.toml";
 
 /// The directory relative to the .pixi folder that stores build related caches.
