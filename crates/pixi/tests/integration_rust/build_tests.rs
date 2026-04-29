@@ -1212,6 +1212,194 @@ test-source-pkg = {{ path = "./source-package" }}
     );
 }
 
+/// Adding a `[package.run-dependencies]` entry to a path-based source
+/// package must invalidate the lock-file on the next resolve.
+///
+/// The locked source record's `depends` field is the union of the
+/// manifest's run-dependencies and any run-exports contributed by the
+/// resolved build/host packages, so a "diff manifest run-deps against
+/// locked depends" check can't tell which side an entry came from. The
+/// only reliable signal is the backend's `run_dependencies`
+/// declaration: satisfiability must consult the backend and reject the
+/// lock-file when its declarations no longer match what's locked.
+///
+/// `PassthroughBackend` reads `run-dependencies` straight from the
+/// source manifest, so editing the manifest changes what the backend
+/// declares on the next satisfiability call. The first solve produces
+/// a lock-file with `dep-a` only; after adding `dep-b`, the lock-file
+/// must be rewritten.
+#[tokio::test]
+#[ignore = "known bug: source-package run-dependency changes are not detected by satisfiability; \
+            see test_source_run_dependency_removal_invalidates_lock_file for the matching removal case"]
+async fn test_source_run_dependency_addition_invalidates_lock_file() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("dep-a", "1.0.0").finish());
+    package_database.add_package(Package::build("dep-b", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let initial_source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "passthrough", version = "*" }
+
+[package.run-dependencies]
+dep-a = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), initial_source_manifest).unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("initial lock-file generation should succeed");
+    assert!(was_updated, "initial solve must create the lock-file");
+
+    // Add a new run-dependency. The locked record's `depends` does not
+    // contain `dep-b`, so satisfiability must detect the mismatch
+    // against the backend's freshly-declared run-dependencies.
+    let updated_source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "passthrough", version = "*" }
+
+[package.run-dependencies]
+dep-a = ">=1.0"
+dep-b = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), updated_source_manifest).unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated_after_add) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("second lock-file check should succeed");
+    assert!(
+        was_updated_after_add,
+        "adding a run-dependency to a source package must invalidate the lock-file",
+    );
+}
+
+/// Removing a `[package.run-dependencies]` entry from a path-based
+/// source package must invalidate the lock-file.
+///
+/// Counterpart to `test_source_run_dependency_addition_invalidates_lock_file`.
+/// The "every backend-declared dep is satisfied by the locked record"
+/// shape used for build/host verification doesn't catch removals at
+/// all: the remaining backend deps are still locked, but the locked
+/// record carries an extra `depends` entry the backend no longer
+/// declares. Detection has to be bidirectional, which is what makes
+/// run-dep removal trickier than addition.
+#[tokio::test]
+#[ignore = "known bug: source-package run-dependency changes are not detected by satisfiability; \
+            removal is the harder direction because the remaining deps still satisfy"]
+async fn test_source_run_dependency_removal_invalidates_lock_file() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("dep-a", "1.0.0").finish());
+    package_database.add_package(Package::build("dep-b", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let initial_source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "passthrough", version = "*" }
+
+[package.run-dependencies]
+dep-a = ">=1.0"
+dep-b = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), initial_source_manifest).unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("initial lock-file generation should succeed");
+    assert!(was_updated, "initial solve must create the lock-file");
+
+    // Drop `dep-b`. The locked record still carries it in `depends`,
+    // but the backend no longer declares it, and the lock-file must be
+    // rewritten so the resolved environment shrinks accordingly.
+    let updated_source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "passthrough", version = "*" }
+
+[package.run-dependencies]
+dep-a = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), updated_source_manifest).unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated_after_remove) = workspace
+        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("second lock-file check should succeed");
+    assert!(
+        was_updated_after_remove,
+        "removing a run-dependency from a source package must invalidate the lock-file",
+    );
+}
+
 /// Test that verifies changing `[package.build.config]` invalidates the metadata cache
 /// and causes the build backend to be re-queried.
 ///
@@ -1856,6 +2044,31 @@ fn collect_build_dep_versions(
     source_pkg: &str,
     binary_dep: &str,
 ) -> Vec<String> {
+    collect_source_dep_versions(lock_file, source_pkg, binary_dep, SourceDepSlot::Build)
+}
+
+/// Collect the versions of a binary package that appears in
+/// `source_pkg`'s `host_packages` slot, across every platform.
+fn collect_host_dep_versions(
+    lock_file: &rattler_lock::LockFile,
+    source_pkg: &str,
+    binary_dep: &str,
+) -> Vec<String> {
+    collect_source_dep_versions(lock_file, source_pkg, binary_dep, SourceDepSlot::Host)
+}
+
+#[derive(Clone, Copy)]
+enum SourceDepSlot {
+    Build,
+    Host,
+}
+
+fn collect_source_dep_versions(
+    lock_file: &rattler_lock::LockFile,
+    source_pkg: &str,
+    binary_dep: &str,
+    slot: SourceDepSlot,
+) -> Vec<String> {
     use pixi_record::LockFileResolver;
     use std::path::Path;
 
@@ -1874,8 +2087,12 @@ fn collect_build_dep_versions(
                 if src.name().as_normalized() != source_pkg {
                     continue;
                 }
-                for build_pkg in &src.build_packages {
-                    if let pixi_record::UnresolvedPixiRecord::Binary(b) = build_pkg
+                let slot_packages = match slot {
+                    SourceDepSlot::Build => &src.build_packages,
+                    SourceDepSlot::Host => &src.host_packages,
+                };
+                for slot_pkg in slot_packages {
+                    if let pixi_record::UnresolvedPixiRecord::Binary(b) = slot_pkg
                         && b.package_record.name.as_normalized() == binary_dep
                     {
                         out.push(b.package_record.version.to_string());
