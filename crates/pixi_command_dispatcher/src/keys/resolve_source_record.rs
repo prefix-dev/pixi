@@ -230,47 +230,43 @@ async fn assemble_source_record_inner(
 
     // Record a source-typed PixiSpec's location into `sources`, erroring
     // if the same (name, location) is registered twice.
-    let mut track_source =
-        |name: &PackageName, spec: &PixiSpec| -> Result<(), SourceRecordError> {
-            if let Either::Left(source) = spec.clone().into_source_or_binary() {
-                match sources.entry(name.clone()) {
-                    std::collections::hash_map::Entry::Occupied(entry) => {
-                        if entry.get() == &source.location {
-                            return Err(SourceRecordError::DuplicateSourceDependency {
-                                package: name.clone(),
-                                source1: Box::new(entry.get().clone()),
-                                source2: Box::new(source.location.clone()),
-                            });
-                        }
-                    }
-                    std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert(source.location.clone());
+    let mut track_source = |name: &PackageName, spec: &PixiSpec| -> Result<(), SourceRecordError> {
+        if let Either::Left(source) = spec.clone().into_source_or_binary() {
+            match sources.entry(name.clone()) {
+                std::collections::hash_map::Entry::Occupied(entry) => {
+                    if entry.get() == &source.location {
+                        return Err(SourceRecordError::DuplicateSourceDependency {
+                            package: name.clone(),
+                            source1: Box::new(entry.get().clone()),
+                            source2: Box::new(source.location.clone()),
+                        });
                     }
                 }
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    entry.insert(source.location.clone());
+                }
             }
-            Ok(())
-        };
+        }
+        Ok(())
+    };
 
     // Stringify a PixiSpec dep map into a `Vec<String>`, threading source
     // locations through `track_source` for the per-source bookkeeping.
-    let stringify_pixi_specs = |specs: DependencyMap<PackageName, PixiSpec>,
-                                track_source: &mut dyn FnMut(
-        &PackageName,
-        &PixiSpec,
-    )
-        -> Result<(), SourceRecordError>|
-     -> Result<Vec<String>, SourceRecordError> {
-        specs
-            .into_specs()
-            .map(|(name, spec)| {
-                track_source(&name, &spec)?;
-                Ok(spec
-                    .to_match_spec(&name, &channel_config)
-                    .map_err(SourceRecordError::from)?
-                    .to_string())
-            })
-            .collect()
-    };
+    let stringify_pixi_specs =
+        |specs: DependencyMap<PackageName, PixiSpec>,
+         track_source: &mut dyn FnMut(&PackageName, &PixiSpec) -> Result<(), SourceRecordError>|
+         -> Result<Vec<String>, SourceRecordError> {
+            specs
+                .into_specs()
+                .map(|(name, spec)| {
+                    track_source(&name, &spec)?;
+                    Ok(spec
+                        .to_match_spec(&name, &channel_config)
+                        .map_err(SourceRecordError::from)?
+                        .to_string())
+                })
+                .collect()
+        };
 
     let stringify_binary_specs =
         |specs: DependencyMap<PackageName, BinarySpec>| -> Result<Vec<String>, SourceRecordError> {

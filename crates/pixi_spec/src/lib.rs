@@ -797,9 +797,7 @@ impl From<PathSourceSpec> for rattler_lock::source::PathSourceLocation {
 
 #[cfg(test)]
 mod test {
-    use rattler_conda_types::{
-        ChannelConfig, PackageName, ParseStrictness::Lenient, VersionSpec,
-    };
+    use rattler_conda_types::{ChannelConfig, PackageName, ParseStrictness::Lenient, VersionSpec};
     use serde::Serialize;
     use serde_json::{Value, json};
     use url::Url;
@@ -900,12 +898,14 @@ mod test {
     fn test_pixi_spec_to_match_spec_binary() {
         // A version-only PixiSpec for `numpy` should produce
         // `MatchSpec("numpy >=1.0")` with the supplied name attached.
-        let channel_config =
-            ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let spec: PixiSpec = serde_json::from_value(json!({ "version": ">=1.0" })).unwrap();
         let name = PackageName::new_unchecked("numpy");
         let match_spec = spec.to_match_spec(&name, &channel_config).unwrap();
-        assert_eq!(match_spec.name.as_exact().map(PackageName::as_normalized), Some("numpy"));
+        assert_eq!(
+            match_spec.name.as_exact().map(PackageName::as_normalized),
+            Some("numpy")
+        );
         assert_eq!(match_spec.to_string(), "numpy >=1.0");
     }
 
@@ -913,20 +913,21 @@ mod test {
     fn test_pixi_spec_to_match_spec_source_path() {
         // A path-based source spec carries no version material, so the
         // resulting MatchSpec only names the package.
-        let channel_config =
-            ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let spec: PixiSpec = serde_json::from_value(json!({ "path": "foobar" })).unwrap();
         let name = PackageName::new_unchecked("my-package");
         let match_spec = spec.to_match_spec(&name, &channel_config).unwrap();
-        assert_eq!(match_spec.name.as_exact().map(PackageName::as_normalized), Some("my-package"));
+        assert_eq!(
+            match_spec.name.as_exact().map(PackageName::as_normalized),
+            Some("my-package")
+        );
     }
 
     #[test]
     fn test_binary_spec_to_match_spec() {
         // The BinarySpec convenience method should produce a MatchSpec
         // equivalent to `try_into_nameless_match_spec` + `from_nameless`.
-        let channel_config =
-            ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let spec = BinarySpec::Version(VersionSpec::from_str(">=2.0", Lenient).unwrap());
         let name = PackageName::new_unchecked("openssl");
         let match_spec = spec.to_match_spec(&name, &channel_config).unwrap();
