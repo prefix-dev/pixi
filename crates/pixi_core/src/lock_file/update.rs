@@ -1083,7 +1083,34 @@ impl<'p> LockFileDerivedData<'p> {
                 // directly to the installer which builds them using
                 // variant-based output matching.
                 let resolver = self.resolver()?;
-                let records = locked_packages_to_unresolved_records(packages, &resolver);
+                let mut records = locked_packages_to_unresolved_records(packages, &resolver);
+
+                // Reify pre-v7 source envs in the records before
+                // handing them to install. Pre-v7 lock files don't
+                // store the resolved build/host packages of source
+                // records, so the install pipeline (which reads those
+                // slices directly off each record) would otherwise see
+                // empty envs and skip building. v7+ lock files no-op
+                // this. The platform setup is allocated through the
+                // shared helper so it produces the same
+                // `WorkspaceEnvRef` satisfiability allocated for this
+                // environment in the same process, hitting the
+                // in-memory `LegacySourceEnvKey` cache.
+                let setup = lock_file::platform_setup::build_platform_setup(
+                    environment,
+                    platform,
+                    &self.command_dispatcher,
+                )
+                .into_diagnostic()?;
+                lock_file::satisfiability::legacy::reify_legacy_source_envs(
+                    &self.command_dispatcher,
+                    &mut records,
+                    self.lock_file.version(),
+                    &setup.workspace_env_ref,
+                    self.workspace.root(),
+                )
+                .await
+                .into_diagnostic()?;
 
                 // Update the conda prefix
                 conda_prefix_updater

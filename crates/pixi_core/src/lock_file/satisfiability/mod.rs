@@ -1,3 +1,4 @@
+pub mod legacy;
 pub mod pypi_metadata;
 
 use std::{
@@ -18,10 +19,10 @@ use miette::Diagnostic;
 use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
+    BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, ComputeResultExt, DevSourceMetadataError,
-    DevSourceMetadataSpec, EnvironmentRef, EnvironmentSpec, SourceCheckoutError, SourceRecordError,
-    WorkspaceEnvRef, executor::CancellationAwareFutures, source_checkout::SourceCheckoutExt,
+    DevSourceMetadataSpec, EnvironmentRef, SourceCheckoutError, SourceRecordError, WorkspaceEnvRef,
+    executor::CancellationAwareFutures, source_checkout::SourceCheckoutExt,
 };
 use pixi_config::Config;
 use pixi_git::url::RepositoryUrl;
@@ -390,6 +391,11 @@ pub enum PlatformUnsat {
 
     #[error("there was a duplicate entry for '{0}'")]
     DuplicateEntry(String),
+
+    #[error(
+        "failed to recompute the build/host environments of a source record loaded from a pre-v7 lock file: {0}"
+    )]
+    LegacySourceEnvReify(String),
 
     #[error("the requirement '{0}' failed to parse")]
     FailedToParseMatchSpec(String, #[source] ParseMatchSpecError),
@@ -1100,62 +1106,22 @@ pub type PlatformSatisfiabilityResult = Result<
     CommandDispatcherError<Box<PlatformUnsat>>,
 >;
 
-#[derive(Clone)]
-struct PlatformVerificationSetup {
-    channel_config: rattler_conda_types::ChannelConfig,
-    virtual_packages: Vec<GenericVirtualPackage>,
-    /// The workspace env ref allocated for this platform verification
-    /// setup so all source-record and dev-source-metadata requests at
-    /// this platform share the same workspace-env identity.
-    workspace_env_ref: WorkspaceEnvRef,
-}
-
 fn build_platform_verification_setup(
     ctx: &VerifySatisfiabilityContext<'_>,
-) -> Result<PlatformVerificationSetup, CommandDispatcherError<Box<PlatformUnsat>>> {
-    let channel_config = ctx.environment.workspace().channel_config();
-    let channels = ctx
-        .environment
-        .channels()
-        .into_iter()
-        .cloned()
-        .map(|c| c.into_base_url(&channel_config))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|e| CommandDispatcherError::Failed(Box::new(PlatformUnsat::InvalidChannel(e))))?;
-    let variant_config = ctx
-        .environment
-        .workspace()
-        .variants(ctx.platform)
-        .map_err(|e| CommandDispatcherError::Failed(Box::new(PlatformUnsat::Variants(e))))?;
-    let virtual_packages: Vec<GenericVirtualPackage> = ctx
-        .environment
-        .virtual_packages(ctx.platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
-        .collect();
-    let build_environment = BuildEnvironment {
-        host_platform: ctx.platform,
-        build_platform: ctx.platform,
-        host_virtual_packages: virtual_packages.clone(),
-        build_virtual_packages: virtual_packages.clone(),
-    };
-
-    let workspace_env_ref = ctx.command_dispatcher.workspace_env_registry().allocate(
-        ctx.environment.name().as_str().to_string(),
-        ctx.platform,
-        EnvironmentSpec {
-            channels,
-            build_environment,
-            variants: variant_config,
-            exclude_newer: None,
-            channel_priority: Default::default(),
-        },
-    );
-
-    Ok(PlatformVerificationSetup {
-        channel_config,
-        virtual_packages,
-        workspace_env_ref,
+) -> Result<
+    crate::lock_file::platform_setup::PlatformSetup,
+    CommandDispatcherError<Box<PlatformUnsat>>,
+> {
+    use crate::lock_file::platform_setup::{PlatformSetupError, build_platform_setup};
+    build_platform_setup(ctx.environment, ctx.platform, &ctx.command_dispatcher).map_err(|err| {
+        match err {
+            PlatformSetupError::InvalidChannel(e) => {
+                CommandDispatcherError::Failed(Box::new(PlatformUnsat::InvalidChannel(e)))
+            }
+            PlatformSetupError::Variants(e) => {
+                CommandDispatcherError::Failed(Box::new(PlatformUnsat::Variants(e)))
+            }
+        }
     })
 }
 
@@ -1208,6 +1174,27 @@ pub async fn verify_platform_satisfiability(
         }
     }
 
+    // Pre-v7 lock files don't store the resolved build/host
+    // environments of source records, so the records arrive here with
+    // empty `build_packages` / `host_packages`. Reify them by
+    // recomputing from the build backend before the verify loop runs;
+    // afterwards the v7 path treats them identically. v7+ lock files
+    // skip this entirely.
+    legacy::reify_legacy_source_envs(
+        &ctx.command_dispatcher,
+        &mut unresolved_records,
+        locked_environment.lock_file().version(),
+        &platform_setup.workspace_env_ref,
+        ctx.project_root,
+    )
+    .await
+    .map_err(|err| match err {
+        CommandDispatcherError::Cancelled => CommandDispatcherError::Cancelled,
+        CommandDispatcherError::Failed(err) => CommandDispatcherError::Failed(Box::new(
+            PlatformUnsat::LegacySourceEnvReify(err.to_string()),
+        )),
+    })?;
+
     // Resolve every unresolved source record into a fully-resolved
     // [`PixiRecord::Source`].
     //
@@ -1233,8 +1220,7 @@ pub async fn verify_platform_satisfiability(
                 resolved_records.push(PixiRecord::Binary(record))
             }
             UnresolvedPixiRecord::Source(record) => {
-                let needs_backend_check =
-                    record.data.is_partial() || record.has_mutable_source();
+                let needs_backend_check = record.data.is_partial() || record.has_mutable_source();
                 if needs_backend_check {
                     // Partial records carry no version/build material in
                     // the lockfile, so they must be resolved from the
@@ -1919,7 +1905,7 @@ async fn lock_pypi_packages(
 
 async fn verify_package_platform_satisfiability(
     ctx: &VerifySatisfiabilityContext<'_>,
-    platform_setup: &PlatformVerificationSetup,
+    platform_setup: &crate::lock_file::platform_setup::PlatformSetup,
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
@@ -3193,7 +3179,7 @@ fn verify_build_source_matches_manifest(
 /// locked build/host packages forward as solver hints.
 async fn verify_partial_source_record_against_backend(
     ctx: &VerifySatisfiabilityContext<'_>,
-    platform_setup: &PlatformVerificationSetup,
+    platform_setup: &crate::lock_file::platform_setup::PlatformSetup,
     record: &pixi_record::UnresolvedSourceRecord,
 ) -> Result<Arc<pixi_record::SourceRecord>, CommandDispatcherError<Box<PlatformUnsat>>> {
     use pixi_command_dispatcher::BuildBackendMetadataSpec;
