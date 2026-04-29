@@ -188,7 +188,7 @@ fn detect_network_filesystem(path: &Path) -> Option<bool> {
     };
     // CIFS magic isn't re-exported by `nix`
     // so define it inline (fs/smb/client/cifsfs.h).
-    let cifs_magic = FsType(0xff53_4d42 as _);
+    let cifs_magic = FsType(0xff53_4d42_u32 as _);
     let fs = statfs_nearest_existing(path)?.filesystem_type();
     Some(
         fs == NFS_SUPER_MAGIC
