@@ -229,6 +229,7 @@ mod tests {
         let data = SourceRecordData::Partial(PartialSourceRecordData {
             name: PackageName::new_unchecked(name.to_string()),
             depends: Vec::new(),
+            constrains: Vec::new(),
             sources: Default::default(),
         });
         UnresolvedPixiRecord::Source(Arc::new(UnresolvedSourceRecord {
@@ -342,6 +343,7 @@ mod tests {
         let data = SourceRecordData::Partial(PartialSourceRecordData {
             name: PackageName::new_unchecked(name.to_string()),
             depends: Vec::new(),
+            constrains: Vec::new(),
             sources: Default::default(),
         });
         UnresolvedPixiRecord::Source(Arc::new(UnresolvedSourceRecord {

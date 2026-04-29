@@ -168,6 +168,9 @@ pub struct PartialSourceRecordData {
     /// Dependencies on other packages (run-time requirements).
     pub depends: Vec<String>,
 
+    /// Run-time constraints on co-installed packages.
+    pub constrains: Vec<String>,
+
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
     pub sources: BTreeMap<String, SourceLocationSpec>,
@@ -348,11 +351,14 @@ impl SourceRecord<FullSourceRecordData> {
         let has_mutable = self.has_mutable_source();
         let mut unresolved = SourceRecord::<SourceRecordData>::from(self);
         if has_mutable {
-            // Downgrade full data to partial: keep only name, depends, and sources.
+            // Downgrade full data to partial: keep name, depends, constrains,
+            // and sources. Version/build/etc are dropped because they would go
+            // stale on the next mutable-source rebuild.
             if let SourceRecordData::Full(full) = unresolved.data {
                 unresolved.data = SourceRecordData::Partial(PartialSourceRecordData {
                     name: full.package_record.name,
                     depends: full.package_record.depends,
+                    constrains: full.package_record.constrains,
                     sources: full.sources,
                 });
             }
@@ -425,6 +431,11 @@ impl SourceRecord<PartialSourceRecordData> {
         &self.data.depends
     }
 
+    /// Run-time constraints.
+    pub fn constrains(&self) -> &[String] {
+        &self.data.constrains
+    }
+
     /// Source dependency locations.
     pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         &self.data.sources
@@ -442,6 +453,14 @@ impl SourceRecord<SourceRecordData> {
         match &self.data {
             SourceRecordData::Full(full) => &full.package_record.depends,
             SourceRecordData::Partial(partial) => &partial.depends,
+        }
+    }
+
+    /// Run-time constraints.
+    pub fn constrains(&self) -> &[String] {
+        match &self.data {
+            SourceRecordData::Full(full) => &full.package_record.constrains,
+            SourceRecordData::Partial(partial) => &partial.constrains,
         }
     }
 
@@ -473,6 +492,7 @@ impl SourceRecord<SourceRecordData> {
                     SourceRecordData::Partial(PartialSourceRecordData {
                         name: full.package_record.name,
                         depends: full.package_record.depends,
+                        constrains: full.package_record.constrains,
                         sources: full.sources,
                     })
                 }
@@ -491,6 +511,7 @@ impl SourceRecord<SourceRecordData> {
                 SourceMetadata::Partial(PartialSourceMetadata {
                     name: partial.name,
                     depends: partial.depends,
+                    constrains: partial.constrains,
                 }),
                 partial.sources,
             ),
@@ -542,6 +563,7 @@ impl SourceRecord<SourceRecordData> {
                 SourceRecordData::Partial(PartialSourceRecordData {
                     name: partial.name,
                     depends: partial.depends,
+                    constrains: partial.constrains,
                     sources,
                 })
             }
@@ -941,6 +963,7 @@ mod tests {
             data: SourceRecordData::Partial(PartialSourceRecordData {
                 name: PackageName::from_str("my-package").unwrap(),
                 depends: vec!["numpy >=1.0".to_string()],
+                constrains: Vec::new(),
                 sources: BTreeMap::new(),
             }),
             manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
@@ -1021,6 +1044,7 @@ mod tests {
                 data: SourceRecordData::Partial(PartialSourceRecordData {
                     name: PackageName::from_str("partial-pkg").unwrap(),
                     depends: vec![],
+                    constrains: vec![],
                     sources: BTreeMap::new(),
                 }),
                 manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {

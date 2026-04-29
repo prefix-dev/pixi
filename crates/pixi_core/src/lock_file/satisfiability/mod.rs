@@ -3429,32 +3429,23 @@ fn verify_locked_run_deps_against_backend(
         })
     })?;
 
-    // Partial source records don't carry `constrains` in the lockfile
-    // (PartialSourceRecordData only round-trips `depends`), so we can
-    // only verify constrains drift on Full records. Partial records
-    // already force a re-lock through other paths in this function;
-    // skipping the constrains check here doesn't widen the gap.
-    if let SourceRecordData::Full(full) = &record.data {
-        let expected_constrains = stringify_binary_dep_map(&assembled, channel_config, |d| {
-            d.constraints
-                .clone()
-                .into_specs()
-                .map(|(name, withspec)| (name, withspec.value))
-        })?;
-        diff_dep_sequences(&full.package_record.constrains, &expected_constrains).map_err(
-            |diff| {
-                Box::new(PlatformUnsat::SourceRunDependenciesChanged {
-                    package: record.name().as_source().to_string(),
-                    kind: SourceRunDepKind::RunConstrains,
-                    added: diff.added,
-                    removed: diff.removed,
-                    reordered: diff.reordered,
-                    locked: diff.locked,
-                    expected: diff.expected,
-                })
-            },
-        )?;
-    }
+    let expected_constrains = stringify_binary_dep_map(&assembled, channel_config, |d| {
+        d.constraints
+            .clone()
+            .into_specs()
+            .map(|(name, withspec)| (name, withspec.value))
+    })?;
+    diff_dep_sequences(record.constrains(), &expected_constrains).map_err(|diff| {
+        Box::new(PlatformUnsat::SourceRunDependenciesChanged {
+            package: record.name().as_source().to_string(),
+            kind: SourceRunDepKind::RunConstrains,
+            added: diff.added,
+            removed: diff.removed,
+            reordered: diff.reordered,
+            locked: diff.locked,
+            expected: diff.expected,
+        })
+    })?;
 
     Ok(())
 }
@@ -4712,6 +4703,7 @@ mod tests {
                 data: SourceRecordData::Partial(PartialSourceRecordData {
                     name: PackageName::from_str(name).unwrap(),
                     depends: Vec::new(),
+                    constrains: Vec::new(),
                     sources: Default::default(),
                 }),
                 manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
