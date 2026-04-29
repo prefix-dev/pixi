@@ -1,6 +1,7 @@
-use pixi_config;
+use pixi_command_dispatcher::CacheDirs;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
+use pixi_core::workspace::WorkspaceRegistry;
 use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -47,6 +48,10 @@ pub struct Args {
     /// Only remove the pixi-build cache
     #[arg(long)]
     pub build: bool,
+
+    /// Only remove disassociated workspace registries
+    #[arg(long)]
+    pub workspaces_registry: bool,
 }
 
 /// Clean the cache of your system which are touched by pixi.
@@ -131,36 +136,34 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 explicit_env.name().fancy_display()
             );
         }
-    } else if !args.activation_cache & !args.build {
-        // Remove all pixi related work from the workspace.
-        if !workspace
-            .environments_dir()
-            .starts_with(workspace.pixi_dir())
-            && workspace.default_environments_dir().exists()
-        {
-            remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
-            remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
-                .await?;
-        }
-        remove_folder_with_progress(workspace.environments_dir(), true).await?;
+    } else if !args.activation_cache && !args.build && !args.workspaces_registry {
+        // Remove all pixi related work from the workspace. Always clean both
+        // the default .pixi location and the effective (possibly detached) location
+        // so leftover artifacts are removed regardless of config changes.
+        remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
+        remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
+            .await?;
+        remove_folder_with_progress(workspace.environments_dir(), false).await?;
         remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
         remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
         remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
-        remove_folder_with_progress(
-            workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR),
-            false,
-        )
-        .await?;
+        remove_folder_with_progress(workspace.default_build_dir(), false).await?;
+        remove_folder_with_progress(workspace.build_dir(), false).await?;
+        prune_workspace_registry().await?;
     } else {
         if args.activation_cache {
             remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
         }
         if args.build {
-            remove_folder_with_progress(
-                workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR),
-                true,
-            )
-            .await?;
+            remove_folder_with_progress(workspace.build_dir(), true).await?;
+            eprintln!(
+                "{}When issues persist, you can remove all build related global cache with: {}",
+                console::style("Hint: ").blue(),
+                console::style("pixi clean cache --build").bold()
+            );
+        }
+        if args.workspaces_registry {
+            prune_workspace_registry().await?;
         }
     }
     Ok(())
@@ -197,6 +200,12 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         )?);
     }
     if args.build_backends {
+        let cache_dirs = CacheDirs::new(
+            pixi_path::AbsPathBuf::new(&cache_dir)
+                .expect("cache dir is not absolute")
+                .into_assume_dir(),
+        );
+        dirs.push(cache_dirs.build_backends().into());
         dirs.push(pixi_config::cache_dir_for(
             pixi_config::CacheKind::BuildToolEnvironments,
         )?);
@@ -205,13 +214,18 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         dirs.push(cache_dir.join(consts::_CACHED_BUILD_ENVS_DIR));
     }
     if args.build {
-        dirs.push(cache_dir.join(consts::CACHED_GIT_DIR));
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_TOOL_ENVS_DIR));
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_WORK_DIR));
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_BACKENDS));
-        dirs.push(cache_dir.join(consts::CACHED_SOURCE_BUILDS));
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_BACKEND_METADATA));
-        dirs.push(cache_dir.join(consts::CACHED_PACKAGES));
+        let cache_dirs = CacheDirs::new(
+            pixi_path::AbsPathBuf::new(&cache_dir)
+                .expect("cache dir is not absolute")
+                .into_assume_dir(),
+        );
+        dirs.push(cache_dirs.git().into());
+        dirs.push(cache_dirs.working_dirs().into());
+        dirs.push(cache_dirs.build_backends().into());
+        dirs.push(cache_dirs.url().into());
+        dirs.push(cache_dirs.source_builds().into());
+        dirs.push(cache_dirs.build_backend_metadata().into());
+        dirs.push(cache_dirs.source_metadata().into());
     }
     if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
@@ -233,6 +247,21 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     Ok(())
 }
 
+/// Clean disassociated workspaces from the workspace registry
+async fn prune_workspace_registry() -> miette::Result<()> {
+    let mut workspace_registry = WorkspaceRegistry::load()?;
+    let removed_workspaces = workspace_registry.prune().await?;
+
+    if removed_workspaces.is_empty() {
+        tracing::info!("No workspace registries were pruned.");
+    }
+
+    for name in removed_workspaces {
+        eprintln!("{} {}", console::style("pruned workspace").green(), name);
+    }
+    Ok(())
+}
+
 async fn remove_folder_with_progress(
     folder: PathBuf,
     warning_non_existent: bool,
@@ -240,8 +269,9 @@ async fn remove_folder_with_progress(
     if !folder.exists() {
         if warning_non_existent {
             eprintln!(
-                "{}",
-                console::style(format!("Folder {:?} was already clean.", &folder)).yellow()
+                "{} Folder {:?} was already clean.",
+                console::style("INFO:").yellow(),
+                &folder
             );
         }
         return Ok(());
@@ -255,17 +285,23 @@ async fn remove_folder_with_progress(
         folder.clone().display()
     ));
 
-    // Ignore errors
-    let result = tokio_fs::remove_dir_all(&folder).await;
-    if let Err(e) = result {
-        tracing::info!("Failed to remove folder {:?}: {}", folder, e);
+    match tokio_fs::remove_dir_all(&folder).await {
+        Ok(()) => {
+            pb.finish_with_message(format!(
+                "{} {}",
+                console::style("Removed").green(),
+                folder.display()
+            ));
+        }
+        Err(e) => {
+            pb.finish_with_message(format!(
+                "{} {} ({})",
+                console::style("Failed to remove").red(),
+                folder.display(),
+                e
+            ));
+        }
     }
-
-    pb.finish_with_message(format!(
-        "{} {}",
-        console::style("removed").green(),
-        folder.display()
-    ));
     Ok(())
 }
 

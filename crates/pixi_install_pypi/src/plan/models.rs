@@ -28,6 +28,16 @@ pub struct PyPIInstallationPlan {
     pub duplicates: Vec<InstalledDist>,
 }
 
+impl PyPIInstallationPlan {
+    pub fn is_noop(&self) -> bool {
+        self.remote.is_empty()
+            && self.cached.is_empty()
+            && self.reinstalls.is_empty()
+            && self.extraneous.is_empty()
+            && self.duplicates.is_empty()
+    }
+}
+
 /// Represents the different reasons why a package needs to be reinstalled
 #[derive(Debug)]
 pub(crate) enum NeedReinstall {

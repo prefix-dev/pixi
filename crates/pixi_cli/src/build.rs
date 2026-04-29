@@ -7,7 +7,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
-    build::SourceCodeLocation,
+    build::PinnedSourceCodeLocation,
 };
 use pixi_config::ConfigCli;
 use pixi_consts::consts::{
@@ -71,7 +71,7 @@ pub struct Args {
 
 /// Validate that the full path of package manifest exists and is a supported format.
 /// Directories are allowed (for discovery), and specific manifest files must be supported formats.
-async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
+pub(crate) async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
     let supported_file_names: Vec<&str> = [
         // backend-specific build files
         // that will be autodiscovered
@@ -283,6 +283,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         preferred_build_source: None,
         channels: channels.clone(),
         channel_config: channel_config.clone(),
+        // When running `pixi build`, the exclude_newer config will be ignored.
+        // It will only be used when using the package as a source dependency.
+        exclude_newer: None,
         build_environment: build_environment.clone(),
         variant_configuration: Some(variant_configuration.clone()),
         variant_files: Some(variant_files.clone()),
@@ -311,8 +314,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .source_build(SourceBuildSpec {
                 package,
                 output_directory: None,
-                source: SourceCodeLocation::new(manifest_source.clone(), None),
+                source: PinnedSourceCodeLocation::new(manifest_source.clone(), None),
                 channels: channels.clone(),
+                // When running `pixi build`, the exclude_newer config will be ignored.
+                // It will only be used when using the package as a source dependency.
+                exclude_newer: None,
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
                 variant_configuration: Some(variant_configuration.clone()),

@@ -1,0 +1,41 @@
+---
+source: crates/pixi_build_mojo/src/main.rs
+expression: generated_recipe.recipe
+---
+schema_version: 1
+package:
+  name: foobar
+  version: 0.1.0
+build:
+  script: "[ ... script ... ]"
+  python:
+    entry_points: []
+    skip_pyc_compilation: []
+    use_python_app_entrypoint: false
+  skip: []
+  always_copy_files: []
+  always_include_files: []
+  merge_build_and_host_envs: false
+  files: []
+  dynamic_linking:
+    rpaths: []
+    binary_relocation: true
+    missing_dso_allowlist: []
+    rpath_allowlist: []
+  variant:
+    use_keys: []
+    ignore_keys: []
+  prefix_detection:
+    force_file_type:
+      text: []
+      binary: []
+    ignore: false
+    ignore_binary_files: false
+  post_process: []
+requirements:
+  build:
+    - mojo-compiler
+  run:
+    - boltons
+about: {}
+extra: {}

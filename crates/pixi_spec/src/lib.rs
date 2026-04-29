@@ -10,6 +10,7 @@
 
 mod detailed;
 mod dev_source;
+mod exclude_newer;
 mod git;
 mod path;
 mod source_anchor;
@@ -21,6 +22,7 @@ use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
 pub use dev_source::DevSourceSpec;
+pub use exclude_newer::{ExcludeNewer, ResolvedExcludeNewer};
 pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};

@@ -647,6 +647,7 @@ impl Project {
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
+                exclude_newer: None,
                 channels,
                 channel_config: self.config.global_channel_config().clone(),
                 enabled_protocols: EnabledProtocols::default(),
@@ -923,7 +924,7 @@ impl Project {
                         .ok_or_else(|| {
                             miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
                         })?,
-                    Some(name.clone().into()),
+                    name.clone().into(),
                 );
                 Ok(match_spec)
             })
@@ -1420,6 +1421,7 @@ impl Project {
             manifest_source: pinned_source_spec,
             preferred_build_source: None,
             channel_config: self.global_channel_config().clone(),
+            exclude_newer: None,
             channels: self
                 .config()
                 .default_channels()

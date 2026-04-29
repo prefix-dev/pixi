@@ -2,13 +2,15 @@ use super::common::{
     CacheError, CacheKey, CachedMetadata, MetadataCache, VersionedMetadata,
     WriteResult as CommonWriteResult,
 };
+use crate::build::CanonicalSourceCodeLocation;
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
-use crate::{BuildEnvironment, PackageIdentifier, build::source_checkout_cache_key};
+use crate::{BuildEnvironment, PackageIdentifier};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_path::AbsPathBuf;
-use pixi_record::{PinnedSourceSpec, VariantValue};
+use pixi_record::VariantValue;
+use pixi_spec::ResolvedExcludeNewer;
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, BinaryHeap};
@@ -53,11 +55,14 @@ pub struct BuildBackendMetadataCacheShard {
     /// The build environment
     pub build_environment: BuildEnvironment,
 
+    /// Exclude packages newer than the configured cutoffs when solving backend environments.
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
+
     /// The protocols that are enabled for source packages
     pub enabled_protocols: EnabledProtocols,
 
     /// The pinned source location
-    pub pinned_source: PinnedSourceSpec,
+    pub source: CanonicalSourceCodeLocation,
 }
 
 impl BuildBackendMetadataCache {
@@ -79,10 +84,6 @@ impl MetadataCache for BuildBackendMetadataCache {
         self.root.as_std_path()
     }
 
-    fn cache_file_name(&self) -> &'static str {
-        "metadata.json"
-    }
-
     const CACHE_SUFFIX: &'static str = "v0";
 }
 
@@ -92,6 +93,7 @@ impl CacheKey for BuildBackendMetadataCacheShard {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
         self.build_environment.build_platform.hash(&mut hasher);
+        self.exclude_newer.hash(&mut hasher);
 
         let mut build_virtual_packages = self.build_environment.build_virtual_packages.clone();
         build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
@@ -102,7 +104,7 @@ impl CacheKey for BuildBackendMetadataCacheShard {
         host_virtual_packages.hash(&mut hasher);
 
         self.enabled_protocols.hash(&mut hasher);
-        let source_dir = source_checkout_cache_key(&self.pinned_source);
+        let source_dir = self.source.cache_unique_key();
         format!(
             "{source_dir}/{}-{}",
             self.build_environment.host_platform,
@@ -144,7 +146,10 @@ pub struct CachedCondaMetadata {
     /// The pinned location of the source code. Although the specification of
     /// where to find the source is part of the `project_model_hash`, the
     /// resolved location is not.
-    pub build_source: PinnedSourceSpec,
+    ///
+    /// This is also part of the cache shard but for debug purposes we store
+    /// it in this file as well.
+    pub source: CanonicalSourceCodeLocation,
 
     /// The build variants that were used to generate this metadata.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]

@@ -7,8 +7,9 @@ use std::{
 use indexmap::IndexMap;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{Platform, Version};
+use pixi_spec::ExcludeNewer;
+use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
+use rattler_conda_types::{PackageName, Platform, Version};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -45,7 +46,14 @@ pub struct TomlManifest {
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+
+    /// Version constraints - limit versions of packages that can be installed
+    /// without explicitly requiring them.
+    pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+    pub exclude_newer: Option<PixiSpanned<IndexMap<PackageName, ExcludeNewer>>>,
+
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
+    pub pypi_exclude_newer: Option<PixiSpanned<IndexMap<PypiPackageName, ExcludeNewer>>>,
     pub dev_dependencies: Option<
         PixiSpanned<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
     >,
@@ -157,6 +165,7 @@ impl TomlManifest {
             dependencies: self.dependencies,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
+            constraints: self.constraints,
             pypi_dependencies: self.pypi_dependencies.map(PixiSpanned::into_inner),
             dev_dependencies: self.dev_dependencies.map(PixiSpanned::into_inner),
             activation: self.activation.map(PixiSpanned::into_inner),
@@ -412,7 +421,7 @@ impl TomlManifest {
 
         let WithWarnings {
             warnings: mut workspace_warnings,
-            value: workspace,
+            value: mut workspace,
         } = workspace.value.into_workspace(
             ExternalWorkspaceProperties {
                 name: project_name.or(external.name),
@@ -421,6 +430,14 @@ impl TomlManifest {
             root_directory,
         )?;
         warnings.append(&mut workspace_warnings);
+        workspace.exclude_newer_package_overrides = self
+            .exclude_newer
+            .map(PixiSpanned::into_inner)
+            .unwrap_or_default();
+        workspace.pypi_exclude_newer_package_overrides = self
+            .pypi_exclude_newer
+            .map(PixiSpanned::into_inner)
+            .unwrap_or_default();
 
         let workspace_manifest = WorkspaceManifest {
             workspace,
@@ -518,9 +535,43 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         }
         let build_dependencies = build_dependencies.map(From::from);
 
+        let constraints = th.optional("constraints");
+        let exclude_newer = th
+            .optional::<PixiSpanned<TomlIndexMap<PackageName, TomlFromStr<ExcludeNewer>>>>(
+                "exclude-newer",
+            )
+            .map(|map| PixiSpanned {
+                span: map.span,
+                value: map
+                    .value
+                    .into_inner()
+                    .into_iter()
+                    .map(|(name, cutoff): (PackageName, TomlFromStr<ExcludeNewer>)| {
+                        (name, cutoff.into_inner())
+                    })
+                    .collect::<IndexMap<_, _>>(),
+            });
+
         let pypi_dependencies = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-dependencies")
             .map(TomlWith::into_inner);
+        let pypi_exclude_newer = th
+            .optional::<PixiSpanned<TomlIndexMap<PypiPackageName, TomlFromStr<ExcludeNewer>>>>(
+                "pypi-exclude-newer",
+            )
+            .map(|map| PixiSpanned {
+                span: map.span,
+                value: map
+                    .value
+                    .into_inner()
+                    .into_iter()
+                    .map(
+                        |(name, cutoff): (PypiPackageName, TomlFromStr<ExcludeNewer>)| {
+                            (name, cutoff.into_inner())
+                        },
+                    )
+                    .collect::<IndexMap<_, _>>(),
+            });
         let dev = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("dev")
             .map(TomlWith::into_inner);
@@ -584,7 +635,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             dependencies,
             host_dependencies,
             build_dependencies,
+            constraints,
+            exclude_newer,
             pypi_dependencies,
+            pypi_exclude_newer,
             dev_dependencies: dev,
             activation,
             tasks,
@@ -688,6 +742,33 @@ mod test {
         platforms = []
 
         [feature.foobar.run-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_source_spec_in_constraints() {
+        // Path source specs are not allowed in [constraints]
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [constraints]
+        my-package = { path = "../my-package" }
+        "#,
+        ));
+
+        // Git source specs are not allowed in [constraints] either
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.gpu.constraints]
+        my-lib = { git = "https://github.com/example/my-lib" }
         "#,
         ));
     }

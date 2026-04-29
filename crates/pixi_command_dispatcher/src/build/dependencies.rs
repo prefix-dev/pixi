@@ -103,7 +103,7 @@ impl Dependencies {
         let mut constraints = DependencyMap::default();
 
         for depend in &output.depends {
-            let name = rattler_conda_types::PackageName::from_str(&depend.name)?;
+            let name = rattler_conda_types::PackageName::from_str(depend.name.as_str())?;
 
             // Match directly on PackageSpec
             match &depend.spec {
@@ -129,7 +129,7 @@ impl Dependencies {
         }
 
         for constraint in &output.constraints {
-            let name = rattler_conda_types::PackageName::from_str(&constraint.name)?;
+            let name = rattler_conda_types::PackageName::from_str(constraint.name.as_str())?;
 
             // Match on ConstraintSpec enum
             match &constraint.spec {
@@ -308,12 +308,9 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
     specs
         .iter()
         .filter_map(move |spec| {
-            let (Some(name_matcher), spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
+            let (name_matcher, spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
                 .ok()?
-                .into_nameless()
-            else {
-                return None;
-            };
+                .into_nameless();
             let name = name_matcher.as_exact().cloned()?;
             if ignore.by_name.contains(&name) {
                 return None;
@@ -405,7 +402,7 @@ impl PixiRunExports {
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let name = PackageName::from_str(&named_spec.name)?;
+                    let name = PackageName::from_str(named_spec.name.as_str())?;
 
                     let spec = match named_spec.spec {
                         pbt::PackageSpec::Binary(binary) => {
@@ -431,7 +428,7 @@ impl PixiRunExports {
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let name = PackageName::from_str(&named_spec.name)?;
+                    let name = PackageName::from_str(named_spec.name.as_str())?;
 
                     // Match on ConstraintSpec enum
                     let spec = match named_spec.spec {

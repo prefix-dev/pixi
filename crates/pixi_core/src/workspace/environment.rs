@@ -121,67 +121,38 @@ impl<'p> Environment<'p> {
         self.best_platform_with_current(Platform::current())
     }
 
+    /// If the PIXI_OVERRIDE_PLATFORM environment variable is set to a valid
+    /// platform string, that platform is used instead.
     fn best_platform_with_current(&self, current: Platform) -> Platform {
+        let current = std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
+            .map(|val| {
+                val.parse::<Platform>().unwrap_or_else(|_| {
+                    tracing::warn!("Invalid value for PIXI_OVERRIDE_PLATFORM='{val}', ignoring.");
+                    current
+                })
+            })
+            .unwrap_or(current);
+
         // If the current platform is supported, return it.
         if self.platforms().contains(&current) {
             return current;
         }
 
-        static WARN_ONCE: Once = Once::new();
-
         // If the current platform is osx-arm64 and the environment supports osx-64,
         // return osx-64.
         if current.is_osx() && self.platforms().contains(&Platform::Osx64) {
-            WARN_ONCE.call_once(|| {
-                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
-                let emulation_warn = warn_folder.join("macos-emulation-warn");
-                if !emulation_warn.exists() {
-                    tracing::warn!(
-                        "osx-arm64 (Apple Silicon) is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
-                    );
-                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
-                }
-            });
             return Platform::Osx64;
         }
 
         // If the current platform is win-arm64 and the environment supports win-64,
         // return win-64.
         if current.is_windows() && self.platforms().contains(&Platform::Win64) {
-            WARN_ONCE.call_once(|| {
-                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
-                let emulation_warn = warn_folder.join("windows-emulation-warn");
-                if !emulation_warn.exists() {
-                    tracing::warn!(
-                        "win-arm64 is not supported by the pixi.toml, falling back to win-64 (emulation)"
-                    );
-                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
-                }
-            });
             return Platform::Win64;
         }
 
         // If the current platform is win-64 and the environment supports win-32,
         // return win-32.
         if current == Platform::Win64 && self.platforms().contains(&Platform::Win32) {
-            WARN_ONCE.call_once(|| {
-                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
-                let emulation_warn = warn_folder.join("windows-32-emulation-warn");
-                if !emulation_warn.exists() {
-                    tracing::warn!(
-                        "win-64 is not supported by the pixi.toml, falling back to win-32 (emulation)"
-                    );
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
-                }
-            });
             return Platform::Win32;
         }
 
@@ -195,6 +166,67 @@ impl<'p> Environment<'p> {
         }
 
         current
+    }
+
+    /// Emits a one-time warning if this environment requires platform emulation
+    /// (e.g. Rosetta on Apple Silicon Macs).
+    ///
+    /// This should only be called when the environment is actually being
+    /// installed or activated — not during lock file solving, which is
+    /// cross-platform and does not use emulation.
+    pub fn emit_emulation_warning(&self) {
+        if std::env::var(consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+            return;
+        }
+
+        let current = Platform::current();
+        let best = self.best_platform();
+        if current == best {
+            return;
+        }
+
+        static WARN_ONCE: Once = Once::new();
+
+        if current.is_osx() && best == Platform::Osx64 {
+            WARN_ONCE.call_once(|| {
+                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let emulation_warn = warn_folder.join("macos-emulation-warn");
+                if !emulation_warn.exists() {
+                    tracing::warn!(
+                        "osx-arm64 (Apple Silicon) is not supported by the current environment, falling back to osx-64 (emulated with Rosetta)"
+                    );
+                    fs_err::create_dir_all(warn_folder)
+                        .and_then(|_| fs_err::File::create(emulation_warn))
+                        .ok();
+                }
+            });
+        } else if current.is_windows() && best == Platform::Win64 {
+            WARN_ONCE.call_once(|| {
+                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let emulation_warn = warn_folder.join("windows-emulation-warn");
+                if !emulation_warn.exists() {
+                    tracing::warn!(
+                        "win-arm64 is not supported by the current environment, falling back to win-64 (emulation)"
+                    );
+                    fs_err::create_dir_all(warn_folder)
+                        .and_then(|_| fs_err::File::create(emulation_warn))
+                        .ok();
+                }
+            });
+        } else if current == Platform::Win64 && best == Platform::Win32 {
+            WARN_ONCE.call_once(|| {
+                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let emulation_warn = warn_folder.join("windows-32-emulation-warn");
+                if !emulation_warn.exists() {
+                    tracing::warn!(
+                        "win-64 is not supported by the current environment, falling back to win-32 (emulation)"
+                    );
+                    fs_err::create_dir_all(warn_folder)
+                        .and_then(|_| fs_err::File::create(emulation_warn))
+                        .ok();
+                }
+            });
+        }
     }
 
     /// Returns the tasks defined for this environment.
@@ -302,7 +334,7 @@ impl<'p> Environment<'p> {
     ///
     /// The activation scripts of all features are combined in the order they
     /// are defined for the environment.
-    pub(crate) fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
+    pub fn activation_scripts(&self, platform: Option<Platform>) -> Vec<String> {
         self.features()
             .filter_map(|f| f.activation_scripts(platform))
             .flatten()
@@ -319,7 +351,9 @@ impl<'p> Environment<'p> {
         self.features()
             .map(|f| f.activation_env(platform))
             .fold(IndexMap::new(), |mut acc, env| {
-                acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
+                for (k, v) in env {
+                    acc.entry(k).or_insert(v);
+                }
                 acc
             })
     }
@@ -393,6 +427,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
+    use rattler_conda_types::PackageName;
 
     use super::*;
 
@@ -636,6 +671,46 @@ mod tests {
     }
 
     #[test]
+    fn test_activation_env_feature_precedence() {
+        // First-listed feature should win when multiple features define the same key,
+        // matching task resolution precedence (see issue #5926).
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+            [project]
+            name = "foobar"
+            channels = []
+            platforms = ["linux-64"]
+
+            [activation.env]
+            SHARED_VAR = "default"
+
+            [feature.test1.activation.env]
+            SHARED_VAR = "test1"
+            TEST1_VAR = "1"
+
+            [feature.test2.activation.env]
+            SHARED_VAR = "test2"
+            TEST2_VAR = "2"
+
+            [environments]
+            myenv = ["test1", "test2"]
+            "#,
+        )
+        .unwrap();
+
+        let env = manifest.environment("myenv").unwrap();
+        let activation = env.activation_env(None);
+        // test1 is listed first, so its value must win over test2 and default
+        assert_eq!(
+            activation.get("SHARED_VAR").map(String::as_str),
+            Some("test1")
+        );
+        assert_eq!(activation.get("TEST1_VAR").map(String::as_str), Some("1"));
+        assert_eq!(activation.get("TEST2_VAR").map(String::as_str), Some("2"));
+    }
+
+    #[test]
     fn test_channel_feature_priority() {
         let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
@@ -783,6 +858,184 @@ mod tests {
                 .collect_vec(),
             vec!["barry", "conda-forge", "bar"]
         );
+    }
+
+    #[test]
+    fn test_channel_specific_exclude_newer_across_multiple_features() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+
+        [feature.foo]
+        channels = [
+            { channel = "bioconda", exclude-newer = "2016-12-02T02:07:43Z" },
+            { channel = "pytorch", exclude-newer = "2017-12-02T02:07:43Z" },
+        ]
+
+        [feature.bar]
+        channels = [
+            { channel = "nvidia", exclude-newer = "2018-12-02T02:07:43Z" },
+            { channel = "dglteam", exclude-newer = "2019-12-02T02:07:43Z" },
+        ]
+
+        [environments]
+        combined = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let env = workspace.environment("combined").unwrap();
+        let config = env.exclude_newer_config().unwrap().unwrap();
+        let package = PackageName::new_unchecked("polars");
+
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("bioconda")),
+            chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("pytorch")),
+            chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("nvidia")),
+            chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("dglteam")),
+            chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("conda-forge")),
+            chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+    }
+
+    #[test]
+    fn test_channel_specific_exclude_newer_prefers_first_feature_channel_definition() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+
+        [feature.foo]
+        channels = [
+            { channel = "shared", exclude-newer = "2016-12-02T02:07:43Z" },
+            { channel = "bioconda", exclude-newer = "2017-12-02T02:07:43Z" },
+        ]
+
+        [feature.bar]
+        channels = [
+            { channel = "shared", exclude-newer = "2018-12-02T02:07:43Z" },
+            { channel = "nvidia", exclude-newer = "2019-12-02T02:07:43Z" },
+        ]
+
+        [environments]
+        combined = ["foo", "bar"]
+        "#,
+        )
+        .unwrap();
+
+        let env = workspace.environment("combined").unwrap();
+        let config = env.exclude_newer_config().unwrap().unwrap();
+        let package = PackageName::new_unchecked("polars");
+
+        assert_eq!(
+            env.channels()
+                .into_iter()
+                .map(|c| c.to_string())
+                .collect_vec(),
+            vec!["shared", "bioconda", "nvidia", "conda-forge"]
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("shared")),
+            chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("bioconda")),
+            chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("nvidia")),
+            chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
+    }
+
+    #[test]
+    fn test_exclude_newer_package_channel_workspace_precedence() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "test"
+        channels = [{ channel = "my-private-forge", exclude-newer = "2016-12-02T02:07:43Z" }, "conda-forge"]
+        platforms = ["linux-64"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+
+        [dependencies]
+        polars = "*"
+        numpy = "*"
+
+        [exclude-newer]
+        polars = "2017-12-02T02:07:43Z"
+        openssl = "2018-12-02T02:07:43Z"
+        "#,
+        )
+        .unwrap();
+
+        let env = workspace.environment("default").unwrap();
+        let config = env.exclude_newer_config().unwrap().unwrap();
+        let polars = PackageName::new_unchecked("polars");
+        let numpy = PackageName::new_unchecked("numpy");
+        let openssl = PackageName::new_unchecked("openssl");
+        let workspace_cutoff = chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let channel_cutoff = chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let dependency_cutoff = chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let constraint_cutoff = chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let polars_cutoff = config.cutoff_for_package(&polars, Some("my-private-forge"));
+        assert_eq!(polars_cutoff, dependency_cutoff);
+
+        let openssl_cutoff = config.cutoff_for_package(&openssl, Some("my-private-forge"));
+        assert_eq!(openssl_cutoff, constraint_cutoff);
+
+        let private_numpy_cutoff = config.cutoff_for_package(&numpy, Some("my-private-forge"));
+        assert_eq!(private_numpy_cutoff, channel_cutoff);
+
+        let forge_numpy_cutoff = config.cutoff_for_package(&numpy, Some("conda-forge"));
+        assert_eq!(forge_numpy_cutoff, workspace_cutoff);
     }
 
     #[test]
@@ -1119,5 +1372,62 @@ mod tests {
                 "Channel priorities were expected to be compatible"
             );
         }
+    }
+
+    struct EnvVarGuard;
+
+    // prevents race conditions on the env variable PIXI_OVERRIDE_PLATFORM
+    static ENV_VAR_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            unsafe {
+                std::env::remove_var(consts::PIXI_OVERRIDE_PLATFORM);
+            }
+        }
+    }
+
+    #[test]
+    fn test_best_platform_override_env_var() {
+        let _lock = ENV_VAR_MUTEX.lock().unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let contents = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#;
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+        unsafe {
+            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "linux-aarch64");
+        }
+        let _guard = EnvVarGuard;
+
+        let env = workspace.default_environment();
+        let result = env.best_platform();
+        assert_eq!(result, Platform::LinuxAarch64);
+    }
+
+    #[test]
+    fn test_best_platform_override_invalid_value() {
+        let _lock = ENV_VAR_MUTEX.lock().unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let contents = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#;
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+        unsafe {
+            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "not-a-platform");
+        }
+        let _guard = EnvVarGuard;
+
+        let env = workspace.default_environment();
+        let result = env.best_platform();
+        assert_eq!(result, Platform::current());
     }
 }

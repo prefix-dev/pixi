@@ -16,7 +16,7 @@ repository = "https://github.com/user/repo"
 
 # --8<-- [start:build-system]
 [package.build]
-backend = { name = "pixi-build-cmake", version = "0.3.*" }
+backend = { name = "pixi-build-cmake", version = "0.*" }
 # not required:
 channels = ["https://prefix.dev/conda-forge"]
 config = { key = "value" }                    # Optional configuration, specific to the build backend

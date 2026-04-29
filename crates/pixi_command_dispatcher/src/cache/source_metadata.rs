@@ -1,14 +1,17 @@
 use super::common::{
     CacheError, CacheKey, CachedMetadata, MetadataCache, WriteResult as CommonWriteResult,
 };
+use crate::build::CanonicalSourceCodeLocation;
 use crate::cache::build_backend_metadata::CachedCondaMetadataId;
-use crate::{BuildEnvironment, build::source_checkout_cache_key, cache::common::VersionedMetadata};
+use crate::{BuildEnvironment, cache::common::VersionedMetadata};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_path::AbsPathBuf;
-use pixi_record::{PinnedSourceSpec, SourceRecord};
-use rattler_conda_types::{ChannelUrl, PackageName};
+use pixi_spec::{ResolvedExcludeNewer, SourceLocationSpec};
+use pixi_variant::VariantValue;
+use rattler_conda_types::{ChannelUrl, PackageName, PackageRecord};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     path::{Path, PathBuf},
@@ -52,11 +55,14 @@ pub struct SourceMetadataCacheShard {
     /// The build environment
     pub build_environment: BuildEnvironment,
 
+    /// Exclude packages newer than the configured cutoffs when solving backend environments.
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
+
     /// The protocols that are enabled for source packages
     pub enabled_protocols: EnabledProtocols,
 
     /// The pinned source location
-    pub pinned_source: PinnedSourceSpec,
+    pub source: CanonicalSourceCodeLocation,
 }
 
 impl SourceMetadataCache {
@@ -78,10 +84,6 @@ impl MetadataCache for SourceMetadataCache {
         self.root.as_std_path()
     }
 
-    fn cache_file_name(&self) -> &'static str {
-        "source_metadata.json"
-    }
-
     const CACHE_SUFFIX: &'static str = "v0";
 }
 
@@ -91,6 +93,7 @@ impl CacheKey for SourceMetadataCacheShard {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
         self.build_environment.build_platform.hash(&mut hasher);
+        self.exclude_newer.hash(&mut hasher);
 
         let mut build_virtual_packages = self.build_environment.build_virtual_packages.clone();
         build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
@@ -102,9 +105,9 @@ impl CacheKey for SourceMetadataCacheShard {
 
         self.enabled_protocols.hash(&mut hasher);
 
-        let source_dir = source_checkout_cache_key(&self.pinned_source);
+        let source_dir = self.source.cache_unique_key();
         format!(
-            "{source_dir}/{}/{}-{}",
+            "{source_dir}/{}-{}-{}",
             self.package.as_normalized(),
             self.build_environment.host_platform,
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
@@ -135,7 +138,21 @@ pub struct CachedSourceMetadata {
     pub cached_conda_metadata_id: CachedCondaMetadataId,
 
     /// The source records
-    pub records: Vec<SourceRecord>,
+    pub records: Vec<CachedSourceRecord>,
+}
+
+/// A cached version of a `SourceRecord` but with a few elements removed
+/// because they can be derived from the input instead like te manifest source.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CachedSourceRecord {
+    pub package_record: PackageRecord,
+
+    /// The variants that uniquely identify the way this package was built.
+    pub variants: Option<BTreeMap<String, VariantValue>>,
+
+    /// Specifies which packages are expected to be installed as source packages
+    /// and from which location.
+    pub sources: HashMap<String, SourceLocationSpec>,
 }
 
 impl CachedMetadata for CachedSourceMetadata {}

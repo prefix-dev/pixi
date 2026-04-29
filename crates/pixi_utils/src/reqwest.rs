@@ -44,7 +44,6 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
         for v in value {
             mirrors.push(Mirror {
                 url: ensure_trailing_slash(v),
-                no_jlap: false,
                 no_bz2: false,
                 no_zstd: false,
                 max_failures: None,
@@ -56,8 +55,9 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     MirrorMiddleware::from_map(internal_map)
 }
 
-pub fn oci_middleware() -> OciMiddleware {
-    OciMiddleware
+pub fn oci_middleware(client: LazyReqwestClient) -> OciMiddleware {
+    let middleware = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
+    OciMiddleware::new(middleware)
 }
 
 static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
@@ -85,7 +85,7 @@ pub fn should_use_builtin_certs_uv(config: &Config) -> bool {
 pub fn tls_backend() -> &'static str {
     #[cfg(feature = "native-tls")]
     {
-        return "native-tls";
+        "native-tls"
     }
 
     #[cfg(not(feature = "native-tls"))]
@@ -151,6 +151,7 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
 
 pub fn build_reqwest_middleware_stack(
     config: &Config,
+    client: &LazyReqwestClient,
     s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
 ) -> miette::Result<Box<[Arc<dyn Middleware>]>> {
     let mut result: Vec<Arc<dyn Middleware>> = Vec::new();
@@ -165,10 +166,10 @@ pub fn build_reqwest_middleware_stack(
 
     if !config.mirror_map().is_empty() {
         result.push(Arc::new(mirror_middleware(config)));
-        result.push(Arc::new(oci_middleware()));
+        result.push(Arc::new(oci_middleware(client.clone())));
     }
 
-    result.push(Arc::new(GCSMiddleware));
+    result.push(Arc::new(GCSMiddleware::default()));
 
     let s3_config_global = config.compute_s3_config();
     let s3_config_project = s3_config_project.unwrap_or_default();
@@ -197,8 +198,10 @@ pub fn build_reqwest_clients(
         Cow::Owned(Config::load_global())
     };
 
-    let client = LazyReqwestClient::new(&config)?.into_client();
-    let middleware = build_reqwest_middleware_stack(&config, s3_config_project)?;
+    let lazy_client = LazyReqwestClient::new(&config)?;
+    let middleware = build_reqwest_middleware_stack(&config, &lazy_client, s3_config_project)?;
+
+    let client = lazy_client.into_client();
     let authenticated_client = ClientWithMiddleware::new(client.clone(), middleware);
 
     Ok((client, authenticated_client))
@@ -216,7 +219,7 @@ pub fn build_lazy_reqwest_clients(
     };
 
     let client = LazyReqwestClient::new(&config)?;
-    let middleware_stack = build_reqwest_middleware_stack(&config, s3_config_project)?;
+    let middleware_stack = build_reqwest_middleware_stack(&config, &client, s3_config_project)?;
 
     let client_for_middleware = client.clone();
     let client_with_middleware = rattler_networking::LazyClient::new(move || {
@@ -265,13 +268,13 @@ impl LazyReqwestClient {
     }
 }
 
-pub fn uv_middlewares(config: &Config) -> Vec<Arc<dyn Middleware>> {
+pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn Middleware>> {
     let mut middlewares: Vec<Arc<dyn Middleware>> = if config.mirror_map().is_empty() {
         vec![]
     } else {
         vec![
             Arc::new(mirror_middleware(config)),
-            Arc::new(oci_middleware()),
+            Arc::new(oci_middleware(client.clone())),
         ]
     };
 
@@ -301,7 +304,8 @@ mod tests {
             vec![Url::parse("https://my-mirror.example.com/simple/").unwrap()],
         );
 
-        let middlewares = uv_middlewares(&config);
+        let client = LazyReqwestClient::new(&config).unwrap();
+        let middlewares = uv_middlewares(&config, client);
 
         // Should have: mirror + OCI + auth middleware
         assert!(
@@ -316,7 +320,8 @@ mod tests {
         // Test that authentication middleware is still included even without mirrors
         // This ensures existing non-mirror auth scenarios continue to work
         let config = Config::default();
-        let middlewares = uv_middlewares(&config);
+        let client = LazyReqwestClient::new(&config).unwrap();
+        let middlewares = uv_middlewares(&config, client);
 
         // Should have: auth middleware only
         assert_eq!(

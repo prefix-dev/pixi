@@ -3,6 +3,8 @@ members = ["cargo:."]
 
 # Config for 'dist'
 [dist]
+# Build one binary, see: https://axodotdev.github.io/cargo-dist/book/reference/config.html?highlight=binaries#inferring-precise-builds
+precise-builds = true
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "1.0.0-rc.1"
 # CI backends to support
@@ -18,6 +20,7 @@ targets = [
   "aarch64-apple-darwin",
   "aarch64-unknown-linux-musl",
   "aarch64-pc-windows-msvc",
+  "riscv64gc-unknown-linux-gnu",
   "x86_64-apple-darwin",
   "x86_64-unknown-linux-musl",
   "x86_64-pc-windows-msvc",
@@ -49,10 +52,14 @@ aarch64-pc-windows-msvc = "windows_x64_2025_large"
 x86_64-pc-windows-msvc = "windows_x64_2025_large"
 # Linux targets
 aarch64-unknown-linux-musl = "8core_ubuntu_latest_runner"
+riscv64gc-unknown-linux-gnu = "8core_ubuntu_latest_runner"
 x86_64-unknown-linux-musl = "8core_ubuntu_latest_runner"
 
 [dist.dependencies.apt]
 gcc-aarch64-linux-gnu = { version = '*', targets = [
   "aarch64-unknown-linux-gnu",
   "aarch64-unknown-linux-musl",
+] }
+gcc-riscv64-linux-gnu = { version = '*', targets = [
+  "riscv64gc-unknown-linux-gnu",
 ] }

@@ -9,7 +9,7 @@ use crate::{
     common::{LockFileExt, PixiControl},
     setup_tracing,
 };
-use pixi_test_utils::{MockRepoData, Package};
+use pixi_test_utils::{MockRepoData, Package, format_diagnostic};
 
 /// Test that verifies build backend receives the correct resolved source path
 /// when a relative path is specified in the source field
@@ -543,6 +543,198 @@ backend.version = "0.1.0"
         gitignore_path.exists(),
         ".pixi/.gitignore file was not created after build"
     );
+}
+
+#[tokio::test]
+async fn test_source_dependency_inherits_exclude_newer_for_build_dependencies() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2026-01-10T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "passthrough", version = "*" }
+
+[package.build-dependencies]
+foo = "*"
+"#,
+    )
+    .unwrap();
+
+    let manifest_without_cutoff = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    pixi.update_manifest(&manifest_without_cutoff).unwrap();
+    pixi.install()
+        .await
+        .expect("source dependency should install without exclude-newer");
+
+    let manifest_with_cutoff = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+exclude-newer = "2025-01-01T00:00:00Z"
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    pixi.update_manifest(&manifest_with_cutoff).unwrap();
+
+    let err = pixi
+        .install()
+        .await
+        .expect_err("source build env solve should inherit exclude-newer during install");
+    let rendered = format_diagnostic(err.as_ref());
+    assert!(
+        rendered.contains("failed to solve the build environment"),
+        "{rendered}"
+    );
+    assert!(rendered.contains("foo"), "{rendered}");
+}
+
+#[tokio::test]
+async fn test_source_dependency_honors_exclude_newer_overrides_for_host_and_build_dependencies() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2026-01-10T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("bar", "1")
+            .with_timestamp("2026-01-10T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.host-dependencies]
+bar = "*"
+
+[package.build-dependencies]
+foo = "*"
+"#,
+    )
+    .unwrap();
+
+    let cutoff = "2025-01-01T00:00:00Z";
+    let override_cutoff = "2026-12-31T00:00:00Z";
+
+    let manifest_with_build_override_only = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+exclude-newer = "{cutoff}"
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+
+[exclude-newer]
+foo = "{override_cutoff}"
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+        cutoff = cutoff,
+        override_cutoff = override_cutoff,
+    );
+    pixi.update_manifest(&manifest_with_build_override_only)
+        .unwrap();
+
+    let err = pixi
+        .install()
+        .await
+        .expect_err("host dependency should still be excluded until it is overridden too");
+    let rendered = format_diagnostic(err.as_ref());
+    assert!(
+        rendered.contains("while trying to solve the host environment"),
+        "{rendered}"
+    );
+    assert!(rendered.contains("bar"), "{rendered}");
+
+    let manifest_with_both_overrides = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+exclude-newer = "{cutoff}"
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+
+[exclude-newer]
+foo = "{override_cutoff}"
+bar = "{override_cutoff}"
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+        cutoff = cutoff,
+        override_cutoff = override_cutoff,
+    );
+    pixi.update_manifest(&manifest_with_both_overrides).unwrap();
+
+    pixi.install()
+        .await
+        .expect("timestamp-less pixi-build source packages should remain eligible");
 }
 
 /// Test that demonstrates using PassthroughBackend with PixiControl

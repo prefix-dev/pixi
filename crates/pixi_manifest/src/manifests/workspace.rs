@@ -917,8 +917,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
-        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
+        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, Feature, FeatureName,
+        FeaturesExt, HasFeaturesIter, HasWorkspaceManifest, PrioritizedChannel, SpecType,
+        TargetSelector, Task, TomlError, WorkspaceManifest,
         manifests::document::ManifestDocument,
         pyproject::PyProjectManifest,
         task::TaskRenderContext,
@@ -2234,6 +2235,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2249,6 +2251,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2266,6 +2269,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2288,6 +2292,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2306,10 +2311,12 @@ platforms = ["linux-64", "win-64"]
                 PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test")),
                     priority: None,
+                    exclude_newer: None,
                 },
                 PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test2")),
                     priority: None,
+                    exclude_newer: None,
                 },
             ]
             .into_iter()
@@ -2320,6 +2327,7 @@ platforms = ["linux-64", "win-64"]
         let custom_channel = PrioritizedChannel {
             channel: NamedChannelOrUrl::Url("https://custom.com/channel".parse().unwrap()),
             priority: None,
+            exclude_newer: None,
         };
         manifest
             .add_channels([custom_channel.clone()], &FeatureName::DEFAULT, false)
@@ -2338,6 +2346,7 @@ platforms = ["linux-64", "win-64"]
         let prioritized_channel1 = PrioritizedChannel {
             channel: NamedChannelOrUrl::Name(String::from("prioritized")),
             priority: Some(12i32),
+            exclude_newer: None,
         };
         manifest
             .add_channels([prioritized_channel1.clone()], &FeatureName::DEFAULT, false)
@@ -2355,6 +2364,7 @@ platforms = ["linux-64", "win-64"]
         let prioritized_channel2 = PrioritizedChannel {
             channel: NamedChannelOrUrl::Name(String::from("prioritized2")),
             priority: Some(-12i32),
+            exclude_newer: None,
         };
         manifest
             .add_channels([prioritized_channel2.clone()], &FeatureName::DEFAULT, false)
@@ -2405,6 +2415,7 @@ platforms = ["linux-64", "win-64"]
                 [PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                     priority: None,
+                    exclude_newer: None,
                 }],
                 &FeatureName::DEFAULT,
             )
@@ -2417,6 +2428,7 @@ platforms = ["linux-64", "win-64"]
                 [PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test_channel")),
                     priority: None,
+                    exclude_newer: None,
                 }],
                 &FeatureName::from("test"),
             )
@@ -2438,6 +2450,7 @@ platforms = ["linux-64", "win-64"]
                     [PrioritizedChannel {
                         channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                         priority: None,
+                        exclude_newer: None,
                     }],
                     &FeatureName::DEFAULT,
                 )
@@ -2621,10 +2634,12 @@ platforms = ["linux-64", "win-64"]
                 &PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("pytorch")),
                     priority: None,
+                    exclude_newer: None,
                 },
                 &PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                     priority: Some(-1),
+                    exclude_newer: None,
                 },
             ]
         );
@@ -2750,7 +2765,7 @@ bar = "*"
         let spec = &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap();
 
         let (name, spec) = spec.clone().into_nameless();
-        let name = name.unwrap().as_exact().unwrap().clone();
+        let name = name.as_exact().unwrap().clone();
 
         let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
 
@@ -2787,7 +2802,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                name.unwrap().as_exact().unwrap(),
+                name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
                 &[],
@@ -2822,7 +2837,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                package_name.unwrap().as_exact().unwrap(),
+                package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
                 &[Platform::Linux64],
@@ -2858,7 +2873,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                package_name.unwrap().as_exact().unwrap(),
+                package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Build,
                 &[Platform::Linux64],
@@ -3329,5 +3344,268 @@ channels = ["nvidia", "pytorch"]
         "#;
         let manifest_no = parse_pixi_toml(contents_no).manifest;
         assert_eq!(manifest_no.workspace.requires_pixi, None);
+    }
+
+    #[test]
+    fn test_constraints_in_default_feature() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+
+[dependencies]
+python = ">=3.9"
+
+[constraints]
+openssl = "<3"
+zlib = ">=1.2"
+"#;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let constraints = manifest.default_feature().constraints(None);
+
+        assert!(
+            constraints.is_some(),
+            "Default feature should have constraints"
+        );
+        let constraints = constraints.unwrap();
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+        assert!(
+            constraints.get(&openssl).is_some(),
+            "Should have openssl constraint"
+        );
+    }
+
+    #[test]
+    fn test_combined_constraints_across_features() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+
+[constraints]
+openssl = "<3"
+
+[feature.extra.constraints]
+zlib = ">=1.2"
+
+[environments]
+full = ["extra"]
+"#;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let workspace = crate::WorkspaceManifest::from_toml_str(contents).unwrap();
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+        let zlib = PackageName::from_str("zlib").unwrap();
+
+        // Check default feature constraints
+        let default_constraints = workspace.default_feature().constraints(None);
+        assert!(default_constraints.is_some());
+        assert!(default_constraints.unwrap().get(&openssl).is_some());
+
+        // Check extra feature constraints
+        let extra = workspace
+            .features
+            .get(&FeatureName::from("extra"))
+            .expect("Should have extra feature");
+        let extra_constraints = extra.constraints(None);
+        assert!(extra_constraints.is_some());
+        assert!(extra_constraints.unwrap().get(&zlib).is_some());
+    }
+
+    #[test]
+    fn test_constraints_in_platform_target() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[constraints]
+openssl = "<3"
+
+[target.linux-64.constraints]
+openssl = "<2"
+"#;
+        use rattler_conda_types::{PackageName, Platform};
+        use std::str::FromStr;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+
+        // Platform-independent constraint
+        let base_constraints = default_feature.constraints(None);
+        assert!(base_constraints.is_some());
+        let base_spec = base_constraints
+            .unwrap()
+            .get(&openssl)
+            .expect("Should have openssl")
+            .iter()
+            .next()
+            .unwrap()
+            .as_version_spec()
+            .unwrap()
+            .to_string();
+        assert_eq!(base_spec, "<3");
+
+        // Platform-specific constraint overrides
+        let linux_constraints = default_feature.constraints(Some(Platform::Linux64));
+        assert!(linux_constraints.is_some());
+        let linux_spec = linux_constraints
+            .unwrap()
+            .get(&openssl)
+            .expect("Should have openssl on linux")
+            .iter()
+            .next()
+            .unwrap()
+            .as_version_spec()
+            .unwrap()
+            .to_string();
+        assert_eq!(linux_spec, "<2");
+    }
+
+    #[test]
+    fn test_package_exclude_newer_tables_are_parsed() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#;
+        use pixi_pypi_spec::PypiPackageName;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let polars = PackageName::from_str("polars").unwrap();
+        assert_eq!(
+            manifest
+                .workspace
+                .exclude_newer_package_overrides
+                .get(&polars)
+                .map(|value| value.to_string()),
+            Some("0s".to_string())
+        );
+
+        let boltons = PypiPackageName::from_str("boltons").unwrap();
+        assert_eq!(
+            manifest
+                .workspace
+                .pypi_exclude_newer_package_overrides
+                .get(&boltons)
+                .map(|value| value.to_string()),
+            Some("0s".to_string())
+        );
+    }
+
+    #[test]
+    fn test_exclude_newer_config_applies_package_overrides() {
+        struct TestFeatures<'a> {
+            manifest: &'a WorkspaceManifest,
+            features: Vec<&'a Feature>,
+        }
+
+        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
+            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+                self.manifest
+            }
+        }
+
+        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
+            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+                self.features.clone().into_iter()
+            }
+        }
+
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+
+[exclude-newer]
+polars = "0d"
+"#;
+
+        let before = chrono::Utc::now();
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+        let features = TestFeatures {
+            manifest: &manifest,
+            features: vec![default_feature],
+        };
+        let config = features.exclude_newer_config().unwrap().unwrap();
+        let after = chrono::Utc::now();
+        let package = PackageName::from_str("polars").unwrap();
+        let package_cutoff = config.cutoff_for_package(&package, None);
+
+        assert!(package_cutoff >= before);
+        assert!(package_cutoff <= after + chrono::Duration::seconds(1));
+    }
+
+    #[test]
+    fn test_exclude_newer_config_applies_channel_overrides() {
+        struct TestFeatures<'a> {
+            manifest: &'a WorkspaceManifest,
+            features: Vec<&'a Feature>,
+        }
+
+        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
+            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+                self.manifest
+            }
+        }
+
+        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
+            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+                self.features.clone().into_iter()
+            }
+        }
+
+        let contents = r#"
+[project]
+name = "foo"
+channels = ["conda-forge", { channel = "bioconda", exclude-newer = "0d" }]
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+"#;
+
+        let before = chrono::Utc::now();
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+        let features = TestFeatures {
+            manifest: &manifest,
+            features: vec![default_feature],
+        };
+        let config = features.exclude_newer_config().unwrap().unwrap();
+        let after = chrono::Utc::now();
+
+        let package = PackageName::from_str("polars").unwrap();
+        let bioconda_cutoff = config.cutoff_for_package(&package, Some("bioconda"));
+        assert!(bioconda_cutoff >= before);
+        assert!(bioconda_cutoff <= after + chrono::Duration::seconds(1));
+
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("conda-forge")),
+            chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
     }
 }

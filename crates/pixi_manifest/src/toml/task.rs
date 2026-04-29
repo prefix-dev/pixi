@@ -58,6 +58,7 @@ impl<'de> toml_span::Deserialize<'de> for TaskArg {
                 return Ok(TaskArg {
                     name,
                     default: None,
+                    choices: None,
                 });
             }
             ValueInner::Table(table) => TableHelper::from((table, value.span)),
@@ -66,10 +67,32 @@ impl<'de> toml_span::Deserialize<'de> for TaskArg {
 
         let name = th.required::<TomlFromStr<ArgName>>("arg")?.into_inner();
         let default = th.optional::<String>("default");
+        let choices = th.optional::<Vec<String>>("choices");
 
         th.finalize(None)?;
 
-        Ok(TaskArg { name, default })
+        if let (Some(default_val), Some(choices_val)) = (&default, &choices)
+            && !choices_val.contains(default_val)
+        {
+            return Err(DeserError::from(toml_span::Error {
+                kind: ErrorKind::Custom(
+                    format!(
+                        "default value '{}' is not one of the allowed choices: {}",
+                        default_val,
+                        choices_val.join(", ")
+                    )
+                    .into(),
+                ),
+                span: value.span,
+                line_info: None,
+            }));
+        }
+
+        Ok(TaskArg {
+            name,
+            default,
+            choices,
+        })
     }
 }
 
@@ -371,5 +394,57 @@ mod test {
             depends-on = [{ task = "foo", args = [{ "foo" = "bar" }, { "baz" = "qux" }] }]
         "#
         ), @"test, depends-on = 'foo with args'");
+    }
+
+    #[test]
+    fn test_task_arg_with_choices() {
+        let input = r#"
+            cmd = "echo {{ target }}"
+            args = [{ arg = "target", choices = ["debug", "release"] }]
+        "#;
+        let parsed = TomlTask::from_toml_str(input).unwrap();
+        let task = parsed.value;
+        let args = task.args().unwrap();
+        assert_eq!(args.len(), 1);
+        assert_eq!(args[0].name.as_str(), "target");
+        assert!(args[0].default.is_none());
+        assert_eq!(
+            args[0].choices.as_ref().unwrap(),
+            &vec!["debug".to_string(), "release".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_task_arg_with_choices_and_valid_default() {
+        let input = r#"
+            cmd = "echo {{ target }}"
+            args = [{ arg = "target", default = "debug", choices = ["debug", "release"] }]
+        "#;
+        let parsed = TomlTask::from_toml_str(input).unwrap();
+        let task = parsed.value;
+        let args = task.args().unwrap();
+        assert_eq!(args[0].default.as_deref(), Some("debug"));
+        assert_eq!(
+            args[0].choices.as_ref().unwrap(),
+            &vec!["debug".to_string(), "release".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_task_arg_with_choices_and_invalid_default() {
+        insta::assert_snapshot!(expect_parse_failure(
+            r#"
+            cmd = "echo {{ target }}"
+            args = [{ arg = "target", default = "invalid", choices = ["debug", "release"] }]
+        "#
+        ), @r###"
+          × default value 'invalid' is not one of the allowed choices: debug, release
+           ╭─[pixi.toml:3:21]
+         2 │             cmd = "echo {{ target }}"
+         3 │             args = [{ arg = "target", default = "invalid", choices = ["debug", "release"] }]
+           ·                     ───────────────────────────────────────────────────────────────────────
+         4 │
+           ╰────
+        "###);
     }
 }

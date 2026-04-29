@@ -648,12 +648,7 @@ fn resolve_run_export_spec(
     )
     .ok()?;
 
-    let name = match_spec
-        .name
-        .as_ref()?
-        .as_exact()?
-        .as_source()
-        .to_string();
+    let pkg_name = match_spec.name.as_exact()?.clone();
 
     // Check if there's a variant value for this package
     let version_spec = if match_spec
@@ -662,7 +657,7 @@ fn resolve_run_export_spec(
         .is_none_or(|v| matches!(v, VersionSpec::Any))
     {
         // If version is "*" or unspecified, try to use the variant value
-        if let Some(variant_value) = variant.get(&name) {
+        if let Some(variant_value) = variant.get(pkg_name.as_source()) {
             Some(
                 VersionSpec::from_str(
                     variant_value.to_string().as_str(),
@@ -678,7 +673,7 @@ fn resolve_run_export_spec(
     };
 
     Some(NamedSpec {
-        name: SourcePackageName::from(name),
+        name: SourcePackageName::from(pkg_name),
         spec: PackageSpec::Binary(BinaryPackageSpec {
             version: version_spec,
             ..Default::default()
@@ -700,15 +695,10 @@ fn convert_run_exports_json(
                 )
                 .ok()?;
 
-                let name = match_spec
-                    .name
-                    .as_ref()?
-                    .as_exact()?
-                    .as_source()
-                    .to_string();
+                let pkg_name = match_spec.name.as_exact()?.clone();
 
                 Some(NamedSpec {
-                    name: SourcePackageName::from(name),
+                    name: SourcePackageName::from(pkg_name),
                     spec: PackageSpec::Binary(BinaryPackageSpec {
                         version: match_spec.version.clone(),
                         ..Default::default()
@@ -728,15 +718,10 @@ fn convert_run_exports_json(
                 )
                 .ok()?;
 
-                let name = match_spec
-                    .name
-                    .as_ref()?
-                    .as_exact()?
-                    .as_source()
-                    .to_string();
+                let pkg_name = match_spec.name.as_exact()?.clone();
 
                 Some(NamedSpec {
-                    name: SourcePackageName::from(name),
+                    name: SourcePackageName::from(pkg_name),
                     spec: ConstraintSpec::Binary(BinaryPackageSpec {
                         version: match_spec.version.clone(),
                         ..Default::default()

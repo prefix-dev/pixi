@@ -1,0 +1,43 @@
+[package]
+edition.workspace = true
+license.workspace = true
+name = "pixi-build-python"
+version = "0.4.8"
+
+[package.metadata.dist]
+dist = false
+
+[features]
+default = ["rustls-tls"]
+native-tls = ["pixi_build_backend/native-tls"]
+rustls-tls = ["pixi_build_backend/rustls-tls"]
+slow_integration_tests = []
+
+[dependencies]
+async-trait = { workspace = true }
+fs-err = { workspace = true }
+indexmap = { workspace = true }
+miette = { workspace = true }
+minijinja = { workspace = true }
+once_cell = { workspace = true }
+pep440_rs = { workspace = true }
+pep508_rs = { workspace = true }
+pixi_build_backend = { workspace = true }
+pixi_build_types = { workspace = true }
+pyproject-toml = { workspace = true }
+rattler_build_recipe = { workspace = true }
+rattler_conda_types = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+spdx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+toml = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+url = { workspace = true }

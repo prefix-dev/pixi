@@ -21,6 +21,7 @@ pixi update [OPTIONS] [PACKAGES]...
 ## Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't install the (solve) environments needed for pypi-dependencies solving
+<br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
 :  Don't actually write the lockfile or update any environment
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENTS>`</a>
@@ -58,6 +59,8 @@ pixi update [OPTIONS] [PACKAGES]...
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
+:  Name of the workspace
 
 ## Description
 The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.

@@ -1,0 +1,25 @@
+{% set PYTHON="%PYTHON%" if build_platform == "windows" else "$PYTHON" -%}
+{%- set OPTIONS = [
+    "-vv",
+    "--no-deps",
+    "--no-build-isolation"
+] + extra_args + (["--editable"] if editable else [])
+-%}
+
+{% if build_platform == "windows" -%}
+{% set OPTIONS = OPTIONS | join(" ^\n        ") -%}
+{% else -%}
+{% set OPTIONS = OPTIONS | join(" \\\n        ") -%}
+{% endif -%}
+
+{% if installer == "uv" -%}
+uv pip install --python "{{ PYTHON }}" {{ OPTIONS }} "{{ manifest_root }}"
+{% elif build_platform == "windows" -%}
+"{{ PYTHON }}" -m pip install --ignore-installed {{ OPTIONS }} "{{ manifest_root }}"
+{% else %}
+"{{ PYTHON }}" -m pip install --ignore-installed {{ OPTIONS }} "{{ manifest_root }}"
+{% endif -%}
+
+{% if build_platform == "windows" -%}
+if errorlevel 1 exit 1
+{% endif %}

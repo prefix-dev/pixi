@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from .common import CURRENT_PLATFORM, ExitCode, copytree_with_local_backend, verify_cli_command
+from .common import CURRENT_PLATFORM, copytree_with_local_backend, verify_cli_command, ExitCode
 
 
 def test_build(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     project = "multi-output"
     test_data = build_data.joinpath(project)
-    test_data.joinpath("pixi.lock").unlink(missing_ok=True)
     copytree_with_local_backend(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+    tmp_pixi_workspace.joinpath("pixi.lock").unlink(missing_ok=True)
     package_manifest = tmp_pixi_workspace.joinpath("recipe", "pixi.toml")
 
     verify_cli_command(
@@ -54,6 +54,7 @@ def test_available_packages(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
         [pixi, "run", "-v", "--manifest-path", tmp_pixi_workspace, "foobar-desktop"],
         stdout_contains="Hello from foobar-desktop",
     )
+
     # foobar is a dependency of foobar-desktop, so it should be there as well
     verify_cli_command(
         [pixi, "run", "-v", "--manifest-path", tmp_pixi_workspace, "foobar"],

@@ -15,7 +15,7 @@ name = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "0.3.*" }
+backend = { name = "pixi-build-cmake", version = "0.*" }
 
 [package.build.config]
 extra-args = ["-DCMAKE_BUILD_TYPE=Release"] # (9)!

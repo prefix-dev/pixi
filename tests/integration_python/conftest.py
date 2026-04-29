@@ -1,23 +1,16 @@
-import os
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
+import os
+import stat
+import shutil
+import sys
+import tempfile
+import time
 
 import pytest
 
 from .common import CONDA_FORGE_CHANNEL, exec_extension
-
-
-@pytest.fixture(autouse=True)
-def clean_pixi_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Remove all PIXI_ prefixed environment variables before each test.
-
-    Since tests are run via `pixi run`, the environment contains PIXI_ variables
-    (like PIXI_IN_SHELL, PIXI_PROJECT_ROOT, etc.) that can interfere with the
-    pixi commands being tested. This fixture ensures each test starts with a
-    clean environment.
-    """
-    for key in list(os.environ.keys()):
-        if key.startswith("PIXI_"):
-            monkeypatch.delenv(key, raising=False)
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -37,8 +30,12 @@ def pixi(request: pytest.FixtureRequest) -> Path:
 
 
 @pytest.fixture
-def tmp_pixi_workspace(tmp_path: Path) -> Path:
-    """Ensure to use a common config independent of the developers machine"""
+def tmp_pixi_workspace(tmp_path: Path):
+    """Create a temporary workspace for tests, with a .pixi config.
+
+    On Windows, uses a shorter path to avoid MAX_PATH (260 char) limitations.
+    The build process creates deeply nested paths that can exceed this limit.
+    """
 
     pixi_config = f"""
 # Reset to defaults
@@ -58,10 +55,43 @@ use-environment-activation-cache = false
 [repodata-config."https://prefix.dev/"]
 disable-sharded = false
 """
-    dot_pixi = tmp_path.joinpath(".pixi")
-    dot_pixi.mkdir()
-    dot_pixi.joinpath("config.toml").write_text(pixi_config)
-    return tmp_path
+
+    if sys.platform == "win32":
+        # Use a very short base path on Windows to avoid MAX_PATH issues.
+        # The standard temp directory (e.g. C:\Users\<user>\AppData\Local\Temp)
+        # is already quite long, so we use C:\.r instead.
+        # Use no drive letter to avoid issues with different drives
+        short_base = Path(r"\.r")
+        short_base.mkdir(parents=True, exist_ok=True)
+        workspace = Path(tempfile.mkdtemp(dir=short_base))
+        workspace.joinpath(".pixi").mkdir()
+        workspace.joinpath(".pixi/config.toml").write_text(pixi_config)
+
+        def _robust_remove(func: Callable[..., Any], path: str, exc: BaseException) -> None:
+            if isinstance(exc, PermissionError):
+                if exc.winerror == 5:  # Access denied (read-only file)
+                    os.chmod(path, stat.S_IWRITE)
+                    func(path)
+                    return
+                if exc.winerror == 32:  # Sharing violation (file in use)
+                    for _ in range(3):
+                        time.sleep(0.5)
+                        try:
+                            os.chmod(path, stat.S_IWRITE)
+                            func(path)
+                            return
+                        except PermissionError:
+                            continue
+            # If we get here, swallow the error (best-effort cleanup)
+
+        try:
+            yield workspace
+        finally:
+            shutil.rmtree(workspace, onexc=_robust_remove)
+    else:
+        tmp_path.joinpath(".pixi").mkdir()
+        tmp_path.joinpath(".pixi/config.toml").write_text(pixi_config)
+        yield tmp_path
 
 
 @pytest.fixture

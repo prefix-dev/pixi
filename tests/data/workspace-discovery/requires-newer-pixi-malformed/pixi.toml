@@ -1,0 +1,6 @@
+[workspace]
+channels = []
+name = "requires-newer-pixi-malformed"
+platforms = []
+requires-pixi = "not a valid version spec!!"
+some-future-field = true

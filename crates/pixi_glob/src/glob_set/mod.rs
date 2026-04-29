@@ -328,4 +328,34 @@ mod tests {
         let paths = sorted_paths(entries, &workspace);
         assert_yaml_snapshot!(paths, @"[]");
     }
+
+    /// Symlinks to directories should be followed, so files inside the target
+    /// directory are discovered. Reproduces https://github.com/prefix-dev/pixi/issues/5417
+    #[cfg(unix)]
+    #[test]
+    fn symlink_to_directory_is_followed() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path().join("workspace");
+        fs::create_dir(&root_path).unwrap();
+
+        // Create a real directory with files *outside* the search root
+        let real_dir = temp_dir.path().join("real_dir");
+        fs::create_dir(&real_dir).unwrap();
+        File::create(real_dir.join("linked_file.txt")).unwrap();
+
+        // Create a regular file and directory in the search root
+        File::create(root_path.join("regular.txt")).unwrap();
+
+        // Create a symlink inside the search root pointing to the real directory
+        std::os::unix::fs::symlink(&real_dir, root_path.join("link_dir")).unwrap();
+
+        let glob_set = GlobSet::create(vec!["**"]);
+        let entries = glob_set.collect_matching(&root_path).unwrap();
+
+        let paths = sorted_paths(entries, &root_path);
+        assert_yaml_snapshot!(paths, @r#"
+        - link_dir/linked_file.txt
+        - regular.txt
+        "#);
+    }
 }

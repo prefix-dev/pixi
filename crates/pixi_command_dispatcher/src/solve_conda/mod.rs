@@ -4,10 +4,9 @@ use std::{
     sync::Arc,
 };
 
-use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use pixi_record::{PixiRecord, SourceRecord};
-use pixi_spec::{BinarySpec, SourceSpec};
+use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
@@ -81,9 +80,9 @@ pub struct SolveCondaEnvironmentSpec {
     #[serde(skip_serializing_if = "crate::is_default")]
     pub channel_priority: ChannelPriority,
 
-    /// Exclude any packages after the first cut-off date.
-    #[serde(skip_serializing_if = "crate::is_default")]
-    pub exclude_newer: Option<DateTime<Utc>>,
+    /// Exclude packages newer than the configured default and per-channel cutoffs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
 
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
@@ -119,12 +118,14 @@ impl SolveCondaEnvironmentSpec {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
+            let exclude_newer = self.exclude_newer.clone().map(Into::into);
+
             // Determine for which records we have source records because those records should only
             //  be installed as source records.
             let package_names_from_source = self
                 .source_repodata
                 .iter()
-                .flat_map(|metadata| &metadata.cached_metadata.records)
+                .flat_map(|metadata| &metadata.records)
                 .map(|metadata| &metadata.package_record.name)
                 .dedup()
                 .collect::<HashSet<_>>();
@@ -144,7 +145,7 @@ impl SolveCondaEnvironmentSpec {
                 .source_specs
                 .into_specs()
                 .map(|(name, spec)| {
-                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), Some(name.into()))
+                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), name.into())
                 })
                 .collect::<Vec<_>>();
 
@@ -174,9 +175,7 @@ impl SolveCondaEnvironmentSpec {
                 .map(|name| {
                     let prefixed_name = format!("__pixi_dev_source_{}", name.as_normalized());
                     MatchSpec {
-                        name: Some(
-                            rattler_conda_types::PackageName::new_unchecked(prefixed_name).into(),
-                        ),
+                        name: rattler_conda_types::PackageName::new_unchecked(prefixed_name).into(),
                         ..MatchSpec::default()
                     }
                 })
@@ -189,7 +188,7 @@ impl SolveCondaEnvironmentSpec {
 
             // Add source records
             for source_metadata in &self.source_repodata {
-                for record in &source_metadata.cached_metadata.records {
+                for record in &source_metadata.records {
                     let url = unique_url(record);
                     let repodata_record = RepoDataRecord {
                         package_record: record.package_record.clone(),
@@ -235,8 +234,7 @@ impl SolveCondaEnvironmentSpec {
                                     .clone()
                                     .try_into_nameless_match_spec_ref(&self.channel_config)
                                     .unwrap_or_default();
-                                MatchSpec::from_nameless(nameless, Some(name.clone().into()))
-                                    .to_string()
+                                MatchSpec::from_nameless(nameless, name.clone().into()).to_string()
                             })
                             .collect(),
                         constrains: dev_source
@@ -249,7 +247,7 @@ impl SolveCondaEnvironmentSpec {
                                     .try_into_nameless_match_spec(&self.channel_config)
                                     .ok()?;
                                 Some(
-                                    MatchSpec::from_nameless(nameless, Some(name.clone().into()))
+                                    MatchSpec::from_nameless(nameless, name.clone().into())
                                         .to_string(),
                                 )
                             })
@@ -302,7 +300,7 @@ impl SolveCondaEnvironmentSpec {
                 locked_packages: installed,
                 virtual_packages: self.virtual_packages,
                 channel_priority: self.channel_priority,
-                exclude_newer: self.exclude_newer,
+                exclude_newer,
                 strategy: self.strategy,
                 constraints: constrains_match_specs,
                 ..rattler_solve::SolverTask::from_iter(solvable_records)

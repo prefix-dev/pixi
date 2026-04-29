@@ -20,7 +20,7 @@ impl CommandDispatcherProcessor {
     ) -> SourceBuildCacheStatusId {
         let id = SourceBuildCacheStatusId(self.source_build_cache_status_ids.len());
         self.source_build_cache_status_ids
-            .insert(task.spec.clone(), id);
+            .insert(task.spec.key(), id);
         if let Some(parent) = task.parent {
             self.parent_contexts.insert(id.into(), parent);
         }
@@ -30,9 +30,13 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::SourceBuildCacheStatusTask`]
     /// task was received.
     pub(crate) fn on_source_build_cache_status(&mut self, task: SourceBuildCacheStatusTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Lookup the id of the request to avoid duplication.
         let source_build_cache_status_id = {
-            match self.source_build_cache_status_ids.get(&task.spec) {
+            match self.source_build_cache_status_ids.get(&task.spec.key()) {
                 Some(id) => {
                     // We already have a pending task. Let's make sure that we are not trying to
                     // resolve the same thing in a cycle.
@@ -55,10 +59,6 @@ impl CommandDispatcherProcessor {
                 PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
                 PendingDeduplicatingTask::Completed(result, _) => {
                     let _ = task.tx.send(result.clone());
-                }
-                PendingDeduplicatingTask::Cancelled => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(task.tx);
                 }
             },
             Entry::Vacant(entry) => {
@@ -129,9 +129,13 @@ impl CommandDispatcherProcessor {
         self.parent_contexts.remove(&context);
         self.remove_cancellation_token(context);
 
-        self.source_build_cache_status
+        if !self
+            .source_build_cache_status
             .get_mut(&id)
             .expect("cannot find pending task")
-            .on_pending_result(result);
+            .on_pending_result(result)
+        {
+            self.source_build_cache_status.remove(&id);
+        }
     }
 }

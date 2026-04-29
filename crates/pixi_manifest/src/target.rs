@@ -11,7 +11,7 @@ use crate::{
     CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PyPiDependencies,
     SpecType,
     activation::Activation,
-    dependencies::CondaDevDependencies,
+    dependencies::{CondaConstraints, CondaDevDependencies},
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -35,6 +35,13 @@ pub struct WorkspaceTarget {
     /// Dev dependencies - source packages whose dependencies should be
     /// installed without building the packages themselves
     pub dev_dependencies: Option<CondaDevDependencies>,
+
+    /// Version constraints for this target.
+    ///
+    /// Constraints limit the versions of packages that can be installed without
+    /// explicitly requiring them to be installed. They apply only if the
+    /// package is installed as a dependency of another package.
+    pub constraints: Option<CondaConstraints>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,

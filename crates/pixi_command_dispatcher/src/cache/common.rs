@@ -26,9 +26,6 @@ pub trait MetadataCache: Clone + Sized {
     /// Returns the root directory for this cache
     fn root(&self) -> &Path;
 
-    /// Returns the name of the cache file (e.g., "metadata.json")
-    fn cache_file_name(&self) -> &'static str;
-
     /// Reads the cached metadata for the given key without holding the lock.
     /// Returns the metadata and its version number if it exists.
     ///
@@ -39,8 +36,7 @@ pub trait MetadataCache: Clone + Sized {
     where
         Self::Metadata: VersionedMetadata,
     {
-        let cache_dir = self.root().join(input.hash_key());
-        let cache_file_path = cache_dir.join(self.cache_file_name());
+        let cache_file_path = self.cache_file_path(input);
 
         // Try to open the cache file (may not exist yet)
         let cache_file = match tokio::fs::File::open(&cache_file_path).await {
@@ -116,12 +112,16 @@ pub trait MetadataCache: Clone + Sized {
     where
         Self::Metadata: VersionedMetadata,
     {
-        let cache_dir = self.root().join(input.hash_key());
-        tokio::fs::create_dir_all(&cache_dir).await.map_err(|e| {
-            Self::Error::from_io_error("creating cache directory".to_string(), cache_dir.clone(), e)
-        })?;
-
-        let cache_file_path = cache_dir.join(self.cache_file_name());
+        let cache_file_path = self.cache_file_path(input);
+        if let Some(parent) = cache_file_path.parent() {
+            tokio::fs::create_dir_all(&parent).await.map_err(|e| {
+                Self::Error::from_io_error(
+                    "creating cache directory".to_string(),
+                    parent.to_path_buf(),
+                    e,
+                )
+            })?;
+        }
 
         // Open or create the cache file
         let cache_file = tokio::fs::OpenOptions::new()
@@ -218,6 +218,15 @@ pub trait MetadataCache: Clone + Sized {
 
         Ok(WriteResult::Written)
     }
+
+    /// Returns the path to the cache entry with the given key.
+    fn cache_file_path(&self, input: &Self::Key) -> PathBuf {
+        // Use string concatenation instead of `with_extension` to avoid issues
+        // with dots in the hash key (e.g., from package names like "my.package").
+        // `with_extension` replaces everything after the last dot, which would
+        // truncate the file name.
+        self.root().join(format!("{}.json", input.hash_key()))
+    }
 }
 
 /// Trait for cache keys that can compute a unique hash
@@ -254,4 +263,82 @@ pub enum WriteResult<M> {
 pub trait CacheError: std::error::Error + Sized {
     /// Creates an error from an I/O error with context about the operation
     fn from_io_error(operation: String, path: PathBuf, error: std::io::Error) -> Self;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct DummyKey(String);
+
+    impl CacheKey for DummyKey {
+        fn hash_key(&self) -> String {
+            self.0.clone()
+        }
+    }
+
+    #[derive(Clone, serde::Serialize, serde::Deserialize)]
+    struct DummyMetadata {
+        version: u64,
+    }
+
+    impl CachedMetadata for DummyMetadata {}
+
+    impl VersionedMetadata for DummyMetadata {
+        fn cache_version(&self) -> u64 {
+            self.version
+        }
+        fn set_cache_version(&mut self, version: u64) {
+            self.version = version;
+        }
+    }
+
+    #[derive(Debug, thiserror::Error)]
+    #[error("test error")]
+    struct DummyError;
+
+    impl CacheError for DummyError {
+        fn from_io_error(_operation: String, _path: PathBuf, _error: std::io::Error) -> Self {
+            DummyError
+        }
+    }
+
+    #[derive(Clone)]
+    struct DummyCache {
+        root: PathBuf,
+    }
+
+    impl MetadataCache for DummyCache {
+        type Key = DummyKey;
+        type Metadata = DummyMetadata;
+        type Error = DummyError;
+        const CACHE_SUFFIX: &'static str = "v0";
+        fn root(&self) -> &Path {
+            &self.root
+        }
+    }
+
+    #[test]
+    fn test_cache_file_path_with_dots_in_key() {
+        let cache = DummyCache {
+            root: PathBuf::from("/tmp/cache"),
+        };
+
+        // A key with dots (e.g., from package name "my.package") should NOT
+        // have the part after the dot replaced by `with_extension`.
+        let key = DummyKey("source-dir/my.package-osx-arm64-HASH".to_string());
+        let path = cache.cache_file_path(&key);
+        assert_eq!(
+            path,
+            PathBuf::from("/tmp/cache/source-dir/my.package-osx-arm64-HASH.json")
+        );
+
+        // A key without dots should also work correctly.
+        let key = DummyKey("source-dir/my-package-osx-arm64-HASH".to_string());
+        let path = cache.cache_file_path(&key);
+        assert_eq!(
+            path,
+            PathBuf::from("/tmp/cache/source-dir/my-package-osx-arm64-HASH.json")
+        );
+    }
 }

@@ -1,0 +1,19 @@
+---
+source: crates/pixi_build_r/src/build_script.rs
+expression: script
+---
+R.exe --version
+@if errorlevel 1 exit 1
+
+
+
+if not exist "%LIBRARY_PREFIX%\R\library" mkdir "%LIBRARY_PREFIX%\R\library"
+@if errorlevel 1 exit 1
+
+
+
+R.exe CMD INSTALL --library=%LIBRARY_PREFIX%\R\library ^
+    --no-lock "/path/to/package"
+
+
+@if errorlevel 1 exit 1

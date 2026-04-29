@@ -188,6 +188,7 @@ def test_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Pa
 
 
 @pytest.mark.slow
+@pytest.mark.xdist_group("serial")
 def test_non_editable_pyproject(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     """
     This one tries to run the Python based rich example project,
@@ -477,26 +478,6 @@ def test_recursive_source_run_dependencies(
             "package-b",
         ],
         stdout_contains="hello from package-b",
-    )
-
-
-@pytest.mark.slow
-def test_maturin(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
-    project = "maturin"
-    test_data = build_data.joinpath(project)
-
-    copytree_with_local_backend(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
-    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
-
-    verify_cli_command(
-        [
-            pixi,
-            "run",
-            "--manifest-path",
-            manifest_path,
-            "start",
-        ],
-        stdout_contains="3 + 5 = 8",
     )
 
 

@@ -1,0 +1,36 @@
+[package]
+description = "CMake build backend for Pixi"
+edition.workspace = true
+license.workspace = true
+name = "pixi-build-cmake"
+version = "0.3.11"
+
+[package.metadata.dist]
+dist = false
+
+[features]
+default = ["rustls-tls"]
+native-tls = ["pixi_build_backend/native-tls", "rattler_build_core/native-tls"]
+rustls-tls = ["pixi_build_backend/rustls-tls", "rattler_build_core/rustls-tls"]
+
+[dependencies]
+async-trait = { workspace = true }
+indexmap = { workspace = true }
+miette = { workspace = true }
+minijinja = { workspace = true }
+pixi_build_backend = { workspace = true }
+pixi_build_types = { workspace = true }
+rattler_build_core = { workspace = true }
+rattler_build_jinja = { workspace = true }
+rattler_build_recipe = { workspace = true }
+rattler_build_types = { workspace = true }
+rattler_conda_types = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["macros"] }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
+rstest = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+tempfile = { workspace = true }

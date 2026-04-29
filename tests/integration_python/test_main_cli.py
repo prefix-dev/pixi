@@ -181,7 +181,7 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
     verify_cli_command(
         [pixi, "workspace", "--manifest-path", manifest_path, "name", "get"],
-        stdout_contains="test_project_commands",
+        stdout_contains=tmp_pixi_workspace.name,
     )
     verify_cli_command(
         [pixi, "workspace", "--manifest-path", manifest_path, "name", "set", "new-name"],
@@ -222,7 +222,7 @@ def test_search_wildcard(pixi: Path, dummy_channel_1: str) -> None:
     verify_cli_command(
         [pixi, "search", "this-will-not-be-found", "-c", dummy_channel_1],
         ExitCode.FAILURE,
-        stderr_contains="not found",
+        stderr_contains="No packages found matching",
     )
 
     verify_cli_command(
@@ -1022,7 +1022,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
                                 "cmd": "echo 'Hello {{name | title}}'",
                                 "description": None,
                                 "depends_on": [],
-                                "args": [{"name": "name", "default": "World"}],
+                                "args": [{"name": "name", "default": "World", "choices": None}],
                                 "cwd": None,
                                 "default_environment": None,
                                 "env": None,
@@ -1209,7 +1209,7 @@ outputs:
       script:
         - if: win
           then:
-            - mkdir -p %PREFIX%\\bin
+            - if not exist %PREFIX%\\bin mkdir %PREFIX%\\bin
             - echo @echo off > %PREFIX%\\bin\\frozen_no_install_build.bat
             - echo echo Hello from frozen_no_install_build >> %PREFIX%\\bin\\frozen_no_install_build.bat
           else:
@@ -1306,6 +1306,8 @@ dependencies:
         (["upgrade"], [], "pixi upgrade"),
         # Pixi build (can lock its source)
         (["build"], [], "pixi build"),
+        # Pixi publish (builds and uploads)
+        (["publish", "--to", "https://prefix.dev/test-channel"], [], "pixi publish"),
     ]
     # This command needs to stay last so we always have something that requires a re-solve
     # Dont move this!
@@ -1329,6 +1331,21 @@ dependencies:
             # Special case: build uses --path instead of --manifest-path
             verify_cli_command(
                 [pixi, "build", "--path", manifest_path, "--locked", "--no-install"],
+            )
+        elif command_name == "pixi publish":
+            # Special case: publish uses --path instead of --manifest-path
+            verify_cli_command(
+                [
+                    pixi,
+                    "publish",
+                    "--to",
+                    "https://prefix.dev/test-channel",
+                    "--path",
+                    manifest_path,
+                    "--frozen",
+                    "--no-install",
+                ],
+                expected_exit_code=ExitCode.FAILURE,
             )
         else:
             verify_cli_command([pixi, *command_parts, *frozen_no_install_flags, *additional_args])

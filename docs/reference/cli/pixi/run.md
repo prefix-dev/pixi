@@ -27,6 +27,8 @@ pixi run [OPTIONS] [TASK]...
 :  Use a clean environment to run the task
 - <a id="arg---skip-deps" href="#arg---skip-deps">`--skip-deps`</a>
 :  Don't run the dependencies of the task ('depends-on' field in the task definition)
+- <a id="arg---templated" href="#arg---templated">`--templated`</a>
+:  Enable template rendering for the command arguments
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
 :  Run the task in dry-run mode (only print the command that would run)
 - <a id="arg---help" href="#arg---help">`--help`</a>
@@ -62,6 +64,7 @@ pixi run [OPTIONS] [TASK]...
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
+<br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
@@ -74,6 +77,8 @@ pixi run [OPTIONS] [TASK]...
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
+:  Name of the workspace
 
 ## Description
 Runs task in the pixi environment.

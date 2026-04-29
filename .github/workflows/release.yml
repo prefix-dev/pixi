@@ -59,7 +59,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
           persist-credentials: false
@@ -73,19 +73,19 @@ jobs:
 
       # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
+        uses: baptiste0928/cargo-install@f204293d9709061b7bc1756fec3ec4e2cd57dec0 # v3
         with:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
           rev: d4085f9cf734dbfeb49d6ff89b16c768b7977ad3 # feature/update_bin_in_root_tar
 
-      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           environments: dist
           activate-environment: true
 
       - name: Cache dist
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: cargo-dist-cache
           # TODO: revert after switching back to released dist
@@ -108,7 +108,7 @@ jobs:
           cat plan-dist-manifest.json
           echo "manifest=$(jq -c "." plan-dist-manifest.json)" >> "$GITHUB_OUTPUT"
       - name: "Upload dist-manifest.json"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-plan-dist-manifest
           path: plan-dist-manifest.json
@@ -151,14 +151,14 @@ jobs:
       - name: enable windows longpaths
         run: |
           git config --global core.longpaths true
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
           persist-credentials: false
 
       # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
+        uses: baptiste0928/cargo-install@f204293d9709061b7bc1756fec3ec4e2cd57dec0 # v3
         with:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
@@ -167,19 +167,19 @@ jobs:
       - name: Install cargo-zigbuild
         # Only install on non windows platforms
         if: ${{ contains(matrix.runner, 'windows') == false }}
-        uses: baptiste0928/cargo-install@b687c656bda5733207e629b50a22bf68974a0305 # v3
+        uses: baptiste0928/cargo-install@f204293d9709061b7bc1756fec3ec4e2cd57dec0 # v3
         with:
           crate: cargo-zigbuild
           version: "0.20.1"
 
-      - uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           environments: dist
           activate-environment: true
 
       # Get the dist-manifest
       - name: Fetch local artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -200,9 +200,67 @@ jobs:
           # Actually do builds and make zips and whatnot
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
+      - name: Azure login (OIDC)
+        if: runner.os == 'Windows'
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - name: Extract Windows executables from archives
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $signDir = Join-Path $env:RUNNER_TEMP "to-sign"
+          New-Item -ItemType Directory -Path $signDir -Force
+          foreach ($zip in (Get-ChildItem target/distrib -Filter "*.zip")) {
+            $extractDir = Join-Path $env:RUNNER_TEMP $zip.BaseName
+            Expand-Archive -Path $zip.FullName -DestinationPath $extractDir -Force
+            Get-ChildItem $extractDir -Filter "*.exe" -Recurse | Copy-Item -Destination $signDir
+          }
+          Get-ChildItem target/distrib -Filter "*.msi" | Copy-Item -Destination $signDir
+      - name: Sign Windows binaries
+        if: runner.os == 'Windows'
+        uses: azure/trusted-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1.2.0
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
+          files-folder: ${{ runner.temp }}/to-sign
+          files-folder-filter: exe,msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+      - name: Repackage signed executables into archives
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $signDir = Join-Path $env:RUNNER_TEMP "to-sign"
+          foreach ($zip in (Get-ChildItem target/distrib -Filter "*.zip")) {
+            $extractDir = Join-Path $env:RUNNER_TEMP $zip.BaseName
+            # Overwrite extracted exe with signed version
+            Get-ChildItem $extractDir -Filter "*.exe" -Recurse | ForEach-Object {
+              $signed = Join-Path $signDir $_.Name
+              if (Test-Path $signed) { Copy-Item $signed $_.FullName -Force }
+            }
+            # Recreate zip
+            Remove-Item $zip.FullName
+            Compress-Archive -Path (Join-Path $extractDir "*") -DestinationPath $zip.FullName
+          }
+          # Overwrite MSI with signed version
+          Get-ChildItem $signDir -Filter "*.msi" | ForEach-Object {
+            $orig = Get-ChildItem target/distrib -Filter $_.Name
+            if ($orig) { Copy-Item $_.FullName $orig.FullName -Force }
+          }
+          # Recompute .sha256 files for all modified archives (zip and msi)
+          # The signing step changes the file content, so checksums computed before signing are stale
+          foreach ($artifact in @(Get-ChildItem target/distrib -Filter "*.zip") + @(Get-ChildItem target/distrib -Filter "*.msi")) {
+            $hash = (Get-FileHash $artifact.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash *$($artifact.Name)" | Set-Content "$($artifact.FullName).sha256" -NoNewline
+          }
       - name: Attest Builds
         id: attest
-        uses: actions/attest-build-provenance@00014ed6ed5efc5b1ab7f7f34a39eb55d41aa4f8 # v3.1.0
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
           subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}"
       - run: cp ${{ steps.attest.outputs.bundle-path }} target/distrib/attestations-${{ join(matrix.targets, ', ') }}.intoto.jsonl
@@ -220,7 +278,7 @@ jobs:
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
       - name: "Upload artifacts"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-build-local-${{ join(matrix.targets, '_') }}
           path: |
@@ -238,19 +296,19 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
           persist-credentials: false
       - name: Install cached dist
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: cargo-dist-cache
           path: ~/.cargo/bin/
       - run: chmod +x ~/.cargo/bin/dist
       # Get all the local artifacts for the global tasks to use (for e.g. checksums)
       - name: Fetch local artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -267,8 +325,44 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
+      # The sha256.sum and dist-manifest.json generated by `dist build --artifacts=global`
+      # use checksums from the per-target dist-manifest.json, which were computed BEFORE
+      # Windows code signing. Since signing changes file contents, those checksums are
+      # stale for Windows artifacts (.zip and .msi). Recompute from the actual files.
+      - name: Recompute checksums for signed artifacts
+        shell: bash
+        run: |
+          cd target/distrib
+
+          # Recompute sha256.sum from actual artifact files
+          if [ -f sha256.sum ]; then
+            : > sha256.sum.new
+            for f in *.tar.gz *.zip *.msi; do
+              if [ -f "$f" ]; then
+                hash=$(sha256sum "$f" | awk '{print $1}')
+                echo "$hash *$f" >> sha256.sum.new
+              fi
+            done
+            mv sha256.sum.new sha256.sum
+            echo "Recomputed sha256.sum:"
+            cat sha256.sum
+          fi
+
+          # Patch dist-manifest.json with correct checksums
+          if [ -f global-dist-manifest.json ]; then
+            for f in *.tar.gz *.zip *.msi; do
+              if [ -f "$f" ]; then
+                hash=$(sha256sum "$f" | awk '{print $1}')
+                jq --arg file "$f" --arg hash "$hash" \
+                  '(.artifacts[$file].checksums.sha256) = $hash' \
+                  global-dist-manifest.json > global-dist-manifest.json.tmp
+                mv global-dist-manifest.json.tmp global-dist-manifest.json
+              fi
+            done
+            echo "Patched checksums in global-dist-manifest.json"
+          fi
       - name: "Upload artifacts"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-build-global
           path: |
@@ -288,19 +382,19 @@ jobs:
     outputs:
       val: ${{ steps.host.outputs.manifest }}
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
           persist-credentials: false
       - name: Install cached dist
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: cargo-dist-cache
           path: ~/.cargo/bin/
       - run: chmod +x ~/.cargo/bin/dist
       # Fetch artifacts from scratch-storage
       - name: Fetch artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -314,7 +408,7 @@ jobs:
           cat dist-manifest.json
           echo "manifest=$(jq -c "." dist-manifest.json)" >> "$GITHUB_OUTPUT"
       - name: "Upload dist-manifest.json"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           # Overwrite the previous copy
           name: artifacts-dist-manifest
@@ -348,49 +442,55 @@ jobs:
 
       # Upload unpacked artifacts, not sure how to do this in one go as you have to name the artifact
       - name: Upload unpacked artifact for pixi-aarch64-unknown-linux-musl
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-aarch64-unknown-linux-musl
           path: unpacked-artifacts/pixi-aarch64-unknown-linux-musl
 
       - name: Upload unpacked artifact for pixi-x86_64-unknown-linux-musl
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-x86_64-unknown-linux-musl
           path: unpacked-artifacts/pixi-x86_64-unknown-linux-musl
 
       - name: Upload unpacked artifact for pixi-aarch64-apple-darwin
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-aarch64-apple-darwin
           path: unpacked-artifacts/pixi-aarch64-apple-darwin
 
       - name: Upload unpacked artifact for pixi-x86_64-apple-darwin
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-x86_64-apple-darwin
           path: unpacked-artifacts/pixi-x86_64-apple-darwin
 
       - name: Upload unpacked artifact for pixi-x86_64-pc-windows-msvc.exe
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-x86_64-pc-windows-msvc.exe
           path: unpacked-artifacts/pixi-x86_64-pc-windows-msvc.exe
 
       - name: Upload unpacked artifact for pixi-aarch64-pc-windows-msvc.exe
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-pixi-aarch64-pc-windows-msvc.exe
           path: unpacked-artifacts/pixi-aarch64-pc-windows-msvc.exe
 
+      - name: Upload unpacked artifact for pixi-riscv64gc-unknown-linux-gnu
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: artifacts-pixi-riscv64gc-unknown-linux-gnu
+          path: unpacked-artifacts/pixi-riscv64gc-unknown-linux-gnu
+
       # Upload installer scripts
       - name: Upload install.sh
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-install.sh
           path: install/install.sh
       - name: Upload install.ps1
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: artifacts-install.ps1
           path: install/install.ps1
@@ -410,13 +510,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
           persist-credentials: false
       # Create a GitHub Release while uploading all files to it
       - name: "Download GitHub Artifacts"
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: artifacts-*
           path: artifacts

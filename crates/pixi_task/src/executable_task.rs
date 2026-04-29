@@ -19,7 +19,10 @@ use pixi_core::{
     workspace::get_activated_environment_variables,
     workspace::{Environment, HasWorkspaceRef},
 };
-use pixi_manifest::{Task, TaskName, task::ArgValues, task::TemplateStringError};
+use pixi_manifest::{
+    Task, TaskName,
+    task::{ArgValues, TaskRenderContext, TemplateStringError},
+};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
@@ -93,11 +96,16 @@ pub struct ExecutableTask<'p> {
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
     pub args: ArgValues,
+    pub init_cwd: Option<PathBuf>,
 }
 
 impl<'p> ExecutableTask<'p> {
     /// Constructs a new executable task from a task graph node.
-    pub fn from_task_graph(task_graph: &TaskGraph<'p>, task_id: TaskId) -> Self {
+    pub fn from_task_graph(
+        task_graph: &TaskGraph<'p>,
+        task_id: TaskId,
+        init_cwd: Option<PathBuf>,
+    ) -> Self {
         let node = &task_graph[task_id];
 
         Self {
@@ -106,6 +114,7 @@ impl<'p> ExecutableTask<'p> {
             task: node.task.clone(),
             run_environment: node.run_environment.clone(),
             args: node.args.clone().unwrap_or_default(),
+            init_cwd,
         }
     }
 
@@ -137,11 +146,87 @@ impl<'p> ExecutableTask<'p> {
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
+            init_cwd: self.init_cwd.as_deref(),
         }
     }
 
     /// Returns the task as script
     fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
+        // Multi-line task strings are joined with `&&` so execution stops on
+        // the first failing command. `deno_task_shell` treats bare newlines
+        // as whitespace, so we rewrite unquoted newlines before parsing.
+        // Newlines inside single or double quotes are preserved so that
+        // embedded scripts (e.g. `python -c "..."`) keep working.
+        fn join_multiline_command(cmd: &str) -> String {
+            if !cmd.contains('\n') {
+                return cmd.to_string();
+            }
+
+            let mut logical_lines: Vec<String> = Vec::new();
+            let mut current = String::new();
+            let mut in_single = false;
+            let mut in_double = false;
+            let mut chars = cmd.chars().peekable();
+
+            while let Some(c) = chars.next() {
+                match c {
+                    '\\' if !in_single => {
+                        // Backslash line continuation outside single quotes:
+                        // drop both the backslash and the following newline.
+                        if chars.peek() == Some(&'\n') {
+                            chars.next();
+                        } else if let Some(&next) = chars.peek() {
+                            current.push(c);
+                            current.push(next);
+                            chars.next();
+                        } else {
+                            current.push(c);
+                        }
+                    }
+                    '\'' if !in_double => {
+                        in_single = !in_single;
+                        current.push(c);
+                    }
+                    '"' if !in_single => {
+                        in_double = !in_double;
+                        current.push(c);
+                    }
+                    '\n' if !in_single && !in_double => {
+                        logical_lines.push(std::mem::take(&mut current));
+                    }
+                    _ => current.push(c),
+                }
+            }
+            if !current.is_empty() {
+                logical_lines.push(current);
+            }
+
+            let filtered: Vec<String> = logical_lines
+                .into_iter()
+                .map(|line| line.trim().to_string())
+                .filter(|line| !line.is_empty() && !line.starts_with('#'))
+                .collect();
+
+            let mut out = String::new();
+            for (i, line) in filtered.iter().enumerate() {
+                if i > 0 {
+                    let prev = &filtered[i - 1];
+                    let already_terminated = prev.ends_with("&&")
+                        || prev.ends_with("||")
+                        || prev.ends_with('|')
+                        || prev.ends_with(';')
+                        || prev.ends_with('&');
+                    if already_terminated {
+                        out.push(' ');
+                    } else {
+                        out.push_str(" && ");
+                    }
+                }
+                out.push_str(line);
+            }
+            out
+        }
+
         // Convert the task into an executable string
         let context = self.render_context();
         let task = self
@@ -149,24 +234,29 @@ impl<'p> ExecutableTask<'p> {
             .as_single_command(&context)
             .map_err(FailedToParseShellScript::ArgumentReplacement)?;
         if let Some(task) = task {
+            let task = join_multiline_command(&task);
             // Get the export specific environment variables
-            let export = get_export_specific_task_env(self.task.as_ref());
+            let export = get_export_specific_task_env(self.task.as_ref(), &context)
+                .map_err(FailedToParseShellScript::ArgumentReplacement)?;
 
             // Append the command line arguments verbatim
-            let cli_args = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
-                additional_args
-                    .iter()
-                    .format_with(" ", |arg, f| f(&format_args!("'{arg}'")))
-                    .to_string()
-            } else {
+            let extra = self.args.extra_args();
+            let cli_args = if extra.is_empty() {
                 String::new()
+            } else {
+                format!(
+                    " {}",
+                    extra
+                        .iter()
+                        .format_with(" ", |arg, f| f(&format_args!("'{arg}'")))
+                )
             };
 
             // Skip the export if it's empty, to avoid newlines
             let full_script = if export.is_empty() {
-                format!("{task} {cli_args}")
+                format!("{task}{cli_args}")
             } else {
-                format!("{export}\n{task} {cli_args}")
+                format!("{export}\n{task}{cli_args}")
             };
 
             Ok(Some(full_script))
@@ -227,11 +317,10 @@ impl<'p> ExecutableTask<'p> {
             .map(|c| c.into_owned());
 
         if let Some(mut cmd) = original_cmd {
-            if let ArgValues::FreeFormArgs(additional_args) = &self.args
-                && !additional_args.is_empty()
-            {
+            let extra = self.args.extra_args();
+            if !extra.is_empty() {
                 cmd.push(' ');
-                cmd.push_str(&additional_args.join(" "));
+                cmd.push_str(&extra.join(" "));
             }
             Ok(Some(cmd))
         } else {
@@ -456,13 +545,12 @@ impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
                         .apply_to(command.as_deref().unwrap_or("<alias>"))
                         .bold()
                 )?;
-                if let ArgValues::FreeFormArgs(additional_args) = &self.task.args
-                    && !additional_args.is_empty()
-                {
+                let extra = self.task.args.extra_args();
+                if !extra.is_empty() {
                     write!(
                         f,
                         " {}",
-                        consts::TASK_STYLE.apply_to(additional_args.iter().format(" "))
+                        consts::TASK_STYLE.apply_to(extra.iter().format(" "))
                     )?;
                 }
                 Ok(())
@@ -490,16 +578,22 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
 /// task script. At runtime they are interpreted by `deno_task_shell`, not by an
 /// external OS shell, so `$VAR`-style expansion follows deno-task-shell’s
 /// semantics.
-fn get_export_specific_task_env(task: &Task) -> String {
-    // Append the environment variables if they don't exist
+fn get_export_specific_task_env(
+    task: &Task,
+    context: &TaskRenderContext,
+) -> Result<String, TemplateStringError> {
+    // Append the environment variables if they don’t exist
     let mut export = String::new();
     if let Some(env) = task.env() {
         for (key, value) in env {
-            tracing::debug!("Setting environment variable: {}=\"{}\"", key, value);
-            export.push_str(&format!("export \"{key}={value}\";\n"));
+            let rendered = value.render(context)?;
+            // Escape double quotes so the export statement remains valid shell.
+            let escaped = rendered.replace('"', "\\\"");
+            tracing::debug!("Setting environment variable: {}=\"{}\"", key, escaped);
+            export.push_str(&format!("export \"{key}={escaped}\";\n"));
         }
     }
-    export
+    Ok(export)
 }
 
 /// Determine the environment variables to use when executing a command. The
@@ -549,6 +643,7 @@ pub async fn get_task_env(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pixi_manifest::task::{ArgValues, TypedArg};
     use std::path::Path;
 
     const PROJECT_BOILERPLATE: &str = r#"
@@ -577,9 +672,80 @@ mod tests {
             .task(&TaskName::from("test"), None)
             .unwrap();
 
-        let export = get_export_specific_task_env(task);
+        let context = TaskRenderContext::default();
+        let export = get_export_specific_task_env(task, &context).unwrap();
 
         assert_eq!(export, "export \"FOO=bar\";\nexport \"BAR=$FOO\";\n");
+    }
+
+    #[test]
+    fn test_export_specific_task_env_with_template() {
+        let file_contents = r#"
+            [tasks]
+            test = {cmd = "test", env = {BACKEND = "{{ backend }}"}, args = [{arg = "backend", default = "Numba"}]}
+            "#;
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        // Test with explicit arg value
+        let args = ArgValues::TypedArgs {
+            args: vec![TypedArg {
+                name: "backend".into(),
+                value: "CuPy".into(),
+            }],
+            extra: vec![],
+        };
+        let context = TaskRenderContext {
+            args: Some(&args),
+            ..Default::default()
+        };
+        let export = get_export_specific_task_env(task, &context).unwrap();
+        assert_eq!(export, "export \"BACKEND=CuPy\";\n");
+
+        // Test with default context (no args renders the default)
+        let default_args = ArgValues::TypedArgs {
+            args: vec![TypedArg {
+                name: "backend".into(),
+                value: "Numba".into(),
+            }],
+            extra: vec![],
+        };
+        let context = TaskRenderContext {
+            args: Some(&default_args),
+            ..Default::default()
+        };
+        let export = get_export_specific_task_env(task, &context).unwrap();
+        assert_eq!(export, "export \"BACKEND=Numba\";\n");
+    }
+
+    #[test]
+    fn test_export_env_escapes_double_quotes() {
+        let file_contents = r#"
+            [tasks]
+            test = {cmd = "test", env = {JSON = '{"key": "value"}'}}
+            "#;
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let context = TaskRenderContext::default();
+        let export = get_export_specific_task_env(task, &context).unwrap();
+        assert_eq!(export, "export \"JSON={\\\"key\\\": \\\"value\\\"}\";\n");
     }
 
     #[test]
@@ -606,10 +772,127 @@ mod tests {
             task: Cow::Borrowed(task),
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
+            init_cwd: None,
         };
 
         let script = executable_task.as_script().unwrap().unwrap();
-        assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
+        assert_eq!(script, "export \"FOO=bar\";\n\ntest");
+    }
+
+    #[test]
+    fn test_as_script_multiline() {
+        let file_contents = r#"
+            [tasks]
+            test = """
+            echo hello
+            echo hello2
+            """
+            "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("test".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            args: ArgValues::default(),
+            init_cwd: None,
+        };
+
+        let script = executable_task.as_script().unwrap().unwrap();
+        assert_eq!(script, "echo hello && echo hello2");
+    }
+
+    #[test]
+    fn test_as_script_multiline_preserves_newlines_inside_quotes() {
+        // Newlines inside a double-quoted argument (e.g. a `python -c` block)
+        // must be preserved, not treated as command separators.
+        let file_contents = r#"
+            [tasks]
+            test = """
+            python -c "import sys
+            print('hi')"
+            echo done
+            """
+            "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("test".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            args: ArgValues::default(),
+            init_cwd: None,
+        };
+
+        let script = executable_task.as_script().unwrap().unwrap();
+        assert_eq!(
+            script,
+            "python -c \"import sys\n            print('hi')\" && echo done"
+        );
+    }
+
+    #[test]
+    fn test_as_script_multiline_preserves_existing_operator() {
+        let file_contents = r#"
+            [tasks]
+            test = """
+            echo hello &&
+            echo hello2
+            echo hello3 |
+            cat
+            # comment line is skipped
+
+            echo done
+            """
+            "#;
+
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+
+        let executable_task = ExecutableTask {
+            workspace: &workspace,
+            name: Some("test".into()),
+            task: Cow::Borrowed(task),
+            run_environment: workspace.default_environment(),
+            args: ArgValues::default(),
+            init_cwd: None,
+        };
+
+        let script = executable_task.as_script().unwrap().unwrap();
+        assert_eq!(
+            script,
+            "echo hello && echo hello2 && echo hello3 | cat && echo done"
+        );
     }
 
     #[tokio::test]

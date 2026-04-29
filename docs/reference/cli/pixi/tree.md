@@ -34,10 +34,13 @@ pixi tree [OPTIONS] [REGEX]
 <br>**env**: `PIXI_LOCKED`
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
+<br>**env**: `PIXI_NO_INSTALL`
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+- <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
+:  Name of the workspace
 
 ## Description
 Show a tree of workspace dependencies

@@ -5,7 +5,6 @@ use std::{
 };
 
 use fancy_display::FancyDisplay;
-use fs_err::tokio as tokio_fs;
 use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
@@ -550,7 +549,7 @@ impl Manifest {
             document.to_string()
         };
 
-        tokio_fs::write(&self.path, contents)
+        pixi_utils::atomic_write::atomic_write(&self.path, contents)
             .await
             .into_diagnostic()?;
         Ok(())

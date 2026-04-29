@@ -24,6 +24,10 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::SourceMetadataTask`]
     /// task was received.
     pub(crate) fn on_source_metadata(&mut self, task: SourceMetadataTask) {
+        if self.is_parent_cancelled(task.parent) {
+            return;
+        }
+
         // Lookup the id of the source metadata to avoid deduplication.
         let source_metadata_id = {
             match self.source_metadata_ids.get(&task.spec) {
@@ -45,13 +49,11 @@ impl CommandDispatcherProcessor {
 
         match self.source_metadata.entry(source_metadata_id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
-                PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
+                PendingDeduplicatingTask::Pending(pending, _) => {
+                    pending.push(task.tx);
+                }
                 PendingDeduplicatingTask::Completed(result, _) => {
                     let _ = task.tx.send(result.clone());
-                }
-                PendingDeduplicatingTask::Cancelled => {
-                    // Drop the sender, this will cause a cancellation on the other side.
-                    drop(task.tx);
                 }
             },
             Entry::Vacant(entry) => {
@@ -143,6 +145,7 @@ impl CommandDispatcherProcessor {
         result: Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ) {
         let context = CommandDispatcherContext::SourceMetadata(id);
+        self.parent_contexts.remove(&context);
         self.remove_cancellation_token(context);
 
         if let Some((reporter, reporter_id)) = self
@@ -154,9 +157,16 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id);
         }
 
-        self.source_metadata
+        if !self
+            .source_metadata
             .get_mut(&id)
             .expect("cannot find pending task")
             .on_pending_result(result)
+        {
+            // Task was cancelled. Remove the task entry so future requests
+            // re-trigger it instead of hitting a stale cancellation.
+            // Keep the spec-to-ID mapping so that ID generation remains stable.
+            self.source_metadata.remove(&id);
+        }
     }
 }

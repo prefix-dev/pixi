@@ -1,0 +1,6 @@
+[workspace]
+channels = []
+name = "requires-newer-pixi"
+platforms = []
+requires-pixi = ">=100"
+some-future-field = true

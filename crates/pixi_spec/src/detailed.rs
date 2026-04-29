@@ -130,7 +130,6 @@ impl Display for DetailedSpec {
         if let Some(sha256) = &self.sha256 {
             parts.push(format!("sha256={sha256:x}"));
         }
-
         if parts.is_empty() {
             write!(f, "*")
         } else {
