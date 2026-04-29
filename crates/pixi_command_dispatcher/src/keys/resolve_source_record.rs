@@ -19,7 +19,7 @@ use pixi_record::{
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
-use rattler_conda_types::{MatchSpec, PackageName, PackageRecord, package::RunExportsJson};
+use rattler_conda_types::{PackageName, PackageRecord, package::RunExportsJson};
 use rattler_solve::SolveStrategy;
 
 use crate::{
@@ -228,12 +228,11 @@ async fn assemble_source_record_inner(
 
     let mut sources: HashMap<PackageName, SourceLocationSpec> = HashMap::new();
 
-    let pixi_spec_to_match_spec = |name: &PackageName,
-                                   spec: &PixiSpec,
-                                   sources: &mut HashMap<PackageName, SourceLocationSpec>|
-     -> Result<MatchSpec, SourceRecordError> {
-        match spec.clone().into_source_or_binary() {
-            Either::Left(source) => {
+    // Record a source-typed PixiSpec's location into `sources`, erroring
+    // if the same (name, location) is registered twice.
+    let mut track_source =
+        |name: &PackageName, spec: &PixiSpec| -> Result<(), SourceRecordError> {
+            if let Either::Left(source) = spec.clone().into_source_or_binary() {
                 match sources.entry(name.clone()) {
                     std::collections::hash_map::Entry::Occupied(entry) => {
                         if entry.get() == &source.location {
@@ -243,44 +242,45 @@ async fn assemble_source_record_inner(
                                 source2: Box::new(source.location.clone()),
                             });
                         }
-                        entry.into_mut()
                     }
                     std::collections::hash_map::Entry::Vacant(entry) => {
-                        entry.insert(source.location.clone())
+                        entry.insert(source.location.clone());
                     }
-                };
-                Ok(MatchSpec::from_nameless(
-                    source.to_nameless_match_spec(),
-                    name.clone().into(),
-                ))
+                }
             }
-            Either::Right(binary) => {
-                let spec = binary
-                    .try_into_nameless_match_spec(&channel_config)
-                    .map_err(SourceRecordError::from)?;
-                Ok(MatchSpec::from_nameless(spec, name.clone().into()))
-            }
-        }
-    };
+            Ok(())
+        };
 
-    let pixi_specs_to_match_spec = |specs: DependencyMap<PackageName, PixiSpec>,
-                                    sources: &mut HashMap<PackageName, SourceLocationSpec>|
+    // Stringify a PixiSpec dep map into a `Vec<String>`, threading source
+    // locations through `track_source` for the per-source bookkeeping.
+    let stringify_pixi_specs = |specs: DependencyMap<PackageName, PixiSpec>,
+                                track_source: &mut dyn FnMut(
+        &PackageName,
+        &PixiSpec,
+    )
+        -> Result<(), SourceRecordError>|
      -> Result<Vec<String>, SourceRecordError> {
         specs
             .into_specs()
-            .map(|(name, spec)| Ok(pixi_spec_to_match_spec(&name, &spec, sources)?.to_string()))
+            .map(|(name, spec)| {
+                track_source(&name, &spec)?;
+                Ok(spec
+                    .to_match_spec(&name, &channel_config)
+                    .map_err(SourceRecordError::from)?
+                    .to_string())
+            })
             .collect()
     };
 
-    let binary_specs_to_match_spec =
+    let stringify_binary_specs =
         |specs: DependencyMap<PackageName, BinarySpec>| -> Result<Vec<String>, SourceRecordError> {
             specs
                 .into_specs()
                 .map(|(name, spec)| {
-                    let nameless_spec = spec
-                        .try_into_nameless_match_spec(&channel_config)
-                        .map_err(SourceRecordError::from)?;
-                    Ok(MatchSpec::from_nameless(nameless_spec, name.into()).to_string())
+                    Ok(spec
+                        .to_match_spec(&name, &channel_config)
+                        .map_err(SourceRecordError::from)?
+                        .to_string())
                 })
                 .collect()
         };
@@ -290,7 +290,12 @@ async fn assemble_source_record_inner(
         .clone()
         .into_specs()
         .map(|(name, withspec)| {
-            Ok(pixi_spec_to_match_spec(&name, &withspec.value, &mut sources)?.to_string())
+            track_source(&name, &withspec.value)?;
+            Ok(withspec
+                .value
+                .to_match_spec(&name, &channel_config)
+                .map_err(SourceRecordError::from)?
+                .to_string())
         })
         .collect::<Result<Vec<_>, SourceRecordError>>()?;
 
@@ -298,11 +303,11 @@ async fn assemble_source_record_inner(
         .constraints
         .into_specs()
         .map(|(name, withspec)| {
-            let nameless_spec = withspec
+            Ok(withspec
                 .value
-                .try_into_nameless_match_spec(&channel_config)
-                .map_err(SourceRecordError::from)?;
-            Ok(MatchSpec::from_nameless(nameless_spec, name.into()).to_string())
+                .to_match_spec(&name, &channel_config)
+                .map_err(SourceRecordError::from)?
+                .to_string())
         })
         .collect::<Result<Vec<_>, SourceRecordError>>()?;
 
@@ -311,11 +316,11 @@ async fn assemble_source_record_inner(
             .map_err(SourceRecordError::from)?;
 
     let run_exports = RunExportsJson {
-        weak: pixi_specs_to_match_spec(run_exports_pixi.weak, &mut sources)?,
-        strong: pixi_specs_to_match_spec(run_exports_pixi.strong, &mut sources)?,
-        noarch: pixi_specs_to_match_spec(run_exports_pixi.noarch, &mut sources)?,
-        weak_constrains: binary_specs_to_match_spec(run_exports_pixi.weak_constrains)?,
-        strong_constrains: binary_specs_to_match_spec(run_exports_pixi.strong_constrains)?,
+        weak: stringify_pixi_specs(run_exports_pixi.weak, &mut track_source)?,
+        strong: stringify_pixi_specs(run_exports_pixi.strong, &mut track_source)?,
+        noarch: stringify_pixi_specs(run_exports_pixi.noarch, &mut track_source)?,
+        weak_constrains: stringify_binary_specs(run_exports_pixi.weak_constrains)?,
+        strong_constrains: stringify_binary_specs(run_exports_pixi.strong_constrains)?,
     };
 
     let package_record = PackageRecord {
