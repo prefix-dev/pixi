@@ -28,7 +28,7 @@ pub use update::{
     LockFileDerivedData, PackageFilterNames, ReinstallEnvironment, ReinstallPackages,
     SolveCondaEnvironmentError, UpdateContext, UpdateLockFileOptions, UpdateMode, UpdatedPrefix,
 };
-pub use utils::filter_lock_file;
+pub use utils::{LockedPackageKind, filter_lock_file};
 
 pub use utils::IoConcurrencyLimit;
 

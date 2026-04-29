@@ -2129,3 +2129,132 @@ async fn test_source_timestamp_changes_when_source_metadata_changes() {
     write_basic_source_package_manifest(&source_dir, "1.1.0", "");
     pixi.update_lock_file().await.unwrap();
 }
+
+/// `pixi update sdl2` must invalidate `sdl2` everywhere it appears in
+/// the lockfile, including inside source records' `host_packages`
+/// arrays. Today only the top-level locked package is relaxed; the
+/// stale copy of `sdl2` inside `my-package.host_packages` survives
+/// the relaxation pass, leaving the lockfile in an inconsistent
+/// state.
+///
+/// Setup: `sdl2` v2.26.5 is the only version in the channel; the
+/// workspace depends on a path-based source package `my-package`
+/// whose `host-dependencies` include `sdl2`, plus a top-level
+/// `sdl2 = "*"` so the user can target it by name. After the first
+/// lock, `sdl2 2.26.5` lands in both the top-level env and inside
+/// `my-package.host_packages`. We publish `sdl2 2.32.0` and run
+/// `pixi update sdl2`.
+///
+/// Today this test fails: the re-lock errors out with a build/host
+/// graph cycle ("my-package -> my-package") because the relaxation
+/// stripped sdl2 from the top level but kept it inside the source
+/// record, so the resolver walks an inconsistent graph. Stripping
+/// update targets out of source records' build/host arrays during
+/// relaxation removes the inconsistency: the re-solve picks
+/// `sdl2 2.32.0` cleanly in both slots and the post-update
+/// assertions below pass.
+#[tokio::test]
+async fn test_update_invalidates_transitive_in_source_host_packages() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("sdl2", "2.26.5").finish());
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.host-dependencies]
+sdl2 = "*"
+"#,
+    )
+    .unwrap();
+
+    let channel_url = Url::from_file_path(channel_dir.path()).unwrap();
+    let workspace_manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+sdl2 = "*"
+"#,
+        channel = channel_url,
+        platform = Platform::current(),
+    );
+    pixi.update_manifest(&workspace_manifest).unwrap();
+
+    // First lock pins sdl2 2.26.5 both at the top level and inside
+    // my-package.host_packages — confirms the precondition the bug
+    // depends on.
+    let lock_v1 = pixi
+        .update_lock_file()
+        .await
+        .expect("first lock should succeed");
+    assert!(
+        lock_v1.contains_match_spec(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "sdl2 ==2.26.5",
+        ),
+        "first lock must pin top-level sdl2 to 2.26.5"
+    );
+    assert_eq!(
+        collect_host_dep_versions(&lock_v1, "my-package", "sdl2"),
+        vec!["2.26.5"],
+        "first lock must pin my-package.host_packages sdl2 to 2.26.5"
+    );
+
+    // Publish a newer sdl2.
+    package_database.add_package(Package::build("sdl2", "2.32.0").finish());
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    // Run the actual CLI update path: this exercises `unlock_packages`
+    // → `UpdateContext` end-to-end, which is where the bug lives.
+    pixi.update()
+        .with_package("sdl2")
+        .await
+        .expect("update sdl2 should succeed");
+
+    let lock_v2 = pixi.lock_file().await.unwrap();
+    assert!(
+        lock_v2.contains_match_spec(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "sdl2 ==2.32.0",
+        ),
+        "top-level sdl2 must be updated to 2.32.0"
+    );
+    assert_eq!(
+        collect_host_dep_versions(&lock_v2, "my-package", "sdl2"),
+        vec!["2.32.0"],
+        "my-package.host_packages must also be updated to sdl2 2.32.0; \
+         a stale 2.26.5 here means `pixi update sdl2` left a transitive \
+         copy untouched"
+    );
+}
