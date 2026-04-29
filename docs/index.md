@@ -58,13 +58,16 @@ pixi global install gh nvim ipython btop ripgrep
 
 ## How Tools Compare to Pixi
 
-| Builtin Core Features       | Pixi | Conda | Pip | Poetry | uv |
-|-----------------------------|------|-------|-----|--------|----|
-| Installs Python             | ✅    | ✅     | ❌   | ❌      | ✅  |
-| Supports Multiple Languages | ✅    | ✅     | ❌   | ❌      | ❌  |
-| Lockfiles                   | ✅    | ❌     | ❌   | ✅      | ✅  |
-| Task runner                 | ✅    | ❌     | ❌   | ❌      | ❌  |
-| Workspace Management        | ✅    | ❌     | ❌   | ✅      | ✅  |
+| Builtin Core Features       | Pixi | Conda | Pip | Poetry | uv | mise |
+|-----------------------------|------|-------|-----|--------|----|------|
+| Installs Python             | ✅    | ✅     | ❌   | ❌      | ✅  | ✅    |
+| Supports Multiple Languages | ✅    | ✅     | ❌   | ❌      | ❌  | ✅    |
+| Lockfiles                   | ✅    | ❌     | ❌   | ✅      | ✅  | ⚠️    |
+| Task runner                 | ✅    | ❌     | ❌   | ❌      | ❌  | ✅    |
+| Workspace Management        | ✅    | ❌     | ❌   | ✅      | ✅  | ✅    |
+
+`mise` focuses on development tool version management and task running. Pixi is a package manager built on the
+Conda ecosystem, with dependency solving, lockfiles, environments, and package building support.
 
 ---
 
