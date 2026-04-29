@@ -242,14 +242,10 @@ pub fn node_local_scratch_dir() -> PathBuf {
 
 /// Identifies a specific pixi cache directory.
 ///
-/// Different caches have different sharing characteristics. The conda package
-/// cache benefits from being on a shared filesystem so that many users on an
-/// HPC cluster can hit the same cache, while the conda↔PyPI mapping cache is
-/// small, transient, and per-user, so it should stay on node-local storage.
 ///
 /// [`CacheKind::prefers_shared`] encodes this preference and is consulted by
 /// the auto-redirect logic when the resolved cache root is on a network
-/// filesystem. Users always have the final say via `[cache.<kind>]` in
+/// filesystem. It can be configured using `[cache.<kind>]` in
 /// `config.toml`.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum CacheKind {
@@ -286,16 +282,8 @@ impl CacheKind {
     /// Whether this cache benefits from being shared across users on a single
     /// (potentially networked) filesystem.
     ///
-    /// On HPC the conda package cache, repodata cache, and uv wheel cache are
-    /// commonly mounted on a shared filesystem so colleagues don't redownload
-    /// the same artifacts. The pypi-mapping / exec-envs / build-tool-envs
-    /// caches are per-user and small enough that node-local storage is a
-    /// better fit; they get auto-redirected when the cache root is on netfs.
     pub fn prefers_shared(self) -> bool {
-        matches!(
-            self,
-            CacheKind::CondaPackages | CacheKind::Repodata | CacheKind::PypiWheels
-        )
+        matches!(self, CacheKind::CondaPackages | CacheKind::PypiWheels)
     }
 }
 
