@@ -396,6 +396,10 @@ RunDependenciesField = Field(
     None,
     description="The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
 )
+RunConstraintsField = Field(
+    None,
+    description="The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+)
 Dependencies = dict[CondaPackageName, MatchSpec] | None
 
 
@@ -834,6 +838,7 @@ class Package(StrictBaseModel):
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
     run_dependencies: Dependencies = RunDependenciesField
+    run_constraints: Dependencies = RunConstraintsField
 
     target: dict[TargetName, PackageTarget] | None = Field(
         None,
@@ -909,6 +914,7 @@ class BuildBackend(MatchspecTable):
 
 class PackageTarget(StrictBaseModel):
     run_dependencies: Dependencies = RunDependenciesField
+    run_constraints: Dependencies = RunConstraintsField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
 

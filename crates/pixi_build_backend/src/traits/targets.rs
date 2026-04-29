@@ -24,6 +24,8 @@ pub trait TargetSelector {
 pub struct Dependencies<'a, S> {
     /// The run dependencies
     pub run: IndexMap<&'a SourcePackageName, &'a S>,
+    /// The run constraints
+    pub run_constraints: IndexMap<&'a SourcePackageName, &'a S>,
     /// The host dependencies
     pub host: IndexMap<&'a SourcePackageName, &'a S>,
     /// The build dependencies
@@ -40,16 +42,23 @@ impl<'a, S> Dependencies<'a, S> {
     /// Create a new Dependencies
     pub fn new(
         run: IndexMap<&'a SourcePackageName, &'a S>,
+        run_constraints: IndexMap<&'a SourcePackageName, &'a S>,
         host: IndexMap<&'a SourcePackageName, &'a S>,
         build: IndexMap<&'a SourcePackageName, &'a S>,
     ) -> Self {
-        Self { run, host, build }
+        Self {
+            run,
+            run_constraints,
+            host,
+            build,
+        }
     }
 
     /// Return an empty Dependencies
     pub fn empty() -> Self {
         Self {
             run: IndexMap::new(),
+            run_constraints: IndexMap::new(),
             host: IndexMap::new(),
             build: IndexMap::new(),
         }
@@ -95,6 +104,12 @@ pub trait Targets {
 
     /// Return the run dependencies for the given platform
     fn run_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> IndexMap<&SourcePackageName, &Self::Spec>;
+
+    /// Return the run constraints for the given platform
+    fn run_constraints(
         &self,
         platform: Option<Platform>,
     ) -> IndexMap<&SourcePackageName, &Self::Spec>;
@@ -175,6 +190,19 @@ impl Targets for pbt::Targets {
             .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpec>>()
     }
 
+    fn run_constraints(
+        &self,
+        platform: Option<Platform>,
+    ) -> IndexMap<&SourcePackageName, &pbt::PackageSpec> {
+        let targets = self.resolve(platform).collect_vec();
+
+        targets
+            .iter()
+            .flat_map(|t| t.run_constraints.iter())
+            .flatten()
+            .collect::<IndexMap<&pbt::SourcePackageName, &pbt::PackageSpec>>()
+    }
+
     fn host_dependencies(
         &self,
         platform: Option<Platform>,
@@ -205,7 +233,8 @@ impl Targets for pbt::Targets {
         let build_deps = self.build_dependencies(platform);
         let host_deps = self.host_dependencies(platform);
         let run_deps = self.run_dependencies(platform);
+        let run_constraints = self.run_constraints(platform);
 
-        Dependencies::new(run_deps, host_deps, build_deps)
+        Dependencies::new(run_deps, run_constraints, host_deps, build_deps)
     }
 }

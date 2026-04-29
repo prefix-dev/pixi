@@ -11,6 +11,8 @@ pub enum SpecType {
     Build,
     /// Regular dependencies that are used when we need to run the project
     Run,
+    /// Runtime constraints on packages we might have
+    RunConstraints,
 }
 
 impl SpecType {
@@ -20,11 +22,18 @@ impl SpecType {
             SpecType::Host => "host-dependencies",
             SpecType::Build => "build-dependencies",
             SpecType::Run => "dependencies",
+            SpecType::RunConstraints => "run-constraints",
         }
     }
 
     /// Returns all the variants of the enum
     pub fn all() -> impl Iterator<Item = SpecType> {
-        [SpecType::Run, SpecType::Host, SpecType::Build].into_iter()
+        [
+            SpecType::Run,
+            SpecType::Host,
+            SpecType::Build,
+            SpecType::RunConstraints,
+        ]
+        .into_iter()
     }
 }
