@@ -1229,8 +1229,6 @@ test-source-pkg = {{ path = "./source-package" }}
 /// a lock-file with `dep-a` only; after adding `dep-b`, the lock-file
 /// must be rewritten.
 #[tokio::test]
-#[ignore = "known bug: source-package run-dependency changes are not detected by satisfiability; \
-            see test_source_run_dependency_removal_invalidates_lock_file for the matching removal case"]
 async fn test_source_run_dependency_addition_invalidates_lock_file() {
     setup_tracing();
 
@@ -1320,8 +1318,6 @@ dep-b = ">=1.0"
 /// declares. Detection has to be bidirectional, which is what makes
 /// run-dep removal trickier than addition.
 #[tokio::test]
-#[ignore = "known bug: source-package run-dependency changes are not detected by satisfiability; \
-            removal is the harder direction because the remaining deps still satisfy"]
 async fn test_source_run_dependency_removal_invalidates_lock_file() {
     setup_tracing();
 
