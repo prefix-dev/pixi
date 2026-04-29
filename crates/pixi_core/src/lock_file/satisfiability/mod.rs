@@ -22,7 +22,10 @@ use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, ComputeResultExt, DevSourceMetadataError,
     DevSourceMetadataSpec, EnvironmentRef, SourceCheckoutError, SourceRecordError, WorkspaceEnvRef,
-    executor::CancellationAwareFutures, source_checkout::SourceCheckoutExt,
+    build::pin_compatible::PinCompatibilityMap,
+    build::{Dependencies, PixiRunExports, dependencies::filter_match_specs},
+    executor::CancellationAwareFutures,
+    source_checkout::SourceCheckoutExt,
 };
 use pixi_config::Config;
 use pixi_git::url::RepositoryUrl;
@@ -363,6 +366,26 @@ impl Display for BuildOrHostEnv {
     }
 }
 
+/// Whether a [`PlatformUnsat::SourceRunDependenciesChanged`] mismatch
+/// concerns the run-`depends` or the run-`constrains` of a built source
+/// package.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum SourceRunDepKind {
+    /// Mismatch in the run-time `depends` list.
+    RunDepends,
+    /// Mismatch in the run-time `constrains` list.
+    RunConstrains,
+}
+
+impl Display for SourceRunDepKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SourceRunDepKind::RunDepends => write!(f, "run-dependencies"),
+            SourceRunDepKind::RunConstrains => write!(f, "run-constraints"),
+        }
+    }
+}
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
@@ -619,6 +642,22 @@ pub enum PlatformUnsat {
         env: BuildOrHostEnv,
         name: String,
         location: String,
+    },
+
+    #[error(
+        "the resolved {kind} of source package '{package}' no longer match what the backend would re-derive from the manifest{added_msg}{removed_msg}",
+        added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
+        removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
+    )]
+    SourceRunDependenciesChanged {
+        /// The source package whose `depends`/`constrains` drifted.
+        package: String,
+        /// Which side drifted: run-`depends` or run-`constrains`.
+        kind: SourceRunDepKind,
+        /// Specs the backend now declares that the locked record is missing.
+        added: Vec<String>,
+        /// Specs the locked record carries that the backend no longer declares.
+        removed: Vec<String>,
     },
 
     #[error(
@@ -3271,6 +3310,16 @@ async fn verify_partial_source_record_against_backend(
         .map_err(CommandDispatcherError::Failed)?;
     }
 
+    // Verify that the locked record's runtime `depends` and `constrains`
+    // still match what the backend would re-derive from its declared
+    // run-dependencies plus the resolved build/host packages'
+    // run-exports. This catches manifest edits to
+    // `[package.run-dependencies]` (and its constraints sibling) that
+    // the build/host check above can't see, because changes there don't
+    // necessarily perturb the build/host envs at all.
+    verify_locked_run_deps_against_backend(record, matching_output, &platform_setup.channel_config)
+        .map_err(CommandDispatcherError::Failed)?;
+
     // Synthesize a full record from the matching output. We use the
     // backend's freshly-computed PackageRecord (version, build,
     // depends, etc.) but keep the locked build/host packages so the
@@ -3281,6 +3330,260 @@ async fn verify_partial_source_record_against_backend(
         record,
         matching_output,
     )))
+}
+
+/// Reassemble what the locked source record's `depends` (and
+/// `constrains`) would look like if produced by a fresh backend
+/// resolution, then assert it matches what's actually locked. The
+/// reconstruction goes through the same `Dependencies` machinery the
+/// solve path uses, so the resulting strings line up byte-for-byte
+/// without any `MatchSpec::from_str` parse on the locked side.
+fn verify_locked_run_deps_against_backend(
+    record: &pixi_record::UnresolvedSourceRecord,
+    matching_output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
+    channel_config: &rattler_conda_types::ChannelConfig,
+) -> Result<(), Box<PlatformUnsat>> {
+    // Resolve build/host package slices into PixiRecords for the pin
+    // compatibility map and the run-export collection. Partial source
+    // records get dropped: pin_compatible against a record whose
+    // version isn't yet materialised would just fail downstream, and
+    // their run_exports are necessarily absent.
+    let resolved_build = resolved_records(&record.build_packages);
+    let resolved_host = resolved_records(&record.host_packages);
+
+    // Build the pin compatibility map from build records first, then
+    // host records, mirroring the order in `resolve_source_record` so
+    // pin_compatible(host_dep) finds host entries when both envs name
+    // the same package.
+    let mut compat_map: PinCompatibilityMap = std::collections::HashMap::new();
+    compat_map.extend(
+        resolved_build
+            .iter()
+            .map(|r| (r.package_record().name.clone(), r)),
+    );
+    compat_map.extend(
+        resolved_host
+            .iter()
+            .map(|r| (r.package_record().name.clone(), r)),
+    );
+
+    // Pull run_exports off direct host/build deps. Indirect (transitive)
+    // entries don't contribute run-exports per conda-build semantics,
+    // so we filter by the names the backend actually declares.
+    let host_run_exports = collect_direct_run_exports(
+        matching_output.host_dependencies.as_ref(),
+        &record.host_packages,
+        &matching_output.ignore_run_exports,
+    );
+    let build_run_exports = collect_direct_run_exports(
+        matching_output.build_dependencies.as_ref(),
+        &record.build_packages,
+        &matching_output.ignore_run_exports,
+    );
+
+    // Reassemble the typed Dependencies the same way `resolve_source_record`
+    // does at solve time: bare run-deps + run-export merge.
+    let assembled = Dependencies::new(&matching_output.run_dependencies, None, &compat_map)
+        .map_err(|err| {
+            Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+                record.name().as_source().to_string(),
+                err.to_string(),
+            ))
+        })?
+        .extend_with_run_exports_from_build_and_host(
+            host_run_exports,
+            build_run_exports,
+            matching_output.metadata.subdir,
+        );
+
+    // Stringify both halves with the same pipeline that produces
+    // locked.depends / locked.constrains at solve time, then compare
+    // as multisets. No `MatchSpec::from_str` on the locked side.
+    let expected_depends = stringify_pixi_dep_map(&assembled, channel_config, |d| {
+        d.dependencies
+            .clone()
+            .into_specs()
+            .map(|(name, withspec)| (name, withspec.value))
+    })?;
+    diff_multisets(record.depends(), &expected_depends).map_err(|(added, removed)| {
+        Box::new(PlatformUnsat::SourceRunDependenciesChanged {
+            package: record.name().as_source().to_string(),
+            kind: SourceRunDepKind::RunDepends,
+            added,
+            removed,
+        })
+    })?;
+
+    // Partial source records don't carry `constrains` in the lockfile
+    // (PartialSourceRecordData only round-trips `depends`), so we can
+    // only verify constrains drift on Full records. Partial records
+    // already force a re-lock through other paths in this function;
+    // skipping the constrains check here doesn't widen the gap.
+    if let SourceRecordData::Full(full) = &record.data {
+        let expected_constrains = stringify_binary_dep_map(&assembled, channel_config, |d| {
+            d.constraints
+                .clone()
+                .into_specs()
+                .map(|(name, withspec)| (name, withspec.value))
+        })?;
+        diff_multisets(&full.package_record.constrains, &expected_constrains).map_err(
+            |(added, removed)| {
+                Box::new(PlatformUnsat::SourceRunDependenciesChanged {
+                    package: record.name().as_source().to_string(),
+                    kind: SourceRunDepKind::RunConstrains,
+                    added,
+                    removed,
+                })
+            },
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Drop unresolvable partial source records and clone the rest into a
+/// `Vec<PixiRecord>` whose lifetime can back the
+/// [`PinCompatibilityMap`].
+fn resolved_records(unresolved: &[pixi_record::UnresolvedPixiRecord]) -> Vec<PixiRecord> {
+    unresolved
+        .iter()
+        .filter_map(|r| r.clone().try_into_resolved().ok())
+        .collect()
+}
+
+/// Pick the records that match a backend-declared dependency name, drop
+/// anything in `ignore_run_exports.from_package`, and turn each
+/// surviving record's `RunExportsJson` into the typed
+/// [`PixiRunExports`] flavour the dispatcher's run-export merger
+/// expects.
+fn collect_direct_run_exports(
+    direct: Option<&pixi_build_types::procedures::conda_outputs::CondaOutputDependencies>,
+    locked: &[pixi_record::UnresolvedPixiRecord],
+    ignore: &pixi_build_types::procedures::conda_outputs::CondaOutputIgnoreRunExports,
+) -> Vec<(PackageName, PixiRunExports)> {
+    let direct_names: HashSet<PackageName> = direct
+        .into_iter()
+        .flat_map(|d| {
+            d.depends
+                .iter()
+                .filter_map(|named| PackageName::try_from(named.name.as_str()).ok())
+        })
+        .collect();
+    let mut out = Vec::new();
+    for record in locked {
+        let name = record.name();
+        if !direct_names.contains(name) || ignore.from_package.contains(name) {
+            continue;
+        }
+        let Some(re_json) = record
+            .as_binary()
+            .and_then(|b| b.package_record.run_exports.as_ref())
+        else {
+            continue;
+        };
+        let pixi_re = PixiRunExports {
+            noarch: filter_match_specs(&re_json.noarch, ignore),
+            strong: filter_match_specs(&re_json.strong, ignore),
+            weak: filter_match_specs(&re_json.weak, ignore),
+            strong_constrains: filter_match_specs(&re_json.strong_constrains, ignore),
+            weak_constrains: filter_match_specs(&re_json.weak_constrains, ignore),
+        };
+        out.push((name.clone(), pixi_re));
+    }
+    out
+}
+
+/// Stringify a `(PackageName, PixiSpec)` projection of a [`Dependencies`]
+/// into the same `Vec<String>` shape the solve path produces for
+/// `depends`. Source-typed specs round-trip through
+/// [`PixiSpec::to_match_spec`] just like at solve time, so locked
+/// entries with relative paths / git revs match byte-for-byte.
+fn stringify_pixi_dep_map<F, I>(
+    deps: &Dependencies,
+    channel_config: &rattler_conda_types::ChannelConfig,
+    project: F,
+) -> Result<Vec<String>, Box<PlatformUnsat>>
+where
+    F: FnOnce(&Dependencies) -> I,
+    I: IntoIterator<Item = (PackageName, PixiSpec)>,
+{
+    project(deps)
+        .into_iter()
+        .map(|(name, spec)| {
+            spec.to_match_spec(&name, channel_config)
+                .map(|m| m.to_string())
+                .map_err(|err| {
+                    Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+                        name.as_source().to_string(),
+                        err.to_string(),
+                    ))
+                })
+        })
+        .collect()
+}
+
+/// Stringify a `(PackageName, BinarySpec)` projection of a
+/// [`Dependencies`] (used for `constrains`).
+fn stringify_binary_dep_map<F, I>(
+    deps: &Dependencies,
+    channel_config: &rattler_conda_types::ChannelConfig,
+    project: F,
+) -> Result<Vec<String>, Box<PlatformUnsat>>
+where
+    F: FnOnce(&Dependencies) -> I,
+    I: IntoIterator<Item = (PackageName, pixi_spec::BinarySpec)>,
+{
+    project(deps)
+        .into_iter()
+        .map(|(name, spec)| {
+            spec.to_match_spec(&name, channel_config)
+                .map(|m| m.to_string())
+                .map_err(|err| {
+                    Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+                        name.as_source().to_string(),
+                        err.to_string(),
+                    ))
+                })
+        })
+        .collect()
+}
+
+/// Compare two `Vec<String>` as multisets and return `Err((added,
+/// removed))` describing the symmetric difference, or `Ok(())` if they
+/// agree. `added` lists entries the right side has that the left side
+/// doesn't (the backend now declares them but the lockfile does not);
+/// `removed` is the inverse.
+fn diff_multisets(
+    locked: &[String],
+    expected: &[String],
+) -> Result<(), (Vec<String>, Vec<String>)> {
+    let mut counts: std::collections::HashMap<&str, isize> = std::collections::HashMap::new();
+    for s in expected {
+        *counts.entry(s.as_str()).or_default() += 1;
+    }
+    for s in locked {
+        *counts.entry(s.as_str()).or_default() -= 1;
+    }
+    let mut added: Vec<String> = Vec::new();
+    let mut removed: Vec<String> = Vec::new();
+    for (spec, delta) in counts {
+        if delta > 0 {
+            for _ in 0..delta {
+                added.push(spec.to_string());
+            }
+        } else if delta < 0 {
+            for _ in 0..(-delta) {
+                removed.push(spec.to_string());
+            }
+        }
+    }
+    if added.is_empty() && removed.is_empty() {
+        Ok(())
+    } else {
+        added.sort();
+        removed.sort();
+        Err((added, removed))
+    }
 }
 
 /// Compare a locked record's variants (`pixi_record::VariantValue`)

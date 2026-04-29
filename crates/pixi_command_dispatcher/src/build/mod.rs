@@ -2,7 +2,7 @@
 
 mod build_environment;
 pub mod conversion;
-mod dependencies;
+pub mod dependencies;
 pub mod pin_compatible;
 mod work_dir_key;
 

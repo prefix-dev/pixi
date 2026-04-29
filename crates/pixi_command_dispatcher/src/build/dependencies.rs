@@ -301,7 +301,7 @@ impl Dependencies {
     }
 }
 
-fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
+pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
     specs: &[String],
     ignore: &CondaOutputIgnoreRunExports,
 ) -> DependencyMap<PackageName, T> {
