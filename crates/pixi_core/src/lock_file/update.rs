@@ -725,13 +725,13 @@ impl<'p> LockFileDerivedData<'p> {
         // prefix" cache) can short-circuit on the next process. Best-
         // effort: a write failure just costs the next activation one
         // re-run.
-        if let Some(fp) = installed_fingerprint {
-            if let Err(err) = fp.write(&environment.dir()) {
-                tracing::debug!(
-                    "Failed to write install fingerprint marker for '{}': {err}",
-                    environment.name().fancy_display()
-                );
-            }
+        if let Some(fp) = installed_fingerprint
+            && let Err(err) = fp.write(&environment.dir())
+        {
+            tracing::debug!(
+                "Failed to write install fingerprint marker for '{}': {err}",
+                environment.name().fancy_display()
+            );
         }
 
         Ok(prefix)

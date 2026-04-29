@@ -98,7 +98,7 @@ impl EnvironmentFingerprint {
     /// is still authoritative; a missing marker just means we run
     /// activation fresh, never produces a stale hit.
     pub fn read(env_dir: &Path) -> Option<Self> {
-        let bytes = std::fs::read(Self::marker_path(env_dir)).ok()?;
+        let bytes = fs_err::read(Self::marker_path(env_dir)).ok()?;
         let trimmed = std::str::from_utf8(&bytes).ok()?.trim();
         if trimmed.is_empty() {
             return None;
@@ -113,11 +113,11 @@ impl EnvironmentFingerprint {
     pub fn write(&self, env_dir: &Path) -> std::io::Result<()> {
         let dest = Self::marker_path(env_dir);
         if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent)?;
+            fs_err::create_dir_all(parent)?;
         }
         let tmp = dest.with_extension("tmp");
-        std::fs::write(&tmp, self.0.as_bytes())?;
-        std::fs::rename(&tmp, &dest)
+        fs_err::write(&tmp, self.0.as_bytes())?;
+        fs_err::rename(&tmp, &dest)
     }
 }
 

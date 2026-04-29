@@ -208,9 +208,8 @@ async fn install_inner(
 
     // Fingerprint every record that will land in the prefix; the
     // sha256s the records already carry are enough, no file I/O.
-    let installed_fingerprint = crate::EnvironmentFingerprint::compute(
-        binary_records.iter().map(|arc| arc.as_ref()),
-    );
+    let installed_fingerprint =
+        crate::EnvironmentFingerprint::compute(binary_records.iter().map(|arc| arc.as_ref()));
 
     // Fast path: when the prefix's stored fingerprint already matches
     // the one we'd install and the caller hasn't asked for an explicit
@@ -222,11 +221,9 @@ async fn install_inner(
         && crate::EnvironmentFingerprint::read(spec.prefix.path()).as_ref()
             == Some(&installed_fingerprint)
     {
-        let transaction = unchanged_transaction(
-            spec.build_environment.host_platform,
-            &binary_records,
-        )
-        .map_err(CommandDispatcherError::Failed)?;
+        let transaction =
+            unchanged_transaction(spec.build_environment.host_platform, &binary_records)
+                .map_err(CommandDispatcherError::Failed)?;
         return Ok(InstallPixiEnvironmentResult {
             transaction,
             post_link_script_result: None,
@@ -283,6 +280,7 @@ async fn install_inner(
 /// derives `PythonStatus` from the transaction sees `Unchanged`. We
 /// leave `unchanged` empty too: callers iterate it to inspect the
 /// install diff, and "no diff" is exactly what we want to signal.
+#[allow(clippy::result_large_err)] // matches install_inner's unboxed error contract
 fn unchanged_transaction(
     platform: rattler_conda_types::Platform,
     records: &[Arc<RepoDataRecord>],

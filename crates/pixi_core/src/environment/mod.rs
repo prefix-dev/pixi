@@ -2,10 +2,10 @@ pub(crate) mod conda_metadata;
 mod conda_prefix;
 pub mod list;
 pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
-use pixi_command_dispatcher::EnvironmentFingerprint;
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};
 use miette::{Context, IntoDiagnostic};
+use pixi_command_dispatcher::EnvironmentFingerprint;
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
@@ -128,11 +128,7 @@ impl EnvironmentHash {
         lock_file: &LockFile,
     ) -> Self {
         let mut hasher = Xxh3::new();
-        Self::hash_common_inputs(
-            &mut hasher,
-            run_environment,
-            input_environment_variables,
-        );
+        Self::hash_common_inputs(&mut hasher, run_environment, input_environment_variables);
 
         // Hash the packages
         let mut urls = Vec::new();
@@ -177,11 +173,7 @@ impl EnvironmentHash {
         installed_fingerprint: &EnvironmentFingerprint,
     ) -> Self {
         let mut hasher = Xxh3::new();
-        Self::hash_common_inputs(
-            &mut hasher,
-            run_environment,
-            input_environment_variables,
-        );
+        Self::hash_common_inputs(&mut hasher, run_environment, input_environment_variables);
         installed_fingerprint.as_str().hash(&mut hasher);
         EnvironmentHash(format!("{:x}", hasher.finish()))
     }
