@@ -184,13 +184,16 @@ pub fn is_network_filesystem(path: &Path) -> bool {
 #[cfg(target_os = "linux")]
 fn detect_network_filesystem(path: &Path) -> Option<bool> {
     use nix::sys::statfs::{
-        AUTOFS_SUPER_MAGIC, CIFS_MAGIC_NUMBER, FUSE_SUPER_MAGIC, NFS_SUPER_MAGIC, SMB_SUPER_MAGIC,
+        AUTOFS_SUPER_MAGIC, FUSE_SUPER_MAGIC, FsType, NFS_SUPER_MAGIC, SMB_SUPER_MAGIC,
     };
+    // CIFS magic isn't re-exported by `nix`
+    // so define it inline (fs/smb/client/cifsfs.h).
+    let cifs_magic = FsType(0xff53_4d42 as _);
     let fs = statfs_nearest_existing(path)?.filesystem_type();
     Some(
         fs == NFS_SUPER_MAGIC
             || fs == SMB_SUPER_MAGIC
-            || fs == CIFS_MAGIC_NUMBER
+            || fs == cifs_magic
             || fs == FUSE_SUPER_MAGIC
             || fs == AUTOFS_SUPER_MAGIC,
     )
