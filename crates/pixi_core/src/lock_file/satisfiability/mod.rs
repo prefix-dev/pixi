@@ -4289,7 +4289,8 @@ mod tests {
             verify_locked_against_backend_specs,
         };
         use pixi_build_types::{
-            BinaryPackageSpec, NamedSpec, PackageSpec, SourcePackageName, VariantValue,
+            BinaryPackageSpec, NamedSpec, PackageSpec, PinCompatibleSpec, SourcePackageName,
+            VariantValue,
             procedures::conda_outputs::{
                 CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports,
                 CondaOutputMetadata, CondaOutputRunExports,
@@ -4354,6 +4355,18 @@ mod tests {
             NamedSpec {
                 name: SourcePackageName::from(PackageName::from_str(name).expect("valid name")),
                 spec: PackageSpec::Binary(spec),
+            }
+        }
+
+        fn pin_compatible_dep(name: &str) -> NamedSpec<PackageSpec> {
+            NamedSpec {
+                name: SourcePackageName::from(PackageName::from_str(name).expect("valid name")),
+                spec: PackageSpec::PinCompatible(PinCompatibleSpec {
+                    lower_bound: None,
+                    upper_bound: None,
+                    exact: false,
+                    build: None,
+                }),
             }
         }
 
@@ -4602,6 +4615,60 @@ mod tests {
                 "locked depends must survive into the synthesized full record"
             );
             assert_eq!(full.manifest_source, partial.manifest_source);
+        }
+
+        /// `pin_compatible(foo)` in *host* dependencies pins to the
+        /// version of `foo` resolved in the *build* environment, so a
+        /// stale lock where the build env has no `foo` is impossible
+        /// to satisfy: the next solve would fail with
+        /// `PinCompatibleError::PackageNotFound`.
+        ///
+        /// This test sets up exactly that situation: backend declares
+        /// `pin_compatible(numpy)` in host_dependencies, locked
+        /// build_packages is empty, locked host_packages happens to
+        /// carry a `numpy` record (e.g. pulled in by an unrelated dep
+        /// in a prior solve). The verifier should reject the lock.
+        ///
+        /// Currently it accepts: `verify_locked_against_backend_specs`
+        /// only receives the *host* slice, and its `contains_name`
+        /// check finds `numpy` there. Fixing this requires the
+        /// function to also receive the env that `pin_compatible`
+        /// resolves against (the build slice for host deps), and to
+        /// run the `contains_name` check against that slice instead.
+        #[test]
+        #[ignore = "demonstrates pin_compatible bug: host pin_compatible must check build_packages, not host_packages"]
+        fn pin_compatible_host_dep_resolves_against_build_env() {
+            let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
+                Arc::new(make_binary_record("numpy", "1.5")),
+            )];
+
+            let host_deps = CondaOutputDependencies {
+                depends: vec![pin_compatible_dep("numpy")],
+                constraints: Vec::new(),
+            };
+            let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
+                PinnedPathSpec {
+                    path: "./pkg".into(),
+                },
+            )));
+
+            let result = verify_locked_against_backend_specs(
+                &host_deps,
+                &host_locked,
+                &CHANNEL_CONFIG,
+                &anchor,
+                &PackageName::from_str("pkg").unwrap(),
+                BuildOrHostEnv::Host,
+            );
+
+            assert!(
+                result.is_err(),
+                "pin_compatible(numpy) in host deps must resolve against the \
+                 build env (which is empty here), not the host env where numpy \
+                 happens to be present. The current implementation silently \
+                 accepts this stale lock; a re-solve would fail with \
+                 PinCompatibleError::PackageNotFound."
+            );
         }
     }
 }
