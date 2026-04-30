@@ -193,6 +193,17 @@ impl PinnedSourceSpec {
                     return false;
                 }
 
+                // The originally-requested ref must match. Same URL but
+                // different ref (e.g. switching `rev = X` to
+                // `branch = "Y"`) is a fresh request, not a hit on the
+                // pin: without this check the resolver re-uses the old
+                // commit and `pixi lock` never updates the pin to follow
+                // the new branch / tag / rev.
+                let source_ref = source_git.rev.clone().unwrap_or_default();
+                if pinned_git.source.reference != source_ref {
+                    return false;
+                }
+
                 // If source spec specifies a subdirectory, it must match
                 if source_git.subdirectory.is_empty() {
                     true // Source doesn't care about subdirectory
@@ -1444,7 +1455,11 @@ mod tests {
     }
 
     #[test]
-    fn test_git_ignores_different_commits() {
+    fn test_git_different_refs_do_not_match() {
+        // Same repo, different requested refs. The pin must NOT satisfy
+        // a spec that asks for a different ref — otherwise switching
+        // `rev = X` to `branch = "Y"` (or to a different `rev`) silently
+        // reuses the old commit and `pixi lock` never updates the pin.
         let pinned = PinnedSourceSpec::Git(PinnedGitSpec {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             source: PinnedGitCheckout {
@@ -1460,8 +1475,28 @@ mod tests {
             subdirectory: Default::default(),
         });
 
-        // Should match - we only compare repository and subdirectory, not the
-        // commit/rev
+        assert!(!pinned.matches_source_spec(&spec));
+    }
+
+    #[test]
+    fn test_git_same_ref_matches() {
+        // Same repo, same ref: the pin must satisfy the spec so a no-op
+        // re-lock keeps the existing commit instead of refetching `main`.
+        let pinned = PinnedSourceSpec::Git(PinnedGitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            source: PinnedGitCheckout {
+                commit: GitSha::from_str("abc123def456789012345678901234567890abcd").unwrap(),
+                subdirectory: Default::default(),
+                reference: GitReference::Branch("main".to_string()),
+            },
+        });
+
+        let spec = SourceLocationSpec::Git(GitSpec {
+            git: Url::parse("https://github.com/user/repo").unwrap(),
+            rev: Some(GitReference::Branch("main".to_string())),
+            subdirectory: Default::default(),
+        });
+
         assert!(pinned.matches_source_spec(&spec));
     }
 
