@@ -328,10 +328,16 @@ impl Workspace {
             return Ok((derived, false));
         }
 
-        // When upgrading the lock file format, force a full re-solve of all
-        // environments so that source records are rebuilt with timestamps.
-        // Simply re-serializing the old lock file would preserve the missing
-        // timestamp fields.
+        // Force a re-solve of every environment when upgrading the lock
+        // file format so source records gain the v7 fields (timestamps,
+        // build / host packages) that v6 didn't store. The locked records
+        // ride along as solver hints (`locked_group_records` on both the
+        // conda and pypi solve paths), so the re-solve is a no-op for
+        // anything that was already pinned. Both maps must be touched:
+        // skipping `pypi` makes the extract task fill the env's pypi cell
+        // with `Arc::default()`, which then wins over the locked-file
+        // fallback in `take_latest_pypi_records` and silently strips
+        // every pypi entry on the upgrade.
         if needs_format_upgrade && options.upgrade_lock_file_format {
             tracing::warn!(
                 "the lock file is up-to-date but uses an older format (v{}), \
@@ -340,11 +346,17 @@ impl Workspace {
                 rattler_lock::FileFormatVersion::LATEST,
             );
             for env in self.environments() {
+                let platforms = env.platforms();
                 outdated
                     .conda
                     .entry(env.clone())
                     .or_default()
-                    .extend(env.platforms());
+                    .extend(platforms.iter().copied());
+                outdated
+                    .pypi
+                    .entry(env.clone())
+                    .or_default()
+                    .extend(platforms);
             }
         }
 
