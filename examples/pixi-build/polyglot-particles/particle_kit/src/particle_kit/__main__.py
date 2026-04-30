@@ -1,4 +1,4 @@
-from particle_kit import View, cpp, rs
+from . import View, cpp, rs
 
 view = View(width=800, height=600, title="Polyglot Particles")
 
