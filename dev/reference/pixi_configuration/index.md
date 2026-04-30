@@ -178,6 +178,10 @@ detached-environments = "/opt/pixi/envs"
 
 The environments will be stored in the [cache directory](../../workspace/environment/#caching-packages) when this option is `true`. When you specify a custom path the environments will be stored in that directory.
 
+Per-kind path override
+
+You can also pin just the detached-environments path via the [`[cache]`](#cache) table (`cache.detached-environments`), which is convenient on HPC where this cache typically belongs on node-local scratch even when the rest of the pixi cache lives on a shared network filesystem.
+
 The resulting directory structure will look like this:
 
 ```shell
@@ -364,6 +368,111 @@ tool-platform = "win-64" # force tools like build backends to be installed for a
 Virtual packages
 
 The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different operating system than the current system, no virtual packages will be used.
+
+### `cache`
+
+The `[cache]` table lets you redirect specific pixi caches independently.
+
+config.toml
+
+```toml
+[cache]
+# Override for the cache root. Equivalent to setting PIXI_CACHE_DIR.
+# Per-kind fields below override this on a cache-by-cache basis.
+root = "/shared/hpc/pixi-cache"
+
+# Per-cache absolute path overrides.
+build-tool-environments = "/local/scratch/cached-build-tool-envs"
+conda-packages = "/shared/hpc/pkgs"                               # conda package cache
+detached-environments = "/local/scratch/envs"
+exec-environments = "/local/scratch/cached-envs"
+pypi-mapping = "/local/scratch/conda-pypi-mapping"                # conda<->pypi name mapping
+pypi-wheels = "/shared/hpc/uv-cache"                              # uv wheel cache
+repodata = "/shared/hpc/repodata"                                 # repodata cache
+
+# How to handle a cache that lives on a network filesystem.
+# - "auto" (default): redirect kinds that prefer local storage to node-local
+#   scratch (chosen from $SLURM_TMPDIR / $PBS_JOBFS / $SCRATCH / $TMPDIR);
+#   leave shared-friendly kinds (conda-packages, repodata, pypi-wheels) put.
+# - "always": redirect every kind when the root looks like netfs.
+# - "never": never redirect.
+netfs-redirect = "auto"
+```
+
+#### Resolution order
+
+For each cache kind, pixi resolves the directory in this order (highest priority first):
+
+1. The matching `PIXI_CACHE_<KIND>_DIR` environment variable, if set (see [Environment-variable escape hatches](#environment-variable-escape-hatches)).
+1. The matching `[cache.<kind>]` path from this config, if set.
+1. The cache root, joined with the kind's subdirectory:
+   1. `PIXI_CACHE_DIR` environment variable
+   1. `RATTLER_CACHE_DIR` environment variable
+   1. `[cache.root]` from this config
+   1. `$XDG_CACHE_HOME/pixi` (when it exists)
+   1. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
+1. If the resolved path is on a network filesystem and the kind is not "shared-friendly", auto-redirect to node-local scratch (see `netfs-redirect` below).
+
+#### Cache kinds
+
+The fields under `[cache]` map one-to-one to the caches pixi maintains:
+
+| Field                     | Cache contents                                                                  | Default behavior on netfs |
+| ------------------------- | ------------------------------------------------------------------------------- | ------------------------- |
+| `conda-packages`          | Extracted conda packages (`pkgs`)                                               | Stay shared               |
+| `repodata`                | `repodata.json` cache                                                           | Stay shared               |
+| `pypi-wheels`             | uv wheel cache (`uv-cache`)                                                     | Stay shared               |
+| `pypi-mapping`            | conda↔PyPI name mapping                                                         | Redirect to node-local    |
+| `exec-environments`       | Cached `pixi exec` envs                                                         | Redirect to node-local    |
+| `build-tool-environments` | Cached build-tool envs                                                          | Redirect to node-local    |
+| `detached-environments`   | Workspace envs when [`detached-environments`](#detached-environments) is `true` | Redirect to node-local    |
+
+#### `netfs-redirect`
+
+Controls the auto-redirect behavior when the resolved cache root lives on a network filesystem (NFS, SMB/CIFS, FUSE, autofs):
+
+- `"auto"` (default): redirect only the kinds that prefer node-local storage (those marked "Redirect to node-local" above).
+- `"always"`: redirect every kind to node-local scratch when the root is on netfs.
+- `"never"`: do not redirect anything, even when on netfs.
+
+A per-kind path override (`[cache.<kind>] = "..."`) always wins over the auto-redirect logic.
+
+The redirect target is chosen from the first non-netfs candidate among `$SLURM_TMPDIR`, `$PBS_JOBFS`, `$SCRATCH`, and `$TMPDIR`, falling back to the system temp directory.
+
+#### Path syntax
+
+All path fields under `[cache]` (including `root` and every per-kind override) follow the same rules:
+
+- **Absolute paths are required.** Relative paths are rejected at config-load time with an error naming the offending field. This is enforced because `config.toml` is loaded from many layered locations (system, XDG, workspace) and "relative to which one?" is ambiguous.
+- **`~` is expanded to the user's home directory.** For example, `pypi-mapping = "~/scratch/mapping"` resolves to `<home>/scratch/mapping`. Expansion happens once, at config-load time.
+- **No environment-variable substitution.** Strings like `$HOME` or `${SCRATCH}` are treated as literal directory names. If you need an environment-variable-driven cache root, use the `PIXI_CACHE_DIR` environment variable instead — it is consulted before `[cache.root]`.
+
+#### Environment-variable escape hatches
+
+Every `[cache]` field can be overridden by an environment variable. Env vars take precedence over `config.toml`, so they're useful on shared CI/HPC nodes where editing the config file is awkward.
+
+**Per-kind path overrides.** Each one is equivalent to the matching `[cache.<kind>]` field. Setting one bypasses the auto-redirect logic for that kind and uses the path verbatim.
+
+| Environment variable                     | Equivalent TOML field           |
+| ---------------------------------------- | ------------------------------- |
+| `PIXI_CACHE_CONDA_PACKAGES_DIR`          | `cache.conda-packages`          |
+| `PIXI_CACHE_REPODATA_DIR`                | `cache.repodata`                |
+| `PIXI_CACHE_PYPI_WHEELS_DIR`             | `cache.pypi-wheels`             |
+| `PIXI_CACHE_PYPI_MAPPING_DIR`            | `cache.pypi-mapping`            |
+| `PIXI_CACHE_EXEC_ENVIRONMENTS_DIR`       | `cache.exec-environments`       |
+| `PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR` | `cache.build-tool-environments` |
+| `PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR`   | `cache.detached-environments`   |
+
+**Redirect policy override.**
+
+- `PIXI_CACHE_NETFS_REDIRECT` = `auto` | `always` | `never` — overrides `[cache.netfs-redirect]`. An unrecognized value is logged and ignored (config falls through).
+
+**Detection escape hatches.** These force the network-filesystem detection itself rather than the policy. They're intended for tests, CI, and one-off debugging:
+
+- `PIXI_DISABLE_NETFS_REDIRECT=1` — treat all paths as local; never redirect.
+- `PIXI_FORCE_NETFS_REDIRECT=1` — treat all paths as netfs; redirect kinds that prefer local storage.
+
+For persistent behavior, prefer `[cache.netfs-redirect]` or `PIXI_CACHE_NETFS_REDIRECT`.
 
 ## Experimental
 

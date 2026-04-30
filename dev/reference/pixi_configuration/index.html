@@ -3883,6 +3883,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cache
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4436,6 +4447,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cache
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4812,6 +4834,13 @@ when deleting the workspace.</p>
 <p>The environments will be stored in the <a href="../../workspace/environment/#caching-packages">cache directory</a> when this option
 is <code>true</code>.
 When you specify a custom path the environments will be stored in that directory.</p>
+<div class="admonition tip">
+<p class="admonition-title">Per-kind path override</p>
+<p>You can also pin just the detached-environments path via the <a href="#cache"><code>[cache]</code></a> table
+(<code>cache.detached-environments</code>), which is convenient on HPC where this cache typically
+belongs on node-local scratch even when the rest of the pixi cache lives on a shared
+network filesystem.</p>
+</div>
 <p>The resulting directory structure will look like this:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>/opt/pixi/envs
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>├──<span class="w"> </span>pixi-6837172896226367631
@@ -4951,28 +4980,209 @@ architecture for which there is fewer support for certain build backends.</p>
 </div>
 <p>The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different
 operating system than the current system, no virtual packages will be used.</p>
+<h3 id="cache"><code>cache</code><a class="headerlink" href="#cache" title="Permanent link">#</a></h3>
+<p>The <code>[cache]</code> table lets you redirect specific pixi caches independently.</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">[cache]</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Override for the cache root. Equivalent to setting PIXI_CACHE_DIR.</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="c1"># Per-kind fields below override this on a cache-by-cache basis.</span>
+</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="n">root</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/pixi-cache&quot;</span>
+</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>
+</span><span id="__span-19-6"><a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="c1"># Per-cache absolute path overrides.</span>
+</span><span id="__span-19-7"><a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="n">build-tool-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/cached-build-tool-envs&quot;</span>
+</span><span id="__span-19-8"><a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="n">conda-packages</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/pkgs&quot;</span><span class="w">                               </span><span class="c1"># conda package cache</span>
+</span><span id="__span-19-9"><a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a><span class="n">detached-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/envs&quot;</span>
+</span><span id="__span-19-10"><a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="n">exec-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/cached-envs&quot;</span>
+</span><span id="__span-19-11"><a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="n">pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/conda-pypi-mapping&quot;</span><span class="w">                </span><span class="c1"># conda&lt;-&gt;pypi name mapping</span>
+</span><span id="__span-19-12"><a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a><span class="n">pypi-wheels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/uv-cache&quot;</span><span class="w">                              </span><span class="c1"># uv wheel cache</span>
+</span><span id="__span-19-13"><a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a><span class="n">repodata</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/repodata&quot;</span><span class="w">                                 </span><span class="c1"># repodata cache</span>
+</span><span id="__span-19-14"><a id="__codelineno-19-14" name="__codelineno-19-14" href="#__codelineno-19-14"></a>
+</span><span id="__span-19-15"><a id="__codelineno-19-15" name="__codelineno-19-15" href="#__codelineno-19-15"></a><span class="c1"># How to handle a cache that lives on a network filesystem.</span>
+</span><span id="__span-19-16"><a id="__codelineno-19-16" name="__codelineno-19-16" href="#__codelineno-19-16"></a><span class="c1"># - &quot;auto&quot; (default): redirect kinds that prefer local storage to node-local</span>
+</span><span id="__span-19-17"><a id="__codelineno-19-17" name="__codelineno-19-17" href="#__codelineno-19-17"></a><span class="c1">#   scratch (chosen from $SLURM_TMPDIR / $PBS_JOBFS / $SCRATCH / $TMPDIR);</span>
+</span><span id="__span-19-18"><a id="__codelineno-19-18" name="__codelineno-19-18" href="#__codelineno-19-18"></a><span class="c1">#   leave shared-friendly kinds (conda-packages, repodata, pypi-wheels) put.</span>
+</span><span id="__span-19-19"><a id="__codelineno-19-19" name="__codelineno-19-19" href="#__codelineno-19-19"></a><span class="c1"># - &quot;always&quot;: redirect every kind when the root looks like netfs.</span>
+</span><span id="__span-19-20"><a id="__codelineno-19-20" name="__codelineno-19-20" href="#__codelineno-19-20"></a><span class="c1"># - &quot;never&quot;: never redirect.</span>
+</span><span id="__span-19-21"><a id="__codelineno-19-21" name="__codelineno-19-21" href="#__codelineno-19-21"></a><span class="n">netfs-redirect</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span>
+</span></code></pre></div>
+<h4 id="resolution-order">Resolution order<a class="headerlink" href="#resolution-order" title="Permanent link">#</a></h4>
+<p>For each cache kind, pixi resolves the directory in this order (highest
+priority first):</p>
+<ol>
+<li>The matching <code>PIXI_CACHE_&lt;KIND&gt;_DIR</code> environment variable, if set
+    (see <a href="#environment-variable-escape-hatches">Environment-variable escape hatches</a>).</li>
+<li>The matching <code>[cache.&lt;kind&gt;]</code> path from this config, if set.</li>
+<li>The cache root, joined with the kind's subdirectory:
+    1. <code>PIXI_CACHE_DIR</code> environment variable
+    2. <code>RATTLER_CACHE_DIR</code> environment variable
+    3. <code>[cache.root]</code> from this config
+    4. <code>$XDG_CACHE_HOME/pixi</code> (when it exists)
+    5. The platform default (e.g. <code>~/Library/Caches/rattler/cache</code> on macOS)</li>
+<li>If the resolved path is on a network filesystem and the kind is not
+    "shared-friendly", auto-redirect to node-local scratch (see
+    <code>netfs-redirect</code> below).</li>
+</ol>
+<h4 id="cache-kinds">Cache kinds<a class="headerlink" href="#cache-kinds" title="Permanent link">#</a></h4>
+<p>The fields under <code>[cache]</code> map one-to-one to the caches pixi maintains:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Cache contents</th>
+<th>Default behavior on netfs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>conda-packages</code></td>
+<td>Extracted conda packages (<code>pkgs</code>)</td>
+<td>Stay shared</td>
+</tr>
+<tr>
+<td><code>repodata</code></td>
+<td><code>repodata.json</code> cache</td>
+<td>Stay shared</td>
+</tr>
+<tr>
+<td><code>pypi-wheels</code></td>
+<td>uv wheel cache (<code>uv-cache</code>)</td>
+<td>Stay shared</td>
+</tr>
+<tr>
+<td><code>pypi-mapping</code></td>
+<td>conda↔PyPI name mapping</td>
+<td>Redirect to node-local</td>
+</tr>
+<tr>
+<td><code>exec-environments</code></td>
+<td>Cached <code>pixi exec</code> envs</td>
+<td>Redirect to node-local</td>
+</tr>
+<tr>
+<td><code>build-tool-environments</code></td>
+<td>Cached build-tool envs</td>
+<td>Redirect to node-local</td>
+</tr>
+<tr>
+<td><code>detached-environments</code></td>
+<td>Workspace envs when <a href="#detached-environments"><code>detached-environments</code></a> is <code>true</code></td>
+<td>Redirect to node-local</td>
+</tr>
+</tbody>
+</table>
+<h4 id="netfs-redirect"><code>netfs-redirect</code><a class="headerlink" href="#netfs-redirect" title="Permanent link">#</a></h4>
+<p>Controls the auto-redirect behavior when the resolved cache root lives on a
+network filesystem (NFS, SMB/CIFS, FUSE, autofs):</p>
+<ul>
+<li><code>"auto"</code> (default): redirect only the kinds that prefer node-local storage
+    (those marked "Redirect to node-local" above).</li>
+<li><code>"always"</code>: redirect every kind to node-local scratch when the root is on
+    netfs.</li>
+<li><code>"never"</code>: do not redirect anything, even when on netfs.</li>
+</ul>
+<p>A per-kind path override (<code>[cache.&lt;kind&gt;] = "..."</code>) always wins over the
+auto-redirect logic.</p>
+<p>The redirect target is chosen from the first non-netfs candidate among
+<code>$SLURM_TMPDIR</code>, <code>$PBS_JOBFS</code>, <code>$SCRATCH</code>, and <code>$TMPDIR</code>, falling back to the
+system temp directory.</p>
+<h4 id="path-syntax">Path syntax<a class="headerlink" href="#path-syntax" title="Permanent link">#</a></h4>
+<p>All path fields under <code>[cache]</code> (including <code>root</code> and every per-kind
+override) follow the same rules:</p>
+<ul>
+<li><strong>Absolute paths are required.</strong> Relative paths are rejected at
+    config-load time with an error naming the offending field. This is
+    enforced because <code>config.toml</code> is loaded from many layered locations
+    (system, XDG, workspace) and "relative to which one?" is ambiguous.</li>
+<li><strong><code>~</code> is expanded to the user's home directory.</strong> For example,
+    <code>pypi-mapping = "~/scratch/mapping"</code> resolves to
+    <code>&lt;home&gt;/scratch/mapping</code>. Expansion happens once, at config-load time.</li>
+<li><strong>No environment-variable substitution.</strong> Strings like <code>$HOME</code> or
+    <code>${SCRATCH}</code> are treated as literal directory names. If you need an
+    environment-variable-driven cache root, use the <code>PIXI_CACHE_DIR</code>
+    environment variable instead — it is consulted before <code>[cache.root]</code>.</li>
+</ul>
+<h4 id="environment-variable-escape-hatches">Environment-variable escape hatches<a class="headerlink" href="#environment-variable-escape-hatches" title="Permanent link">#</a></h4>
+<p>Every <code>[cache]</code> field can be overridden by an environment variable. Env vars
+take precedence over <code>config.toml</code>, so they're useful on shared CI/HPC nodes
+where editing the config file is awkward.</p>
+<p><strong>Per-kind path overrides.</strong> Each one is equivalent to the matching
+<code>[cache.&lt;kind&gt;]</code> field. Setting one bypasses the auto-redirect logic for
+that kind and uses the path verbatim.</p>
+<table>
+<thead>
+<tr>
+<th>Environment variable</th>
+<th>Equivalent TOML field</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PIXI_CACHE_CONDA_PACKAGES_DIR</code></td>
+<td><code>cache.conda-packages</code></td>
+</tr>
+<tr>
+<td><code>PIXI_CACHE_REPODATA_DIR</code></td>
+<td><code>cache.repodata</code></td>
+</tr>
+<tr>
+<td><code>PIXI_CACHE_PYPI_WHEELS_DIR</code></td>
+<td><code>cache.pypi-wheels</code></td>
+</tr>
+<tr>
+<td><code>PIXI_CACHE_PYPI_MAPPING_DIR</code></td>
+<td><code>cache.pypi-mapping</code></td>
+</tr>
+<tr>
+<td><code>PIXI_CACHE_EXEC_ENVIRONMENTS_DIR</code></td>
+<td><code>cache.exec-environments</code></td>
+</tr>
+<tr>
+<td><code>PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR</code></td>
+<td><code>cache.build-tool-environments</code></td>
+</tr>
+<tr>
+<td><code>PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR</code></td>
+<td><code>cache.detached-environments</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Redirect policy override.</strong></p>
+<ul>
+<li><code>PIXI_CACHE_NETFS_REDIRECT</code> = <code>auto</code> | <code>always</code> | <code>never</code> — overrides
+    <code>[cache.netfs-redirect]</code>. An unrecognized value is logged and ignored
+    (config falls through).</li>
+</ul>
+<p><strong>Detection escape hatches.</strong> These force the network-filesystem detection
+itself rather than the policy. They're intended for tests, CI, and one-off
+debugging:</p>
+<ul>
+<li><code>PIXI_DISABLE_NETFS_REDIRECT=1</code> — treat all paths as local; never redirect.</li>
+<li><code>PIXI_FORCE_NETFS_REDIRECT=1</code> — treat all paths as netfs; redirect kinds
+    that prefer local storage.</li>
+</ul>
+<p>For persistent behavior, prefer <code>[cache.netfs-redirect]</code> or
+<code>PIXI_CACHE_NETFS_REDIRECT</code>.</p>
 <h2 id="experimental">Experimental<a class="headerlink" href="#experimental" title="Permanent link">#</a></h2>
 <p>This allows the user to set specific experimental features that are not yet stable.</p>
 <p>Please write a GitHub issue and add the flag <code>experimental</code> to the issue if you find issues with the feature you
 activated.</p>
 <h3 id="caching-environment-activations">Caching environment activations<a class="headerlink" href="#caching-environment-activations" title="Permanent link">#</a></h3>
 <p>Turn this feature on from configuration with the following command:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># For all of your workspaces</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--global
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
-</span><span id="__span-19-4"><a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="c1"># For a specific workspace</span>
-</span><span id="__span-19-5"><a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--local
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># For all of your workspaces</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--global
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># For a specific workspace</span>
+</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--local
 </span></code></pre></div>
 <p>This will cache the environment activation in the <code>.pixi/activation-env-v0</code> folder in the workspace root.
 It will create a json file for each environment that is activated, and it will be used to activate the environment in
 the future.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>&gt;<span class="w"> </span>tree<span class="w"> </span>.pixi/activation-env-v0/
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>.pixi/activation-env-v0/
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>├──<span class="w"> </span>activation_default.json
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>└──<span class="w"> </span>activation_lint.json
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>&gt;<span class="w"> </span>cat<span class="w">  </span>.pixi/activation-env-v0/activation_lint.json
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="o">{</span><span class="s2">&quot;hash&quot;</span>:<span class="s2">&quot;8d8344e0751d377a&quot;</span>,<span class="s2">&quot;environment_variables&quot;</span>:<span class="o">{</span>&lt;ENVIRONMENT_VARIABLES_USED_IN_ACTIVATION&gt;<span class="o">}}</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>&gt;<span class="w"> </span>tree<span class="w"> </span>.pixi/activation-env-v0/
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>.pixi/activation-env-v0/
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>├──<span class="w"> </span>activation_default.json
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>└──<span class="w"> </span>activation_lint.json
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>&gt;<span class="w"> </span>cat<span class="w">  </span>.pixi/activation-env-v0/activation_lint.json
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="o">{</span><span class="s2">&quot;hash&quot;</span>:<span class="s2">&quot;8d8344e0751d377a&quot;</span>,<span class="s2">&quot;environment_variables&quot;</span>:<span class="o">{</span>&lt;ENVIRONMENT_VARIABLES_USED_IN_ACTIVATION&gt;<span class="o">}}</span>
 </span></code></pre></div>
 <ul>
 <li>The <code>hash</code> is a hash of the data on that environment in the <code>pixi.lock</code>, plus some important information on the
@@ -4981,12 +5191,12 @@ the future.</p>
 <li>The <code>environment_variables</code> are the environment variables that are set when activating the environment.</li>
 </ul>
 <p>You can ignore the cache by running:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi run/shell/shell-hook --force-activate
+<div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi run/shell/shell-hook --force-activate
 </span></code></pre></div>
 <p>Set the configuration with:</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[experimental]</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># Enable the use of the environment activation cache</span>
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="n">use-environment-activation-cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">[experimental]</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># Enable the use of the environment activation cache</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="n">use-environment-activation-cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Why is this experimental?</p>
@@ -5004,13 +5214,13 @@ the repodata (the most important file) from the first mirror in the list. The
 repodata contains all the SHA256 hashes of the individual packages, so it is
 important to get this file from a trusted source.</p>
 <p>You can also specify mirrors for an entire "host", e.g.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&quot;</span><span class="p">]</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="c1"># prefix.dev doesn&#39;t mirror conda-forge&#39;s label channels</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># pixi uses the longest matching prefix for the mirror</span>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="w">  </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="p">,</span>
-</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&quot;</span><span class="p">]</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># prefix.dev doesn&#39;t mirror conda-forge&#39;s label channels</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># pixi uses the longest matching prefix for the mirror</span>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="w">  </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="p">,</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>This will forward all request to channels on anaconda.org to prefix.dev.
 Channels that are not currently mirrored on prefix.dev will fail in the above example.
@@ -5020,10 +5230,10 @@ by providing a longer prefix that points to itself.</p>
 <p>You can also specify mirrors on the OCI registry. There is a public mirror on
 the Github container registry (ghcr.io) that is maintained by the conda-forge
 team. You can use it like this:</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">  </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span><span class="p">,</span>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">  </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span><span class="p">,</span>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
 packages on Github</a>.</p>
