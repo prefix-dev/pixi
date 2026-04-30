@@ -5,6 +5,7 @@ use pixi_consts::consts;
 use rattler_conda_types::{Platform, package::RunExportsJson};
 use rattler_lock::{LockFile, PackageBuildSource};
 use std::path::PathBuf;
+use std::time::Duration;
 use tempfile::TempDir;
 use url::Url;
 
@@ -2511,5 +2512,80 @@ subdirectory = "."
     assert_eq!(
         extract_git_build_sources(&pixi.lock_file().await.unwrap()),
         new_sources,
+    );
+}
+
+fn count_build_events(events: &[BackendEvent]) -> usize {
+    events
+        .iter()
+        .filter(|event| matches!(event, BackendEvent::CondaBuildV1Called))
+        .count()
+}
+
+/// Regression test for PIX-1692: a relative `exclude-newer` cutoff must not
+/// invalidate the source-build cache on consecutive `pixi install`s when the
+/// source package itself has not changed.
+#[tokio::test]
+async fn install_with_relative_exclude_newer_does_not_rebuild_unchanged_source_packages() {
+    setup_tracing();
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let backend_override = BackendOverride::from_memory(instantiator);
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "0.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+name = "my-package"
+channels = []
+exclude-newer = "7d"
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+            Platform::current()
+        ),
+    )
+    .unwrap();
+
+    pixi.install().await.unwrap();
+    let first_build_events = observer.events();
+    assert_eq!(
+        count_build_events(&first_build_events),
+        1,
+        "first install should build the source package once"
+    );
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    pixi.install().await.unwrap();
+    let second_build_events = observer.events();
+    assert_eq!(
+        count_build_events(&second_build_events),
+        0,
+        "second install should reuse the existing build cache for an unchanged source package"
     );
 }
