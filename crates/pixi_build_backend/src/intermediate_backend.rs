@@ -785,6 +785,7 @@ where
                 force_colors: true,
                 sandbox_config: None,
                 exclude_newer: None,
+                env_isolation: Default::default(),
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,
@@ -802,6 +803,7 @@ where
                 self.backend_identifier.version,
             ),
             extra_meta: None,
+            staging_library_name_map: None,
         };
 
         let (output, output_path) =

@@ -392,6 +392,7 @@ mod tests {
             run_exports: None,
             experimental_extra_depends: BTreeMap::new(),
             python_site_packages_path: None,
+            flags: vec![],
         };
 
         PixiRecord::Binary(RepoDataRecord {

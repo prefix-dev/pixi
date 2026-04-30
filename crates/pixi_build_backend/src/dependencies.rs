@@ -199,6 +199,8 @@ fn can_apply_variant(spec: &MatchSpec) -> Option<&PackageName> {
             url: None,
             condition: None,
             track_features: None,
+            flags: None,
+            license_family: None,
         } => name.as_exact(),
         _ => None,
     }
