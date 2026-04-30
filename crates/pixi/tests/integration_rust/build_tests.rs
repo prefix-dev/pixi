@@ -3,6 +3,8 @@ use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, Passthroug
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
 use rattler_conda_types::{Platform, package::RunExportsJson};
+use rattler_lock::{LockFile, PackageBuildSource};
+use std::path::PathBuf;
 use tempfile::TempDir;
 use url::Url;
 
@@ -11,7 +13,7 @@ use crate::{
     setup_tracing,
 };
 use pixi_cli::{build, publish};
-use pixi_test_utils::{MockRepoData, Package, format_diagnostic};
+use pixi_test_utils::{GitRepoFixture, MockRepoData, Package, format_diagnostic};
 
 fn write_source_package_manifest(path: &std::path::Path, name: &str, version: &str, extra: &str) {
     let source_pixi_toml = format!(
@@ -2367,5 +2369,147 @@ sdl2 = "*"
         "my-package.host_packages must also be updated to sdl2 2.32.0; \
          a stale 2.26.5 here means `pixi update sdl2` left a transitive \
          copy untouched"
+    );
+}
+
+/// Sorted list of the git-typed `package_build_source` entries on every
+/// source record in the lock file. Mirrors the Python helper: it's the
+/// signal that flips when the workspace's git pin changes.
+fn extract_git_build_sources(lock_file: &LockFile) -> Vec<PackageBuildSource> {
+    let mut out = Vec::new();
+    for (_, env) in lock_file.environments() {
+        for (_, packages) in env.packages_by_platform() {
+            for pkg in packages {
+                let Some(src) = pkg.as_source_conda() else {
+                    continue;
+                };
+                if let Some(build_source @ PackageBuildSource::Git { .. }) =
+                    src.package_build_source.clone()
+                {
+                    out.push(build_source);
+                }
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// `pixi install --locked` must reject a manifest whose git ref no longer
+/// matches the lock without rewriting the lock, and a regular `pixi lock`
+/// must update the lock to the new ref. Mirrors the (now-removed) python
+/// `test_git_path_lock_behaviour`.
+#[tokio::test]
+async fn test_git_path_lock_behaviour() {
+    setup_tracing();
+
+    // Build a repo with `main` and `other-feature` branches at distinct
+    // revs. The `lock-behaviour-base` fixture ships the initial commit;
+    // the rest is layered on through the GitRepoFixture::git escape
+    // hatch since the numbered-fixture format can't express branches.
+    let fixture = GitRepoFixture::new("lock-behaviour-base");
+    fixture.git(&["checkout", "-b", "other-feature"]);
+    fs::write(
+        fixture.repo_path.join("README.md"),
+        "other-feature change\n",
+    )
+    .unwrap();
+    fixture.git(&["commit", "-am", "other-feature change"]);
+    let other_feature_rev = fixture.git(&["rev-parse", "HEAD"]);
+    fixture.git(&["checkout", "main"]);
+    fs::write(fixture.repo_path.join("README.md"), "main update\n").unwrap();
+    fixture.git(&["commit", "-am", "main update"]);
+    let main_rev = fixture.git(&["rev-parse", "HEAD"]);
+    assert_ne!(main_rev, other_feature_rev);
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let manifest_path = pixi.manifest_path();
+    let workspace_path: PathBuf = pixi.workspace_path().into();
+    let git_url = &fixture.base_url;
+    let write_manifest = |kind: &str, value: &str| {
+        let manifest = format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "." }}
+
+[package]
+name = "my-package"
+version = "0.1.0"
+
+[package.build]
+backend = {{ name = "passthrough", version = "*" }}
+
+[package.build.source]
+git = "{git_url}"
+subdirectory = "."
+{kind} = "{value}"
+"#,
+            platform = Platform::current(),
+        );
+        fs::write(&manifest_path, manifest).unwrap();
+    };
+
+    // Pin to main_rev and produce the initial lock.
+    write_manifest("rev", &main_rev);
+    pixi.lock().await.unwrap();
+    let initial = extract_git_build_sources(&pixi.lock_file().await.unwrap());
+    assert!(
+        !initial.is_empty(),
+        "expected at least one git package_build_source entry in the lock"
+    );
+
+    // `--locked` must accept a manifest that matches the lock and leave
+    // the lock byte-identical.
+    pixi.install().with_locked().await.unwrap();
+    assert_eq!(
+        extract_git_build_sources(&pixi.lock_file().await.unwrap()),
+        initial,
+        "successful --locked install must not rewrite the lock"
+    );
+
+    // Swap the manifest to a branch that resolves to a different rev.
+    // The lock now lists the old rev → manifest mismatch.
+    write_manifest("branch", "other-feature");
+
+    // `--locked` must reject the mismatch and not touch the lock.
+    let lock_before = fs::read_to_string(workspace_path.join("pixi.lock")).unwrap();
+    let res = pixi.install().with_locked().await;
+    assert!(
+        res.is_err(),
+        "`pixi install --locked` must fail when manifest's git ref drifts from the lock"
+    );
+    let lock_after = fs::read_to_string(workspace_path.join("pixi.lock")).unwrap();
+    assert_eq!(
+        lock_before, lock_after,
+        "failed --locked install must leave the lock byte-identical"
+    );
+    assert_eq!(
+        extract_git_build_sources(&pixi.lock_file().await.unwrap()),
+        initial,
+    );
+
+    // A regular `pixi lock` updates the pin to the new ref.
+    pixi.lock().await.unwrap();
+    let new_sources = extract_git_build_sources(&pixi.lock_file().await.unwrap());
+    assert_ne!(
+        new_sources, initial,
+        "`pixi lock` after a manifest git-ref change must produce a different pin"
+    );
+
+    // The follow-up `--locked` install accepts the refreshed lock.
+    pixi.install().with_locked().await.unwrap();
+    assert_eq!(
+        extract_git_build_sources(&pixi.lock_file().await.unwrap()),
+        new_sources,
     );
 }

@@ -126,52 +126,6 @@ def test_git_path_build(
 
 @pytest.mark.slow
 @pytest.mark.xdist_group("serial")
-def test_git_path_lock_behaviour(
-    pixi: Path,
-    build_data: Path,
-    tmp_pixi_workspace: Path,
-    local_cpp_git_repo: LocalGitRepo,
-) -> None:
-    """Exercise git source locking behaviour when switching manifest branches."""
-
-    prepare_cpp_git_workspace(
-        tmp_pixi_workspace, build_data, local_cpp_git_repo, rev=local_cpp_git_repo.main_rev
-    )
-
-    verify_cli_command(
-        [pixi, "lock", "-v", "--manifest-path", tmp_pixi_workspace],
-    )
-
-    lock_path = tmp_pixi_workspace / "pixi.lock"
-    initial_sources = extract_git_sources(lock_path)
-
-    verify_cli_command(
-        [pixi, "install", "-v", "--manifest-path", tmp_pixi_workspace, "--locked"],
-    )
-    assert extract_git_sources(lock_path) == initial_sources
-
-    configure_local_git_source(tmp_pixi_workspace, local_cpp_git_repo, branch="other-feature")
-
-    verify_cli_command(
-        [pixi, "install", "-v", "--manifest-path", tmp_pixi_workspace, "--locked"],
-        expected_exit_code=ExitCode.FAILURE,
-    )
-    assert extract_git_sources(lock_path) == initial_sources
-
-    verify_cli_command(
-        [pixi, "lock", "-v", "--manifest-path", tmp_pixi_workspace],
-    )
-    new_sources = extract_git_sources(lock_path)
-    assert new_sources != initial_sources
-
-    verify_cli_command(
-        [pixi, "install", "-v", "--manifest-path", tmp_pixi_workspace, "--locked"],
-    )
-    assert extract_git_sources(lock_path) == new_sources
-
-
-@pytest.mark.slow
-@pytest.mark.xdist_group("serial")
 def test_git_path_lock_update_preserves_git_source(
     pixi: Path,
     build_data: Path,
