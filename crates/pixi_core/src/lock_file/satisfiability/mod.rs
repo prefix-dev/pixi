@@ -645,10 +645,9 @@ pub enum PlatformUnsat {
     },
 
     #[error(
-        "the resolved {kind} of source package '{package}' no longer match what the backend would re-derive from the manifest{added_msg}{removed_msg}{reorder_msg}",
+        "the resolved {kind} of source package '{package}' no longer match what the backend would re-derive from the manifest{added_msg}{removed_msg}",
         added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
         removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
-        reorder_msg = if *reordered { format!("; reordered (locked: {}; expected: {})", locked.join(", "), expected.join(", ")) } else { String::new() },
     )]
     SourceRunDependenciesChanged {
         /// The source package whose `depends`/`constrains` drifted.
@@ -659,17 +658,6 @@ pub enum PlatformUnsat {
         added: Vec<String>,
         /// Specs the locked record carries that the backend no longer declares.
         removed: Vec<String>,
-        /// `true` when both `added` and `removed` are empty but the
-        /// sequences differ, i.e. the same set of specs is present but
-        /// in a different order. The locked record encodes a specific
-        /// `Vec<String>` order produced by the solve-time iteration of
-        /// `DependencyMap`, and re-derivation from a drifted manifest
-        /// can land on a different order without changing the set.
-        reordered: bool,
-        /// The locked sequence, used for `reordered` diagnostics.
-        locked: Vec<String>,
-        /// The re-derived sequence, used for `reordered` diagnostics.
-        expected: Vec<String>,
     },
 
     #[error(
@@ -3506,17 +3494,19 @@ fn collect_direct_run_exports(
     out
 }
 
-/// Compare two `Vec<String>` as ordered sequences. The locked record's
-/// `depends`/`constrains` are produced by iterating a `DependencyMap`
-/// at solve time, so a re-derivation that lands on the same specs but
-/// in a different order is real drift, not a false match.
+/// Compare two `Vec<String>` as multisets. Order is not semantically
+/// meaningful for `depends` / `constrains`: the solver consumes the
+/// list as a set of specs, and the order in the locked record only
+/// reflects the iteration order of the producing `DependencyMap` at
+/// solve time. Two paths (live solve vs lock-file readback) can land
+/// on different iteration orders for the same set of run-exports,
+/// so requiring an exact sequence match would surface spurious drift
+/// every time a record-source iterator returned a different order.
 ///
-/// On mismatch the function returns a [`DepDiff`] carrying the
-/// symmetric multiset difference (the common case: a spec was added or
-/// removed) plus a [`DepDiffReorder`] payload for the rarer case where
-/// the sets agree but the sequences don't.
+/// Returns `Ok(())` when the two sides cover the same multiset of
+/// specs, otherwise a [`DepDiff`] naming the symmetric difference.
 fn diff_dep_sequences(locked: &[String], expected: &[String]) -> Result<(), DepDiff> {
-    if locked == expected {
+    if locked.len() == expected.len() && locked == expected {
         return Ok(());
     }
     let mut counts: std::collections::HashMap<&str, isize> = std::collections::HashMap::new();
@@ -3539,63 +3529,32 @@ fn diff_dep_sequences(locked: &[String], expected: &[String]) -> Result<(), DepD
             }
         }
     }
+    if added.is_empty() && removed.is_empty() {
+        return Ok(());
+    }
     added.sort();
     removed.sort();
-    // Only clone the full sequences when the diagnostic actually needs
-    // them: a reorder-only mismatch must show both sides for the user,
-    // but a normal add/remove diff already names the offending specs.
-    let reorder = (added.is_empty() && removed.is_empty()).then(|| DepDiffReorder {
-        locked: locked.to_vec(),
-        expected: expected.to_vec(),
-    });
-    Err(DepDiff {
-        added,
-        removed,
-        reorder,
-    })
+    Err(DepDiff { added, removed })
 }
 
-/// Symmetric diff between locked and re-derived dependency sequences.
-/// `added` / `removed` cover the common manifest-edit cases; `reorder`
-/// is only populated when the sets are equal but the order differs.
+/// Symmetric multiset diff between locked and re-derived dependency
+/// sequences.
 #[derive(Debug)]
 struct DepDiff {
     /// Specs the backend now declares but the lockfile lacks.
     added: Vec<String>,
     /// Specs the lockfile carries but the backend no longer declares.
     removed: Vec<String>,
-    /// `Some` only when `added` and `removed` are both empty: the sets
-    /// agree but the sequences don't, so the renderer needs both
-    /// sequences to show the user.
-    reorder: Option<DepDiffReorder>,
-}
-
-/// Locked vs re-derived sequences for a reorder-only mismatch. Allocated
-/// only when the diff is purely a reordering, so the common add/remove
-/// path doesn't pay for two unused `Vec<String>` clones.
-#[derive(Debug)]
-struct DepDiffReorder {
-    locked: Vec<String>,
-    expected: Vec<String>,
 }
 
 impl DepDiff {
-    /// Convert the diff into the `PlatformUnsat` variant. Splits the
-    /// `reorder` payload into `(reordered, locked, expected)` so the
-    /// variant's flat field shape stays unchanged.
+    /// Convert the diff into the `PlatformUnsat` variant.
     fn into_unsat(self, package: &PackageName, kind: SourceRunDepKind) -> Box<PlatformUnsat> {
-        let (reordered, locked, expected) = match self.reorder {
-            Some(r) => (true, r.locked, r.expected),
-            None => (false, Vec::new(), Vec::new()),
-        };
         Box::new(PlatformUnsat::SourceRunDependenciesChanged {
             package: package.as_source().to_string(),
             kind,
             added: self.added,
             removed: self.removed,
-            reordered,
-            locked,
-            expected,
         })
     }
 }
@@ -4995,28 +4954,16 @@ mod tests {
         }
 
         #[test]
-        fn diff_sequences_detects_reorder() {
-            // Same multiset, different order. The locked depends
-            // encodes the solve-time iteration order of the
-            // DependencyMap, so a reorder is genuine drift.
-            let diff = diff_dep_sequences(
+        fn diff_sequences_ignores_reorder() {
+            // Same multiset, different order. Order is not semantically
+            // meaningful; only the symmetric multiset difference matters.
+            let result = diff_dep_sequences(
                 &["a >=1".to_string(), "b ==2".to_string()],
                 &["b ==2".to_string(), "a >=1".to_string()],
-            )
-            .expect_err("reorder must surface as drift");
-            let reorder = diff
-                .reorder
-                .as_ref()
-                .expect("should be flagged as reordered");
-            assert!(diff.added.is_empty());
-            assert!(diff.removed.is_empty());
-            assert_eq!(
-                reorder.locked,
-                vec!["a >=1".to_string(), "b ==2".to_string()]
             );
-            assert_eq!(
-                reorder.expected,
-                vec!["b ==2".to_string(), "a >=1".to_string()]
+            assert!(
+                result.is_ok(),
+                "permutations must not surface as drift: {result:?}"
             );
         }
 
@@ -5029,7 +4976,6 @@ mod tests {
             .expect_err("expected drift");
             assert_eq!(diff.added, vec!["b ==2".to_string()]);
             assert!(diff.removed.is_empty());
-            assert!(diff.reorder.is_none());
         }
 
         #[test]
@@ -5041,7 +4987,6 @@ mod tests {
             .expect_err("expected drift");
             assert!(diff.added.is_empty());
             assert_eq!(diff.removed, vec!["b ==2".to_string()]);
-            assert!(diff.reorder.is_none());
         }
 
         #[test]
@@ -5053,7 +4998,6 @@ mod tests {
             .expect_err("expected drift");
             assert_eq!(diff.added, vec!["c <=3".to_string()]);
             assert_eq!(diff.removed, vec!["b ==2".to_string()]);
-            assert!(diff.reorder.is_none());
         }
 
         #[test]
@@ -5068,7 +5012,6 @@ mod tests {
             .expect_err("expected drift");
             assert!(diff.added.is_empty());
             assert_eq!(diff.removed, vec!["a >=1".to_string()]);
-            assert!(diff.reorder.is_none());
         }
 
         /// Build a Full source record with the supplied `depends` and
@@ -5180,10 +5123,8 @@ mod tests {
                     kind: SourceRunDepKind::RunConstrains,
                     added,
                     removed,
-                    reordered,
                     ..
                 } => {
-                    assert!(!reordered, "expected add/remove drift, not reorder");
                     assert_eq!(added, vec!["bar <2".to_string()]);
                     assert!(removed.is_empty());
                 }
@@ -5205,10 +5146,8 @@ mod tests {
                     kind: SourceRunDepKind::RunConstrains,
                     added,
                     removed,
-                    reordered,
                     ..
                 } => {
-                    assert!(!reordered, "expected add/remove drift, not reorder");
                     assert!(added.is_empty());
                     assert_eq!(removed, vec!["bar <2".to_string()]);
                 }
