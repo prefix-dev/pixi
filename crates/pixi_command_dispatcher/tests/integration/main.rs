@@ -521,8 +521,20 @@ pub async fn dropping_future_cancels_background_task() {
     let root_dir = cargo_workspace_dir();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    // Use an isolated cache dir. The ephemeral-env compute key takes a
+    // fast path when it finds a `.pixi-ephemeral-cache.json` marker in
+    // the target prefix, returning the cached records before any
+    // `CondaSolveStarted` event fires. With a shared cache that marker
+    // can already be present from a previous run of this test (or a
+    // stray `pixi run` reusing the same backend), so the test waits for
+    // a solve that never happens. A fresh tempdir guarantees a clean
+    // prefix and forces the slow path the test actually wants to
+    // observe.
+    let cache_tempdir = TempDir::new().unwrap();
+    let cache_dirs = CacheDirs::new(to_abs_dir(cache_tempdir.path().to_path_buf()));
+
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(cache_dirs)
         .with_reporter(reporter)
         .with_executor(Executor::Serial)
         .finish();
@@ -555,11 +567,14 @@ pub async fn dropping_future_cancels_background_task() {
     // `instantiate_tool_environment` goes through `EphemeralEnvKey`, which
     // runs a binary-only conda solve before touching the prefix. Waiting
     // for `CondaSolveStarted` proves the background task entered its
-    // compute body.
+    // compute body. The timeout is generous on purpose: cold caches on
+    // slow CI runners can take many seconds to spin up the dispatcher
+    // and reach the solve, and the test doesn't care about latency, only
+    // ordering (start before cancel).
     let started = events
         .wait_until_matches(
             |e| matches!(e, Event::CondaSolveStarted { .. }),
-            std::time::Duration::from_secs(2),
+            std::time::Duration::from_secs(30),
         )
         .await
         .is_ok();
@@ -574,8 +589,9 @@ pub async fn dropping_future_cancels_background_task() {
     drop(write_guard);
 
     // The aborted task should unwind promptly once the prefix lock is
-    // released and drop propagates through the compute engine.
-    let join = tokio::time::timeout(std::time::Duration::from_secs(2), handle).await;
+    // released and drop propagates through the compute engine. Same
+    // timeout reasoning as the start wait above.
+    let join = tokio::time::timeout(std::time::Duration::from_secs(30), handle).await;
     assert!(
         join.is_ok(),
         "instantiate task did not finish promptly after cancellation"
