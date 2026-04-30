@@ -313,7 +313,7 @@ impl Workspace {
             if needs_format_upgrade {
                 tracing::warn!(
                     "the lock file is up-to-date but uses an older format (v{}), \
-                     run `pixi update` to upgrade to v{} for improved reproducibility",
+                     run `pixi lock` to upgrade to v{} for improved reproducibility",
                     derived.lock_file.version(),
                     rattler_lock::FileFormatVersion::LATEST,
                 );

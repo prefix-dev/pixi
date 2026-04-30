@@ -294,7 +294,7 @@ def test_git_path_build_has_absolutely_no_respect_to_lock_file(
     # lock file should remain untouched when running `pixi build`
     assert extract_git_sources(lock_path) == initial_sources
 
-    work_dir = tmp_pixi_workspace / ".pixi" / "build" / "work"
+    work_dir = tmp_pixi_workspace / ".pixi" / "bld" / "simple-app"
     assert work_dir.exists()
 
     target_phrase = b"Build backend works v2"
