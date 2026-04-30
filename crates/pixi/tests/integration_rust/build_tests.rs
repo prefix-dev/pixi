@@ -1439,6 +1439,12 @@ async fn test_host_run_export_constraint_removal_invalidates_lock_file() {
     // `constrains`.
     let source_dir = pixi.workspace_path().join("my-package");
     fs::create_dir_all(&source_dir).unwrap();
+    // `noarch = false` opts the passthrough backend out of its
+    // NoArch default so the package is platform-specific. Required
+    // here because `weak_constrains` run-exports are only applied to
+    // non-NoArch packages: a NoArch built with `libfoo` in host-deps
+    // would never pick up `bar <2`, leaving nothing for the drift
+    // detector to catch.
     let initial_source_manifest = r#"
 [package]
 name = "my-package"
@@ -1446,6 +1452,9 @@ version = "1.0.0"
 
 [package.build]
 backend = { name = "passthrough", version = "*" }
+
+[package.build.config]
+noarch = false
 
 [package.host-dependencies]
 libfoo = "*"
@@ -1485,6 +1494,9 @@ version = "1.0.0"
 
 [package.build]
 backend = { name = "passthrough", version = "*" }
+
+[package.build.config]
+noarch = false
 "#;
     fs::write(source_dir.join("pixi.toml"), updated_source_manifest).unwrap();
 
