@@ -474,6 +474,43 @@ impl FromStr for NetfsRedirect {
     }
 }
 
+/// Per-kind cache path env var name. Setting one is equivalent to
+/// `[cache.<kind>]` in `config.toml` and takes precedence over it.
+fn env_var_for(kind: CacheKind) -> &'static str {
+    match kind {
+        CacheKind::CondaPackages => "PIXI_CACHE_CONDA_PACKAGES_DIR",
+        CacheKind::Repodata => "PIXI_CACHE_REPODATA_DIR",
+        CacheKind::PypiWheels => "PIXI_CACHE_PYPI_WHEELS_DIR",
+        CacheKind::PypiMapping => "PIXI_CACHE_PYPI_MAPPING_DIR",
+        CacheKind::ExecEnvironments => "PIXI_CACHE_EXEC_ENVIRONMENTS_DIR",
+        CacheKind::BuildToolEnvironments => "PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR",
+        CacheKind::DetachedEnvironments => "PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR",
+    }
+}
+
+/// Read the per-kind path override from the environment, if set.
+fn env_path_for(kind: CacheKind) -> Option<PathBuf> {
+    std::env::var_os(env_var_for(kind))
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Read the netfs-redirect policy from the environment. An unset or
+/// unrecognized value yields `None`, deferring to the TOML config.
+fn env_netfs_redirect() -> Option<NetfsRedirect> {
+    let raw = std::env::var("PIXI_CACHE_NETFS_REDIRECT").ok()?;
+    match raw.parse() {
+        Ok(mode) => Some(mode),
+        Err(_) => {
+            tracing::warn!(
+                "ignoring PIXI_CACHE_NETFS_REDIRECT={raw}: expected one of \
+                 `auto`, `always`, `never`"
+            );
+            None
+        }
+    }
+}
+
 /// Resolve the cache directory for a single [`CacheKind`], consulting the
 /// process-wide global config (system + user `config.toml`).
 ///
@@ -484,6 +521,11 @@ pub fn cache_dir_for(kind: CacheKind) -> miette::Result<PathBuf> {
 }
 
 fn resolve_cache_kind_dir(cache_cfg: &CacheConfig, kind: CacheKind) -> miette::Result<PathBuf> {
+    // Env vars override TOML for per-kind paths. Setting one bypasses the
+    // redirect logic for that kind, mirroring the TOML field's semantics.
+    if let Some(p) = env_path_for(kind) {
+        return Ok(p);
+    }
     if let Some(p) = cache_cfg.path_for(kind) {
         return Ok(p.to_path_buf());
     }
@@ -492,7 +534,8 @@ fn resolve_cache_kind_dir(cache_cfg: &CacheConfig, kind: CacheKind) -> miette::R
         .ok_or_else(|| miette::miette!("could not determine default cache directory"))?;
     let pinned = matches!(source, CacheDirSource::UserPinned);
 
-    let should_redirect = match cache_cfg.netfs_redirect {
+    let redirect_mode = env_netfs_redirect().unwrap_or(cache_cfg.netfs_redirect);
+    let should_redirect = match redirect_mode {
         NetfsRedirect::Never => false,
         NetfsRedirect::Always => is_network_filesystem(&base) && !pinned,
         NetfsRedirect::Auto => !pinned && !kind.prefers_shared() && is_network_filesystem(&base),
@@ -3752,6 +3795,94 @@ UNUSED = "unused"
     fn cache_config_validate_passes_when_unset() {
         // An empty CacheConfig is valid (no paths to check).
         CacheConfig::default().validate().unwrap();
+    }
+
+    #[test]
+    fn cache_dir_for_per_kind_env_overrides_toml() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        // Even with a TOML per-kind path AND force-redirect set, the env var
+        // wins and bypasses redirect.
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        let _env = ScopedEnv::set("PIXI_CACHE_PYPI_MAPPING_DIR", "/from/env/mapping");
+
+        let config = Config {
+            cache: CacheConfig {
+                pypi_mapping: Some(PathBuf::from("/from/toml/mapping")),
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+
+        let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
+        assert_eq!(got, PathBuf::from("/from/env/mapping"));
+    }
+
+    #[test]
+    fn cache_dir_for_per_kind_env_only_affects_named_kind() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::unset("PIXI_FORCE_NETFS_REDIRECT");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        let _cache = ScopedEnv::set("PIXI_CACHE_DIR", "/pinned/root");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _env = ScopedEnv::set("PIXI_CACHE_REPODATA_DIR", "/from/env/repodata");
+
+        // Repodata uses the env-var path verbatim.
+        let got_repo = Config::default()
+            .cache_dir_for(CacheKind::Repodata)
+            .unwrap();
+        assert_eq!(got_repo, PathBuf::from("/from/env/repodata"));
+
+        // Other kinds keep their default subdir under the pinned root.
+        let got_wheels = Config::default()
+            .cache_dir_for(CacheKind::PypiWheels)
+            .unwrap();
+        assert!(got_wheels.starts_with("/pinned/root"));
+        assert!(!got_wheels.starts_with("/from/env"));
+    }
+
+    #[test]
+    fn cache_dir_for_netfs_redirect_env_overrides_toml() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        // TOML says `always`, env says `never` — env wins, so no redirect.
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        let _redirect = ScopedEnv::set("PIXI_CACHE_NETFS_REDIRECT", "never");
+
+        let config = Config {
+            cache: CacheConfig {
+                netfs_redirect: NetfsRedirect::Always,
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+
+        let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
+        assert!(!got.starts_with(node_local_scratch_dir()));
+    }
+
+    #[test]
+    fn cache_dir_for_netfs_redirect_env_invalid_falls_back_to_toml() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        let _redirect = ScopedEnv::set("PIXI_CACHE_NETFS_REDIRECT", "garbage");
+
+        let config = Config {
+            cache: CacheConfig {
+                netfs_redirect: NetfsRedirect::Never,
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+
+        // Bad env value → ignored, TOML `never` still applies.
+        let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
+        assert!(!got.starts_with(node_local_scratch_dir()));
     }
 
     #[test]

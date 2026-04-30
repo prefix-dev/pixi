@@ -351,14 +351,16 @@ The `[cache]` table lets you redirect specific pixi caches independently.
 For each cache kind, pixi resolves the directory in this order (highest
 priority first):
 
-1. The matching `[cache.<kind>]` path from this config, if set.
-2. The cache root, joined with the kind's subdirectory:
+1. The matching `PIXI_CACHE_<KIND>_DIR` environment variable, if set
+    (see [Environment-variable escape hatches](#environment-variable-escape-hatches)).
+2. The matching `[cache.<kind>]` path from this config, if set.
+3. The cache root, joined with the kind's subdirectory:
     1. `PIXI_CACHE_DIR` environment variable
     2. `RATTLER_CACHE_DIR` environment variable
     3. `[cache.root]` from this config
     4. `$XDG_CACHE_HOME/pixi` (when it exists)
     5. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
-3. If the resolved path is on a network filesystem and the kind is not
+4. If the resolved path is on a network filesystem and the kind is not
     "shared-friendly", auto-redirect to node-local scratch (see
     `netfs-redirect` below).
 
@@ -414,14 +416,40 @@ override) follow the same rules:
 
 #### Environment-variable escape hatches
 
-Two environment variables override the netfs detection regardless of config:
+Every `[cache]` field can be overridden by an environment variable. Env vars
+take precedence over `config.toml`, so they're useful on shared CI/HPC nodes
+where editing the config file is awkward.
+
+**Per-kind path overrides.** Each one is equivalent to the matching
+`[cache.<kind>]` field. Setting one bypasses the auto-redirect logic for
+that kind and uses the path verbatim.
+
+| Environment variable | Equivalent TOML field |
+|---|---|
+| `PIXI_CACHE_CONDA_PACKAGES_DIR` | `cache.conda-packages` |
+| `PIXI_CACHE_REPODATA_DIR` | `cache.repodata` |
+| `PIXI_CACHE_PYPI_WHEELS_DIR` | `cache.pypi-wheels` |
+| `PIXI_CACHE_PYPI_MAPPING_DIR` | `cache.pypi-mapping` |
+| `PIXI_CACHE_EXEC_ENVIRONMENTS_DIR` | `cache.exec-environments` |
+| `PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR` | `cache.build-tool-environments` |
+| `PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR` | `cache.detached-environments` |
+
+**Redirect policy override.**
+
+- `PIXI_CACHE_NETFS_REDIRECT` = `auto` | `always` | `never` — overrides
+    `[cache.netfs-redirect]`. An unrecognized value is logged and ignored
+    (config falls through).
+
+**Detection escape hatches.** These force the network-filesystem detection
+itself rather than the policy. They're intended for tests, CI, and one-off
+debugging:
 
 - `PIXI_DISABLE_NETFS_REDIRECT=1` — treat all paths as local; never redirect.
 - `PIXI_FORCE_NETFS_REDIRECT=1` — treat all paths as netfs; redirect kinds
     that prefer local storage.
 
-These are intended for tests, CI, and one-off debugging; for persistent
-behavior, prefer `[cache.netfs-redirect]`.
+For persistent behavior, prefer `[cache.netfs-redirect]` or
+`PIXI_CACHE_NETFS_REDIRECT`.
 
 ## Experimental
 
