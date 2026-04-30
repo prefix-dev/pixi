@@ -62,7 +62,7 @@ impl BuildCacheKey {
 
 /// A struct that contains information about specific outdated environments.
 ///
-/// Use the [`OutdatedEnvironments::from_project_and_lock_file`] to create an
+/// Use [`OutdatedEnvironments::from_workspace_and_lock_file`] to create an
 /// instance of this struct by examining the project and lock-file and finding
 /// any mismatches.
 pub struct OutdatedEnvironments<'p> {

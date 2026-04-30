@@ -41,7 +41,7 @@ pub struct Args {
 }
 
 /// Response from the Github API when fetching a release by tag.
-/// https://docs.github.com/de/rest/releases/releases?apiVersion=2022-11-28#get-a-release-by-tag-name
+/// <https://docs.github.com/de/rest/releases/releases?apiVersion=2022-11-28#get-a-release-by-tag-name>
 #[derive(Debug, serde::Deserialize)]
 struct ReleaseResponse {
     /// Markdown body of the release as seen on the Github release page.

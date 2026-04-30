@@ -795,7 +795,7 @@ impl StateChanges {
             }
         }
 
-        top_level_changes.sort_by_key(|(name, _)| *name);
+        top_level_changes.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
 
         let was_removed = top_level_changes
             .iter()

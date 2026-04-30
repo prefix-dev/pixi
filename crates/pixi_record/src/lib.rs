@@ -33,7 +33,7 @@ use thiserror::Error;
 /// binary file or something that still requires building.
 ///
 /// This is basically a superset of a regular [`RepoDataRecord`].
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize)]
 #[serde(untagged)]
 pub enum PixiRecord {
     Binary(Arc<RepoDataRecord>),
@@ -152,7 +152,7 @@ impl From<Arc<RepoDataRecord>> for PixiRecord {
 ///
 /// Call [`try_into_resolved`](Self::try_into_resolved) to attempt the
 /// conversion to a fully-resolved [`PixiRecord`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum UnresolvedPixiRecord {
     Binary(Arc<RepoDataRecord>),
     Source(Arc<UnresolvedSourceRecord>),
@@ -176,10 +176,10 @@ impl UnresolvedPixiRecord {
     }
 
     /// Source dependency locations. Empty for binary records.
-    pub fn sources(&self) -> &std::collections::HashMap<String, pixi_spec::SourceLocationSpec> {
+    pub fn sources(&self) -> &std::collections::BTreeMap<String, pixi_spec::SourceLocationSpec> {
         static EMPTY: std::sync::LazyLock<
-            std::collections::HashMap<String, pixi_spec::SourceLocationSpec>,
-        > = std::sync::LazyLock::new(std::collections::HashMap::new);
+            std::collections::BTreeMap<String, pixi_spec::SourceLocationSpec>,
+        > = std::sync::LazyLock::new(std::collections::BTreeMap::new);
         match self {
             UnresolvedPixiRecord::Binary(_) => &EMPTY,
             UnresolvedPixiRecord::Source(record) => record.sources(),

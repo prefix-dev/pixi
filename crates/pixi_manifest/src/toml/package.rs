@@ -274,7 +274,7 @@ impl TomlPackage {
     /// 1. Direct value (from package)
     /// 2. Workspace inheritance (from workspace) - ERROR if explicitly
     ///    requested but missing
-    /// 3. Package defaults (from [project] section if the manifest is a
+    /// 3. Package defaults (from `[project]` section if the manifest is a
     ///    `pyproject.toml`)
     /// 4. None if missing at all levels
     fn resolve_optional_field_with_defaults<T>(

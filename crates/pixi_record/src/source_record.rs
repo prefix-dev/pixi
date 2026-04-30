@@ -29,14 +29,17 @@
 
 use pixi_git::sha::GitSha;
 use pixi_spec::{GitReference, SourceLocationSpec};
-use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord};
+use rattler_conda_types::{
+    Flag, MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord, PackageUrl,
+    package::RunExportsJson,
+};
 use rattler_lock::{
     CondaSourceData, GitShallowSpec, PackageBuildSource, PartialSourceMetadata, SourceData,
     SourceMetadata,
 };
 use std::fmt::{Display, Formatter};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet},
     path::Path,
     str::FromStr,
 };
@@ -98,7 +101,7 @@ impl From<PinnedBuildSourceSpec> for PinnedSourceSpec {
 }
 
 /// A record of a conda package that still requires building.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SourceRecord<D> {
     /// Information about the conda package.
     pub data: D,
@@ -115,7 +118,7 @@ pub struct SourceRecord<D> {
     pub variants: BTreeMap<String, VariantValue>,
 
     /// The short hash that was originally parsed from the lock file (e.g.
-    /// the 9f3c2a7b part of numba-cuda[9f3c2a7b] @ .).
+    /// the `9f3c2a7b` part of `numba-cuda[9f3c2a7b] @ .`).
     ///
     /// It's useful to reuse this identifier to avoid unnecessary lock-file
     /// updates. If this field is None when serializing to the lock-file, it
@@ -164,7 +167,7 @@ pub type UnresolvedSourceRecord = SourceRecord<SourceRecordData>;
 /// This is what gets stored in the lock file for mutable (path-based) sources,
 /// since their full metadata (version, build string, etc.) can change between
 /// runs and would be stale.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct PartialSourceRecordData {
     /// The package name of the source record.
     pub name: PackageName,
@@ -172,23 +175,42 @@ pub struct PartialSourceRecordData {
     /// Dependencies on other packages (run-time requirements).
     pub depends: Vec<String>,
 
+    /// Run-time constraints on co-installed packages.
+    pub constrains: Vec<String>,
+
+    /// Additional dependencies grouped by an extra/feature key.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub experimental_extra_depends: BTreeMap<String, Vec<String>>,
+
+    /// Variant-selection flags declared by the recipe.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub flags: Vec<Flag>,
+
+    /// PURLs (Package URLs) describing this package in other ecosystems.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purls: Option<BTreeSet<PackageUrl>>,
+
+    /// Run-exports declared by the recipe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_exports: Option<RunExportsJson>,
+
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
-    pub sources: HashMap<String, SourceLocationSpec>,
+    pub sources: BTreeMap<String, SourceLocationSpec>,
 }
 
 /// Complete metadata for a fully-evaluated source package.
 ///
 /// Contains the full [`PackageRecord`] (version, build, dependencies, etc.)
 /// plus the source dependency map.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct FullSourceRecordData {
     #[serde(flatten)]
     pub package_record: PackageRecord,
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
-    pub sources: HashMap<String, SourceLocationSpec>,
+    pub sources: BTreeMap<String, SourceLocationSpec>,
 }
 
 /// Runtime-checked variant used at the lock-file boundary.
@@ -196,7 +218,7 @@ pub struct FullSourceRecordData {
 /// After reading a lock file, source records may be either full (immutable
 /// sources like git) or partial (mutable sources like local paths). This enum
 /// captures both cases and is resolved to [`FullSourceRecordData`] at startup.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 #[allow(clippy::large_enum_variant)]
 pub enum SourceRecordData {
     Partial(PartialSourceRecordData),
@@ -336,7 +358,7 @@ impl SourceRecord<FullSourceRecordData> {
     }
 
     /// Source dependency locations.
-    pub fn sources(&self) -> &HashMap<String, SourceLocationSpec> {
+    pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         &self.data.sources
     }
 
@@ -352,11 +374,18 @@ impl SourceRecord<FullSourceRecordData> {
         let has_mutable = self.has_mutable_source();
         let mut unresolved = SourceRecord::<SourceRecordData>::from(self);
         if has_mutable {
-            // Downgrade full data to partial: keep only name, depends, and sources.
+            // Downgrade full data to partial: keep name, depends, constrains,
+            // and sources. Version/build/etc are dropped because they would go
+            // stale on the next mutable-source rebuild.
             if let SourceRecordData::Full(full) = unresolved.data {
                 unresolved.data = SourceRecordData::Partial(PartialSourceRecordData {
                     name: full.package_record.name,
                     depends: full.package_record.depends,
+                    constrains: full.package_record.constrains,
+                    experimental_extra_depends: full.package_record.experimental_extra_depends,
+                    flags: full.package_record.flags,
+                    purls: full.package_record.purls,
+                    run_exports: full.package_record.run_exports,
                     sources: full.sources,
                 });
             }
@@ -429,8 +458,13 @@ impl SourceRecord<PartialSourceRecordData> {
         &self.data.depends
     }
 
+    /// Run-time constraints.
+    pub fn constrains(&self) -> &[String] {
+        &self.data.constrains
+    }
+
     /// Source dependency locations.
-    pub fn sources(&self) -> &HashMap<String, SourceLocationSpec> {
+    pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         &self.data.sources
     }
 }
@@ -449,8 +483,16 @@ impl SourceRecord<SourceRecordData> {
         }
     }
 
+    /// Run-time constraints.
+    pub fn constrains(&self) -> &[String] {
+        match &self.data {
+            SourceRecordData::Full(full) => &full.package_record.constrains,
+            SourceRecordData::Partial(partial) => &partial.constrains,
+        }
+    }
+
     /// Source dependency locations.
-    pub fn sources(&self) -> &HashMap<String, SourceLocationSpec> {
+    pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         match &self.data {
             SourceRecordData::Full(full) => &full.sources,
             SourceRecordData::Partial(partial) => &partial.sources,
@@ -477,6 +519,11 @@ impl SourceRecord<SourceRecordData> {
                     SourceRecordData::Partial(PartialSourceRecordData {
                         name: full.package_record.name,
                         depends: full.package_record.depends,
+                        constrains: full.package_record.constrains,
+                        experimental_extra_depends: full.package_record.experimental_extra_depends,
+                        flags: full.package_record.flags,
+                        purls: full.package_record.purls,
+                        run_exports: full.package_record.run_exports,
                         sources: full.sources,
                     })
                 }
@@ -492,10 +539,15 @@ impl SourceRecord<SourceRecordData> {
                 full.sources,
             ),
             SourceRecordData::Partial(partial) => (
-                SourceMetadata::Partial(PartialSourceMetadata {
+                SourceMetadata::Partial(Box::new(PartialSourceMetadata {
                     name: partial.name,
                     depends: partial.depends,
-                }),
+                    constrains: partial.constrains,
+                    experimental_extra_depends: partial.experimental_extra_depends,
+                    flags: partial.flags,
+                    purls: partial.purls,
+                    run_exports: partial.run_exports,
+                })),
                 partial.sources,
             ),
         };
@@ -546,6 +598,11 @@ impl SourceRecord<SourceRecordData> {
                 SourceRecordData::Partial(PartialSourceRecordData {
                     name: partial.name,
                     depends: partial.depends,
+                    constrains: partial.constrains,
+                    experimental_extra_depends: partial.experimental_extra_depends,
+                    flags: partial.flags,
+                    purls: partial.purls,
+                    run_exports: partial.run_exports,
                     sources,
                 })
             }
@@ -945,7 +1002,12 @@ mod tests {
             data: SourceRecordData::Partial(PartialSourceRecordData {
                 name: PackageName::from_str("my-package").unwrap(),
                 depends: vec!["numpy >=1.0".to_string()],
-                sources: HashMap::new(),
+                constrains: Vec::new(),
+                experimental_extra_depends: BTreeMap::new(),
+                flags: vec![],
+                purls: None,
+                run_exports: None,
+                sources: BTreeMap::new(),
             }),
             manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
                 path: typed_path::Utf8TypedPathBuf::from("./my-package"),
@@ -1025,7 +1087,12 @@ mod tests {
                 data: SourceRecordData::Partial(PartialSourceRecordData {
                     name: PackageName::from_str("partial-pkg").unwrap(),
                     depends: vec![],
-                    sources: HashMap::new(),
+                    constrains: vec![],
+                    experimental_extra_depends: BTreeMap::new(),
+                    flags: vec![],
+                    purls: None,
+                    run_exports: None,
+                    sources: BTreeMap::new(),
                 }),
                 manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
                     path: typed_path::Utf8TypedPathBuf::from("./partial-pkg"),
@@ -1062,7 +1129,7 @@ mod tests {
         SourceRecord {
             data: FullSourceRecordData {
                 package_record: record,
-                sources: HashMap::new(),
+                sources: BTreeMap::new(),
             },
             manifest_source,
             build_source,

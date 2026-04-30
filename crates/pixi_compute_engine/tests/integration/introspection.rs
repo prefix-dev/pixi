@@ -204,8 +204,8 @@ impl Key for Fib {
         }
         let (a, b) = ctx
             .compute2(
-                |ctx| futures::FutureExt::boxed(ctx.compute(&Fib(n - 1))),
-                |ctx| futures::FutureExt::boxed(ctx.compute(&Fib(n - 2))),
+                async |ctx| ctx.compute(&Fib(n - 1)).await,
+                async |ctx| ctx.compute(&Fib(n - 2)).await,
             )
             .await;
         a + b
@@ -368,8 +368,8 @@ impl Key for ParallelReader {
         let n = self.0;
         let (a, b) = ctx
             .compute2(
-                |ctx| futures::FutureExt::boxed(ctx.compute(&BaseKey(n))),
-                |ctx| futures::FutureExt::boxed(ctx.compute(&BaseKey(n + 1))),
+                async |ctx| ctx.compute(&BaseKey(n)).await,
+                async |ctx| ctx.compute(&BaseKey(n + 1)).await,
             )
             .await;
         a + b
@@ -416,8 +416,8 @@ impl Key for CountedFib {
         }
         let (a, b) = ctx
             .compute2(
-                |ctx| futures::FutureExt::boxed(ctx.compute(&CountedFib { n: n - 1 })),
-                |ctx| futures::FutureExt::boxed(ctx.compute(&CountedFib { n: n - 2 })),
+                async |ctx| ctx.compute(&CountedFib { n: n - 1 }).await,
+                async |ctx| ctx.compute(&CountedFib { n: n - 2 }).await,
             )
             .await;
         a + b

@@ -1,5 +1,9 @@
 //! See [`BackendSourceBuildSpec`]
 
+mod ext;
+
+pub use ext::BackendSourceBuildExt;
+
 use std::{
     collections::{BTreeMap, BTreeSet, BinaryHeap},
     fmt::Display,
@@ -7,10 +11,11 @@ use std::{
     sync::Arc,
 };
 
+use crate::BackendHandle;
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
-use pixi_build_frontend::{Backend, json_rpc::CommunicationError};
+use pixi_build_frontend::json_rpc::CommunicationError;
 use pixi_build_types::{
     VariantValue,
     procedures::conda_build_v1::{
@@ -42,7 +47,7 @@ use crate::{
 pub struct BackendSourceBuildSpec {
     /// The backend to use for the build.
     #[serde(skip)]
-    pub backend: Backend,
+    pub backend: BackendHandle,
 
     /// The name of the package that we are building.
     pub name: PackageName,
@@ -65,9 +70,6 @@ pub struct BackendSourceBuildSpec {
 
     /// The channels to use for solving.
     pub channels: Vec<ChannelUrl>,
-
-    /// The channel configuration to use to convert channel urls.
-    pub channel_config: ChannelConfig,
 
     /// The working directory to use for the build.
     pub work_directory: PathBuf,
@@ -137,6 +139,7 @@ pub struct BackendBuiltSource {
 impl BackendSourceBuildSpec {
     pub async fn build(
         self,
+        channel_config: Arc<ChannelConfig>,
         log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         match self.method {
@@ -151,7 +154,7 @@ impl BackendSourceBuildSpec {
                     self.source_dir,
                     self.work_directory,
                     self.channels,
-                    self.channel_config,
+                    channel_config,
                     log_sink,
                 )
                 .await
@@ -161,7 +164,7 @@ impl BackendSourceBuildSpec {
 
     #[allow(clippy::too_many_arguments)]
     async fn build_v1(
-        backend: Backend,
+        backend: BackendHandle,
         name: PackageName,
         version: VersionWithSource,
         build: String,
@@ -170,10 +173,12 @@ impl BackendSourceBuildSpec {
         source_dir: PathBuf,
         work_directory: PathBuf,
         channels: Vec<ChannelUrl>,
-        channel_config: ChannelConfig,
+        channel_config: Arc<ChannelConfig>,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         let built_package = backend
+            .lock()
+            .await
             .conda_build_v1(
                 CondaBuildV1Params {
                     channels,

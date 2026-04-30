@@ -190,20 +190,13 @@ async fn try_compute2_cancels_losing_branch() {
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
             let slow_started = ctx.global_data().slow_key_data().started.clone();
             ctx.try_compute2(
-                move |ctx| {
-                    ctx.compute(&SlowKey { id: 99 })
-                        .map(Ok::<u32, &'static str>)
-                        .boxed()
-                },
-                move |_ctx| {
+                async |ctx| Ok::<u32, &'static str>(ctx.compute(&SlowKey { id: 99 }).await),
+                async move |_ctx| {
                     // Wait until the slow branch has actually spawned its
                     // sub-compute, then fail. This guarantees the abort
                     // has something to cancel.
-                    async move {
-                        slow_started.notified().await;
-                        Err::<u32, &'static str>("fast-fail")
-                    }
-                    .boxed()
+                    slow_started.notified().await;
+                    Err::<u32, &'static str>("fast-fail")
                 },
             )
             .await

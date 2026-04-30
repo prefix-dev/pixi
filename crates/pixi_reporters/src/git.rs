@@ -3,10 +3,7 @@ use std::{collections::HashMap, time::Duration};
 use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar};
 use parking_lot::Mutex;
-use pixi_command_dispatcher::{
-    ReporterContext,
-    reporter::{DedupGroupId, GitCheckoutId},
-};
+use pixi_command_dispatcher::{ReporterContext, reporter::GitCheckoutId};
 use pixi_git::{GIT_SSH_CLONING_WARNING_MSG, resolver::RepositoryReference, url::RepositoryUrl};
 use pixi_progress::style_warning_pb;
 
@@ -56,12 +53,11 @@ impl GitCheckoutProgress {
 }
 
 impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
-    /// Called when a git checkout was queued on the [`CommandQueue`].
+    /// Called when a git checkout was queued on the command queue.
     fn on_queued(
         &self,
         _context: Option<ReporterContext>,
         env: &RepositoryReference,
-        _dedup_id: DedupGroupId,
     ) -> GitCheckoutId {
         let mut inner = self.inner.lock();
         let id = GitCheckoutId(inner.next_id);

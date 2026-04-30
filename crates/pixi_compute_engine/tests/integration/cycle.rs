@@ -13,7 +13,6 @@
 use std::sync::Arc;
 
 use derive_more::Display;
-use futures::FutureExt;
 use pixi_compute_engine::{ComputeCtx, ComputeEngine, ComputeError, Key};
 use tokio::sync::Notify;
 
@@ -56,7 +55,7 @@ impl Key for CycleKey {
         // caught a cycle, its Err comes back as `inner`. If OUR
         // guard caught the cycle, we fold it ourselves.
         let child_result = ctx
-            .with_cycle_guard(move |ctx| async move { ctx.compute(&child).await }.boxed())
+            .with_cycle_guard(async move |ctx| ctx.compute(&child).await)
             .await;
         match child_result {
             Ok(inner) => inner,
@@ -130,9 +129,9 @@ async fn unguarded_self_loop_returns_cycle_error() {
     let ComputeError::Cycle(cycle) = err else {
         panic!("expected ComputeError::Cycle, got: {err:?}");
     };
-    // Ring for a self-loop is [K, K].
-    assert_eq!(cycle.path.len(), 2);
-    assert_eq!(cycle.path.first(), cycle.path.last());
+    // Self-loop path is a single entry; the closing edge is
+    // implicit (last back to first).
+    assert_eq!(cycle.path.len(), 1);
 }
 
 /// Without any `with_cycle_guard` on the cycle path, a detected
@@ -154,9 +153,35 @@ async fn unguarded_cycle_returns_cycle_error() {
         rendered.contains("UnguardedCycleKey(B)"),
         "cycle path should mention B: {rendered}",
     );
-    // Ring form: first and last key match.
-    assert!(cycle.path.len() >= 3);
-    assert_eq!(cycle.path.first(), cycle.path.last());
+    // Distinct keys on the cycle, no repeats; the closing edge is
+    // implicit (last back to first).
+    assert!(cycle.path.len() >= 2);
+    assert!(
+        cycle
+            .path
+            .iter()
+            .enumerate()
+            .all(|(i, k)| cycle.path[(i + 1)..].iter().all(|other| other != k)),
+        "expected distinct keys on the cycle path: {cycle:?}",
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn with_ctx_surfaces_cycle_error_from_nested_compute() {
+    let engine = ComputeEngine::new();
+    let err = engine
+        .with_ctx(async |ctx| {
+            ctx.compute(&UnguardedCycleKey('A')).await;
+        })
+        .await
+        .unwrap_err();
+
+    let ComputeError::Cycle(cycle) = err else {
+        panic!("expected ComputeError::Cycle, got: {err:?}");
+    };
+    let rendered = format!("{cycle}");
+    assert!(rendered.contains("UnguardedCycleKey(A)"));
+    assert!(rendered.contains("UnguardedCycleKey(B)"));
 }
 
 /// Two concurrent root computes in a cross-root cycle, neither
@@ -260,11 +285,8 @@ async fn one_root_catches_other_root_errors() {
             ctx.global_data().handshake().g_started.notify_one();
             ctx.global_data().handshake().u_started.notified().await;
             match ctx
-                .with_cycle_guard(|ctx| {
-                    async move {
-                        let _ = ctx.compute(&KeyU).await;
-                    }
-                    .boxed()
+                .with_cycle_guard(async |ctx| {
+                    let _ = ctx.compute(&KeyU).await;
                 })
                 .await
             {
@@ -351,11 +373,8 @@ async fn guard_on_non_cycle_key_does_not_catch_downstream_cycle() {
         type Value = &'static str;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
             match ctx
-                .with_cycle_guard(|ctx| {
-                    async move {
-                        ctx.compute(&Inner('A')).await;
-                    }
-                    .boxed()
+                .with_cycle_guard(async |ctx| {
+                    ctx.compute(&Inner('A')).await;
                 })
                 .await
             {
@@ -390,22 +409,16 @@ async fn outer_guard_catches_cycle_from_within_branch() {
         type Value = Result<(), String>;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
             let caught = ctx
-                .with_cycle_guard(|ctx| {
-                    async move {
-                        ctx.compute2(
-                            // Cycling branch: self-loops on M.
-                            |ctx| {
-                                async move {
-                                    let _ = ctx.compute(&M).await;
-                                }
-                                .boxed()
-                            },
-                            // Non-cycling sibling.
-                            |_ctx| async move {}.boxed(),
-                        )
-                        .await;
-                    }
-                    .boxed()
+                .with_cycle_guard(async |ctx| {
+                    ctx.compute2(
+                        // Cycling branch: self-loops on M.
+                        async |ctx| {
+                            let _ = ctx.compute(&M).await;
+                        },
+                        // Non-cycling sibling.
+                        async |_ctx| {},
+                    )
+                    .await;
                 })
                 .await;
             match caught {
@@ -456,21 +469,15 @@ async fn branch_guard_does_not_catch_sibling_branch_cycle() {
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
             ctx.compute2(
                 // Branch A: non-cycling work inside its own guard.
-                |ctx| {
-                    async move {
-                        let _ = ctx
-                            .with_cycle_guard(|ctx| {
-                                async move {
-                                    let _ = ctx.compute(&Leaf).await;
-                                }
-                                .boxed()
-                            })
-                            .await;
-                    }
-                    .boxed()
+                async |ctx| {
+                    let _ = ctx
+                        .with_cycle_guard(async |ctx| {
+                            let _ = ctx.compute(&Leaf).await;
+                        })
+                        .await;
                 },
                 // Branch B: closes a cycle, no user guard.
-                |ctx| async move { ctx.compute(&SelfLoop).await }.boxed(),
+                async |ctx| ctx.compute(&SelfLoop).await,
             )
             .await;
         }
@@ -516,39 +523,23 @@ async fn sibling_branches_on_same_dep_both_catch_cycle() {
         type Value = (String, String);
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
             ctx.compute2(
-                |ctx| {
-                    async move {
-                        match ctx
-                            .with_cycle_guard(|ctx| {
-                                async move {
-                                    ctx.compute(&Shared).await;
-                                }
-                                .boxed()
-                            })
-                            .await
-                        {
-                            Ok(()) => "a-ok".to_string(),
-                            Err(cycle) => format!("a-caught:{cycle}"),
-                        }
-                    }
-                    .boxed()
+                async |ctx| match ctx
+                    .with_cycle_guard(async |ctx| {
+                        ctx.compute(&Shared).await;
+                    })
+                    .await
+                {
+                    Ok(()) => "a-ok".to_string(),
+                    Err(cycle) => format!("a-caught:{cycle}"),
                 },
-                |ctx| {
-                    async move {
-                        match ctx
-                            .with_cycle_guard(|ctx| {
-                                async move {
-                                    ctx.compute(&Shared).await;
-                                }
-                                .boxed()
-                            })
-                            .await
-                        {
-                            Ok(()) => "b-ok".to_string(),
-                            Err(cycle) => format!("b-caught:{cycle}"),
-                        }
-                    }
-                    .boxed()
+                async |ctx| match ctx
+                    .with_cycle_guard(async |ctx| {
+                        ctx.compute(&Shared).await;
+                    })
+                    .await
+                {
+                    Ok(()) => "b-ok".to_string(),
+                    Err(cycle) => format!("b-caught:{cycle}"),
                 },
             )
             .await
@@ -595,24 +586,16 @@ async fn cycling_branch_does_not_disturb_sibling() {
         type Value = (String, u32);
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
             ctx.compute2(
-                |ctx| {
-                    async move {
-                        match ctx
-                            .with_cycle_guard(|ctx| {
-                                async move {
-                                    let _ = ctx.compute(&R).await;
-                                }
-                                .boxed()
-                            })
-                            .await
-                        {
-                            Ok(()) => "no-cycle".to_string(),
-                            Err(cycle) => format!("caught:{cycle}"),
-                        }
-                    }
-                    .boxed()
+                async |ctx| match ctx
+                    .with_cycle_guard(async |ctx| {
+                        let _ = ctx.compute(&R).await;
+                    })
+                    .await
+                {
+                    Ok(()) => "no-cycle".to_string(),
+                    Err(cycle) => format!("caught:{cycle}"),
                 },
-                |ctx| async move { ctx.compute(&Leaf).await }.boxed(),
+                async |ctx| ctx.compute(&Leaf).await,
             )
             .await
         }
@@ -652,7 +635,7 @@ async fn guarded_cycle_recovery_is_cached() {
         type Value = Result<(), String>;
         async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
             COMPUTE_CALLS.fetch_add(1, Ordering::SeqCst);
-            ctx.with_cycle_guard(|ctx| ctx.compute(&Recovering).boxed())
+            ctx.with_cycle_guard(async |ctx| ctx.compute(&Recovering).await)
                 .await
                 .unwrap_or_else(|cycle| Err(format!("cycle:{cycle}")))
         }

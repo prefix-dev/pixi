@@ -1,13 +1,12 @@
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use miette::Diagnostic;
 use once_cell::sync::Lazy;
-use pixi_build_discovery::{CommandSpec, EnabledProtocols};
-use pixi_build_frontend::Backend;
+use pixi_build_discovery::CommandSpec;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_glob::GlobSet;
 use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
-use rattler_conda_types::{ChannelConfig, ChannelUrl};
+use rattler_conda_types::ChannelUrl;
 use std::time::SystemTime;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -16,14 +15,17 @@ use std::{
     sync::{Arc, Mutex},
 };
 use thiserror::Error;
-use tracing::instrument;
 
 use crate::build::CanonicalSourceCodeLocation;
 use crate::cache::common::CacheRevision;
+use crate::compute_data::{HasBuildBackendMetadataCache, HasCacheDirs, HasReporter};
+use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
+use crate::reporter::{Reporter, ReporterContext};
+use crate::reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context};
 use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
+    BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
+    InstantiateBackendKey, SourceCheckout, SourceCheckoutError,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
     cache::{
         build_backend_metadata::{
@@ -32,10 +34,11 @@ use crate::{
         },
         common::{CacheEntry, CacheKey, CacheKeyString, MetadataCache, MetadataCacheKey},
     },
+    source_checkout::SourceCheckoutExt,
 };
 use pixi_build_discovery::BackendSpec;
 use pixi_build_frontend::BackendOverride;
-use pixi_path::AbsPath;
+use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_path::normalize::normalize_typed;
 
 static WARNED_BACKENDS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
@@ -50,11 +53,86 @@ fn warn_once_per_backend(backend_name: &str) {
     }
 }
 
+/// Public request for build-backend metadata. The outer layer of the
+/// two-level key design: identity is
+/// `(manifest_source, preferred_build_source, env_ref)`, so two envs
+/// with different ids don't dedup here even when their content is
+/// identical. The actual backend compute lives on
+/// [`BuildBackendMetadataInner`]; this outer Key's compute body
+/// resolves `env_ref` via projections, builds an inner, and delegates.
+/// Envs with equivalent resolved content converge at the inner layer
+/// and share a single backend spawn.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+pub struct BuildBackendMetadataSpec {
+    /// Manifest source. Passed through to the inner compute.
+    pub manifest_source: PinnedSourceSpec,
+
+    /// Optional pinned location of the source code; hint for the
+    /// discovered backend. Passed through to the inner compute.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferred_build_source: Option<PinnedSourceSpec>,
+
+    /// Environment context that drives channels, build environment,
+    /// variant configuration, and `exclude_newer`. Resolved via the
+    /// dispatcher's [`WorkspaceEnvRegistry`](crate::WorkspaceEnvRegistry)
+    /// at compute time.
+    #[serde(skip)]
+    pub env_ref: EnvironmentRef,
+}
+
+/// Compute-engine [`Key`] for the public-facing backend-metadata
+/// request. Thin orchestrator that reads projections off `env_ref` to
+/// build a [`BuildBackendMetadataInner`], then delegates to it via
+/// `ctx.compute`. All actual work (and the reporter lifecycle) lives
+/// on the inner Key.
+#[derive(Clone, Debug, Hash, Eq, PartialEq, derive_more::Display)]
+#[display("{}", _0.manifest_source)]
+pub struct BuildBackendMetadataKey(pub Arc<BuildBackendMetadataSpec>);
+
+impl BuildBackendMetadataKey {
+    pub fn new(spec: BuildBackendMetadataSpec) -> Self {
+        Self(Arc::new(spec))
+    }
+}
+
+impl Key for BuildBackendMetadataKey {
+    type Value = Result<Arc<BuildBackendMetadata>, BuildBackendMetadataError>;
+
+    async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        // Resolve env_ref through the projection Keys so the dep graph
+        // tracks the env fields this request depends on.
+        let channels = ctx
+            .compute(&crate::ChannelsOf(self.0.env_ref.clone()))
+            .await;
+        let build_environment = ctx
+            .compute(&crate::BuildEnvOf(self.0.env_ref.clone()))
+            .await;
+        let variants = ctx
+            .compute(&crate::VariantsOf(self.0.env_ref.clone()))
+            .await;
+        let exclude_newer = ctx
+            .compute(&crate::ExcludeNewerOf(self.0.env_ref.clone()))
+            .await;
+
+        let inner = BuildBackendMetadataInner {
+            manifest_source: self.0.manifest_source.clone(),
+            preferred_build_source: self.0.preferred_build_source.clone(),
+            channels: (*channels).clone(),
+            build_environment: (*build_environment).clone(),
+            variant_configuration: variants.variant_configuration.clone(),
+            variant_files: variants.variant_files.clone(),
+            exclude_newer: (*exclude_newer).clone(),
+        };
+
+        ctx.compute(&BuildBackendMetadataInnerKey::new(inner)).await
+    }
+}
+
 /// Represents a request for metadata from a build backend for a particular
 /// source location. The result of this request is the metadata for that
 /// particular source.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
-pub struct BuildBackendMetadataSpec {
+pub struct BuildBackendMetadataInner {
     /// The location that refers to where the manifest is stored.
     pub manifest_source: PinnedSourceSpec,
 
@@ -68,9 +146,6 @@ pub struct BuildBackendMetadataSpec {
     /// See [`PinnedSourceSpec::matches_source_spec`] how the matching is done.
     pub preferred_build_source: Option<PinnedSourceSpec>,
 
-    /// The channel configuration to use for the build backend.
-    pub channel_config: ChannelConfig,
-
     /// Exclude packages newer than the configured cutoffs when solving backend environments.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exclude_newer: Option<ResolvedExcludeNewer>,
@@ -83,14 +158,10 @@ pub struct BuildBackendMetadataSpec {
     pub build_environment: BuildEnvironment,
 
     /// Variant configuration
-    pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
+    pub variant_configuration: BTreeMap<String, Vec<VariantValue>>,
 
     /// Variant file paths provided by the workspace.
-    pub variant_files: Option<Vec<PathBuf>>,
-
-    /// The protocols that are enabled for this source
-    #[serde(skip_serializing_if = "crate::is_default")]
-    pub enabled_protocols: EnabledProtocols,
+    pub variant_files: Vec<PathBuf>,
 }
 
 /// The metadata of a source checkout.
@@ -112,280 +183,7 @@ pub struct BuildBackendMetadata {
     pub skip_cache: bool,
 }
 
-impl BuildBackendMetadataSpec {
-    #[instrument(
-        skip_all,
-        name = "backend-metadata",
-        fields(
-            manifest_source = %self.manifest_source,
-            build_source = self.preferred_build_source.as_ref().map(tracing::field::display),
-            platform = %self.build_environment.host_platform,
-        )
-    )]
-    pub(crate) async fn request(
-        self,
-        command_dispatcher: CommandDispatcher,
-        log_sink: UnboundedSender<String>,
-    ) -> Result<BuildBackendMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
-        // Ensure that the source is checked out before proceeding.
-        let manifest_source_checkout = command_dispatcher
-            // Never has an alternative root because we want to get the manifest
-            .checkout_pinned_source(self.manifest_source.clone())
-            .await
-            .map_err_with(BuildBackendMetadataError::SourceCheckout)?;
-
-        // Discover information about the build backend from the source code (cached by path).
-        let discovered_backend = command_dispatcher
-            .discover_backend(
-                manifest_source_checkout.path.as_std_path(),
-                self.channel_config.clone(),
-                self.enabled_protocols.clone(),
-            )
-            .await
-            .map_err_with(|e| BuildBackendMetadataError::Discovery(Arc::new(e)))?;
-
-        // Determine the location of the source to build from.
-        let manifest_source_anchor =
-            SourceAnchor::from(SourceLocationSpec::from(self.manifest_source.clone()));
-        // `build_source` is still relative to the `manifest_source`
-        let build_source_checkout = match &discovered_backend.init_params.build_source {
-            None => None,
-            Some(build_source) => {
-                let relative_build_source_spec = if let SourceLocationSpec::Path(path) =
-                    build_source
-                    && path.path.is_relative()
-                {
-                    Some(normalize_typed(path.path.to_path()).to_string())
-                } else {
-                    None
-                };
-
-                // An out-of-tree source is provided. Resolve it against the manifest source.
-                let resolved_location = manifest_source_anchor.resolve(build_source.clone());
-
-                // Check if we have a preferred build source that matches this same location
-                match &self.preferred_build_source {
-                    Some(pinned) if pinned.matches_source_spec(&resolved_location) => Some((
-                        command_dispatcher
-                            .checkout_pinned_source(pinned.clone())
-                            .await
-                            .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
-                        relative_build_source_spec,
-                    )),
-                    _ => Some((
-                        command_dispatcher
-                            .pin_and_checkout(resolved_location)
-                            .await
-                            .map_err_with(BuildBackendMetadataError::SourceCheckout)?,
-                        relative_build_source_spec,
-                    )),
-                }
-            }
-        };
-
-        let (build_source_checkout, build_source) =
-            if let Some((checkout, relative_build_source)) = build_source_checkout {
-                let pinned = checkout.pinned.clone();
-                (
-                    checkout,
-                    Some(if let Some(relative) = relative_build_source {
-                        PinnedBuildSourceSpec::Relative(relative, pinned)
-                    } else {
-                        PinnedBuildSourceSpec::Absolute(pinned)
-                    }),
-                )
-            } else {
-                (manifest_source_checkout.clone(), None)
-            };
-        let manifest_source_location = PinnedSourceCodeLocation::new(
-            manifest_source_checkout.pinned.clone(),
-            build_source.clone(),
-        );
-
-        // Check if we should skip the metadata cache for this backend
-        let skip_cache = Self::should_skip_metadata_cache(
-            &discovered_backend.backend_spec,
-            command_dispatcher.build_backend_overrides(),
-        );
-
-        // Check the source metadata cache, short circuit if there is a cache hit that
-        // is still fresh.
-        let cache_key: CacheKey<BuildBackendMetadataCache> = BuildBackendMetadataCacheKey {
-            channel_urls: self.channels.clone(),
-            build_environment: self.build_environment.clone(),
-            exclude_newer: self.exclude_newer.clone(),
-            enabled_protocols: self.enabled_protocols.clone(),
-            source: manifest_source_location.clone().into(),
-        };
-        let cache_read_result = command_dispatcher
-            .build_backend_metadata_cache()
-            .read(&cache_key)
-            .await
-            .map_err(BuildBackendMetadataError::Cache)
-            .map_err(CommandDispatcherError::Failed)?;
-
-        let project_model_hash = discovered_backend
-            .init_params
-            .project_model
-            .as_ref()
-            .map(ProjectModelHash::from);
-
-        let configuration_hash = ConfigurationHash::compute(
-            discovered_backend.init_params.configuration.as_ref(),
-            discovered_backend.init_params.target_configuration.as_ref(),
-        );
-
-        // Check if the cached metadata is still fresh. The stale metadata is
-        // kept around so we can compare outputs and reuse the ID if unchanged.
-        let stale_cached_metadata = if !skip_cache {
-            match Self::verify_cache_freshness(
-                cache_read_result,
-                &build_source_checkout,
-                project_model_hash,
-                configuration_hash,
-                &self.variant_configuration,
-            )
-            .await?
-            {
-                Ok(fresh) => {
-                    tracing::debug!("Using cached build backend metadata");
-                    return Ok(BuildBackendMetadata {
-                        source: manifest_source_location.clone(),
-                        cache_key: cache_key.key(),
-                        metadata: fresh,
-                        skip_cache,
-                    });
-                }
-                Err(stale) => stale,
-            }
-        } else {
-            let backend_name = match &discovered_backend.backend_spec {
-                BackendSpec::JsonRpc(spec) => &spec.name,
-            };
-            warn_once_per_backend(backend_name);
-            None
-        };
-
-        // Instantiate the backend with the discovered information.
-        let backend = command_dispatcher
-            .instantiate_backend(InstantiateBackendSpec {
-                backend_spec: discovered_backend
-                    .backend_spec
-                    .clone()
-                    .resolve(manifest_source_anchor),
-                build_source_dir: build_source_checkout
-                    .path
-                    .as_dir_or_file_parent()
-                    .to_path_buf(),
-                channel_config: self.channel_config.clone(),
-                exclude_newer: self.exclude_newer.clone(),
-                enabled_protocols: self.enabled_protocols.clone(),
-                workspace_root: AbsPath::new(&discovered_backend.init_params.workspace_root)
-                    .expect("workspace root is not absolute")
-                    .assume_dir()
-                    .to_path_buf(),
-                manifest_path: AbsPath::new(&discovered_backend.init_params.manifest_path)
-                    .expect("manifest path is not absolute")
-                    .assume_file()
-                    .to_path_buf(),
-                project_model: discovered_backend.init_params.project_model.clone(),
-                configuration: discovered_backend.init_params.configuration.clone(),
-                target_configuration: discovered_backend.init_params.target_configuration.clone(),
-            })
-            .await
-            .map_err_with(BuildBackendMetadataError::Initialize)?;
-
-        // Call the conda_outputs method to get metadata.
-        if !backend.capabilities().provides_conda_outputs() {
-            return Err(CommandDispatcherError::Failed(
-                BuildBackendMetadataError::BackendMissingCapabilities(
-                    backend.identifier().to_string(),
-                ),
-            ));
-        }
-
-        tracing::trace!(
-            "Using `{}` procedure to get metadata information",
-            pixi_build_types::procedures::conda_outputs::METHOD_NAME
-        );
-        let raw = self
-            .call_conda_outputs(
-                &command_dispatcher,
-                &build_source_checkout,
-                backend,
-                log_sink,
-            )
-            .await?;
-
-        // Determine the revision: reuse the previous one if the outputs
-        // haven't changed, otherwise generate a new one. This ensures downstream
-        // caches keyed by the revision remain valid when inputs change but
-        // outputs stay the same.
-        let revision = match &stale_cached_metadata {
-            Some(prev) if prev.outputs == raw.outputs => prev.revision.clone(),
-            _ => CacheRevision::new(),
-        };
-
-        let canonical_manifest_source: CanonicalSourceLocation =
-            manifest_source_location.manifest_source().into();
-        let canonical_build_source =
-            CanonicalSourceLocation::from(build_source_checkout.pinned.clone());
-        let canonical_build_source_opt =
-            (canonical_manifest_source != canonical_build_source).then_some(canonical_build_source);
-
-        let prev_cache_version = stale_cached_metadata
-            .as_ref()
-            .map(|cache| cache.cache_version);
-        let metadata = BuildBackendMetadataCacheEntry {
-            revision,
-            cache_version: prev_cache_version.map_or(0, |version| version + 1),
-            outputs: raw.outputs,
-            build_variants: self.variant_configuration.unwrap_or_default(),
-            build_variant_files: self.variant_files.into_iter().flatten().collect(),
-            input_globs: raw.input_globs,
-            input_files: raw.input_files,
-            source: CanonicalSourceCodeLocation::new(
-                canonical_manifest_source,
-                canonical_build_source_opt,
-            ),
-            project_model_hash,
-            configuration_hash,
-            timestamp: raw.timestamp,
-        };
-
-        // Try to store the metadata in the cache with version checking.
-        // If another process updated the cache while we were computing, we get a conflict.
-        match command_dispatcher
-            .build_backend_metadata_cache()
-            .try_write(
-                &cache_key,
-                metadata.clone(),
-                prev_cache_version.unwrap_or(0),
-            )
-            .await
-            .map_err(BuildBackendMetadataError::Cache)
-            .map_err(CommandDispatcherError::Failed)?
-        {
-            build_backend_metadata::WriteResult::Written => {
-                tracing::trace!("Cache updated successfully");
-            }
-            build_backend_metadata::WriteResult::Conflict(_other_metadata) => {
-                // Another process computed and cached metadata while we were computing.
-                // We use our computed result.
-                tracing::debug!(
-                    "Cache was updated by another process during computation (version conflict), using our computed result"
-                );
-            }
-        }
-
-        Ok(BuildBackendMetadata {
-            source: manifest_source_location,
-            cache_key: cache_key.key(),
-            metadata,
-            skip_cache,
-        })
-    }
-
+impl BuildBackendMetadataInner {
     /// Checks if we should skip the metadata cache for this backend.
     /// Returns true if:
     /// 1. There's a System backend override (either for this specific backend or all backends)
@@ -451,13 +249,13 @@ impl BuildBackendMetadataSpec {
         build_source_checkout: &SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
         configuration_hash: ConfigurationHash,
-        requested_variants: &Option<BTreeMap<String, Vec<VariantValue>>>,
+        requested_variants: &BTreeMap<String, Vec<VariantValue>>,
     ) -> Result<
         Result<
             CacheEntry<BuildBackendMetadataCache>,
             Option<CacheEntry<BuildBackendMetadataCache>>,
         >,
-        CommandDispatcherError<BuildBackendMetadataError>,
+        BuildBackendMetadataError,
     > {
         let Some(cache_entry) = cache_entry else {
             return Ok(Err(None));
@@ -480,7 +278,7 @@ impl BuildBackendMetadataSpec {
         }
 
         // Check if the build variants match
-        if Some(&cache_entry.build_variants) != requested_variants.as_ref() {
+        if &cache_entry.build_variants != requested_variants {
             tracing::info!("found cached outputs with different variants, invalidating cache.");
             return Ok(Err(Some(cache_entry)));
         }
@@ -530,8 +328,7 @@ impl BuildBackendMetadataSpec {
         let glob_set = GlobSet::create(cache_entry.input_globs.iter().map(String::as_str));
         for matching_file in glob_set
             .collect_matching(build_source_dir.as_std_path())
-            .map_err(BuildBackendMetadataError::from)
-            .map_err(CommandDispatcherError::Failed)?
+            .map_err(BuildBackendMetadataError::from)?
         {
             let path = matching_file.into_path();
             if cache_entry.input_files.contains(&path) {
@@ -550,7 +347,7 @@ impl BuildBackendMetadataSpec {
     #[allow(clippy::result_large_err)]
     fn validate_unique_variants(
         outputs: &[pixi_build_types::procedures::conda_outputs::CondaOutput],
-    ) -> Result<(), CommandDispatcherError<BuildBackendMetadataError>> {
+    ) -> Result<(), BuildBackendMetadataError> {
         use std::collections::HashMap;
 
         // Group outputs by package name
@@ -581,12 +378,10 @@ impl BuildBackendMetadataSpec {
             }
 
             if !duplicate_variants.is_empty() {
-                return Err(CommandDispatcherError::Failed(
-                    BuildBackendMetadataError::DuplicateVariants {
-                        package: package_name.as_normalized().to_string(),
-                        duplicates: duplicate_variants.join(", "),
-                    },
-                ));
+                return Err(BuildBackendMetadataError::DuplicateVariants {
+                    package: package_name.as_normalized().to_string(),
+                    duplicates: duplicate_variants.join(", "),
+                });
             }
         }
 
@@ -597,18 +392,20 @@ impl BuildBackendMetadataSpec {
     /// checkout.
     async fn call_conda_outputs(
         &self,
-        command_dispatcher: &CommandDispatcher,
+        cache_dirs: &crate::CacheDirs,
         build_source_checkout: &SourceCheckout,
-        backend: Backend,
+        source_unique_key: &str,
+        backend: BackendHandle,
         mut log_sink: UnboundedSender<String>,
-    ) -> Result<RawCondaOutputs, CommandDispatcherError<BuildBackendMetadataError>> {
-        let backend_identifier = backend.identifier().to_string();
+    ) -> Result<RawCondaOutputs, BuildBackendMetadataError> {
+        let backend_guard = backend.lock().await;
+        let backend_identifier = backend_guard.identifier().to_string();
         let params = CondaOutputsParams {
             channels: self.channels.clone(),
             host_platform: self.build_environment.host_platform,
             build_platform: self.build_environment.build_platform,
-            variant_configuration: self.variant_configuration.clone().map(|variants| {
-                variants
+            variant_configuration: Some(
+                self.variant_configuration
                     .iter()
                     .map(|(k, v)| {
                         (
@@ -619,12 +416,15 @@ impl BuildBackendMetadataSpec {
                                 .collect(),
                         )
                     })
-                    .collect()
-            }),
-            variant_files: self.variant_files.clone(),
-            work_directory: command_dispatcher
-                .cache_dirs()
-                .working_dirs()
+                    .collect(),
+            ),
+            variant_files: Some(self.variant_files.clone()),
+            // Work dir nests under the per-source slot of the metadata
+            // cache, so cache entries for this source and the backend's
+            // scratch for the same source live side by side (single
+            // `rm -rf` cleans both).
+            work_directory: cache_dirs
+                .backend_metadata_work_dir(source_unique_key)
                 .join(
                     WorkDirKey {
                         source: SourceRecordOrCheckout::Checkout {
@@ -637,18 +437,17 @@ impl BuildBackendMetadataSpec {
                 )
                 .into_std_path_buf(),
         };
-        let outputs = backend
+        let outputs = backend_guard
             .conda_outputs(params, move |line| {
                 let _err = futures::executor::block_on(log_sink.send(line));
             })
             .await
-            .map_err(|e| BuildBackendMetadataError::Communication(Arc::new(e)))
-            .map_err(CommandDispatcherError::Failed)?;
+            .map_err(|e| BuildBackendMetadataError::Communication(Arc::new(e)))?;
         let timestamp = SystemTime::now();
 
         // If the backend supports unique variants, validate that outputs with the same name
         // have unique variants
-        if backend.api_version().supports_unique_variants() {
+        if backend_guard.api_version().supports_unique_variants() {
             Self::validate_unique_variants(&outputs.outputs)?;
         }
 
@@ -669,8 +468,7 @@ impl BuildBackendMetadataSpec {
         let globs_root_path = globs_root.as_std_path();
         let input_glob_files = input_glob_set
             .collect_matching(globs_root_path)
-            .map_err(BuildBackendMetadataError::from)
-            .map_err(CommandDispatcherError::Failed)?
+            .map_err(BuildBackendMetadataError::from)?
             .into_iter()
             .map(|entry| {
                 let path = entry.into_path();
@@ -686,6 +484,412 @@ impl BuildBackendMetadataSpec {
             input_globs: outputs.input_globs.into_iter().collect(),
             input_files: input_glob_files,
             timestamp,
+        })
+    }
+}
+
+/// Compute-engine [`Key`] for the content-hashed backend-metadata
+/// compute. Dedup is structural: two requests for the same
+/// [`BuildBackendMetadataInner`] share a single compute, which lets
+/// multiple workspace envs that converge on identical content share
+/// one backend spawn. The disk cache sits underneath, reached via
+/// [`DataStore`](pixi_compute_engine::DataStore) through
+/// [`HasBuildBackendMetadataCache`].
+#[derive(Clone, Debug, Hash, Eq, PartialEq, derive_more::Display)]
+#[display("{}", _0.manifest_source)]
+pub(crate) struct BuildBackendMetadataInnerKey(pub(crate) Arc<BuildBackendMetadataInner>);
+
+impl BuildBackendMetadataInnerKey {
+    pub(crate) fn new(inner: BuildBackendMetadataInner) -> Self {
+        Self(Arc::new(inner))
+    }
+}
+
+impl Key for BuildBackendMetadataInnerKey {
+    type Value = Result<Arc<BuildBackendMetadata>, BuildBackendMetadataError>;
+
+    async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        // Reporter lifecycle: queue up-front so the reporter can count
+        // us against the parent context before any real work starts.
+        // The `on_started` event carries the log-output receiver so the
+        // reporter can stream backend output as it arrives.
+        let reporter_arc = ctx.global_data().reporter().cloned();
+        let parent_reporter_ctx = current_reporter_context();
+        let reporter_fn = || {
+            reporter_arc
+                .as_deref()
+                .and_then(Reporter::as_build_backend_metadata_reporter)
+        };
+        let reporter_id = reporter_fn().map(|r| r.on_queued(parent_reporter_ctx, &self.0));
+
+        let (log_sink, log_rx) = futures::channel::mpsc::unbounded::<String>();
+        if let (Some(r), Some(id)) = (reporter_fn(), reporter_id) {
+            r.on_started(id, Box::new(log_rx));
+        }
+
+        // Scope nested Keys under our reporter context so they attribute
+        // their progress to this backend-metadata request (falling back
+        // to the parent when no reporter is attached).
+        let scope_ctx = reporter_id
+            .map(ReporterContext::BuildBackendMetadata)
+            .or(parent_reporter_ctx);
+        let work = self.0.clone().compute_inner(ctx, log_sink);
+        let result = match scope_ctx {
+            Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+            None => work.await,
+        };
+
+        if let (Some(r), Some(id)) = (reporter_fn(), reporter_id) {
+            r.on_finished(id, result.is_err());
+        }
+
+        result.map(Arc::new)
+    }
+}
+
+/// Checked-out sources plus the discovered backend, threaded through
+/// the compute pipeline.
+struct ResolvedCheckouts {
+    /// Checkout containing the manifest. Always populated.
+    manifest_source_checkout: SourceCheckout,
+    /// Checkout of the source to build from. Equals
+    /// `manifest_source_checkout` when the backend does not declare an
+    /// out-of-tree build source.
+    build_source_checkout: SourceCheckout,
+    /// Wrapper describing how the build source relates to the manifest
+    /// source (relative subdirectory vs. absolute pinned spec). `None`
+    /// when the build source is the manifest source.
+    build_source: Option<PinnedBuildSourceSpec>,
+    /// Anchor used to resolve relative references in the discovered
+    /// backend spec.
+    manifest_source_anchor: SourceAnchor,
+    /// Backend discovered from the manifest checkout.
+    discovered_backend: Arc<pixi_build_discovery::DiscoveredBackend>,
+}
+
+impl ResolvedCheckouts {
+    /// The canonical source location stored in cache keys and
+    /// returned in [`BuildBackendMetadata::source`].
+    fn manifest_source_location(&self) -> PinnedSourceCodeLocation {
+        PinnedSourceCodeLocation::new(
+            self.manifest_source_checkout.pinned.clone(),
+            self.build_source.clone(),
+        )
+    }
+}
+
+/// Outcome of probing the on-disk metadata cache.
+enum CacheProbe {
+    /// Cache contained a fresh entry; the caller can return it
+    /// directly without contacting the backend.
+    Hit(BuildBackendMetadata),
+    /// Cache missed or was stale; the caller must call the backend and
+    /// write a new entry. `stale` carries any prior entry so the caller
+    /// can reuse the revision when outputs are unchanged, and bump the
+    /// cache version on conflict.
+    Miss {
+        cache_key: CacheKey<BuildBackendMetadataCache>,
+        stale: Option<CacheEntry<BuildBackendMetadataCache>>,
+        project_model_hash: Option<ProjectModelHash>,
+        configuration_hash: ConfigurationHash,
+        skip_cache: bool,
+    },
+}
+
+impl BuildBackendMetadataInner {
+    /// Resolve the manifest and build-source checkouts and the backend
+    /// that owns them.
+    async fn resolve_checkouts(
+        &self,
+        ctx: &mut ComputeCtx,
+    ) -> Result<ResolvedCheckouts, BuildBackendMetadataError> {
+        let manifest_source_checkout = ctx
+            .checkout_pinned_source(self.manifest_source.clone())
+            .await?;
+
+        let discovered_backend = ctx
+            .compute(&crate::DiscoveredBackendKey::new(
+                manifest_source_checkout.path.as_std_path(),
+            ))
+            .await
+            .map_err(BuildBackendMetadataError::Discovery)?;
+
+        let manifest_source_anchor =
+            SourceAnchor::from(SourceLocationSpec::from(self.manifest_source.clone()));
+
+        let build_source_checkout_and_spec = match &discovered_backend.init_params.build_source {
+            None => None,
+            Some(build_source) => {
+                let relative_build_source_spec = if let SourceLocationSpec::Path(path) =
+                    build_source
+                    && path.path.is_relative()
+                {
+                    Some(normalize_typed(path.path.to_path()).to_string())
+                } else {
+                    None
+                };
+
+                let resolved_location = manifest_source_anchor.resolve(build_source.clone());
+
+                let checkout = match &self.preferred_build_source {
+                    Some(pinned) if pinned.matches_source_spec(&resolved_location) => {
+                        ctx.checkout_pinned_source(pinned.clone()).await?
+                    }
+                    _ => ctx.pin_and_checkout(resolved_location).await?,
+                };
+                Some((checkout, relative_build_source_spec))
+            }
+        };
+
+        let (build_source_checkout, build_source) = match build_source_checkout_and_spec {
+            Some((checkout, relative_build_source)) => {
+                let pinned = checkout.pinned.clone();
+                let spec = if let Some(relative) = relative_build_source {
+                    PinnedBuildSourceSpec::Relative(relative, pinned)
+                } else {
+                    PinnedBuildSourceSpec::Absolute(pinned)
+                };
+                (checkout, Some(spec))
+            }
+            None => (manifest_source_checkout.clone(), None),
+        };
+
+        Ok(ResolvedCheckouts {
+            manifest_source_checkout,
+            build_source_checkout,
+            build_source,
+            manifest_source_anchor,
+            discovered_backend,
+        })
+    }
+
+    /// Read the metadata cache and decide whether we can short-circuit.
+    ///
+    /// Returns [`CacheProbe::Hit`] on a fresh cache hit, or
+    /// [`CacheProbe::Miss`] carrying every input the caller needs to
+    /// call the backend and write a new entry.
+    async fn probe_cache(
+        &self,
+        ctx: &mut ComputeCtx,
+        checkouts: &ResolvedCheckouts,
+    ) -> Result<CacheProbe, BuildBackendMetadataError> {
+        let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
+        let backend_override = ctx.compute(&BackendOverrideKey).await;
+        let skip_cache = Self::should_skip_metadata_cache(
+            &checkouts.discovered_backend.backend_spec,
+            &backend_override,
+        );
+
+        let manifest_source_location = checkouts.manifest_source_location();
+        let cache = ctx.global_data().build_backend_metadata_cache();
+        let cache_key: CacheKey<BuildBackendMetadataCache> = BuildBackendMetadataCacheKey {
+            channel_urls: self.channels.clone(),
+            build_environment: self.build_environment.clone(),
+            exclude_newer: self.exclude_newer.clone(),
+            enabled_protocols: enabled_protocols.as_ref().clone(),
+            source: manifest_source_location.clone().into(),
+        };
+        let cache_read_result = cache
+            .read(&cache_key)
+            .await
+            .map_err(BuildBackendMetadataError::Cache)?;
+
+        let project_model_hash = checkouts
+            .discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(ProjectModelHash::from);
+        let configuration_hash = ConfigurationHash::compute(
+            checkouts
+                .discovered_backend
+                .init_params
+                .configuration
+                .as_ref(),
+            checkouts
+                .discovered_backend
+                .init_params
+                .target_configuration
+                .as_ref(),
+        );
+
+        if skip_cache {
+            let BackendSpec::JsonRpc(spec) = &checkouts.discovered_backend.backend_spec;
+            warn_once_per_backend(&spec.name);
+            return Ok(CacheProbe::Miss {
+                cache_key,
+                stale: None,
+                project_model_hash,
+                configuration_hash,
+                skip_cache,
+            });
+        }
+
+        match Self::verify_cache_freshness(
+            cache_read_result,
+            &checkouts.build_source_checkout,
+            project_model_hash,
+            configuration_hash,
+            &self.variant_configuration,
+        )
+        .await?
+        {
+            Ok(fresh) => {
+                tracing::debug!("Using cached build backend metadata");
+                Ok(CacheProbe::Hit(BuildBackendMetadata {
+                    source: manifest_source_location,
+                    cache_key: cache_key.key(),
+                    metadata: fresh,
+                    skip_cache,
+                }))
+            }
+            Err(stale) => Ok(CacheProbe::Miss {
+                cache_key,
+                stale,
+                project_model_hash,
+                configuration_hash,
+                skip_cache,
+            }),
+        }
+    }
+
+    /// Orchestrates the four phases of producing
+    /// [`BuildBackendMetadata`]: checkouts → cache probe → backend
+    /// invocation → cache write.
+    async fn compute_inner(
+        self: Arc<Self>,
+        ctx: &mut ComputeCtx,
+        log_sink: UnboundedSender<String>,
+    ) -> Result<BuildBackendMetadata, BuildBackendMetadataError> {
+        let checkouts = self.resolve_checkouts(ctx).await?;
+
+        let (cache_key, stale, project_model_hash, configuration_hash, skip_cache) =
+            match self.probe_cache(ctx, &checkouts).await? {
+                CacheProbe::Hit(metadata) => return Ok(metadata),
+                CacheProbe::Miss {
+                    cache_key,
+                    stale,
+                    project_model_hash,
+                    configuration_hash,
+                    skip_cache,
+                } => (
+                    cache_key,
+                    stale,
+                    project_model_hash,
+                    configuration_hash,
+                    skip_cache,
+                ),
+            };
+
+        // Instantiate the backend. `DiscoveredBackendKey` dedups inside
+        // the key, so the re-discovery is free.
+        let backend = ctx
+            .compute(&InstantiateBackendKey::new(
+                checkouts.manifest_source_checkout.path.as_std_path(),
+                checkouts.manifest_source_anchor.clone(),
+                checkouts
+                    .build_source_checkout
+                    .path
+                    .as_dir_or_file_parent()
+                    .to_path_buf(),
+                self.exclude_newer.clone(),
+            ))
+            .await
+            .map_err(|e: Arc<InstantiateBackendError>| {
+                BuildBackendMetadataError::Initialize((*e).clone())
+            })?;
+
+        {
+            let guard = backend.lock().await;
+            if !guard.capabilities().provides_conda_outputs() {
+                return Err(BuildBackendMetadataError::BackendMissingCapabilities(
+                    guard.identifier().to_string(),
+                ));
+            }
+        }
+
+        tracing::trace!(
+            "Using `{}` procedure to get metadata information",
+            pixi_build_types::procedures::conda_outputs::METHOD_NAME
+        );
+
+        // Snapshot cache dirs for the conda_outputs call (work-dir path
+        // derivation). Cheap clone: `CacheDirs` is a handful of paths.
+        let cache_dirs = ctx.global_data().cache_dirs().clone();
+
+        // Compute the source's cache_unique_key up front: the work dir
+        // is nested under the same `<source>/` slot the metadata cache
+        // uses, so both live in one tree per source.
+        let manifest_source_location = checkouts.manifest_source_location();
+        let canonical_manifest_source: CanonicalSourceLocation =
+            manifest_source_location.manifest_source().into();
+        let canonical_build_source =
+            CanonicalSourceLocation::from(checkouts.build_source_checkout.pinned.clone());
+        let canonical_build_source_opt = (canonical_manifest_source != canonical_build_source)
+            .then_some(canonical_build_source.clone());
+        let canonical_source = CanonicalSourceCodeLocation::new(
+            canonical_manifest_source.clone(),
+            canonical_build_source_opt.clone(),
+        );
+        let source_unique_key = canonical_source.cache_unique_key();
+
+        let raw = self
+            .call_conda_outputs(
+                &cache_dirs,
+                &checkouts.build_source_checkout,
+                &source_unique_key,
+                backend,
+                log_sink,
+            )
+            .await?;
+
+        // Reuse the previous revision when outputs are unchanged, so
+        // downstream caches keyed by the revision remain valid.
+        let revision = match &stale {
+            Some(prev) if prev.outputs == raw.outputs => prev.revision.clone(),
+            _ => CacheRevision::new(),
+        };
+
+        let prev_cache_version = stale.as_ref().map(|cache| cache.cache_version);
+        let metadata = BuildBackendMetadataCacheEntry {
+            revision,
+            cache_version: prev_cache_version.map_or(0, |version| version + 1),
+            outputs: raw.outputs,
+            build_variants: self.variant_configuration.clone(),
+            build_variant_files: self.variant_files.iter().cloned().collect(),
+            input_globs: raw.input_globs,
+            input_files: raw.input_files,
+            source: canonical_source,
+            project_model_hash,
+            configuration_hash,
+            timestamp: raw.timestamp,
+        };
+
+        let cache = ctx.global_data().build_backend_metadata_cache();
+        match cache
+            .try_write(
+                &cache_key,
+                metadata.clone(),
+                prev_cache_version.unwrap_or(0),
+            )
+            .await
+            .map_err(BuildBackendMetadataError::Cache)?
+        {
+            build_backend_metadata::WriteResult::Written => {
+                tracing::trace!("Cache updated successfully");
+            }
+            build_backend_metadata::WriteResult::Conflict(_other_metadata) => {
+                tracing::debug!(
+                    "Cache was updated by another process during computation (version conflict), using our computed result"
+                );
+            }
+        }
+
+        Ok(BuildBackendMetadata {
+            source: manifest_source_location,
+            cache_key: cache_key.key(),
+            metadata,
+            skip_cache,
         })
     }
 }
@@ -717,7 +921,7 @@ pub enum BuildBackendMetadataError {
     #[error("could not initialize the build-backend")]
     Initialize(
         #[diagnostic_source]
-        #[from]
+        #[source]
         InstantiateBackendError,
     ),
 
@@ -828,7 +1032,7 @@ mod tests {
             ),
         ];
 
-        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        let result = BuildBackendMetadataInner::validate_unique_variants(&outputs);
         assert!(
             result.is_ok(),
             "Expected validation to pass for unique variants"
@@ -849,16 +1053,16 @@ mod tests {
             ),
         ];
 
-        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        let result = BuildBackendMetadataInner::validate_unique_variants(&outputs);
         assert!(
             result.is_err(),
             "Expected validation to fail for duplicate variants"
         );
 
-        if let Err(CommandDispatcherError::Failed(BuildBackendMetadataError::DuplicateVariants {
+        if let Err(BuildBackendMetadataError::DuplicateVariants {
             package,
             duplicates,
-        })) = result
+        }) = result
         {
             assert_eq!(package, "mypackage");
             assert!(duplicates.contains("python"));
@@ -875,7 +1079,7 @@ mod tests {
             create_test_output("mypackage", BTreeMap::new()),
         ];
 
-        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        let result = BuildBackendMetadataInner::validate_unique_variants(&outputs);
         assert!(
             result.is_err(),
             "Expected validation to fail for duplicate empty variants"
@@ -896,7 +1100,7 @@ mod tests {
             ),
         ];
 
-        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        let result = BuildBackendMetadataInner::validate_unique_variants(&outputs);
         assert!(
             result.is_ok(),
             "Expected validation to pass for different packages with same variants"
@@ -911,7 +1115,7 @@ mod tests {
             BTreeMap::from([("python".to_string(), VariantValue::from("3.11"))]),
         )];
 
-        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        let result = BuildBackendMetadataInner::validate_unique_variants(&outputs);
         assert!(
             result.is_ok(),
             "Expected validation to pass for single output"
@@ -945,7 +1149,7 @@ mod tests {
             ),
         ];
 
-        let result = BuildBackendMetadataSpec::validate_unique_variants(&outputs);
+        let result = BuildBackendMetadataInner::validate_unique_variants(&outputs);
         assert!(
             result.is_err(),
             "Expected validation to fail for duplicate multi-key variants"

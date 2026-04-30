@@ -12,3 +12,4 @@ mod executor;
 mod injected;
 mod introspection;
 mod misc;
+mod spawn_hook;

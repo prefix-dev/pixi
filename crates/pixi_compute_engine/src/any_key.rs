@@ -1,4 +1,4 @@
-//! Type-erased wrapper around a [`Key`](crate::Key).
+//! Type-erased wrapper around a [`Key`].
 //!
 //! [`AnyKey`] lets the engine store, hash, compare, and display Keys without
 //! needing to know their concrete type. It is used for rendering cycle
@@ -83,14 +83,14 @@ impl AnyKey {
     ///
     /// Returns whatever the Key's [`Key::key_type_name`] produced at
     /// construction time. By default that is the concrete type's name
-    /// stripped of its module path (see [`crate::short_type_name`]).
+    /// stripped of its module path (see [`crate::short_type_name()`]).
     pub fn key_type_name(&self) -> &'static str {
         self.inner.key_type_name()
     }
 
     /// Request a value of type `T` from the wrapped Key.
     ///
-    /// Calls the Key's [`Key::provide`](crate::Key::provide)
+    /// Calls the Key's [`Key::provide`]
     /// implementation and returns the value it provided, or `None` if
     /// the Key does not provide a value of type `T`.
     pub fn request_value<T: 'static>(&self) -> Option<T> {
@@ -102,7 +102,7 @@ impl AnyKey {
 
     /// Request a reference of type `&T` from the wrapped Key.
     ///
-    /// Calls the Key's [`Key::provide`](crate::Key::provide)
+    /// Calls the Key's [`Key::provide`]
     /// implementation and returns the reference it provided, or `None`
     /// if the Key does not provide a `&T`.
     pub fn request_ref<T: ?Sized + 'static>(&self) -> Option<&T> {

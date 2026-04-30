@@ -77,13 +77,18 @@ class Workspace:
         package_manifest_path.write_text(tomli_w.dumps(self.package_manifest))
 
     def iter_debug_dirs(self) -> list[Path]:
+        # Layout: <workspace>/.pixi/bld/<pkg>/<workspace_key>/debug/
+        # (see cache_dirs::source_build_workspaces and DEBUG_OUTPUT_DIR).
         candidates: list[Path] = []
-        work_root = self.workspace_dir.joinpath(".pixi", "build", "work")
-        if work_root.is_dir():
-            for entry in sorted(work_root.iterdir()):
-                debug_candidate = entry.joinpath("debug")
-                if debug_candidate.is_dir():
-                    candidates.append(debug_candidate)
+        bld_root = self.workspace_dir.joinpath(".pixi", "bld")
+        if bld_root.is_dir():
+            for pkg_entry in sorted(bld_root.iterdir()):
+                if not pkg_entry.is_dir():
+                    continue
+                for workspace_entry in sorted(pkg_entry.iterdir()):
+                    debug_candidate = workspace_entry.joinpath("debug")
+                    if debug_candidate.is_dir():
+                        candidates.append(debug_candidate)
         return candidates
 
     def find_debug_file(self, filename: str) -> Path | None:

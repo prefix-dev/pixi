@@ -1,8 +1,11 @@
 use std::fmt::Display;
+use std::hash::Hash;
+use std::sync::Arc;
 
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_types::{ConstraintSpec, PackageSpec};
+use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::{DevSourceRecord, PinnedSourceSpec};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
@@ -11,10 +14,7 @@ use thiserror::Error;
 use tracing::instrument;
 
 use crate::build::conversion;
-use crate::{
-    BuildBackendMetadataError, BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
-    CommandDispatcherErrorResultExt,
-};
+use crate::{BuildBackendMetadataError, BuildBackendMetadataKey, BuildBackendMetadataSpec};
 
 /// A specification for retrieving dev source metadata.
 ///
@@ -120,74 +120,83 @@ impl Diagnostic for PackageNotProvidedError {
     }
 }
 
-impl DevSourceMetadataSpec {
-    /// Retrieves dev source metadata by querying the build backend.
-    ///
-    /// This method:
-    /// 1. Gets metadata from the build backend
-    /// 2. Creates a DevSourceRecord for each output
-    /// 3. Combines build/host/run dependencies for each output
+/// Compute-engine [`Key`] for dev source metadata.
+///
+/// Wraps the spec in an [`Arc`] so the key is cheap to hash/clone; the
+/// Value is likewise [`Arc`]-wrapped so dedup fan-out shares the
+/// record allocation.
+#[derive(Clone, Debug, Hash, Eq, PartialEq, derive_more::Display)]
+#[display("{}", _0.backend_metadata.manifest_source)]
+pub struct DevSourceMetadataKey(pub Arc<DevSourceMetadataSpec>);
+
+impl DevSourceMetadataKey {
+    pub fn new(spec: DevSourceMetadataSpec) -> Self {
+        Self(Arc::new(spec))
+    }
+}
+
+impl Key for DevSourceMetadataKey {
+    type Value = Result<Arc<DevSourceMetadata>, DevSourceMetadataError>;
+
     #[instrument(
         skip_all,
         name = "dev-source-metadata",
         fields(
-            source = %self.backend_metadata.manifest_source,
-            platform = %self.backend_metadata.build_environment.host_platform,
+            source = %self.0.backend_metadata.manifest_source,
+            platform = %self.0.backend_metadata.env_ref.display_platform(),
         )
     )]
-    pub(crate) async fn request(
-        self,
-        command_dispatcher: CommandDispatcher,
-    ) -> Result<DevSourceMetadata, CommandDispatcherError<DevSourceMetadataError>> {
-        // Get the metadata from the build backend
-        let build_backend_metadata = command_dispatcher
-            .build_backend_metadata(self.backend_metadata.clone())
-            .await
-            .map_err_with(Box::new)
-            .map_err_with(DevSourceMetadataError::BuildBackendMetadata)?;
+    async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        let spec = &self.0;
 
-        // Create a SourceAnchor for resolving relative paths in dependencies
+        // Get the metadata from the build backend.
+        let build_backend_metadata = ctx
+            .compute(&BuildBackendMetadataKey::new(spec.backend_metadata.clone()))
+            .await
+            .map_err(|e| DevSourceMetadataError::BuildBackendMetadata(Box::new(e)))?;
+
+        // Create a SourceAnchor for resolving relative paths in dependencies.
         let source_anchor = SourceAnchor::from(SourceLocationSpec::from(
             build_backend_metadata.source.manifest_source().clone(),
         ));
 
-        // Create a DevSourceRecord for each output
-        let mut records = Vec::new();
-        for output in &build_backend_metadata.metadata.outputs {
-            if output.metadata.name != self.package_name {
-                continue;
-            }
-            let record = Self::create_dev_source_record(
-                output,
-                build_backend_metadata.source.manifest_source(),
-                &source_anchor,
-            )?;
-            records.push(record);
-        }
+        // Create a DevSourceRecord for each output that matches the requested package.
+        let records: Vec<DevSourceRecord> = build_backend_metadata
+            .metadata
+            .outputs
+            .iter()
+            .filter(|output| output.metadata.name == spec.package_name)
+            .map(|output| {
+                DevSourceMetadataSpec::create_dev_source_record(
+                    output,
+                    build_backend_metadata.source.manifest_source(),
+                    &source_anchor,
+                )
+            })
+            .collect();
 
-        // Ensure the source provides the requested package
         if records.is_empty() {
             let available_names = build_backend_metadata
                 .metadata
                 .outputs
                 .iter()
                 .map(|output| output.metadata.name.clone());
-            return Err(CommandDispatcherError::Failed(
-                PackageNotProvidedError::new(
-                    self.package_name,
-                    build_backend_metadata.source.manifest_source().clone(),
-                    available_names,
-                )
-                .into(),
-            ));
+            return Err(PackageNotProvidedError::new(
+                spec.package_name.clone(),
+                build_backend_metadata.source.manifest_source().clone(),
+                available_names,
+            )
+            .into());
         }
 
-        Ok(DevSourceMetadata {
+        Ok(Arc::new(DevSourceMetadata {
             source: build_backend_metadata.source.manifest_source().clone(),
             records,
-        })
+        }))
     }
+}
 
+impl DevSourceMetadataSpec {
     /// Creates a DevSourceRecord from a CondaOutput.
     ///
     /// This combines all dependencies (build, host, run) into a single map
@@ -196,7 +205,7 @@ impl DevSourceMetadataSpec {
         output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
         source: &PinnedSourceSpec,
         source_anchor: &SourceAnchor,
-    ) -> Result<DevSourceRecord, CommandDispatcherError<DevSourceMetadataError>> {
+    ) -> DevSourceRecord {
         // Combine all dependencies into a single map
         let mut all_dependencies = DependencyMap::default();
         let mut all_constraints = DependencyMap::default();
@@ -272,7 +281,7 @@ impl DevSourceMetadataSpec {
         // The backend has already selected specific variant values for this output
         let variant_values = output.metadata.variant.clone();
 
-        Ok(DevSourceRecord {
+        DevSourceRecord {
             name: output.metadata.name.clone(),
             source: source.clone(),
             variants: variant_values
@@ -282,6 +291,6 @@ impl DevSourceMetadataSpec {
                 .collect(),
             dependencies: all_dependencies,
             constraints: all_constraints,
-        })
+        }
     }
 }

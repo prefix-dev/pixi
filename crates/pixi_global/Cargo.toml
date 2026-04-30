@@ -18,11 +18,11 @@ fs-err = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
+ordermap = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 once_cell = { workspace = true }
-pixi_build_discovery = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }

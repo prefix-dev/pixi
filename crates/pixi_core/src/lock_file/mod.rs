@@ -1,6 +1,7 @@
 mod install_subset;
 mod outdated;
 mod package_identifier;
+mod platform_setup;
 mod records_by_name;
 mod reporter;
 mod resolve;
@@ -26,9 +27,9 @@ pub use satisfiability::{
 };
 pub use update::{
     LockFileDerivedData, PackageFilterNames, ReinstallEnvironment, ReinstallPackages,
-    SolveCondaEnvironmentError, UpdateContext, UpdateLockFileOptions, UpdateMode,
+    SolveCondaEnvironmentError, UpdateContext, UpdateLockFileOptions, UpdateMode, UpdatedPrefix,
 };
-pub use utils::filter_lock_file;
+pub use utils::{LockedPackageKind, filter_lock_file};
 
 pub use utils::IoConcurrencyLimit;
 

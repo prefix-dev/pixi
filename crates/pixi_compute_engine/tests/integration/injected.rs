@@ -2,7 +2,6 @@
 //! integration, dep recording, re-inject panic, and introspection state.
 
 use derive_more::Display;
-use futures::FutureExt;
 use pixi_compute_engine::{
     ComputeCtx, ComputeEngine, DependencyGraph, InjectedKey, Key, NodeState,
 };
@@ -212,8 +211,8 @@ impl Key for ParallelInjectedReader {
         let n = self.0;
         let (a, b) = ctx
             .compute2(
-                |ctx| ctx.compute(&Param(n)).boxed(),
-                |ctx| ctx.compute(&Param(n + 1)).boxed(),
+                async |ctx| ctx.compute(&Param(n)).await,
+                async |ctx| ctx.compute(&Param(n + 1)).await,
             )
             .await;
         a + b

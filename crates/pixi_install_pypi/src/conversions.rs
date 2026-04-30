@@ -102,7 +102,7 @@ pub enum ConvertToUvDistError {
     UvPepTypes(#[from] ConversionError),
 }
 
-/// Convert from an [`UnresolvedPypiRecord`] to a uv [`distribution_types::Dist`]
+/// Convert from an `UnresolvedPypiRecord` to a uv `distribution_types::Dist`.
 pub fn convert_to_dist(
     record: &InstallablePypiRecord,
     lock_file_dir: &Path,

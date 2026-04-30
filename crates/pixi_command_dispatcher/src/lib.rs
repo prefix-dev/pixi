@@ -38,67 +38,96 @@ mod build_backend_metadata;
 mod cache;
 mod cache_dirs;
 mod command_dispatcher;
-mod command_dispatcher_processor;
+pub mod compute_data;
 mod dev_source_metadata;
-mod discover_backend_cache;
+mod discovered_backend;
+pub mod environment;
+mod ephemeral_env;
 pub mod executor;
+mod injected_config;
 mod input_hash;
+mod install_binary;
 mod install_pixi;
+mod installed_source_hints;
+mod instantiate_backend_key;
 mod instantiate_tool_env;
+pub mod keys;
 mod limits;
+mod path;
+mod ptr_arc;
 pub mod reporter;
+mod reporter_context;
+mod reporter_lifecycle;
+mod resolved_backend_command;
+mod solve_binary;
 mod solve_conda;
 mod solve_pixi;
 mod source_build;
-mod source_build_cache_status;
-mod source_checkout;
+pub mod source_checkout;
 mod source_metadata;
 mod source_record;
 
 pub use backend_source_build::{
-    BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
+    BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method,
 };
 pub use build::BuildEnvironment;
 pub use build_backend_metadata::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataInner,
+    BuildBackendMetadataKey, BuildBackendMetadataSpec,
 };
 pub use cache::build_backend_metadata::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry,
 };
 pub use cache::common::{CacheEntry, CacheRevision, MetadataCache};
-pub use cache::source_record::{SourceRecordCache, SourceRecordCacheEntry};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, InstantiateBackendError, InstantiateBackendSpec,
+    CommandDispatcherErrorResultExt, ComputeResultExt, ReporterContextSpawnHook,
 };
 pub use dev_source_metadata::{
-    DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec, PackageNotProvidedError,
+    DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataKey, DevSourceMetadataSpec,
+    PackageNotProvidedError,
+};
+pub use discovered_backend::DiscoveredBackendKey;
+pub use environment::{
+    BuildEnvOf, ChannelsOf, DerivedEnvKind, DerivedParent, EnvironmentRef, EnvironmentSpec,
+    EphemeralEnv, ExcludeNewerOf, HasWorkspaceEnvRegistry, VariantsOf, WorkspaceEnvId,
+    WorkspaceEnvRef, WorkspaceEnvRegistry,
+};
+pub use ephemeral_env::{
+    EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec, InstalledEphemeralEnv,
 };
 pub use executor::Executor;
+pub use injected_config::{
+    BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
+};
 pub use install_pixi::{
-    InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
+    EnvironmentFingerprint, InstallPixiEnvironmentError, InstallPixiEnvironmentExt,
+    InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
+};
+pub use installed_source_hints::{InstalledSourceHint, InstalledSourceHints};
+pub use instantiate_backend_key::{
+    BackendHandle, InstantiateBackendError, InstantiateBackendKey, resolve_backend_identifier,
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
-pub use limits::Limits;
+pub use limits::{Limit, Limits};
+pub use ptr_arc::PtrArc;
 pub use reporter::{
-    CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveReporter, Reporter,
-    ReporterContext,
+    CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,
+    PixiSolveReporter, Reporter, ReporterContext,
 };
+pub use resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use serde::Serialize;
 pub use solve_conda::SolveCondaEnvironmentSpec;
-pub use solve_pixi::{MissingChannelError, PixiEnvironmentSpec, SolvePixiEnvironmentError};
-pub use source_build::{SourceBuildError, SourceBuildResult, SourceBuildSpec};
-pub use source_build_cache_status::{
-    CachedBuildStatus, SourceBuildCacheEntry, SourceBuildCacheStatusError,
-    SourceBuildCacheStatusSpec,
-};
+pub use solve_pixi::{MissingChannelError, SolvePixiEnvironmentError};
+pub use source_build::SourceBuildError;
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
-pub use source_record::{
-    ResolvedSourceRecord, SourceRecordError, SourceRecordReuseKey, SourceRecordSpec,
-};
+pub use source_record::{ResolvedSourceRecord, SourceRecordError, SourceRecordSpec};
+
+// Re-export pixi_compute_engine types used by downstream crates.
+pub use pixi_compute_engine::{ComputeCtx, ComputeEngine, ComputeError, Key};
 
 /// A helper function to check if a value is the default value for its type.
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {
@@ -113,7 +142,7 @@ fn is_default<T: Default + PartialEq>(value: &T) -> bool {
 /// ### Note
 ///
 /// This feature is still in very early stages and is not yet fully implemented.
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize)]
 pub enum BuildProfile {
     /// Build a version of the package that is suitable for development.
     Development,

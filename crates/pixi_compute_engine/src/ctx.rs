@@ -88,12 +88,11 @@ type DepsList = Arc<Mutex<Vec<AnyKey>>>;
 /// # Combinator closure shape
 ///
 /// All parallel combinators take closures of the form
-/// `for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send`. The
-/// idiomatic body is a direct `.boxed()` on a single compute call:
+/// `for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> T + Send`. The
+/// idiomatic body is a direct compute call:
 ///
 /// ```
 /// # use std::fmt;
-/// # use futures::FutureExt;
 /// # use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
 /// # #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 /// # struct Leaf(u32);
@@ -114,8 +113,8 @@ type DepsList = Arc<Mutex<Vec<AnyKey>>>;
 ///     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
 ///         let (a, b) = ctx
 ///             .compute2(
-///                 |ctx| ctx.compute(&Leaf(1)).boxed(),
-///                 |ctx| ctx.compute(&Leaf(2)).boxed(),
+///                 async |ctx| ctx.compute(&Leaf(1)).await,
+///                 async |ctx| ctx.compute(&Leaf(2)).await,
 ///             )
 ///             .await;
 ///         a + b
@@ -190,6 +189,26 @@ impl ComputeCtx {
         }
     }
 
+    /// Build a root ctx paired with a synthetic cycle fallback so a
+    /// user-facing scope (see
+    /// [`ComputeEngine::with_ctx`](crate::ComputeEngine::with_ctx))
+    /// can surface transitive cycles instead of parking forever when
+    /// an awaited dep fails with a cycle.
+    pub(crate) fn new_root_with_fallback(
+        engine: Arc<EngineInner>,
+    ) -> (Self, oneshot::Receiver<CycleError>) {
+        let (tx, rx) = oneshot::channel();
+        let guard_stack = Arc::new(GuardStack::new());
+        guard_stack.set_fallback(Arc::new(GuardHandle::new(tx)));
+        let ctx = Self {
+            engine,
+            current: None,
+            deps: Arc::new(Mutex::new(Vec::new())),
+            guard_stack,
+        };
+        (ctx, rx)
+    }
+
     /// Access the engine-wide shared data store.
     ///
     /// Values are set at engine construction time via
@@ -205,12 +224,21 @@ impl ComputeCtx {
         &self.engine.global_data
     }
 
-    /// Build a handle used by the parallel combinators to produce one
-    /// future per branch, each owning its own sub-ctx that shares this
-    /// ctx's active-edge state and dep accumulator.
-    fn parallel(&mut self) -> ParallelBuilder<'_> {
-        if self.engine.sequential_branches {
-            ParallelBuilder::Serial {
+    /// Build a [`ParallelBuilder`] that mints one future per parallel
+    /// branch, each owning its own sub-ctx that shares this ctx's
+    /// active-edge state and dep accumulator but carries a
+    /// branch-local cycle-guard stack.
+    ///
+    /// Use this when the set of branches is dynamic (a walk that
+    /// discovers new work as earlier branches complete). For a fixed
+    /// arity / iterator of branches, prefer the wrapper combinators:
+    /// [`compute2`](Self::compute2), [`compute3`](Self::compute3),
+    /// [`compute_many`](Self::compute_many),
+    /// [`compute_join`](Self::compute_join),
+    /// [`try_compute_join`](Self::try_compute_join).
+    pub fn parallel(&mut self) -> ParallelBuilder<'_> {
+        let inner = if self.engine.sequential_branches {
+            ParallelBuilderInner::Serial {
                 engine: &self.engine,
                 current: &self.current,
                 deps: &self.deps,
@@ -218,13 +246,14 @@ impl ComputeCtx {
                 prev_done: None,
             }
         } else {
-            ParallelBuilder::Concurrent {
+            ParallelBuilderInner::Concurrent {
                 engine: &self.engine,
                 current: &self.current,
                 deps: &self.deps,
                 guard_stack: &self.guard_stack,
             }
-        }
+        };
+        ParallelBuilder { inner }
     }
 
     /// Request the value of another Key as a dependency of the
@@ -240,8 +269,7 @@ impl ComputeCtx {
     ///
     /// The returned future is precisely-captured (`use<K>`): it does
     /// not borrow `key`, so callers can pass a temporary reference
-    /// such as `ctx.compute(&Fib(n - 1)).boxed()` without lifetime
-    /// issues.
+    /// such as `ctx.compute(&Fib(n - 1))` without lifetime issues.
     ///
     /// # Cycles
     ///
@@ -325,7 +353,6 @@ impl ComputeCtx {
     ///
     /// ```
     /// # use std::fmt;
-    /// # use futures::FutureExt;
     /// # use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
     /// # #[derive(Clone, Debug, Hash, PartialEq, Eq)]
     /// # struct Node(u32);
@@ -340,7 +367,7 @@ impl ComputeCtx {
     ///         // `engine.compute(&Node(_))` would return
     ///         // `Err(ComputeError::Cycle)`.
     ///         let me = self.0;
-    ///         ctx.with_cycle_guard(|ctx| ctx.compute(&Node(me)).boxed())
+    ///         ctx.with_cycle_guard(async |ctx| ctx.compute(&Node(me)).await)
     ///             .await
     ///             .unwrap_or_else(|cycle| Err(format!("cycle at Node({me}): {cycle}")))
     ///     }
@@ -353,7 +380,7 @@ impl ComputeCtx {
     /// ```
     pub async fn with_cycle_guard<'s, F, T>(&'s mut self, f: F) -> Result<T, CycleError>
     where
-        F: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send,
+        F: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> T + Send,
     {
         let (tx, rx) = oneshot::channel();
         let handle = Arc::new(GuardHandle::new(tx));
@@ -548,7 +575,6 @@ impl ComputeCtx {
     ///
     /// ```
     /// # use std::fmt;
-    /// # use futures::FutureExt;
     /// # use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
     /// # #[derive(Clone, Debug, Hash, PartialEq, Eq)]
     /// # struct Leaf(u32);
@@ -569,8 +595,8 @@ impl ComputeCtx {
     ///     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
     ///         let (a, b) = ctx
     ///             .compute2(
-    ///                 |ctx| ctx.compute(&Leaf(1)).boxed(),
-    ///                 |ctx| ctx.compute(&Leaf(2)).boxed(),
+    ///                 async |ctx| ctx.compute(&Leaf(1)).await,
+    ///                 async |ctx| ctx.compute(&Leaf(2)).await,
     ///             )
     ///             .await;
     ///         a + b
@@ -583,8 +609,8 @@ impl ComputeCtx {
     /// ```
     pub async fn compute2<C1, T, C2, U>(&mut self, c1: C1, c2: C2) -> (T, U)
     where
-        C1: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send,
-        C2: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, U> + Send,
+        C1: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> T + Send,
+        C2: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> U + Send,
     {
         let mut p = self.parallel();
         futures::future::join(p.compute(c1), p.compute(c2)).await
@@ -596,9 +622,9 @@ impl ComputeCtx {
     /// [`compute_join`](Self::compute_join).
     pub async fn compute3<C1, T, C2, U, C3, V>(&mut self, c1: C1, c2: C2, c3: C3) -> (T, U, V)
     where
-        C1: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send,
-        C2: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, U> + Send,
-        C3: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, V> + Send,
+        C1: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> T + Send,
+        C2: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> U + Send,
+        C3: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> V + Send,
     {
         let mut p = self.parallel();
         futures::future::join3(p.compute(c1), p.compute(c2), p.compute(c3)).await
@@ -616,7 +642,6 @@ impl ComputeCtx {
     ///
     /// ```
     /// # use std::fmt;
-    /// # use futures::FutureExt;
     /// # use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
     /// # #[derive(Clone, Debug, Hash, PartialEq, Eq)]
     /// # struct Parse(&'static str);
@@ -639,8 +664,8 @@ impl ComputeCtx {
     ///     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
     ///         let (a, b) = ctx
     ///             .try_compute2(
-    ///                 |ctx| ctx.compute(&Parse("10")).boxed(),
-    ///                 |ctx| ctx.compute(&Parse("oops")).boxed(),
+    ///                 async |ctx| ctx.compute(&Parse("10")).await,
+    ///                 async |ctx| ctx.compute(&Parse("oops")).await,
     ///             )
     ///             .await?;
     ///         Ok(a + b)
@@ -654,8 +679,8 @@ impl ComputeCtx {
     /// ```
     pub async fn try_compute2<C1, T, C2, U, E>(&mut self, c1: C1, c2: C2) -> Result<(T, U), E>
     where
-        C1: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, Result<T, E>> + Send,
-        C2: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, Result<U, E>> + Send,
+        C1: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> Result<T, E> + Send,
+        C2: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> Result<U, E> + Send,
     {
         let mut p = self.parallel();
         futures::future::try_join(p.compute(c1), p.compute(c2)).await
@@ -671,9 +696,9 @@ impl ComputeCtx {
         c3: C3,
     ) -> Result<(T, U, V), E>
     where
-        C1: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, Result<T, E>> + Send,
-        C2: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, Result<U, E>> + Send,
-        C3: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, Result<V, E>> + Send,
+        C1: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> Result<T, E> + Send,
+        C2: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> Result<U, E> + Send,
+        C3: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> Result<V, E> + Send,
     {
         let mut p = self.parallel();
         futures::future::try_join3(p.compute(c1), p.compute(c2), p.compute(c3)).await
@@ -694,7 +719,7 @@ impl ComputeCtx {
     ///
     /// ```
     /// # use std::fmt;
-    /// # use futures::{future::join_all, FutureExt};
+    /// # use futures::future::join_all;
     /// # use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
     /// # #[derive(Clone, Debug, Hash, PartialEq, Eq)]
     /// # struct Leaf(u32);
@@ -714,7 +739,9 @@ impl ComputeCtx {
     ///     type Value = u32;
     ///     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
     ///         let futs = ctx.compute_many((1..=3).map(|n| {
-    ///             ComputeCtx::declare_closure(move |ctx| ctx.compute(&Leaf(n)).boxed())
+    ///             ComputeCtx::declare_closure(async move |ctx: &mut ComputeCtx| {
+    ///                 ctx.compute(&Leaf(n)).await
+    ///             })
     ///         }));
     ///         join_all(futs).await.into_iter().sum()
     ///     }
@@ -730,7 +757,7 @@ impl ComputeCtx {
     ) -> Vec<impl Future<Output = T> + use<Items, F, T>>
     where
         Items: IntoIterator<Item = F>,
-        F: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send,
+        F: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> T + Send,
     {
         let mut p = self.parallel();
         computes.into_iter().map(|func| p.compute(func)).collect()
@@ -739,9 +766,7 @@ impl ComputeCtx {
     /// Map each input item to a compute via `mapper` and join the
     /// resulting futures concurrently into a `Vec` of their values.
     ///
-    /// `mapper` takes `(&mut ComputeCtx, item)` and returns a boxed
-    /// future producing the item's result. It must be `Copy` (so
-    /// it can be applied to every item without moving); capture
+    /// `mapper` is an [`AsyncFn`] applied once per item; capture
     /// per-item data via the closure's parameter, not via the
     /// environment.
     ///
@@ -749,7 +774,6 @@ impl ComputeCtx {
     ///
     /// ```
     /// # use std::fmt;
-    /// # use futures::FutureExt;
     /// # use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
     /// # #[derive(Clone, Debug, Hash, PartialEq, Eq)]
     /// # struct Square(u32);
@@ -768,7 +792,7 @@ impl ComputeCtx {
     /// impl Key for Squares {
     ///     type Value = Vec<u32>;
     ///     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-    ///         ctx.compute_join(1..=4u32, |ctx, n| ctx.compute(&Square(n)).boxed())
+    ///         ctx.compute_join(1..=4u32, async |ctx, n| ctx.compute(&Square(n)).await)
     ///             .await
     ///     }
     /// }
@@ -784,35 +808,33 @@ impl ComputeCtx {
     ) -> Vec<R>
     where
         Items: IntoIterator<Item = T>,
-        Mapper: for<'x> FnOnce(&'x mut ComputeCtx, T) -> BoxFuture<'x, R> + Send + Copy,
+        Mapper: for<'x> AsyncFn(&'x mut ComputeCtx, T) -> R + Send + Clone,
         T: Send,
     {
         let mut p = self.parallel();
-        futures::future::join_all(
-            items
-                .into_iter()
-                .map(|item| p.compute(move |ctx| mapper(ctx, item))),
-        )
+        futures::future::join_all(items.into_iter().map(|item| {
+            let mapper = mapper.clone();
+            p.compute(async move |ctx: &mut ComputeCtx| mapper(ctx, item).await)
+        }))
         .await
     }
 
     /// Pin the HRTB binder on a single-argument compute closure.
     ///
     /// When a closure is built inline at the call site, Rust's
-    /// inference usually picks the `for<'x> FnOnce(&'x mut
-    /// ComputeCtx) -> BoxFuture<'x, T>` bound without help. When
-    /// the closure flows through an adapter like
-    /// [`Iterator::map`], a `let` binding, or a type-erasing
-    /// collection, inference sometimes fails to universally
-    /// quantify over the ctx lifetime. Wrapping the closure in
-    /// `declare_closure` is a no-op at runtime that re-asserts the
-    /// bound so inference succeeds.
+    /// inference usually picks the `for<'x> AsyncFnOnce(&'x mut
+    /// ComputeCtx) -> T` bound without help. When the closure
+    /// flows through an adapter like [`Iterator::map`], a `let`
+    /// binding, or a type-erasing collection, inference sometimes
+    /// fails to universally quantify over the ctx lifetime.
+    /// Wrapping the closure in `declare_closure` is a no-op at
+    /// runtime that re-asserts the bound so inference succeeds.
     ///
     /// # Example
     ///
     /// ```
     /// # use std::fmt;
-    /// # use futures::{future::join_all, FutureExt};
+    /// # use futures::future::join_all;
     /// # use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
     /// # #[derive(Clone, Debug, Hash, PartialEq, Eq)]
     /// # struct Leaf(u32);
@@ -834,7 +856,9 @@ impl ComputeCtx {
     ///         // Built via `Iterator::map`. Without `declare_closure`,
     ///         // the inner closure's HRTB would fail to infer.
     ///         let futs = ctx.compute_many((1..=3).map(|n| {
-    ///             ComputeCtx::declare_closure(move |ctx| ctx.compute(&Leaf(n)).boxed())
+    ///             ComputeCtx::declare_closure(async move |ctx: &mut ComputeCtx| {
+    ///                 ctx.compute(&Leaf(n)).await
+    ///             })
     ///         }));
     ///         join_all(futs).await.into_iter().sum()
     ///     }
@@ -846,7 +870,7 @@ impl ComputeCtx {
     /// ```
     pub fn declare_closure<F, T>(f: F) -> F
     where
-        F: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send,
+        F: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> T + Send,
     {
         f
     }
@@ -854,14 +878,14 @@ impl ComputeCtx {
     /// Pin the HRTB binder on a two-argument join-mapper closure.
     ///
     /// Same purpose as [`declare_closure`](Self::declare_closure)
-    /// but for the `(&mut ComputeCtx, item) -> BoxFuture<_>` shape
+    /// but for the `AsyncFn(&mut ComputeCtx, item) -> R` shape
     /// taken by [`compute_join`](Self::compute_join) and
     /// [`try_compute_join`](Self::try_compute_join). Useful when
     /// the mapper is stored in a `let` binding before being
     /// passed in.
     pub fn declare_join_closure<M, T, R>(m: M) -> M
     where
-        M: for<'x> FnOnce(&'x mut ComputeCtx, T) -> BoxFuture<'x, R> + Send + Copy,
+        M: for<'x> AsyncFn(&'x mut ComputeCtx, T) -> R + Send + Clone,
     {
         m
     }
@@ -874,10 +898,9 @@ impl ComputeCtx {
     ///
     /// ```
     /// # use std::fmt;
-    /// # use futures::FutureExt;
     /// # use pixi_compute_engine::{ComputeCtx, ComputeEngine, Key};
     /// # #[derive(Clone, Debug, Hash, PartialEq, Eq)]
-    /// # struct Parse(&'static str);
+    /// # struct Parse(String);
     /// # impl fmt::Display for Parse {
     /// #     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.0) }
     /// # }
@@ -895,10 +918,9 @@ impl ComputeCtx {
     /// impl Key for ParseAll {
     ///     type Value = Result<Vec<u32>, String>;
     ///     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-    ///         ctx.try_compute_join(["1", "2", "three"], |ctx, s| {
-    ///             ctx.compute(&Parse(s)).boxed()
-    ///         })
-    ///         .await
+    ///         let inputs = ["1", "2", "three"].map(String::from);
+    ///         ctx.try_compute_join(inputs, async |ctx, s| ctx.compute(&Parse(s)).await)
+    ///             .await
     ///     }
     /// }
     /// # tokio_test::block_on(async {
@@ -914,15 +936,14 @@ impl ComputeCtx {
     ) -> Result<Vec<R>, E>
     where
         Items: IntoIterator<Item = T>,
-        Mapper: for<'x> FnOnce(&'x mut ComputeCtx, T) -> BoxFuture<'x, Result<R, E>> + Send + Copy,
+        Mapper: for<'x> AsyncFn(&'x mut ComputeCtx, T) -> Result<R, E> + Send + Clone,
         T: Send,
     {
         let mut p = self.parallel();
-        futures::future::try_join_all(
-            items
-                .into_iter()
-                .map(|item| p.compute(move |ctx| mapper(ctx, item))),
-        )
+        futures::future::try_join_all(items.into_iter().map(|item| {
+            let mapper = mapper.clone();
+            p.compute(async move |ctx: &mut ComputeCtx| mapper(ctx, item).await)
+        }))
         .await
     }
 }
@@ -967,9 +988,27 @@ impl Drop for EdgeGuard {
     }
 }
 
-/// Handle returned by [`ComputeCtx::parallel`] for minting one future per
-/// parallel branch.
-enum ParallelBuilder<'p> {
+/// Handle returned by [`ComputeCtx::parallel`] for minting one future
+/// per parallel branch.
+///
+/// Use this when the set of branches is not known up front (e.g. a
+/// dynamic walk that discovers new work as earlier branches complete).
+/// Hold a `ParallelBuilder` across the walk and call
+/// [`compute`](Self::compute) per push to mint a future that runs its
+/// body in a fresh sub-[`ComputeCtx`] with its own branch-local cycle
+/// guard stack, so sibling branches cannot disturb each other's
+/// `with_cycle_guard` scopes. The returned futures are independent
+/// and can be driven through a `FuturesUnordered` or similar.
+///
+/// For a fixed set of branches, prefer [`ComputeCtx::compute2`],
+/// [`ComputeCtx::compute_join`], [`ComputeCtx::try_compute_join`], or
+/// [`ComputeCtx::compute_many`] — they wrap this builder for common
+/// cases.
+pub struct ParallelBuilder<'p> {
+    inner: ParallelBuilderInner<'p>,
+}
+
+enum ParallelBuilderInner<'p> {
     Concurrent {
         engine: &'p Arc<EngineInner>,
         current: &'p Option<AnyKey>,
@@ -986,18 +1025,25 @@ enum ParallelBuilder<'p> {
 }
 
 impl ParallelBuilder<'_> {
-    fn compute<F, T>(&mut self, func: F) -> impl Future<Output = T> + use<F, T>
+    /// Mint one branch future. `func` runs on a fresh sub-[`ComputeCtx`]
+    /// with a branch-local cycle-guard stack chained to the parent's.
+    ///
+    /// The returned future is precisely-captured (`+ use<F, T>`) and
+    /// does not borrow from `self`, so multiple branch futures can be
+    /// awaited concurrently (e.g. via `futures::future::join_all` or
+    /// a `FuturesUnordered`).
+    pub fn compute<F, T>(&mut self, func: F) -> impl Future<Output = T> + use<F, T>
     where
-        F: for<'x> FnOnce(&'x mut ComputeCtx) -> BoxFuture<'x, T> + Send,
+        F: for<'x> AsyncFnOnce(&'x mut ComputeCtx) -> T + Send,
     {
-        let (engine, current, deps, guard_stack) = match self {
-            ParallelBuilder::Concurrent {
+        let (engine, current, deps, guard_stack) = match &self.inner {
+            ParallelBuilderInner::Concurrent {
                 engine,
                 current,
                 deps,
                 guard_stack,
             }
-            | ParallelBuilder::Serial {
+            | ParallelBuilderInner::Serial {
                 engine,
                 current,
                 deps,
@@ -1018,9 +1064,9 @@ impl ParallelBuilder<'_> {
             deps: deps.clone(),
             guard_stack: Arc::new(GuardStack::new_branch(guard_stack.clone())),
         };
-        let (prev, done_tx) = match self {
-            ParallelBuilder::Concurrent { .. } => (None, None),
-            ParallelBuilder::Serial { prev_done, .. } => {
+        let (prev, done_tx) = match &mut self.inner {
+            ParallelBuilderInner::Concurrent { .. } => (None, None),
+            ParallelBuilderInner::Serial { prev_done, .. } => {
                 let (tx, rx) = oneshot::channel();
                 (prev_done.replace(rx), Some(tx))
             }
@@ -1070,7 +1116,15 @@ fn spawn_compute_future<K: Key>(
     current: Option<AnyKey>,
     generation: SpawnGeneration,
 ) -> BoxFuture<'static, Result<K::Value, ComputeError>> {
-    let handle = tokio::spawn(async move {
+    // The compute body runs inside a task spawned by `tokio::spawn`.
+    // An optional `SpawnHook` on the engine may wrap that body with
+    // caller-side task-local setup (e.g. scoping a reporter context)
+    // before spawn. The hook operates on a `BoxFuture<'static, ()>`;
+    // a oneshot channel carries the typed result out.
+    let (result_tx, result_rx) = oneshot::channel::<Result<K::Value, ComputeError>>();
+
+    let engine_for_inner = engine.clone();
+    let body: BoxFuture<'static, ()> = Box::pin(async move {
         let guard_stack = Arc::new(GuardStack::new());
 
         // Synthetic fallback: stored in its own slot, outside the
@@ -1085,13 +1139,13 @@ fn spawn_compute_future<K: Key>(
         guard_stack.set_fallback(Arc::new(GuardHandle::new(fallback_tx)));
 
         let mut child_ctx = ComputeCtx {
-            engine: engine.clone(),
+            engine: engine_for_inner.clone(),
             current,
             deps: Arc::new(Mutex::new(Vec::new())),
             guard_stack,
         };
 
-        let engine_for_body = engine.clone();
+        let engine_for_body = engine_for_inner.clone();
         let key_for_body = key.clone();
         let compute_body = async move {
             let value = key_for_body.compute(&mut child_ctx).await;
@@ -1111,7 +1165,7 @@ fn spawn_compute_future<K: Key>(
         // the race's random pick would occasionally let a cycled
         // task return `Ok` of a value derived from a dependency
         // that had already been reported as cyclic.
-        tokio::select! {
+        let result: Result<K::Value, ComputeError> = tokio::select! {
             biased;
             cycle = fallback_rx => Err(ComputeError::Cycle(
                 // The sender lives in the fallback frame on our
@@ -1120,7 +1174,19 @@ fn spawn_compute_future<K: Key>(
                 cycle.expect("synthetic cycle fallback sender dropped"),
             )),
             value = compute_body => Ok(value),
-        }
+        };
+
+        // The only way the receiver is gone is if the outer future
+        // wrapping this task was dropped, in which case the task is
+        // already being torn down and the send is irrelevant.
+        let _ = result_tx.send(result);
     });
-    boxed_compute_future(handle)
+
+    let wrapped = match engine.spawn_hook.as_ref() {
+        Some(hook) => hook.wrap(&engine.global_data, body),
+        None => body,
+    };
+
+    let handle = tokio::spawn(wrapped);
+    boxed_compute_future(handle, result_rx)
 }

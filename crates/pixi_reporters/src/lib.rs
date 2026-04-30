@@ -13,12 +13,10 @@ use git::GitCheckoutProgress;
 use indicatif::{MultiProgress, ProgressBar};
 use main_progress_bar::MainProgressBar;
 use pixi_command_dispatcher::{
-    InstallPixiEnvironmentSpec, PixiEnvironmentSpec, ReporterContext, SolveCondaEnvironmentSpec,
-    reporter::{
-        BackendSourceBuildReporter, CondaSolveId, PixiInstallId, PixiSolveId, SourceBuildReporter,
-    },
+    InstallPixiEnvironmentSpec, PixiSolveEnvironmentSpec, ReporterContext,
+    SolveCondaEnvironmentSpec,
+    reporter::{BackendSourceBuildReporter, CondaSolveId, PixiInstallId, PixiSolveId},
 };
-use pixi_spec::PixiSpec;
 use rattler_repodata_gateway::{Reporter, RunExportsReporter};
 pub use release_notes::format_release_notes;
 use repodata_reporter::RepodataReporter;
@@ -85,10 +83,6 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
         Some(&self.source_checkout_reporter)
     }
 
-    fn as_source_build_reporter(&self) -> Option<&dyn SourceBuildReporter> {
-        Some(&self.sync_reporter)
-    }
-
     fn as_backend_source_build_reporter(&self) -> Option<&dyn BackendSourceBuildReporter> {
         Some(&self.sync_reporter)
     }
@@ -138,9 +132,6 @@ impl pixi_command_dispatcher::PixiInstallReporter for TopLevelProgress {
         _reason: Option<ReporterContext>,
         _env: &InstallPixiEnvironmentSpec,
     ) -> PixiInstallId {
-        // Installing a pixi environment uses rayon. We only want to initialize the
-        // rayon thread pool when we absolutely need it.
-        LazyLock::force(&RAYON_INITIALIZE);
         PixiInstallId(0)
     }
 
@@ -153,26 +144,18 @@ impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {
     fn on_queued(
         &self,
         _reason: Option<ReporterContext>,
-        env: &PixiEnvironmentSpec,
+        env: &PixiSolveEnvironmentSpec,
     ) -> PixiSolveId {
-        let has_direct_conda_dependency =
-            env.dependencies.iter_specs().any(|(_, spec)| match spec {
-                PixiSpec::Url(url) => url.is_binary(),
-                PixiSpec::Path(path) => path.is_binary(),
-                _ => false,
-            });
-        if has_direct_conda_dependency {
+        if env.has_direct_conda_dependency {
             // Dependencies on conda packages will trigger validating the package cache
             // which will be done using rayon. If that's the case, we need to ensure rayon
             // is initialized using the uv initialization.
             LazyLock::force(&RAYON_INITIALIZE);
         }
 
-        let id = self.conda_solve_reporter.queued(format!(
-            "{} ({})",
-            env.name.as_deref().unwrap_or_default(),
-            env.build_environment.host_platform
-        ));
+        let id = self
+            .conda_solve_reporter
+            .queued(format!("{} ({})", env.name, env.platform));
         PixiSolveId(id)
     }
 

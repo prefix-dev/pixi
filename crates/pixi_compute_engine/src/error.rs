@@ -9,7 +9,7 @@
 //! A detected cycle is first offered to every
 //! [`ComputeCtx::with_cycle_guard`](crate::ComputeCtx::with_cycle_guard)
 //! scope that sits on the cycle path, as a
-//! [`CycleError`](crate::CycleError). If no user guard catches, the
+//! [`CycleError`]. If no user guard catches, the
 //! cycle surfaces at the engine boundary as [`ComputeError::Cycle`],
 //! carrying the full ring of keys.
 
@@ -39,9 +39,9 @@ pub enum ComputeError {
     /// [`ComputeCtx::with_cycle_guard`](crate::ComputeCtx::with_cycle_guard)
     /// scope caught.
     ///
-    /// The wrapped [`CycleError`] contains the full ring of keys in
-    /// the form `[caller, target, ..., caller]`, starting and ending
-    /// with the key that closed the loop.
+    /// The wrapped [`CycleError`]'s `path` lists the distinct keys
+    /// on the cycle in order: `[caller, target, ...]`, where the
+    /// closing edge is from the last entry back to the first.
     #[error("compute cycle detected: {0}")]
     Cycle(CycleError),
 }
