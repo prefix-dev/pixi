@@ -81,8 +81,10 @@ mod tests {
             package_record: pr,
             identifier: DistArchiveIdentifier::from_str(&file_name)
                 .expect("valid dist archive identifier"),
-            url: Url::parse(&format!("https://example.com/conda-forge/linux-64/{file_name}"))
-                .expect("valid url"),
+            url: Url::parse(&format!(
+                "https://example.com/conda-forge/linux-64/{file_name}"
+            ))
+            .expect("valid url"),
             channel: Some("https://example.com/conda-forge".to_string()),
         }))
     }
@@ -134,9 +136,11 @@ mod tests {
             exact: false,
             build: None,
         };
-        let err =
-            resolve_pin_compatible(&PackageName::new_unchecked("python"), &spec, &map)
-                .expect_err("invalid pin expression must surface");
-        assert!(matches!(err, PinCompatibleError::Pin(PinError::InvalidPinExpression(_))));
+        let err = resolve_pin_compatible(&PackageName::new_unchecked("python"), &spec, &map)
+            .expect_err("invalid pin expression must surface");
+        assert!(matches!(
+            err,
+            PinCompatibleError::Pin(PinError::InvalidPinExpression(_))
+        ));
     }
 }

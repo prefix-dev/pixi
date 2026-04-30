@@ -219,10 +219,7 @@ fn apply_pin_bound(
 
 /// Truncate `version` to its first `segment_count` segments.
 /// Example: `"1.2.3"` with `segment_count=2` -> `"1.2"`.
-fn extract_version_segments(
-    version: &Version,
-    segment_count: usize,
-) -> Result<Version, PinError> {
+fn extract_version_segments(version: &Version, segment_count: usize) -> Result<Version, PinError> {
     version
         .clone()
         .with_segments(..min(version.segment_count(), segment_count))

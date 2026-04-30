@@ -3764,8 +3764,9 @@ fn verify_locked_against_backend_specs(
                 let pin = Pin::try_from(pin.clone()).map_err(|err| {
                     unsat(format!("{} (pin_compatible: {err})", dep_name.as_source()))
                 })?;
-                let resolved =
-                    pin.resolve(&pin_record.version, &pin_record.build).map_err(|err| {
+                let resolved = pin
+                    .resolve(&pin_record.version, &pin_record.build)
+                    .map_err(|err| {
                         unsat(format!("{} (pin_compatible: {err})", dep_name.as_source()))
                     })?;
                 let nameless = resolved
@@ -4668,12 +4669,15 @@ mod tests {
         }
 
         fn pin_compatible_dep(name: &str) -> NamedSpec<PackageSpec> {
-            pin_compatible_dep_with(name, PinCompatibleSpec {
-                lower_bound: None,
-                upper_bound: None,
-                exact: false,
-                build: None,
-            })
+            pin_compatible_dep_with(
+                name,
+                PinCompatibleSpec {
+                    lower_bound: None,
+                    upper_bound: None,
+                    exact: false,
+                    build: None,
+                },
+            )
         }
 
         fn pin_compatible_dep_with(name: &str, spec: PinCompatibleSpec) -> NamedSpec<PackageSpec> {
