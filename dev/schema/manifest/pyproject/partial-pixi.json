@@ -1325,7 +1325,7 @@
           "description": "Machine-specific aspects of the package",
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/Target"
+            "$ref": "#/$defs/PackageTarget"
           },
           "propertyNames": {
             "minLength": 1
@@ -1358,6 +1358,75 @@
               "workspace": true
             }
           ]
+        }
+      }
+    },
+    "PackageTarget": {
+      "title": "PackageTarget",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build-dependencies": {
+          "title": "Build-Dependencies",
+          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "host-dependencies": {
+          "title": "Host-Dependencies",
+          "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "python": ">=3.8"
+            }
+          ]
+        },
+        "run-dependencies": {
+          "title": "Run-Dependencies",
+          "description": "The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
         }
       }
     },

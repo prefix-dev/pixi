@@ -4530,7 +4530,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>PyPI-to-conda mapping</strong> (opt-in): Maps <code>project.dependencies</code> and <code>build-system.requires</code> from <code>pyproject.toml</code> to conda packages (see <a href="#ignore-pypi-mapping"><code>ignore-pypi-mapping</code></a>)</li>
 <li><strong>Automatic compiler detection</strong>: Detects build tools like <code>maturin</code> or <code>setuptools-rust</code> and automatically adds required compilers</li>
 <li><strong>Cross-platform support</strong>: Works consistently across Linux, macOS, and Windows</li>
-<li><strong>Flexible installation</strong>: Automatically selects between <code>pip</code> and <code>uv</code> for package installation</li>
+<li><strong>Flexible installation</strong>: Uses <code>uv</code> by default and falls back to <code>pip</code> when explicitly requested</li>
 </ul>
 <h2 id="basic-usage">Basic Usage<a class="headerlink" href="#basic-usage" title="Permanent link">#</a></h2>
 <p>To use the Python backend in your <code>pixi.toml</code>, add it to your package's build configuration:</p>
@@ -4546,7 +4546,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <p>The backend automatically includes the following build tools:</p>
 <ul>
 <li><code>python</code> - The Python interpreter</li>
-<li><code>pip</code> - Python package installer (or <code>uv</code> if specified)</li>
+<li><code>uv</code> - Python package installer used by default (or <code>pip</code> if explicitly added to dependencies)</li>
 </ul>
 <p>You can add these to your <a href="https://pixi.sh/latest/build/dependency_types/"><code>host-dependencies</code></a> if you need specific versions:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package.build-dependencies]</span>
@@ -4694,7 +4694,7 @@ If no compilers are specified, the default value for <code>noarch</code> is <cod
 <li><strong>Default</strong>: <code>[]</code></li>
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific globs completely replace base globs</li>
 </ul>
-<p>Extra arguments to pass to <code>pip</code>.
+<p>Extra arguments to pass to the selected installer (<code>uv</code> by default, or <code>pip</code> if selected).
 A use-case could be <a href="https://pip.pypa.io/en/stable/cli/pip_install/#cmdoption-C"><code>pip</code>'s <code>--config-settings</code> parameter</a>.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[package.build.config]</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-Cbuilddir=mybuilddir&quot;</span><span class="p">]</span>
@@ -4823,7 +4823,7 @@ At the moment, only <code>platform_system</code>, <code>os_name</code>, <code>pl
 <h2 id="build-process">Build Process<a class="headerlink" href="#build-process" title="Permanent link">#</a></h2>
 <p>The Python backend follows this build process:</p>
 <ol>
-<li><strong>Installer Detection</strong>: Automatically chooses between <code>uv</code> and <code>pip</code> based on available dependencies</li>
+<li><strong>Installer Detection</strong>: Uses <code>uv</code> by default and selects <code>pip</code> only when it is explicitly present in the dependencies (and <code>uv</code> is not)</li>
 <li><strong>Environment Setup</strong>: Configures Python environment variables for the build</li>
 <li><strong>Package Installation</strong>: Executes the selected installer with the following options:<ul>
 <li><code>--no-deps</code>: Don't install dependencies (handled by conda)</li>
@@ -4836,12 +4836,13 @@ At the moment, only <code>platform_system</code>, <code>os_name</code>, <code>pl
 <h2 id="installer-selection">Installer Selection<a class="headerlink" href="#installer-selection" title="Permanent link">#</a></h2>
 <p>The backend automatically detects which Python installer to use:</p>
 <ul>
-<li><strong>uv</strong>: Used if <code>uv</code> is present in the build or host dependencies</li>
-<li><strong>pip</strong>: Used as the default fallback installer</li>
+<li><strong>uv</strong>: Used by default. Also used when both <code>uv</code> and <code>pip</code> are present in the build or host dependencies.</li>
+<li><strong>pip</strong>: Used only when <code>pip</code> is present in the build or host dependencies and <code>uv</code> is not.</li>
 </ul>
-<p>To use <code>uv</code> for faster installations, add it to your dependencies:</p>
+<p><code>uv</code> is auto-added to host dependencies when neither <code>pip</code> nor <code>uv</code> is specified.
+To explicitly opt into <code>pip</code>, add it to your dependencies:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[package.host-dependencies]</span>
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">uv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">pip</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span></code></pre></div>
 <h1 id="editable-installations">Editable Installations<a class="headerlink" href="#editable-installations" title="Permanent link">#</a></h1>
 <p>Until profiles are implemented, editable installations are not easily configurable.
