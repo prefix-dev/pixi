@@ -175,19 +175,29 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     let mut dirs = vec![];
 
     if args.pypi {
-        dirs.push(cache_dir.join(consts::PYPI_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::PypiWheels,
+        )?);
     }
     if args.conda {
-        dirs.push(cache_dir.join(consts::CONDA_PACKAGE_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::CondaPackages,
+        )?);
     }
     if args.repodata {
-        dirs.push(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::Repodata,
+        )?);
     }
     if args.mapping {
-        dirs.push(cache_dir.join(consts::CONDA_PYPI_MAPPING_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::PypiMapping,
+        )?);
     }
     if args.exec {
-        dirs.push(cache_dir.join(consts::CACHED_ENVS_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::ExecEnvironments,
+        )?);
     }
     if args.build_backends {
         let cache_dirs = CacheDirs::new(
@@ -196,7 +206,9 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
                 .into_assume_dir(),
         );
         dirs.push(cache_dirs.build_backends().into());
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_TOOL_ENVS_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::BuildToolEnvironments,
+        )?);
         // TODO: Let's clean deprecated cache directory.
         // This will be removed in a future release.
         dirs.push(cache_dir.join(consts::_CACHED_BUILD_ENVS_DIR));

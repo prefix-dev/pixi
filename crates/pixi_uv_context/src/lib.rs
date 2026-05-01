@@ -3,8 +3,7 @@ use std::time::Duration;
 
 use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};
-use pixi_config::{self, Config, get_cache_dir};
-use pixi_consts::consts;
+use pixi_config::{self, CacheKind, Config};
 use pixi_utils::reqwest::{
     LazyReqwestClient, should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares,
 };
@@ -154,7 +153,7 @@ fn build_concurrency(config: &Config) -> Concurrency {
 
 impl UvResolutionContext {
     pub fn from_config(config: &Config, client: LazyReqwestClient) -> miette::Result<Self> {
-        let uv_cache = get_cache_dir()?.join(consts::PYPI_CACHE_DIR);
+        let uv_cache = config.cache_dir_for(CacheKind::PypiWheels)?;
         if !uv_cache.exists() {
             create_dir_all(&uv_cache)
                 .into_diagnostic()

@@ -121,7 +121,18 @@ impl<'p> Environment<'p> {
         self.best_platform_with_current(Platform::current())
     }
 
+    /// If the PIXI_OVERRIDE_PLATFORM environment variable is set to a valid
+    /// platform string, that platform is used instead.
     fn best_platform_with_current(&self, current: Platform) -> Platform {
+        let current = std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
+            .map(|val| {
+                val.parse::<Platform>().unwrap_or_else(|_| {
+                    tracing::warn!("Invalid value for PIXI_OVERRIDE_PLATFORM='{val}', ignoring.");
+                    current
+                })
+            })
+            .unwrap_or(current);
+
         // If the current platform is supported, return it.
         if self.platforms().contains(&current) {
             return current;
@@ -164,6 +175,10 @@ impl<'p> Environment<'p> {
     /// installed or activated — not during lock file solving, which is
     /// cross-platform and does not use emulation.
     pub fn emit_emulation_warning(&self) {
+        if std::env::var(consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+            return;
+        }
+
         let current = Platform::current();
         let best = self.best_platform();
         if current == best {
@@ -1357,5 +1372,62 @@ mod tests {
                 "Channel priorities were expected to be compatible"
             );
         }
+    }
+
+    struct EnvVarGuard;
+
+    // prevents race conditions on the env variable PIXI_OVERRIDE_PLATFORM
+    static ENV_VAR_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            unsafe {
+                std::env::remove_var(consts::PIXI_OVERRIDE_PLATFORM);
+            }
+        }
+    }
+
+    #[test]
+    fn test_best_platform_override_env_var() {
+        let _lock = ENV_VAR_MUTEX.lock().unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let contents = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#;
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+        unsafe {
+            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "linux-aarch64");
+        }
+        let _guard = EnvVarGuard;
+
+        let env = workspace.default_environment();
+        let result = env.best_platform();
+        assert_eq!(result, Platform::LinuxAarch64);
+    }
+
+    #[test]
+    fn test_best_platform_override_invalid_value() {
+        let _lock = ENV_VAR_MUTEX.lock().unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let contents = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#;
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+        unsafe {
+            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "not-a-platform");
+        }
+        let _guard = EnvVarGuard;
+
+        let env = workspace.default_environment();
+        let result = env.best_platform();
+        assert_eq!(result, Platform::current());
     }
 }

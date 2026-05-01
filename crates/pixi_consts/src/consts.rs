@@ -66,6 +66,8 @@ pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
     Some(dir) => dir,
     None => ".pixi",
 };
+/// Environment variable to override the detected platform.
+pub const PIXI_OVERRIDE_PLATFORM: &str = "PIXI_OVERRIDE_PLATFORM";
 /// The default manifest name for the global manifest file in the pixi config directory.
 pub const GLOBAL_MANIFEST_DEFAULT_NAME: &str =
     match option_env!("PIXI_GLOBAL_MANIFEST_DEFAULT_NAME") {

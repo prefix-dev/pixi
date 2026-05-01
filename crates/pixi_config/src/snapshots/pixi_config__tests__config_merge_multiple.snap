@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_config/src/lib.rs
+assertion_line: 2831
 expression: debug
 ---
 Config {
@@ -149,6 +150,17 @@ Config {
         ),
     },
     tool_platform: None,
+    cache: CacheConfig {
+        root: None,
+        conda_packages: None,
+        repodata: None,
+        pypi_wheels: None,
+        pypi_mapping: None,
+        exec_environments: None,
+        build_tool_environments: None,
+        detached_environments: None,
+        netfs_redirect: Auto,
+    },
     change_ps1: None,
     force_activate: None,
 }

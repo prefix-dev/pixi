@@ -1146,8 +1146,13 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
 
+    // Only pin the uv wheel cache — conda packages and repodata can be reused
+    // from prior runs, which keeps the test fast.
     temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        [(
+            "PIXI_CACHE_PYPI_WHEELS_DIR",
+            Some(tmp_dir_path.to_str().unwrap()),
+        )],
         async {
             pixi.install().await.unwrap();
         },

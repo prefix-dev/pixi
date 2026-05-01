@@ -1,0 +1,22 @@
+[package]
+authors = ["Bas Zalmstra <bas@prefix.dev>"]
+description = "Python bindings for particle_cpp emitters and modifiers"
+name = "particle_cpp_py"
+version = "0.1.0"
+
+[package.build.backend]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pixi-build-cmake"
+version = "0.3.*"
+
+[package.host-dependencies]
+python = ">=3.11"
+pybind11 = ">=2.13"
+particle_core = { path = "../particle_core" }
+particle_cpp = { path = "../particle_cpp" }
+
+[package.run-dependencies]
+# TODO: drop once pixi-build emits run-exports for source packages; for now we
+# have to repeat the host-deps so consumers pick up the runtime libraries.
+particle_core = { path = "../particle_core" }
+particle_cpp = { path = "../particle_cpp" }
