@@ -172,6 +172,10 @@ pub struct TomlProject {
     /// Specifies which fields listed by PEP 621 were intentionally unspecified
     /// so another tool can/will provide such metadata dynamically.
     pub dynamic: Option<Vec<Spanned<String>>>,
+    /// PEP 794: import names this project provides exclusively.
+    pub import_names: Option<Vec<Spanned<String>>>,
+    /// PEP 794: namespace import names this project contributes to.
+    pub import_namespaces: Option<Vec<Spanned<String>>>,
 }
 
 impl TomlProject {
@@ -282,6 +286,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlProject {
             )
             .map(TomlWith::into_inner);
         let dynamic = th.optional("dynamic");
+        let import_names = th.optional("import-names");
+        let import_namespaces = th.optional("import-namespaces");
 
         th.finalize(None)?;
 
@@ -304,6 +310,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlProject {
             dependencies,
             optional_dependencies,
             dynamic,
+            import_names,
+            import_namespaces,
         })
     }
 }
@@ -540,5 +548,44 @@ impl<'de> Deserialize<'de> for Tool {
         th.finalize(Some(value))?;
 
         Ok(Self { poetry, pixi })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::toml::FromTomlStr;
+
+    #[test]
+    fn pep_794_import_name_metadata_is_accepted() {
+        let input = r#"
+[project]
+name = "azure-mgmt-search"
+version = "9.1.0"
+import-names = ["azure.mgmt.search"]
+import-namespaces = ["azure", "azure.mgmt"]
+"#;
+        let parsed = PyProjectToml::from_toml_str(input).unwrap();
+        let project = parsed.project.expect("project table is present");
+        assert_eq!(project.name.as_ref(), "azure-mgmt-search");
+
+        let import_names = project
+            .import_names
+            .expect("import-names should be parsed")
+            .into_iter()
+            .map(Spanned::take)
+            .collect::<Vec<_>>();
+        assert_eq!(import_names, vec!["azure.mgmt.search".to_string()]);
+
+        let import_namespaces = project
+            .import_namespaces
+            .expect("import-namespaces should be parsed")
+            .into_iter()
+            .map(Spanned::take)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            import_namespaces,
+            vec!["azure".to_string(), "azure.mgmt".to_string()]
+        );
     }
 }
