@@ -41,8 +41,7 @@
 mod backend_source_build;
 pub mod build;
 mod build_backend_metadata;
-mod cache;
-mod cache_dirs;
+pub mod cache;
 mod command_dispatcher;
 pub mod compute_data;
 mod dev_source_metadata;
@@ -79,11 +78,10 @@ pub use build_backend_metadata::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataInner,
     BuildBackendMetadataKey, BuildBackendMetadataSpec,
 };
-pub use cache::build_backend_metadata::{
-    BuildBackendMetadataCache, BuildBackendMetadataCacheEntry,
+pub use cache::{
+    BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, CacheDirs, CacheEntry,
+    CacheRevision, MetadataCache,
 };
-pub use cache::common::{CacheEntry, CacheRevision, MetadataCache};
-pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
     CommandDispatcherErrorResultExt, ComputeResultExt, ReporterContextSpawnHook,

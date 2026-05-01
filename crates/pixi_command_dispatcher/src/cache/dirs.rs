@@ -1,6 +1,12 @@
-use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
+//! [`CacheDirs`]: a typed bag of on-disk cache roots used across the
+//! dispatcher (build backend envs, package cache, git/url checkouts,
+//! source-build artifacts and workspaces, etc.). Each path either falls
+//! back to a `<root>/<name>` default or is overridden by the caller.
+
 use pixi_consts::consts;
 use pixi_path::{AbsPresumedDirPath, AbsPresumedDirPathBuf};
+
+use super::backend_metadata::BuildBackendMetadataCache;
 
 #[derive(Clone)]
 pub struct CacheDirs {
@@ -168,7 +174,7 @@ impl CacheDirs {
     /// Returns the root for content-addressed source-build artifacts.
     ///
     /// Layout: `<workspace or root>/artifacts-v0/<pkg>/<cache_key>/`
-    /// (managed by `keys::source_build::cache::ArtifactCache`).
+    /// (managed by [`crate::cache::artifact::ArtifactCache`]).
     ///
     /// Rooted directly on the workspace (not under the `build/` dir)
     /// so Windows paths stay short.
@@ -184,7 +190,7 @@ impl CacheDirs {
     /// incremental state).
     ///
     /// Layout: `<workspace or root>/bld/<pkg>/<workspace_key>/`
-    /// (managed by `keys::source_build::workspace::WorkspaceCache`).
+    /// (managed by [`crate::cache::workspace::WorkspaceCache`]).
     ///
     /// Rooted directly on the workspace (not under `build/`) and named
     /// tersely so the deep nested backend directories fit under

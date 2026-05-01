@@ -19,7 +19,9 @@ use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
 
 use crate::{
-    CacheDirs, cache::build_backend_metadata::BuildBackendMetadataCache, reporter::Reporter,
+    CacheDirs,
+    cache::BuildBackendMetadataCache,
+    reporter::Reporter,
 };
 
 /// Access the conda repodata gateway from global data.
