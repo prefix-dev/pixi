@@ -469,9 +469,8 @@ async fn fetch_matching_output(
             .collect()
     });
 
-    // The backend streams log lines; we drop them here (no reporter is
-    // attached to this Key path yet). Follow-up: wire a SourceBuild
-    // reporter lifecycle mirroring the legacy flow.
+    // The backend streams log lines; we drop them here (no SourceBuild
+    // reporter lifecycle is wired up yet).
     let (mut log_sink, _log_rx) = unbounded::<String>();
     let outputs = backend
         .lock()
@@ -600,8 +599,7 @@ async fn install_prefix(
 }
 
 /// Read index.json out of the freshly-built `.conda` and synthesize a
-/// `RepoDataRecord` for it. Mirrors the legacy construction in
-/// `SourceBuildSpec::build`.
+/// `RepoDataRecord` for it.
 async fn synthesize_repodata(
     output_file: &std::path::Path,
 ) -> Result<RepoDataRecord, SourceBuildError> {
@@ -659,9 +657,8 @@ fn map_cache_err(err: self::cache::ArtifactCacheError) -> SourceBuildError {
     }
 }
 
-/// Mirror of the legacy `Directories` helper: build/host prefixes sit
-/// under the workspace dir with platform-specific padding for non-Windows
-/// hosts.
+/// Build/host prefixes for a source build: both sit under the workspace
+/// dir, with platform-specific padding for non-Windows hosts.
 struct Directories {
     build_prefix: PathBuf,
     host_prefix: PathBuf,

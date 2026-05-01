@@ -408,12 +408,9 @@ pub enum SolveCondaEnvironmentError {
     #[error(transparent)]
     SpecConversionError(#[from] pixi_spec::SpecConversionError),
 
-    /// Used by the compute-engine path
-    /// ([`crate::keys::SolveCondaKey`]) where the binary repodata
-    /// fetch is done inside the key's compute body. The legacy
-    /// `SolveCondaEnvironmentSpec::solve` receives repodata
-    /// pre-fetched by its caller, so this variant is not produced on
-    /// the legacy path.
+    /// Surfaced when the binary repodata fetch performed inside
+    /// [`SolveCondaKey`](crate::keys::SolveCondaKey)'s compute body
+    /// fails.
     #[error(transparent)]
     Gateway(#[from] rattler_repodata_gateway::GatewayError),
 }
