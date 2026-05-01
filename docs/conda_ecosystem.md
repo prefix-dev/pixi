@@ -73,10 +73,19 @@ packages or data-only packages with no compiled code.
 
 In a Pixi workspace you declare which platforms you support:
 
-```toml title="pixi.toml"
-[workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace]
+    platforms = ["linux-64", "osx-arm64", "win-64"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    platforms = ["linux-64", "osx-arm64", "win-64"]
+    ```
 
 Pixi solves dependencies for each listed platform and records the
 result in the lock file, even for platforms you're not currently
@@ -145,6 +154,7 @@ Pixi detects your system's virtual packages automatically. You
 can also declare them explicitly in your workspace — for example, to
 tell the solver that your deployment target has CUDA 12:
 
+<!-- no-pyproject -->
 ```toml title="pixi.toml"
 [system-requirements]
 cuda = "12"
@@ -237,3 +247,5 @@ can build, test, and publish packages from within a Pixi workspace.
 
 For a deeper comparison of the conda and PyPI ecosystems and how Pixi
 bridges them, see [Conda & PyPI](concepts/conda_pypi.md).
+
+

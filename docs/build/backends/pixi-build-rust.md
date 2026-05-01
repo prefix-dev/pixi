@@ -6,10 +6,19 @@ The `pixi-build-rust` backend is designed for building Rust projects using [Carg
     `pixi-build` is a preview feature, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
-    ```toml
-    [workspace]
-    preview = ["pixi-build"]
-    ```
+    === "pixi.toml"
+
+        ```toml
+            [workspace]
+            preview = ["pixi-build"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+            [tool.pixi.workspace]
+            preview = ["pixi-build"]
+        ```
 
 
 ## Overview
@@ -26,6 +35,7 @@ This backend automatically generates conda packages from Rust projects by:
 
 To use the Rust backend in your `pixi.toml`, add it to your package's build configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package]
 name = "rust_package"
@@ -51,6 +61,7 @@ This includes:
 
 For example, if your `Cargo.toml` contains:
 
+<!-- no-pyproject -->
 ```toml
 [package]
 name = "my-rust-tool"
@@ -63,6 +74,7 @@ repository = "https://github.com/user/my-rust-tool"
 
 You can create a minimal `pixi.toml`:
 
+<!-- no-pyproject -->
 ```toml
 [package.build]
 backend = { name = "pixi-build-rust", version = "*" }
@@ -85,6 +97,7 @@ The backend automatically includes the following build tools:
 
 You can add these to your [`build-dependencies`](https://pixi.sh/latest/build/dependency_types/) if you need specific versions:
 
+<!-- no-pyproject -->
 ```toml
 [package.build-dependencies]
 rust = "1.70"
@@ -102,6 +115,7 @@ You can customize the Rust backend behavior using the `[package.build.config]` s
 
 Additional command-line arguments to pass to the `cargo install` command. These arguments are appended to the cargo command that builds and installs your project.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-args = [
@@ -112,6 +126,7 @@ extra-args = [
 
 For target-specific configuration, platform arguments completely replace the base configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-args = ["--release"]
@@ -129,6 +144,7 @@ extra-args = ["--features", "linux-specific", "--target", "x86_64-unknown-linux-
 
 Environment variables to set during the build process. These variables are available during compilation.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { RUST_LOG = "debug", CARGO_PROFILE_RELEASE_LTO = "true" }
@@ -136,6 +152,7 @@ env = { RUST_LOG = "debug", CARGO_PROFILE_RELEASE_LTO = "true" }
 
 For target-specific configuration, platform environment variables are merged with base variables:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { RUST_LOG = "info", COMMON_VAR = "base" }
@@ -157,6 +174,7 @@ The backend always writes JSON-RPC request/response logs and the generated inter
 
 Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include Rust source files (`**/*.rs`), Cargo configuration files (`Cargo.toml`, `Cargo.lock`), build scripts (`build.rs`), and other build-related files.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-input-globs = [
@@ -168,6 +186,7 @@ extra-input-globs = [
 
 For target-specific configuration, platform-specific globs completely replace the base:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 extra-input-globs = ["*.txt"]
@@ -186,6 +205,7 @@ extra-input-globs = ["*.txt", "*.so", "linux-configs/**/*"]
 When set to `true`, disables automatic metadata extraction from `Cargo.toml`.
 The backend will only use metadata explicitly defined in your `pixi.toml` file, ignoring any information from the Cargo manifest.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 ignore-cargo-manifest = true
@@ -199,6 +219,7 @@ This is useful when:
 
 For target-specific configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 ignore-cargo-manifest = false
@@ -216,6 +237,7 @@ ignore-cargo-manifest = true
 
 List of compilers to use for the build. The backend automatically generates appropriate compiler dependencies using conda-forge's compiler infrastructure.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 compilers = ["rust", "c", "cxx"]
@@ -223,6 +245,7 @@ compilers = ["rust", "c", "cxx"]
 
 For target-specific configuration, platform compilers completely replace the base configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 compilers = ["rust", "c"]
@@ -244,6 +267,7 @@ compilers = ["rust", "c", "cxx"]
 List of specific cargo binaries to install. Each entry is passed to `cargo install` as `--bin <name>`.
 If the list is empty, Cargo's default behavior is used (all binaries defined by the crate are installed).
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 binaries = ["rattler-build"]
@@ -251,6 +275,7 @@ binaries = ["rattler-build"]
 
 For target-specific configuration, platform-specific binaries override the base configuration:
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 binaries = ["my-cli", "my-helper"]
@@ -291,11 +316,21 @@ The `vs2022` compiler is more widely supported on modern GitHub runners and buil
 
 You can override these defaults by explicitly setting variants using [`[workspace.build-variants]`](https://pixi.sh/latest/reference/pixi_manifest/#build-variants-optional) in your `pixi.toml`:
 
-```toml
-[workspace.build-variants]
-c_compiler = ["vs2019"]
-cxx_compiler = ["vs2019"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace.build-variants]
+    c_compiler = ["vs2019"]
+    cxx_compiler = ["vs2019"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace.build-variants]
+    c_compiler = ["vs2019"]
+    cxx_compiler = ["vs2019"]
+    ```
 
 ## Limitations
 
@@ -308,3 +343,5 @@ cxx_compiler = ["vs2019"]
 - [Cargo Documentation](https://doc.rust-lang.org/cargo/) - Official Cargo documentation
 - [The Rust Programming Language](https://doc.rust-lang.org/book/) - Official Rust book
 - [sccache](https://github.com/mozilla/sccache) - Shared compilation cache for Rust
+
+

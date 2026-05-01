@@ -91,13 +91,25 @@ When we run `echo $HELLO_WORLD`, it will output:
 Hello world!
 ```
 
-```toml title="pixi.toml"
-[tasks.hello]
-cmd = "echo $HELLO_WORLD"
-env = { HELLO_WORLD = "Hello world!" }
-[activation.env]
-HELLO_WORLD = "Activate!"
-```
+=== "pixi.toml"
+
+    ```toml
+    [tasks.hello]
+    cmd = "echo $HELLO_WORLD"
+    env = { HELLO_WORLD = "Hello world!" }
+    [activation.env]
+    HELLO_WORLD = "Activate!"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.tasks.hello]
+    cmd = "echo $HELLO_WORLD"
+    env = { HELLO_WORLD = "Hello world!" }
+    [tool.pixi.activation.env]
+    HELLO_WORLD = "Activate!"
+    ```
 
 ##### Example 2: `activation.env` > `activation.scripts`
 
@@ -107,13 +119,25 @@ When we run `echo Debug mode: $DEBUG_MODE`, it will output:
 Debug mode: enabled
 ```
 
-```toml title="pixi.toml"
-[activation.env]
-DEBUG_MODE = "enabled"
+=== "pixi.toml"
 
-[activation]
-scripts = ["setup.sh"]
-```
+    ```toml
+    [activation.env]
+    DEBUG_MODE = "enabled"
+    
+    [activation]
+    scripts = ["setup.sh"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.activation.env]
+    DEBUG_MODE = "enabled"
+    
+    [tool.pixi.activation]
+    scripts = ["setup.sh"]
+    ```
 
 ```bash title="setup.sh"
 export DEBUG_MODE="disabled"
@@ -127,13 +151,25 @@ When we run `echo Library path: $LIB_PATH`, it will output:
 Library path: /my/lib
 ```
 
-```toml title="pixi.toml"
-[activation]
-scripts = ["local_setup.sh"]
+=== "pixi.toml"
 
-[dependencies]
-my-package = "*"  # This package has its own activation scripts that set LIB_PATH="/dep/lib"
-```
+    ```toml
+    [activation]
+    scripts = ["local_setup.sh"]
+    
+    [dependencies]
+    my-package = "*"  # This package has its own activation scripts that set LIB_PATH="/dep/lib"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.activation]
+    scripts = ["local_setup.sh"]
+    
+    [tool.pixi.dependencies]
+    my-package = "*"  # This package has its own activation scripts that set LIB_PATH="/dep/lib"
+    ```
 ```bash title="local_setup.sh"
 export LIB_PATH="/my/lib"
 ```
@@ -149,27 +185,53 @@ Python path: /pixi/python
 # Outside environment
 export PYTHON_PATH="/system/python"
 ```
-```toml title="pixi.toml"
-[dependencies]
-python-utils = "*"  # This package sets PYTHON_PATH="/pixi/python" in its activation scripts
-```
+=== "pixi.toml"
+
+    ```toml
+    [dependencies]
+    python-utils = "*"  # This package sets PYTHON_PATH="/pixi/python" in its activation scripts
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies]
+    python-utils = "*"  # This package sets PYTHON_PATH="/pixi/python" in its activation scripts
+    ```
 
 ##### Example 5: Complex Example - All priorities combined
 In `pixi.toml`, we define the same variable `APP_CONFIG` across multiple levels:
-```toml title="pixi.toml"
-[tasks.start]
-cmd = "echo Config: $APP_CONFIG"
-env = { APP_CONFIG = "task-specific" }
+=== "pixi.toml"
+    ```toml
+    [tasks.start]
+    cmd = "echo Config: $APP_CONFIG"
+    env = { APP_CONFIG = "task-specific" }
 
-[activation.env]
-APP_CONFIG = "activation-env"
+    [activation.env]
+    APP_CONFIG = "activation-env"
 
-[activation]
-scripts = ["app_setup.sh"]
+    [activation]
+    scripts = ["app_setup.sh"]
 
-[dependencies]
-config-loader = "*"  # Sets APP_CONFIG="dependency-config"
-```
+    [dependencies]
+    config-loader = "*"  # Sets APP_CONFIG="dependency-config"
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.tasks.start]
+    cmd = "echo Config: $APP_CONFIG"
+    env = { APP_CONFIG = "task-specific" }
+
+    [tool.pixi.activation.env]
+    APP_CONFIG = "activation-env"
+
+    [tool.pixi.activation]
+    scripts = ["app_setup.sh"]
+
+    [tool.pixi.dependencies]
+    config-loader = "*"  # Sets APP_CONFIG="dependency-config"
+    ```
 ```bash title="app_setup.sh"
 export APP_CONFIG="activation-script"
 ```
@@ -183,3 +245,4 @@ Since `task.env` has the highest priority, when we run `pixi run start` it will 
 ```
 Config: task-specific
 ```
+

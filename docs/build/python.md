@@ -86,9 +86,17 @@ We pass `--format pixi` in order to communicate to pixi, that we want a `pixi.to
 
 This is the content of the `pixi.toml`:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/python/pixi.toml"
-```
+=== "pixi.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pixi_workspaces/pixi_build/python/pixi.toml"
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    --8<-- "docs/source_files/pyproject_tomls/python_pixi.toml"
+    ```
 
 1. In `workspace` information is set that is shared across all packages in the workspace.
 2. In `dependencies` you specify all of your Pixi packages. Here, this includes only our own package that is defined further below under `package`
@@ -120,3 +128,4 @@ In another tutorial we will learn how to add multiple Pixi packages to the same 
 Thanks for reading! Happy Coding 🚀
 
 Any questions? Feel free to reach out or share this tutorial on [X](https://twitter.com/prefix_dev), [join our Discord](https://discord.gg/kKV8ZxyzY4), send us an [e-mail](mailto:hi@prefix.dev) or follow our [GitHub](https://github.com/prefix-dev).
+

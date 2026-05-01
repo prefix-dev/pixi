@@ -32,19 +32,37 @@ into our workspace. By default, since our `environment.yml` has a `name` field, 
 of the same name (or uses the feature of that name if it already exists), and creates an `environment`
 containing that feature (with [`no-default-feature`](https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table) set):
 
-```toml title="pixi.toml"
-[feature.simple-env]
-channels = ["conda-forge"]
+=== "pixi.toml"
 
-[feature.simple-env.dependencies]
-python = "*"
+    ```toml
+    [feature.simple-env]
+    channels = ["conda-forge"]
+    
+    [feature.simple-env.dependencies]
+    python = "*"
+    
+    [feature.simple-env.pypi-dependencies]
+    httpx = "*"
+    
+    [environments]
+    simple-env = { features = ["simple-env"], no-default-feature = true }
+    ```
 
-[feature.simple-env.pypi-dependencies]
-httpx = "*"
+=== "pyproject.toml"
 
-[environments]
-simple-env = { features = ["simple-env"], no-default-feature = true }
-```
+    ```toml
+    [tool.pixi.feature.simple-env]
+    channels = ["conda-forge"]
+    
+    [tool.pixi.feature.simple-env.dependencies]
+    python = "*"
+    
+    [tool.pixi.feature.simple-env.pypi-dependencies]
+    httpx = "*"
+    
+    [tool.pixi.environments]
+    simple-env = { features = ["simple-env"], no-default-feature = true }
+    ```
 
 It is then possible to define tasks for the imported environment, run commands in that
 environment, and launch a [`pixi shell`](https://pixi.sh/latest/reference/cli/pixi/shell)
@@ -65,44 +83,87 @@ Running `pixi import --format=conda-env --feature=numpy --environment=simple-env
 the environment into a new feature called "numpy", and include that feature in the existing
 `simple-env` environment (effectively merging the environments from our two input files):
 
-```toml title="pixi.toml"
-[feature.simple-env]
-channels = ["conda-forge"]
+=== "pixi.toml"
 
-[feature.simple-env.dependencies]
-python = "*"
+    ```toml
+    [feature.simple-env]
+    channels = ["conda-forge"]
+    
+    [feature.simple-env.dependencies]
+    python = "*"
+    
+    [feature.simple-env.pypi-dependencies]
+    httpx = "*"
+    
+    [feature.numpy]
+    channels = ["conda-forge"]
+    
+    [feature.numpy.dependencies]
+    numpy = "*"
+    
+    [environments]
+    simple-env = { features = ["simple-env", "numpy"], no-default-feature = true }
+    ```
 
-[feature.simple-env.pypi-dependencies]
-httpx = "*"
+=== "pyproject.toml"
 
-[feature.numpy]
-channels = ["conda-forge"]
-
-[feature.numpy.dependencies]
-numpy = "*"
-
-[environments]
-simple-env = { features = ["simple-env", "numpy"], no-default-feature = true }
-```
+    ```toml
+    [tool.pixi.feature.simple-env]
+    channels = ["conda-forge"]
+    
+    [tool.pixi.feature.simple-env.dependencies]
+    python = "*"
+    
+    [tool.pixi.feature.simple-env.pypi-dependencies]
+    httpx = "*"
+    
+    [tool.pixi.feature.numpy]
+    channels = ["conda-forge"]
+    
+    [tool.pixi.feature.numpy.dependencies]
+    numpy = "*"
+    
+    [tool.pixi.environments]
+    simple-env = { features = ["simple-env", "numpy"], no-default-feature = true }
+    ```
 
 It is also possible to specify platforms for the feature via the `--platform` argument. For example,
 `pixi import --format=conda-env --feature=unix --platform=linux-64 --platform=osx-arm64 environment.yml`
 adds the following to our workspace manifest:
 
-```toml title="pixi.toml"
-[feature.unix]
-platforms = ["linux-64", "osx-arm64"]
-channels = ["conda-forge"]
+=== "pixi.toml"
 
-[feature.unix.target.linux-64.dependencies]
-python = "*"
+    ```toml
+    [feature.unix]
+    platforms = ["linux-64", "osx-arm64"]
+    channels = ["conda-forge"]
+    
+    [feature.unix.target.linux-64.dependencies]
+    python = "*"
+    
+    [feature.unix.target.osx-arm64.dependencies]
+    python = "*"
+    
+    [environments]
+    unix = { features = ["unix"], no-default-feature = true }
+    ```
 
-[feature.unix.target.osx-arm64.dependencies]
-python = "*"
+=== "pyproject.toml"
 
-[environments]
-unix = { features = ["unix"], no-default-feature = true }
-```
+    ```toml
+    [tool.pixi.feature.unix]
+    platforms = ["linux-64", "osx-arm64"]
+    channels = ["conda-forge"]
+    
+    [tool.pixi.feature.unix.target.linux-64.dependencies]
+    python = "*"
+    
+    [tool.pixi.feature.unix.target.osx-arm64.dependencies]
+    python = "*"
+    
+    [tool.pixi.environments]
+    unix = { features = ["unix"], no-default-feature = true }
+    ```
 
 ### `pypi-txt` format
 
@@ -120,14 +181,27 @@ environment into our workspace. It is necessary to specify a `feature` or `envir
 name (or both) via the arguments of the same names. If only one of these names is provided, a matching
 name is used for the other field. Hence, the following lines are added to our workspace manifest:
 
-```toml title="pixi.toml"
-[feature.my-feature1.pypi-dependencies]
-cowpy = "*"
-array-api-extra = ">=0.8"
+=== "pixi.toml"
 
-[environments]
-my-feature1 = { features = ["my-feature1"], no-default-feature = true }
-```
+    ```toml
+    [feature.my-feature1.pypi-dependencies]
+    cowpy = "*"
+    array-api-extra = ">=0.8"
+    
+    [environments]
+    my-feature1 = { features = ["my-feature1"], no-default-feature = true }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.feature.my-feature1.pypi-dependencies]
+    cowpy = "*"
+    array-api-extra = ">=0.8"
+    
+    [tool.pixi.environments]
+    my-feature1 = { features = ["my-feature1"], no-default-feature = true }
+    ```
 
 Any dependencies listed in the file are added as [`pypi-dependencies`](https://pixi.sh/latest/reference/pixi_manifest/#pypi-dependencies).
 An environment will be created with [`no-default-feature`](https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table)
@@ -147,22 +221,45 @@ It is also possible to combine the steps of `pixi init` and `pixi import` into o
 `pixi init --import environment.yml` (using the same file from our example above) produces a manifest
 which looks like this:
 
-```toml title="pixi.toml"
-[workspace]
-authors = ["Lucas Colley <lucas.colley8@gmail.com>"]
-channels = ["conda-forge"]
-name = "simple-env"
-platforms = ["osx-arm64"]
-version = "0.1.0"
+=== "pixi.toml"
 
-[tasks]
+    ```toml
+    [workspace]
+    authors = ["Lucas Colley <lucas.colley8@gmail.com>"]
+    channels = ["conda-forge"]
+    name = "simple-env"
+    platforms = ["osx-arm64"]
+    version = "0.1.0"
+    
+    [tasks]
+    
+    [dependencies]
+    python = "*"
+    
+    [pypi-dependencies]
+    httpx = "*"
+    ```
 
-[dependencies]
-python = "*"
+=== "pyproject.toml"
 
-[pypi-dependencies]
-httpx = "*"
-```
+    ```toml
+    [project]
+    authors = ["Lucas Colley <lucas.colley8@gmail.com>"]
+    name = "simple-env"
+    version = "0.1.0"
+    
+    [tool.pixi.workspace]
+    channels = ["conda-forge"]
+    platforms = ["osx-arm64"]
+    
+    [tool.pixi.tasks]
+    
+    [tool.pixi.dependencies]
+    python = "*"
+    
+    [tool.pixi.pypi-dependencies]
+    httpx = "*"
+    ```
 
 Unlike `pixi import`, this by default uses the `default` feature and environment. Thus,
 it achieves a very similar workspace to that obtained by running `pixi init ` and `pixi import --feature=default environment.yml`.
@@ -178,3 +275,4 @@ For further details, please see the CLI reference documentation for [`pixi impor
 If there are any questions, or you know how to improve this tutorial, feel free to reach out to us on [GitHub](https://github.com/prefix-dev/pixi).
 
 At the time of writing, there are plans for many potential extensions to our import capabilities — you can follow along with that work at the `import` [roadmap issue on GitHub](https://github.com/prefix-dev/pixi/issues/4192).
+

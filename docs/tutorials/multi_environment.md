@@ -56,9 +56,14 @@ Here we will use the command line, and add a `pytest` dependency to the `test` f
 pixi add --feature test pytest
 ```
 This will add the following to our `pixi.toml` file:
-```toml
---8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-feat-dep"
-```
+=== "pixi.toml"
+	```toml
+	--8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-feat-dep"
+	```
+=== "pyproject.toml"
+	```toml
+	--8<-- "docs/source_files/pyproject_tomls/multi-environment-simple.toml:test-feat-dep"
+	```
 This table acts exactly the same as a normal `dependencies` table, but it is only used when the `test` feature is part of an environment.
 
 ### Adding an environment
@@ -69,9 +74,14 @@ Here we will use the command line:
 pixi workspace environment add test --feature test
 ```
 This will add the following to our `pixi.toml` file:
-```toml
---8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-env"
-```
+=== "pixi.toml"
+	```toml
+	--8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-env"
+	```
+=== "pyproject.toml"
+	```toml
+	--8<-- "docs/source_files/pyproject_tomls/multi-environment-simple.toml:test-env"
+	```
 
 ### Running a task
 We can now run a task in our new environment.
@@ -97,9 +107,14 @@ If you have special test commands that always fit with the test environment you 
 pixi task add test --feature test pytest
 ```
 This will add the following to our `pixi.toml` file:
-```toml
---8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-tasks"
-```
+=== "pixi.toml"
+	```toml
+	--8<-- "docs/source_files/pixi_tomls/multi-environment-simple.toml:test-tasks"
+	```
+=== "pyproject.toml"
+	```toml
+	--8<-- "docs/source_files/pyproject_tomls/multi-environment-simple.toml:test-tasks"
+	```
 Now you don't have to specify the environment when running the test command.
 ```shell
 pixi run test
@@ -134,9 +149,14 @@ pixi workspace environment add test-py312 --feature py312 --feature test
 ```
 
 This should result in adding the following to the `pixi.toml`:
-```toml
---8<-- "docs/source_files/pixi_tomls/multi-environment-py-envs.toml:py-envs"
-```
+=== "pixi.toml"
+	```toml
+	--8<-- "docs/source_files/pixi_tomls/multi-environment-py-envs.toml:py-envs"
+	```
+=== "pyproject.toml"
+	```toml
+	--8<-- "docs/source_files/pyproject_tomls/multi-environment-py-envs.toml:py-envs"
+	```
 
 Now we can run the test command in both environments.
 ```shell

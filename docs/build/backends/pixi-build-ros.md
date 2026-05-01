@@ -8,10 +8,19 @@ It provides seamless integration with Pixi's package management workflow while s
     `pixi-build` is a preview feature, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
-    ```toml
-    [workspace]
-    preview = ["pixi-build"]
-    ```
+    === "pixi.toml"
+
+        ```toml
+            [workspace]
+            preview = ["pixi-build"]
+        ```
+
+    === "pyproject.toml"
+
+        ```toml
+            [tool.pixi.workspace]
+            preview = ["pixi-build"]
+        ```
 
 ## Overview
 
@@ -27,6 +36,7 @@ This backend automatically generates conda packages from ROS projects by:
 
 To use the ROS backend in your `pixi.toml`, add it to your package's build configuration:
 
+<!-- no-pyproject -->
 ```toml
 [workspace]
 preview = ["pixi-build"]
@@ -63,12 +73,23 @@ pixi build
 
 When you want to install it into your environment, you can do so by adding the following to your workspace `pixi.toml`:
 
-```toml
-[dependencies]
-ros-jazzy-my-ros-package = { path = "." }
-# or if the package is in a separate pixi.toml
-# ros-jazzy-my-ros-package = { path = "src/my_ros_package" }
-```
+=== "pixi.toml"
+
+    ```toml
+    [dependencies]
+    ros-jazzy-my-ros-package = { path = "." }
+    # or if the package is in a separate pixi.toml
+    # ros-jazzy-my-ros-package = { path = "src/my_ros_package" }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.dependencies]
+    ros-jazzy-my-ros-package = { path = "." }
+    # or if the package is in a separate pixi.toml
+    # ros-jazzy-my-ros-package = { path = "src/my_ros_package" }
+    ```
 Note that you need to specify the `ros-jazzy-` prefix when you use a distro configuration.
 
 
@@ -96,6 +117,7 @@ This includes:
 
 It would be equivalent to the following `pixi.toml`:
 
+<!-- no-pyproject -->
 ```toml
 [package]
 name = "my_ros_package"
@@ -113,16 +135,31 @@ The fields in the `pixi.toml` will override the values from `package.xml` if the
 `pixi-build-ros` will automatically detect the ROS distro based on the `channels` in the workspace.
 If a `distro` is not specified in the `pixi.toml`, it will be automatically detected based on the `channels` in the workspace.
 
-```toml title="pixi.toml"
-[workspace]
-channels = ["conda-forge", "robostack-jazzy"]
+=== "pixi.toml"
 
+    ```toml
+    [workspace]
+    channels = ["conda-forge", "robostack-jazzy"]
+    
+    
+    [package.build.config]
+     # This would already be automatically detected by a function in the backend.
+     # Because it searches for `robostack-` and uses the first match, if it's not defined like this.
+    distro = "jazzy"
+    ```
 
-[package.build.config]
- # This would already be automatically detected by a function in the backend.
- # Because it searches for `robostack-` and uses the first match, if it's not defined like this.
-distro = "jazzy"
-```
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    channels = ["conda-forge", "robostack-jazzy"]
+    
+    
+    [tool.pixi.package.build.config]
+     # This would already be automatically detected by a function in the backend.
+     # Because it searches for `robostack-` and uses the first match, if it's not defined like this.
+    distro = "jazzy"
+    ```
 
 This is implemented to easily switch between distros over ros packages, by changing the `channel` used in the `workspace` section.
 
@@ -151,6 +188,7 @@ You can customize the ROS backend behavior using the `[package.build.config]` se
 The ROS distribution to build for. This affects dependency mapping and build configuration.
 If set the package name will be prefixed with `ros-<distro>-` automatically, otherwise the package name from `pixi.toml` or `package.xml` is used.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 distro = "jazzy"  # or "humble", "noetic", "iron", etc.
@@ -164,6 +202,7 @@ distro = "jazzy"  # or "humble", "noetic", "iron", etc.
 
 Environment variables to set during the build process. These variables are available during compilation.
 
+<!-- no-pyproject -->
 ```toml
 [package.build.config]
 env = { AMENT_CMAKE_ENVIRONMENT_HOOKS_ENABLED = "1" }
@@ -191,15 +230,29 @@ The backend always writes JSON-RPC request/response logs and the generated inter
 
 Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include ROS-specific files.
 
-```toml title="pixi.toml"
-[package.build.config]
-extra-input-globs = [
-    "launch/**/*.py",
-    "config/*.yaml",
-    "msgs/**/*.msg",
-    "srvs/**/*.srv"
-]
-```
+=== "pixi.toml"
+
+    ```toml
+    [package.build.config]
+    extra-input-globs = [
+        "launch/**/*.py",
+        "config/*.yaml",
+        "msgs/**/*.msg",
+        "srvs/**/*.srv"
+    ]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.package.build.config]
+    extra-input-globs = [
+        "launch/**/*.py",
+        "config/*.yaml",
+        "msgs/**/*.msg",
+        "srvs/**/*.srv"
+    ]
+    ```
 
 Default input globs include:
 - Source files: `**/*.{c,cpp,h,hpp,rs,sh,py,pyx}`
@@ -214,23 +267,45 @@ Default input globs include:
 Additional dependency mappings to apply to the dependency mapping process.
 These mappings are used to extend the usage of the dependencies in the `package.xml` file.
 
-```toml title="pixi.toml"
-[package.build.config]
-extra-package-mappings = [
-    {"ros-custom" = { ros =  ["ros-custom-msgs"] }},
-    "mapping.yml"
-]
-```
+=== "pixi.toml"
+
+    ```toml
+    [package.build.config]
+    extra-package-mappings = [
+        {"ros-custom" = { ros =  ["ros-custom-msgs"] }},
+        "mapping.yml"
+    ]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.package.build.config]
+    extra-package-mappings = [
+        {"ros-custom" = { ros =  ["ros-custom-msgs"] }},
+        "mapping.yml"
+    ]
+    ```
 
 Or using a toml array of tables:
 
-```toml title="pixi.toml"
-[[package.build.config.extra-package-mappings]]
-custom_msgs = { ros = ["custom-messages"] }
-```
+=== "pixi.toml"
+
+    ```toml
+    [[package.build.config.extra-package-mappings]]
+    custom_msgs = { ros = ["custom-messages"] }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.[package.build.config.extra-package-mappings]]
+    custom_msgs = { ros = ["custom-messages"] }
+    ```
 
 Or you can use a file directly in the list:
 
+<!-- no-pyproject -->
 ```toml title="pixi.toml"
 [package.build.config]
 extra-package-mappings = ["mapping.yml"]
@@ -260,11 +335,21 @@ The `vs2022` compiler is more widely supported on modern GitHub runners and buil
 
 You can override these defaults by explicitly setting variants using [`[workspace.build-variants]`](https://pixi.sh/latest/reference/pixi_manifest/#build-variants-optional) in your `pixi.toml`:
 
-```toml
-[workspace.build-variants]
-c_compiler = ["vs2019"]
-cxx_compiler = ["vs2019"]
-```
+=== "pixi.toml"
+
+    ```toml
+    [workspace.build-variants]
+    c_compiler = ["vs2019"]
+    cxx_compiler = ["vs2019"]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace.build-variants]
+    c_compiler = ["vs2019"]
+    cxx_compiler = ["vs2019"]
+    ```
 
 ## Build Process
 
@@ -316,3 +401,6 @@ For ROS1 packages using catkin build system:
 - [RoboStack](https://robostack.github.io/) - Conda packages for the Robot Operating System
 - [ament Build System](https://docs.ros.org/en/rolling/Concepts/Build-System-Development/ament.html) - ROS2 build system
 - [catkin Build System](http://wiki.ros.org/catkin) - ROS1 build system
+
+
+

@@ -64,14 +64,27 @@ Pixi global also allows you to install [Pixi packages](../build/getting_started.
 Let's assume there's a C++ package we'd like to install globally from source.
 First, it needs to have a package manifest:
 
-```toml title="pixi.toml"
-[package]
-name = "cpp_math"
-version = "0.1.0"
+=== "pixi.toml"
 
-[package.build]
-backend = { name = "pixi-build-cmake", version = "*" }
-```
+    ```toml
+    [package]
+    name = "cpp_math"
+    version = "0.1.0"
+    
+    [package.build]
+    backend = { name = "pixi-build-cmake", version = "*" }
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.package]
+    name = "cpp_math"
+    version = "0.1.0"
+    
+    [tool.pixi.package.build]
+    backend = { name = "pixi-build-cmake", version = "*" }
+    ```
 
 If the source is on your machine, you can install it like this:
 
@@ -270,3 +283,4 @@ build:
 ```
 
 After installing such a package with `pixi global install`, the exposed executable no longer sees `CONDA_PREFIX` and can fall back to its default behavior.
+

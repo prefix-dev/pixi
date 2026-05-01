@@ -73,14 +73,25 @@ This can be a predefined task or any normal executable.
 Tasks can have other tasks as dependencies.
 Here is an example of a more complex task use case
 
-```toml title="pixi.toml"
-[tasks]
-build = "make build"
-# using the toml table view
-[tasks.test]
-cmd = "pytest"
-depends-on = ["build"]
-```
+=== "pixi.toml"
+    ```toml
+    [tasks]
+    build = "make build"
+    # using the toml table view
+    [tasks.test]
+    cmd = "pytest"
+    depends-on = ["build"]
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.tasks]
+    build = "make build"
+    # using the toml table view
+    [tool.pixi.tasks.test]
+    cmd = "pytest"
+    depends-on = ["build"]
+    ```
 
 More information: [Tasks](./workspace/advanced_tasks.md)
 

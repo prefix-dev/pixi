@@ -146,6 +146,7 @@ dependencies = ["black", "flask[async]==3.1.0"]
 
 ??? note "Extras in `pixi.toml`"
     This tutorial focuses on the use of the `pyproject.toml`, but in case you're curious, the `pixi.toml` would contain the following entry after the installation of a PyPI package including an optional dependency:
+    <!-- no-pyproject -->
     ```toml
     [pypi-dependencies]
     flask = { version = "==3.1.0", extras = ["async"] }
@@ -475,3 +476,4 @@ Hopefully, this provides a flexible and powerful way to manage your Python proje
 Thanks for reading! Happy Coding 🚀
 
 Any questions? Feel free to reach out or share this tutorial on [X](https://twitter.com/prefix_dev), [join our Discord](https://discord.gg/kKV8ZxyzY4), send us an [e-mail](mailto:hi@prefix.dev) or follow our [GitHub](https://github.com/prefix-dev).
+

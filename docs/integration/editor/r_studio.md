@@ -19,24 +19,45 @@ To use the R packages installed by `pixi` in RStudio, you need to run `rstudio` 
 The full example can be found here: [RStudio example](https://github.com/prefix-dev/pixi/tree/main/examples/r).
 Here is an example of a `pixi.toml` file that sets up an RStudio task:
 
-```toml
-[workspace]
-name = "r"
-channels = ["conda-forge"]
-platforms = ["linux-64", "osx-64", "osx-arm64"]
+=== "pixi.toml"
+    ```toml
+    [workspace]
+    name = "r"
+    channels = ["conda-forge"]
+    platforms = ["linux-64", "osx-64", "osx-arm64"]
 
-[target.linux.tasks]
-rstudio = "rstudio"
+    [target.linux.tasks]
+    rstudio = "rstudio"
 
-[target.osx.tasks]
-rstudio = "open -a rstudio"
-# or alternatively with the full path:
-# rstudio = "/Applications/RStudio.app/Contents/MacOS/RStudio"
+    [target.osx.tasks]
+    rstudio = "open -a rstudio"
+    # or alternatively with the full path:
+    # rstudio = "/Applications/RStudio.app/Contents/MacOS/RStudio"
 
-[dependencies]
-r = ">=4.3,<5"
-r-ggplot2 = ">=3.5.0,<3.6"
-```
+    [dependencies]
+    r = ">=4.3,<5"
+    r-ggplot2 = ">=3.5.0,<3.6"
+    ```
+
+=== "pyproject.toml"
+    ```toml
+    [tool.pixi.workspace]
+    name = "r"
+    channels = ["conda-forge"]
+    platforms = ["linux-64", "osx-64", "osx-arm64"]
+
+    [tool.pixi.target.linux.tasks]
+    rstudio = "rstudio"
+
+    [tool.pixi.target.osx.tasks]
+    rstudio = "open -a rstudio"
+    # or alternatively with the full path:
+    # rstudio = "/Applications/RStudio.app/Contents/MacOS/RStudio"
+
+    [tool.pixi.dependencies]
+    r = ">=4.3,<5"
+    r-ggplot2 = ">=3.5.0,<3.6"
+    ```
 
 Once RStudio has loaded, you can execute the following R code that uses the `ggplot2` package:
 
