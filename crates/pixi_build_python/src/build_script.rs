@@ -5,6 +5,7 @@ use pixi_build_types::SourcePackageName;
 use serde::Serialize;
 
 const UV: &str = "uv";
+const PIP: &str = "pip";
 #[derive(Serialize)]
 pub struct BuildScriptContext {
     pub installer: Installer,
@@ -17,8 +18,8 @@ pub struct BuildScriptContext {
 #[derive(Default, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Installer {
-    Uv,
     #[default]
+    Uv,
     Pip,
 }
 
@@ -31,17 +32,27 @@ impl Installer {
     }
 
     /// Determine the installer from an iterator of dependency package names.
-    /// Checks if "uv" is present in the package names.
+    ///
+    /// `uv` is the default installer. `pip` is selected only when `pip` is
+    /// present in the dependencies and `uv` is not. If both are present, `uv`
+    /// wins.
     pub fn determine_installer_from_names<'a>(
-        mut package_names: impl Iterator<Item = &'a str>,
+        package_names: impl Iterator<Item = &'a str>,
     ) -> Installer {
-        // Check all dependency names for "uv" package
-        let has_uv = package_names.any(|name| name == UV);
+        let mut has_uv = false;
+        let mut has_pip = false;
+        for name in package_names {
+            if name == UV {
+                has_uv = true;
+            } else if name == PIP {
+                has_pip = true;
+            }
+        }
 
-        if has_uv {
-            Installer::Uv
-        } else {
+        if has_pip && !has_uv {
             Installer::Pip
+        } else {
+            Installer::Uv
         }
     }
 }
