@@ -3,13 +3,14 @@
 //! This module provides functionality to:
 //! 1. Read metadata from local pyproject.toml files
 //! 2. Compare locked metadata against current source tree metadata
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::str::FromStr;
 
+use indexmap::IndexMap;
 use pep440_rs::{Version, VersionSpecifiers};
-use pep508_rs::Requirement;
+use pep508_rs::{PackageName, Requirement};
 use pixi_install_pypi::LockedPypiRecord;
-use thiserror::Error;
+use uv_normalize::ExtraName;
 
 /// Metadata extracted from a local package source tree.
 #[derive(Debug, Clone)]
@@ -21,14 +22,6 @@ pub struct LocalPackageMetadata {
     pub requires_dist: Vec<Requirement>,
     /// The Python version requirement.
     pub requires_python: Option<VersionSpecifiers>,
-}
-
-/// Error that can occur when reading metadata from a source tree.
-#[derive(Debug, Error)]
-pub enum MetadataReadError {
-    /// Failed to parse the pyproject.toml file.
-    #[error("failed to parse pyproject.toml: {0}")]
-    ParseError(String),
 }
 
 /// The result of comparing locked metadata against current metadata.
@@ -131,44 +124,60 @@ fn normalize_requirement(req: &Requirement) -> String {
     req.to_string()
 }
 
-/// Convert UV metadata to LocalPackageMetadata for comparison.
-///
-/// This is used when we build metadata using UV's DistributionDatabase
-/// for packages with dynamic metadata.
-pub fn from_uv_metadata(
-    metadata: &uv_distribution::Metadata,
-) -> Result<LocalPackageMetadata, MetadataReadError> {
-    // Convert version
-    let version = pep440_rs::Version::from_str(&metadata.version.to_string())
-        .map_err(|e| MetadataReadError::ParseError(format!("invalid version: {e}")))?;
-
-    // Convert requires_dist
-    let requires_dist: Vec<Requirement> = metadata
-        .requires_dist
+/// Replace each `pkg[group]` self-reference with the raw entries of
+/// `optional_dependencies[group]`, carrying the outer marker. Matches
+/// what build backends bake into wheel METADATA; UV's static parse
+/// leaves the self-references intact. Cycles in the optional-deps
+/// graph are broken on the path that closes them.
+pub fn expand_self_extras(
+    requires_dist: Vec<Requirement>,
+    package_name: &PackageName,
+    optional_dependencies: &IndexMap<ExtraName, Vec<String>>,
+) -> Vec<Requirement> {
+    let parsed: HashMap<&str, Vec<Requirement>> = optional_dependencies
         .iter()
-        .map(|req| {
-            let req_str = req.to_string();
-            req_str
-                .parse::<Requirement>()
-                .map_err(|e| MetadataReadError::ParseError(format!("invalid requirement: {e}")))
+        .map(|(extra, raws)| {
+            let reqs = raws
+                .iter()
+                .filter_map(|s| Requirement::from_str(s).ok())
+                .collect::<Vec<_>>();
+            (extra.as_ref(), reqs)
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect();
 
-    // Convert requires_python
-    let requires_python = metadata
-        .requires_python
-        .as_ref()
-        .map(|rp| {
-            pep440_rs::VersionSpecifiers::from_str(&rp.to_string())
-                .map_err(|e| MetadataReadError::ParseError(format!("invalid requires-python: {e}")))
-        })
-        .transpose()?;
+    let mut result: Vec<Requirement> = Vec::new();
+    let mut path: HashSet<&str> = HashSet::new();
+    for req in &requires_dist {
+        expand_into(req, package_name, &parsed, &mut path, &mut result);
+    }
+    result
+}
 
-    Ok(LocalPackageMetadata {
-        version: Some(version),
-        requires_dist,
-        requires_python,
-    })
+fn expand_into<'a>(
+    req: &Requirement,
+    package_name: &PackageName,
+    parsed: &'a HashMap<&'a str, Vec<Requirement>>,
+    path: &mut HashSet<&'a str>,
+    result: &mut Vec<Requirement>,
+) {
+    if req.name != *package_name || req.extras.is_empty() {
+        result.push(req.clone());
+        return;
+    }
+    for extra in &req.extras {
+        let Some((&key, group_reqs)) = parsed.get_key_value(extra.as_ref()) else {
+            continue;
+        };
+        if !path.insert(key) {
+            continue;
+        }
+        for child in group_reqs {
+            let mut expanded = child.clone();
+            expanded.marker.and(req.marker.clone());
+            expand_into(&expanded, package_name, parsed, path, result);
+        }
+        path.remove(key);
+    }
 }
 
 #[cfg(test)]
@@ -245,5 +254,105 @@ mod tests {
 
         let mismatch = compare_metadata(&locked, &current);
         assert!(matches!(mismatch, Some(MetadataMismatch::RequiresDist(_))));
+    }
+
+    fn pkg_name(s: &str) -> PackageName {
+        PackageName::from_str(s).unwrap()
+    }
+
+    fn extra(s: &str) -> ExtraName {
+        ExtraName::from_str(s).unwrap()
+    }
+
+    fn req(s: &str) -> Requirement {
+        Requirement::from_str(s).unwrap()
+    }
+
+    fn render(reqs: &[Requirement]) -> String {
+        let mut lines: Vec<String> = reqs.iter().map(|r| r.to_string()).collect();
+        lines.sort();
+        lines.join("\n")
+    }
+
+    #[test]
+    fn expand_self_extras_replaces_ribasim_style_self_refs() {
+        // Mirrors Deltares/Ribasim: `delwaq` references `ribasim[netcdf]`
+        // and `all` composes the other groups.
+        let mut optional: IndexMap<ExtraName, Vec<String>> = IndexMap::new();
+        optional.insert(extra("tests"), vec!["pytest".into()]);
+        optional.insert(extra("netcdf"), vec!["xugrid".into()]);
+        optional.insert(
+            extra("delwaq"),
+            vec!["jinja2".into(), "networkx".into(), "ribasim[netcdf]".into()],
+        );
+        optional.insert(
+            extra("all"),
+            vec![
+                "ribasim[tests]".into(),
+                "ribasim[netcdf]".into(),
+                "ribasim[delwaq]".into(),
+            ],
+        );
+
+        let static_parsed = vec![
+            req("pandas"),
+            req("pytest ; extra == 'tests'"),
+            req("xugrid ; extra == 'netcdf'"),
+            req("jinja2 ; extra == 'delwaq'"),
+            req("networkx ; extra == 'delwaq'"),
+            req("ribasim[netcdf] ; extra == 'delwaq'"),
+            req("ribasim[tests] ; extra == 'all'"),
+            req("ribasim[netcdf] ; extra == 'all'"),
+            req("ribasim[delwaq] ; extra == 'all'"),
+        ];
+
+        let expanded = expand_self_extras(static_parsed, &pkg_name("ribasim"), &optional);
+        insta::assert_snapshot!(render(&expanded), @r"
+        jinja2 ; extra == 'all'
+        jinja2 ; extra == 'delwaq'
+        networkx ; extra == 'all'
+        networkx ; extra == 'delwaq'
+        pandas
+        pytest ; extra == 'all'
+        pytest ; extra == 'tests'
+        xugrid ; extra == 'all'
+        xugrid ; extra == 'all'
+        xugrid ; extra == 'delwaq'
+        xugrid ; extra == 'netcdf'
+        ");
+    }
+
+    #[test]
+    fn expand_self_extras_preserves_non_self_references() {
+        let optional: IndexMap<ExtraName, Vec<String>> = IndexMap::new();
+        let input = vec![req("requests"), req("other[gpu] ; extra == 'all'")];
+        let expanded = expand_self_extras(input, &pkg_name("mypkg"), &optional);
+        insta::assert_snapshot!(render(&expanded), @r"
+        other[gpu] ; extra == 'all'
+        requests
+        ");
+    }
+
+    #[test]
+    fn expand_self_extras_drops_unknown_extras_silently() {
+        // A self-reference to an extra that doesn't exist (typo, stale
+        // metadata) is dropped.
+        let optional: IndexMap<ExtraName, Vec<String>> = IndexMap::new();
+        let input = vec![req("pandas"), req("mypkg[missing] ; extra == 'all'")];
+        let expanded = expand_self_extras(input, &pkg_name("mypkg"), &optional);
+        insta::assert_snapshot!(render(&expanded), @"pandas");
+    }
+
+    #[test]
+    fn expand_self_extras_breaks_cycles() {
+        // a -> b -> a; expansion must terminate. The non-cyclic dep
+        // `actual` is still emitted with the outer marker.
+        let mut optional: IndexMap<ExtraName, Vec<String>> = IndexMap::new();
+        optional.insert(extra("a"), vec!["actual".into(), "mypkg[b]".into()]);
+        optional.insert(extra("b"), vec!["mypkg[a]".into()]);
+
+        let input = vec![req("mypkg[a] ; extra == 'X'")];
+        let expanded = expand_self_extras(input, &pkg_name("mypkg"), &optional);
+        insta::assert_snapshot!(render(&expanded), @"actual ; extra == 'x'");
     }
 }
