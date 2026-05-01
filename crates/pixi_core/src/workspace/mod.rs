@@ -54,7 +54,9 @@ use pixi_utils::{
 };
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
-use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_lock::LockFile;
+
+use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
@@ -653,6 +655,7 @@ impl Workspace {
                     .or_else(|| BackendOverride::from_env().ok().flatten())
                     .unwrap_or_default(),
             )
+            .with_channel_config(self.channel_config())
             .execute_link_scripts(match self.config.run_post_link_scripts() {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
@@ -808,10 +811,8 @@ impl Workspace {
         filter_lock_file(self, lock_file, |env, platform, package| {
             if affected_environments.contains(&(env.name().as_str(), platform)) {
                 match package {
-                    LockedPackageRef::Conda(package) => {
-                        !conda_packages.contains(&package.record().name)
-                    }
-                    LockedPackageRef::Pypi(package, _env) => !pypi_packages.contains(&package.name),
+                    LockedPackageKind::Conda(name) => !conda_packages.contains(name),
+                    LockedPackageKind::Pypi(name) => !pypi_packages.contains(name),
                 }
             } else {
                 true

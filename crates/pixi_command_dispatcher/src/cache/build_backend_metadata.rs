@@ -1,10 +1,12 @@
 use super::common::{
-    CacheError, CacheKey, CachedMetadata, MetadataCache, VersionedMetadata,
-    WriteResult as CommonWriteResult,
+    CacheError, CacheKeyString, CacheRevision, MetadataCache, MetadataCacheEntry, MetadataCacheKey,
+    VersionedCacheEntry, WriteResult as CommonWriteResult,
 };
 use crate::build::CanonicalSourceCodeLocation;
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
-use crate::{BuildEnvironment, PackageIdentifier};
+use rattler_conda_types::PackageName;
+
+use crate::BuildEnvironment;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
@@ -23,7 +25,7 @@ use std::{
 use thiserror::Error;
 
 // Re-export WriteResult with the correct type
-pub type WriteResult = CommonWriteResult<CachedCondaMetadata>;
+pub type WriteResult = CommonWriteResult<BuildBackendMetadataCacheEntry>;
 
 /// A cache for caching the metadata of a source checkout.
 ///
@@ -48,7 +50,7 @@ pub enum BuildBackendMetadataCacheError {
 /// Defines additional input besides the source files that are used to compute
 /// the metadata of a source checkout. This is used to bucket the metadata.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct BuildBackendMetadataCacheShard {
+pub struct BuildBackendMetadataCacheKey {
     /// The URLs of the channels that were used.
     pub channel_urls: Vec<ChannelUrl>,
 
@@ -58,7 +60,7 @@ pub struct BuildBackendMetadataCacheShard {
     /// Exclude packages newer than the configured cutoffs when solving backend environments.
     pub exclude_newer: Option<ResolvedExcludeNewer>,
 
-    /// The protocols that are enabled for source packages
+    /// The protocols that were enabled for backend discovery.
     pub enabled_protocols: EnabledProtocols,
 
     /// The pinned source location
@@ -76,8 +78,8 @@ impl BuildBackendMetadataCache {
 }
 
 impl MetadataCache for BuildBackendMetadataCache {
-    type Key = BuildBackendMetadataCacheShard;
-    type Metadata = CachedCondaMetadata;
+    type Key = BuildBackendMetadataCacheKey;
+    type Entry = BuildBackendMetadataCacheEntry;
     type Error = BuildBackendMetadataCacheError;
 
     fn root(&self) -> &Path {
@@ -87,29 +89,34 @@ impl MetadataCache for BuildBackendMetadataCache {
     const CACHE_SUFFIX: &'static str = "v0";
 }
 
-impl CacheKey for BuildBackendMetadataCacheShard {
-    /// Computes a unique semi-human-readable hash for this key.
-    fn hash_key(&self) -> String {
+impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKey {
+    /// Computes a unique semi-human-readable string representation of the key.
+    /// This is what is used as the cache file name.
+    fn key(&self) -> CacheKeyString<BuildBackendMetadataCache> {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
-        self.build_environment.build_platform.hash(&mut hasher);
         self.exclude_newer.hash(&mut hasher);
 
+        self.build_environment.build_platform.hash(&mut hasher);
         let mut build_virtual_packages = self.build_environment.build_virtual_packages.clone();
         build_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
         build_virtual_packages.hash(&mut hasher);
 
+        self.build_environment.host_platform.hash(&mut hasher);
         let mut host_virtual_packages = self.build_environment.host_virtual_packages.clone();
         host_virtual_packages.sort_by(|a, b| a.name.cmp(&b.name));
         host_virtual_packages.hash(&mut hasher);
 
         self.enabled_protocols.hash(&mut hasher);
         let source_dir = self.source.cache_unique_key();
-        format!(
+        CacheKeyString::new(format!(
             "{source_dir}/{}-{}",
-            self.build_environment.host_platform,
+            self.build_environment
+                .host_platform
+                .to_string()
+                .replace('-', "_"),
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
-        )
+        ))
     }
 }
 
@@ -122,10 +129,11 @@ impl CacheError for BuildBackendMetadataCacheError {
 /// Cached result of calling `conda/outputs` on a build backend. This is
 /// returned by [`MetadataCache::read`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CachedCondaMetadata {
-    /// A randomly generated identifier that is generated for each metadata
-    /// file.
-    pub id: CachedCondaMetadataId,
+pub struct BuildBackendMetadataCacheEntry {
+    /// A revision identifier for this cache entry. Changes when the
+    /// meaningful content of the entry changes. Downstream caches store
+    /// this to detect when their data is stale.
+    pub revision: CacheRevision<BuildBackendMetadataCache>,
 
     /// Version number for optimistic locking. Incremented with each cache
     /// update. Used to detect when another process has updated the cache
@@ -181,9 +189,13 @@ pub struct CachedCondaMetadata {
     pub outputs: Vec<CondaOutput>,
 }
 
-impl CachedMetadata for CachedCondaMetadata {}
+impl MetadataCacheEntry<BuildBackendMetadataCache> for BuildBackendMetadataCacheEntry {
+    fn revision(&self) -> &CacheRevision<BuildBackendMetadataCache> {
+        &self.revision
+    }
+}
 
-impl VersionedMetadata for CachedCondaMetadata {
+impl VersionedCacheEntry<BuildBackendMetadataCache> for BuildBackendMetadataCacheEntry {
     fn cache_version(&self) -> u64 {
         self.cache_version
     }
@@ -193,28 +205,13 @@ impl VersionedMetadata for CachedCondaMetadata {
     }
 }
 
-impl CachedCondaMetadata {
+impl BuildBackendMetadataCacheEntry {
     /// Returns the unique package identifiers for the packages in this
     /// metadata.
-    pub fn outputs(&self) -> Vec<PackageIdentifier> {
+    pub fn output_names(&self) -> Vec<PackageName> {
         self.outputs
             .iter()
-            .map(|output| PackageIdentifier {
-                name: output.metadata.name.clone(),
-                version: output.metadata.version.clone(),
-                build: output.metadata.build.clone(),
-                subdir: output.metadata.subdir.to_string(),
-            })
+            .map(|output| output.metadata.name.clone())
             .collect()
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Copy, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct CachedCondaMetadataId(u64);
-
-impl CachedCondaMetadataId {
-    pub fn random() -> Self {
-        Self(rand::random())
     }
 }

@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::PathBuf,
     sync::Arc,
 };
 
@@ -9,7 +8,7 @@ use pixi_record::{PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
+    ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
     package::{ArchiveIdentifier, CondaArchiveType, DistArchiveIdentifier},
 };
 use rattler_repodata_gateway::RepoData;
@@ -17,16 +16,17 @@ use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
 use tokio::task::JoinError;
 use url::Url;
 
-use crate::{CommandDispatcherError, SourceMetadata};
+use crate::SourceMetadata;
 
 /// Contains all information that describes the input of a conda environment.
 /// All information about both binary and source packages is stored in the
 /// specification, when solving this information is passed to the solver,
 /// and the result is returned.
 ///
-/// Unlike [`super::PixiEnvironmentSpec`], solving a `SolveCondaEnvironmentSpec`
-/// instance does not require any recursive calls since all information is
-/// already available in the specification.
+/// Unlike the higher-level pixi-environment solve, a
+/// `SolveCondaEnvironmentSpec` carries everything the solver needs
+/// already: source metadata has been resolved upstream, so this solve
+/// is a leaf with no recursive calls.
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct SolveCondaEnvironmentSpec {
@@ -83,9 +83,6 @@ pub struct SolveCondaEnvironmentSpec {
     /// Exclude packages newer than the configured default and per-channel cutoffs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exclude_newer: Option<ResolvedExcludeNewer>,
-
-    /// The channel configuration to use for this environment.
-    pub channel_config: ChannelConfig,
 }
 
 impl Default for SolveCondaEnvironmentSpec {
@@ -105,16 +102,19 @@ impl Default for SolveCondaEnvironmentSpec {
             strategy: SolveStrategy::default(),
             channel_priority: ChannelPriority::default(),
             exclude_newer: None,
-            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
         }
     }
 }
 
 impl SolveCondaEnvironmentSpec {
-    /// Solves this environment
-    pub async fn solve(
+    /// Run the conda solve on a blocking thread. Caller provides
+    /// `channel_config` so this function is reachable without a
+    /// `CommandDispatcher` handle; the `ctx.solve_conda` ext method
+    /// on [`pixi_compute_engine::ComputeCtx`] is the only caller.
+    pub async fn solve_on_blocking_pool(
         self,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>> {
+        channel_config: std::sync::Arc<rattler_conda_types::ChannelConfig>,
+    ) -> Result<Vec<PixiRecord>, SolveCondaBlockingError> {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
@@ -126,7 +126,7 @@ impl SolveCondaEnvironmentSpec {
                 .source_repodata
                 .iter()
                 .flat_map(|metadata| &metadata.records)
-                .map(|metadata| &metadata.package_record.name)
+                .map(|metadata| &metadata.package_record().name)
                 .dedup()
                 .collect::<HashSet<_>>();
 
@@ -138,6 +138,7 @@ impl SolveCondaEnvironmentSpec {
                 .filter_map(|record| record.into_binary())
                 // Filter any record we want as a source record
                 .filter(|record| !package_names_from_source.contains(&record.package_record.name))
+                .map(Arc::unwrap_or_clone)
                 .collect();
 
             // Create direct dependencies on the source packages to feed to the solver.
@@ -151,12 +152,12 @@ impl SolveCondaEnvironmentSpec {
 
             let binary_match_specs = self
                 .binary_specs
-                .into_match_specs(&self.channel_config)
+                .into_match_specs(&channel_config)
                 .map_err(SolveCondaEnvironmentError::SpecConversionError)?;
 
             let constrains_match_specs = self
                 .constraints
-                .into_match_specs(&self.channel_config)
+                .into_match_specs(&channel_config)
                 .map_err(SolveCondaEnvironmentError::SpecConversionError)?;
 
             // Create match specs for dev source packages themselves
@@ -191,19 +192,19 @@ impl SolveCondaEnvironmentSpec {
                 for record in &source_metadata.records {
                     let url = unique_url(record);
                     let repodata_record = RepoDataRecord {
-                        package_record: record.package_record.clone(),
+                        package_record: record.data.package_record.clone(),
                         url: url.clone(),
                         identifier: DistArchiveIdentifier {
                             identifier: ArchiveIdentifier {
-                                name: record.package_record.name.as_normalized().to_string(),
-                                version: record.package_record.version.to_string(),
-                                build_string: format!("{}_source", record.package_record.build),
+                                name: record.package_record().name.as_normalized().to_string(),
+                                version: record.package_record().version.to_string(),
+                                build_string: format!("{}_source", record.package_record().build),
                             },
                             archive_type: CondaArchiveType::Conda.into(),
                         },
                         channel: None,
                     };
-                    let mut record = record.clone();
+                    let mut record = SourceRecord::clone(record);
                     record.build_source = source_metadata.source.build_source().cloned();
                     url_to_source_package.insert(url, (record, repodata_record));
                 }
@@ -232,7 +233,7 @@ impl SolveCondaEnvironmentSpec {
                             .map(|(name, spec)| {
                                 let nameless = spec
                                     .clone()
-                                    .try_into_nameless_match_spec_ref(&self.channel_config)
+                                    .try_into_nameless_match_spec_ref(&channel_config)
                                     .unwrap_or_default();
                                 MatchSpec::from_nameless(nameless, name.clone().into()).to_string()
                             })
@@ -244,7 +245,7 @@ impl SolveCondaEnvironmentSpec {
                             .filter_map(|(name, spec)| {
                                 let nameless = spec
                                     .clone()
-                                    .try_into_nameless_match_spec(&self.channel_config)
+                                    .try_into_nameless_match_spec(&channel_config)
                                     .ok()?;
                                 Some(
                                     MatchSpec::from_nameless(nameless, name.clone().into())
@@ -317,13 +318,13 @@ impl SolveCondaEnvironmentSpec {
                         if let Some(source_record) = url_to_source_package.remove(&record.url) {
                             // This is a source package, we want to return the source record
                             // instead of the binary record.
-                            return Some(PixiRecord::Source(source_record.0.clone()));
+                            return Some(PixiRecord::Source(Arc::new(source_record.0)));
                         } else if let Some(_dev_source) = url_to_dev_source.remove(&record.url) {
                             // This is a dev source, we don't want to return it.
                             return None;
                         }
 
-                        Some(PixiRecord::Binary(record))
+                        Some(PixiRecord::Binary(Arc::new(record)))
                     })
                     .collect_vec(),
             )
@@ -332,24 +333,39 @@ impl SolveCondaEnvironmentSpec {
 
         // Error out if the background task failed or was canceled.
         match solve_result.map_err(JoinError::try_into_panic) {
-            Err(Err(_)) => Err(CommandDispatcherError::Cancelled),
-            Err(Ok(panic)) => std::panic::resume_unwind(panic),
-            Ok(Err(err)) => Err(CommandDispatcherError::Failed(err)),
+            Err(Err(_)) => Err(SolveCondaBlockingError::JoinCancelled),
+            Err(Ok(panic)) => Err(SolveCondaBlockingError::Panic(panic)),
+            Ok(Err(err)) => Err(SolveCondaBlockingError::Solve(err)),
             Ok(Ok(result)) => Ok(result),
         }
     }
 }
 
+/// Error kinds returned by `SolveCondaEnvironmentSpec::solve_on_blocking_pool`.
+/// The outer `SolveCondaEnvironmentSpec::solve` maps these onto
+/// [`crate::CommandDispatcherError`] for backwards compatibility; new
+/// compute-engine call sites handle these directly.
+#[derive(Debug)]
+pub enum SolveCondaBlockingError {
+    /// The solve itself returned an error.
+    Solve(SolveCondaEnvironmentError),
+    /// The blocking task was cancelled (runtime shutdown).
+    JoinCancelled,
+    /// The blocking task panicked; payload is passed through so callers
+    /// can decide whether to resume the unwind.
+    Panic(Box<dyn std::any::Any + Send + 'static>),
+}
+
 /// Generates a unique URL for a source record.
 fn unique_url(source: &SourceRecord) -> Url {
-    let mut url = source.manifest_source.identifiable_url();
+    let mut url = source.manifest_source().identifiable_url();
 
     // Add unique identifiers to the URL.
     url.query_pairs_mut()
-        .append_pair("name", source.package_record.name.as_source())
-        .append_pair("version", &source.package_record.version.as_str())
-        .append_pair("build", &source.package_record.build)
-        .append_pair("subdir", &source.package_record.subdir);
+        .append_pair("name", source.package_record().name.as_source())
+        .append_pair("version", &source.package_record().version.as_str())
+        .append_pair("build", &source.package_record().build)
+        .append_pair("subdir", &source.package_record().subdir);
 
     url
 }
@@ -391,4 +407,13 @@ pub enum SolveCondaEnvironmentError {
 
     #[error(transparent)]
     SpecConversionError(#[from] pixi_spec::SpecConversionError),
+
+    /// Used by the compute-engine path
+    /// ([`crate::keys::SolveCondaKey`]) where the binary repodata
+    /// fetch is done inside the key's compute body. The legacy
+    /// `SolveCondaEnvironmentSpec::solve` receives repodata
+    /// pre-fetched by its caller, so this variant is not produced on
+    /// the legacy path.
+    #[error(transparent)]
+    Gateway(#[from] rattler_repodata_gateway::GatewayError),
 }

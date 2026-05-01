@@ -14,6 +14,15 @@ pub struct Limits {
     /// Building takes up significant resources so we limit the total number of
     /// concurrent builds. By default only 1 build is allowed at a time.
     pub max_concurrent_builds: Limit,
+
+    /// The maximum number of concurrent git checkouts. Git fetches are
+    /// network-bound; too many in flight can overwhelm the network or
+    /// remote server.
+    pub max_concurrent_git_checkouts: Limit,
+
+    /// The maximum number of concurrent URL archive fetches. Same
+    /// rationale as `max_concurrent_git_checkouts`.
+    pub max_concurrent_url_checkouts: Limit,
 }
 
 /// Defines the type of limit to apply.
@@ -43,6 +52,12 @@ pub(crate) struct ResolvedLimits {
 
     /// The maximum number of concurrent source builds that can be performed.
     pub max_concurrent_builds: Option<usize>,
+
+    /// The maximum number of concurrent git checkouts.
+    pub max_concurrent_git_checkouts: Option<usize>,
+
+    /// The maximum number of concurrent URL archive fetches.
+    pub max_concurrent_url_checkouts: Option<usize>,
 }
 
 impl From<Limits> for ResolvedLimits {
@@ -63,9 +78,26 @@ impl From<Limits> for ResolvedLimits {
             Limit::Default => Some(1), // Default to 1 build at a time
         };
 
+        // Default to 8 concurrent network fetches: a common sweet spot
+        // that's well below typical remote-host per-client connection
+        // limits while still hiding per-request latency.
+        let max_concurrent_git_checkouts = match value.max_concurrent_git_checkouts {
+            Limit::None => None,
+            Limit::Max(max) => Some(max.get()),
+            Limit::Default => Some(8),
+        };
+
+        let max_concurrent_url_checkouts = match value.max_concurrent_url_checkouts {
+            Limit::None => None,
+            Limit::Max(max) => Some(max.get()),
+            Limit::Default => Some(8),
+        };
+
         Self {
             max_concurrent_solves,
             max_concurrent_builds,
+            max_concurrent_git_checkouts,
+            max_concurrent_url_checkouts,
         }
     }
 }

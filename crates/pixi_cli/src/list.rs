@@ -230,7 +230,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    if packages_to_output.is_empty() {
+    if packages_to_output.is_empty() && !args.json {
         miette::bail!(
             "No packages found in '{}' environment for '{}' platform.",
             environment.name().fancy_display(),
@@ -269,7 +269,7 @@ fn get_field_cell(package: &Package, field: Field) -> Cell {
             };
             Cell::new(content)
         }
-        Field::Version => Cell::new(&package.version),
+        Field::Version => Cell::new(package.version.as_deref().unwrap_or_default()),
         Field::Build => Cell::new(package.build.as_deref().unwrap_or_default()),
         Field::BuildNumber => Cell::new(
             package

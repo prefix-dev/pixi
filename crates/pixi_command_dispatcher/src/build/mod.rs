@@ -1,25 +1,18 @@
 //! Datastructures and functions used for building packages from source.
 
-mod build_cache;
 mod build_environment;
 pub mod conversion;
-mod dependencies;
-mod move_file;
+pub mod dependencies;
 pub mod pin_compatible;
 mod work_dir_key;
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-pub use build_cache::{
-    BuildCache, BuildCacheEntry, BuildCacheError, BuildHostEnvironment, BuildHostPackage,
-    BuildInput, CachedBuild, CachedBuildSourceInfo,
-};
 pub use build_environment::BuildEnvironment;
 pub use dependencies::{
     Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports, WithSource,
 };
-pub(crate) use move_file::{MoveError, move_file};
 use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -209,39 +202,6 @@ fn pretty_url_name(url: &Url) -> String {
         let mut hasher = DefaultHasher::new();
         url.as_str().hash(&mut hasher);
         URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
-    }
-}
-
-/// Constructs a name for a cache directory for the given source checkout.
-///
-/// For git and url sources, which have been pinned to specific checkouts, the
-/// pin is included in the name (e.g. the commit or hash). You could include
-/// multiple git sources with different hashes.
-///
-/// For path sources, only the path is used as there can only be one entry on
-/// disk anyway.
-pub(crate) fn source_checkout_cache_key(source: &CanonicalSourceLocation) -> String {
-    match source {
-        CanonicalSourceLocation::Url(url) => {
-            format!("{}-{:x}", pretty_url_name(&url.url), url.sha256)
-        }
-        CanonicalSourceLocation::Git(git) => {
-            let name = pretty_url_name(git.repository.as_url());
-            let mut hasher = Xxh3::new();
-            git.hash(&mut hasher);
-            let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
-            format!("{name}-{unique_key}")
-        }
-        CanonicalSourceLocation::Path(path) => {
-            let mut hasher = Xxh3::new();
-            path.path.hash(&mut hasher);
-            let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
-            if let Some(file_name) = path.path.file_name() {
-                format!("{file_name}-{unique_key}")
-            } else {
-                unique_key
-            }
-        }
     }
 }
 

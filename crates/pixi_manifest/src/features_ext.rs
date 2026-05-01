@@ -112,32 +112,13 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         self.workspace_manifest().workspace.exclude_newer
     }
 
-    /// Returns the effective exclude-newer solver configuration.
-    fn exclude_newer_config(
-        &self,
-    ) -> Result<Option<rattler_solve::ExcludeNewer>, ParseChannelError> {
-        self.exclude_newer_config_resolved()
-            .map(|exclude_newer| exclude_newer.map(Into::into))
-    }
-
     /// Returns the effective exclude-newer solver configuration with absolute cutoffs.
     fn exclude_newer_config_resolved(
-        &self,
-    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
-        exclude_newer_config_resolved_impl(self, |channel| Ok(channel.channel.to_string()))
-    }
-
-    /// Returns the effective exclude-newer configuration keyed by resolved channel URLs.
-    fn exclude_newer_config_resolved_with_channel_config(
         &self,
         channel_config: &ChannelConfig,
     ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
         exclude_newer_config_resolved_impl(self, |channel| {
-            Ok(channel
-                .channel
-                .clone()
-                .into_base_url(channel_config)?
-                .to_string())
+            channel.channel.clone().into_base_url(channel_config)
         })
     }
 
@@ -355,7 +336,7 @@ fn exclude_newer_config_resolved_impl<'source, T, F>(
 ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError>
 where
     T: FeaturesExt<'source> + ?Sized,
-    F: FnMut(&PrioritizedChannel) -> Result<String, ParseChannelError>,
+    F: FnMut(&PrioritizedChannel) -> Result<ChannelUrl, ParseChannelError>,
 {
     let mut exclude_newer = features
         .exclude_newer_raw()

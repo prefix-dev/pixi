@@ -9,12 +9,12 @@ use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::{
     Workspace,
-    lock_file::{UpdateContext, filter_lock_file},
+    lock_file::{LockedPackageKind, UpdateContext, filter_lock_file},
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use pixi_manifest::EnvironmentName;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_lock::LockFile;
 
 use crate::cli_config::WorkspaceConfig;
 
@@ -64,7 +64,7 @@ pub struct UpdateSpecsArgs {
 }
 
 /// A distilled version of `UpdateSpecsArgs`.
-/// TODO: In the future if we want to add `--recursive` this datastructure could
+/// TODO: In the future if we want to add `--recursive` this data structure could
 ///     be used to store information about recursive packages.
 struct UpdateSpecs {
     packages: Option<HashSet<String>>,
@@ -89,7 +89,7 @@ impl UpdateSpecs {
         &self,
         environment_name: &EnvironmentName,
         platform: &Platform,
-        package: LockedPackageRef<'_>,
+        package_name: &str,
     ) -> bool {
         // Check if the platform is in the list of platforms to update.
         if let Some(platforms) = &self.platforms
@@ -107,14 +107,14 @@ impl UpdateSpecs {
 
         // Check if the package is in the list of packages to update.
         if let Some(packages) = &self.packages
-            && !packages.contains(package.name())
+            && !packages.contains(package_name)
         {
             return false;
         }
 
         tracing::debug!(
             "relaxing package: {}, env={}, platform={}",
-            package.name(),
+            package_name,
             environment_name.fancy_display(),
             consts::PLATFORM_STYLE.apply_to(platform),
         );
@@ -227,7 +227,8 @@ fn ensure_package_exists(
     let similar_names = environments
         .iter()
         .flat_map(|env| env.packages_by_platform())
-        .filter_map(|(p, packages)| {
+        .filter_map(|(lock_p, packages)| {
+            let p = lock_p.subdir();
             if let Some(platforms) = &specs.platforms
                 && !platforms.contains(&p)
             {
@@ -276,8 +277,19 @@ fn ensure_package_exists(
 }
 
 /// Constructs a new lock-file where some of the constraints have been removed.
+///
+/// The same predicate runs against top-level entries and against the
+/// transitive `build_packages` / `host_packages` of every kept source record,
+/// so stale copies of an update target inside a source record's host or build
+/// closure are stripped together with the top-level entry. Without that
+/// strip, `pixi update <pkg>` would update only the top-level entry and leave
+/// source packages building against the old version.
 fn unlock_packages(project: &Workspace, lock_file: &LockFile, specs: &UpdateSpecs) -> LockFile {
     filter_lock_file(project, lock_file, |env, platform, package| {
-        !specs.should_relax(env.name(), &platform, package)
+        let name = match package {
+            LockedPackageKind::Conda(name) => name.as_normalized(),
+            LockedPackageKind::Pypi(name) => name.as_ref(),
+        };
+        !specs.should_relax(env.name(), &platform, name)
     })
 }

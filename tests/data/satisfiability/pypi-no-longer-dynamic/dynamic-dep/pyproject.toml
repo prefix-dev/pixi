@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dynamic-dep"
+#dynamic = ["version"]
+# The version is no longer dynamic, which should cause the satisfiability
+# check to fail because the lock-file doesnt declare a version.
+version = "1.0.0"

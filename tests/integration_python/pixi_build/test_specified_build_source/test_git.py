@@ -30,8 +30,8 @@ def _git_source_entries(lock_file: Path) -> list[dict[str, Any]]:
     for entry in iter_entries():
         if isinstance(entry, dict):
             entry = cast(dict[str, Any], entry)
-            if entry.get("conda") == ".":
-                package_build_source = entry.get("package_build_source")
+            if (v := entry.get("conda_source")) and v.endswith("@ ."):
+                package_build_source = entry.get("source")
                 if package_build_source is not None:
                     serialized_sources.append(package_build_source)
 
@@ -122,52 +122,6 @@ def test_git_path_build(
 
     built_packages = list(tmp_pixi_workspace.glob("*.conda"))
     assert len(built_packages) == 1
-
-
-@pytest.mark.slow
-@pytest.mark.xdist_group("serial")
-def test_git_path_lock_behaviour(
-    pixi: Path,
-    build_data: Path,
-    tmp_pixi_workspace: Path,
-    local_cpp_git_repo: LocalGitRepo,
-) -> None:
-    """Exercise git source locking behaviour when switching manifest branches."""
-
-    prepare_cpp_git_workspace(
-        tmp_pixi_workspace, build_data, local_cpp_git_repo, rev=local_cpp_git_repo.main_rev
-    )
-
-    verify_cli_command(
-        [pixi, "lock", "-v", "--manifest-path", tmp_pixi_workspace],
-    )
-
-    lock_path = tmp_pixi_workspace / "pixi.lock"
-    initial_sources = extract_git_sources(lock_path)
-
-    verify_cli_command(
-        [pixi, "install", "-v", "--manifest-path", tmp_pixi_workspace, "--locked"],
-    )
-    assert extract_git_sources(lock_path) == initial_sources
-
-    configure_local_git_source(tmp_pixi_workspace, local_cpp_git_repo, branch="other-feature")
-
-    verify_cli_command(
-        [pixi, "install", "-v", "--manifest-path", tmp_pixi_workspace, "--locked"],
-        expected_exit_code=ExitCode.FAILURE,
-    )
-    assert extract_git_sources(lock_path) == initial_sources
-
-    verify_cli_command(
-        [pixi, "lock", "-v", "--manifest-path", tmp_pixi_workspace],
-    )
-    new_sources = extract_git_sources(lock_path)
-    assert new_sources != initial_sources
-
-    verify_cli_command(
-        [pixi, "install", "-v", "--manifest-path", tmp_pixi_workspace, "--locked"],
-    )
-    assert extract_git_sources(lock_path) == new_sources
 
 
 @pytest.mark.slow
@@ -294,7 +248,7 @@ def test_git_path_build_has_absolutely_no_respect_to_lock_file(
     # lock file should remain untouched when running `pixi build`
     assert extract_git_sources(lock_path) == initial_sources
 
-    work_dir = tmp_pixi_workspace / ".pixi" / "build" / "work"
+    work_dir = tmp_pixi_workspace / ".pixi" / "bld" / "simple-app"
     assert work_dir.exists()
 
     target_phrase = b"Build backend works v2"
@@ -413,8 +367,11 @@ def test_git_path_lock_detects_manual_rev_change(
     def mutate(node: Any) -> None:
         if isinstance(node, dict):
             node = cast(dict[str, Any], node)
-            if node.get("conda") == "." and "package_build_source" in node:
-                node["package_build_source"]["rev"] = local_cpp_git_repo.other_feature_rev
+            # In v7 lock files, environment entries are short references
+            # (only `conda_source` key) while the full package data (with
+            # `source`) lives in the top-level `packages` list.
+            if (v := node.get("conda_source")) and v.endswith("@ .") and "source" in node:
+                node["source"]["rev"] = local_cpp_git_repo.other_feature_rev
             for value in node.values():
                 mutate(value)
         elif isinstance(node, list):

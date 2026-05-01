@@ -427,7 +427,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
-    use rattler_conda_types::PackageName;
+    use rattler_conda_types::{NamedChannelOrUrl, PackageName};
 
     use super::*;
 
@@ -889,36 +889,59 @@ mod tests {
         )
         .unwrap();
 
+        let channel_config = rattler_conda_types::ChannelConfig::default_with_root_dir(
+            std::env::current_dir().unwrap(),
+        );
         let env = workspace.environment("combined").unwrap();
-        let config = env.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
         let package = PackageName::new_unchecked("polars");
 
+        let bioconda = NamedChannelOrUrl::Name("bioconda".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let pytorch = NamedChannelOrUrl::Name("pytorch".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let nvidia = NamedChannelOrUrl::Name("nvidia".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let dglteam = NamedChannelOrUrl::Name("dglteam".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let conda_forge = NamedChannelOrUrl::Name("conda-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+
         assert_eq!(
-            config.cutoff_for_package(&package, Some("bioconda")),
+            config.cutoff_for_package(&package, Some(bioconda.as_str())),
             chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("pytorch")),
+            config.cutoff_for_package(&package, Some(pytorch.as_str())),
             chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("nvidia")),
+            config.cutoff_for_package(&package, Some(nvidia.as_str())),
             chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("dglteam")),
+            config.cutoff_for_package(&package, Some(dglteam.as_str())),
             chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("conda-forge")),
+            config.cutoff_for_package(&package, Some(conda_forge.as_str())),
             chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
@@ -954,9 +977,26 @@ mod tests {
         )
         .unwrap();
 
+        let channel_config = rattler_conda_types::ChannelConfig::default_with_root_dir(
+            std::env::current_dir().unwrap(),
+        );
         let env = workspace.environment("combined").unwrap();
-        let config = env.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
         let package = PackageName::new_unchecked("polars");
+
+        let shared = NamedChannelOrUrl::Name("shared".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let bioconda = NamedChannelOrUrl::Name("bioconda".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let nvidia = NamedChannelOrUrl::Name("nvidia".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
 
         assert_eq!(
             env.channels()
@@ -966,19 +1006,19 @@ mod tests {
             vec!["shared", "bioconda", "nvidia", "conda-forge"]
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("shared")),
+            config.cutoff_for_package(&package, Some(shared.as_str())),
             chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("bioconda")),
+            config.cutoff_for_package(&package, Some(bioconda.as_str())),
             chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("nvidia")),
+            config.cutoff_for_package(&package, Some(nvidia.as_str())),
             chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
@@ -1007,8 +1047,13 @@ mod tests {
         )
         .unwrap();
 
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let env = workspace.environment("default").unwrap();
-        let config = env.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
         let polars = PackageName::new_unchecked("polars");
         let numpy = PackageName::new_unchecked("numpy");
         let openssl = PackageName::new_unchecked("openssl");
@@ -1025,16 +1070,24 @@ mod tests {
             .unwrap()
             .with_timezone(&chrono::Utc);
 
-        let polars_cutoff = config.cutoff_for_package(&polars, Some("my-private-forge"));
+        let my_private_forge = NamedChannelOrUrl::Name("my-private-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let conda_forge = NamedChannelOrUrl::Name("conda-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+
+        let polars_cutoff = config.cutoff_for_package(&polars, Some(my_private_forge.as_str()));
         assert_eq!(polars_cutoff, dependency_cutoff);
 
-        let openssl_cutoff = config.cutoff_for_package(&openssl, Some("my-private-forge"));
+        let openssl_cutoff = config.cutoff_for_package(&openssl, Some(my_private_forge.as_str()));
         assert_eq!(openssl_cutoff, constraint_cutoff);
 
-        let private_numpy_cutoff = config.cutoff_for_package(&numpy, Some("my-private-forge"));
+        let private_numpy_cutoff =
+            config.cutoff_for_package(&numpy, Some(my_private_forge.as_str()));
         assert_eq!(private_numpy_cutoff, channel_cutoff);
 
-        let forge_numpy_cutoff = config.cutoff_for_package(&numpy, Some("conda-forge"));
+        let forge_numpy_cutoff = config.cutoff_for_package(&numpy, Some(conda_forge.as_str()));
         assert_eq!(forge_numpy_cutoff, workspace_cutoff);
     }
 
