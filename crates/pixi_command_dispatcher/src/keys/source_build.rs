@@ -5,8 +5,6 @@
 //! gives the backend a stable incremental-build location across runs
 //! sharing the same deps.
 
-pub use crate::cache::{ArtifactCache, WorkspaceCache};
-
 use std::{collections::BTreeMap, hash::Hash, path::PathBuf, sync::Arc};
 
 use derive_more::Display;
@@ -23,6 +21,10 @@ use rattler_digest::Sha256Hash;
 use tracing::instrument;
 use url::Url;
 
+pub use crate::cache::{ArtifactCache, WorkspaceCache};
+use crate::cache::{
+    ArtifactCacheError, compute_artifact_cache_key, compute_workspace_key,
+};
 use crate::compute_data::HasCacheDirs;
 use crate::{
     BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
@@ -44,8 +46,6 @@ fn unwrap_dispatcher_err<E>(err: CommandDispatcherError<E>) -> E {
         }
     }
 }
-
-use crate::cache::{compute_artifact_cache_key, compute_workspace_key};
 
 /// Hashable inputs to a source build. Runtime concerns (reporters, log
 /// sinks, force-rebuild) stay out of the spec; force-rebuild wipes the
@@ -635,9 +635,9 @@ async fn compute_package_sha256(path: &std::path::Path) -> Result<Sha256Hash, So
     .map_err(|e| SourceBuildError::CalculateSha256(p, Arc::new(e)))
 }
 
-fn map_cache_err(err: crate::cache::ArtifactCacheError) -> SourceBuildError {
+fn map_cache_err(err: ArtifactCacheError) -> SourceBuildError {
     match err {
-        crate::cache::ArtifactCacheError::Io {
+        ArtifactCacheError::Io {
             operation,
             path,
             source,
@@ -645,8 +645,8 @@ fn map_cache_err(err: crate::cache::ArtifactCacheError) -> SourceBuildError {
             let msg = format!("{operation} at {}", path.display());
             SourceBuildError::CreateWorkDirectory(Arc::new(std::io::Error::new(source.kind(), msg)))
         }
-        crate::cache::ArtifactCacheError::Glob(err) => SourceBuildError::GlobSet(err),
-        crate::cache::ArtifactCacheError::ArtifactFilename(path) => {
+        ArtifactCacheError::Glob(err) => SourceBuildError::GlobSet(err),
+        ArtifactCacheError::ArtifactFilename(path) => {
             SourceBuildError::MissingOutputFile(path)
         }
     }

@@ -17,7 +17,11 @@ use std::{
 use thiserror::Error;
 
 use crate::build::CanonicalSourceCodeLocation;
-use crate::cache::CacheRevision;
+use crate::cache::{
+    BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, BuildBackendMetadataCacheError,
+    BuildBackendMetadataCacheKey, CacheEntry, CacheKey, CacheKeyString, CacheRevision,
+    MetadataCache, MetadataCacheKey, WriteResult,
+};
 use crate::compute_data::{HasBuildBackendMetadataCache, HasCacheDirs, HasReporter};
 use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
@@ -27,11 +31,6 @@ use crate::{
     BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
     InstantiateBackendKey, SourceCheckout, SourceCheckoutError,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
-    cache::{
-        self, BuildBackendMetadataCache, BuildBackendMetadataCacheEntry,
-        BuildBackendMetadataCacheKey, CacheEntry, CacheKey, CacheKeyString, MetadataCache,
-        MetadataCacheKey,
-    },
     source_checkout::SourceCheckoutExt,
 };
 use pixi_build_discovery::BackendSpec;
@@ -873,10 +872,10 @@ impl BuildBackendMetadataInner {
             .await
             .map_err(BuildBackendMetadataError::Cache)?
         {
-            cache::backend_metadata::WriteResult::Written => {
+            WriteResult::Written => {
                 tracing::trace!("Cache updated successfully");
             }
-            cache::backend_metadata::WriteResult::Conflict(_other_metadata) => {
+            WriteResult::Conflict(_other_metadata) => {
                 tracing::debug!(
                     "Cache was updated by another process during computation (version conflict), using our computed result"
                 );
@@ -942,7 +941,7 @@ pub enum BuildBackendMetadataError {
     GlobSet(Arc<pixi_glob::GlobSetError>),
 
     #[error(transparent)]
-    Cache(#[from] cache::backend_metadata::BuildBackendMetadataCacheError),
+    Cache(#[from] BuildBackendMetadataCacheError),
 
     #[error("failed to normalize path")]
     NormalizePath(Arc<pixi_path::NormalizeError>),

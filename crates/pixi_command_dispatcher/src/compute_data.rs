@@ -18,11 +18,8 @@ use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
 
-use crate::{
-    CacheDirs,
-    cache::BuildBackendMetadataCache,
-    reporter::Reporter,
-};
+use crate::cache::{BuildBackendMetadataCache, CacheDirs};
+use crate::reporter::Reporter;
 
 /// Access the conda repodata gateway from global data.
 pub trait HasGateway {

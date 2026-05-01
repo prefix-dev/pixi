@@ -174,7 +174,7 @@ impl CacheDirs {
     /// Returns the root for content-addressed source-build artifacts.
     ///
     /// Layout: `<workspace or root>/artifacts-v0/<pkg>/<cache_key>/`
-    /// (managed by [`crate::cache::artifact::ArtifactCache`]).
+    /// (managed by [`super::artifact::ArtifactCache`]).
     ///
     /// Rooted directly on the workspace (not under the `build/` dir)
     /// so Windows paths stay short.
@@ -190,7 +190,7 @@ impl CacheDirs {
     /// incremental state).
     ///
     /// Layout: `<workspace or root>/bld/<pkg>/<workspace_key>/`
-    /// (managed by [`crate::cache::workspace::WorkspaceCache`]).
+    /// (managed by [`super::workspace::WorkspaceCache`]).
     ///
     /// Rooted directly on the workspace (not under `build/`) and named
     /// tersely so the deep nested backend directories fit under
