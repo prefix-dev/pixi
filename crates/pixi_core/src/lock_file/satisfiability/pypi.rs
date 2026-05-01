@@ -1,0 +1,1267 @@
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::{Arc, LazyLock},
+};
+
+use dashmap::DashMap;
+use once_cell::sync::OnceCell;
+use pep440_rs::VersionSpecifiers;
+use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
+use pixi_git::url::RepositoryUrl;
+use pixi_install_pypi::LockedPypiRecord;
+use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_record::{LockedGitUrl, PixiRecord};
+use pixi_spec::Subdirectory;
+use pixi_uv_context::UvResolutionContext;
+use pixi_uv_conversions::{
+    configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_options_to_build_options,
+    pypi_options_to_index_locations, to_index_strategy,
+};
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
+use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_lock::UrlOrPath;
+use typed_path::Utf8TypedPathBuf;
+use url::Url;
+use uv_client::{BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_configuration::RAYON_INITIALIZE;
+use uv_distribution::DistributionDatabase;
+use uv_distribution_types::{
+    ConfigSettings, DependencyMetadata, DirectorySourceDist, Dist, HashPolicy, IndexUrl,
+    RequirementSource, SourceDist,
+};
+use uv_git_types::GitReference;
+use uv_pypi_types::PyProjectToml;
+use uv_resolver::FlatIndex;
+
+use super::errors::PlatformUnsat;
+use super::platform::VerifySatisfiabilityContext;
+use super::pypi_metadata;
+use crate::{
+    lock_file::{
+        CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName,
+        outdated::{BuildCacheKey, PypiEnvironmentBuildCache},
+        records_by_name::LockedPypiRecordsByName,
+        resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
+    },
+    workspace::{
+        Environment, EnvironmentVars, HasWorkspaceRef, grouped_environment::GroupedEnvironment,
+    },
+};
+
+/// Returns `true` if the given URL is the default PyPI index
+/// (`https://pypi.org/simple`). The lock file always stores this
+/// explicitly, but manifests omit it, so we treat it as equivalent to
+/// "no index specified".
+fn is_default_pypi_index(url: &Url) -> bool {
+    url.as_str().trim_end_matches('/')
+        == pixi_consts::consts::DEFAULT_PYPI_INDEX_URL
+            .as_str()
+            .trim_end_matches('/')
+}
+
+/// Check satisfiability of a pypi requirement against a locked pypi package
+/// This also does an additional check for git urls when using direct url
+/// references
+pub(crate) fn pypi_satisfies_editable(
+    spec: &uv_distribution_types::Requirement,
+    locked_data: &LockedPypiRecord,
+    project_root: &Path,
+) -> Result<(), Box<PlatformUnsat>> {
+    let locked_data = &locked_data.data;
+    // We dont match on spec.is_editable() != locked_data.editable
+    // as it will happen later in verify_package_platform_satisfiability
+    // TODO: could be a potential refactoring opportunity
+
+    match &spec.source {
+        RequirementSource::Registry { .. }
+        | RequirementSource::Url { .. }
+        | RequirementSource::Path { .. }
+        | RequirementSource::Git { .. } => {
+            unreachable!(
+                "editable requirement cannot be from registry, url, git or path (non-directory)"
+            )
+        }
+        RequirementSource::Directory { install_path, .. } => match &**locked_data.location() {
+            // If we have an url requirement locked, but the editable is requested, this does not
+            // satisfy
+            UrlOrPath::Url(url) => Err(Box::new(PlatformUnsat::EditablePackageIsUrl(
+                spec.name.clone(),
+                url.to_string(),
+            ))),
+            UrlOrPath::Path(path) => {
+                // Most of the times the path will be relative to the project root
+                let absolute_path = if path.is_absolute() {
+                    Cow::Borrowed(Path::new(path.as_str()))
+                } else {
+                    Cow::Owned(project_root.join(Path::new(path.as_str())))
+                };
+                // Absolute paths can have symbolic links, so we canonicalize
+                let canonicalized_path = dunce::canonicalize(&absolute_path).map_err(|e| {
+                    Box::new(PlatformUnsat::FailedToCanonicalizePath(
+                        absolute_path.to_path_buf(),
+                        e,
+                    ))
+                })?;
+
+                if canonicalized_path != install_path.as_ref() {
+                    return Err(Box::new(PlatformUnsat::EditablePackagePathMismatch(
+                        spec.name.clone(),
+                        absolute_path.into_owned(),
+                        install_path.to_path_buf(),
+                    )));
+                }
+                Ok(())
+            }
+        },
+    }
+}
+
+/// Check satisfiability of a pypi requirement against a locked pypi package
+/// This also does an additional check for git urls when using direct url
+/// references
+pub(crate) fn pypi_satisfies_requirement(
+    spec: &uv_distribution_types::Requirement,
+    locked_record: &LockedPypiRecord,
+    project_root: &Path,
+) -> Result<(), Box<PlatformUnsat>> {
+    let locked_data = &locked_record.data;
+    if spec.name.to_string() != locked_data.name().to_string() {
+        return Err(PlatformUnsat::LockedPyPINamesMismatch {
+            expected: spec.name.to_string(),
+            found: locked_data.name().to_string(),
+        }
+        .into());
+    }
+
+    match &spec.source {
+        RequirementSource::Registry {
+            specifier, index, ..
+        } => {
+            let version_string = locked_record.locked_version.to_string();
+            if !specifier.contains(
+                &uv_pep440::Version::from_str(&version_string).expect("could not parse version"),
+            ) {
+                return Err(PlatformUnsat::LockedPyPIVersionsMismatch {
+                    name: spec.name.clone().to_string(),
+                    specifiers: specifier.clone().to_string(),
+                    version: version_string.to_owned(),
+                }
+                .into());
+            }
+
+            // Verify the index in the requirement matches the lock-file.
+            // Pre-v7 lockfiles don't store per-package index URLs, so
+            // index_url is None — skip the comparison in that case.
+            match (
+                index,
+                locked_data.as_wheel().and_then(|w| w.index_url.as_ref()),
+            ) {
+                (Some(required_index), Some(locked_url)) => {
+                    let required_url: Url = required_index.url.url().clone().into();
+                    if locked_url != &required_url {
+                        return Err(PlatformUnsat::LockedPyPIIndexMismatch {
+                            name: spec.name.to_string(),
+                            expected_index: required_url.to_string(),
+                            locked_index: locked_url.to_string(),
+                        }
+                        .into());
+                    }
+                }
+                (None, Some(locked_url)) if !is_default_pypi_index(locked_url) => {
+                    return Err(PlatformUnsat::LockedPyPIIndexMismatch {
+                        name: spec.name.to_string(),
+                        expected_index: "<default>".to_string(),
+                        locked_index: locked_url.to_string(),
+                    }
+                    .into());
+                }
+                // No locked index: the lockfile predates per-package
+                // index tracking (pre-v7), so we can't verify the index.
+                (_, None) | (None, _) => {}
+            }
+
+            Ok(())
+        }
+        RequirementSource::Url { url: spec_url, .. } => {
+            if let UrlOrPath::Url(locked_url) = &**locked_data.location() {
+                // Url may not start with git, and must start with direct+
+                if locked_url.as_str().starts_with("git+")
+                    || !locked_url.as_str().starts_with("direct+")
+                {
+                    return Err(PlatformUnsat::LockedPyPIMalformedUrl(locked_url.clone()).into());
+                }
+                let locked_url = locked_url
+                    .as_ref()
+                    .strip_prefix("direct+")
+                    .and_then(|str| Url::parse(str).ok())
+                    .unwrap_or(locked_url.clone());
+
+                if *spec_url.raw() == locked_url.clone().into() {
+                    return Ok(());
+                } else {
+                    return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
+                        name: spec.name.clone().to_string(),
+                        spec_url: spec_url.raw().to_string(),
+                        lock_url: locked_url.to_string(),
+                    }
+                    .into());
+                }
+            }
+            Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(spec.name.to_string()).into())
+        }
+        RequirementSource::Git {
+            git, subdirectory, ..
+        } => {
+            let repository = git.repository();
+            let reference = git.reference();
+            match &**locked_data.location() {
+                UrlOrPath::Url(url) => {
+                    if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
+                    {
+                        let pinned_repository = RepositoryUrl::new(&pinned_git_spec.git);
+                        let specified_repository = RepositoryUrl::new(repository);
+
+                        let repo_is_same = pinned_repository == specified_repository;
+                        if !repo_is_same {
+                            return Err(PlatformUnsat::LockedPyPIGitUrlMismatch {
+                                name: spec.name.clone().to_string(),
+                                spec_url: repository.to_string(),
+                                lock_url: pinned_git_spec.git.to_string(),
+                            }
+                            .into());
+                        }
+                        // If the spec uses DefaultBranch, we need to check what the lock has
+                        // DefaultBranch in it
+                        // otherwise any explicit ref in lock is not satisfiable
+                        if *reference == GitReference::DefaultBranch {
+                            match &pinned_git_spec.source.reference {
+                                // Any explicit reference in lock is not satisfiable
+                                // when manifest has DefaultBranch (user removed the explicit ref)
+                                pixi_spec::GitReference::Branch(_)
+                                | pixi_spec::GitReference::Tag(_)
+                                | pixi_spec::GitReference::Rev(_) => {
+                                    return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
+                                        name: spec.name.clone().to_string(),
+                                        expected_ref: reference.to_string(),
+                                        found_ref: pinned_git_spec.source.reference.to_string(),
+                                    }
+                                    .into());
+                                }
+                                // Only DefaultBranch in lock is satisfiable
+                                pixi_spec::GitReference::DefaultBranch => {
+                                    return Ok(());
+                                }
+                            }
+                        }
+
+                        // Normalize the input requirement subdirectory the same way we do in our
+                        // lock-file. We convert to string to ensure we have a valid fallback if
+                        // `Subdirectory` validation fails.
+                        let spec_subdir_str = subdirectory
+                            .as_deref()
+                            .and_then(|s| Subdirectory::normalize(s).ok())
+                            .map_or_else(
+                                || {
+                                    subdirectory
+                                        .as_ref()
+                                        .map(|s| s.to_string_lossy().to_string())
+                                },
+                                |s| Some(s.to_string_lossy().to_string()),
+                            );
+                        let lock_subdir_str =
+                            pinned_git_spec.source.subdirectory.to_option_string();
+                        if lock_subdir_str != spec_subdir_str {
+                            return Err(PlatformUnsat::LockedPyPIGitSubdirectoryMismatch {
+                                name: spec.name.clone().to_string(),
+                                spec_subdirectory: spec_subdir_str.unwrap_or_default(),
+                                lock_subdirectory: lock_subdir_str.unwrap_or_default(),
+                            }
+                            .into());
+                        }
+                        // v6 lockfiles encode git deps as
+                        //   git+https://repo.git#<sha>
+                        // without any ref information — no ?tag=/?branch=/?rev=
+                        // query params and no @ref in the URL path. v7 lockfiles
+                        // always include the ref as a query param. When the
+                        // locked URL carries no ref information the original ref
+                        // was not recorded and the commit SHA is the only
+                        // authority — skip the ref comparison.
+                        let has_ref_in_query = url
+                            .query_pairs()
+                            .any(|(k, _)| matches!(&*k, "tag" | "branch" | "rev"));
+                        let has_ref_in_path = url.path().contains('@');
+                        if !has_ref_in_query && !has_ref_in_path {
+                            return Ok(());
+                        }
+
+                        // If the spec does specify a revision than the revision must match
+                        // convert first to the same type
+                        let pixi_reference = into_pixi_reference(reference.clone());
+
+                        if pinned_git_spec.source.reference == pixi_reference {
+                            return Ok(());
+                        } else {
+                            return Err(PlatformUnsat::LockedPyPIGitRefMismatch {
+                                name: spec.name.clone().to_string(),
+                                expected_ref: reference.to_string(),
+                                found_ref: pinned_git_spec.source.reference.to_string(),
+                            }
+                            .into());
+                        }
+                    }
+                    Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
+                        spec.name.to_string(),
+                        url.to_string(),
+                    )
+                    .into())
+                }
+                UrlOrPath::Path(path) => Err(PlatformUnsat::LockedPyPIRequiresGitUrl(
+                    spec.name.to_string(),
+                    path.to_string(),
+                )
+                .into()),
+            }
+        }
+        RequirementSource::Path { install_path, .. }
+        | RequirementSource::Directory { install_path, .. } => {
+            if let UrlOrPath::Path(locked_path) = &**locked_data.location() {
+                let install_path =
+                    Utf8TypedPathBuf::from(install_path.to_string_lossy().to_string());
+                let project_root =
+                    Utf8TypedPathBuf::from(project_root.to_string_lossy().to_string());
+                // Join relative paths with the project root
+                let locked_path = if locked_path.is_absolute() {
+                    locked_path.clone()
+                } else {
+                    project_root.join(locked_path.to_path()).normalize()
+                };
+                if locked_path.to_path() != install_path {
+                    return Err(PlatformUnsat::LockedPyPIPathMismatch {
+                        name: spec.name.clone().to_string(),
+                        install_path: install_path.to_string(),
+                        locked_path: locked_path.to_string(),
+                    }
+                    .into());
+                }
+                return Ok(());
+            }
+            Err(PlatformUnsat::LockedPyPIRequiresPath(spec.name.to_string()).into())
+        }
+    }
+}
+
+// Resolve metadata for all path-based pypi source packages upfront, then
+// lock every pypi record with a concrete version.  Wheels already carry
+// their version; source packages get it from the source tree metadata.
+//
+// The metadata is read into `ctx.static_metadata_cache` so later calls to
+// `read_local_package_metadata` for the same path return instantly.
+pub(super) async fn lock_pypi_packages(
+    ctx: &VerifySatisfiabilityContext<'_>,
+    locked_pixi_records: &PixiRecordsByName,
+    unresolved_pypi_environment: &PypiRecordsByName,
+    building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
+) -> Result<LockedPypiRecordsByName, CommandDispatcherError<Box<PlatformUnsat>>> {
+    let mut locked_pypi_records: Vec<LockedPypiRecord> =
+        Vec::with_capacity(unresolved_pypi_environment.len());
+    for record in &unresolved_pypi_environment.records {
+        let pkg = record.as_package_data();
+
+        // For path-based directories, read metadata from the source tree.
+        // The result is cached in ctx.static_metadata_cache for later use.
+        let metadata = if let UrlOrPath::Path(path) = &**pkg.location() {
+            let absolute_path = if path.is_absolute() {
+                Cow::Borrowed(Path::new(path.as_str()))
+            } else {
+                Cow::Owned(ctx.project_root.join(Path::new(path.as_str())))
+            };
+
+            if absolute_path.is_dir() {
+                let uv_ctx = ctx
+                    .uv_context
+                    .get_or_try_init(|| {
+                        UvResolutionContext::from_config(
+                            ctx.config,
+                            ctx.environment.workspace().client()?.clone(),
+                        )
+                    })
+                    .map_err(|e| {
+                        CommandDispatcherError::Failed(Box::new(
+                            PlatformUnsat::FailedToReadLocalMetadata(
+                                pkg.name().clone(),
+                                format!("failed to initialize UV context: {e}"),
+                            ),
+                        ))
+                    })?;
+
+                let build_ctx = BuildMetadataContext {
+                    environment: ctx.environment,
+                    locked_pixi_records,
+                    platform: ctx.platform,
+                    project_root: ctx.project_root,
+                    uv_context: uv_ctx,
+                    project_env_vars: &ctx.project_env_vars,
+                    command_dispatcher: ctx.command_dispatcher.clone(),
+                    build_caches: ctx.build_caches,
+                    building_pixi_records: &building_pixi_records,
+                    static_metadata_cache: ctx.static_metadata_cache,
+                };
+
+                match read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx).await {
+                    Ok(m) => Some(m),
+                    Err(e) => {
+                        return Err(CommandDispatcherError::Failed(Box::new(
+                            PlatformUnsat::FailedToReadLocalMetadata(
+                                pkg.name().clone(),
+                                format!("failed to read metadata: {e}"),
+                            ),
+                        )));
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // A path-based directory that was parsed as Distribution (e.g. a
+        // directory named `foo.tar.gz`) needs a re-solve — it should be a
+        // Source package.
+        if pkg.as_wheel().is_some() && metadata.is_some() {
+            return Err(CommandDispatcherError::Failed(Box::new(
+                PlatformUnsat::DistributionShouldBeSource {
+                    name: pkg.name().clone(),
+                },
+            )));
+        }
+
+        // Determine the version: prefer the wheel version from the lock file,
+        // fall back to the version read from the source tree metadata.
+        let version = pkg
+            .version()
+            .cloned()
+            .or_else(|| metadata.as_ref().and_then(|m| m.version.clone()))
+            .unwrap_or_else(|| pep440_rs::MIN_VERSION.clone());
+
+        locked_pypi_records.push(record.lock(version));
+    }
+
+    Ok(LockedPypiRecordsByName::from_iter(
+        locked_pypi_records.drain(..),
+    ))
+}
+
+/// Context for building dynamic metadata for local packages.
+struct BuildMetadataContext<'a> {
+    environment: &'a Environment<'a>,
+    locked_pixi_records: &'a PixiRecordsByName,
+    platform: Platform,
+    project_root: &'a Path,
+    uv_context: &'a UvResolutionContext,
+    project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
+    command_dispatcher: CommandDispatcher,
+    build_caches: &'a DashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
+    building_pixi_records: &'a Result<PixiRecordsByName, PlatformUnsat>,
+    static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+}
+
+/// Read metadata for a local directory package using UV's DistributionDatabase.
+///
+/// This first tries to extract metadata statically via `database.requires_dist()`,
+/// which parses the pyproject.toml without building. If static extraction fails
+/// (e.g., dynamic dependencies), it falls back to building the wheel metadata.
+///
+/// Static metadata is cached across platforms since it doesn't depend on the platform.
+async fn read_local_package_metadata(
+    directory: &Path,
+    package_name: &pep508_rs::PackageName,
+    ctx: &BuildMetadataContext<'_>,
+) -> Result<pypi_metadata::LocalPackageMetadata, PlatformUnsat> {
+    // Check if we already have static metadata cached for this directory
+    if let Some(cached_metadata) = ctx.static_metadata_cache.get(directory) {
+        tracing::debug!("Package {} - using cached static metadata", package_name);
+        return Ok(cached_metadata.value().clone());
+    }
+
+    let pypi_options = ctx.environment.pypi_options();
+
+    // Look up editability from the manifest (not stored in lock file).
+    // This affects which PEP 517 hook uv calls
+    // (prepare_metadata_for_build_editable vs prepare_metadata_for_build_wheel).
+    let editable = ctx
+        .environment
+        .pypi_dependencies(Some(ctx.platform))
+        .get(package_name)
+        .and_then(|specs| specs.iter().find_map(|spec| spec.editable()))
+        .unwrap_or(false);
+
+    // Find the Python interpreter from locked records
+    let python_record = ctx
+        .locked_pixi_records
+        .records
+        .iter()
+        .find(|r| is_python_record(r))
+        .ok_or_else(|| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                "No Python interpreter found in locked packages".to_string(),
+            )
+        })?;
+
+    // Create marker environment for the target platform
+    let marker_environment = determine_marker_environment(ctx.platform, python_record.as_ref())
+        .map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to determine marker environment: {e}"),
+            )
+        })?;
+
+    let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
+
+    // Get or create cache entry for this environment and host platform
+    // We use best_platform() since the build prefix is shared across all target platforms
+    let best_platform = ctx.environment.best_platform();
+    let cache_key = BuildCacheKey::new(ctx.environment.name().clone(), best_platform);
+    let cache = ctx.build_caches.entry(cache_key).or_default().clone();
+
+    let index_locations = pypi_options_to_index_locations(&pypi_options, ctx.project_root)
+        .map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to setup index locations: {e}"),
+            )
+        })?;
+
+    let build_options = pypi_options_to_build_options(
+        &pypi_options.no_build.clone().unwrap_or_default(),
+        &pypi_options.no_binary.clone().unwrap_or_default(),
+    )
+    .map_err(|e| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to create build options: {e}"),
+        )
+    })?;
+
+    let dependency_metadata = DependencyMetadata::default();
+
+    // Configure insecure hosts
+    let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
+        ctx.uv_context.allow_insecure_host.clone(),
+        ctx.uv_context.tls_no_verify,
+        &index_locations,
+    );
+
+    let registry_client = {
+        let base_client_builder = BaseClientBuilder::default()
+            .allow_insecure_host(allow_insecure_hosts.clone())
+            .markers(&marker_environment)
+            .keyring(ctx.uv_context.keyring_provider)
+            .connectivity(Connectivity::Online)
+            .native_tls(ctx.uv_context.use_native_tls)
+            .extra_middleware(ctx.uv_context.extra_middleware.clone());
+
+        let mut uv_client_builder =
+            RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
+                .index_locations(index_locations.clone())
+                .index_strategy(index_strategy);
+
+        for p in &ctx.uv_context.proxies {
+            uv_client_builder = uv_client_builder.proxy(p.clone())
+        }
+
+        Arc::new(uv_client_builder.build())
+    };
+
+    // Get tags for this platform (needed for FlatIndex)
+    let system_requirements = ctx.environment.system_requirements();
+    let tags =
+        get_pypi_tags(ctx.platform, &system_requirements, python_record.as_ref()).map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to determine pypi tags: {e}"),
+            )
+        })?;
+
+    let flat_index = {
+        let flat_index_client = FlatIndexClient::new(
+            registry_client.cached_client(),
+            Connectivity::Online,
+            &ctx.uv_context.cache,
+        );
+        let flat_index_urls: Vec<&IndexUrl> = index_locations
+            .flat_indexes()
+            .map(|index| index.url())
+            .collect();
+        let flat_index_entries = flat_index_client
+            .fetch_all(flat_index_urls.into_iter())
+            .await
+            .map_err(|e| {
+                PlatformUnsat::FailedToReadLocalMetadata(
+                    package_name.clone(),
+                    format!("Failed to fetch flat index entries: {e}"),
+                )
+            })?;
+        FlatIndex::from_entries(
+            flat_index_entries,
+            Some(&tags),
+            &ctx.uv_context.hash_strategy,
+            &build_options,
+        )
+    };
+
+    // Create build dispatch parameters
+    let config_settings = ConfigSettings::default();
+    let build_params = UvBuildDispatchParams::new(
+        &registry_client,
+        &ctx.uv_context.cache,
+        &index_locations,
+        &flat_index,
+        &dependency_metadata,
+        &config_settings,
+        &build_options,
+        &ctx.uv_context.hash_strategy,
+    )
+    .with_index_strategy(index_strategy)
+    .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
+    .with_shared_state(ctx.uv_context.shared_state.fork())
+    .with_source_strategy(ctx.uv_context.source_strategy)
+    .with_concurrency(ctx.uv_context.concurrency);
+
+    // Get or create conda prefix updater for the environment
+    // Use best_platform() because we can only install/run Python on the host platform
+    let conda_prefix_updater = cache
+        .conda_prefix_updater
+        .get_or_try_init(|| {
+            let prefix_platform = ctx.environment.best_platform();
+            let group = GroupedEnvironment::Environment(ctx.environment.clone());
+            let virtual_packages = ctx.environment.virtual_packages(prefix_platform);
+
+            // Force the initialization of the rayon thread pool to avoid implicit creation
+            // by the uv.
+            LazyLock::force(&RAYON_INITIALIZE);
+
+            CondaPrefixUpdater::builder(
+                group,
+                prefix_platform,
+                virtual_packages
+                    .into_iter()
+                    .map(GenericVirtualPackage::from)
+                    .collect(),
+                ctx.command_dispatcher.clone(),
+            )
+            .finish()
+            .map_err(|e| {
+                PlatformUnsat::FailedToReadLocalMetadata(
+                    package_name.clone(),
+                    format!("Failed to create conda prefix updater: {e}"),
+                )
+            })
+        })?
+        .clone();
+
+    // Use cached lazy build dispatch dependencies
+    let last_error = Arc::new(OnceCell::new());
+    // Use building_pixi_records (host platform) for installing Python and building,
+    // since we can only run binaries on the host platform
+    let building_records: miette::Result<Vec<PixiRecord>> = ctx
+        .building_pixi_records
+        .as_ref()
+        .map(|r| r.records.clone())
+        .map_err(|e| miette::miette!("{}", e));
+    let lazy_build_dispatch = LazyBuildDispatch::new(
+        build_params,
+        conda_prefix_updater,
+        ctx.project_env_vars.clone(),
+        ctx.environment.clone(),
+        building_records,
+        pypi_options.no_build_isolation.clone(),
+        &cache.lazy_build_dispatch_deps,
+        None,
+        false,
+        Arc::clone(&last_error),
+    );
+
+    // Create distribution database
+    let database = DistributionDatabase::new(
+        &registry_client,
+        &lazy_build_dispatch,
+        ctx.uv_context.concurrency.downloads,
+    );
+
+    // Try to read pyproject.toml and use requires_dist() first
+    let pyproject_path = directory.join("pyproject.toml");
+    if let Ok(contents) = fs_err::read_to_string(&pyproject_path) {
+        // Parse with toml_edit for version/requires_python
+        if let Ok(toml) = contents.parse::<toml_edit::DocumentMut>() {
+            let version = toml
+                .get("project")
+                .and_then(|p| p.get("version"))
+                .and_then(|v| v.as_str())
+                .and_then(|v| v.parse::<pep440_rs::Version>().ok());
+
+            let requires_python = toml
+                .get("project")
+                .and_then(|p| p.get("requires-python"))
+                .and_then(|v| v.as_str())
+                .and_then(|rp| rp.parse::<VersionSpecifiers>().ok());
+
+            // Parse pyproject.toml with UV's parser for requires_dist
+            if let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) {
+                // Try to extract requires_dist statically using UV's database
+                // The `dynamic` flag on `RequiresDist` is true when any
+                // field is listed in `[project.dynamic]`, not just
+                // dependencies. Since we handle version separately (and
+                // skip comparison when it's `None`), we accept the
+                // statically extracted deps regardless of the flag.
+                match database.requires_dist(directory, &pyproject_toml).await {
+                    Ok(Some(requires_dist)) => {
+                        tracing::debug!(
+                            "Package {} - extracted requires_dist using database.requires_dist(). Dynamic: {}",
+                            package_name,
+                            requires_dist.dynamic
+                        );
+
+                        // Convert uv requirements to pep508_rs requirements
+                        let requires_dist_converted: Result<Vec<pep508_rs::Requirement>, _> =
+                            requires_dist
+                                .requires_dist
+                                .iter()
+                                .map(|req| {
+                                    let req_str = req.to_string();
+                                    req_str.parse::<pep508_rs::Requirement>().map_err(|e| {
+                                        PlatformUnsat::FailedToReadLocalMetadata(
+                                            package_name.clone(),
+                                            format!("Invalid requirement: {e}"),
+                                        )
+                                    })
+                                })
+                                .collect();
+
+                        if let Ok(requires_dist_vec) = requires_dist_converted {
+                            let metadata = pypi_metadata::LocalPackageMetadata {
+                                version,
+                                requires_dist: requires_dist_vec,
+                                requires_python,
+                            };
+                            // Cache the static metadata for reuse on other platforms
+                            ctx.static_metadata_cache
+                                .insert(directory.to_path_buf(), metadata.clone());
+                            return Ok(metadata);
+                        }
+                    }
+                    Ok(None) => {
+                        tracing::debug!(
+                            "Package {} - requires_dist() returned None, falling back to build",
+                            package_name
+                        );
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            "Package {} - requires_dist() failed: {}, falling back to build",
+                            package_name,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Fall back to building the wheel metadata
+    tracing::debug!(
+        "Package {} - building wheel metadata with get_or_build_wheel_metadata()",
+        package_name
+    );
+
+    // Create the directory source dist
+    let uv_package_name =
+        uv_normalize::PackageName::from_str(package_name.as_ref()).map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Invalid package name: {e}"),
+            )
+        })?;
+
+    let install_path = directory.to_path_buf();
+    let file_url = url::Url::from_file_path(&install_path).map_err(|_| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to convert path to URL: {}", install_path.display()),
+        )
+    })?;
+    let verbatim_url = uv_pep508::VerbatimUrl::from_url(file_url.into());
+    let source_dist = DirectorySourceDist {
+        name: uv_package_name,
+        install_path: install_path.into_boxed_path(),
+        editable: Some(editable),
+        r#virtual: Some(false),
+        url: verbatim_url,
+    };
+
+    // Build the metadata
+    let metadata_response = database
+        .get_or_build_wheel_metadata(
+            &Dist::Source(SourceDist::Directory(source_dist)),
+            HashPolicy::None,
+        )
+        .await
+        .map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to build metadata: {e}"),
+            )
+        })?;
+
+    // Convert UV metadata to our format
+    pypi_metadata::from_uv_metadata(&metadata_response.metadata).map_err(|e| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to convert metadata: {e}"),
+        )
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        path::{Path, PathBuf},
+        str::FromStr,
+    };
+
+    use pep440_rs::Version;
+    use pep508_rs;
+    use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
+    use pixi_manifest::pypi::pypi_options::NoBuild;
+    use pixi_pypi_spec::PixiPypiSource;
+    use pixi_uv_conversions::pep508_requirement_to_uv_requirement;
+    use rattler_lock::{PypiPackageData, UrlOrPath, Verbatim};
+    use url::Url;
+    use uv_distribution_types::RequirementSource;
+
+    use super::super::PypiNoBuildCheck;
+    use super::pypi_satisfies_requirement;
+    use crate::lock_file::tests::{make_source_package_with, make_wheel_package_with};
+
+    /// Lock a `PypiPackageData` into a `LockedPypiRecord` for testing.
+    /// Uses the package version for wheels, a dummy version for source packages.
+    fn lock_for_test(data: PypiPackageData) -> LockedPypiRecord {
+        let version = data
+            .version()
+            .cloned()
+            .unwrap_or_else(|| Version::from_str("42.23").unwrap());
+        UnresolvedPypiRecord::from(data).lock(version)
+    }
+
+    #[test]
+    fn test_pypi_git_check_with_rev() {
+        // Mock locked data
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            "git+https://github.com/mypkg@rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@2993").unwrap(),
+        )
+        .unwrap();
+        let project_root = PathBuf::from_str("/").unwrap();
+        // This will not satisfy because the rev length is different, even being
+        // resolved to the same one
+        pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
+
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            "git+https://github.com/mypkg.git?rev=29932f3915935d773dc8d52c292cadd81c81071d#29932f3915935d773dc8d52c292cadd81c81071d"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str(
+                "mypkg @ git+https://github.com/mypkg.git@29932f3915935d773dc8d52c292cadd81c81071d",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let project_root = PathBuf::from_str("/").unwrap();
+        // This will satisfy
+        pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap();
+        let non_matching_spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap(),
+        )
+        .unwrap();
+        pypi_satisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
+
+        // Removing the rev from the Requirement should NOT satisfy when lock has
+        // explicit Rev. This ensures that when a user removes an explicit ref
+        // from the manifest, the lock file gets re-resolved.
+        let spec_without_rev = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
+        )
+        .unwrap();
+        pypi_satisfies_requirement(&spec_without_rev, &locked_data, &project_root).unwrap_err();
+
+        // When lock has DefaultBranch (no explicit ref), removing rev from manifest
+        // should satisfy
+        // No ?rev= query param, only the fragment with commit hash
+        let locked_data_default_branch = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+        pypi_satisfies_requirement(
+            &spec_without_rev,
+            &locked_data_default_branch,
+            &project_root,
+        )
+        .unwrap();
+    }
+
+    // Do not use unix paths on windows: The path gets normalized to something
+    // unix-y, and the lockfile keeps the "pretty" path the user filled in at
+    // all times. So on windows the test fails.
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_unix_absolute_path_handling() {
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            Verbatim::new(UrlOrPath::Path("/home/username/mypkg.tar.gz".into())),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+
+        let spec =
+            pep508_rs::Requirement::from_str("mypkg @ file:///home/username/mypkg.tar.gz").unwrap();
+
+        let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
+
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    #[test]
+    fn test_windows_absolute_path_handling() {
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            Verbatim::new(UrlOrPath::Path("C:\\Users\\username\\mypkg.tar.gz".into())),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+
+        let spec =
+            pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
+                .unwrap();
+
+        let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
+
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    #[test]
+    fn pypi_editable_satisfied() {
+        let pypi_no_build_check = PypiNoBuildCheck::new(Some(&NoBuild::All));
+
+        pypi_no_build_check
+            .check(
+                &make_source_package_with(
+                    "sdist",
+                    UrlOrPath::from_str(".").expect("invalid path").into(),
+                    vec![],
+                    None,
+                )
+                .into(),
+                Some(&PixiPypiSource::Path {
+                    path: PathBuf::from("").into(),
+                    editable: Some(true),
+                }),
+            )
+            .expect("check must pass");
+    }
+
+    /// Test that `pypi_satisfies_requirement` works correctly when a pypi
+    /// package has no version (dynamic version from a source dependency).
+    /// Path-based requirements should still satisfy.
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_pypi_satisfies_path_requirement_without_version() {
+        let locked_data = lock_for_test(make_source_package_with(
+            "dynamic-dep",
+            Verbatim::new(UrlOrPath::Path("/home/user/project/dynamic-dep".into())),
+            vec![],
+            None,
+        ));
+
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("dynamic-dep @ file:///home/user/project/dynamic-dep")
+                .unwrap(),
+        )
+        .unwrap();
+
+        // A path-based source dependency without a version should still satisfy
+        // a path-based requirement.
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    /// Windows variant of the path-based dynamic version test.
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_pypi_satisfies_path_requirement_without_version() {
+        let locked_data = lock_for_test(make_source_package_with(
+            "dynamic-dep",
+            Verbatim::new(UrlOrPath::Path(
+                "C:\\Users\\user\\project\\dynamic-dep".into(),
+            )),
+            vec![],
+            None,
+        ));
+
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str(
+                "dynamic-dep @ file:///C:\\Users\\user\\project\\dynamic-dep",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        // A path-based source dependency without a version should still satisfy
+        // a path-based requirement.
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    /// Test that `pypi_satisfies_requirement` works with a git-based
+    /// requirement when the locked package has no version.
+    #[test]
+    fn test_pypi_satisfies_git_requirement_without_version() {
+        let locked_data = lock_for_test(make_source_package_with(
+            "mypkg",
+            "git+https://github.com/mypkg.git#29932f3915935d773dc8d52c292cadd81c81071d"
+                .parse()
+                .expect("failed to parse url"),
+            vec![],
+            None,
+        ));
+
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
+        )
+        .unwrap();
+
+        // A git-based source dependency without a version should still satisfy.
+        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+    }
+
+    /// Regression test: removing a PyPI `index` from the manifest should
+    /// invalidate the lock-file when the locked package was resolved from that
+    /// index.
+    ///
+    /// Verify that removing an explicit index from a PyPI requirement
+    /// invalidates the lock-file entry that was resolved from that index.
+    #[test]
+    fn test_pypi_index_removed_should_invalidate() {
+        // Locked data: package was resolved from a custom index.
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://custom.example.com/simple/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            Some(Url::parse("https://custom.example.com/simple").unwrap()),
+            vec![],
+            None,
+        ));
+
+        // Requirement: no index specified (user removed the `index` field).
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("my-dep>=1.0").unwrap(),
+        )
+        .unwrap();
+
+        let project_root = PathBuf::from_str("/").unwrap();
+
+        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        assert!(
+            result.is_err(),
+            "expected index removal to invalidate satisfiability, \
+             but pypi_satisfies_requirement returned Ok(())"
+        );
+    }
+
+    /// Helper to build a `uv_distribution_types::Requirement` with an explicit index.
+    fn registry_requirement_with_index(
+        name: &str,
+        specifier: &str,
+        index_url: &str,
+    ) -> uv_distribution_types::Requirement {
+        use uv_normalize::PackageName as UvPackageName;
+        use uv_pep440::VersionSpecifiers;
+
+        let index =
+            uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
+                uv_pep508::VerbatimUrl::from_url(Url::parse(index_url).unwrap().into()),
+            ));
+        uv_distribution_types::Requirement {
+            name: UvPackageName::from_str(name).unwrap(),
+            extras: vec![].into(),
+            groups: vec![].into(),
+            marker: uv_pep508::MarkerTree::TRUE,
+            source: RequirementSource::Registry {
+                specifier: VersionSpecifiers::from_str(specifier).unwrap(),
+                index: Some(index),
+                conflict: None,
+            },
+            origin: None,
+        }
+    }
+
+    /// Verify that changing a PyPI index to a different non-default index
+    /// invalidates the lock-file.
+    #[test]
+    fn test_pypi_index_changed_should_invalidate() {
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://old-index.example.com/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            Some(Url::parse("https://old-index.example.com/simple").unwrap()),
+            vec![],
+            None,
+        ));
+
+        let spec = registry_requirement_with_index(
+            "my-dep",
+            ">=1.0",
+            "https://new-index.example.com/simple",
+        );
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        assert!(
+            result.is_err(),
+            "expected index change to invalidate satisfiability"
+        );
+    }
+
+    /// Verify that a matching non-default index is considered satisfiable.
+    #[test]
+    fn test_pypi_index_matching_should_satisfy() {
+        let index_url = "https://custom.example.com/simple";
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://custom.example.com/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            Some(Url::parse(index_url).unwrap()),
+            vec![],
+            None,
+        ));
+
+        let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        assert!(
+            result.is_ok(),
+            "expected matching index to satisfy, got: {:?}",
+            result.unwrap_err()
+        );
+    }
+
+    /// Verify that adding an index to a requirement that was locked with the
+    /// default index invalidates the lock-file.
+    #[test]
+    fn test_pypi_index_added_should_invalidate() {
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://pypi.org/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            Some(Url::parse("https://pypi.org/simple").unwrap()),
+            vec![],
+            None,
+        ));
+
+        let spec =
+            registry_requirement_with_index("my-dep", ">=1.0", "https://custom.example.com/simple");
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        assert!(
+            result.is_err(),
+            "expected adding an index to invalidate satisfiability"
+        );
+    }
+
+    /// V6 lockfiles don't store per-package PyPI index URLs, so
+    /// `index_url` is `None` after parsing. When the manifest specifies a
+    /// per-package `index`, the satisfiability check must not treat the
+    /// missing locked index as a mismatch — it is simply absent from the
+    /// older format.
+    ///
+    /// This is a regression test for a bug observed in crater runs where
+    /// `pixi install --all` upgraded v6 lockfiles to v7.
+    #[test]
+    fn test_v6_missing_index_url_should_not_invalidate() {
+        let index_url = "https://custom.example.com/simple";
+
+        // Simulate a v6 locked package: resolved from a custom index, but
+        // index_url is None because v6 doesn't store it.
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://custom.example.com/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            None, // v6: no per-package index_url
+            vec![],
+            None,
+        ));
+
+        let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        assert!(
+            result.is_ok(),
+            "v6 lockfile with missing index_url should still satisfy a \
+             requirement with an explicit index, got: {:?}",
+            result.unwrap_err()
+        );
+    }
+}
