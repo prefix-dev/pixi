@@ -265,7 +265,7 @@ fn build_env_yaml_from_lockfile(
     let env_name = environment.name().as_str();
     let lockfile_env = lockfile.environment(env_name).ok_or_else(|| {
         miette::miette!(
-            help = "Run `pixi install` (or another command that updates the lock file) first.",
+            help = "Run `pixi lock` (or another command that updates the lock file) first.",
             "environment '{env_name}' not found in the lock file"
         )
     })?;
@@ -280,7 +280,7 @@ fn build_env_yaml_from_lockfile(
 
     let packages = lockfile_env.packages(*platform).ok_or_else(|| {
         miette::miette!(
-            help = "Run `pixi install` for this platform first.",
+            help = "Run `pixi lock` to update the lock file for this platform.",
             "platform '{platform}' not found in the lock file for environment '{env_name}'"
         )
     })?;
@@ -393,7 +393,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let lock_file_path = workspace.lock_file_path();
         if !lock_file_path.is_file() {
             miette::bail!(
-                help = "Run `pixi install` (or another command that updates the lock file) first.",
+                help = "Run `pixi lock` (or another command that updates the lock file) first.",
                 "no lock file found at '{}'",
                 lock_file_path.display(),
             );
