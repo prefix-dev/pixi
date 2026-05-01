@@ -658,7 +658,7 @@ version = "0.1.0"
     }
 
     #[tokio::test]
-    async fn test_pip_is_in_host_requirements() {
+    async fn test_uv_is_in_host_requirements() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -1125,7 +1125,7 @@ build-backend = "hatchling.build"
             "run deps should only contain python when ignore_pypi_mapping=true"
         );
 
-        // Host requirements should only contain pip (auto-added installer) and python
+        // Host requirements should only contain uv (auto-added default installer) and python
         let host_deps: Vec<String> = generated_recipe
             .recipe
             .requirements
@@ -1136,8 +1136,8 @@ build-backend = "hatchling.build"
 
         assert_eq!(
             host_deps,
-            vec!["pip", "python"],
-            "host deps should only contain pip and python when ignore_pypi_mapping=true"
+            vec!["uv", "python"],
+            "host deps should only contain uv and python when ignore_pypi_mapping=true"
         );
     }
 
