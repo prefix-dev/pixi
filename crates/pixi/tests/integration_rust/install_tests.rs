@@ -1940,5 +1940,7 @@ async fn install_all_skips_unsupported_environments() {
     pixi.install()
         .with_environment(vec!["other".to_string()])
         .await
-        .expect_err("install -e other should fail because it does not support the current platform");
+        .expect_err(
+            "install -e other should fail because it does not support the current platform",
+        );
 }
