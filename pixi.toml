@@ -55,8 +55,8 @@ python = ">=3.14,<3.15"
 env.CARGO_TARGET_DIR = "target/pixi"
 
 [feature.rust.dependencies]
-rust = ">=1.90.0,<1.91"
-rust-src = ">=1.90.0,<2"
+rust = ">=1.94.0,<1.95"
+rust-src = ">=1.94.0,<2"
 
 [feature.rust.target.unix.activation]
 scripts = ["scripts/activate.sh"]
