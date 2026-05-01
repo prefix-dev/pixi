@@ -22,9 +22,7 @@ use tracing::instrument;
 use url::Url;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
-use crate::cache::{
-    ArtifactCacheError, compute_artifact_cache_key, compute_workspace_key,
-};
+use crate::cache::{ArtifactCacheError, compute_artifact_cache_key, compute_workspace_key};
 use crate::compute_data::HasCacheDirs;
 use crate::{
     BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
@@ -646,9 +644,7 @@ fn map_cache_err(err: ArtifactCacheError) -> SourceBuildError {
             SourceBuildError::CreateWorkDirectory(Arc::new(std::io::Error::new(source.kind(), msg)))
         }
         ArtifactCacheError::Glob(err) => SourceBuildError::GlobSet(err),
-        ArtifactCacheError::ArtifactFilename(path) => {
-            SourceBuildError::MissingOutputFile(path)
-        }
+        ArtifactCacheError::ArtifactFilename(path) => SourceBuildError::MissingOutputFile(path),
     }
 }
 
