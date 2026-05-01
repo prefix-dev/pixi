@@ -473,6 +473,8 @@ impl SourceSpec {
             license,
             condition,
             track_features: _,
+            flags: _,
+            license_family: _,
         } = spec;
         Self {
             location,

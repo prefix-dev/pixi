@@ -1436,6 +1436,7 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> Result<(),
         timestamp: _,
         track_features: a_track_features,
         version: a_version,
+        flags: _,
     } = &a;
     let PackageRecord {
         arch: _,
@@ -1464,6 +1465,7 @@ fn package_records_are_equal(a: &PackageRecord, b: &PackageRecord) -> Result<(),
         timestamp: _,
         track_features: b_track_features,
         version: b_version,
+        flags: _,
     } = &b;
 
     if a_name != b_name {

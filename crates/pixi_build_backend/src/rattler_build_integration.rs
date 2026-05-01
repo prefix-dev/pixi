@@ -198,6 +198,7 @@ pub async fn get_build_output(
                 sandbox_config: None,
                 solve_strategy: Default::default(),
                 exclude_newer: None,
+                env_isolation: Default::default(),
             },
             finalized_dependencies: None,
             finalized_sources: None,
@@ -206,6 +207,7 @@ pub async fn get_build_output(
             system_tools: SystemTools::new(backend_name, backend_version),
             build_summary: Arc::default(),
             extra_meta: None,
+            staging_library_name_map: None,
         };
 
         let temp_recipe = TemporaryRenderedRecipe::from_output(&output)?;

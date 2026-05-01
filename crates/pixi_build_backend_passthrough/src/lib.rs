@@ -847,6 +847,8 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                         .clone()
                         .unwrap_or_else(|| Version::major(0))
                         .into(),
+                    flags: vec![],
+                    repodata_revision: None,
                 };
                 (index_json, None)
             }

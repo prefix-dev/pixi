@@ -472,6 +472,7 @@ impl SourceMetadataSpec {
 
                 // These are not important at this point.
                 experimental_extra_depends: Default::default(),
+                flags: vec![],
             },
             sources: sources
                 .into_iter()
