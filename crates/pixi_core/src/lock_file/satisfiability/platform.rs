@@ -21,28 +21,26 @@ use pixi_manifest::{EnvironmentName, FeaturesExt};
 use pixi_record::{
     DevSourceRecord, LockFileResolver, PixiRecord, SourceRecordData, UnresolvedPixiRecord,
 };
-use pixi_spec::{
-    PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError,
-};
+use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     as_uv_req, pep508_requirement_to_uv_requirement, to_normalize, to_uv_specifiers, to_uv_version,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseChannelError,
-    ParseMatchSpecError, ParseStrictness::Lenient, Platform,
+    GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseChannelError, ParseMatchSpecError,
+    ParseStrictness::Lenient, Platform,
 };
 use rattler_lock::{LockedPackage, UrlOrPath};
 use uv_distribution_types::{RequirementSource, RequiresPython};
 
 use super::errors::{LocalMetadataMismatch, PlatformUnsat, SolveGroupUnsat};
+use super::legacy;
 use super::pypi::{lock_pypi_packages, pypi_satisfies_editable, pypi_satisfies_requirement};
 use super::pypi_metadata;
 use super::source_record::{
     verify_build_source_matches_manifest, verify_partial_source_record_against_backend,
 };
-use super::legacy;
 use crate::{
     lock_file::{
         PixiRecordsByName, PypiRecordsByName,
@@ -311,7 +309,6 @@ pub async fn verify_platform_satisfiability(
 
     package_verification_future.await
 }
-
 
 #[allow(clippy::large_enum_variant)]
 /// A dependency that needs to be checked in the lock file
@@ -1237,7 +1234,10 @@ pub(super) fn spec_conversion_to_match_spec_error(e: SpecConversionError) -> Par
 }
 
 /// Wrap a parse error into a `PlatformUnsat::FailedToParseMatchSpec`.
-pub(super) fn failed_to_parse_match_spec_unsat(name: &str, err: ParseMatchSpecError) -> Box<PlatformUnsat> {
+pub(super) fn failed_to_parse_match_spec_unsat(
+    name: &str,
+    err: ParseMatchSpecError,
+) -> Box<PlatformUnsat> {
     Box::new(PlatformUnsat::FailedToParseMatchSpec(name.to_string(), err))
 }
 

@@ -1,15 +1,9 @@
-//! Top-level orchestration tests for satisfiability verification.
-//!
-//! These walk through the full pipeline (`verify_environment_satisfiability`
-//! + `verify_platform_satisfiability` + `verify_solve_group_satisfiability`)
-//! against fixture workspaces, then snapshot the resulting diagnostic. They
-//! intentionally live in `lock_file::satisfiability::tests` so the existing
-//! snapshot files under `satisfiability/snapshots/` keep matching the
-//! generated module-path key.
-//!
-//! Per-module unit tests live next to the code they exercise: pypi tests in
-//! `pypi.rs`, source-record / backend-verification tests in
-//! `source_record.rs`.
+// Top-level orchestration tests for satisfiability verification. They walk
+// through the full pipeline against fixture workspaces and snapshot the
+// resulting diagnostic. Lives at `lock_file::satisfiability::tests` so the
+// existing snapshot files under `satisfiability/snapshots/` keep matching
+// the generated module-path key. Per-module unit tests live next to the
+// code they exercise.
 
 use std::{
     collections::HashMap,
@@ -295,4 +289,3 @@ fn test_version_specifiers_logic() {
         Some(1)
     );
 }
-

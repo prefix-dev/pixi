@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use pixi_command_dispatcher::{
     CommandDispatcherError,
-    build::{Dependencies, PixiRunExports, dependencies::filter_match_specs, pin_compatible::PinCompatibilityMap},
+    build::{
+        Dependencies, PixiRunExports, dependencies::filter_match_specs,
+        pin_compatible::PinCompatibilityMap,
+    },
 };
 use pixi_record::{
     PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, SourceMismatchError, SourceRecordData,
@@ -798,8 +801,8 @@ mod tests {
         BinaryPackageSpec, NamedSpec, PackageSpec, PinCompatibleSpec, SourcePackageName,
         VariantValue,
         procedures::conda_outputs::{
-            CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports,
-            CondaOutputMetadata, CondaOutputRunExports,
+            CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
+            CondaOutputRunExports,
         },
     };
     use pixi_record::{
@@ -849,11 +852,8 @@ mod tests {
         } else {
             BinaryPackageSpec {
                 version: Some(
-                    VersionSpec::from_str(
-                        spec_str,
-                        rattler_conda_types::ParseStrictness::Lenient,
-                    )
-                    .expect("valid spec"),
+                    VersionSpec::from_str(spec_str, rattler_conda_types::ParseStrictness::Lenient)
+                        .expect("valid spec"),
                 ),
                 ..Default::default()
             }
@@ -1121,8 +1121,7 @@ mod tests {
         // run_deps. The synthesized full record must keep the
         // locked depends (which carries previously-resolved
         // run-exports) and the locked manifest pin verbatim.
-        let mut partial =
-            make_partial_source_record("mypkg", "./mypkg", Vec::new(), Vec::new());
+        let mut partial = make_partial_source_record("mypkg", "./mypkg", Vec::new(), Vec::new());
         // Hand-set locked depends so the assertion has something
         // distinctive to compare.
         if let SourceRecordData::Partial(p) = &mut partial.data {
@@ -1148,9 +1147,9 @@ mod tests {
     /// `foo` from another dep.
     #[test]
     fn pin_compatible_host_dep_rejects_when_build_lacks_package() {
-        let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
-            Arc::new(make_binary_record("numpy", "1.5")),
-        )];
+        let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record("numpy", "1.5"),
+        ))];
         let build_locked: Vec<UnresolvedPixiRecord> = Vec::new();
 
         let host_deps = CondaOutputDependencies {
@@ -1190,12 +1189,12 @@ mod tests {
     /// with no bounds (resolves to `*`). Verification passes.
     #[test]
     fn pin_compatible_host_dep_satisfied() {
-        let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
-            Arc::new(make_binary_record("numpy", "1.5")),
-        )];
-        let build_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
-            Arc::new(make_binary_record("numpy", "1.5")),
-        )];
+        let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record("numpy", "1.5"),
+        ))];
+        let build_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record("numpy", "1.5"),
+        ))];
 
         let host_deps = CondaOutputDependencies {
             depends: vec![pin_compatible_dep("numpy")],
@@ -1228,12 +1227,12 @@ mod tests {
     fn pin_compatible_host_dep_rejects_version_drift() {
         use pixi_build_types::PinCompatibleSpec;
 
-        let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
-            Arc::new(make_binary_record("numpy", "1.5")),
-        )];
-        let build_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
-            Arc::new(make_binary_record("numpy", "2.0")),
-        )];
+        let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record("numpy", "1.5"),
+        ))];
+        let build_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record("numpy", "2.0"),
+        ))];
 
         let host_deps = CondaOutputDependencies {
             depends: vec![pin_compatible_dep_with(
@@ -1414,11 +1413,8 @@ mod tests {
             name: SourcePackageName::from(PackageName::from_str(name).unwrap()),
             spec: pixi_build_types::ConstraintSpec::Binary(BinaryPackageSpec {
                 version: Some(
-                    VersionSpec::from_str(
-                        spec_str,
-                        rattler_conda_types::ParseStrictness::Lenient,
-                    )
-                    .unwrap(),
+                    VersionSpec::from_str(spec_str, rattler_conda_types::ParseStrictness::Lenient)
+                        .unwrap(),
                 ),
                 ..Default::default()
             }),

@@ -20,8 +20,8 @@ use pixi_uv_conversions::{
     configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_options_to_build_options,
     pypi_options_to_index_locations, to_index_strategy,
 };
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
@@ -47,7 +47,9 @@ use crate::{
         records_by_name::LockedPypiRecordsByName,
         resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
     },
-    workspace::{Environment, EnvironmentVars, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
+    workspace::{
+        Environment, EnvironmentVars, HasWorkspaceRef, grouped_environment::GroupedEnvironment,
+    },
 };
 
 /// Returns `true` if the given URL is the default PyPI index
@@ -843,8 +845,8 @@ mod tests {
     use url::Url;
     use uv_distribution_types::RequirementSource;
 
-    use super::pypi_satisfies_requirement;
     use super::super::PypiNoBuildCheck;
+    use super::pypi_satisfies_requirement;
     use crate::lock_file::tests::{make_source_package_with, make_wheel_package_with};
 
     /// Lock a `PypiPackageData` into a `LockedPypiRecord` for testing.
@@ -856,7 +858,7 @@ mod tests {
             .unwrap_or_else(|| Version::from_str("42.23").unwrap());
         UnresolvedPypiRecord::from(data).lock(version)
     }
-    
+
     #[test]
     fn test_pypi_git_check_with_rev() {
         // Mock locked data
@@ -879,7 +881,7 @@ mod tests {
         // This will not satisfy because the rev length is different, even being
         // resolved to the same one
         pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
-    
+
         let locked_data = lock_for_test(make_wheel_package_with(
             "mypkg",
             "0.1.0",
@@ -906,7 +908,7 @@ mod tests {
         )
         .unwrap();
         pypi_satisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
-    
+
         // Removing the rev from the Requirement should NOT satisfy when lock has
         // explicit Rev. This ensures that when a user removes an explicit ref
         // from the manifest, the lock file gets re-resolved.
@@ -915,7 +917,7 @@ mod tests {
         )
         .unwrap();
         pypi_satisfies_requirement(&spec_without_rev, &locked_data, &project_root).unwrap_err();
-    
+
         // When lock has DefaultBranch (no explicit ref), removing rev from manifest
         // should satisfy
         // No ?rev= query param, only the fragment with commit hash
@@ -937,11 +939,12 @@ mod tests {
         )
         .unwrap();
     }
-    
+
     // Do not use unix paths on windows: The path gets normalized to something
     // unix-y, and the lockfile keeps the "pretty" path the user filled in at
     // all times. So on windows the test fails.
-    
+
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn test_unix_absolute_path_handling() {
         let locked_data = lock_for_test(make_wheel_package_with(
@@ -953,15 +956,15 @@ mod tests {
             vec![],
             None,
         ));
-    
+
         let spec =
             pep508_rs::Requirement::from_str("mypkg @ file:///home/username/mypkg.tar.gz").unwrap();
-    
+
         let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
-    
+
         pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
-    
+
     #[test]
     fn test_windows_absolute_path_handling() {
         let locked_data = lock_for_test(make_wheel_package_with(
@@ -973,21 +976,20 @@ mod tests {
             vec![],
             None,
         ));
-    
+
         let spec =
             pep508_rs::Requirement::from_str("mypkg @ file:///C:\\Users\\username\\mypkg.tar.gz")
                 .unwrap();
-    
+
         let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
-    
+
         pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
-    
-    
+
     #[test]
     fn pypi_editable_satisfied() {
         let pypi_no_build_check = PypiNoBuildCheck::new(Some(&NoBuild::All));
-    
+
         pypi_no_build_check
             .check(
                 &make_source_package_with(
@@ -1004,7 +1006,7 @@ mod tests {
             )
             .expect("check must pass");
     }
-    
+
     /// Test that `pypi_satisfies_requirement` works correctly when a pypi
     /// package has no version (dynamic version from a source dependency).
     /// Path-based requirements should still satisfy.
@@ -1017,18 +1019,18 @@ mod tests {
             vec![],
             None,
         ));
-    
+
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("dynamic-dep @ file:///home/user/project/dynamic-dep")
                 .unwrap(),
         )
         .unwrap();
-    
+
         // A path-based source dependency without a version should still satisfy
         // a path-based requirement.
         pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
-    
+
     /// Windows variant of the path-based dynamic version test.
     #[cfg(target_os = "windows")]
     #[test]
@@ -1041,7 +1043,7 @@ mod tests {
             vec![],
             None,
         ));
-    
+
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str(
                 "dynamic-dep @ file:///C:\\Users\\user\\project\\dynamic-dep",
@@ -1049,12 +1051,12 @@ mod tests {
             .unwrap(),
         )
         .unwrap();
-    
+
         // A path-based source dependency without a version should still satisfy
         // a path-based requirement.
         pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
-    
+
     /// Test that `pypi_satisfies_requirement` works with a git-based
     /// requirement when the locked package has no version.
     #[test]
@@ -1067,16 +1069,16 @@ mod tests {
             vec![],
             None,
         ));
-    
+
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
         )
         .unwrap();
-    
+
         // A git-based source dependency without a version should still satisfy.
         pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
     }
-    
+
     /// Regression test: removing a PyPI `index` from the manifest should
     /// invalidate the lock-file when the locked package was resolved from that
     /// index.
@@ -1097,15 +1099,15 @@ mod tests {
             vec![],
             None,
         ));
-    
+
         // Requirement: no index specified (user removed the `index` field).
         let spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("my-dep>=1.0").unwrap(),
         )
         .unwrap();
-    
+
         let project_root = PathBuf::from_str("/").unwrap();
-    
+
         let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
         assert!(
             result.is_err(),
@@ -1113,8 +1115,7 @@ mod tests {
              but pypi_satisfies_requirement returned Ok(())"
         );
     }
-    
-    
+
     fn registry_requirement_with_index(
         name: &str,
         specifier: &str,
@@ -1122,7 +1123,7 @@ mod tests {
     ) -> uv_distribution_types::Requirement {
         use uv_normalize::PackageName as UvPackageName;
         use uv_pep440::VersionSpecifiers;
-    
+
         let index =
             uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
                 uv_pep508::VerbatimUrl::from_url(Url::parse(index_url).unwrap().into()),
@@ -1140,7 +1141,7 @@ mod tests {
             origin: None,
         }
     }
-    
+
     /// Verify that changing a PyPI index to a different non-default index
     /// invalidates the lock-file.
     #[test]
@@ -1156,13 +1157,13 @@ mod tests {
             vec![],
             None,
         ));
-    
+
         let spec = registry_requirement_with_index(
             "my-dep",
             ">=1.0",
             "https://new-index.example.com/simple",
         );
-    
+
         let project_root = PathBuf::from_str("/").unwrap();
         let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
         assert!(
@@ -1170,7 +1171,7 @@ mod tests {
             "expected index change to invalidate satisfiability"
         );
     }
-    
+
     /// Verify that a matching non-default index is considered satisfiable.
     #[test]
     fn test_pypi_index_matching_should_satisfy() {
@@ -1186,9 +1187,9 @@ mod tests {
             vec![],
             None,
         ));
-    
+
         let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
-    
+
         let project_root = PathBuf::from_str("/").unwrap();
         let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
         assert!(
@@ -1197,7 +1198,7 @@ mod tests {
             result.unwrap_err()
         );
     }
-    
+
     /// Verify that adding an index to a requirement that was locked with the
     /// default index invalidates the lock-file.
     #[test]
@@ -1213,10 +1214,10 @@ mod tests {
             vec![],
             None,
         ));
-    
+
         let spec =
             registry_requirement_with_index("my-dep", ">=1.0", "https://custom.example.com/simple");
-    
+
         let project_root = PathBuf::from_str("/").unwrap();
         let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
         assert!(
@@ -1224,7 +1225,7 @@ mod tests {
             "expected adding an index to invalidate satisfiability"
         );
     }
-    
+
     /// V6 lockfiles don't store per-package PyPI index URLs, so
     /// `index_url` is `None` after parsing. When the manifest specifies a
     /// per-package `index`, the satisfiability check must not treat the
@@ -1236,7 +1237,7 @@ mod tests {
     #[test]
     fn test_v6_missing_index_url_should_not_invalidate() {
         let index_url = "https://custom.example.com/simple";
-    
+
         // Simulate a v6 locked package: resolved from a custom index, but
         // index_url is None because v6 doesn't store it.
         let locked_data = lock_for_test(make_wheel_package_with(
@@ -1250,9 +1251,9 @@ mod tests {
             vec![],
             None,
         ));
-    
+
         let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
-    
+
         let project_root = PathBuf::from_str("/").unwrap();
         let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
         assert!(

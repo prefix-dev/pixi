@@ -4,17 +4,14 @@ use std::{
     str::FromStr,
 };
 
+use crate::lock_file::records_by_name::HasNameVersion;
 use itertools::Itertools;
 use pixi_install_pypi::UnresolvedPypiRecord;
-use pixi_manifest::{
-    FeaturesExt,
-    pypi::pypi_options::NoBuild,
-};
+use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
 use pixi_pypi_spec::PixiPypiSource;
 use pypi_modifiers::Tags;
 use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Platform};
 use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
-use crate::lock_file::records_by_name::HasNameVersion;
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 
