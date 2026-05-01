@@ -24,16 +24,15 @@ use rattler_solve::SolveStrategy;
 
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, InstalledSourceHints, PtrArc,
-    Reporter, ReporterContext, SourceRecordSpec,
+    Reporter, ReporterContext, SourceRecordError, SourceRecordReporterSpec,
     build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports},
     compute_data::{HasGateway, HasReporter},
+    cycle::CycleEnvironment,
     injected_config::ChannelConfigKey,
     keys::solve_pixi_environment::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
     reporter::{SourceRecordId, SourceRecordReporter},
     reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context},
     reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle},
-    source_metadata::CycleEnvironment,
-    source_record::SourceRecordError,
 };
 
 /// Resolve one variant's [`SourceRecord`] from an assembled
@@ -55,12 +54,12 @@ pub(super) async fn assemble_source_record(
     installed_source_hints: &PtrArc<InstalledSourceHints>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     // Reporter lifecycle for this variant's source-record assembly.
-    // Build a `SourceRecordSpec` from the data flowing through here so
+    // Build a `SourceRecordReporterSpec` from the data flowing through here so
     // the reporter gets a familiar shape. Dedup fields
     // (`exclude_newer`) are set to `None`: the RSP path doesn't carry
     // that value directly and the reporter uses the spec only for
     // display.
-    let reporter_spec = SourceRecordSpec {
+    let reporter_spec = SourceRecordReporterSpec {
         package: output.metadata.name.clone(),
         variants: output
             .metadata
@@ -538,7 +537,7 @@ struct SourceRecordReporterLifecycle;
 impl LifecycleKind for SourceRecordReporterLifecycle {
     type Reporter<'r> = dyn SourceRecordReporter + 'r;
     type Id = SourceRecordId;
-    type Env = SourceRecordSpec;
+    type Env = SourceRecordReporterSpec;
 
     fn queue<'r>(
         reporter: Option<&'r dyn Reporter>,

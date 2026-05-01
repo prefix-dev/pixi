@@ -56,7 +56,7 @@ use self::workspace::compute_workspace_key;
 /// sinks, force-rebuild) stay out of the spec; force-rebuild wipes the
 /// artifact-cache entry before calling the Key.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct SourceBuildSpecV2 {
+pub struct SourceBuildSpec {
     /// `build_packages` and `host_packages` are expected to be populated
     /// upstream.
     pub record: Arc<UnresolvedSourceRecord>,
@@ -90,10 +90,10 @@ pub struct SourceBuildResult {
 
 #[derive(Clone, Debug, Display, Eq, Hash, PartialEq)]
 #[display("{}", _0.record.name().as_source())]
-pub struct SourceBuildKey(pub Arc<SourceBuildSpecV2>);
+pub struct SourceBuildKey(pub Arc<SourceBuildSpec>);
 
 impl SourceBuildKey {
-    pub fn new(spec: SourceBuildSpecV2) -> Self {
+    pub fn new(spec: SourceBuildSpec) -> Self {
         Self(Arc::new(spec))
     }
 }
@@ -119,7 +119,7 @@ impl Key for SourceBuildKey {
 /// mapping + reporter scaffolding orthogonal to the pipeline itself.
 async fn compute_inner(
     ctx: &mut ComputeCtx,
-    spec: Arc<SourceBuildSpecV2>,
+    spec: Arc<SourceBuildSpec>,
 ) -> Result<SourceBuildResult, SourceBuildError> {
     // sha256s are collected in a stable (build, host) order so the
     // artifact cache key stays deterministic across buckets.
@@ -385,7 +385,7 @@ async fn compute_inner(
 /// cache key separately so a dep moving build ↔ host invalidates.
 async fn recurse_source_deps(
     ctx: &mut ComputeCtx,
-    spec: &Arc<SourceBuildSpecV2>,
+    spec: &Arc<SourceBuildSpec>,
 ) -> Result<(Vec<Sha256Hash>, Vec<Sha256Hash>), SourceBuildError> {
     // build_packages run on the build platform. The nested build's
     // HOST platform is therefore the outer's BUILD platform.
@@ -411,7 +411,7 @@ async fn recurse_source_deps(
 /// Build a single bucket (build or host) of source dependencies concurrently.
 async fn build_source_deps(
     ctx: &mut ComputeCtx,
-    spec: Arc<SourceBuildSpecV2>,
+    spec: Arc<SourceBuildSpec>,
     packages: Vec<UnresolvedPixiRecord>,
     nested_build_environment: BuildEnvironment,
 ) -> Result<Vec<Sha256Hash>, SourceBuildError> {
@@ -431,7 +431,7 @@ async fn build_source_deps(
         async move |sub_ctx: &mut ComputeCtx,
                     src: Arc<UnresolvedSourceRecord>|
                     -> Result<Sha256Hash, SourceBuildError> {
-            let nested_spec = SourceBuildSpecV2 {
+            let nested_spec = SourceBuildSpec {
                 record: src,
                 channels: spec.channels.clone(),
                 exclude_newer: spec.exclude_newer.clone(),
@@ -451,7 +451,7 @@ async fn build_source_deps(
 /// record's name + variants.
 async fn fetch_matching_output(
     backend: &crate::BackendHandle,
-    spec: &SourceBuildSpecV2,
+    spec: &SourceBuildSpec,
     work_directory: &std::path::Path,
 ) -> Result<CondaOutput, SourceBuildError> {
     let variant_config = spec.variant_configuration.as_ref().map(|variants| {
@@ -526,7 +526,7 @@ enum InstallTarget {
 /// fully-resolved `RepoDataRecord`s that end up inside.
 async fn install_prefix(
     ctx: &mut ComputeCtx,
-    spec: &SourceBuildSpecV2,
+    spec: &SourceBuildSpec,
     target: InstallTarget,
     prefix_path: PathBuf,
     packages: Vec<UnresolvedPixiRecord>,

@@ -45,10 +45,12 @@ mod cache;
 mod cache_dirs;
 mod command_dispatcher;
 pub mod compute_data;
+mod cycle;
 mod dev_source_metadata;
 mod discovered_backend;
 pub mod environment;
 mod ephemeral_env;
+mod errors;
 mod injected_config;
 mod input_hash;
 mod install_binary;
@@ -63,11 +65,7 @@ mod reporter_lifecycle;
 mod resolved_backend_command;
 mod solve_binary;
 mod solve_conda;
-mod solve_pixi;
-mod source_build;
 pub mod source_checkout;
-mod source_metadata;
-mod source_record;
 mod util;
 
 pub use backend_source_build::{
@@ -117,14 +115,17 @@ pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,
     PixiSolveReporter, Reporter, ReporterContext,
 };
+pub use cycle::{Cycle, CycleEnvironment};
+pub use errors::{
+    MissingChannelError, SolvePixiEnvironmentError, SourceBuildError, SourceMetadataError,
+    SourceRecordError,
+};
+pub use keys::SourceMetadata;
+pub use reporter::{SourceMetadataReporterSpec, SourceRecordReporterSpec};
 pub use resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use serde::Serialize;
 pub use solve_conda::SolveCondaEnvironmentSpec;
-pub use solve_pixi::{MissingChannelError, SolvePixiEnvironmentError};
-pub use source_build::SourceBuildError;
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
-pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
-pub use source_record::{ResolvedSourceRecord, SourceRecordError, SourceRecordSpec};
 pub use util::executor;
 pub use util::{Executor, Limit, Limits, PtrArc};
 

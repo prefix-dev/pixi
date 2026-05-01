@@ -1,17 +1,56 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use futures::Stream;
 use pixi_build_discovery::JsonRpcBackendSpec;
 use pixi_git::resolver::RepositoryReference;
-use pixi_spec::PixiSpec;
+use pixi_spec::{PixiSpec, ResolvedExcludeNewer};
+use pixi_variant::VariantValue;
+use rattler_conda_types::PackageName;
 use rattler_repodata_gateway::RunExportsReporter;
 use serde::Serialize;
 use url::Url;
 
 use crate::{
-    BackendSourceBuildSpec, BuildBackendMetadataInner, SolveCondaEnvironmentSpec,
-    SourceMetadataSpec, SourceRecordSpec, install_pixi::InstallPixiEnvironmentSpec,
+    BackendSourceBuildSpec, BuildBackendMetadataInner, BuildBackendMetadataSpec,
+    SolveCondaEnvironmentSpec, install_pixi::InstallPixiEnvironmentSpec,
 };
+
+/// Reporter-facing view of the in-flight metadata resolution for a single
+/// source package. Constructed inside
+/// [`ResolveSourcePackageKey`](crate::keys::ResolveSourcePackageKey) just
+/// to feed the [`SourceMetadataReporter`] lifecycle; the Key itself
+/// drives the work via [`SourceMetadataSpec`](crate::keys::SourceMetadataSpec).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SourceMetadataReporterSpec {
+    /// The name of the package to retrieve metadata from.
+    pub package: PackageName,
+
+    /// Information about the build backend to request the information from.
+    pub backend_metadata: BuildBackendMetadataSpec,
+
+    /// The timestamp exclusion to apply when retrieving the metadata.
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
+}
+
+/// Reporter-facing view of the in-flight resolution for a single source
+/// record (one variant of a source package). Built inside
+/// [`assemble_source_record`](crate::keys::resolve_source_record) for
+/// the [`SourceRecordReporter`] lifecycle.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SourceRecordReporterSpec {
+    /// The name of the package to retrieve metadata from.
+    pub package: PackageName,
+
+    /// The specific variant that identifies which build output to resolve.
+    pub variants: BTreeMap<String, VariantValue>,
+
+    /// Information about the build backend to request the information from.
+    pub backend_metadata: BuildBackendMetadataSpec,
+
+    /// Exclude packages newer than this cutoff when resolving build/host
+    /// dependencies. Typically derived from locked source timestamps.
+    pub exclude_newer: Option<ResolvedExcludeNewer>,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
@@ -202,7 +241,7 @@ pub struct SourceRecordId(pub usize);
 
 pub trait SourceRecordReporter: Send + Sync {
     /// Called when an operation was queued on the [`crate::CommandDispatcher`].
-    fn on_queued(&self, reason: Option<ReporterContext>, spec: &SourceRecordSpec)
+    fn on_queued(&self, reason: Option<ReporterContext>, spec: &SourceRecordReporterSpec)
     -> SourceRecordId;
 
     /// Called when the operation has started.
@@ -221,7 +260,7 @@ pub trait SourceMetadataReporter: Send + Sync {
     fn on_queued(
         &self,
         reason: Option<ReporterContext>,
-        spec: &SourceMetadataSpec,
+        spec: &SourceMetadataReporterSpec,
     ) -> SourceMetadataId;
 
     /// Called when the operation has started.
