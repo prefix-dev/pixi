@@ -225,7 +225,7 @@ pub(super) async fn verify_partial_source_record_against_backend(
 /// reconstruction goes through the same `Dependencies` machinery the
 /// solve path uses, so the resulting strings line up byte-for-byte
 /// without any `MatchSpec::from_str` parse on the locked side.
-pub(crate) fn verify_locked_run_deps_against_backend(
+fn verify_locked_run_deps_against_backend(
     record: &pixi_record::UnresolvedSourceRecord,
     matching_output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
     channel_config: &rattler_conda_types::ChannelConfig,
@@ -393,7 +393,7 @@ fn collect_direct_run_exports(
 ///
 /// Returns `Ok(())` when the two sides cover the same multiset of
 /// specs, otherwise a [`DepDiff`] naming the symmetric difference.
-pub(crate) fn diff_dep_sequences(locked: &[String], expected: &[String]) -> Result<(), DepDiff> {
+fn diff_dep_sequences(locked: &[String], expected: &[String]) -> Result<(), DepDiff> {
     if locked.len() == expected.len() && locked == expected {
         return Ok(());
     }
@@ -428,16 +428,16 @@ pub(crate) fn diff_dep_sequences(locked: &[String], expected: &[String]) -> Resu
 /// Symmetric multiset diff between locked and re-derived dependency
 /// sequences.
 #[derive(Debug)]
-pub(crate) struct DepDiff {
+struct DepDiff {
     /// Specs the backend now declares but the lockfile lacks.
-    pub(crate) added: Vec<String>,
+    added: Vec<String>,
     /// Specs the lockfile carries but the backend no longer declares.
-    pub(crate) removed: Vec<String>,
+    removed: Vec<String>,
 }
 
 impl DepDiff {
     /// Convert the diff into the `PlatformUnsat` variant.
-    pub(crate) fn into_unsat(self, package: &PackageName, kind: SourceRunDepKind) -> Box<PlatformUnsat> {
+    fn into_unsat(self, package: &PackageName, kind: SourceRunDepKind) -> Box<PlatformUnsat> {
         Box::new(PlatformUnsat::SourceRunDependenciesChanged {
             package: package.as_source().to_string(),
             kind,
@@ -456,7 +456,7 @@ impl DepDiff {
 /// solver previously produced. Every other key must agree on both
 /// sides; equality goes through `pixi_variant`'s `From` impl so the
 /// two representations align.
-pub(crate) fn variants_equivalent(
+fn variants_equivalent(
     locked: &std::collections::BTreeMap<String, pixi_record::VariantValue>,
     backend: &std::collections::BTreeMap<String, pixi_build_types::VariantValue>,
 ) -> bool {
@@ -579,7 +579,7 @@ impl<'a> LockedConda<'a> {
 /// Returns `Box<PlatformUnsat>` directly so the caller can choose how
 /// to wrap (`CommandDispatcherError::Failed`, or propagated as part of
 /// a larger result).
-pub(crate) fn verify_locked_against_backend_specs(
+fn verify_locked_against_backend_specs(
     deps: &pixi_build_types::procedures::conda_outputs::CondaOutputDependencies,
     locked: &[pixi_record::UnresolvedPixiRecord],
     pin_compatible_locked: &[pixi_record::UnresolvedPixiRecord],
@@ -712,7 +712,7 @@ fn format_locked_summary(locked: &[pixi_record::UnresolvedPixiRecord]) -> String
 /// `manifest_source`, `build_source`, `build_packages`, and
 /// `host_packages` are preserved verbatim so re-locking sees the same
 /// pinned source and the same build/host snapshot.
-pub(crate) fn build_full_source_record_from_output(
+fn build_full_source_record_from_output(
     record: &pixi_record::UnresolvedSourceRecord,
     output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
 ) -> pixi_record::SourceRecord {
@@ -784,5 +784,714 @@ pub(crate) fn build_full_source_record_from_output(
         identifier_hash: record.identifier_hash.clone(),
         build_packages: record.build_packages.clone(),
         host_packages: record.host_packages.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::BuildOrHostEnv;
+    use super::{
+        build_full_source_record_from_output, variants_equivalent,
+        verify_locked_against_backend_specs,
+    };
+    use pixi_build_types::{
+        BinaryPackageSpec, NamedSpec, PackageSpec, PinCompatibleSpec, SourcePackageName,
+        VariantValue,
+        procedures::conda_outputs::{
+            CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports,
+            CondaOutputMetadata, CondaOutputRunExports,
+        },
+    };
+    use pixi_record::{
+        PartialSourceRecordData, PinnedPathSpec, PinnedSourceSpec, SourceRecordData,
+        UnresolvedPixiRecord, UnresolvedSourceRecord,
+    };
+    use pixi_spec::{SourceAnchor, SourceLocationSpec};
+    use rattler_conda_types::{
+        ChannelConfig, NoArchType, PackageName, PackageRecord, Platform, RepoDataRecord,
+        VersionSpec, VersionWithSource, package::DistArchiveIdentifier,
+    };
+    use std::{
+        collections::BTreeMap,
+        path::PathBuf,
+        str::FromStr,
+        sync::{Arc, LazyLock},
+    };
+    use url::Url;
+
+    static CHANNEL_CONFIG: LazyLock<ChannelConfig> =
+        LazyLock::new(|| ChannelConfig::default_with_root_dir(PathBuf::from("/workspace")));
+
+    fn make_binary_record(name: &str, version: &str) -> RepoDataRecord {
+        let pkg_name = PackageName::from_str(name).expect("valid name");
+        let mut pr = PackageRecord::new(
+            pkg_name,
+            VersionWithSource::from_str(version).expect("valid version"),
+            "h0".into(),
+        );
+        pr.subdir = "linux-64".into();
+        let file_name = format!("{name}-{version}-h0.conda");
+        RepoDataRecord {
+            package_record: pr,
+            identifier: DistArchiveIdentifier::from_str(&file_name)
+                .expect("valid dist archive identifier"),
+            url: Url::parse(&format!(
+                "https://example.com/conda-forge/linux-64/{file_name}"
+            ))
+            .expect("valid url"),
+            channel: Some("https://example.com/conda-forge".to_string()),
+        }
+    }
+
+    fn binary_dep(name: &str, spec_str: &str) -> NamedSpec<PackageSpec> {
+        let spec = if spec_str.is_empty() {
+            BinaryPackageSpec::default()
+        } else {
+            BinaryPackageSpec {
+                version: Some(
+                    VersionSpec::from_str(
+                        spec_str,
+                        rattler_conda_types::ParseStrictness::Lenient,
+                    )
+                    .expect("valid spec"),
+                ),
+                ..Default::default()
+            }
+        };
+        NamedSpec {
+            name: SourcePackageName::from(PackageName::from_str(name).expect("valid name")),
+            spec: PackageSpec::Binary(spec),
+        }
+    }
+
+    fn pin_compatible_dep(name: &str) -> NamedSpec<PackageSpec> {
+        pin_compatible_dep_with(
+            name,
+            PinCompatibleSpec {
+                lower_bound: None,
+                upper_bound: None,
+                exact: false,
+                build: None,
+            },
+        )
+    }
+
+    fn pin_compatible_dep_with(name: &str, spec: PinCompatibleSpec) -> NamedSpec<PackageSpec> {
+        NamedSpec {
+            name: SourcePackageName::from(PackageName::from_str(name).expect("valid name")),
+            spec: PackageSpec::PinCompatible(spec),
+        }
+    }
+
+    fn make_partial_source_record(
+        name: &str,
+        manifest_path: &str,
+        build_packages: Vec<UnresolvedPixiRecord>,
+        host_packages: Vec<UnresolvedPixiRecord>,
+    ) -> UnresolvedSourceRecord {
+        UnresolvedSourceRecord {
+            data: SourceRecordData::Partial(PartialSourceRecordData {
+                name: PackageName::from_str(name).unwrap(),
+                depends: Vec::new(),
+                constrains: Vec::new(),
+                experimental_extra_depends: Default::default(),
+                flags: Default::default(),
+                purls: None,
+                run_exports: None,
+                sources: Default::default(),
+            }),
+            manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
+                path: manifest_path.into(),
+            }),
+            build_source: None,
+            variants: Default::default(),
+            identifier_hash: None,
+            build_packages,
+            host_packages,
+        }
+    }
+
+    fn make_conda_output(name: &str, build_deps: Vec<NamedSpec<PackageSpec>>) -> CondaOutput {
+        CondaOutput {
+            metadata: CondaOutputMetadata {
+                name: PackageName::from_str(name).unwrap(),
+                version: "1.0.0"
+                    .parse::<rattler_conda_types::Version>()
+                    .unwrap()
+                    .into(),
+                build: "h0_0".to_string(),
+                build_number: 0,
+                subdir: Platform::Linux64,
+                license: None,
+                license_family: None,
+                noarch: NoArchType::none(),
+                purls: None,
+                python_site_packages_path: None,
+                variant: BTreeMap::new(),
+            },
+            build_dependencies: Some(CondaOutputDependencies {
+                depends: build_deps,
+                constraints: Vec::new(),
+            }),
+            host_dependencies: None,
+            run_dependencies: CondaOutputDependencies {
+                depends: Vec::new(),
+                constraints: Vec::new(),
+            },
+            ignore_run_exports: CondaOutputIgnoreRunExports::default(),
+            run_exports: CondaOutputRunExports::default(),
+            input_globs: None,
+        }
+    }
+
+    #[test]
+    fn variants_equivalent_ignores_target_platform() {
+        // Locked record with no variants vs backend output that
+        // injected `target_platform=linux-64`: they should still
+        // count as equivalent so older lock files (which omit the
+        // synthetic key) keep matching.
+        let locked = BTreeMap::new();
+        let mut backend = BTreeMap::new();
+        backend.insert(
+            "target_platform".to_string(),
+            VariantValue::String("linux-64".to_string()),
+        );
+        assert!(variants_equivalent(&locked, &backend));
+    }
+
+    #[test]
+    fn variants_equivalent_real_keys_must_match() {
+        let mut locked = BTreeMap::new();
+        locked.insert(
+            "python".to_string(),
+            pixi_record::VariantValue::String("3.11".to_string()),
+        );
+        let mut backend = BTreeMap::new();
+        backend.insert(
+            "python".to_string(),
+            VariantValue::String("3.10".to_string()),
+        );
+        assert!(!variants_equivalent(&locked, &backend));
+    }
+
+    #[test]
+    fn locked_build_satisfies_backend_spec_passes() {
+        // Backend declares `numpy >=1`; locked build_packages
+        // contains numpy 1.5. Verification should pass.
+        let locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record("numpy", "1.5"),
+        ))];
+        let deps = CondaOutputDependencies {
+            depends: vec![binary_dep("numpy", ">=1")],
+            constraints: Vec::new(),
+        };
+        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
+            PinnedPathSpec {
+                path: "./pkg".into(),
+            },
+        )));
+        let result = verify_locked_against_backend_specs(
+            &deps,
+            &locked,
+            &[],
+            &CHANNEL_CONFIG,
+            &anchor,
+            &PackageName::from_str("pkg").unwrap(),
+            BuildOrHostEnv::Build,
+        );
+        assert!(result.is_ok(), "verification should pass: {result:?}");
+    }
+
+    #[test]
+    fn locked_build_does_not_satisfy_backend_spec_fails() {
+        // Backend declares `numpy >=2`; locked has numpy 1.5. Must
+        // surface `SourceBuildHostUnsat` so the caller knows which
+        // spec drifted.
+        let locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record("numpy", "1.5"),
+        ))];
+        let deps = CondaOutputDependencies {
+            depends: vec![binary_dep("numpy", ">=2")],
+            constraints: Vec::new(),
+        };
+        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
+            PinnedPathSpec {
+                path: "./pkg".into(),
+            },
+        )));
+        let err = verify_locked_against_backend_specs(
+            &deps,
+            &locked,
+            &[],
+            &CHANNEL_CONFIG,
+            &anchor,
+            &PackageName::from_str("pkg").unwrap(),
+            BuildOrHostEnv::Build,
+        )
+        .expect_err("locked numpy=1.5 must not satisfy >=2");
+        assert!(
+            matches!(
+                *err,
+                super::super::PlatformUnsat::SourceBuildHostUnsat { .. }
+            ),
+            "expected SourceBuildHostUnsat, got: {err}"
+        );
+    }
+
+    /// Regression: an early version of `LockedConda::satisfies_binary`
+    /// matched a `NamelessMatchSpec` against a `RepoDataRecord`
+    /// without checking the package name first. With a wildcard
+    /// spec like `bar *`, every locked binary record (including
+    /// `numpy 1.5`) was reported as satisfying it. The check now
+    /// requires the record's name to match the spec's caller-
+    /// supplied name.
+    #[test]
+    fn wrong_name_record_does_not_satisfy_binary_spec() {
+        // Backend wants `bar *`. Locked has only `foo 1.5`.
+        // A name-blind matcher would falsely accept `foo 1.5`.
+        let locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(Arc::new(
+            make_binary_record("foo", "1.5"),
+        ))];
+        let deps = CondaOutputDependencies {
+            depends: vec![binary_dep("bar", "")],
+            constraints: Vec::new(),
+        };
+        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
+            PinnedPathSpec {
+                path: "./pkg".into(),
+            },
+        )));
+        let err = verify_locked_against_backend_specs(
+            &deps,
+            &locked,
+            &[],
+            &CHANNEL_CONFIG,
+            &anchor,
+            &PackageName::from_str("pkg").unwrap(),
+            BuildOrHostEnv::Build,
+        )
+        .expect_err("name mismatch must surface as unsat");
+        assert!(
+            matches!(
+                *err,
+                super::super::PlatformUnsat::SourceBuildHostUnsat { .. }
+            ),
+            "expected SourceBuildHostUnsat, got: {err}"
+        );
+    }
+
+    #[test]
+    fn missing_required_record_in_locked_build_fails() {
+        // Backend wants `cmake` in build env; locked build is
+        // empty. Must report `SourceBuildHostUnsat` rather than
+        // silently passing.
+        let locked: Vec<UnresolvedPixiRecord> = Vec::new();
+        let deps = CondaOutputDependencies {
+            depends: vec![binary_dep("cmake", "")],
+            constraints: Vec::new(),
+        };
+        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
+            PinnedPathSpec {
+                path: "./pkg".into(),
+            },
+        )));
+        let err = verify_locked_against_backend_specs(
+            &deps,
+            &locked,
+            &[],
+            &CHANNEL_CONFIG,
+            &anchor,
+            &PackageName::from_str("pkg").unwrap(),
+            BuildOrHostEnv::Build,
+        )
+        .expect_err("missing record must surface as unsat");
+        assert!(
+            matches!(
+                *err,
+                super::super::PlatformUnsat::SourceBuildHostUnsat { .. }
+            ),
+            "expected SourceBuildHostUnsat, got: {err}"
+        );
+    }
+
+    #[test]
+    fn build_full_source_record_preserves_locked_depends_and_pin() {
+        // Locked partial record with non-trivial depends. The
+        // backend output reports a fresh version/build but no
+        // run_deps. The synthesized full record must keep the
+        // locked depends (which carries previously-resolved
+        // run-exports) and the locked manifest pin verbatim.
+        let mut partial =
+            make_partial_source_record("mypkg", "./mypkg", Vec::new(), Vec::new());
+        // Hand-set locked depends so the assertion has something
+        // distinctive to compare.
+        if let SourceRecordData::Partial(p) = &mut partial.data {
+            p.depends = vec!["numpy >=1".to_string(), "openssl 3.0.*".to_string()];
+        }
+
+        let output = make_conda_output("mypkg", Vec::new());
+        let full = build_full_source_record_from_output(&partial, &output);
+        assert_eq!(
+            full.data.package_record.depends,
+            vec!["numpy >=1".to_string(), "openssl 3.0.*".to_string()],
+            "locked depends must survive into the synthesized full record"
+        );
+        assert_eq!(full.manifest_source, partial.manifest_source);
+    }
+
+    /// `pin_compatible(foo)` in *host* dependencies pins against
+    /// the version of `foo` resolved in the *build* environment.
+    /// If the locked build env has no `foo`, no re-solve can
+    /// succeed (the resolver would fail with
+    /// `PinCompatibleError::PackageNotFound`), so the lock must
+    /// be rejected even when the host env happens to carry a
+    /// `foo` from another dep.
+    #[test]
+    fn pin_compatible_host_dep_rejects_when_build_lacks_package() {
+        let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
+            Arc::new(make_binary_record("numpy", "1.5")),
+        )];
+        let build_locked: Vec<UnresolvedPixiRecord> = Vec::new();
+
+        let host_deps = CondaOutputDependencies {
+            depends: vec![pin_compatible_dep("numpy")],
+            constraints: Vec::new(),
+        };
+        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
+            PinnedPathSpec {
+                path: "./pkg".into(),
+            },
+        )));
+
+        let err = verify_locked_against_backend_specs(
+            &host_deps,
+            &host_locked,
+            &build_locked,
+            &CHANNEL_CONFIG,
+            &anchor,
+            &PackageName::from_str("pkg").unwrap(),
+            BuildOrHostEnv::Host,
+        )
+        .expect_err(
+            "pin_compatible(numpy) must resolve against the (empty) build env, \
+             not the host env that happens to contain numpy",
+        );
+        assert!(
+            matches!(
+                *err,
+                super::super::PlatformUnsat::SourceBuildHostUnsat { .. }
+            ),
+            "expected SourceBuildHostUnsat, got: {err}"
+        );
+    }
+
+    /// Happy path: locked build env has `numpy 1.5`, locked host
+    /// env also has `numpy 1.5`, host dep is `pin_compatible(numpy)`
+    /// with no bounds (resolves to `*`). Verification passes.
+    #[test]
+    fn pin_compatible_host_dep_satisfied() {
+        let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
+            Arc::new(make_binary_record("numpy", "1.5")),
+        )];
+        let build_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
+            Arc::new(make_binary_record("numpy", "1.5")),
+        )];
+
+        let host_deps = CondaOutputDependencies {
+            depends: vec![pin_compatible_dep("numpy")],
+            constraints: Vec::new(),
+        };
+        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
+            PinnedPathSpec {
+                path: "./pkg".into(),
+            },
+        )));
+
+        let result = verify_locked_against_backend_specs(
+            &host_deps,
+            &host_locked,
+            &build_locked,
+            &CHANNEL_CONFIG,
+            &anchor,
+            &PackageName::from_str("pkg").unwrap(),
+            BuildOrHostEnv::Host,
+        );
+        assert!(result.is_ok(), "verification should pass: {result:?}");
+    }
+
+    /// Resolution-then-verification: build env has `numpy 2.0`, the
+    /// pin is `exact=true`, and host env still carries `numpy 1.5`
+    /// from before the user bumped the build env. The resolved
+    /// spec is `numpy ==2.0`, which the locked host record does
+    /// not satisfy.
+    #[test]
+    fn pin_compatible_host_dep_rejects_version_drift() {
+        use pixi_build_types::PinCompatibleSpec;
+
+        let host_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
+            Arc::new(make_binary_record("numpy", "1.5")),
+        )];
+        let build_locked: Vec<UnresolvedPixiRecord> = vec![UnresolvedPixiRecord::Binary(
+            Arc::new(make_binary_record("numpy", "2.0")),
+        )];
+
+        let host_deps = CondaOutputDependencies {
+            depends: vec![pin_compatible_dep_with(
+                "numpy",
+                PinCompatibleSpec {
+                    lower_bound: None,
+                    upper_bound: None,
+                    exact: true,
+                    build: None,
+                },
+            )],
+            constraints: Vec::new(),
+        };
+        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
+            PinnedPathSpec {
+                path: "./pkg".into(),
+            },
+        )));
+
+        let err = verify_locked_against_backend_specs(
+            &host_deps,
+            &host_locked,
+            &build_locked,
+            &CHANNEL_CONFIG,
+            &anchor,
+            &PackageName::from_str("pkg").unwrap(),
+            BuildOrHostEnv::Host,
+        )
+        .expect_err(
+            "host's locked numpy 1.5 cannot satisfy pin_compatible(numpy, exact) \
+             against build's numpy 2.0",
+        );
+        assert!(
+            matches!(
+                *err,
+                super::super::PlatformUnsat::SourceBuildHostUnsat { .. }
+            ),
+            "expected SourceBuildHostUnsat, got: {err}"
+        );
+    }
+
+    // -- Unit tests for run-dependency / run-constraint drift -----------
+
+    use super::super::SourceRunDepKind;
+    use super::{diff_dep_sequences, verify_locked_run_deps_against_backend};
+    use pixi_record::FullSourceRecordData;
+
+    #[test]
+    fn diff_sequences_passes_when_equal() {
+        let result = diff_dep_sequences(
+            &["a >=1".to_string(), "b ==2".to_string()],
+            &["a >=1".to_string(), "b ==2".to_string()],
+        );
+        assert!(
+            result.is_ok(),
+            "identical sequences should not drift: {result:?}"
+        );
+    }
+
+    #[test]
+    fn diff_sequences_ignores_reorder() {
+        // Same multiset, different order. Order is not semantically
+        // meaningful; only the symmetric multiset difference matters.
+        let result = diff_dep_sequences(
+            &["a >=1".to_string(), "b ==2".to_string()],
+            &["b ==2".to_string(), "a >=1".to_string()],
+        );
+        assert!(
+            result.is_ok(),
+            "permutations must not surface as drift: {result:?}"
+        );
+    }
+
+    #[test]
+    fn diff_sequences_reports_only_addition() {
+        let diff = diff_dep_sequences(
+            &["a >=1".to_string()],
+            &["a >=1".to_string(), "b ==2".to_string()],
+        )
+        .expect_err("expected drift");
+        assert_eq!(diff.added, vec!["b ==2".to_string()]);
+        assert!(diff.removed.is_empty());
+    }
+
+    #[test]
+    fn diff_sequences_reports_only_removal() {
+        let diff = diff_dep_sequences(
+            &["a >=1".to_string(), "b ==2".to_string()],
+            &["a >=1".to_string()],
+        )
+        .expect_err("expected drift");
+        assert!(diff.added.is_empty());
+        assert_eq!(diff.removed, vec!["b ==2".to_string()]);
+    }
+
+    #[test]
+    fn diff_sequences_reports_both_directions() {
+        let diff = diff_dep_sequences(
+            &["a >=1".to_string(), "b ==2".to_string()],
+            &["a >=1".to_string(), "c <=3".to_string()],
+        )
+        .expect_err("expected drift");
+        assert_eq!(diff.added, vec!["c <=3".to_string()]);
+        assert_eq!(diff.removed, vec!["b ==2".to_string()]);
+    }
+
+    #[test]
+    fn diff_sequences_treats_duplicates_as_distinct() {
+        // Locked carries the same spec twice but the expected set
+        // only carries it once; the extra copy must surface as a
+        // removal.
+        let diff = diff_dep_sequences(
+            &["a >=1".to_string(), "a >=1".to_string()],
+            &["a >=1".to_string()],
+        )
+        .expect_err("expected drift");
+        assert!(diff.added.is_empty());
+        assert_eq!(diff.removed, vec!["a >=1".to_string()]);
+    }
+
+    /// Build a Full source record with the supplied `depends` and
+    /// `constrains` strings. Build/host packages are empty, which
+    /// is enough for the constrains-only test cases below.
+    fn make_full_source_record(
+        name: &str,
+        depends: Vec<String>,
+        constrains: Vec<String>,
+    ) -> UnresolvedSourceRecord {
+        let pkg_name = PackageName::from_str(name).unwrap();
+        let mut pr = PackageRecord::new(
+            pkg_name.clone(),
+            "1.0.0"
+                .parse::<rattler_conda_types::VersionWithSource>()
+                .unwrap(),
+            "h0_0".into(),
+        );
+        pr.subdir = "linux-64".into();
+        pr.depends = depends;
+        pr.constrains = constrains;
+        UnresolvedSourceRecord {
+            data: SourceRecordData::Full(FullSourceRecordData {
+                package_record: pr,
+                sources: Default::default(),
+            }),
+            manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
+                path: "./pkg".into(),
+            }),
+            build_source: None,
+            variants: Default::default(),
+            identifier_hash: None,
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
+        }
+    }
+
+    /// Helper to build a `CondaOutput` whose `run_dependencies` has
+    /// the given `depends` and `constraints`. Other fields default
+    /// to empty.
+    fn make_conda_output_with_run_deps(
+        name: &str,
+        depends: Vec<NamedSpec<PackageSpec>>,
+        constraints: Vec<NamedSpec<pixi_build_types::ConstraintSpec>>,
+    ) -> CondaOutput {
+        let mut output = make_conda_output(name, Vec::new());
+        output.build_dependencies = None;
+        output.run_dependencies = CondaOutputDependencies {
+            depends,
+            constraints,
+        };
+        output
+    }
+
+    fn binary_constraint(
+        name: &str,
+        spec_str: &str,
+    ) -> NamedSpec<pixi_build_types::ConstraintSpec> {
+        NamedSpec {
+            name: SourcePackageName::from(PackageName::from_str(name).unwrap()),
+            spec: pixi_build_types::ConstraintSpec::Binary(BinaryPackageSpec {
+                version: Some(
+                    VersionSpec::from_str(
+                        spec_str,
+                        rattler_conda_types::ParseStrictness::Lenient,
+                    )
+                    .unwrap(),
+                ),
+                ..Default::default()
+            }),
+        }
+    }
+
+    #[test]
+    fn verify_locked_run_deps_passes_when_match() {
+        // Backend declares run_deps `numpy >=1` and constrains
+        // `openssl ==3.0`; locked record has the same. No drift.
+        let record = make_full_source_record(
+            "pkg",
+            vec!["numpy >=1".to_string()],
+            vec!["openssl ==3.0".to_string()],
+        );
+        let output = make_conda_output_with_run_deps(
+            "pkg",
+            vec![binary_dep("numpy", ">=1")],
+            vec![binary_constraint("openssl", "==3.0")],
+        );
+
+        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        assert!(result.is_ok(), "expected no drift: {result:?}");
+    }
+
+    #[test]
+    fn verify_locked_run_deps_detects_constrain_addition() {
+        // Backend declares a new constrain `bar <2` that the locked
+        // record does not carry. Drift surfaces with `kind =
+        // RunConstrains` and `added = ["bar <2"]`.
+        let record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        let output = make_conda_output_with_run_deps(
+            "pkg",
+            Vec::new(),
+            vec![binary_constraint("bar", "<2")],
+        );
+
+        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+            .expect_err("backend declared a new constraint, locked has none");
+        match *err {
+            super::super::PlatformUnsat::SourceRunDependenciesChanged {
+                kind: SourceRunDepKind::RunConstrains,
+                added,
+                removed,
+                ..
+            } => {
+                assert_eq!(added, vec!["bar <2".to_string()]);
+                assert!(removed.is_empty());
+            }
+            other => panic!("expected RunConstrains drift, got: {other}"),
+        }
+    }
+
+    #[test]
+    fn verify_locked_run_deps_detects_constrain_removal() {
+        // Locked record carries a constrain that the backend no
+        // longer declares. Drift surfaces with `removed`.
+        let record = make_full_source_record("pkg", Vec::new(), vec!["bar <2".to_string()]);
+        let output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
+
+        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+            .expect_err("backend dropped a constraint that's still locked");
+        match *err {
+            super::super::PlatformUnsat::SourceRunDependenciesChanged {
+                kind: SourceRunDepKind::RunConstrains,
+                added,
+                removed,
+                ..
+            } => {
+                assert!(added.is_empty());
+                assert_eq!(removed, vec!["bar <2".to_string()]);
+            }
+            other => panic!("expected RunConstrains drift, got: {other}"),
+        }
     }
 }

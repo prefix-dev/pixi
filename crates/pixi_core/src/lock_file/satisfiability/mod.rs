@@ -33,12 +33,3 @@ pub use platform::{
 #[allow(unused_imports)]
 pub(crate) use pypi::{pypi_satisfies_editable, pypi_satisfies_requirement};
 
-// Re-exports for items referenced from the test module via
-// `super::super::*` paths. Visibility stays at `pub(super)` so they
-// remain accessible to descendant modules (i.e. `tests`) without
-// becoming part of the crate's public surface.
-#[cfg(test)]
-pub(super) use source_record::{
-    build_full_source_record_from_output, diff_dep_sequences, variants_equivalent,
-    verify_locked_against_backend_specs, verify_locked_run_deps_against_backend,
-};
