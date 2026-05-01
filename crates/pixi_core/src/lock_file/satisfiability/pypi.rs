@@ -1116,6 +1116,7 @@ mod tests {
         );
     }
 
+    /// Helper to build a `uv_distribution_types::Requirement` with an explicit index.
     fn registry_requirement_with_index(
         name: &str,
         specifier: &str,

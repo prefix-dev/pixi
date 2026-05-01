@@ -790,6 +790,9 @@ fn build_full_source_record_from_output(
     }
 }
 
+/// Helpers and unit tests for the build/host verification path
+/// added on top of `verify_platform_satisfiability` (the entrypoint
+/// that replaces the old `SourceRecordRequiresRebuild` stopgap).
 #[cfg(test)]
 mod tests {
     use super::super::BuildOrHostEnv;
