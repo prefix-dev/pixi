@@ -9,12 +9,12 @@ use crate::environment::WorkspaceEnvRegistry;
 use crate::injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
-use crate::path::RootDir;
 use crate::reporter_context::CURRENT_REPORTER_CONTEXT;
+use crate::util::limits::ResolvedLimits;
+use crate::util::path::RootDir;
 use crate::{
     CacheDirs, CommandDispatcher, Executor, Limits, Reporter,
     command_dispatcher::{CommandDispatcherData, DepGraphDumpGuard},
-    limits::ResolvedLimits,
     source_checkout::{GitCheckoutSemaphore, UrlCheckoutSemaphore},
 };
 use futures::future::BoxFuture;
