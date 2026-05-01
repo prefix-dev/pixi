@@ -94,9 +94,13 @@ fn trampoline() -> miette::Result<()> {
     // Resolve symlinks so that config lookup works even when the trampoline is
     // invoked via a symlink from a different directory. On Linux,
     // `current_exe()` reads /proc/self/exe which auto-resolves symlinks, but
-    // on macOS (_NSGetExecutablePath) and Windows (GetModuleFileNameW) it
-    // returns the symlink path rather than the target.
+    // on macOS (_NSGetExecutablePath) returns the symlink path rather than the target.
     // https://doc.rust-lang.org/std/env/fn.current_exe.html#platform-specific-behavior
+    // On windows `env::current_exe()` already returns the canonical path, so 
+    // we only need to canonicalize on other platforms. Canonicalization is 
+    // required because `env::current_exe()` might return a symlink from a 
+    // different directory instead of the canonical binary.
+    #[cfg(not(windows))]
     let current_exe = current_exe.canonicalize().unwrap_or(current_exe);
 
     // ignore any ctrl-c signals

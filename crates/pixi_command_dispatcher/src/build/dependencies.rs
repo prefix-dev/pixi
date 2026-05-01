@@ -338,6 +338,8 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     url: _,
                     license: None,
                     track_features: None,
+                    flags: None,
+                    license_family: None,
                 } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
                 NamelessMatchSpec {
                     version,
@@ -358,6 +360,8 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     extras: _,
                     condition: _,
                     track_features: _,
+                    flags: _,
+                    license_family: _,
                 } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
                     version,
                     build,

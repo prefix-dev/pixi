@@ -372,6 +372,7 @@ impl RattlerBuild {
                     force_colors: true,
                     sandbox_config: None,
                     exclude_newer: None,
+                    env_isolation: Default::default(),
                 },
                 finalized_dependencies: None,
                 finalized_cache_dependencies: None,
@@ -380,6 +381,7 @@ impl RattlerBuild {
                 system_tools: SystemTools::new(self.backend.name, self.backend.version),
                 build_summary: Default::default(),
                 extra_meta: None,
+                staging_library_name_map: None,
             });
         }
 

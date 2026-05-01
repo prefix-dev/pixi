@@ -12,7 +12,6 @@ version = "0.1.0"
 fs-err = { workspace = true }
 miette = { workspace = true }
 pixi_config = { workspace = true }
-pixi_consts = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
 reqwest = { workspace = true }

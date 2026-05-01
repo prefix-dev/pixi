@@ -233,6 +233,8 @@ fn binary_package_spec_to_package_dependency(
         license,
         condition: None,
         track_features: None,
+        flags: None,
+        license_family: None,
     })
 }
 

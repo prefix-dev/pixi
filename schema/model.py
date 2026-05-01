@@ -835,7 +835,7 @@ class Package(StrictBaseModel):
     build_dependencies: Dependencies = BuildDependenciesField
     run_dependencies: Dependencies = RunDependenciesField
 
-    target: dict[TargetName, Target] | None = Field(
+    target: dict[TargetName, PackageTarget] | None = Field(
         None,
         description="Machine-specific aspects of the package",
         examples=[{"linux": {"host-dependencies": {"python": "3.8"}}}],

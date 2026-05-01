@@ -588,6 +588,8 @@ async fn upload_to_s3(
             repodata_patch: None,
             write_zst: true,
             write_shards: true,
+            repodata_revisions: vec![],
+            package_revision_assignment: Default::default(),
             force: false,
             max_parallel: std::thread::available_parallelism()
                 .map(|p| p.get())
@@ -677,6 +679,8 @@ async fn upload_to_local_filesystem(
             repodata_patch: None,
             write_zst: true,
             write_shards: true,
+            repodata_revisions: vec![],
+            package_revision_assignment: Default::default(),
             force: false,
             max_parallel: std::thread::available_parallelism()
                 .map(|p| p.get())

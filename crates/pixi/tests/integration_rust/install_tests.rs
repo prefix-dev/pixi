@@ -834,8 +834,13 @@ setup(
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
 
+    // Only pin the uv wheel cache — conda packages and repodata can be reused
+    // from prior runs, which keeps the test fast.
     temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        [(
+            "PIXI_CACHE_PYPI_WHEELS_DIR",
+            Some(tmp_dir_path.to_str().unwrap()),
+        )],
         async {
             pixi.install().await.expect("cannot install project");
         },
@@ -958,8 +963,13 @@ setup(
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
 
+    // Only pin the uv wheel cache — conda packages and repodata can be reused
+    // from prior runs, which keeps the test fast.
     temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        [(
+            "PIXI_CACHE_PYPI_WHEELS_DIR",
+            Some(tmp_dir_path.to_str().unwrap()),
+        )],
         async {
             pixi.install()
                 .await
@@ -969,6 +979,20 @@ setup(
     .await;
 }
 
+/// Regression test for issue #1686.
+///
+/// When a pypi package is provided by conda, pixi tells the pypi resolver
+/// to treat that package as already installed rather than fetching it from
+/// PyPI. Before #1969 the resolver's in-memory index was also shared with
+/// uv's build-dispatch, so PEP 517 builds whose `build-system.requires`
+/// listed the same package couldn't install it from PyPI either, and the
+/// build failed.
+///
+/// The setup below exercises exactly that path: `setuptools` is a conda
+/// dependency (so pixi registers it as conda-provided), and the local
+/// pypi package's `build-system.requires = ["setuptools>=60"]` forces uv
+/// to invoke build-dispatch to fetch setuptools from PyPI during the
+/// wheel build.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
@@ -977,38 +1001,46 @@ setup(
 async fn test_setuptools_override_failure() {
     setup_tracing();
 
-    // This was causing issues like: https://github.com/prefix-dev/pixi/issues/1686
+    let current_platform = Platform::current();
+    let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
+    let pkg_source = workspace_root.join("tests/data/setuptools-override-repro");
+    let pkg_path = pkg_source.to_str().unwrap().replace('\\', "/");
+
     let manifest = format!(
         r#"
         [project]
         channels = ["https://prefix.dev/conda-forge"]
-        name = "pixi-source-problem"
-        platforms = ["{platform}"]
-        exclude-newer = "2024-08-29"
+        name = "setuptools-override-minimal"
+        platforms = ["{current_platform}"]
 
         [dependencies]
-        pip = ">=24.0,<25"
-        python = "<3.13"
-        # we need to pin them because xalas start to fail with newer versions
-        ninja = "*"
-        cmake = "<4"
+        # `setuptools` on the conda side is what causes pixi to register
+        # it as a conda-provided package for the pypi resolver. The local
+        # pypi package below then forces a PEP 517 build that needs its
+        # own `setuptools>=60` from PyPI, which exercises the fix in
+        # #1969: build-dispatch now has a separate in-memory index so
+        # the conda-provided-package hint doesn't block the build.
+        python = ">=3.11,<3.13"
+        pip = "*"
+        setuptools = ">=60"
 
-        [pypi-options]
-        no-build-isolation = ["xatlas"]
-
-        # The transitive dependencies of viser were causing issues
         [pypi-dependencies]
-        viser = "==0.2.7"
-        "#,
-        platform = Platform::current()
+        setuptools-override-repro = {{ path = "{pkg_path}" }}
+        "#
     );
+
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
 
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
 
+    // Only pin the uv wheel cache — conda packages and repodata can be reused
+    // from prior runs, which keeps the test fast.
     temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        [(
+            "PIXI_CACHE_PYPI_WHEELS_DIR",
+            Some(tmp_dir_path.to_str().unwrap()),
+        )],
         async {
             pixi.install().await.expect("cannot install project");
         },
