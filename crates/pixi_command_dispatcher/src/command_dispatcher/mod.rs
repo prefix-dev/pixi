@@ -28,8 +28,7 @@ use crate::{
     BackendHandle, BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
     DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec, Executor,
     InstantiateBackendError, InstantiateBackendKey, Reporter,
-    cache::build_backend_metadata::BuildBackendMetadataCache,
-    cache_dirs::CacheDirs,
+    cache::{BuildBackendMetadataCache, CacheDirs},
     environment::WorkspaceEnvRegistry,
     install_pixi::{
         InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,

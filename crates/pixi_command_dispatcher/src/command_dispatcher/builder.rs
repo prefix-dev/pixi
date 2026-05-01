@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::BuildEnvironment;
-use crate::cache::build_backend_metadata::BuildBackendMetadataCache;
+use crate::cache::BuildBackendMetadataCache;
 use crate::compute_data::{
     AllowExecuteLinkScripts, BackendSourceBuildSemaphore, CondaSolveSemaphore,
 };
