@@ -106,6 +106,8 @@ async fn test_conda_build_v1() {
             build: None,
             subdir: Platform::current(),
             variant: Default::default(),
+            build_number_override: None,
+            build_string_prefix: None,
         },
         work_directory: build_dir.clone(),
         output_directory: None,

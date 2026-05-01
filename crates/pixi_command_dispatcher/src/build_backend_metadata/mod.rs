@@ -88,6 +88,12 @@ pub struct BuildBackendMetadataSpec {
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
+
+    /// Override the build number for all outputs.
+    pub build_number_override: Option<u64>,
+
+    /// A string to prepend to the build string of all outputs.
+    pub build_string_prefix: Option<String>,
 }
 
 /// The metadata of a source checkout.
@@ -210,6 +216,8 @@ impl BuildBackendMetadataSpec {
             exclude_newer: self.exclude_newer.clone(),
             enabled_protocols: self.enabled_protocols.clone(),
             source: manifest_source_location.clone().into(),
+            build_number_override: self.build_number_override,
+            build_string_prefix: self.build_string_prefix.clone(),
         };
         let cache_read_result = command_dispatcher
             .build_backend_metadata_cache()
@@ -556,6 +564,8 @@ impl BuildBackendMetadataSpec {
             channels: self.channels,
             host_platform: self.build_environment.host_platform,
             build_platform: self.build_environment.build_platform,
+            build_number_override: self.build_number_override,
+            build_string_prefix: self.build_string_prefix,
             variant_configuration: self.variant_configuration.clone().map(|variants| {
                 variants
                     .iter()

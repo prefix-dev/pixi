@@ -431,6 +431,8 @@ mod tests {
                 variant_configuration: None,
                 variant_files: None,
                 work_directory: current_dir,
+                build_number_override: None,
+                build_string_prefix: None,
             })
             .await
             .unwrap();

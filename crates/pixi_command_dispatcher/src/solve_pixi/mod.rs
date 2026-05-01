@@ -300,6 +300,8 @@ impl PixiEnvironmentSpec {
                         variant_configuration,
                         variant_files,
                         enabled_protocols,
+                        build_number_override: None,
+                        build_string_prefix: None,
                     },
                 };
 
