@@ -4,7 +4,7 @@ mod url;
 pub use git::{GitCheckoutSemaphore, GitSourceCheckoutExt, HasGitCheckoutSemaphore};
 pub use url::{HasUrlCheckoutSemaphore, UrlCheckoutSemaphore, UrlSourceCheckoutExt};
 
-use crate::path::RootDirExt;
+use crate::util::path::RootDirExt;
 use futures::FutureExt;
 use futures::future::BoxFuture;
 use miette::Diagnostic;

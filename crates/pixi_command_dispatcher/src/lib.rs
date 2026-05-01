@@ -43,7 +43,6 @@ mod dev_source_metadata;
 mod discovered_backend;
 pub mod environment;
 mod ephemeral_env;
-pub mod executor;
 mod injected_config;
 mod input_hash;
 mod install_binary;
@@ -52,9 +51,6 @@ mod installed_source_hints;
 mod instantiate_backend_key;
 mod instantiate_tool_env;
 pub mod keys;
-mod limits;
-mod path;
-mod ptr_arc;
 pub mod reporter;
 mod reporter_context;
 mod reporter_lifecycle;
@@ -66,6 +62,7 @@ mod source_build;
 pub mod source_checkout;
 mod source_metadata;
 mod source_record;
+mod util;
 
 pub use backend_source_build::{
     BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
@@ -98,7 +95,6 @@ pub use environment::{
 pub use ephemeral_env::{
     EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec, InstalledEphemeralEnv,
 };
-pub use executor::Executor;
 pub use injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
@@ -111,8 +107,6 @@ pub use instantiate_backend_key::{
     BackendHandle, InstantiateBackendError, InstantiateBackendKey, resolve_backend_identifier,
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
-pub use limits::{Limit, Limits};
-pub use ptr_arc::PtrArc;
 pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,
     PixiSolveReporter, Reporter, ReporterContext,
@@ -125,6 +119,8 @@ pub use source_build::SourceBuildError;
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
 pub use source_record::{ResolvedSourceRecord, SourceRecordError, SourceRecordSpec};
+pub use util::executor;
+pub use util::{Executor, Limit, Limits, PtrArc};
 
 // Re-export pixi_compute_engine types used by downstream crates.
 pub use pixi_compute_engine::{ComputeCtx, ComputeEngine, ComputeError, Key};
