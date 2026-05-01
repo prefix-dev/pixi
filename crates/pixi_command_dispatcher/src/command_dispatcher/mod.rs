@@ -1,10 +1,13 @@
-//! Defines the [`CommandDispatcher`] and its associated components for managing
-//! and synchronizing tasks across different environments.
+//! Defines the [`CommandDispatcher`] and its associated components.
 //!
-//! The [`CommandDispatcher`] is a central component for orchestrating tasks
+//! [`CommandDispatcher`] is a thin, cheaply cloneable handle that wraps a
+//! [`ComputeEngine`](pixi_compute_engine::ComputeEngine) together with shared
+//! [`CommandDispatcherData`] (gateway, caches, resolvers, executor, etc.).
+//! Public methods on the handle build the appropriate
+//! [`Key`](pixi_compute_engine::Key) and submit it to the engine, which
+//! handles deduplication, caching, and dependency tracking for operations
 //! such as solving environments, fetching metadata, and managing source
-//! checkouts. It ensures efficient execution by avoiding redundant computations
-//! and supporting concurrent operations.
+//! checkouts.
 
 use std::sync::Arc;
 

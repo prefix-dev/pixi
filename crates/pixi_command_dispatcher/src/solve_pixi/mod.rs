@@ -70,8 +70,7 @@ pub enum SolvePixiEnvironmentError {
     #[diagnostic(transparent)]
     SourceCheckoutError(crate::SourceCheckoutError),
 
-    /// Used by the compute-engine solve path where
-    /// [`SourceMetadata`](crate::SourceMetadata) errors surface
+    /// [`SourceMetadata`](crate::SourceMetadata) error surfaced
     /// directly from [`SourceMetadataKey`](crate::keys::SourceMetadataKey).
     #[error(transparent)]
     #[diagnostic(transparent)]

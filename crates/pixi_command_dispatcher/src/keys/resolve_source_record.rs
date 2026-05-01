@@ -39,10 +39,9 @@ use crate::{
 /// Resolve one variant's [`SourceRecord`] from an assembled
 /// [`CondaOutput`] + pinned source location.
 ///
-/// Mirrors the legacy `resolve_output` flow: solve the build env,
-/// extract build run-exports, solve the host env, extract host
-/// run-exports, assemble the final record with merged run
-/// dependencies.
+/// Solves the build env, extracts build run-exports, solves the host
+/// env, extracts host run-exports, then assembles the final record
+/// with merged run dependencies.
 ///
 /// `preferred_build_source` is the FULL pin map, propagated verbatim
 /// into the nested build/host env solves so pins for every package

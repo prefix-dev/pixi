@@ -2,11 +2,11 @@
 //! task, for attribution of child operations.
 //!
 //! Pattern is Buck2's `EventDispatcher` via `tokio::task_local!`: when a
-//! processor task handler starts, it wraps its work with
+//! Key's compute body starts, it wraps its work with
 //! [`CURRENT_REPORTER_CONTEXT`]`.scope(Some(own_context), ..)`. Anything
-//! that runs inside then sees that context, including a
-//! [`ComputeEngine`](pixi_compute_engine::ComputeEngine) call whose
-//! freshly spawned task inherits the task-local via the engine's
+//! that runs inside then sees that context, including nested
+//! [`ComputeEngine`](pixi_compute_engine::ComputeEngine) calls whose
+//! freshly spawned tasks inherit the task-local via the engine's
 //! [`SpawnHook`](pixi_compute_engine::SpawnHook) (registered by the
 //! [`CommandDispatcherBuilder`](crate::CommandDispatcherBuilder)).
 //!

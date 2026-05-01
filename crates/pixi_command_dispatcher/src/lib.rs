@@ -17,13 +17,19 @@
 //!
 //! # Architecture
 //!
-//! The [`CommandDispatcher`] is built around a task-based execution model:
+//! The [`CommandDispatcher`] is a thin handle over a generic incremental
+//! computation engine:
 //!
-//! 1. Each operation is represented as a task implementing the `TaskSpec` trait
-//! 2. Tasks are submitted to a central queue and processed asynchronously
-//! 3. Duplicate tasks are detected and consolidated to avoid redundant work
-//! 4. Dependencies between tasks are tracked to ensure proper execution order
-//! 5. Results are cached when appropriate to improve performance
+//! 1. Each operation is a [`pixi_compute_engine::Key`] whose `compute`
+//!    method produces its `Value`.
+//! 2. Keys run through a [`pixi_compute_engine::ComputeEngine`], which
+//!    dedups concurrent requests for the same key and caches results.
+//! 3. Dependencies between keys are tracked implicitly via
+//!    [`ComputeCtx::compute`](pixi_compute_engine::ComputeCtx::compute), and
+//!    cycles are detected by the engine.
+//! 4. Shared resources (gateway, caches, package cache, git/url resolvers,
+//!    etc.) live in a typed [`DataStore`](pixi_compute_engine::DataStore)
+//!    that keys read from via extension traits.
 //!
 //! # Usage
 //!

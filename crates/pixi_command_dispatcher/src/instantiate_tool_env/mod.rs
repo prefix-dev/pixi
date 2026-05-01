@@ -155,9 +155,8 @@ pub enum InstantiateToolEnvironmentError {
     #[diagnostic(transparent)]
     InstallEnvironment(Arc<InstallPixiEnvironmentError>),
 
-    /// Error surfaced from the compute-engine ephemeral-env path. Holds
-    /// the original [`crate::EphemeralEnvError`] so callers can inspect
-    /// it. Present to bridge the legacy error shape with the new Key.
+    /// Error surfaced from the ephemeral-env Key. Holds the original
+    /// [`crate::EphemeralEnvError`] so callers can inspect it.
     #[error(transparent)]
     #[diagnostic(transparent)]
     EphemeralEnv(Arc<crate::EphemeralEnvError>),
