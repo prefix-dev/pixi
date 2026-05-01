@@ -265,54 +265,34 @@ pub struct PyPIBuildConfig<'a> {
     pub link_mode: Option<LinkMode>,
 }
 
-/// Derives the appropriate `LinkMode` based on installation restrictions.
-///
-/// This function implements a fallback chain for link modes when certain methods
-/// are disallowed:
-/// - Default preference order: Clone (on macOS) or Hardlink (elsewhere)
-/// - If reflinks are disallowed, falls back to Hardlink
-/// - If hardlinks are disallowed, falls back to Symlink
-/// - If symlinks are disallowed, falls back to Copy
-/// - Copy is always allowed as a last resort
+/// Picks a `LinkMode` honoring the configured restrictions, preferring the
+/// platform default when it is allowed and otherwise falling through
+/// `Clone` → `Hardlink` → `Symlink` → `Copy`.
 pub fn derive_link_mode(
     allow_symbolic_links: Option<bool>,
     allow_hard_links: Option<bool>,
     allow_ref_links: Option<bool>,
 ) -> LinkMode {
-    // Get platform default
-    let default = LinkMode::default();
-
-    // Helper to check if a mode is allowed
-    let is_clone_allowed = allow_ref_links.unwrap_or(true);
-    let is_hardlink_allowed = allow_hard_links.unwrap_or(true);
-    let is_symlink_allowed = allow_symbolic_links.unwrap_or(true);
-
-    // If default is allowed, use it
-    let default_allowed = match default {
-        LinkMode::Clone => is_clone_allowed,
-        LinkMode::Hardlink => is_hardlink_allowed,
-        LinkMode::Symlink => is_symlink_allowed,
-        LinkMode::Copy => true, // Copy is always allowed
+    let is_allowed = |mode: LinkMode| match mode {
+        LinkMode::Clone => allow_ref_links.unwrap_or(true),
+        LinkMode::Hardlink => allow_hard_links.unwrap_or(true),
+        LinkMode::Symlink => allow_symbolic_links.unwrap_or(true),
+        LinkMode::Copy => true,
     };
 
-    if default_allowed {
+    let default = LinkMode::default();
+    if is_allowed(default) {
         return default;
     }
-
-    // Otherwise, find the first allowed mode in preference order
-    // Preference: Clone > Hardlink > Symlink > Copy
-    if is_clone_allowed {
-        return LinkMode::Clone;
-    }
-    if is_hardlink_allowed {
-        return LinkMode::Hardlink;
-    }
-    if is_symlink_allowed {
-        return LinkMode::Symlink;
-    }
-
-    // Fall back to Copy (always allowed)
-    LinkMode::Copy
+    [
+        LinkMode::Clone,
+        LinkMode::Hardlink,
+        LinkMode::Symlink,
+        LinkMode::Copy,
+    ]
+    .into_iter()
+    .find(|&mode| is_allowed(mode))
+    .unwrap_or(LinkMode::Copy)
 }
 
 /// Configuration for PyPI context, grouping uv and environment settings

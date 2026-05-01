@@ -1407,14 +1407,9 @@ impl From<ConfigCli> for Config {
                 },
             },
             pinning_strategy: cli.pinning_strategy,
-            // CLI uses --no-* flags which invert to allow_* = false
-            allow_symbolic_links: if cli.no_symbolic_links {
-                Some(false)
-            } else {
-                None
-            },
-            allow_hard_links: if cli.no_hard_links { Some(false) } else { None },
-            allow_ref_links: if cli.no_ref_links { Some(false) } else { None },
+            allow_symbolic_links: cli.no_symbolic_links.then_some(false),
+            allow_hard_links: cli.no_hard_links.then_some(false),
+            allow_ref_links: cli.no_ref_links.then_some(false),
             ..Default::default()
         }
     }
@@ -2578,24 +2573,6 @@ impl Config {
     /// false.
     pub fn run_post_link_scripts(&self) -> RunPostLinkScripts {
         self.run_post_link_scripts.clone().unwrap_or_default()
-    }
-
-    /// Returns whether symbolic links are allowed during package installation.
-    /// Defaults to `None` (allow).
-    pub fn allow_symbolic_links(&self) -> Option<bool> {
-        self.allow_symbolic_links
-    }
-
-    /// Returns whether hard links are allowed during package installation.
-    /// Defaults to `None` (allow).
-    pub fn allow_hard_links(&self) -> Option<bool> {
-        self.allow_hard_links
-    }
-
-    /// Returns whether ref links (copy-on-write) are allowed during package installation.
-    /// Defaults to `None` (allow).
-    pub fn allow_ref_links(&self) -> Option<bool> {
-        self.allow_ref_links
     }
 }
 

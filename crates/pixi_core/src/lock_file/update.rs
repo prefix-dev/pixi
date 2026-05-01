@@ -979,14 +979,7 @@ impl<'p> LockFileDerivedData<'p> {
                         system_requirements: &environment.system_requirements(),
                     };
 
-                    // Derive link mode from config restrictions
                     let workspace_config = self.workspace.config();
-                    let link_mode = derive_link_mode(
-                        workspace_config.allow_symbolic_links(),
-                        workspace_config.allow_hard_links(),
-                        workspace_config.allow_ref_links(),
-                    );
-
                     let build_config = PyPIBuildConfig {
                         no_build_isolation: &non_isolated_packages,
                         no_build: &no_build,
@@ -994,7 +987,11 @@ impl<'p> LockFileDerivedData<'p> {
                         index_strategy: index_strategy.as_ref(),
                         exclude_newer: &pypi_exclude_newer,
                         skip_wheel_filename_check,
-                        link_mode: Some(link_mode),
+                        link_mode: Some(derive_link_mode(
+                            workspace_config.allow_symbolic_links,
+                            workspace_config.allow_hard_links,
+                            workspace_config.allow_ref_links,
+                        )),
                     };
 
                     let lazy_env_vars = LazyPixiEnvironmentVars {
@@ -2028,6 +2025,14 @@ impl<'p> UpdateContext<'p> {
         }
 
         // Spawn tasks to update the pypi packages.
+        let project_link_mode = {
+            let config = project.config();
+            derive_link_mode(
+                config.allow_symbolic_links,
+                config.allow_hard_links,
+                config.allow_ref_links,
+            )
+        };
         for (environment, platform) in
             self.outdated_envs
                 .pypi
@@ -2086,14 +2091,6 @@ impl<'p> UpdateContext<'p> {
                 .cloned()
                 .unwrap_or_default();
 
-            // Derive link mode from config restrictions for PyPI build dispatch
-            let config = project.config();
-            let link_mode = derive_link_mode(
-                config.allow_symbolic_links(),
-                config.allow_hard_links(),
-                config.allow_ref_links(),
-            );
-
             // Spawn a task to solve the pypi environment
             let cache_key =
                 lock_file::outdated::BuildCacheKey::new(environment.name().clone(), platform);
@@ -2119,7 +2116,7 @@ impl<'p> UpdateContext<'p> {
                 locked_group_records,
                 self.no_install,
                 build_cache,
-                link_mode,
+                project_link_mode,
             );
 
             pending_futures.push(
