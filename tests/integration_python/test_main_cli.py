@@ -412,15 +412,9 @@ def test_cli_config_options(
     )
 
     # Test --no-*-links flags
-    verify_cli_command(
-        [pixi, "install", "--no-ref-links", "--manifest-path", manifest_path]
-    )
-    verify_cli_command(
-        [pixi, "install", "--no-hard-links", "--manifest-path", manifest_path]
-    )
-    verify_cli_command(
-        [pixi, "install", "--no-symbolic-links", "--manifest-path", manifest_path]
-    )
+    verify_cli_command([pixi, "install", "--no-ref-links", "--manifest-path", manifest_path])
+    verify_cli_command([pixi, "install", "--no-hard-links", "--manifest-path", manifest_path])
+    verify_cli_command([pixi, "install", "--no-symbolic-links", "--manifest-path", manifest_path])
 
     # Test --auth-file flag
     auth_file = tmp_pixi_workspace / "auth.json"
