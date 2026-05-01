@@ -61,11 +61,16 @@ pub fn exact_inputs_from_ninja(workdir: &Path) -> io::Result<BTreeSet<String>> {
         })?;
     // The build env's ninja typically isn't on PATH for the backend process;
     // CMake records the binary it picked, so we use that.
-    let ninja = read_cache_value(&cache, CMAKE_MAKE_PROGRAM_KEY)
+    let ninja_binary = read_cache_value(&cache, CMAKE_MAKE_PROGRAM_KEY)
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("ninja"));
+    let ninja = Ninja::new(ninja_binary, build_dir.clone());
 
-    let outputs = run_ninja_concurrently(&ninja, &build_dir)?;
+    let outputs = ninja.run_concurrently([
+        ("-t inputs all", &["-t", "inputs", "all"]),
+        ("-t deps", &["-t", "deps"]),
+        ("-t targets all", &["-t", "targets", "all"]),
+    ])?;
     for (label, output) in outputs.iter() {
         if !output.status.success() {
             return Err(io::Error::other(format!(
@@ -74,21 +79,20 @@ pub fn exact_inputs_from_ninja(workdir: &Path) -> io::Result<BTreeSet<String>> {
             )));
         }
     }
-    let [inputs, deps, targets] = outputs;
+    let [(_, inputs), (_, deps), (_, targets)] = outputs;
 
-    let source_dir = normalized_path(&source_dir);
-    let build_dir = normalized_path(&build_dir);
+    let layout = Layout::new(&source_dir, &build_dir);
     let mut files = BTreeSet::new();
-    parse_inputs(&inputs.1.stdout, &source_dir, &build_dir, &mut files);
-    parse_deps(&deps.1.stdout, &source_dir, &build_dir, &mut files);
-    parse_targets(&targets.1.stdout, &source_dir, &build_dir, &mut files);
+    parse_inputs(decode_stdout(&inputs.stdout)?, &layout, &mut files);
+    parse_deps(decode_stdout(&deps.stdout)?, &layout, &mut files);
+    parse_targets(decode_stdout(&targets.stdout)?, &layout, &mut files);
 
     // Recover the original CONFIGURE_DEPENDS glob patterns so that adding a
     // new file matching one of them invalidates the cache. Best-effort: a
     // missing or malformed VerifyGlobs.cmake is not fatal.
-    let verify_path = Path::new(&build_dir).join(VERIFY_GLOBS_FILE);
+    let verify_path = build_dir.join(VERIFY_GLOBS_FILE);
     if let Ok(verify_globs) = fs_err::read_to_string(&verify_path) {
-        parse_verify_globs(&verify_globs, &source_dir, &mut files);
+        parse_verify_globs(&verify_globs, &layout, &mut files);
     }
 
     Ok(files)
@@ -106,66 +110,120 @@ fn read_cache_value<'a>(cache: &'a str, key: &str) -> Option<&'a str> {
     cache.lines().find_map(|l| l.strip_prefix(key))
 }
 
-/// Runs the three ninja queries in parallel threads so none can block on a
-/// full pipe buffer while the others wait.
-fn run_ninja_concurrently(
-    ninja: &Path,
-    build_dir: &Path,
-) -> io::Result<[(&'static str, Output); 3]> {
-    let queries: [&[&str]; 3] = [
-        &["-t", "inputs", "all"],
-        &["-t", "deps"],
-        &["-t", "targets", "all"],
-    ];
-    let labels = ["-t inputs all", "-t deps", "-t targets all"];
+/// Decode ninja stdout as UTF-8. Ninja writes UTF-8 in practice; if it ever
+/// produces something else we'd rather surface the error and let the caller
+/// fall back to globs than silently drop lines.
+fn decode_stdout(bytes: &[u8]) -> io::Result<&str> {
+    std::str::from_utf8(bytes).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+}
 
-    std::thread::scope(|s| -> io::Result<[(&'static str, Output); 3]> {
-        let handles: Vec<_> = queries
-            .iter()
-            .map(|args| {
-                s.spawn(move || {
-                    Command::new(ninja)
+/// The two normalized roots that turn build-graph paths into source-relative
+/// inputs, plus the rule that drops paths outside the source dir or under
+/// `.pixi/`. Constructing one normalizes both paths to forward slashes with
+/// no trailing slash so all downstream comparisons are textual.
+struct Layout {
+    source_dir: String,
+    build_dir: String,
+}
+
+impl Layout {
+    fn new(source_dir: &Path, build_dir: &Path) -> Self {
+        Self {
+            source_dir: normalized_path(source_dir),
+            build_dir: normalized_path(build_dir),
+        }
+    }
+
+    /// Returns `path` as a forward-slash, source-relative string if it sits
+    /// inside the source dir and outside the pixi cache (`.pixi/`).
+    ///
+    /// `path` may be absolute or relative to the build dir; relative paths are
+    /// canonicalized lexically against the build dir before the source-dir
+    /// prefix check. Backslashes are normalized to forward slashes throughout
+    /// (CMake/ninja emit either form on Windows depending on the sub-tool).
+    fn relativize(&self, path: &str) -> Option<String> {
+        let absolute = canonicalize(path, &self.build_dir);
+        self.strip_source_root(&absolute)
+    }
+
+    /// Converts an absolute CMake glob pattern into a source-relative,
+    /// forward-slash, gitignore-style pattern. Returns `None` if the pattern
+    /// is outside the source dir or under `.pixi/`. `recursive` matches
+    /// `file(GLOB_RECURSE)` semantics: searches every subdir of the dir
+    /// component, so `<dir>/<pat>` becomes `<dir>/**/<pat>`.
+    fn relativize_glob(&self, pattern: &str, recursive: bool) -> Option<String> {
+        let normalized = pattern.replace('\\', "/");
+        let rel = self.strip_source_root(&normalized)?;
+        if !recursive || rel.contains("**") {
+            return Some(rel);
+        }
+        // `file(GLOB_RECURSE … "<dir>/<pat>")` searches every subdir of <dir>.
+        // The matching gitignore-style form is `<dir>/**/<pat>`.
+        match rel.rsplit_once('/') {
+            Some((dir, last)) => Some(format!("{dir}/**/{last}")),
+            None => Some(format!("**/{rel}")),
+        }
+    }
+
+    /// Inner helper: strip the source-dir prefix and reject empty results
+    /// or paths that fall under `.pixi/`. Both `relativize` paths funnel
+    /// through here so the "what counts as a source input" rule lives in
+    /// exactly one place.
+    fn strip_source_root(&self, absolute: &str) -> Option<String> {
+        let rest = absolute.strip_prefix(&self.source_dir)?;
+        let rel = rest.strip_prefix('/').unwrap_or(rest);
+        if rel.is_empty() || is_pixi_cache_segment(rel) {
+            return None;
+        }
+        Some(rel.to_string())
+    }
+}
+
+/// Wraps the ninja binary plus the build dir so callers don't repeat the
+/// `Command::new(...).arg("-C").arg(build_dir).args(...)` chain.
+struct Ninja {
+    binary: PathBuf,
+    build_dir: PathBuf,
+}
+
+impl Ninja {
+    fn new(binary: PathBuf, build_dir: PathBuf) -> Self {
+        Self { binary, build_dir }
+    }
+
+    /// Runs each `(label, args)` query in its own thread so none can block
+    /// on a full pipe buffer while the others wait. The label is propagated
+    /// alongside its `Output` so callers can attribute failures.
+    fn run_concurrently(
+        &self,
+        queries: [(&'static str, &[&str]); 3],
+    ) -> io::Result<[(&'static str, Output); 3]> {
+        std::thread::scope(|s| {
+            let handles = queries.map(|(label, args)| {
+                let h = s.spawn(move || {
+                    Command::new(&self.binary)
                         .arg("-C")
-                        .arg(build_dir)
-                        .args(*args)
+                        .arg(&self.build_dir)
+                        .args(args)
                         .output()
-                })
-            })
-            .collect();
-
-        let mut results = handles.into_iter();
-        let r0 = results
-            .next()
-            .unwrap()
-            .join()
-            .expect("ninja thread panicked")?;
-        let r1 = results
-            .next()
-            .unwrap()
-            .join()
-            .expect("ninja thread panicked")?;
-        let r2 = results
-            .next()
-            .unwrap()
-            .join()
-            .expect("ninja thread panicked")?;
-        Ok([(labels[0], r0), (labels[1], r1), (labels[2], r2)])
-    })
+                });
+                (label, h)
+            });
+            let collected: Vec<(&'static str, Output)> = handles
+                .into_iter()
+                .map(|(label, h)| h.join().expect("ninja thread panicked").map(|o| (label, o)))
+                .collect::<io::Result<_>>()?;
+            Ok(collected.try_into().expect("3 ninja queries -> 3 outputs"))
+        })
+    }
 }
 
 /// `ninja -t inputs all` lists every input edge of the named targets,
 /// one per line: sources, link inputs, even intermediate object files.
 /// Anything inside `source_dir` that isn't under `.pixi/` is a user input.
-fn parse_inputs(stdout: &[u8], source_dir: &str, build_dir: &str, files: &mut BTreeSet<String>) {
-    for raw in stdout.split(|b| *b == b'\n') {
-        let Ok(line) = std::str::from_utf8(raw) else {
-            continue;
-        };
-        let line = line.trim_end_matches('\r');
-        if line.is_empty() {
-            continue;
-        }
-        if let Some(rel) = relativize(line, source_dir, build_dir) {
+fn parse_inputs(stdout: &str, layout: &Layout, files: &mut BTreeSet<String>) {
+    for line in nonempty_lines(stdout) {
+        if let Some(rel) = layout.relativize(line) {
             files.insert(rel);
         }
     }
@@ -183,20 +241,13 @@ fn parse_inputs(stdout: &[u8], source_dir: &str, build_dir: &str, files: &mut BT
 ///
 /// Indented lines are headers (and sometimes the TU) discovered by the
 /// compiler. They may be either absolute or relative to the build dir.
-fn parse_deps(stdout: &[u8], source_dir: &str, build_dir: &str, files: &mut BTreeSet<String>) {
-    for raw in stdout.split(|b| *b == b'\n') {
-        let Ok(line) = std::str::from_utf8(raw) else {
-            continue;
-        };
+fn parse_deps(stdout: &str, layout: &Layout, files: &mut BTreeSet<String>) {
+    for line in nonempty_lines(stdout) {
         // Dep entries are indented by exactly four spaces.
         let Some(path) = line.strip_prefix("    ") else {
             continue;
         };
-        let path = path.trim_end_matches('\r');
-        if path.is_empty() {
-            continue;
-        }
-        if let Some(rel) = relativize(path, source_dir, build_dir) {
+        if let Some(rel) = layout.relativize(path) {
             files.insert(rel);
         }
     }
@@ -211,12 +262,8 @@ fn parse_deps(stdout: &[u8], source_dir: &str, build_dir: &str, files: &mut BTre
 /// (`all`, `clean`, `<target_name>`) using bare relative names. Those would
 /// otherwise canonicalize into the build dir (which may sit under the
 /// source dir) and pollute the result, so we reject any non-absolute path.
-fn parse_targets(stdout: &[u8], source_dir: &str, build_dir: &str, files: &mut BTreeSet<String>) {
-    for raw in stdout.split(|b| *b == b'\n') {
-        let Ok(line) = std::str::from_utf8(raw) else {
-            continue;
-        };
-        let line = line.trim_end_matches('\r');
+fn parse_targets(stdout: &str, layout: &Layout, files: &mut BTreeSet<String>) {
+    for line in nonempty_lines(stdout) {
         let Some((path, rule)) = line.rsplit_once(':') else {
             continue;
         };
@@ -227,7 +274,7 @@ fn parse_targets(stdout: &[u8], source_dir: &str, build_dir: &str, files: &mut B
         if !is_absolute(path) {
             continue;
         }
-        if let Some(rel) = relativize(path, source_dir, build_dir) {
+        if let Some(rel) = layout.relativize(path) {
             files.insert(rel);
         }
     }
@@ -245,7 +292,7 @@ fn parse_targets(stdout: &[u8], source_dir: &str, build_dir: &str, files: &mut B
 /// We translate each pattern into a source-relative gitignore-style glob
 /// and add it to the input set. `GLOB_RECURSE` becomes `dir/**/<pattern>`
 /// to match pixi's matcher semantics (the `ignore` crate).
-fn parse_verify_globs(text: &str, source_dir: &str, files: &mut BTreeSet<String>) {
+fn parse_verify_globs(text: &str, layout: &Layout, files: &mut BTreeSet<String>) {
     for line in text.lines() {
         let trimmed = line.trim_start();
         let (recursive, rest) = if let Some(r) = trimmed.strip_prefix("file(GLOB_RECURSE ") {
@@ -261,10 +308,17 @@ fn parse_verify_globs(text: &str, source_dir: &str, files: &mut BTreeSet<String>
         let Some(pattern) = first_quoted(rest) else {
             continue;
         };
-        if let Some(rel) = relativize_glob(pattern, source_dir, recursive) {
+        if let Some(rel) = layout.relativize_glob(pattern, recursive) {
             files.insert(rel);
         }
     }
+}
+
+/// Iterates non-empty lines from a UTF-8 stdout buffer. `str::lines()` already
+/// handles both `\n` and `\r\n` terminators and never yields the terminator
+/// itself, so the parsers don't need to think about line endings.
+fn nonempty_lines(stdout: &str) -> impl Iterator<Item = &str> {
+    stdout.lines().filter(|l| !l.is_empty())
 }
 
 /// Extracts the first `"…"` substring from a slice. Returns `None` if no
@@ -274,55 +328,6 @@ fn first_quoted(s: &str) -> Option<&str> {
     let rel = &s[start..];
     let end = rel.find('"')?;
     Some(&rel[..end])
-}
-
-/// Converts an absolute CMake glob pattern into a source-relative,
-/// forward-slash, gitignore-style pattern. Returns `None` if the pattern
-/// is outside the source dir or under `.pixi/`.
-fn relativize_glob(pattern: &str, source_dir: &str, recursive: bool) -> Option<String> {
-    let normalized = pattern.replace('\\', "/");
-    let rest = normalized.strip_prefix(source_dir)?;
-    let rel = rest.strip_prefix('/').unwrap_or(rest);
-    if rel.is_empty() {
-        return None;
-    }
-    if is_pixi_cache_segment(rel) {
-        return None;
-    }
-    if !recursive {
-        return Some(rel.to_string());
-    }
-    // `file(GLOB_RECURSE … "<dir>/<pat>")` searches every subdir of <dir>.
-    // The matching gitignore-style form is `<dir>/**/<pat>`. If the user
-    // already wrote `**` we leave it alone.
-    if rel.contains("**") {
-        return Some(rel.to_string());
-    }
-    let (dir, last) = match rel.rsplit_once('/') {
-        Some((d, l)) => (d, l),
-        None => return Some(format!("**/{rel}")),
-    };
-    Some(format!("{dir}/**/{last}"))
-}
-
-/// Returns `path` as a forward-slash, source-relative string if it sits
-/// inside `source_dir` and outside the pixi cache (`.pixi/`).
-///
-/// `path` may be absolute or relative to `build_dir`; relative paths are
-/// canonicalized against `build_dir` before the source-dir prefix check.
-/// Backslashes are normalized to forward slashes throughout (CMake/ninja
-/// emit either form on Windows depending on the sub-tool).
-fn relativize(path: &str, source_dir: &str, build_dir: &str) -> Option<String> {
-    let absolute = canonicalize(path, build_dir);
-    let rest = absolute.strip_prefix(source_dir)?;
-    let rel = rest.strip_prefix('/').unwrap_or(rest);
-    if rel.is_empty() {
-        return None;
-    }
-    if is_pixi_cache_segment(rel) {
-        return None;
-    }
-    Some(rel.to_string())
 }
 
 /// Canonicalize a build-graph path string into an absolute, forward-slash
@@ -392,27 +397,31 @@ fn normalized_path(p: &Path) -> String {
 mod tests {
     use super::*;
 
+    fn layout(source_dir: &str, build_dir: &str) -> Layout {
+        Layout::new(Path::new(source_dir), Path::new(build_dir))
+    }
+
     fn collect_inputs(stdout: &str, source_dir: &str, build_dir: &str) -> Vec<String> {
         let mut set = BTreeSet::new();
-        parse_inputs(stdout.as_bytes(), source_dir, build_dir, &mut set);
+        parse_inputs(stdout, &layout(source_dir, build_dir), &mut set);
         set.into_iter().collect()
     }
 
     fn collect_deps(stdout: &str, source_dir: &str, build_dir: &str) -> Vec<String> {
         let mut set = BTreeSet::new();
-        parse_deps(stdout.as_bytes(), source_dir, build_dir, &mut set);
+        parse_deps(stdout, &layout(source_dir, build_dir), &mut set);
         set.into_iter().collect()
     }
 
     fn collect_targets(stdout: &str, source_dir: &str, build_dir: &str) -> Vec<String> {
         let mut set = BTreeSet::new();
-        parse_targets(stdout.as_bytes(), source_dir, build_dir, &mut set);
+        parse_targets(stdout, &layout(source_dir, build_dir), &mut set);
         set.into_iter().collect()
     }
 
     fn collect_verify_globs(text: &str, source_dir: &str) -> Vec<String> {
         let mut set = BTreeSet::new();
-        parse_verify_globs(text, source_dir, &mut set);
+        parse_verify_globs(text, &layout(source_dir, ""), &mut set);
         set.into_iter().collect()
     }
 
@@ -504,40 +513,34 @@ clean: CLEAN
 
     #[test]
     fn relativize_handles_windows_backslashes_and_mixed_slashes() {
-        let build = normalized_path(Path::new("F:/projects/pixi2/probe/build"));
-        let src = normalized_path(Path::new("F:/projects/pixi2/probe"));
         // CMake emits forward slashes even on Windows; the source dir we
         // read from CMakeCache.txt may not have a trailing slash.
+        let layout = layout("C:/work/probe", "C:/work/probe/build");
         assert_eq!(
-            relativize("F:/projects/pixi2/probe/src/main.cc", &src, &build),
+            layout.relativize("C:/work/probe/src/main.cc"),
             Some("src/main.cc".to_string()),
         );
         assert_eq!(
-            relativize(r"F:\projects\pixi2\probe\src\main.cc", &src, &build),
+            layout.relativize(r"C:\work\probe\src\main.cc"),
             Some("src/main.cc".to_string()),
         );
         // Outside source dir → dropped.
         assert_eq!(
-            relativize("F:/packages/conda/include/iostream", &src, &build),
+            layout.relativize("C:/packages/conda/include/iostream"),
             None,
         );
         // Inside the .pixi cache → dropped.
         assert_eq!(
-            relativize(
-                "F:/projects/pixi2/probe/.pixi/envs/default/include/foo.h",
-                &src,
-                &build
-            ),
+            layout.relativize("C:/work/probe/.pixi/envs/default/include/foo.h"),
             None,
         );
     }
 
     #[test]
     fn relativize_drops_source_dir_itself() {
-        let build = normalized_path(Path::new("/src/proj/build"));
-        let src = normalized_path(Path::new("/src/proj"));
-        assert_eq!(relativize("/src/proj", &src, &build), None);
-        assert_eq!(relativize("/src/proj/", &src, &build), None);
+        let layout = layout("/src/proj", "/src/proj/build");
+        assert_eq!(layout.relativize("/src/proj"), None);
+        assert_eq!(layout.relativize("/src/proj/"), None);
     }
 
     #[test]
