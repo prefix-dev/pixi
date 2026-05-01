@@ -11,10 +11,11 @@ use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
     ParseStrictness, Platform,
 };
+use rattler_lock::{CondaPackageData, LockFile, LockedPackageRef, PypiPackageData, UrlOrPath};
 
 use crate::cli_config::WorkspaceConfig;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Default, Parser)]
 pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
@@ -36,6 +37,14 @@ pub struct Args {
     /// Defaults to the environment name.
     #[arg(short, long)]
     pub name: Option<String>,
+
+    /// Render the environment with packages pinned to the versions resolved
+    /// in the lock file instead of the manifest specs.
+    ///
+    /// This produces a "frozen" conda environment file that can be used to
+    /// recreate the same environment without re-running the solver.
+    #[arg(long)]
+    pub from_lockfile: bool,
 }
 
 fn format_pip_extras(extras: &[ExtraName]) -> String {
@@ -217,6 +226,145 @@ fn build_env_yaml(
     Ok(env_yaml)
 }
 
+fn format_locked_pypi_dependency(pypi: &PypiPackageData) -> String {
+    let name = pypi.name.to_string();
+    let editable = pypi.editable;
+
+    match &pypi.location {
+        UrlOrPath::Path(path) => {
+            if editable {
+                format!("-e {path}")
+            } else {
+                path.to_string()
+            }
+        }
+        UrlOrPath::Url(url) => {
+            // Direct references (VCS or file URLs) and other non-registry URLs
+            // require the `name @ url` form. Registry-style URLs (https/http to
+            // a wheel/sdist) are also written this way to preserve the exact
+            // artifact recorded in the lock file.
+            let scheme = url.scheme();
+            if scheme == "file" || scheme.contains('+') {
+                format!("{name} @ {url}")
+            } else {
+                // For plain registry URLs, use a simple version pin so the
+                // resulting environment file is human friendly while still
+                // matching the resolved version.
+                format!("{name}=={version}", version = pypi.version)
+            }
+        }
+    }
+}
+
+fn build_env_yaml_from_lockfile(
+    platform: &Platform,
+    environment: &Environment,
+    lockfile: &LockFile,
+    name: String,
+) -> miette::Result<EnvironmentYaml> {
+    let env_name = environment.name().as_str();
+    let lockfile_env = lockfile.environment(env_name).ok_or_else(|| {
+        miette::miette!(
+            help = "Run `pixi install` (or another command that updates the lock file) first.",
+            "environment '{env_name}' not found in the lock file"
+        )
+    })?;
+
+    let channels =
+        channels_with_nodefaults(environment.channels().into_iter().cloned().collect_vec());
+    let mut env_yaml = rattler_conda_types::EnvironmentYaml {
+        name: Some(name),
+        channels,
+        ..Default::default()
+    };
+
+    let packages = lockfile_env.packages(*platform).ok_or_else(|| {
+        miette::miette!(
+            help = "Run `pixi install` for this platform first.",
+            "platform '{platform}' not found in the lock file for environment '{env_name}'"
+        )
+    })?;
+
+    let mut pip_dependencies: Vec<String> = Vec::new();
+
+    for package in packages {
+        match package {
+            LockedPackageRef::Conda(CondaPackageData::Binary(p)) => {
+                let pr = &p.package_record;
+                let spec_str = format!(
+                    "{name} =={version} {build}",
+                    name = pr.name.as_source(),
+                    version = pr.version,
+                    build = pr.build,
+                );
+                let spec = MatchSpec::from_str(&spec_str, ParseStrictness::Lenient)
+                    .into_diagnostic()
+                    .with_context(|| {
+                        format!("failed to build a match spec for locked package {spec_str}")
+                    })?;
+                env_yaml
+                    .dependencies
+                    .push(MatchSpecOrSubSection::MatchSpec(Box::new(spec)));
+            }
+            LockedPackageRef::Conda(CondaPackageData::Source(source)) => {
+                tracing::warn!(
+                    "Skipping conda source package '{}' since source packages cannot be expressed in a conda environment file.",
+                    source.package_record.name.as_source()
+                );
+            }
+            LockedPackageRef::Pypi(pypi, _env_data) => {
+                pip_dependencies.push(format_locked_pypi_dependency(pypi));
+            }
+        }
+    }
+
+    if !pip_dependencies.is_empty() {
+        let pypi_options = environment.pypi_options();
+        if let Some(ref find_links) = pypi_options.find_links {
+            for find_link in find_links {
+                match find_link {
+                    FindLinksUrlOrPath::Url(url) => {
+                        pip_dependencies.insert(0, format!("--find-links {url}"));
+                    }
+                    FindLinksUrlOrPath::Path(path) => {
+                        pip_dependencies
+                            .insert(0, format!("--find-links {}", path.to_string_lossy()));
+                    }
+                }
+            }
+        }
+        if let Some(ref extra_index_urls) = pypi_options.extra_index_urls {
+            for extra_index_url in extra_index_urls {
+                pip_dependencies.insert(0, format!("--extra-index-url {extra_index_url}"));
+            }
+        }
+        if let Some(ref index_url) = pypi_options.index_url {
+            pip_dependencies.insert(0, format!("--index-url {index_url}"));
+        }
+
+        env_yaml
+            .dependencies
+            .push(MatchSpecOrSubSection::MatchSpec(Box::new(
+                MatchSpec::from_str("pip", ParseStrictness::Lenient)
+                    .expect("'pip' should be a valid name"),
+            )));
+
+        env_yaml
+            .dependencies
+            .push(MatchSpecOrSubSection::SubSection(
+                "pip".to_string(),
+                pip_dependencies,
+            ));
+    }
+
+    let activation_vars = environment.activation_env(Some(*platform));
+    if !activation_vars.is_empty() {
+        env_yaml.variables = activation_vars;
+    }
+
+    Ok(env_yaml)
+}
+
 /// Add `nodefaults` channel if the environment doesn't have `main`, `r`, or
 /// `msys2`
 fn channels_with_nodefaults(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChannelOrUrl> {
@@ -241,12 +389,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .name
         .unwrap_or_else(|| environment.name().as_str().to_string());
 
-    let env_yaml = build_env_yaml(
-        &platform,
-        &environment,
-        config.global_channel_config(),
-        name,
-    )?;
+    let env_yaml = if args.from_lockfile {
+        let lock_file_path = workspace.lock_file_path();
+        if !lock_file_path.is_file() {
+            miette::bail!(
+                help = "Run `pixi install` (or another command that updates the lock file) first.",
+                "no lock file found at '{}'",
+                lock_file_path.display(),
+            );
+        }
+        let lockfile = LockFile::from_path(&lock_file_path)
+            .into_diagnostic()
+            .with_context(|| {
+                format!("failed to read lock file at '{}'", lock_file_path.display())
+            })?;
+        build_env_yaml_from_lockfile(&platform, &environment, &lockfile, name)?
+    } else {
+        build_env_yaml(
+            &platform,
+            &environment,
+            config.global_channel_config(),
+            name,
+        )?
+    };
 
     if let Some(output_path) = args.output_path {
         env_yaml
@@ -277,6 +442,7 @@ mod tests {
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: None,
+            from_lockfile: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -305,6 +471,7 @@ mod tests {
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: None,
+            from_lockfile: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -334,6 +501,7 @@ mod tests {
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: None,
+            from_lockfile: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -368,6 +536,7 @@ mod tests {
             environment: Some("alternative".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: None,
+            from_lockfile: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -397,6 +566,7 @@ mod tests {
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: None,
+            from_lockfile: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -425,6 +595,7 @@ mod tests {
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: None,
+            from_lockfile: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -461,6 +632,7 @@ mod tests {
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: None,
+            from_lockfile: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -497,6 +669,52 @@ mod tests {
     }
 
     #[test]
+    fn test_export_conda_env_yaml_from_lockfile() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let lockfile = LockFile::from_path(&workspace.lock_file_path()).unwrap();
+
+        let environment = workspace
+            .environment_from_name_or_env_var(Some("default".to_string()))
+            .unwrap();
+
+        for platform in [Platform::Osx64, Platform::Linux64, Platform::OsxArm64] {
+            let env_yaml = build_env_yaml_from_lockfile(
+                &platform,
+                &environment,
+                &lockfile,
+                environment.name().as_str().to_string(),
+            )
+            .unwrap();
+            insta::assert_snapshot!(
+                format!("test_export_conda_env_yaml_from_lockfile_{platform}"),
+                env_yaml.to_yaml_string()
+            );
+        }
+    }
+
+    #[test]
+    fn test_export_conda_env_yaml_from_lockfile_unknown_platform() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi.toml");
+        let workspace = Workspace::from_path(&path).unwrap();
+        let lockfile = LockFile::from_path(&workspace.lock_file_path()).unwrap();
+        let environment = workspace
+            .environment_from_name_or_env_var(Some("default".to_string()))
+            .unwrap();
+
+        // win-64 is not in the lock file for this project; expect an error.
+        let result = build_env_yaml_from_lockfile(
+            &Platform::Win64,
+            &environment,
+            &lockfile,
+            environment.name().as_str().to_string(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_specify_output_name() {
         let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
             .join("tests/data/mock-projects/test-project-export/pixi.toml");
@@ -508,6 +726,7 @@ mod tests {
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
             name: Some(env_name.clone()),
+            from_lockfile: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
