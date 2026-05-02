@@ -373,6 +373,7 @@ impl RattlerBuild {
                     sandbox_config: None,
                     exclude_newer: None,
                     env_isolation: Default::default(),
+                    v3: true,
                 },
                 finalized_dependencies: None,
                 finalized_cache_dependencies: None,

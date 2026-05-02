@@ -178,8 +178,20 @@ impl Protocol for RattlerBuildBackend {
                     build: discovered_output.build_string.clone(),
                     build_number,
                     subdir: discovered_output.target_platform,
-                    license: recipe.about.license.map(|l| l.to_string()),
-                    license_family: recipe.about.license_family,
+                    license: recipe.about.license.clone().map(|l| l.to_string()),
+                    license_family: recipe.about.license_family.clone(),
+                    extra_depends: recipe
+                        .requirements
+                        .extras
+                        .iter()
+                        .map(|(group, deps)| {
+                            (
+                                group.clone(),
+                                deps.iter().map(ToString::to_string).collect(),
+                            )
+                        })
+                        .collect(),
+                    flags: build.flags.clone(),
                     noarch,
                     purls: None,
                     python_site_packages_path,
@@ -433,6 +445,7 @@ impl Protocol for RattlerBuildBackend {
                 sandbox_config: None,
                 exclude_newer: None,
                 env_isolation: Default::default(),
+                v3: true,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,

@@ -246,6 +246,27 @@
             "null"
           ]
         },
+        "extras": {
+          "description": "Optional extra dependencies to select for the package.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "flags": {
+          "description": "Plain string flags used to select package variants.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "default": null
+        },
         "channel": {
           "description": "The channel of the package",
           "type": [
@@ -291,6 +312,30 @@
             "string",
             "null"
           ]
+        },
+        "licenseFamily": {
+          "description": "The license family of the package",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "condition": {
+          "description": "The condition under which this match spec applies.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trackFeatures": {
+          "description": "The track features of the package",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

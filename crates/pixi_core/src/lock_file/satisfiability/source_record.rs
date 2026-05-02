@@ -769,8 +769,8 @@ fn build_full_source_record_from_output(
         track_features: vec![],
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
-        experimental_extra_depends: Default::default(),
-        flags: Default::default(),
+        experimental_extra_depends: output.metadata.extra_depends.clone(),
+        flags: output.metadata.flags.clone(),
     };
     let sources: std::collections::BTreeMap<String, SourceLocationSpec> = match &record.data {
         SourceRecordData::Full(full) => full.sources.clone(),
@@ -927,6 +927,8 @@ mod tests {
                 subdir: Platform::Linux64,
                 license: None,
                 license_family: None,
+                extra_depends: Default::default(),
+                flags: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,

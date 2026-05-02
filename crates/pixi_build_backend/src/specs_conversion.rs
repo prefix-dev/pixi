@@ -205,12 +205,17 @@ fn binary_package_spec_to_package_dependency(
         build,
         build_number,
         file_name,
+        extras,
+        flags,
         channel,
         subdir,
         md5,
         sha256,
         url,
         license,
+        license_family,
+        condition,
+        track_features,
     } = binary_spec;
 
     // If the version is "*", we treat it as None
@@ -223,7 +228,7 @@ fn binary_package_spec_to_package_dependency(
         build,
         build_number,
         file_name,
-        extras: None,
+        extras,
         channel: channel.map(Channel::from_url).map(Arc::new),
         subdir,
         namespace: None,
@@ -231,10 +236,10 @@ fn binary_package_spec_to_package_dependency(
         sha256,
         url,
         license,
-        condition: None,
-        track_features: None,
-        flags: None,
-        license_family: None,
+        condition,
+        track_features,
+        flags,
+        license_family,
     })
 }
 
@@ -409,6 +414,7 @@ pub fn from_build_v1_args_to_finalized_dependencies(
                 .into_iter()
                 .map(from_build_v1_dependency_to_dependency_info)
                 .collect(),
+            extra_depends: Default::default(),
             run_exports: run_exports
                 .map(from_build_v1_run_exports_to_run_exports)
                 .unwrap_or_default(),

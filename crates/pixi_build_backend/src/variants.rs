@@ -15,24 +15,34 @@ pub fn can_be_used_as_variant(spec: &pbt::PackageSpec) -> bool {
                 build,
                 build_number,
                 file_name,
+                extras,
+                flags,
                 channel,
                 subdir,
                 md5,
                 sha256,
                 url,
                 license,
+                license_family,
+                condition,
+                track_features,
             } = spec;
 
             version == &Some(VersionSpec::Any)
                 && build.is_none()
                 && build_number.is_none()
                 && file_name.is_none()
+                && extras.is_none()
+                && flags.is_none()
                 && channel.is_none()
                 && subdir.is_none()
                 && md5.is_none()
                 && sha256.is_none()
                 && url.is_none()
                 && license.is_none()
+                && license_family.is_none()
+                && condition.is_none()
+                && track_features.is_none()
         }
         _ => false,
     }

@@ -27,7 +27,9 @@ use pixi_spec::{
 };
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
-use rattler_conda_types::{MatchSpec, PackageName, PackageNameMatcher, ParseStrictness};
+use rattler_conda_types::{
+    MatchSpec, PackageName, PackageNameMatcher, ParseMatchSpecOptions, RepodataRevision,
+};
 use rattler_solve::SolveStrategy;
 use tracing::instrument;
 
@@ -504,8 +506,10 @@ async fn walk_and_resolve(
             let anchor =
                 SourceAnchor::from(SourceLocationSpec::from(record.manifest_source().clone()));
             for depend_str in &record.package_record().depends {
-                let Ok(match_spec) = MatchSpec::from_str(depend_str, ParseStrictness::Lenient)
-                else {
+                let Ok(match_spec) = MatchSpec::from_str(
+                    depend_str,
+                    ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+                ) else {
                     continue;
                 };
                 let (name_matcher, _) = match_spec.into_nameless();

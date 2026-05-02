@@ -169,12 +169,17 @@ fn convert_nameless_matchspec(spec: NamelessMatchSpec) -> pbt::BinaryPackageSpec
         build: spec.build,
         build_number: spec.build_number,
         file_name: spec.file_name,
+        extras: spec.extras,
+        flags: spec.flags,
         channel: spec.channel.map(|c| c.base_url.clone().into()),
         subdir: spec.subdir,
         md5: spec.md5,
         sha256: spec.sha256,
         url: spec.url,
         license: spec.license,
+        license_family: spec.license_family,
+        condition: spec.condition,
+        track_features: spec.track_features,
     }
 }
 

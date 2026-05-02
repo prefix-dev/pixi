@@ -399,12 +399,17 @@ fn is_star_requirement(spec: &PackageSpec) -> bool {
             build: None,
             build_number: None,
             file_name: None,
+            extras: None,
+            flags: None,
             channel: None,
             subdir: None,
             md5: None,
             sha256: None,
             url: None,
             license: None,
+            license_family: None,
+            condition: None,
+            track_features: None,
         } => version
             .as_ref()
             .is_none_or(|v| matches!(v, VersionSpec::Any)),
@@ -583,6 +588,8 @@ fn create_output(
             subdir,
             license: project_model.license.clone(),
             license_family: None,
+            extra_depends: index_json.experimental_extra_depends.clone(),
+            flags: index_json.flags.clone(),
             noarch: index_json.noarch,
             purls: None,
             python_site_packages_path: None,
@@ -697,6 +704,11 @@ fn resolve_run_export_spec(
         name: SourcePackageName::from(pkg_name),
         spec: PackageSpec::Binary(BinaryPackageSpec {
             version: version_spec,
+            extras: match_spec.extras.clone(),
+            flags: match_spec.flags.clone(),
+            license_family: match_spec.license_family.clone(),
+            condition: match_spec.condition.clone(),
+            track_features: match_spec.track_features.clone(),
             ..Default::default()
         }),
     })
@@ -722,6 +734,11 @@ fn convert_run_exports_json(
                     name: SourcePackageName::from(pkg_name),
                     spec: PackageSpec::Binary(BinaryPackageSpec {
                         version: match_spec.version.clone(),
+                        extras: match_spec.extras.clone(),
+                        flags: match_spec.flags.clone(),
+                        license_family: match_spec.license_family.clone(),
+                        condition: match_spec.condition.clone(),
+                        track_features: match_spec.track_features.clone(),
                         ..Default::default()
                     }),
                 })
@@ -745,6 +762,11 @@ fn convert_run_exports_json(
                     name: SourcePackageName::from(pkg_name),
                     spec: ConstraintSpec::Binary(BinaryPackageSpec {
                         version: match_spec.version.clone(),
+                        extras: match_spec.extras.clone(),
+                        flags: match_spec.flags.clone(),
+                        license_family: match_spec.license_family.clone(),
+                        condition: match_spec.condition.clone(),
+                        track_features: match_spec.track_features.clone(),
                         ..Default::default()
                     }),
                 })

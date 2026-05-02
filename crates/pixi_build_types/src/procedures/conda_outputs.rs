@@ -12,7 +12,7 @@ use std::{
 };
 
 use ordermap::OrderSet;
-use rattler_conda_types::{ChannelUrl, NoArchType, PackageName, Platform, VersionWithSource};
+use rattler_conda_types::{ChannelUrl, Flag, NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -139,6 +139,12 @@ pub struct CondaOutputMetadata {
 
     /// The license family of the package
     pub license_family: Option<String>,
+
+    /// Extra dependency groups that can be selected through MatchSpec extras.
+    pub extra_depends: BTreeMap<String, Vec<String>>,
+
+    /// Plain string flags used to select package variants.
+    pub flags: Vec<Flag>,
 
     /// The noarch type of the package
     pub noarch: NoArchType,

@@ -998,6 +998,8 @@ mod tests {
                 subdir: Platform::NoArch,
                 license: None,
                 license_family: None,
+                extra_depends: Default::default(),
+                flags: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,

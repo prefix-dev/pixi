@@ -31,10 +31,13 @@ fn to_pixi_spec_v1(
                 build,
                 build_number,
                 extras: None,
+                flags: None,
                 subdir,
                 namespace: None,
                 license,
+                license_family: None,
                 condition: None,
+                track_features: None,
             } = source
             else {
                 unimplemented!(
@@ -94,31 +97,36 @@ fn to_pixi_spec_v1(
                 build,
                 build_number,
                 file_name,
+                extras,
+                flags,
                 channel,
                 subdir,
                 md5,
                 sha256,
                 url,
                 license,
+                license_family,
+                condition,
+                track_features,
                 // These are currently explicitly ignored in the conversion
                 namespace: _,
-                extras: _,
-                condition: _,
-                track_features: _,
-                flags: _,
-                license_family: _,
             } = binary.try_into_nameless_match_spec(channel_config)?;
             pbt::PackageSpec::Binary(pbt::BinaryPackageSpec {
                 version,
                 build,
                 build_number,
                 file_name,
+                extras,
+                flags,
                 channel: channel.map(|c| c.base_url.url().clone().into()),
                 subdir,
                 md5,
                 sha256,
                 url,
                 license,
+                license_family,
+                condition,
+                track_features,
             })
         }
     };

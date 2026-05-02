@@ -16,7 +16,7 @@ use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, UrlBinarySpec}
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
-    ParseStrictness, Platform, VersionSpec,
+    ParseMatchSpecOptions, Platform, RepodataRevision, VersionSpec,
 };
 use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
@@ -308,9 +308,12 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
     specs
         .iter()
         .filter_map(move |spec| {
-            let (name_matcher, spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
-                .ok()?
-                .into_nameless();
+            let (name_matcher, spec) = MatchSpec::from_str(
+                spec,
+                ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+            )
+            .ok()?
+            .into_nameless();
             let name = name_matcher.as_exact().cloned()?;
             if ignore.by_name.contains(&name) {
                 return None;
@@ -329,7 +332,7 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     build_number: None,
                     file_name: None,
                     extras: None,
-                    condition: None,
+                    flags: None,
                     channel: None,
                     subdir: None,
                     namespace: None,
@@ -337,41 +340,46 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     sha256: None,
                     url: _,
                     license: None,
-                    track_features: None,
-                    flags: None,
                     license_family: None,
+                    condition: None,
+                    track_features: None,
                 } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
                 NamelessMatchSpec {
                     version,
                     build,
                     build_number,
                     file_name,
+                    extras,
+                    flags,
                     channel,
                     subdir,
                     md5,
                     sha256,
                     license,
+                    license_family,
+                    condition,
+                    track_features,
 
                     // Caught in the above case
                     url: _,
 
                     // Explicitly ignored
                     namespace: _,
-                    extras: _,
-                    condition: _,
-                    track_features: _,
-                    flags: _,
-                    license_family: _,
                 } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
                     version,
                     build,
                     build_number,
                     file_name,
+                    extras,
+                    flags,
                     channel: channel.map(|c| NamedChannelOrUrl::Url(c.base_url.clone().into())),
                     subdir,
                     md5,
                     sha256,
                     license,
+                    license_family,
+                    condition,
+                    track_features,
                 })),
             };
 

@@ -10,7 +10,9 @@
 //! older pixi TOMLs keep loading, we can send them to the backend.
 use ordermap::OrderMap;
 use pixi_stable_hash::{IsDefault, StableHashBuilder};
-use rattler_conda_types::{BuildNumber, BuildNumberSpec, StringMatcher, Version, VersionSpec};
+use rattler_conda_types::{
+    BuildNumber, BuildNumberSpec, MatchSpecCondition, StringMatcher, Version, VersionSpec,
+};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
@@ -453,6 +455,12 @@ pub struct BinaryPackageSpec {
     pub build_number: Option<BuildNumberSpec>,
     /// Match the specific filename of the package
     pub file_name: Option<String>,
+    /// Optional extra dependencies to select for the package.
+    pub extras: Option<Vec<String>>,
+    /// Plain string flags used to select package variants.
+    #[serde_as(as = "Option<Vec<DisplayFromStr>>")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<Vec<String>>"))]
+    pub flags: Option<Vec<StringMatcher>>,
     /// The channel of the package
     pub channel: Option<Url>,
     /// The subdir of the channel
@@ -469,6 +477,13 @@ pub struct BinaryPackageSpec {
     pub url: Option<Url>,
     /// The license of the package
     pub license: Option<String>,
+    /// The license family of the package
+    pub license_family: Option<String>,
+    /// The condition under which this match spec applies.
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<String>"))]
+    pub condition: Option<MatchSpecCondition>,
+    /// The track features of the package
+    pub track_features: Option<Vec<String>>,
 }
 
 impl From<VersionSpec> for BinaryPackageSpec {
@@ -505,6 +520,12 @@ impl std::fmt::Debug for BinaryPackageSpec {
         if let Some(file_name) = &self.file_name {
             debug_struct.field("file_name", file_name);
         }
+        if let Some(extras) = &self.extras {
+            debug_struct.field("extras", extras);
+        }
+        if let Some(flags) = &self.flags {
+            debug_struct.field("flags", flags);
+        }
         if let Some(channel) = &self.channel {
             debug_struct.field("channel", channel);
         }
@@ -516,6 +537,15 @@ impl std::fmt::Debug for BinaryPackageSpec {
         }
         if let Some(sha256) = &self.sha256 {
             debug_struct.field("sha256", &format!("{sha256:x}"));
+        }
+        if let Some(license_family) = &self.license_family {
+            debug_struct.field("license_family", license_family);
+        }
+        if let Some(condition) = &self.condition {
+            debug_struct.field("condition", condition);
+        }
+        if let Some(track_features) = &self.track_features {
+            debug_struct.field("track_features", track_features);
         }
 
         debug_struct.finish()
@@ -817,15 +847,22 @@ impl Hash for BinaryPackageSpec {
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let condition = self.condition.as_ref().map(ToString::to_string);
+
         StableHashBuilder::<H>::new()
             .field("build", &self.build)
             .field("build_number", &self.build_number)
             .field("channel", &self.channel)
+            .field("condition", &condition)
+            .field("extras", &self.extras)
             .field("file_name", &self.file_name)
+            .field("flags", &self.flags)
             .field("license", &self.license)
+            .field("license_family", &self.license_family)
             .field("md5", &self.md5)
             .field("sha256", &self.sha256)
             .field("subdir", &self.subdir)
+            .field("track_features", &self.track_features)
             .field("url", &self.url)
             .field("version", &self.version)
             .finish(state);
@@ -974,6 +1011,7 @@ mod tests {
             sha256: None,
             url: None,
             license: None,
+            ..Default::default()
         };
         let hash2 = calculate_hash(&spec2);
 
