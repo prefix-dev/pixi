@@ -16,7 +16,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use futures::TryFutureExt;
 use itertools::Either;
 use miette::Diagnostic;
-use pixi_compute_engine::{ComputeCtx, DataStore, Key};
+use pixi_compute_engine::{BuildEnvironment, ComputeCtx, DataStore, Key};
 use pixi_record::PixiRecord;
 use pixi_spec::{BinarySpec, PixiSpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
@@ -406,7 +406,7 @@ async fn fetch_binary_repodata(
     ctx: &mut ComputeCtx,
     spec: &EphemeralEnvSpec,
     binary_specs: &DependencyMap<PackageName, BinarySpec>,
-    build_env: &crate::BuildEnvironment,
+    build_env: &BuildEnvironment,
 ) -> Result<Vec<RepoData>, EphemeralEnvError> {
     use rattler_conda_types::{Channel, Platform};
 

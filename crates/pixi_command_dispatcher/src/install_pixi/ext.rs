@@ -1,26 +1,23 @@
 //! `ctx.install_pixi_environment` extension trait. Installs a pixi
 //! environment by (a) concurrently building every source record via
-//! [`SourceBuildKey`], then (b) running the
-//! rattler prefix installer over the resulting binary set.
+//! [`SourceBuildKey`], then (b) delegating the binary install to
+//! `pixi_compute_engine`'s prefix-install primitive.
 //!
-//! Reporter lifecycle, install reporter creation, and reporter-context
-//! scoping live here.
+//! Reporter lifecycle (queued/started/finished + nested-context
+//! scoping) and source-build orchestration live here; the actual
+//! prefix-installer call lives in `pixi_compute_engine::install_pixi`.
 
 use std::{collections::HashMap, sync::Arc};
 
-use pixi_compute_engine::{ComputeCtx, DataStore};
+use pixi_compute_engine::{BuildEnvironment, ComputeCtx};
 use pixi_record::UnresolvedPixiRecord;
-use rattler::install::{Installer, InstallerError, PythonInfo, Transaction};
 use rattler_conda_types::{PackageName, RepoDataRecord};
 
 use crate::BuildProfile;
 use crate::CommandDispatcherError;
-use crate::compute_data::{
-    HasAllowExecuteLinkScripts, HasCacheDirs, HasDownloadClient, HasPackageCache, HasReporter,
-};
+use crate::compute_data::{HasCacheDirs, HasReporter};
 use crate::install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
-    reporter::WrappingInstallReporter,
 };
 use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpecV2, WorkspaceCache};
 use crate::reporter::{Reporter, ReporterContext};
@@ -94,7 +91,7 @@ impl InstallPixiEnvironmentExt for ComputeCtx {
 struct SharedBuildParams {
     channels: Vec<rattler_conda_types::ChannelUrl>,
     exclude_newer: Option<pixi_spec::ResolvedExcludeNewer>,
-    build_environment: crate::BuildEnvironment,
+    build_environment: BuildEnvironment,
     variant_configuration:
         Option<std::collections::BTreeMap<String, Vec<pixi_record::VariantValue>>>,
     variant_files: Option<Vec<std::path::PathBuf>>,
@@ -206,99 +203,35 @@ async fn install_inner(
         binary_records.push(record);
     }
 
-    // Fingerprint every record that will land in the prefix; the
-    // sha256s the records already carry are enough, no file I/O.
-    let installed_fingerprint =
-        crate::EnvironmentFingerprint::compute(binary_records.iter().map(|arc| arc.as_ref()));
-
-    // Fast path: when the prefix's stored fingerprint already matches
-    // the one we'd install and the caller hasn't asked for an explicit
-    // reinstall, skip the rattler installer entirely. Source builds
-    // above this point still ran (their content feeds the
-    // fingerprint), so any source change forces a fresh install via a
-    // fingerprint mismatch.
-    if spec.force_reinstall.is_empty()
-        && crate::EnvironmentFingerprint::read(spec.prefix.path()).as_ref()
-            == Some(&installed_fingerprint)
-    {
-        let transaction =
-            unchanged_transaction(spec.build_environment.host_platform, &binary_records)
-                .map_err(CommandDispatcherError::Failed)?;
-        return Ok(InstallPixiEnvironmentResult {
-            transaction,
-            post_link_script_result: None,
-            pre_link_script_result: None,
-            resolved_source_records,
-            installed_fingerprint,
-        });
-    }
-
-    // Run the rattler prefix installer against the fully-resolved binary
-    // set. Resources come from the compute engine's DataStore.
-    let data: &DataStore = ctx.global_data();
-    let mut installer = Installer::new()
-        .with_target_platform(spec.build_environment.host_platform)
-        .with_download_client(data.download_client().clone())
-        .with_package_cache(data.package_cache().clone())
-        .with_reinstall_packages(std::mem::take(&mut spec.force_reinstall))
-        .with_ignored_packages(spec.ignore_packages.take().unwrap_or_default())
-        .with_execute_link_scripts(data.allow_execute_link_scripts());
-    if let Some(installed) = spec.installed.take() {
-        installer = installer.with_installed_packages(installed);
-    }
-    if let Some(reporter) = install_reporter {
-        installer = installer.with_reporter(WrappingInstallReporter(reporter));
-    }
-
-    let result = installer
-        .install(
-            spec.prefix.path(),
-            binary_records.into_iter().map(Arc::unwrap_or_clone),
+    // Delegate the binary install to compute_engine. The engine
+    // primitive computes the fingerprint, short-circuits on a match,
+    // and otherwise drives the rattler prefix installer. Spelled-out
+    // UFCS because `ComputeCtx` carries both `InstallPixiEnvironmentExt`
+    // impls (this crate's mixed-records one and the engine's binary-only
+    // one) with the same method name.
+    let engine_spec = pixi_compute_engine::InstallPixiEnvironmentSpec {
+        name: spec.name.clone(),
+        records: binary_records,
+        ignore_packages: spec.ignore_packages.take(),
+        prefix: spec.prefix.clone(),
+        installed: spec.installed.take(),
+        build_environment: spec.build_environment.clone(),
+        force_reinstall: std::mem::take(&mut spec.force_reinstall),
+    };
+    let engine_result =
+        <ComputeCtx as pixi_compute_engine::InstallPixiEnvironmentExt>::install_pixi_environment(
+            ctx,
+            engine_spec,
+            install_reporter,
         )
         .await
-        .map_err(|err| match err {
-            InstallerError::FailedToDetectInstalledPackages(err) => {
-                InstallPixiEnvironmentError::ReadInstalledPackages(spec.prefix.clone(), err)
-            }
-            err => InstallPixiEnvironmentError::Installer(err),
-        })
-        .map_err(CommandDispatcherError::Failed)?;
+        .map_err(|err| CommandDispatcherError::Failed(err.into()))?;
 
     Ok(InstallPixiEnvironmentResult {
-        transaction: result.transaction,
-        post_link_script_result: result.post_link_script_result,
-        pre_link_script_result: result.pre_link_script_result,
+        transaction: engine_result.transaction,
+        post_link_script_result: engine_result.post_link_script_result,
+        pre_link_script_result: engine_result.pre_link_script_result,
         resolved_source_records,
-        installed_fingerprint,
-    })
-}
-
-/// Build the [`Transaction`] returned to the caller when the install
-/// short-circuits on a fingerprint match. There's no work to perform,
-/// so `operations` is empty; only `python_info` and
-/// `current_python_info` need real values so downstream code that
-/// derives `PythonStatus` from the transaction sees `Unchanged`. We
-/// leave `unchanged` empty too: callers iterate it to inspect the
-/// install diff, and "no diff" is exactly what we want to signal.
-#[allow(clippy::result_large_err)] // matches install_inner's unboxed error contract
-fn unchanged_transaction(
-    platform: rattler_conda_types::Platform,
-    records: &[Arc<RepoDataRecord>],
-) -> Result<
-    Transaction<rattler::install::InstallationResultRecord, RepoDataRecord>,
-    InstallPixiEnvironmentError,
-> {
-    let python_info = records
-        .iter()
-        .find(|r| r.package_record.name.as_normalized() == "python")
-        .map(|r| PythonInfo::from_python_record(&r.package_record, platform))
-        .transpose()
-        .map_err(|err| InstallPixiEnvironmentError::DetectPythonInfo(err.to_string()))?;
-    Ok(Transaction {
-        operations: Vec::new(),
-        python_info: python_info.clone(),
-        current_python_info: python_info,
-        platform,
-        unchanged: Vec::new(),
+        installed_fingerprint: engine_result.installed_fingerprint,
     })
 }

@@ -11,10 +11,8 @@ use std::sync::Arc;
 use derive_more::Display;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::BackendOverride;
-use pixi_compute_engine::InjectedKey;
+use pixi_compute_engine::{BuildEnvironment, InjectedKey};
 use rattler_conda_types::ChannelConfig;
-
-use crate::BuildEnvironment;
 
 /// Injected [`ChannelConfig`] for the dispatcher's engine.
 #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]

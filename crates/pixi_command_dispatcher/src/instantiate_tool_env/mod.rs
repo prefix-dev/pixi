@@ -16,9 +16,9 @@ use rattler_conda_types::{ChannelUrl, PackageName, VersionWithSource, prefix::Pr
 use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::{
-    BuildEnvironment, SolvePixiEnvironmentError, install_pixi::InstallPixiEnvironmentError,
-};
+use pixi_compute_engine::BuildEnvironment;
+
+use crate::{SolvePixiEnvironmentError, install_pixi::InstallPixiEnvironmentError};
 
 /// Specification for a tool environment. Tool environments are cached between
 /// runs.

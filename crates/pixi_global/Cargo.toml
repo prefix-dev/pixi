@@ -25,6 +25,7 @@ once_cell = { workspace = true }
 ordermap = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
+pixi_compute_engine = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }

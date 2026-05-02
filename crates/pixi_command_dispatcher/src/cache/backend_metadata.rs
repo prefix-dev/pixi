@@ -14,9 +14,9 @@ use super::common::{
 };
 use crate::build::CanonicalSourceCodeLocation;
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
+use pixi_compute_engine::BuildEnvironment;
 use rattler_conda_types::PackageName;
 
-use crate::BuildEnvironment;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;

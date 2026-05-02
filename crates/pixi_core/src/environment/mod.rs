@@ -5,7 +5,7 @@ pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdate
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};
 use miette::{Context, IntoDiagnostic};
-use pixi_command_dispatcher::EnvironmentFingerprint;
+use pixi_compute_engine::EnvironmentFingerprint;
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
@@ -157,7 +157,7 @@ impl EnvironmentHash {
     /// (3) is captured by `installed_fingerprint`, which is the
     /// per-record sha256 hash of every package in the prefix
     /// (binaries + built source-build artifacts) computed by
-    /// [`pixi_command_dispatcher::EnvironmentFingerprint`].
+    /// [`pixi_compute_engine::EnvironmentFingerprint`].
     ///
     /// We deliberately do **not** fold locked package URLs into this
     /// hash like [`Self::from_environment`] does: for source
@@ -267,8 +267,8 @@ impl LockedEnvironmentHash {
 ///
 /// The install fingerprint that downstream caches key on lives in a
 /// separate marker file managed by
-/// [`pixi_command_dispatcher::EnvironmentFingerprint::read`] /
-/// [`pixi_command_dispatcher::EnvironmentFingerprint::write`], so
+/// [`pixi_compute_engine::EnvironmentFingerprint::read`] /
+/// [`pixi_compute_engine::EnvironmentFingerprint::write`], so
 /// it isn't part of this struct.
 #[derive(Serialize, Deserialize)]
 pub(crate) struct EnvironmentFile {

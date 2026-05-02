@@ -73,7 +73,6 @@ pub use backend_source_build::{
     BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method,
 };
-pub use build::BuildEnvironment;
 pub use build_backend_metadata::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataInner,
     BuildBackendMetadataKey, BuildBackendMetadataSpec,
@@ -103,8 +102,8 @@ pub use injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
 pub use install_pixi::{
-    EnvironmentFingerprint, InstallPixiEnvironmentError, InstallPixiEnvironmentExt,
-    InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
+    InstallPixiEnvironmentError, InstallPixiEnvironmentExt, InstallPixiEnvironmentResult,
+    InstallPixiEnvironmentSpec,
 };
 pub use installed_source_hints::{InstalledSourceHint, InstalledSourceHints};
 pub use instantiate_backend_key::{

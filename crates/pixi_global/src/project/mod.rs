@@ -22,11 +22,12 @@ use once_cell::sync::OnceCell;
 pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv, InstallPixiEnvironmentSpec, Limits,
+    BuildBackendMetadataSpec, CommandDispatcher, ComputeResultExt, EnvironmentRef, EnvironmentSpec,
+    EphemeralEnv, InstallPixiEnvironmentSpec, Limits,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
     source_checkout::SourceCheckoutExt,
 };
+use pixi_compute_engine::BuildEnvironment;
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_core::repodata::Repodata;
@@ -1460,7 +1461,7 @@ impl Project {
                 pinned_source_spec.to_string(),
                 EnvironmentSpec {
                     channels,
-                    build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
+                    build_environment: BuildEnvironment::default(),
                     variants: VariantConfig::default(),
                     exclude_newer: None,
                     channel_priority: Default::default(),

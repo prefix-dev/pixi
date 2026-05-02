@@ -173,11 +173,11 @@ impl DerivedParent {
 
 /// Which derived environment a [`EnvironmentRef::Derived`] represents.
 /// The build/host derivation is a pure function of the parent
-/// [`BuildEnvironment`](crate::BuildEnvironment).
+/// [`BuildEnvironment`](pixi_compute_engine::BuildEnvironment).
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Display)]
 pub enum DerivedEnvKind {
     /// Environment used to run the build backend itself. Derived via
-    /// [`BuildEnvironment::to_build_from_build`](crate::BuildEnvironment::to_build_from_build).
+    /// [`BuildEnvironment::to_build_from_build`](pixi_compute_engine::BuildEnvironment::to_build_from_build).
     Build,
 
     /// Environment the built package targets. Today this is a clone of

@@ -13,9 +13,8 @@
 //! [`WorkspaceEnvRef`]s and defeat any in-memory cache the engine
 //! built up under the first.
 
-use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, EnvironmentSpec, WorkspaceEnvRef,
-};
+use pixi_command_dispatcher::{CommandDispatcher, EnvironmentSpec, WorkspaceEnvRef};
+use pixi_compute_engine::BuildEnvironment;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, ParseChannelError, Platform};
 use thiserror::Error;

@@ -1,14 +1,13 @@
 use std::sync::Arc;
 
 use derive_more::Display;
-use pixi_compute_engine::{ComputeCtx, Key};
+use pixi_compute_engine::{BuildEnvironment, ComputeCtx, Key};
 use pixi_spec::ResolvedExcludeNewer;
 use rattler_conda_types::ChannelUrl;
 
 use pixi_utils::variants::VariantConfig;
 
 use super::{EnvironmentRef, EnvironmentSpec, HasWorkspaceEnvRegistry};
-use crate::BuildEnvironment;
 
 /// Resolve an [`EnvironmentRef`] to the [`EnvironmentSpec`] behind it,
 /// applying the `Derived` transform when present. Delegates to
@@ -88,10 +87,11 @@ mod tests {
     use rattler_conda_types::{ChannelUrl, PackageName, Platform};
     use rattler_solve::ChannelPriority;
 
+    use pixi_compute_engine::BuildEnvironment;
+
     use super::*;
-    use crate::{
-        BuildEnvironment,
-        environment::{DerivedEnvKind, DerivedParent, EnvironmentSpec, WorkspaceEnvRegistry},
+    use crate::environment::{
+        DerivedEnvKind, DerivedParent, EnvironmentSpec, WorkspaceEnvRegistry,
     };
 
     fn channel(url: &str) -> ChannelUrl {

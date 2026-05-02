@@ -1,3 +1,7 @@
+//! [`BuildEnvironment`]: host + build platform pair with detected
+//! virtual packages, used as a key component in solve, install, and
+//! source-build flows.
+
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackageOverrides, VirtualPackages,

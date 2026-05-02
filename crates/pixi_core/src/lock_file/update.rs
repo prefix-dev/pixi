@@ -24,12 +24,12 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use ordermap::{OrderMap, OrderSet};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    ComputeResultExt, EnvironmentFingerprint, EnvironmentRef, EnvironmentSpec,
-    SolvePixiEnvironmentError,
+    CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt, ComputeResultExt,
+    EnvironmentRef, EnvironmentSpec, SolvePixiEnvironmentError,
     executor::CancellationAwareFutures,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
+use pixi_compute_engine::{BuildEnvironment, EnvironmentFingerprint};
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
@@ -520,7 +520,7 @@ pub enum ReinstallEnvironment {
 
 /// The result of a successful prefix update: the prefix that was
 /// produced plus the content fingerprint of every record installed
-/// into it (see [`pixi_command_dispatcher::EnvironmentFingerprint`]).
+/// into it (see [`pixi_compute_engine::EnvironmentFingerprint`]).
 ///
 /// The fingerprint is `None` for code paths that don't run a fresh
 /// install whose fingerprint represents the full prefix state — most

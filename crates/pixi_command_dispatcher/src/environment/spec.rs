@@ -1,11 +1,10 @@
 use std::hash::{Hash, Hasher};
 
+use pixi_compute_engine::BuildEnvironment;
 use pixi_spec::ResolvedExcludeNewer;
 use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::ChannelUrl;
 use rattler_solve::ChannelPriority;
-
-use crate::BuildEnvironment;
 
 /// Snapshot of the environment-level inputs a solve or metadata fetch
 /// depends on. Stored in [`WorkspaceEnvRegistry`](super::WorkspaceEnvRegistry)

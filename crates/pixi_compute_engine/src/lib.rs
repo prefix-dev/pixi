@@ -260,6 +260,7 @@
 
 mod abort_on_drop;
 mod any_key;
+mod build_environment;
 mod builder;
 mod ctx;
 mod cycle;
@@ -267,13 +268,16 @@ mod data;
 mod demand;
 mod engine;
 mod error;
+mod fingerprint;
 mod injected;
+mod install_pixi;
 pub mod introspection;
 mod key;
 mod key_graph;
 mod short_type_name;
 
 pub use any_key::AnyKey;
+pub use build_environment::BuildEnvironment;
 pub use builder::ComputeEngineBuilder;
 pub use ctx::{ComputeCtx, ParallelBuilder};
 pub use cycle::CycleError;
@@ -281,7 +285,12 @@ pub use data::DataStore;
 pub use demand::Demand;
 pub use engine::{ComputeEngine, SpawnHook};
 pub use error::ComputeError;
+pub use fingerprint::EnvironmentFingerprint;
 pub use injected::InjectedKey;
+pub use install_pixi::{
+    AllowExecuteLinkScripts, InstallPixiEnvironmentError, InstallPixiEnvironmentExt,
+    InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec, WrappingInstallReporter,
+};
 pub use introspection::{DependencyGraph, GraphNode, NodeState};
 pub use key::{Key, StorageType};
 pub use short_type_name::short_type_name;

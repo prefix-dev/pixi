@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use pixi_compute_engine::DataStore;
+use pixi_compute_engine::{AllowExecuteLinkScripts, DataStore};
 use pixi_git::resolver::GitResolver;
 use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
@@ -108,11 +108,6 @@ impl HasPackageCache for DataStore {
         self.get::<PackageCache>()
     }
 }
-
-/// Newtype around the `execute_link_scripts` bool so it can be stored
-/// in [`DataStore`] keyed by its own `TypeId`.
-#[derive(Copy, Clone, Debug)]
-pub struct AllowExecuteLinkScripts(pub bool);
 
 /// Access whether link-script execution is permitted.
 pub trait HasAllowExecuteLinkScripts {

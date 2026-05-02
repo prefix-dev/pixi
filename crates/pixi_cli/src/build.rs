@@ -11,10 +11,11 @@ use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv,
+    BuildBackendMetadataSpec, BuildProfile, CacheDirs, ComputeResultExt, EnvironmentRef,
+    EnvironmentSpec, EphemeralEnv,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpecV2},
 };
+use pixi_compute_engine::BuildEnvironment;
 use pixi_config::ConfigCli;
 use pixi_consts::consts::{
     MOJOPROJECT_MANIFEST, PYPROJECT_MANIFEST, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES,

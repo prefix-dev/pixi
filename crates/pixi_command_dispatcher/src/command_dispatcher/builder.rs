@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use crate::BuildEnvironment;
+use pixi_compute_engine::{AllowExecuteLinkScripts, BuildEnvironment};
+
 use crate::cache::BuildBackendMetadataCache;
-use crate::compute_data::{
-    AllowExecuteLinkScripts, BackendSourceBuildSemaphore, CondaSolveSemaphore,
-};
+use crate::compute_data::{BackendSourceBuildSemaphore, CondaSolveSemaphore};
 use crate::environment::WorkspaceEnvRegistry;
 use crate::injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,

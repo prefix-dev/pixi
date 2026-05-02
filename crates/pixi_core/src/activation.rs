@@ -250,7 +250,7 @@ async fn try_get_valid_activation_cache(
     // missing. The fingerprint is written by
     // `LockFileDerivedData::prefix` after a successful install.
     let installed_fingerprint =
-        pixi_command_dispatcher::EnvironmentFingerprint::read(&environment.dir())?;
+        pixi_compute_engine::EnvironmentFingerprint::read(&environment.dir())?;
     let hash = EnvironmentHash::for_activation(
         environment,
         &current_input_env_vars,
@@ -386,7 +386,7 @@ pub async fn run_activation(
         // activation will re-run; correctness over a tempting but
         // dead cache.
         let Some(installed_fingerprint) =
-            pixi_command_dispatcher::EnvironmentFingerprint::read(&environment.dir())
+            pixi_compute_engine::EnvironmentFingerprint::read(&environment.dir())
         else {
             return Ok(activator_result);
         };
@@ -689,7 +689,7 @@ mod tests {
         assert!(!project.activation_env_cache_folder().exists());
 
         // Write a fingerprint marker so the cache becomes operative.
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-1".to_string())
+        pixi_compute_engine::EnvironmentFingerprint::from_string("fp-1".to_string())
             .write(&default_env.dir())
             .unwrap();
 
@@ -725,7 +725,7 @@ mod tests {
         // Bumping the fingerprint mimics a fresh install with
         // different content — the cache key changes, so activation
         // runs again and overwrites the cache file.
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-2".to_string())
+        pixi_compute_engine::EnvironmentFingerprint::from_string("fp-2".to_string())
             .write(&default_env.dir())
             .unwrap();
         let env = run_activation(
@@ -760,7 +760,7 @@ mod tests {
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
         // A fingerprint marker is required for the cache to engage at all.
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-stable".to_string())
+        pixi_compute_engine::EnvironmentFingerprint::from_string("fp-stable".to_string())
             .write(&default_env.dir())
             .unwrap();
         let env = run_activation(
@@ -795,7 +795,7 @@ mod tests {
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
         // Marker survives the manifest edit (same prefix dir).
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-stable".to_string())
+        pixi_compute_engine::EnvironmentFingerprint::from_string("fp-stable".to_string())
             .write(&default_env.dir())
             .unwrap();
         let env = run_activation(

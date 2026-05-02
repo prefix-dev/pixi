@@ -11,11 +11,27 @@ version = "0.1.0"
 
 [dependencies]
 cmp_any = { workspace = true }
+fs-err = { workspace = true }
 futures = { workspace = true }
+miette = { workspace = true }
 parking_lot = { workspace = true }
-serde = { workspace = true, optional = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
+tracing = { workspace = true }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
+
+rattler = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_networking = { workspace = true }
+rattler_virtual_packages = { workspace = true }
+
+[features]
+# Existing test files reference `cfg(feature = "serde")` to opt into
+# Serialize-based tests; declare the feature so `cfg-checking` doesn't
+# warn. The feature itself is a no-op — `serde` is now an unconditional
+# dependency (used by `install_pixi`, `fingerprint`, etc.).
+serde = []
 
 [dev-dependencies]
 derive_more = { workspace = true, features = ["display"] }

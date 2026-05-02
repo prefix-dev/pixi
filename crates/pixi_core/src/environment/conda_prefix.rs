@@ -3,9 +3,8 @@ use std::sync::Arc;
 
 use async_once_cell::OnceCell as AsyncOnceCell;
 use miette::IntoDiagnostic;
-use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, EnvironmentFingerprint, InstallPixiEnvironmentSpec,
-};
+use pixi_command_dispatcher::{CommandDispatcher, InstallPixiEnvironmentSpec};
+use pixi_compute_engine::{BuildEnvironment, EnvironmentFingerprint};
 use pixi_manifest::FeaturesExt;
 use pixi_record::{PixiRecord, UnresolvedPixiRecord};
 use pixi_spec::ResolvedExcludeNewer;
@@ -40,7 +39,7 @@ pub struct CondaPrefixInstallResult {
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
 
     /// Content fingerprint of every record now in the prefix; see
-    /// [`pixi_command_dispatcher::EnvironmentFingerprint`].
+    /// [`pixi_compute_engine::EnvironmentFingerprint`].
     pub installed_fingerprint: EnvironmentFingerprint,
 }
 
@@ -57,7 +56,7 @@ pub struct CondaPrefixUpdated {
     /// Fully-resolved records for source packages that were built.
     pub resolved_source_records: HashMap<PackageName, Arc<RepoDataRecord>>,
     /// Content fingerprint of every record now in the prefix; see
-    /// [`pixi_command_dispatcher::EnvironmentFingerprint`].
+    /// [`pixi_compute_engine::EnvironmentFingerprint`].
     pub installed_fingerprint: EnvironmentFingerprint,
 }
 

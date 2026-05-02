@@ -22,13 +22,15 @@ use tracing::instrument;
 use url::Url;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
+use pixi_compute_engine::BuildEnvironment;
+
 use crate::cache::{ArtifactCacheError, compute_artifact_cache_key, compute_workspace_key};
 use crate::compute_data::HasCacheDirs;
 use crate::{
     BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
-    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method, BuildEnvironment,
-    BuildProfile, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey, SourceBuildError,
+    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method, BuildProfile,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, InstallPixiEnvironmentExt,
+    InstallPixiEnvironmentSpec, InstantiateBackendKey, SourceBuildError,
     build::{Dependencies, PixiRunExports},
     source_checkout::SourceCheckoutExt,
 };

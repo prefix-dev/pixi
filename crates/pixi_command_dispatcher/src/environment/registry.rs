@@ -123,8 +123,10 @@ mod tests {
 
     use pixi_utils::variants::VariantConfig;
 
+    use pixi_compute_engine::BuildEnvironment;
+
     use super::*;
-    use crate::{BuildEnvironment, environment::EnvironmentSpec};
+    use crate::environment::EnvironmentSpec;
 
     fn empty_spec() -> EnvironmentSpec {
         EnvironmentSpec {

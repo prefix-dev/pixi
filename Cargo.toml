@@ -16,7 +16,7 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.metadata.cargo-shear]
-ignored = ["pixi_compute_engine"]
+ignored = []
 
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]

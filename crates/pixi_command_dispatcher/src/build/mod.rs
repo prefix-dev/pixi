@@ -1,6 +1,5 @@
 //! Datastructures and functions used for building packages from source.
 
-mod build_environment;
 pub mod conversion;
 pub mod dependencies;
 pub mod pin_compatible;
@@ -9,7 +8,6 @@ mod work_dir_key;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-pub use build_environment::BuildEnvironment;
 pub use dependencies::{
     Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports, WithSource,
 };

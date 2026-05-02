@@ -1,9 +1,6 @@
 mod ext;
-mod fingerprint;
-pub(crate) mod reporter;
 
 pub use ext::InstallPixiEnvironmentExt;
-pub use fingerprint::EnvironmentFingerprint;
 
 use std::{
     borrow::Cow,
@@ -15,6 +12,7 @@ use std::{
 
 use miette::Diagnostic;
 
+use pixi_compute_engine::{BuildEnvironment, EnvironmentFingerprint};
 use pixi_record::{UnresolvedPixiRecord, VariantValue};
 use pixi_spec::ResolvedExcludeNewer;
 use rattler::install::{
@@ -24,7 +22,7 @@ use rattler::install::{
 use rattler_conda_types::{ChannelUrl, PackageName, PrefixRecord, RepoDataRecord, prefix::Prefix};
 use thiserror::Error;
 
-use crate::{BuildEnvironment, SourceBuildError};
+use crate::SourceBuildError;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -135,4 +133,18 @@ pub enum InstallPixiEnvironmentError {
 
     #[error("failed to determine python info for the installed environment: {0}")]
     DetectPythonInfo(String),
+}
+
+impl From<pixi_compute_engine::InstallPixiEnvironmentError> for InstallPixiEnvironmentError {
+    fn from(err: pixi_compute_engine::InstallPixiEnvironmentError) -> Self {
+        use pixi_compute_engine::InstallPixiEnvironmentError as E;
+        match err {
+            E::ReadInstalledPackages(prefix, io) => Self::ReadInstalledPackages(prefix, io),
+            E::Installer(installer_err) => Self::Installer(installer_err),
+            E::ConvertTransactionToPrefixRecord(prefix, io) => {
+                Self::ConvertTransactionToPrefixRecord(prefix, io)
+            }
+            E::DetectPythonInfo(msg) => Self::DetectPythonInfo(msg),
+        }
+    }
 }

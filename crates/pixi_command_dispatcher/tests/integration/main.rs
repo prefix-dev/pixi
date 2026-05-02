@@ -15,11 +15,12 @@ use itertools::Itertools;
 use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, EnvironmentRef,
-    EnvironmentSpec, EphemeralEnv, Executor, InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec,
+    CacheDirs, CommandDispatcher, CommandDispatcherError, EnvironmentRef, EnvironmentSpec,
+    EphemeralEnv, Executor, InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec,
     InstantiateToolEnvironmentSpec, SolvePixiEnvironmentError, SourceCheckoutError,
     keys::SolvePixiEnvironmentSpec, source_checkout::UrlSourceCheckoutExt,
 };
+use pixi_compute_engine::BuildEnvironment;
 use pixi_record::PinnedSourceSpec;
 use pixi_spec::{
     GitReference, GitSpec, PathSpec, PixiSpec, ResolvedExcludeNewer, Subdirectory, UrlSpec,

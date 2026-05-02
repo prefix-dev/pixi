@@ -25,11 +25,13 @@ use crate::cache::{
 use crate::compute_data::{HasBuildBackendMetadataCache, HasCacheDirs, HasReporter};
 use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
+use pixi_compute_engine::BuildEnvironment;
+
 use crate::reporter::{Reporter, ReporterContext};
 use crate::reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context};
 use crate::{
-    BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
-    InstantiateBackendKey, SourceCheckout, SourceCheckoutError,
+    BackendHandle, EnvironmentRef, InstantiateBackendError, InstantiateBackendKey, SourceCheckout,
+    SourceCheckoutError,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
     source_checkout::SourceCheckoutExt,
 };

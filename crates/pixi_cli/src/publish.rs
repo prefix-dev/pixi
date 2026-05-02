@@ -10,10 +10,11 @@ use miette::{Context, IntoDiagnostic};
 use pixi_auth::get_auth_store;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv,
+    BuildBackendMetadataSpec, BuildProfile, CacheDirs, ComputeResultExt, EnvironmentRef,
+    EnvironmentSpec, EphemeralEnv,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpecV2},
 };
+use pixi_compute_engine::BuildEnvironment;
 use pixi_config::{Config, ConfigCli};
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
 use pixi_manifest::FeaturesExt;
