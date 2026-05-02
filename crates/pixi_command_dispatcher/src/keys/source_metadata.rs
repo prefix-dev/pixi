@@ -1,7 +1,7 @@
 //! Compute-engine Key that pins a source, queries its build backend,
 //! and returns the [`CondaOutput`]s matching a given package name.
 //! Outputs are not resolved into
-//! [`SourceRecord`](pixi_record::SourceRecord)s here;
+//! [`SourceRecord`]s here;
 //! [`crate::keys::SolvePixiEnvironmentKey`] does that after scheduling
 //! the per-source build/host solves.
 

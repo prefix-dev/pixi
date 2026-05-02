@@ -33,9 +33,8 @@ pub struct SourceMetadataReporterSpec {
 }
 
 /// Reporter-facing view of the in-flight resolution for a single source
-/// record (one variant of a source package). Built inside
-/// [`assemble_source_record`](crate::keys::resolve_source_record) for
-/// the [`SourceRecordReporter`] lifecycle.
+/// record (one variant of a source package). Built inside the
+/// `resolve_source_record` Key for the [`SourceRecordReporter`] lifecycle.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceRecordReporterSpec {
     /// The name of the package to retrieve metadata from.
