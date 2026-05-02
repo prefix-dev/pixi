@@ -1,7 +1,7 @@
 //! Defines the [`CommandDispatcher`] and its associated components.
 //!
 //! [`CommandDispatcher`] is a thin, cheaply cloneable handle that wraps a
-//! [`ComputeEngine`](pixi_compute_engine::ComputeEngine) together with shared
+//! [`ComputeEngine`] together with shared
 //! [`CommandDispatcherData`] (gateway, caches, resolvers, executor, etc.).
 //! Public methods on the handle build the appropriate
 //! [`Key`](pixi_compute_engine::Key) and submit it to the engine, which
