@@ -135,8 +135,8 @@ enum ProcessPathUrlError {
 }
 
 /// Given a pyproject.toml and either case:
-///   1) dependencies = [ foo @ /home/foo ]
-///   2) tool.pixi.pypi-dependencies.foo = { path = "/home/foo"}
+///   1) `dependencies = [ foo @ /home/foo ]`
+///   2) `tool.pixi.pypi-dependencies.foo = { path = "/home/foo"}`
 ///
 /// uv has different behavior for each.
 ///

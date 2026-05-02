@@ -592,7 +592,7 @@ async fn listen_ctrl_c_windows() {
 /// from which we could get PGID and do things right.
 ///
 /// Resulting approach should mimic
-/// https://github.com/astral-sh/uv/blob/9d17dfa3537312b928f94479f632891f918c4760/crates/uv/src/child.rs#L156C21-L168C77.
+/// <https://github.com/astral-sh/uv/blob/9d17dfa3537312b928f94479f632891f918c4760/crates/uv/src/child.rs#L156C21-L168C77>
 #[cfg(unix)]
 async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
     use futures::FutureExt;
