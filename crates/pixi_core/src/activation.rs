@@ -38,7 +38,7 @@ struct ActivationCache {
     /// Captures input env vars, activation scripts, project activation
     /// env vars, and either:
     /// - the prefix's install fingerprint (preferred — see
-    ///   [`InstallPixiEnvironmentResult::installed_fingerprint`]), or
+    ///   `InstallPixiEnvironmentResult::installed_fingerprint`), or
     /// - locked package URLs (legacy fallback when no fingerprint is
     ///   stored next to the prefix).
     hash: EnvironmentHash,
