@@ -86,6 +86,7 @@ pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
     CommandDispatcherErrorResultExt, ComputeResultExt, ReporterContextSpawnHook,
 };
+pub use cycle::{Cycle, CycleEnvironment};
 pub use dev_source_metadata::{
     DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataKey, DevSourceMetadataSpec,
     PackageNotProvidedError,
@@ -99,6 +100,10 @@ pub use environment::{
 pub use ephemeral_env::{
     EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec, InstalledEphemeralEnv,
 };
+pub use errors::{
+    MissingChannelError, SolvePixiEnvironmentError, SourceBuildError, SourceMetadataError,
+    SourceRecordError,
+};
 pub use injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
@@ -111,17 +116,12 @@ pub use instantiate_backend_key::{
     BackendHandle, InstantiateBackendError, InstantiateBackendKey, resolve_backend_identifier,
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
+pub use keys::SourceMetadata;
 pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,
-    PixiSolveReporter, Reporter, ReporterContext,
+    PixiSolveReporter, Reporter, ReporterContext, SourceMetadataReporterSpec,
+    SourceRecordReporterSpec,
 };
-pub use cycle::{Cycle, CycleEnvironment};
-pub use errors::{
-    MissingChannelError, SolvePixiEnvironmentError, SourceBuildError, SourceMetadataError,
-    SourceRecordError,
-};
-pub use keys::SourceMetadata;
-pub use reporter::{SourceMetadataReporterSpec, SourceRecordReporterSpec};
 pub use resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use serde::Serialize;
 pub use solve_conda::SolveCondaEnvironmentSpec;

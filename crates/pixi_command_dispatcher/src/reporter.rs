@@ -241,8 +241,11 @@ pub struct SourceRecordId(pub usize);
 
 pub trait SourceRecordReporter: Send + Sync {
     /// Called when an operation was queued on the [`crate::CommandDispatcher`].
-    fn on_queued(&self, reason: Option<ReporterContext>, spec: &SourceRecordReporterSpec)
-    -> SourceRecordId;
+    fn on_queued(
+        &self,
+        reason: Option<ReporterContext>,
+        spec: &SourceRecordReporterSpec,
+    ) -> SourceRecordId;
 
     /// Called when the operation has started.
     fn on_started(&self, id: SourceRecordId);

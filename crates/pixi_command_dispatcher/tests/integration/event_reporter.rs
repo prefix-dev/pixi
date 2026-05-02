@@ -11,7 +11,8 @@ use pixi_build_discovery::JsonRpcBackendSpec;
 use pixi_command_dispatcher::{
     BackendSourceBuildSpec, BuildBackendMetadataInner, CondaSolveReporter, GitCheckoutReporter,
     InstallPixiEnvironmentSpec, PixiInstallReporter, PixiSolveEnvironmentSpec, PixiSolveReporter,
-    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceMetadataReporterSpec, SourceRecordReporterSpec,
+    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceMetadataReporterSpec,
+    SourceRecordReporterSpec,
     reporter::{
         BackendSourceBuildId, BackendSourceBuildReporter, BuildBackendMetadataId,
         BuildBackendMetadataReporter, CondaSolveId, GitCheckoutId, InstantiateBackendId,
