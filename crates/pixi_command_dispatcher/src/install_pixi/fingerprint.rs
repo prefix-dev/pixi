@@ -9,10 +9,11 @@
 //! haven't changed since the last successful activation.
 //!
 //! The fingerprint persists alongside the prefix in a small
-//! standalone marker file ([`Self::MARKER_FILENAME`], written under
-//! `<env_dir>/conda-meta/`). Methods [`Self::read`] and
-//! [`Self::write`] manage that file directly so callers don't need
-//! to know about its location or format.
+//! standalone marker file ([`EnvironmentFingerprint::MARKER_FILENAME`],
+//! written under `<env_dir>/conda-meta/`). Methods
+//! [`EnvironmentFingerprint::read`] and [`EnvironmentFingerprint::write`]
+//! manage that file directly so callers don't need to know about its
+//! location or format.
 
 use std::{fmt, hash::Hasher, path::Path};
 
