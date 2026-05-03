@@ -40,6 +40,16 @@
         "null"
       ]
     },
+    "buildFlags": {
+      "description": "V3 package variant flags declared by the source package.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
     "authors": {
       "description": "Optional authors",
       "type": [

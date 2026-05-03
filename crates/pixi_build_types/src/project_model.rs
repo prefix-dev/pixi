@@ -11,7 +11,7 @@
 use ordermap::OrderMap;
 use pixi_stable_hash::{IsDefault, StableHashBuilder};
 use rattler_conda_types::{
-    BuildNumber, BuildNumberSpec, MatchSpecCondition, StringMatcher, Version, VersionSpec,
+    BuildNumber, BuildNumberSpec, Flag, MatchSpecCondition, StringMatcher, Version, VersionSpec,
 };
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,11 @@ pub struct ProjectModel {
 
     /// An optional project description
     pub description: Option<String>,
+
+    /// V3 package variant flags declared by the source package.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<Vec<String>>"))]
+    pub build_flags: Option<Vec<Flag>>,
 
     /// Optional authors
     pub authors: Option<Vec<String>>,
@@ -576,6 +581,7 @@ impl Hash for ProjectModel {
             build_number,
             version,
             description,
+            build_flags,
             authors,
             license,
             license_file,
@@ -591,6 +597,7 @@ impl Hash for ProjectModel {
             .field("authors", authors)
             .field("build_string", build_string)
             .field("build_number", build_number)
+            .field("build_flags", build_flags)
             .field("description", description)
             .field("documentation", documentation)
             .field("extras", extras)
@@ -904,6 +911,7 @@ mod tests {
             build_string: None,
             version: None,
             description: None,
+            build_flags: None,
             authors: None,
             license: None,
             license_file: None,
@@ -963,6 +971,7 @@ mod tests {
             build_string: None,
             version: None,
             description: None,
+            build_flags: None,
             authors: None,
             license: None,
             license_file: None,

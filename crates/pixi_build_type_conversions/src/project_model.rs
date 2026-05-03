@@ -238,6 +238,7 @@ pub fn to_project_model_v1(
         build_number: None,
         version: manifest.package.version.clone(),
         description: manifest.package.description.clone(),
+        build_flags: (!manifest.build.flags.is_empty()).then(|| manifest.build.flags.clone()),
         authors: manifest.package.authors.clone(),
         license: manifest.package.license.clone(),
         license_file: manifest.package.license_file.clone(),
@@ -349,5 +350,36 @@ mod tests {
         let test_extra = extras.get("test").expect("test extra exists");
 
         assert!(test_extra.keys().any(|name| name.as_str() == "gtest"));
+    }
+
+    #[test]
+    fn test_package_build_flags_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+        flags = ["cuda", "blas_openblas"]
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let flags = project_model
+            .build_flags
+            .expect("build flags are forwarded");
+        let flags = flags.iter().map(|flag| flag.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(flags, vec!["cuda", "blas_openblas"]);
     }
 }

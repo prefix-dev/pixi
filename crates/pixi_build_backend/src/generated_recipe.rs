@@ -272,6 +272,14 @@ impl GeneratedRecipe {
 
         let mut recipe = SingleOutputRecipe::new(package);
         recipe.requirements = requirements;
+        if let Some(flags) = model.build_flags {
+            recipe.build.flags = ConditionalList::new(
+                flags
+                    .into_iter()
+                    .map(|flag| Item::Value(Value::new_concrete(flag, None)))
+                    .collect(),
+            );
+        }
         recipe.about = about;
 
         Ok(GeneratedRecipe {
@@ -336,7 +344,7 @@ impl MetadataProvider for DefaultMetadataProvider {
 mod tests {
     use ordermap::OrderMap;
     use pixi_build_types::{BinaryPackageSpec, ExtraDependencies, PackageSpec, SourcePackageName};
-    use rattler_conda_types::PackageName;
+    use rattler_conda_types::{Flag, PackageName};
 
     use super::*;
 
@@ -370,5 +378,23 @@ mod tests {
                 "test": ["gtest"]
             })
         );
+    }
+
+    #[test]
+    fn generated_recipe_declares_build_flags() {
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            build_flags: Some(vec![
+                "cuda".parse::<Flag>().unwrap(),
+                "blas_openblas".parse::<Flag>().unwrap(),
+            ]),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+        let value = serde_json::to_value(&generated.recipe.build.flags).unwrap();
+
+        assert_eq!(value, serde_json::json!(["cuda", "blas_openblas"]));
     }
 }

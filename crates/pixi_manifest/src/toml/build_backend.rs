@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, sync::Once};
 use indexmap::IndexMap;
 use pixi_spec::{SourceLocationSpec, TomlLocationSpec, TomlSpec};
 use pixi_toml::{Same, TomlFromStr, TomlIndexMap, TomlWith};
-use rattler_conda_types::NamedChannelOrUrl;
+use rattler_conda_types::{Flag, NamedChannelOrUrl};
 use std::borrow::Cow;
 use toml_span::{DeserError, Error, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
@@ -23,6 +23,7 @@ pub struct TomlPackageBuild {
     pub additional_dependencies: UniquePackageMap,
     pub source: Option<SourceLocationSpec>,
     pub configuration: Option<serde_value::Value>,
+    pub flags: Vec<Flag>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
     pub warnings: Vec<crate::Warning>,
 }
@@ -96,6 +97,7 @@ impl TomlPackageBuild {
                 channels,
                 source: self.source,
                 config: self.configuration,
+                flags: self.flags,
                 target_config: if target_config.is_empty() {
                     None
                 } else {
@@ -202,6 +204,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .optional_s::<TomlLocationSpec>("source")
             .map(spec_from_spanned_toml_location)
             .transpose()?;
+        let flags = th
+            .optional::<TomlWith<_, Vec<TomlFromStr<Flag>>>>("flags")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
 
         // Try the new "config" key first, then fall back to deprecated "configuration"
         let configuration = if let Some((_, mut value)) = th.take("config") {
@@ -266,6 +272,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             additional_dependencies,
             source,
             configuration,
+            flags,
             target,
             warnings,
         })
@@ -496,5 +503,24 @@ mod test {
                 .additional_dependencies
                 .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
         );
+    }
+
+    #[test]
+    fn test_build_flags() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            flags = ["cuda", "blas_openblas"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        let flags = parsed
+            .value
+            .flags
+            .iter()
+            .map(|flag| flag.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(flags, vec!["cuda", "blas_openblas"]);
     }
 }
