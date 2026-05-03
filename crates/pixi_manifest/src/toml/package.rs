@@ -137,24 +137,10 @@ pub struct TomlPackage {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub extras: IndexMap<PixiSpanned<String>, TomlPackageExtra>,
+    pub extra_dependencies: IndexMap<PixiSpanned<String>, PixiSpanned<UniquePackageMap>>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
 
     pub span: Span,
-}
-
-#[derive(Debug)]
-pub struct TomlPackageExtra {
-    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
-}
-
-impl<'de> toml_span::Deserialize<'de> for TomlPackageExtra {
-    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        let mut th = TableHelper::new(value)?;
-        let dependencies = th.optional("dependencies");
-        th.finalize(None)?;
-        Ok(Self { dependencies })
-    }
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlPackage {
@@ -190,8 +176,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
         let run_dependencies = th.optional("run-dependencies");
-        let extras = th
-            .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("extras")
+        let extra_dependencies = th
+            .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("extra-dependencies")
             .map(TomlWith::into_inner)
             .unwrap_or_default();
         let build = th.required("build")?;
@@ -215,7 +201,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             host_dependencies,
             build_dependencies,
             run_dependencies,
-            extras,
+            extra_dependencies,
             build,
             target,
             span: value.span,
@@ -363,22 +349,16 @@ impl TomlPackage {
         .into_package_target(preview)?;
 
         let extras = self
-            .extras
+            .extra_dependencies
             .into_iter()
-            .map(|(name, extra)| {
-                let dependencies = extra
-                    .dependencies
-                    .map(|dependencies| {
-                        dependencies
-                            .value
-                            .into_inner(preview.is_enabled(KnownPreviewFeature::PixiBuild))
-                            .map(|index_map| {
-                                let dep_map: CondaDependencies = index_map.into_iter().collect();
-                                dep_map
-                            })
-                    })
-                    .transpose()?
-                    .unwrap_or_default();
+            .map(|(name, dependencies)| {
+                let dependencies = dependencies
+                    .value
+                    .into_inner(preview.is_enabled(KnownPreviewFeature::PixiBuild))
+                    .map(|index_map| {
+                        let dep_map: CondaDependencies = index_map.into_iter().collect();
+                        dep_map
+                    })?;
 
                 Ok::<_, TomlError>((name.value, dependencies))
             })
@@ -649,7 +629,7 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
 
-        [extras.test.dependencies]
+        [extra-dependencies.test]
         gtest = "*"
         pytest = ">=8"
         "#;

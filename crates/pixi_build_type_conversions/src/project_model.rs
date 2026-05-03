@@ -330,7 +330,7 @@ mod tests {
         [build]
         backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
 
-        [extras.test.dependencies]
+        [extra-dependencies.test]
         gtest = "*"
         "#;
 
