@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use minijinja::Value;
 use ordermap::OrderMap;
 use pixi_build_types::{
-    BinaryPackageSpec, PackageSpec, SourcePackageName, SourcePackageSpec, Target, TargetSelector,
-    Targets,
+    BinaryPackageSpec, ExtraDependencies, PackageSpec, SourcePackageName, SourcePackageSpec,
+    Target, TargetSelector, Targets,
     procedures::conda_build_v1::{
         CondaBuildV1Dependency, CondaBuildV1DependencySource, CondaBuildV1Prefix,
         CondaBuildV1RunExports,
@@ -179,6 +179,22 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Require
         run_constraints: run_constraints_items,
         ..Default::default()
     }
+}
+
+pub fn from_extras_v1_to_conditional_requirements(
+    extras: ExtraDependencies,
+) -> BTreeMap<String, ConditionalList<SerializableMatchSpec>> {
+    extras
+        .into_iter()
+        .map(|(name, deps)| {
+            let items = package_specs_to_package_dependency(deps)
+                .unwrap()
+                .into_iter()
+                .map(package_dependency_to_item)
+                .collect();
+            (name, ConditionalList::new(items))
+        })
+        .collect()
 }
 
 pub(crate) fn source_package_spec_to_package_dependency(
@@ -446,5 +462,30 @@ mod test {
         };
         let match_spec = binary_package_spec_to_package_dependency(name, spec);
         assert_eq!(match_spec.to_string(), "python");
+    }
+
+    #[test]
+    fn test_extras_conversion() {
+        let mut dependencies = OrderMap::new();
+        dependencies.insert(
+            SourcePackageName::from(PackageName::new_unchecked("gtest")),
+            PackageSpec::Binary(BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }),
+        );
+
+        let mut extras = ExtraDependencies::new();
+        extras.insert("test".to_string(), dependencies);
+
+        let extras = from_extras_v1_to_conditional_requirements(extras);
+        let value = serde_json::to_value(&extras).unwrap();
+
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "test": ["gtest"]
+            })
+        );
     }
 }

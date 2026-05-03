@@ -67,6 +67,16 @@ pub struct ProjectModel {
     /// The target of the project, this may contain
     /// platform specific configurations.
     pub targets: Option<Targets>,
+
+    /// Optional dependency groups declared by the source package.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(
+            with = "Option<std::collections::HashMap<String, std::collections::HashMap<String, PackageSpec>>>"
+        )
+    )]
+    pub extras: Option<ExtraDependencies>,
 }
 
 impl IsDefault for ProjectModel {
@@ -76,6 +86,8 @@ impl IsDefault for ProjectModel {
         Some(self)
     }
 }
+
+pub type ExtraDependencies = OrderMap<String, OrderMap<SourcePackageName, PackageSpec>>;
 
 /// Represents a target selector. Currently, we only support explicit platform
 /// selection.
@@ -572,6 +584,7 @@ impl Hash for ProjectModel {
             repository,
             documentation,
             targets,
+            extras,
         } = self;
 
         StableHashBuilder::<H>::new()
@@ -580,6 +593,7 @@ impl Hash for ProjectModel {
             .field("build_number", build_number)
             .field("description", description)
             .field("documentation", documentation)
+            .field("extras", extras)
             .field("homepage", homepage)
             .field("license", license)
             .field("license_file", license_file)
@@ -898,6 +912,7 @@ mod tests {
             repository: None,
             documentation: None,
             targets: None,
+            extras: None,
         };
 
         let hash1 = calculate_hash(&project_model);
@@ -956,6 +971,7 @@ mod tests {
             repository: None,
             documentation: None,
             targets: None,
+            extras: None,
         };
 
         let hash1 = calculate_hash(&project_model);

@@ -208,6 +208,25 @@ fn to_targets_v1(
     })
 }
 
+fn to_extras_v1(
+    manifest: &PackageManifest,
+    channel_config: &ChannelConfig,
+) -> Result<Option<pbt::ExtraDependencies>, SpecConversionError> {
+    if manifest.extras.is_empty() {
+        return Ok(None);
+    }
+
+    manifest
+        .extras
+        .iter()
+        .map(|(name, deps)| {
+            to_pbt_dependencies(deps.iter_specs(), channel_config)
+                .map(|dependencies| (name.clone(), dependencies))
+        })
+        .collect::<Result<_, _>>()
+        .map(Some)
+}
+
 /// Converts a [`PackageManifest`] to a [`pbt::ProjectModel`].
 pub fn to_project_model_v1(
     manifest: &PackageManifest,
@@ -227,6 +246,7 @@ pub fn to_project_model_v1(
         repository: manifest.package.repository.clone(),
         documentation: manifest.package.documentation.clone(),
         targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
+        extras: to_extras_v1(manifest, channel_config)?,
     };
     Ok(project)
 }
@@ -235,6 +255,10 @@ pub fn to_project_model_v1(
 mod tests {
     use std::path::PathBuf;
 
+    use pixi_manifest::Preview;
+    use pixi_manifest::toml::{
+        FromTomlStr, PackageDefaults, TomlPackage, WorkspacePackageProperties,
+    };
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
 
@@ -294,5 +318,36 @@ mod tests {
         manifest_path: PathBuf,
     ) {
         snapshot_test!(manifest_path);
+    }
+
+    #[test]
+    fn test_package_extras_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+
+        [extras.test.dependencies]
+        gtest = "*"
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let extras = project_model.extras.expect("extras are forwarded");
+        let test_extra = extras.get("test").expect("test extra exists");
+
+        assert!(test_extra.keys().any(|name| name.as_str() == "gtest"));
     }
 }

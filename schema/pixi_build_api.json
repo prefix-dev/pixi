@@ -105,6 +105,19 @@
           "type": "null"
         }
       ]
+    },
+    "extras": {
+      "description": "Optional dependency groups declared by the source package.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/$defs/PackageSpec"
+        }
+      }
     }
   },
   "$defs": {

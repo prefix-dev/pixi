@@ -16,7 +16,9 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 use url::Url;
 
-use crate::specs_conversion::from_targets_v1_to_conditional_requirements;
+use crate::specs_conversion::{
+    from_extras_v1_to_conditional_requirements, from_targets_v1_to_conditional_requirements,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct PythonParams {
@@ -213,8 +215,12 @@ impl GeneratedRecipe {
             Value::new_concrete(version_with_source, None),
         );
 
-        let requirements =
+        let mut requirements =
             from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default());
+        requirements.extras = model
+            .extras
+            .map(from_extras_v1_to_conditional_requirements)
+            .unwrap_or_default();
 
         macro_rules! derive_value {
             ($ident:ident) => {
@@ -324,4 +330,45 @@ pub struct DefaultMetadataProvider;
 
 impl MetadataProvider for DefaultMetadataProvider {
     type Error = Infallible;
+}
+
+#[cfg(test)]
+mod tests {
+    use ordermap::OrderMap;
+    use pixi_build_types::{BinaryPackageSpec, ExtraDependencies, PackageSpec, SourcePackageName};
+    use rattler_conda_types::PackageName;
+
+    use super::*;
+
+    #[test]
+    fn generated_recipe_declares_package_extras() {
+        let mut dependencies = OrderMap::new();
+        dependencies.insert(
+            SourcePackageName::from(PackageName::new_unchecked("gtest")),
+            PackageSpec::Binary(BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }),
+        );
+
+        let mut extras = ExtraDependencies::new();
+        extras.insert("test".to_string(), dependencies);
+
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            extras: Some(extras),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+        let value = serde_json::to_value(&generated.recipe.requirements.extras).unwrap();
+
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "test": ["gtest"]
+            })
+        );
+    }
 }

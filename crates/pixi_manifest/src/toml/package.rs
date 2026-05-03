@@ -9,7 +9,9 @@ use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
 
 use crate::{
-    PackageManifest, Preview, TargetSelector, Targets, TomlError, WithWarnings,
+    KnownPreviewFeature, PackageManifest, Preview, TargetSelector, Targets, TomlError,
+    WithWarnings,
+    dependencies::CondaDependencies,
     error::GenericError,
     package::Package,
     toml::{
@@ -135,9 +137,24 @@ pub struct TomlPackage {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub extras: IndexMap<PixiSpanned<String>, TomlPackageExtra>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
 
     pub span: Span,
+}
+
+#[derive(Debug)]
+pub struct TomlPackageExtra {
+    pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlPackageExtra {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let dependencies = th.optional("dependencies");
+        th.finalize(None)?;
+        Ok(Self { dependencies })
+    }
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlPackage {
@@ -173,6 +190,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
         let run_dependencies = th.optional("run-dependencies");
+        let extras = th
+            .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("extras")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
         let build = th.required("build")?;
         let target = th
             .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
@@ -194,6 +215,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             host_dependencies,
             build_dependencies,
             run_dependencies,
+            extras,
             build,
             target,
             span: value.span,
@@ -340,6 +362,28 @@ impl TomlPackage {
         }
         .into_package_target(preview)?;
 
+        let extras = self
+            .extras
+            .into_iter()
+            .map(|(name, extra)| {
+                let dependencies = extra
+                    .dependencies
+                    .map(|dependencies| {
+                        dependencies
+                            .value
+                            .into_inner(preview.is_enabled(KnownPreviewFeature::PixiBuild))
+                            .map(|index_map| {
+                                let dep_map: CondaDependencies = index_map.into_iter().collect();
+                                dep_map
+                            })
+                    })
+                    .transpose()?
+                    .unwrap_or_default();
+
+                Ok::<_, TomlError>((name.value, dependencies))
+            })
+            .collect::<Result<_, _>>()?;
+
         let targets = self
             .target
             .into_iter()
@@ -479,6 +523,7 @@ impl TomlPackage {
             },
             build: build_result.value,
             targets: Targets::from_default_and_user_defined(default_package_target, targets),
+            extras,
         })
         .with_warnings(warnings))
     }
@@ -593,6 +638,39 @@ mod test {
         5 │
           ╰────
         "###);
+    }
+
+    #[test]
+    fn test_package_extras_dependencies() {
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [extras.test.dependencies]
+        gtest = "*"
+        pytest = ">=8"
+        "#;
+
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let manifest = package
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let test_extra = manifest.extras.get("test").expect("test extra exists");
+        let names = test_extra
+            .names()
+            .map(|name| name.as_normalized())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["gtest", "pytest"]);
     }
 
     #[test]
