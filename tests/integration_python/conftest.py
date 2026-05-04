@@ -29,6 +29,20 @@ def pixi(request: pytest.FixtureRequest) -> Path:
     return Path(exec_extension(str(pixi_path)))
 
 
+@pytest.fixture(scope="session", autouse=True)
+def isolated_pixi_cache_per_worker(
+    tmp_path_factory: pytest.TempPathFactory, worker_id: str
+) -> None:
+    # Parallel xdist workers all share the user's `~/.cache/rattler/` by default,
+    # which causes hash mismatches when two workers race to build the same source
+    # package into the same `bld/` path. Give each worker its own cache root.
+    # Single-process runs (worker_id == "master") keep the user's cache for speed.
+    if worker_id == "master":
+        return
+    cache_dir = tmp_path_factory.mktemp("pixi-cache", numbered=False)
+    os.environ["PIXI_CACHE_DIR"] = str(cache_dir)
+
+
 @pytest.fixture
 def tmp_pixi_workspace(tmp_path: Path):
     """Create a temporary workspace for tests, with a .pixi config.
