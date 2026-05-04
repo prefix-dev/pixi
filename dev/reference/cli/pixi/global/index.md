@@ -34,4 +34,4 @@ pixi global <COMMAND>
 
 Subcommand for global package management actions.
 
-Install packages on the user level. Into to the \[`$PIXI_HOME`\] directory, which defaults to `~/.pixi`.
+Install packages on the user level. Into to the `$PIXI_HOME` directory, which defaults to `~/.pixi`.
