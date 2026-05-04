@@ -615,7 +615,7 @@ fn verify_locked_against_backend_specs(
 
         match &dep.spec {
             PackageSpec::Binary(binary) => {
-                let nameless = from_binary_spec_v1(binary.clone())
+                let nameless = from_binary_spec_v1((**binary).clone())
                     .try_into_nameless_match_spec(channel_config)
                     .map_err(|e| {
                         failed_to_parse_match_spec_unsat(
@@ -863,7 +863,7 @@ mod tests {
         };
         NamedSpec {
             name: SourcePackageName::from(PackageName::from_str(name).expect("valid name")),
-            spec: PackageSpec::Binary(spec),
+            spec: spec.into(),
         }
     }
 

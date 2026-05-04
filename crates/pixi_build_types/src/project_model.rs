@@ -223,11 +223,23 @@ impl IsDefault for Target {
 #[serde(rename_all = "camelCase")]
 pub enum PackageSpec {
     /// This is a binary dependency
-    Binary(BinaryPackageSpec),
+    Binary(Box<BinaryPackageSpec>),
     /// This is a dependency on a source package
     Source(SourcePackageSpec),
     /// Pin to a version that is compatible with a version from the "previous" environment
     PinCompatible(PinCompatibleSpec),
+}
+
+impl From<BinaryPackageSpec> for PackageSpec {
+    fn from(value: BinaryPackageSpec) -> Self {
+        PackageSpec::Binary(Box::new(value))
+    }
+}
+
+impl From<VersionSpec> for PackageSpec {
+    fn from(value: VersionSpec) -> Self {
+        PackageSpec::Binary(Box::new(value.into()))
+    }
 }
 
 /// A package spec that can be used for constraints.
@@ -993,7 +1005,7 @@ mod tests {
         let mut deps = OrderMap::new();
         deps.insert(
             SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
-            PackageSpec::Binary(BinaryPackageSpec::default()),
+            PackageSpec::from(BinaryPackageSpec::default()),
         );
 
         let target_with_deps = Target {
@@ -1062,7 +1074,7 @@ mod tests {
     #[test]
     fn test_enum_variant_hash_stability() {
         // Test PackageSpecV1 enum variants
-        let binary_spec = PackageSpec::Binary(BinaryPackageSpec::default());
+        let binary_spec = PackageSpec::from(BinaryPackageSpec::default());
         let source_spec = PackageSpec::Source(SourcePackageSpec::from(PathSpec {
             path: "test".to_string(),
         }));
@@ -1077,7 +1089,7 @@ mod tests {
         );
 
         // Same variant with same content should have same hash
-        let binary_spec2 = PackageSpec::Binary(BinaryPackageSpec::default());
+        let binary_spec2 = PackageSpec::from(BinaryPackageSpec::default());
         let hash3 = calculate_hash(&binary_spec2);
 
         assert_eq!(
@@ -1092,19 +1104,19 @@ mod tests {
                 SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
                     "host_dep1",
                 )),
-                PackageSpec::Binary(BinaryPackageSpec::default()),
+                PackageSpec::from(BinaryPackageSpec::default()),
             )])),
             build_dependencies: Some(OrderMap::from([(
                 SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
                     "build_dep1",
                 )),
-                PackageSpec::Binary(BinaryPackageSpec::default()),
+                PackageSpec::from(BinaryPackageSpec::default()),
             )])),
             run_dependencies: Some(OrderMap::from([(
                 SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
                     "run_dep1",
                 )),
-                PackageSpec::Binary(BinaryPackageSpec::default()),
+                PackageSpec::from(BinaryPackageSpec::default()),
             )])),
         }
     }
@@ -1213,7 +1225,7 @@ mod tests {
         let mut deps = OrderMap::new();
         deps.insert(
             SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
-            PackageSpec::Binary(BinaryPackageSpec::default()),
+            PackageSpec::from(BinaryPackageSpec::default()),
         );
 
         // Same dependency in host_dependencies

@@ -269,7 +269,7 @@ fn convert_dependency(
             if let Some(NamedSpec { name, spec }) = apply_variant_and_convert(&spec, variant)? {
                 return Ok(pbt::NamedSpec {
                     name,
-                    spec: pbt::PackageSpec::Binary(spec),
+                    spec: spec.into(),
                 });
             }
             spec
@@ -323,7 +323,7 @@ fn convert_dependency(
     } else {
         Ok(pbt::NamedSpec {
             name: pbt::SourcePackageName::from(name.clone()),
-            spec: pbt::PackageSpec::Binary(convert_nameless_matchspec(spec)),
+            spec: convert_nameless_matchspec(spec).into(),
         })
     }
 }

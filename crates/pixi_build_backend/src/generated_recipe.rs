@@ -343,7 +343,7 @@ impl MetadataProvider for DefaultMetadataProvider {
 #[cfg(test)]
 mod tests {
     use ordermap::OrderMap;
-    use pixi_build_types::{BinaryPackageSpec, ExtraDependencies, PackageSpec, SourcePackageName};
+    use pixi_build_types::{BinaryPackageSpec, ExtraDependencies, SourcePackageName};
     use rattler_conda_types::{Flag, PackageName};
 
     use super::*;
@@ -353,10 +353,11 @@ mod tests {
         let mut dependencies = OrderMap::new();
         dependencies.insert(
             SourcePackageName::from(PackageName::new_unchecked("gtest")),
-            PackageSpec::Binary(BinaryPackageSpec {
+            BinaryPackageSpec {
                 version: Some("*".parse().unwrap()),
                 ..BinaryPackageSpec::default()
-            }),
+            }
+            .into(),
         );
 
         let mut extras = ExtraDependencies::new();

@@ -26,7 +26,7 @@ pub fn can_be_used_as_variant(spec: &pbt::PackageSpec) -> bool {
                 license_family,
                 condition,
                 track_features,
-            } = spec;
+            } = spec.as_ref();
 
             version == &Some(VersionSpec::Any)
                 && build.is_none()

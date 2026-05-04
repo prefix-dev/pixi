@@ -68,7 +68,7 @@ impl PackageSpec for pbt::PackageSpec {
                     license_family,
                     condition,
                     track_features,
-                } = spec;
+                } = spec.as_ref();
 
                 version == &Some(rattler_conda_types::VersionSpec::Any)
                     && build.is_none()
@@ -119,7 +119,7 @@ impl PackageSpec for pbt::PackageSpec {
 
 impl AnyVersion for pbt::PackageSpec {
     fn any() -> Self {
-        pbt::PackageSpec::Binary(rattler_conda_types::VersionSpec::Any.into())
+        rattler_conda_types::VersionSpec::Any.into()
     }
 }
 
@@ -179,7 +179,7 @@ mod tests {
             ..Default::default()
         };
 
-        let package_spec = pbt::PackageSpec::Binary(binary_spec);
+        let package_spec: pbt::PackageSpec = binary_spec.into();
         let package_name = PackageName::try_from("tk").unwrap();
 
         let (match_spec, _) = package_spec.to_match_spec(package_name).unwrap();
@@ -213,7 +213,7 @@ mod tests {
             ..Default::default()
         };
 
-        let package_spec = pbt::PackageSpec::Binary(binary_spec);
+        let package_spec: pbt::PackageSpec = binary_spec.into();
         let package_name = PackageName::try_from("tk").unwrap();
 
         let (match_spec, _) = package_spec.to_match_spec(package_name).unwrap();
@@ -245,7 +245,7 @@ mod tests {
             ..Default::default()
         };
 
-        let package_spec = pbt::PackageSpec::Binary(binary_spec);
+        let package_spec: pbt::PackageSpec = binary_spec.into();
         let package_name = PackageName::try_from("python").unwrap();
 
         let (match_spec, _) = package_spec.to_match_spec(package_name).unwrap();

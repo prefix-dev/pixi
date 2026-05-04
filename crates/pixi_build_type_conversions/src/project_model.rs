@@ -111,7 +111,7 @@ fn to_pixi_spec_v1(
                 // These are currently explicitly ignored in the conversion
                 namespace: _,
             } = binary.try_into_nameless_match_spec(channel_config)?;
-            pbt::PackageSpec::Binary(pbt::BinaryPackageSpec {
+            pbt::BinaryPackageSpec {
                 version,
                 build,
                 build_number,
@@ -127,7 +127,8 @@ fn to_pixi_spec_v1(
                 license_family,
                 condition,
                 track_features,
-            })
+            }
+            .into()
         }
     };
     Ok(pbt_spec)

@@ -196,7 +196,7 @@ fn convert_package_spec_to_v1(spec: &PackageSpec) -> PbtPackageSpec {
                 VersionSpec::from_str(&binary_spec.binary.version, ParseStrictness::Lenient)
                     .unwrap_or(VersionSpec::Any);
 
-            PbtPackageSpec::Binary(PbtBinaryPackageSpec {
+            PbtBinaryPackageSpec {
                 version: Some(version_spec),
                 build: None,
                 build_number: None,
@@ -208,7 +208,8 @@ fn convert_package_spec_to_v1(spec: &PackageSpec) -> PbtPackageSpec {
                 url: None,
                 license: None,
                 ..PbtBinaryPackageSpec::default()
-            })
+            }
+            .into()
         }
         PackageSpec::Source(source_spec) => {
             let inside_source = source_spec.source.clone();

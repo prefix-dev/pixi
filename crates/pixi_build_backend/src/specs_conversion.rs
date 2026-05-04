@@ -264,9 +264,10 @@ fn package_spec_to_package_dependency(
     spec: PackageSpec,
 ) -> miette::Result<PackageDependency> {
     match spec {
-        PackageSpec::Binary(binary_spec) => {
-            Ok(binary_package_spec_to_package_dependency(name, binary_spec))
-        }
+        PackageSpec::Binary(binary_spec) => Ok(binary_package_spec_to_package_dependency(
+            name,
+            *binary_spec,
+        )),
         PackageSpec::Source(source_spec) => Ok(PackageDependency::Source(
             source_package_spec_to_package_dependency(name, source_spec)?,
         )),
@@ -469,10 +470,11 @@ mod test {
         let mut dependencies = OrderMap::new();
         dependencies.insert(
             SourcePackageName::from(PackageName::new_unchecked("gtest")),
-            PackageSpec::Binary(BinaryPackageSpec {
+            BinaryPackageSpec {
                 version: Some("*".parse().unwrap()),
                 ..BinaryPackageSpec::default()
-            }),
+            }
+            .into(),
         );
 
         let mut extras = ExtraDependencies::new();
