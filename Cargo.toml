@@ -236,7 +236,7 @@ rattler_networking = { version = "0.26.6", default-features = false, features = 
   "google-cloud-auth",
 ] }
 rattler_package_streaming = { version = "0.25.0", default-features = false }
-rattler_repodata_gateway = { version = "0.28.0", default-features = false }
+rattler_repodata_gateway = { version = "0.28.1", default-features = false }
 rattler_s3 = { version = "0.1.29", default-features = false }
 rattler_shell = { version = "0.26.6", default-features = false }
 rattler_solve = { version = "6.0.0", default-features = false }
@@ -267,12 +267,12 @@ version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd776
 # cuts a new release.
 rattler_build_core = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
 rattler_build_jinja = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
-rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
 rattler_build_networking = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_recipe = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
 rattler_build_script = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
 rattler_build_source_cache = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
+rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
 rattler_build_yaml_parser = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
 
 [patch."https://github.com/prefix-dev/rattler-build"]
