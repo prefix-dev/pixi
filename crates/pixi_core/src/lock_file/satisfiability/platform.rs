@@ -106,6 +106,7 @@ fn build_platform_verification_setup(
 /// occurred. The [`PlatformUnsat`] error should contain enough information for
 /// the user and developer to figure out what went wrong.
 ///
+#[allow(clippy::result_large_err)]
 pub async fn verify_platform_satisfiability(
     ctx: &VerifySatisfiabilityContext<'_>,
     locked_environment: rattler_lock::Environment<'_>,

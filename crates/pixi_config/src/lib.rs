@@ -121,7 +121,7 @@ static USE_PROXY_FROM_ENV: LazyLock<bool> =
 static NETFS_REDIRECT_WARNED: LazyLock<Mutex<HashSet<CacheKind>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
-/// Lazily-loaded global (system + user) [cache] config.
+/// Lazily-loaded global (system + user) cache config.
 ///
 /// Used by the free [`cache_dir_for`] function so process-wide overrides like
 /// `[cache.conda-packages]` in `~/.config/pixi/config.toml` are honored even

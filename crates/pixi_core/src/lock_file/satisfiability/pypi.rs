@@ -360,6 +360,7 @@ pub(crate) fn pypi_satisfies_requirement(
 //
 // The metadata is read into `ctx.static_metadata_cache` so later calls to
 // `read_local_package_metadata` for the same path return instantly.
+#[allow(clippy::result_large_err)]
 pub(super) async fn lock_pypi_packages(
     ctx: &VerifySatisfiabilityContext<'_>,
     locked_pixi_records: &PixiRecordsByName,
@@ -477,6 +478,7 @@ struct BuildMetadataContext<'a> {
 /// (e.g., dynamic dependencies), it falls back to building the wheel metadata.
 ///
 /// Static metadata is cached across platforms since it doesn't depend on the platform.
+#[allow(clippy::result_large_err)]
 async fn read_local_package_metadata(
     directory: &Path,
     package_name: &pep508_rs::PackageName,
