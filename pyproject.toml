@@ -6,7 +6,12 @@ format-command = "pixi run -e lint ruff format --stdin-filename {filename}"
 test-dir = "tests/integration_python"
 
 [tool.pytest.ini_options]
-addopts = "--basetemp=pytest-temp --timeout=600 --durations=0"
+# basetemp is set in tests/integration_python/conftest.py to pytest-temp-<pid>
+# so it stays on the same filesystem as the cache (faster than /tmp on a
+# different FS) while still being unique per invocation. A static path
+# would race two concurrent `pixi run test`s on xdist.setup_node's
+# basetemp.mkdir(mode=0o700) call.
+addopts = "--timeout=600 --durations=0"
 markers = ["slow: marks tests as slow", "extra_slow: marks tests as extra slow"]
 testpaths = ["tests/integration_python"]
 tmp_path_retention_policy = "failed"
