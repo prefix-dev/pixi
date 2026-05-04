@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_manifest/src/toml/build_backend.rs
-assertion_line: 299
 expression: parsed
 ---
 TomlPackageBuild {
@@ -38,9 +37,13 @@ TomlPackageBuild {
                 build: None,
                 build_number: None,
                 file_name: None,
+                extras: None,
+                flags: None,
                 channel: None,
                 subdir: None,
                 license: None,
+                license_family: None,
+                track_features: None,
             },
             channels: None,
             additional_dependencies: UniquePackageMap {
@@ -96,6 +99,7 @@ TomlPackageBuild {
             },
         ),
     ),
+    flags: [],
     target: {},
     warnings: [
         Deprecation(

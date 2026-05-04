@@ -99,6 +99,12 @@ pub struct CondaOutput {
     /// also installed.
     pub run_dependencies: CondaOutputDependencies,
 
+    /// Optional dependency groups that consumers can select through MatchSpec
+    /// extras (e.g. `pkg[group]`). Each group maps to a list of additional
+    /// run-time dependencies that get pulled in when the group is requested.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub extra_depends: BTreeMap<String, Vec<String>>,
+
     /// Describes which run-exports should be ignored for this package.
     pub ignore_run_exports: CondaOutputIgnoreRunExports,
 
@@ -140,10 +146,8 @@ pub struct CondaOutputMetadata {
     /// The license family of the package
     pub license_family: Option<String>,
 
-    /// Extra dependency groups that can be selected through MatchSpec extras.
-    pub extra_depends: BTreeMap<String, Vec<String>>,
-
     /// Plain string flags used to select package variants.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub flags: Vec<Flag>,
 
     /// The noarch type of the package

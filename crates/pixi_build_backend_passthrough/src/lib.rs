@@ -570,6 +570,7 @@ fn create_output(
         )),
         host_dependencies: Some(host_deps),
         run_dependencies,
+        extra_depends: index_json.experimental_extra_depends.clone(),
         metadata: CondaOutputMetadata {
             name: project_model
                 .name
@@ -588,7 +589,6 @@ fn create_output(
             subdir,
             license: project_model.license.clone(),
             license_family: None,
-            extra_depends: index_json.experimental_extra_depends.clone(),
             flags: index_json.flags.clone(),
             noarch: index_json.noarch,
             purls: None,

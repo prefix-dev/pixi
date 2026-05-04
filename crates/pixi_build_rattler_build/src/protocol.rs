@@ -180,17 +180,6 @@ impl Protocol for RattlerBuildBackend {
                     subdir: discovered_output.target_platform,
                     license: recipe.about.license.clone().map(|l| l.to_string()),
                     license_family: recipe.about.license_family.clone(),
-                    extra_depends: recipe
-                        .requirements
-                        .extras
-                        .iter()
-                        .map(|(group, deps)| {
-                            (
-                                group.clone(),
-                                deps.iter().map(ToString::to_string).collect(),
-                            )
-                        })
-                        .collect(),
                     flags: build.flags.clone(),
                     noarch,
                     purls: None,
@@ -245,6 +234,17 @@ impl Protocol for RattlerBuildBackend {
                         &subpackages,
                     )?,
                 },
+                extra_depends: recipe
+                    .requirements
+                    .extras
+                    .iter()
+                    .map(|(group, deps)| {
+                        (
+                            group.clone(),
+                            deps.iter().map(ToString::to_string).collect(),
+                        )
+                    })
+                    .collect(),
                 ignore_run_exports: CondaOutputIgnoreRunExports {
                     by_name: recipe
                         .requirements

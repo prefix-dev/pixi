@@ -24,12 +24,17 @@ expression: project_model
             "build": null,
             "buildNumber": null,
             "fileName": null,
+            "extras": null,
+            "flags": null,
             "channel": null,
             "subdir": null,
             "md5": null,
             "sha256": null,
             "url": null,
-            "license": null
+            "license": null,
+            "licenseFamily": null,
+            "condition": null,
+            "trackFeatures": null
           }
         }
       },
@@ -53,12 +58,17 @@ expression: project_model
             "build": null,
             "buildNumber": null,
             "fileName": null,
+            "extras": null,
+            "flags": null,
             "channel": null,
             "subdir": null,
             "md5": null,
             "sha256": null,
             "url": null,
-            "license": null
+            "license": null,
+            "licenseFamily": null,
+            "condition": null,
+            "trackFeatures": null
           }
         }
       }
