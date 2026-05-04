@@ -67,7 +67,6 @@ pixi_variant = { workspace = true }
 indexmap = { workspace = true }
 insta = { workspace = true, features = ["json"] }
 pixi_build_backend_passthrough = { workspace = true }
-pixi_config = { workspace = true }
 pixi_test_utils = { workspace = true }
 regex = { workspace = true }
 slotmap = { workspace = true }

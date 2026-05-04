@@ -129,9 +129,25 @@ fn env_ref_of(channels: Vec<ChannelUrl>, build_environment: BuildEnvironment) ->
 }
 
 /// Returns a default set of cache directories for the test.
+///
+/// Backed by a per-process tempdir kept alive in a `OnceLock`, so tests
+/// running in this binary share one cache root across each other but stay
+/// isolated from the user's `~/.cache/rattler/` and from any other
+/// concurrent test binary. The previous version handed out the user's
+/// real cache, which made parallel `pixi run test-slow` invocations race
+/// on the bld/repodata/pkgs caches and silently reshape `simple_test`'s
+/// EventTree snapshot (e.g. a deduped `Conda solve` migrated between
+/// parents) under contention.
 fn default_cache_dirs() -> CacheDirs {
-    let cache_dir = pixi_config::get_cache_dir().unwrap();
-    CacheDirs::new(to_abs_dir(cache_dir))
+    use std::sync::OnceLock;
+    static CACHE_TMPDIR: OnceLock<tempfile::TempDir> = OnceLock::new();
+    let dir = CACHE_TMPDIR.get_or_init(|| {
+        tempfile::Builder::new()
+            .prefix("pixi-cmd-dispatcher-test-cache-")
+            .tempdir()
+            .expect("create cache tempdir")
+    });
+    CacheDirs::new(to_abs_dir(dir.path()))
 }
 
 /// Returns the tool platform that is appropriate for the current platform.
