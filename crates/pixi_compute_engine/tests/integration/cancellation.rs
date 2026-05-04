@@ -103,22 +103,42 @@ async fn cancellation_drops_task() {
     );
 }
 
-/// A Key whose compute yields a few times, giving the test time to
-/// interleave a `select!`-racing caller and a normal caller.
+/// A Key whose compute parks on an external `Notify` until the test
+/// releases it, so the test can deterministically attach multiple
+/// subscribers to the same in-flight compute before it completes.
+///
+/// The previous incarnation used `tokio::task::yield_now()` five times,
+/// which is "slow" only relative to a single-threaded executor; on a
+/// multi-threaded runtime the spawned task could finish before the
+/// second subscriber even called `engine.compute(..)`. That left the
+/// second subscriber's first poll returning `Ready`, which `poll_once`
+/// silently discarded, and the subsequent `.await` then hit "`async fn`
+/// resumed after completion" inside `compute_root`.
+#[derive(Clone)]
+struct ReleaseGate(Arc<Notify>);
+
+trait HasReleaseGate {
+    fn release_gate(&self) -> &Arc<Notify>;
+}
+
+impl HasReleaseGate for DataStore {
+    fn release_gate(&self) -> &Arc<Notify> {
+        &self.get::<ReleaseGate>().0
+    }
+}
+
 #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
 #[display("{id}")]
-struct YieldingKey {
+struct GatedKey {
     id: u32,
 }
-impl Key for YieldingKey {
+impl Key for GatedKey {
     type Value = u32;
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         ctx.global_data()
             .test_counter()
             .fetch_add(1, Ordering::SeqCst);
-        for _ in 0..5 {
-            tokio::task::yield_now().await;
-        }
+        ctx.global_data().release_gate().notified().await;
         self.id * 3
     }
 }
@@ -130,7 +150,11 @@ impl Key for YieldingKey {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn cancellation_with_subscribers() {
     let counter = test_counter();
-    let engine = ComputeEngine::builder().with_data(counter.clone()).build();
+    let release = Arc::new(Notify::new());
+    let engine = ComputeEngine::builder()
+        .with_data(counter.clone())
+        .with_data(ReleaseGate(release.clone()))
+        .build();
 
     // Handshakes: A signals "subscribed", B signals "subscribed",
     // the test tells A "okay to drop now".
@@ -141,7 +165,7 @@ async fn cancellation_with_subscribers() {
     let caller_a = tokio::spawn({
         let engine = engine.clone();
         async move {
-            let key = YieldingKey { id: 42 };
+            let key = GatedKey { id: 42 };
             let mut compute = engine.compute(&key).boxed();
             // Poll once to spawn the task and register as a subscriber.
             poll_once(&mut compute).await;
@@ -156,7 +180,7 @@ async fn cancellation_with_subscribers() {
     let caller_b = tokio::spawn({
         let engine = engine.clone();
         async move {
-            let key = YieldingKey { id: 42 };
+            let key = GatedKey { id: 42 };
             let mut compute = engine.compute(&key).boxed();
             // Poll once to subscribe to the same shared future as A.
             poll_once(&mut compute).await;
@@ -172,6 +196,10 @@ async fn cancellation_with_subscribers() {
     let _ = a_drop_tx.send(());
 
     let _ = caller_a.await;
+    // Release the gated compute only after A has dropped; the spawned
+    // task must still be parked by the time we get here, otherwise B's
+    // poll_once would have observed `Ready` and panicked.
+    release.notify_one();
     assert_eq!(caller_b.await.unwrap(), 126);
     assert_eq!(counter.0.load(Ordering::SeqCst), 1);
 }
