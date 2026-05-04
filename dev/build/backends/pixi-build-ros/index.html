@@ -4645,16 +4645,21 @@ If you explicitly set <code>ROS_DISTRO</code> or <code>ROS_VERSION</code> in <co
 <p>Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include ROS-specific files.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[package.build.config]</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="s2">&quot;launch/**/*.py&quot;</span><span class="p">,</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="s2">&quot;config/*.yaml&quot;</span><span class="p">,</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="s2">&quot;msgs/**/*.msg&quot;</span><span class="p">,</span>
-</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="s2">&quot;srvs/**/*.srv&quot;</span>
-</span><span id="__span-10-7"><a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="p">]</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="s2">&quot;urdf/**/*.urdf&quot;</span><span class="p">,</span>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="s2">&quot;worlds/**/*.sdf&quot;</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="p">]</span>
 </span></code></pre></div>
-<p>Default input globs include:
-- Source files: <code>**/*.{c,cpp,h,hpp,rs,sh,py,pyx}</code>
-- ROS configuration: <code>package.xml</code>, <code>setup.py</code>, <code>setup.cfg</code>, <code>pyproject.toml</code>
-- Build files: <code>CMakeLists.txt</code></p>
+<p>Default input globs include:</p>
+<ul>
+<li>Source files: <code>**/*.{c,cpp,h,hpp,rs,sh,py,pyx}</code></li>
+<li>ROS configuration: <code>package.xml</code>, <code>setup.py</code>, <code>setup.cfg</code>, <code>pyproject.toml</code></li>
+<li>Build files: <code>CMakeLists.txt</code></li>
+<li>Launch files: <code>launch/**/*.py</code></li>
+<li>Config files: <code>config/*.yaml</code></li>
+<li>Message definitions: <code>msg/**/*.msg</code></li>
+<li>Service definitions: <code>srv/**/*.srv</code></li>
+<li>Action definitions: <code>action/**/*.action</code></li>
+</ul>
 <h3 id="extra-package-mappings"><code>extra-package-mappings</code><a class="headerlink" href="#extra-package-mappings" title="Permanent link">#</a></h3>
 <ul>
 <li><strong>Type</strong>: <code>List&lt;Map&lt;String, Map&lt;String, List&lt;String&gt; | RelativeFileName&gt;&gt;&gt;</code></li>
