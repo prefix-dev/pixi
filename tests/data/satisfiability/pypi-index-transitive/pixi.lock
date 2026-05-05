@@ -1,13 +1,16 @@
 #
 # This lock-file should satisfy the accompanying pixi.toml file.
 #
-# Regression test: a direct PyPI dependency `my-root` is requested from a
-# custom index. It transitively pulls in `my-dep`, which is also resolved
-# from the same custom index. The transitive `my-dep` requirement comes
-# through pep508 (which has no concept of an index) and therefore lacks an
-# `index` field, while the locked record correctly stores the resolved
-# index URL. The satisfiability check must trust the lock-file's recorded
-# index for transitive deps and not flag a `<default>` -> custom mismatch.
+# Regression test for a false-positive index mismatch on transitive
+# dependencies. The manifest declares both `foo` and `bar` as direct
+# dependencies pinned to a custom index. `bar` transitively requires
+# `foo` (via its `requires_dist`); the satisfiability walker visits
+# `foo` once as a direct manifest requirement (which carries the
+# custom index) and once as a transitive requirement coming through
+# pep508 (which carries no index). The locked `foo` record correctly
+# stores the resolved custom index, and the check must accept the
+# transitive visit instead of reporting a `<default>` -> custom
+# mismatch.
 
 version: 7
 platforms:
@@ -21,23 +24,23 @@ environments:
     packages:
       win-64:
         - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
-        - pypi: https://custom.example.com/simple/packages/my_dep-1.0.0-py3-none-any.whl
-        - pypi: https://custom.example.com/simple/packages/my_root-1.0.0-py3-none-any.whl
+        - pypi: https://custom.example.com/simple/packages/bar-1.0.0-py3-none-any.whl
+        - pypi: https://custom.example.com/simple/packages/foo-1.0.0-py3-none-any.whl
 packages:
   - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
     sha256: 1a95494abe572a8819c933f978df89f00bde72ea9432d46a70632599e8029ea4
     md5: f07c8c5dd98767f9a652de5d039b284e
     # Faked to be empty to reduce the size of the example
     depends: []
-  - pypi: https://custom.example.com/simple/packages/my_dep-1.0.0-py3-none-any.whl
-    name: my-dep
-    version: 1.0.0
-    sha256: 0000000000000000000000000000000000000000000000000000000000000000
-    index: https://custom.example.com/simple
-  - pypi: https://custom.example.com/simple/packages/my_root-1.0.0-py3-none-any.whl
-    name: my-root
+  - pypi: https://custom.example.com/simple/packages/bar-1.0.0-py3-none-any.whl
+    name: bar
     version: 1.0.0
     requires_dist:
-      - my-dep>=1.0,<2.0
+      - foo>=1.0,<2.0
     sha256: 1111111111111111111111111111111111111111111111111111111111111111
+    index: https://custom.example.com/simple
+  - pypi: https://custom.example.com/simple/packages/foo-1.0.0-py3-none-any.whl
+    name: foo
+    version: 1.0.0
+    sha256: 0000000000000000000000000000000000000000000000000000000000000000
     index: https://custom.example.com/simple

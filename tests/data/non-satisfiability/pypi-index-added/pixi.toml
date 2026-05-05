@@ -1,0 +1,15 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-index-added"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+# The user pinned `my-dep` to a non-default custom index, but the
+# lock-file still has `my-dep` resolved from the default PyPI index.
+# The satisfiability check must invalidate the lock so the package
+# gets re-resolved from the requested index.
+
+[pypi-dependencies]
+my-dep = { version = "==1.0.0", index = "https://custom.example.com/simple" }
