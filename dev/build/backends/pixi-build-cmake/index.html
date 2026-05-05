@@ -2088,6 +2088,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#input-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input tracking
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Input tracking">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fileglob-configure_depends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        file(GLOB CONFIGURE_DEPENDS ...)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fallback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cmake-flag-precedence" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4301,6 +4340,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#input-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input tracking
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Input tracking">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fileglob-configure_depends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        file(GLOB CONFIGURE_DEPENDS ...)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fallback
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cmake-flag-precedence" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4459,7 +4537,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Default</strong>: <code>[]</code></li>
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific globs completely replace base globs</li>
 </ul>
-<p>Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include source files (<code>**/*.{c,cc,cxx,cpp,h,hpp,hxx}</code>), CMake files (<code>**/*.{cmake,cmake.in}</code>, <code>**/CMakeLists.txt</code>), and other build-related files.</p>
+<p>Additional glob patterns to include as input files for the build process. These patterns are added to the input set that the backend extracts automatically from each successful build (see <a href="#input-tracking">Input tracking</a> below). Use this for files that aren't visible to CMake (assets, runtime config, documentation, scripts invoked by <code>add_custom_command</code>, and so on).</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[package.build.config]</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
 </span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="s2">&quot;assets/**/*&quot;</span><span class="p">,</span>
@@ -4513,12 +4591,31 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Build</strong>: Executes <code>cmake --build</code> to compile the project</li>
 <li><strong>Install</strong>: Installs the built artifacts to the conda package</li>
 </ol>
+<h2 id="input-tracking">Input tracking<a class="headerlink" href="#input-tracking" title="Permanent link">#</a></h2>
+<p>After a successful build, the backend asks Ninja which files were actually used and stores that exact set as the build's inputs. Pixi uses those inputs to decide whether the build cache is still valid, so a tighter set means fewer false rebuilds and stale-cache misses.</p>
+<p>Three Ninja sub-commands cover the build graph:</p>
+<ul>
+<li><strong><code>ninja -t inputs all</code></strong>: declared translation units (the source files listed in <code>add_executable</code> / <code>add_library</code>).</li>
+<li><strong><code>ninja -t deps</code></strong>: discovered headers, read from the depfile database the compiler emitted during the build.</li>
+<li><strong><code>ninja -t targets all</code></strong>: <code>CMakeLists.txt</code> and any <code>*.cmake</code> file that CMake registers on its regen rule (e.g. via <code>include()</code> or <code>CMAKE_MODULE_PATH</code>).</li>
+</ul>
+<p>Anything outside the project root is dropped (system headers, conda environment files, files in unrelated source trees). Anything under <code>&lt;project&gt;/.pixi/</code> is also dropped, since pixi's own cache and conda envs are tracked through the environment hash, not through input globs.</p>
+<h3 id="fileglob-configure_depends"><code>file(GLOB CONFIGURE_DEPENDS ...)</code><a class="headerlink" href="#fileglob-configure_depends" title="Permanent link">#</a></h3>
+<p>If your <code>CMakeLists.txt</code> uses <code>file(GLOB ... CONFIGURE_DEPENDS ...)</code> to collect sources, the backend recovers the original glob patterns from CMake's <code>VerifyGlobs.cmake</code> and forwards them to pixi. Adding a new file matching one of those patterns invalidates the build cache and triggers a reconfigure, the same way it does for an in-tree <code>cmake --build</code> cycle.</p>
+<p>Plain <code>file(GLOB ...)</code> without <code>CONFIGURE_DEPENDS</code> follows CMake's own semantics: only the files that matched at configure time are tracked. Adding a new file does not invalidate the cache. This mirrors what plain <code>file(GLOB)</code> does inside CMake itself: the documented footgun where you have to re-run CMake by hand. Prefer <code>CONFIGURE_DEPENDS</code> if you want auto-detection.</p>
+<h3 id="fallback">Fallback<a class="headerlink" href="#fallback" title="Permanent link">#</a></h3>
+<p>If any of the queries fail (for example, the build directory was wiped between phases, or Ninja exited non-zero), the backend logs a warning and falls back to a coarse glob set:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>**/*.{c,cc,cxx,cpp,h,hpp,hxx}
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>**/*.{cmake,cmake.in}
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>**/CMakeLists.txt
+</span></code></pre></div>
+<p>This is strictly less precise but never misses a real input. Most users will never see the fallback path.</p>
 <h2 id="cmake-flag-precedence">CMake Flag Precedence<a class="headerlink" href="#cmake-flag-precedence" title="Permanent link">#</a></h2>
 <p>With CMake, when duplicate flags are provided, the last flag takes precedence.
 The <code>pixi-build-cmake</code> backend places <code>extra-args</code> after the default CMake flags, allowing you to override default settings.</p>
 <p>For example, to switch from the default Release build to Debug mode:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Debug&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Debug&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h2 id="default-variants">Default variants<a class="headerlink" href="#default-variants" title="Permanent link">#</a></h2>
 <p>On Windows platforms, the backend automatically sets the following default variants:</p>
@@ -4531,9 +4628,9 @@ Only <code>cxx_compiler</code> will be installed by default, the <code>c_compile
 <p>This default is set to align with conda-forge's switch to Visual Studio 2022 and because <a href="https://learn.microsoft.com/en-us/lifecycle/products/visual-studio-2019">mainstream support for Visual Studio 2019 ended in 2024</a>.
 The <code>vs2022</code> compiler is more widely supported on modern GitHub runners and build environments.</p>
 <p>You can override these defaults by explicitly setting variants using <a href="https://pixi.sh/latest/reference/pixi_manifest/#build-variants-optional"><code>[workspace.build-variants]</code></a> in your <code>pixi.toml</code>:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[workspace.build-variants]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
-</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[workspace.build-variants]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">#</a></h2>
 <ul>
