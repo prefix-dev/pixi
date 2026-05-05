@@ -86,9 +86,10 @@ pixi add [OPTIONS] <SPEC>...
 ## Description
 Adds dependencies to the workspace
 
-The dependencies should be defined as MatchSpec for conda package, or a PyPI
-requirement for the `--pypi` dependencies. If no specific version is
-provided, the latest version compatible with your workspace will be chosen
+The dependencies should be defined as MatchSpec for conda package, a PyPI
+requirement for the `--pypi` dependencies, or an absolute path to a local
+`.conda` or `.tar.bz2` package file. If no specific version is provided,
+the latest version compatible with your workspace will be chosen
 automatically or a * will be used.
 
 Example usage:
