@@ -5690,6 +5690,7 @@ name = "pixi-build-cmake"
 version = "0.3.11"
 dependencies = [
  "async-trait",
+ "fs-err",
  "indexmap 2.14.0",
  "insta",
  "miette 7.6.0",
@@ -5707,6 +5708,7 @@ dependencies = [
  "strum",
  "tempfile",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
