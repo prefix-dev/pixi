@@ -105,7 +105,7 @@ pixi add [OPTIONS] <SPEC>...
 
 Adds dependencies to the workspace
 
-The dependencies should be defined as MatchSpec for conda package, or a PyPI requirement for the `--pypi` dependencies. If no specific version is provided, the latest version compatible with your workspace will be chosen automatically or a * will be used.
+The dependencies should be defined as MatchSpec for conda package, a PyPI requirement for the `--pypi` dependencies, or an absolute path to a local `.conda` or `.tar.bz2` package file. If no specific version is provided, the latest version compatible with your workspace will be chosen automatically or a * will be used.
 
 Example usage:
 
@@ -153,24 +153,25 @@ pixi add --platform osx-64 clang # (7)!
 pixi add --no-install numpy # (8)!
 pixi add --no-lockfile-update numpy # (9)!
 pixi add --feature featurex numpy # (10)!
-pixi add --git https://github.com/wolfv/pixi-build-examples boost-check # (11)!
-pixi add --git https://github.com/wolfv/pixi-build-examples --branch main --subdir boost-check boost-check # (12)!
-pixi add --git https://github.com/wolfv/pixi-build-examples --tag v0.1.0 boost-check # (13)!
-pixi add --git https://github.com/wolfv/pixi-build-examples --rev e50d4a1 boost-check # (14)!
+pixi add /absolute/path/to/package-1.0-hb0f4dca_0.conda # (11)!
+pixi add --git https://github.com/wolfv/pixi-build-examples boost-check # (12)!
+pixi add --git https://github.com/wolfv/pixi-build-examples --branch main --subdir boost-check boost-check # (13)!
+pixi add --git https://github.com/wolfv/pixi-build-examples --tag v0.1.0 boost-check # (14)!
+pixi add --git https://github.com/wolfv/pixi-build-examples --rev e50d4a1 boost-check # (15)!
 
 # Add a pypi dependency
-pixi add --pypi requests[security] # (15)!
-pixi add --pypi Django==5.1rc1 # (16)!
-pixi add --pypi "boltons>=24.0.0" --feature lint # (17)!
-pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (18)!
-pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (19)!
-pixi add --pypi "project @ file:///absolute/path/to/project" # (20)!
-pixi add --pypi "project@file:///absolute/path/to/project" --editable # (21)!
-pixi add --git https://github.com/mahmoud/boltons.git boltons --pypi # (22)!
-pixi add --git https://github.com/mahmoud/boltons.git boltons --branch main --pypi # (23)!
-pixi add --git https://github.com/mahmoud/boltons.git boltons --rev e50d4a1 --pypi # (24)!
-pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi # (25)!
-pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi --subdir boltons # (26)!
+pixi add --pypi requests[security] # (16)!
+pixi add --pypi Django==5.1rc1 # (17)!
+pixi add --pypi "boltons>=24.0.0" --feature lint # (18)!
+pixi add --pypi "boltons @ https://files.pythonhosted.org/packages/46/35/e50d4a115f93e2a3fbf52438435bb2efcf14c11d4fcd6bdcd77a6fc399c9/boltons-24.0.0-py3-none-any.whl" # (19)!
+pixi add --pypi "exchangelib @ git+https://github.com/ecederstrand/exchangelib" # (20)!
+pixi add --pypi "project @ file:///absolute/path/to/project" # (21)!
+pixi add --pypi "project@file:///absolute/path/to/project" --editable # (22)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --pypi # (23)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --branch main --pypi # (24)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --rev e50d4a1 --pypi # (25)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi # (26)!
+pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi --subdir boltons # (27)!
 ```
 
 1. This will add the `numpy` package to the project with the latest available for the solved environment.
@@ -183,6 +184,7 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 1. This will add the `numpy` package to the manifest and lockfile, without installing it in an environment.
 1. This will add the `numpy` package to the manifest without updating the lockfile or installing it in the environment.
 1. This will add the `numpy` package in the feature `featurex`.
+1. This will install a pre-built `.conda` or `.tar.bz2` package directly from the local filesystem using an absolute path. The package name is extracted from the archive filename.
 1. This will add the `boost-check` source package to the dependencies from the git repository.
 1. This will add the `boost-check` source package to the dependencies from the git repository using `main` branch and the `boost-check` folder in the repository.
 1. This will add the `boost-check` source package to the dependencies from the git repository using `v0.1.0` tag.
