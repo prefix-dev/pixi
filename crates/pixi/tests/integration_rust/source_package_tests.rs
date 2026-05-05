@@ -639,7 +639,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         build_dir: None,
         clean: false,
         path: Some(pixi.manifest_path()),
-        to: target_url.to_string(),
+        to: Some(target_url.to_string()),
         force: false,
         skip_existing: true,
         generate_attestation: false,
@@ -2417,5 +2417,56 @@ my-package = {{ path = "./my-package" }}
         count_build_events(&second_build_events),
         0,
         "second install should reuse the existing build cache for an unchanged source package"
+    );
+}
+
+fn simple_package_manifest(platform: Platform) -> String {
+    format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+"#
+    )
+}
+
+/// `pixi publish` without a `to` argument must build the package and return
+/// successfully without uploading anything.
+#[tokio::test]
+async fn test_publish_without_target_builds_but_does_not_upload() {
+    setup_tracing();
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let pixi = PixiControl::from_manifest(&simple_package_manifest(Platform::current())).unwrap();
+
+    publish::execute(publish::Args {
+        backend_override: Some(BackendOverride::from_memory(instantiator)),
+        config_cli: Default::default(),
+        lock_and_install_config: Default::default(),
+        target_platform: Platform::current(),
+        build_platform: Platform::current(),
+        build_dir: None,
+        clean: false,
+        path: Some(pixi.manifest_path()),
+        to: None,
+        force: false,
+        skip_existing: true,
+        generate_attestation: false,
+    })
+    .await
+    .expect("publish without `to` should succeed");
+
+    assert!(
+        !observer.build_events().is_empty(),
+        "publish without `to` should still build the package"
     );
 }

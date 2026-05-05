@@ -1429,7 +1429,7 @@ dependencies:
         # Upgrade commands
         (["upgrade"], [], "pixi upgrade"),
         # Pixi publish (builds and uploads)
-        (["publish", "--to", "https://prefix.dev/test-channel"], [], "pixi publish"),
+        (["publish", "https://prefix.dev/test-channel"], [], "pixi publish"),
         # pixi build has been removed; the stub still accepts --frozen/--no-install
         (["build"], [], "pixi build"),
     ]
@@ -1463,12 +1463,11 @@ dependencies:
                 [
                     pixi,
                     "publish",
-                    "--to",
-                    "https://prefix.dev/test-channel",
                     "--path",
                     manifest_path,
                     "--frozen",
                     "--no-install",
+                    "https://prefix.dev/test-channel",
                 ],
                 expected_exit_code=ExitCode.FAILURE,
             )

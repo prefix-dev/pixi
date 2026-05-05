@@ -84,12 +84,11 @@ pub struct Args {
     /// The target channel URL to publish packages to.
     ///
     /// Examples:
-    ///   --to <https://prefix.dev/my-channel>
-    ///   --to <https://anaconda.org/my-user>
-    ///   --to s3://my-bucket/my-channel
-    ///   --to file:///path/to/local/channel
-    #[arg(long)]
-    pub to: String,
+    ///   <https://prefix.dev/my-channel>
+    ///   <https://anaconda.org/my-user>
+    ///   s3://my-bucket/my-channel
+    ///   file:///path/to/local/channel
+    pub to: Option<String>,
 
     /// Force overwrite existing packages
     #[arg(long)]
@@ -421,19 +420,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("No packages were built. Nothing to publish.");
     }
 
+    let Some(target_url) = args
+        .to
+        .as_ref()
+        .map(|to| parse_target_url(to))
+        .transpose()?
+    else {
+        return Ok(());
+    };
+
     // === Phase 2: Upload the built packages ===
 
     pixi_progress::println!(
         "\n{}Publishing {} package(s) to {}",
         console::style(console::Emoji("📦 ", "")).cyan(),
         built_package_paths.len(),
-        args.to
+        target_url
     );
 
     let config = Config::load_global();
     let auth_storage = get_auth_store(&config).into_diagnostic()?;
-
-    let target_url = parse_target_url(&args.to)?;
 
     pixi_progress::await_in_progress("uploading packages", |_| {
         upload_packages(
@@ -451,7 +457,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         "{}Successfully published {} package(s) to {}",
         console::style(console::Emoji("✔ ", "")).green(),
         built_package_paths.len(),
-        args.to
+        target_url
     );
     for path in &built_package_paths {
         let name = path

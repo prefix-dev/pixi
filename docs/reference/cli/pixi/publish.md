@@ -10,8 +10,13 @@ Build a conda package and publish it to a channel.
 
 ## Usage
 ```
-pixi publish [OPTIONS] --to <TO>
+pixi publish [OPTIONS] <TO>
 ```
+
+## Arguments
+- <a id="arg-<TO>" href="#arg-<TO>">`<TO>`</a>
+:  The target channel URL to publish packages to
+<br>**required**: `true`
 
 ## Options
 - <a id="arg---target-platform" href="#arg---target-platform">`--target-platform (-t) <TARGET_PLATFORM>`</a>
@@ -26,9 +31,6 @@ pixi publish [OPTIONS] --to <TO>
 :  Whether to clean the build directory before building
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
 :  The path to a directory containing a package manifest, or to a specific manifest file
-- <a id="arg---to" href="#arg---to">`--to <TO>`</a>
-:  The target channel URL to publish packages to
-<br>**required**: `true`
 - <a id="arg---force" href="#arg---force">`--force`</a>
 :  Force overwrite existing packages
 - <a id="arg---skip-existing" href="#arg---skip-existing">`--skip-existing <SKIP_EXISTING>`</a>
