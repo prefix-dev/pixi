@@ -9,7 +9,9 @@ use pixi_config::pixi_home;
 use pixi_consts::consts;
 use pixi_global::project::FromMatchSpecError;
 use pixi_spec::{PixiSpec, Subdirectory, SubdirectoryError};
-use rattler_conda_types::{ChannelConfig, MatchSpec, ParseMatchSpecError, ParseStrictness};
+use rattler_conda_types::{
+    ChannelConfig, MatchSpec, ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
+};
 use typed_path::Utf8NativePathBuf;
 
 use crate::has_specs::HasSpecs;
@@ -185,11 +187,15 @@ impl GlobalSpecs {
             self.specs
                 .iter()
                 .map(|spec_str| {
-                    let name = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?
-                        .name
-                        .as_exact()
-                        .cloned()
-                        .ok_or(GlobalSpecsConversionError::NameRequired)?;
+                    let name = MatchSpec::from_str(
+                        spec_str,
+                        ParseMatchSpecOptions::lenient()
+                            .with_repodata_revision(RepodataRevision::V3),
+                    )?
+                    .name
+                    .as_exact()
+                    .cloned()
+                    .ok_or(GlobalSpecsConversionError::NameRequired)?;
                     Ok(pixi_global::project::GlobalSpec::new(
                         name,
                         pixi_spec.clone(),

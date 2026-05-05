@@ -21,8 +21,11 @@ pub fn from_source_spec_v1(source: SourcePackageSpec) -> pixi_spec::SourceSpec {
         subdir,
         license,
         extras: None,
+        flags: None,
         namespace: None,
+        license_family: None,
         condition: None,
+        track_features: None,
     }
 }
 
@@ -111,9 +114,14 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpec) -> pixi_spec::BinarySpec {
             build,
             build_number,
             file_name,
+            extras: None,
+            flags: None,
             channel: channel.map(NamedChannelOrUrl::Url),
             subdir,
             license,
+            license_family: None,
+            condition: None,
+            track_features: None,
             md5,
             sha256,
         })),
