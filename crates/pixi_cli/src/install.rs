@@ -7,6 +7,7 @@ use pixi_core::{
     environment::{InstallFilter, get_update_lock_file_and_prefixes},
     lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
 };
+use pixi_manifest::FeaturesExt;
 use std::fmt::Write;
 
 use crate::cli_config::WorkspaceConfig;
@@ -98,10 +99,31 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     // Get the environments by name
-    let environments = envs
+    let mut environments = envs
         .into_iter()
         .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
         .collect::<Result<Vec<_>, _>>()?;
+
+    // When installing all environments, silently skip any that don't support
+    // the current platform. When the user explicitly asks for an environment
+    // (or the default), we still want to surface the platform error.
+    if args.all {
+        let (supported, skipped): (Vec<_>, Vec<_>) = environments
+            .into_iter()
+            .partition(|env| env.platforms().contains(&env.best_platform()));
+
+        if !skipped.is_empty() {
+            tracing::warn!(
+                "Skipping environment(s) that do not support the current platform: {}",
+                skipped
+                    .iter()
+                    .map(|env| env.name().fancy_display().to_string())
+                    .join(", ")
+            );
+        }
+
+        environments = supported;
+    }
 
     // Build the install filter from CLI args
     let filter = InstallFilter::new()
@@ -117,6 +139,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             lock_file_usage: args.lock_file_usage.to_usage(),
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
         },
         ReinstallPackages::default(),
         &filter,

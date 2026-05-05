@@ -244,6 +244,11 @@ impl GenerateRecipe for RosGenerator {
             "tests/**/*.py",
             "docs/**/*.rst",
             "docs/**/*.md",
+            "launch/**/*.py",
+            "config/*.yaml",
+            "msg/**/*.msg",
+            "srv/**/*.srv",
+            "action/**/*.action",
         ];
 
         if !editable {

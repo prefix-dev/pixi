@@ -256,9 +256,9 @@ impl Dependencies {
         // Determine the records that have missing run exports.
         let records_missing_run_exports = relevant_records
             .iter_mut()
-            .flat_map(|r| match *r {
-                PixiRecord::Binary(repo_data_record) => Some(repo_data_record),
-                PixiRecord::Source(_source_record) => None,
+            .flat_map(|r| match r {
+                PixiRecord::Binary(repo_data_record) => Some(Arc::make_mut(repo_data_record)),
+                PixiRecord::Source(_) => None,
             })
             .filter(|r| r.package_record.run_exports.is_none());
         gateway
@@ -301,7 +301,7 @@ impl Dependencies {
     }
 }
 
-fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
+pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
     specs: &[String],
     ignore: &CondaOutputIgnoreRunExports,
 ) -> DependencyMap<PackageName, T> {
@@ -338,6 +338,8 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     url: _,
                     license: None,
                     track_features: None,
+                    flags: None,
+                    license_family: None,
                 } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
                 NamelessMatchSpec {
                     version,
@@ -358,6 +360,8 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     extras: _,
                     condition: _,
                     track_features: _,
+                    flags: _,
+                    license_family: _,
                 } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
                     version,
                     build,

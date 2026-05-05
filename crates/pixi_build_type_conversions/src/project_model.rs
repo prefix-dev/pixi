@@ -105,6 +105,8 @@ fn to_pixi_spec_v1(
                 extras: _,
                 condition: _,
                 track_features: _,
+                flags: _,
+                license_family: _,
             } = binary.try_into_nameless_match_spec(channel_config)?;
             pbt::PackageSpec::Binary(pbt::BinaryPackageSpec {
                 version,

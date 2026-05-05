@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
 use futures::Stream;
+use pixi_build_discovery::JsonRpcBackendSpec;
 use pixi_git::resolver::RepositoryReference;
+use pixi_spec::PixiSpec;
 use rattler_repodata_gateway::RunExportsReporter;
 use serde::Serialize;
 use url::Url;
 
 use crate::{
-    BackendSourceBuildSpec, BuildBackendMetadataSpec, PixiEnvironmentSpec,
-    SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
-    install_pixi::InstallPixiEnvironmentSpec, instantiate_tool_env::InstantiateToolEnvironmentSpec,
+    BackendSourceBuildSpec, BuildBackendMetadataInner, SolveCondaEnvironmentSpec,
+    SourceMetadataSpec, SourceRecordSpec, install_pixi::InstallPixiEnvironmentSpec,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -24,23 +25,39 @@ pub trait PixiInstallReporter {
     /// particular installation. Other functions in this trait will use this
     /// identifier to link the events to the particular solve.
     fn on_queued(
-        &mut self,
+        &self,
         reason: Option<ReporterContext>,
         env: &InstallPixiEnvironmentSpec,
     ) -> PixiInstallId;
 
-    /// Called when solving of the specified environment has started.
-    fn on_start(&mut self, solve_id: PixiInstallId);
+    /// Called when installation of the specified environment has started.
+    fn on_started(&self, solve_id: PixiInstallId);
 
     /// Called when solving of the specified environment has finished.
-    fn on_finished(&mut self, solve_id: PixiInstallId);
+    fn on_finished(&self, solve_id: PixiInstallId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
 pub struct PixiSolveId(pub usize);
 
-pub trait PixiSolveReporter {
+/// Lightweight reporter-facing view of a pixi environment solve.
+///
+/// This intentionally carries only the fields used by solve reporters,
+/// so compute-engine call sites don't need to clone full solve specs
+/// just to emit lifecycle events.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub struct PixiSolveEnvironmentSpec {
+    pub name: String,
+    pub platform: rattler_conda_types::Platform,
+    /// Direct binary URL/path dependencies trigger package-cache
+    /// validation in the solve flow; that validation uses rayon, so
+    /// reporters use this bit to eagerly initialize rayon through uv's
+    /// initialization path before the validation work starts.
+    pub has_direct_conda_dependency: bool,
+}
+
+pub trait PixiSolveReporter: Send + Sync {
     /// Called when the [`crate::CommandDispatcher`] learns of a new pixi
     /// environment to solve.
     ///
@@ -52,23 +69,23 @@ pub trait PixiSolveReporter {
     /// particular solve. Other functions in this trait will use this identifier
     /// to link the events to the particular solve.
     fn on_queued(
-        &mut self,
+        &self,
         reason: Option<ReporterContext>,
-        env: &PixiEnvironmentSpec,
+        env: &PixiSolveEnvironmentSpec,
     ) -> PixiSolveId;
 
     /// Called when solving of the specified environment has started.
-    fn on_start(&mut self, solve_id: PixiSolveId);
+    fn on_started(&self, solve_id: PixiSolveId);
 
     /// Called when solving of the specified environment has finished.
-    fn on_finished(&mut self, solve_id: PixiSolveId);
+    fn on_finished(&self, solve_id: PixiSolveId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
 pub struct CondaSolveId(pub usize);
 
-pub trait CondaSolveReporter {
+pub trait CondaSolveReporter: Send + Sync {
     /// Called when the [`crate::CommandDispatcher`] learns of a new conda
     /// environment to solve.
     ///
@@ -80,71 +97,80 @@ pub trait CondaSolveReporter {
     /// particular solve. Other functions in this trait will use this identifier
     /// to link the events to the particular solve.
     fn on_queued(
-        &mut self,
+        &self,
         reason: Option<ReporterContext>,
         env: &SolveCondaEnvironmentSpec,
     ) -> CondaSolveId;
 
     /// Called when solving of the specified environment has started.
-    fn on_start(&mut self, solve_id: CondaSolveId);
+    fn on_started(&self, solve_id: CondaSolveId);
 
     /// Called when solving of the specified environment has finished.
-    fn on_finished(&mut self, solve_id: CondaSolveId);
+    fn on_finished(&self, solve_id: CondaSolveId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
 pub struct GitCheckoutId(pub usize);
 
-pub trait GitCheckoutReporter {
+pub trait GitCheckoutReporter: Send + Sync {
     /// Called when a git checkout was queued on the
     /// [`crate::CommandDispatcher`].
     fn on_queued(
-        &mut self,
+        &self,
         reason: Option<ReporterContext>,
         env: &RepositoryReference,
     ) -> GitCheckoutId;
 
     /// Called when the git checkout has started.
-    fn on_start(&mut self, checkout_id: GitCheckoutId);
+    fn on_started(&self, checkout_id: GitCheckoutId);
 
     /// Called when the git checkout has finished.
-    fn on_finished(&mut self, checkout_id: GitCheckoutId);
+    fn on_finished(&self, checkout_id: GitCheckoutId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
 pub struct UrlCheckoutId(pub usize);
 
-pub trait UrlCheckoutReporter {
+pub trait UrlCheckoutReporter: Send + Sync {
     /// Called when a url checkout was queued on the
     /// [`crate::CommandDispatcher`].
-    fn on_queued(&mut self, reason: Option<ReporterContext>, env: &Url) -> UrlCheckoutId;
+    fn on_queued(&self, reason: Option<ReporterContext>, env: &Url) -> UrlCheckoutId;
 
     /// Called when the url checkout has started.
-    fn on_start(&mut self, checkout_id: UrlCheckoutId);
+    fn on_started(&self, checkout_id: UrlCheckoutId);
 
     /// Called when the url checkout has finished.
-    fn on_finished(&mut self, checkout_id: UrlCheckoutId);
+    fn on_finished(&self, checkout_id: UrlCheckoutId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
-pub struct InstantiateToolEnvId(pub usize);
+pub struct InstantiateBackendId(pub usize);
 
-pub trait InstantiateToolEnvironmentReporter {
+/// Reporter for the compute-engine [`InstantiateBackendKey`](crate::InstantiateBackendKey).
+///
+/// Fires once per backend instantiation request, after the backend has
+/// been discovered and its spec resolved against any active
+/// [`BackendOverride`](pixi_build_frontend::BackendOverride). Child
+/// operations performed by the instantiation (conda solves, the binary
+/// install into the ephemeral prefix, etc.) attribute up to the
+/// returned [`InstantiateBackendId`] via the task-local reporter
+/// context.
+pub trait InstantiateBackendReporter: Send + Sync {
     /// Called when an operation was queued on the [`crate::CommandDispatcher`].
     fn on_queued(
-        &mut self,
+        &self,
         reason: Option<ReporterContext>,
-        env: &InstantiateToolEnvironmentSpec,
-    ) -> InstantiateToolEnvId;
+        spec: &JsonRpcBackendSpec,
+    ) -> InstantiateBackendId;
 
     /// Called when the operation has started.
-    fn on_started(&mut self, id: InstantiateToolEnvId);
+    fn on_started(&self, id: InstantiateBackendId);
 
     /// Called when the operation has finished.
-    fn on_finished(&mut self, id: InstantiateToolEnvId);
+    fn on_finished(&self, id: InstantiateBackendId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -154,64 +180,55 @@ pub struct BuildBackendMetadataId(pub usize);
 pub trait BuildBackendMetadataReporter {
     /// Called when an operation was queued on the [`crate::CommandDispatcher`].
     fn on_queued(
-        &mut self,
+        &self,
         reason: Option<ReporterContext>,
-        env: &BuildBackendMetadataSpec,
+        env: &BuildBackendMetadataInner,
     ) -> BuildBackendMetadataId;
 
     /// Called when the operation has started.
     fn on_started(
-        &mut self,
+        &self,
         id: BuildBackendMetadataId,
         backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     );
 
     /// Called when the operation has finished.
-    fn on_finished(&mut self, id: BuildBackendMetadataId, failed: bool);
+    fn on_finished(&self, id: BuildBackendMetadataId, failed: bool);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct SourceRecordId(pub usize);
+
+pub trait SourceRecordReporter: Send + Sync {
+    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
+    fn on_queued(&self, reason: Option<ReporterContext>, spec: &SourceRecordSpec)
+    -> SourceRecordId;
+
+    /// Called when the operation has started.
+    fn on_started(&self, id: SourceRecordId);
+
+    /// Called when the operation has finished.
+    fn on_finished(&self, id: SourceRecordId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
 pub struct SourceMetadataId(pub usize);
 
-pub trait SourceMetadataReporter {
+pub trait SourceMetadataReporter: Send + Sync {
     /// Called when an operation was queued on the [`crate::CommandDispatcher`].
     fn on_queued(
-        &mut self,
+        &self,
         reason: Option<ReporterContext>,
-        env: &SourceMetadataSpec,
+        spec: &SourceMetadataSpec,
     ) -> SourceMetadataId;
 
     /// Called when the operation has started.
-    fn on_started(&mut self, id: SourceMetadataId);
+    fn on_started(&self, id: SourceMetadataId);
 
     /// Called when the operation has finished.
-    fn on_finished(&mut self, id: SourceMetadataId);
-}
-
-/// A trait that is used to report the progress of a source build performed by
-/// the [`crate::CommandDispatcher`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
-#[serde(transparent)]
-pub struct SourceBuildId(pub usize);
-
-pub trait SourceBuildReporter {
-    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
-    fn on_queued(
-        &mut self,
-        reason: Option<ReporterContext>,
-        env: &SourceBuildSpec,
-    ) -> SourceBuildId;
-
-    /// Called when the operation has started.
-    fn on_started(
-        &mut self,
-        id: SourceBuildId,
-        backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
-    );
-
-    /// Called when the operation has finished.
-    fn on_finished(&mut self, id: SourceBuildId, failed: bool);
+    fn on_finished(&self, id: SourceMetadataId);
 }
 
 /// A trait that is used to report the progress of a source build performed by
@@ -223,7 +240,7 @@ pub struct BackendSourceBuildId(pub usize);
 pub trait BackendSourceBuildReporter {
     /// Called when an operation was queued on the [`crate::CommandDispatcher`].
     fn on_queued(
-        &mut self,
+        &self,
         reason: Option<ReporterContext>,
         env: &BackendSourceBuildSpec,
     ) -> BackendSourceBuildId;
@@ -231,80 +248,83 @@ pub trait BackendSourceBuildReporter {
     /// Called when the operation has started. The `backend_output_stream`
     /// stream can be used to capture the output of the build process.
     fn on_started(
-        &mut self,
+        &self,
         id: BackendSourceBuildId,
         backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     );
 
     /// Called when the operation has finished.
-    fn on_finished(&mut self, id: BackendSourceBuildId, failed: bool);
+    fn on_finished(&self, id: BackendSourceBuildId, failed: bool);
 }
 
 /// A trait that is used to report the progress of the
 /// [`crate::CommandDispatcher`].
 ///
-/// The reporter has to be `Send` but does not require `Sync`.
-pub trait Reporter: Send {
+/// The reporter has to be `Send + Sync`.
+pub trait Reporter: Send + Sync {
     /// Called when the command dispatcher thread starts.
-    fn on_start(&mut self) {}
+    fn on_start(&self) {}
 
     /// Called to clear the current progress.
-    fn on_clear(&mut self) {}
+    fn on_clear(&self) {}
 
     /// Called when the command dispatcher thread is about to close.
-    fn on_finished(&mut self) {}
+    fn on_finished(&self) {}
 
-    /// Returns a mutable reference to a reporter that reports on any git
+    /// Returns a reference to a reporter that reports on any git
     /// progress.
-    fn as_git_reporter(&mut self) -> Option<&mut dyn GitCheckoutReporter> {
+    fn as_git_reporter(&self) -> Option<&dyn GitCheckoutReporter> {
         None
     }
-    /// Returns a mutable reference to a reporter that reports on any git
+    /// Returns a reference to a reporter that reports on any git
     /// progress.
-    fn as_url_reporter(&mut self) -> Option<&mut dyn UrlCheckoutReporter> {
+    fn as_url_reporter(&self) -> Option<&dyn UrlCheckoutReporter> {
         None
     }
-    /// Returns a mutable reference to a reporter that reports on conda solve
+    /// Returns a reference to a reporter that reports on conda solve
     /// progress.
-    fn as_conda_solve_reporter(&mut self) -> Option<&mut dyn CondaSolveReporter> {
+    fn as_conda_solve_reporter(&self) -> Option<&dyn CondaSolveReporter> {
         None
     }
-    /// Returns a mutable reference to a reporter that reports on an entire pixi
+    /// Returns a reference to a reporter that reports on an entire pixi
     /// solve progress. so that can mean solves for multiple ecosystems for
     /// an environment.
-    fn as_pixi_solve_reporter(&mut self) -> Option<&mut dyn PixiSolveReporter> {
+    fn as_pixi_solve_reporter(&self) -> Option<&dyn PixiSolveReporter> {
         None
     }
-    /// Returns a mutable reference to a reporter that reports on the progress
+    /// Returns a reference to a reporter that reports on the progress
     /// of actual package installation.
-    fn as_pixi_install_reporter(&mut self) -> Option<&mut dyn PixiInstallReporter> {
+    fn as_pixi_install_reporter(&self) -> Option<&dyn PixiInstallReporter> {
         None
     }
-    /// Returns a mutable reference to a reporter that reports on the progress
-    /// of instantiating a tool environment.
-    fn as_instantiate_tool_environment_reporter(
-        &mut self,
-    ) -> Option<&mut dyn InstantiateToolEnvironmentReporter> {
+    /// Returns a reference to a reporter that reports on the progress
+    /// of instantiating a build backend (discovery, override resolution,
+    /// ephemeral env, activation, JSON-RPC handshake).
+    fn as_instantiate_backend_reporter(&self) -> Option<&dyn InstantiateBackendReporter> {
         None
     }
 
-    /// Returns a mutable reference to a reporter that reports on the progress
+    /// Returns a reference to a reporter that reports on the progress
     /// of fetching build backend metadata.
-    fn as_build_backend_metadata_reporter(
-        &mut self,
-    ) -> Option<&mut dyn BuildBackendMetadataReporter> {
+    fn as_build_backend_metadata_reporter(&self) -> Option<&dyn BuildBackendMetadataReporter> {
         None
     }
 
-    /// Returns a mutable reference to a reporter that reports on the progress
-    /// of fetching source metadata.
-    fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
+    /// Returns a reference to a reporter that reports on the progress
+    /// of resolving source metadata (all variants for a package).
+    fn as_source_metadata_reporter(&self) -> Option<&dyn SourceMetadataReporter> {
+        None
+    }
+
+    /// Returns a reference to a reporter that reports on the progress
+    /// of resolving source records.
+    fn as_source_record_reporter(&self) -> Option<&dyn SourceRecordReporter> {
         None
     }
 
     /// Returns a reporter that reports gateway progress.
     fn create_gateway_reporter(
-        &mut self,
+        &self,
         _reason: Option<ReporterContext>,
     ) -> Option<Box<dyn rattler_repodata_gateway::Reporter>> {
         None
@@ -312,7 +332,7 @@ pub trait Reporter: Send {
 
     /// Returns a reporter that run exports fetching progress.
     fn create_run_exports_reporter(
-        &mut self,
+        &self,
         _reason: Option<ReporterContext>,
     ) -> Option<Arc<dyn RunExportsReporter>> {
         None
@@ -320,23 +340,32 @@ pub trait Reporter: Send {
 
     /// Returns a reporter that reports installation progress.
     fn create_install_reporter(
-        &mut self,
+        &self,
         _reason: Option<ReporterContext>,
     ) -> Option<Box<dyn rattler::install::Reporter>> {
         None
     }
 
-    /// Returns a mutable reference to a reporter that reports on the progress
-    /// of building source packages.
-    fn as_source_build_reporter(&mut self) -> Option<&mut dyn SourceBuildReporter> {
-        None
-    }
-
-    /// Returns a mutable reference to a reporter that reports on the progress
+    /// Returns a reference to a reporter that reports on the progress
     /// of a backend that is building source packages.
-    fn as_backend_source_build_reporter(&mut self) -> Option<&mut dyn BackendSourceBuildReporter> {
+    fn as_backend_source_build_reporter(&self) -> Option<&dyn BackendSourceBuildReporter> {
         None
     }
+}
+
+/// Returns whether the environment has direct binary URL/path dependencies.
+///
+/// The top-level progress reporter uses this to initialize rayon through uv's
+/// initialization path before the solve later validates those direct binary
+/// package-cache entries in parallel.
+pub(crate) fn has_direct_conda_dependency(
+    dependencies: &pixi_spec_containers::DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
+) -> bool {
+    dependencies.iter_specs().any(|(_, spec)| match spec {
+        PixiSpec::Url(url) => url.is_binary(),
+        PixiSpec::Path(path) => path.is_binary(),
+        _ => false,
+    })
 }
 
 #[derive(Debug, Clone, Copy, Serialize, derive_more::From)]
@@ -346,8 +375,8 @@ pub enum ReporterContext {
     SolveConda(CondaSolveId),
     InstallPixi(PixiInstallId),
     SourceMetadata(SourceMetadataId),
+    SourceRecord(SourceRecordId),
     BuildBackendMetadata(BuildBackendMetadataId),
-    InstantiateToolEnv(InstantiateToolEnvId),
-    SourceBuild(SourceBuildId),
+    InstantiateBackend(InstantiateBackendId),
     BackendSourceBuild(BackendSourceBuildId),
 }

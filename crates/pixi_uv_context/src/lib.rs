@@ -3,8 +3,7 @@ use std::time::Duration;
 
 use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};
-use pixi_config::{self, Config, get_cache_dir};
-use pixi_consts::consts;
+use pixi_config::{self, CacheKind, Config};
 use pixi_utils::reqwest::{
     LazyReqwestClient, should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares,
 };
@@ -154,7 +153,7 @@ fn build_concurrency(config: &Config) -> Concurrency {
 
 impl UvResolutionContext {
     pub fn from_config(config: &Config, client: LazyReqwestClient) -> miette::Result<Self> {
-        let uv_cache = get_cache_dir()?.join(consts::PYPI_CACHE_DIR);
+        let uv_cache = config.cache_dir_for(CacheKind::PypiWheels)?;
         if !uv_cache.exists() {
             create_dir_all(&uv_cache)
                 .into_diagnostic()
@@ -236,17 +235,19 @@ impl UvResolutionContext {
     /// - `index_locations`: The index locations to use
     /// - `index_strategy`: The index strategy to use
     /// - `markers`: Optional marker environment for platform-specific resolution
+    /// - `connectivity`: Whether to allow network access
     pub fn build_registry_client(
         &self,
         allow_insecure_hosts: Vec<TrustedHost>,
         index_locations: &IndexLocations,
         index_strategy: IndexStrategy,
         markers: Option<&MarkerEnvironment>,
+        connectivity: Connectivity,
     ) -> Arc<RegistryClient> {
         let mut base_client_builder = BaseClientBuilder::default()
             .allow_insecure_host(allow_insecure_hosts)
             .keyring(self.keyring_provider)
-            .connectivity(Connectivity::Online)
+            .connectivity(connectivity)
             .native_tls(self.use_native_tls)
             .built_in_root_certs(self.use_builtin_certs)
             .extra_middleware(self.extra_middleware.clone());

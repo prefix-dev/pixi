@@ -1,8 +1,10 @@
 use pixi_command_dispatcher::CacheDirs;
 use pixi_consts::consts;
+use pixi_core::Workspace;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceRegistry;
 use pixi_manifest::EnvironmentName;
+use pixi_path::AbsPathBuf;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -147,15 +149,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
         remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
         remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
-        remove_folder_with_progress(workspace.default_build_dir(), false).await?;
-        remove_folder_with_progress(workspace.build_dir(), false).await?;
+        for dir in workspace_build_cache_dirs(&workspace) {
+            remove_folder_with_progress(dir, false).await?;
+        }
         prune_workspace_registry().await?;
     } else {
         if args.activation_cache {
             remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
         }
         if args.build {
-            remove_folder_with_progress(workspace.build_dir(), true).await?;
+            for dir in workspace_build_cache_dirs(&workspace) {
+                remove_folder_with_progress(dir, false).await?;
+            }
             eprintln!(
                 "{}When issues persist, you can remove all build related global cache with: {}",
                 console::style("Hint: ").blue(),
@@ -175,19 +180,29 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     let mut dirs = vec![];
 
     if args.pypi {
-        dirs.push(cache_dir.join(consts::PYPI_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::PypiWheels,
+        )?);
     }
     if args.conda {
-        dirs.push(cache_dir.join(consts::CONDA_PACKAGE_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::CondaPackages,
+        )?);
     }
     if args.repodata {
-        dirs.push(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::Repodata,
+        )?);
     }
     if args.mapping {
-        dirs.push(cache_dir.join(consts::CONDA_PYPI_MAPPING_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::PypiMapping,
+        )?);
     }
     if args.exec {
-        dirs.push(cache_dir.join(consts::CACHED_ENVS_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::ExecEnvironments,
+        )?);
     }
     if args.build_backends {
         let cache_dirs = CacheDirs::new(
@@ -196,7 +211,9 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
                 .into_assume_dir(),
         );
         dirs.push(cache_dirs.build_backends().into());
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_TOOL_ENVS_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::BuildToolEnvironments,
+        )?);
         // TODO: Let's clean deprecated cache directory.
         // This will be removed in a future release.
         dirs.push(cache_dir.join(consts::_CACHED_BUILD_ENVS_DIR));
@@ -208,12 +225,11 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
                 .into_assume_dir(),
         );
         dirs.push(cache_dirs.git().into());
-        dirs.push(cache_dirs.working_dirs().into());
         dirs.push(cache_dirs.build_backends().into());
         dirs.push(cache_dirs.url().into());
-        dirs.push(cache_dirs.source_builds().into());
-        dirs.push(cache_dirs.build_backend_metadata().into());
-        dirs.push(cache_dirs.source_metadata().into());
+        dirs.push(cache_dirs.source_build_artifacts().into());
+        dirs.push(cache_dirs.source_build_workspaces().into());
+        dirs.push(cache_dirs.backend_metadata().into());
     }
     if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
@@ -291,6 +307,35 @@ async fn remove_folder_with_progress(
         }
     }
     Ok(())
+}
+
+/// Build-related per-workspace cache directories. Aggregated here so
+/// `pixi clean` (workspace-level) and `pixi clean --build` wipe every
+/// location the command dispatcher writes to. Includes the legacy
+/// `.pixi/build/` path for migration from the pre-hoist layout.
+fn workspace_build_cache_dirs(workspace: &Workspace) -> Vec<PathBuf> {
+    let cache_dir = match pixi_config::get_cache_dir() {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let Ok(cache_abs) = AbsPathBuf::new(cache_dir) else {
+        return Vec::new();
+    };
+    let Ok(workspace_abs) = AbsPathBuf::new(workspace.pixi_dir()) else {
+        return Vec::new();
+    };
+    let cache_dirs =
+        CacheDirs::new(cache_abs.into_assume_dir()).with_workspace(workspace_abs.into_assume_dir());
+    vec![
+        cache_dirs.source_build_artifacts().into(),
+        cache_dirs.source_build_workspaces().into(),
+        cache_dirs.backend_metadata().into(),
+        // Legacy pre-hoist location. Empty on fresh installs; still
+        // wiped so users migrating from the old layout see a clean
+        // `.pixi/`.
+        workspace.default_build_dir(),
+        workspace.build_dir(),
+    ]
 }
 
 async fn remove_file(file: PathBuf, warning_non_existent: bool) -> miette::Result<()> {

@@ -121,7 +121,18 @@ impl<'p> Environment<'p> {
         self.best_platform_with_current(Platform::current())
     }
 
+    /// If the PIXI_OVERRIDE_PLATFORM environment variable is set to a valid
+    /// platform string, that platform is used instead.
     fn best_platform_with_current(&self, current: Platform) -> Platform {
+        let current = std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
+            .map(|val| {
+                val.parse::<Platform>().unwrap_or_else(|_| {
+                    tracing::warn!("Invalid value for PIXI_OVERRIDE_PLATFORM='{val}', ignoring.");
+                    current
+                })
+            })
+            .unwrap_or(current);
+
         // If the current platform is supported, return it.
         if self.platforms().contains(&current) {
             return current;
@@ -164,6 +175,10 @@ impl<'p> Environment<'p> {
     /// installed or activated — not during lock file solving, which is
     /// cross-platform and does not use emulation.
     pub fn emit_emulation_warning(&self) {
+        if std::env::var(consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+            return;
+        }
+
         let current = Platform::current();
         let best = self.best_platform();
         if current == best {
@@ -412,7 +427,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
-    use rattler_conda_types::PackageName;
+    use rattler_conda_types::{NamedChannelOrUrl, PackageName};
 
     use super::*;
 
@@ -874,36 +889,59 @@ mod tests {
         )
         .unwrap();
 
+        let channel_config = rattler_conda_types::ChannelConfig::default_with_root_dir(
+            std::env::current_dir().unwrap(),
+        );
         let env = workspace.environment("combined").unwrap();
-        let config = env.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
         let package = PackageName::new_unchecked("polars");
 
+        let bioconda = NamedChannelOrUrl::Name("bioconda".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let pytorch = NamedChannelOrUrl::Name("pytorch".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let nvidia = NamedChannelOrUrl::Name("nvidia".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let dglteam = NamedChannelOrUrl::Name("dglteam".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let conda_forge = NamedChannelOrUrl::Name("conda-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+
         assert_eq!(
-            config.cutoff_for_package(&package, Some("bioconda")),
+            config.cutoff_for_package(&package, Some(bioconda.as_str())),
             chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("pytorch")),
+            config.cutoff_for_package(&package, Some(pytorch.as_str())),
             chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("nvidia")),
+            config.cutoff_for_package(&package, Some(nvidia.as_str())),
             chrono::DateTime::parse_from_rfc3339("2018-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("dglteam")),
+            config.cutoff_for_package(&package, Some(dglteam.as_str())),
             chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("conda-forge")),
+            config.cutoff_for_package(&package, Some(conda_forge.as_str())),
             chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
@@ -939,9 +977,26 @@ mod tests {
         )
         .unwrap();
 
+        let channel_config = rattler_conda_types::ChannelConfig::default_with_root_dir(
+            std::env::current_dir().unwrap(),
+        );
         let env = workspace.environment("combined").unwrap();
-        let config = env.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
         let package = PackageName::new_unchecked("polars");
+
+        let shared = NamedChannelOrUrl::Name("shared".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let bioconda = NamedChannelOrUrl::Name("bioconda".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let nvidia = NamedChannelOrUrl::Name("nvidia".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
 
         assert_eq!(
             env.channels()
@@ -951,19 +1006,19 @@ mod tests {
             vec!["shared", "bioconda", "nvidia", "conda-forge"]
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("shared")),
+            config.cutoff_for_package(&package, Some(shared.as_str())),
             chrono::DateTime::parse_from_rfc3339("2016-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("bioconda")),
+            config.cutoff_for_package(&package, Some(bioconda.as_str())),
             chrono::DateTime::parse_from_rfc3339("2017-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         );
         assert_eq!(
-            config.cutoff_for_package(&package, Some("nvidia")),
+            config.cutoff_for_package(&package, Some(nvidia.as_str())),
             chrono::DateTime::parse_from_rfc3339("2019-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
@@ -992,8 +1047,13 @@ mod tests {
         )
         .unwrap();
 
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let env = workspace.environment("default").unwrap();
-        let config = env.exclude_newer_config().unwrap().unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
         let polars = PackageName::new_unchecked("polars");
         let numpy = PackageName::new_unchecked("numpy");
         let openssl = PackageName::new_unchecked("openssl");
@@ -1010,16 +1070,24 @@ mod tests {
             .unwrap()
             .with_timezone(&chrono::Utc);
 
-        let polars_cutoff = config.cutoff_for_package(&polars, Some("my-private-forge"));
+        let my_private_forge = NamedChannelOrUrl::Name("my-private-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let conda_forge = NamedChannelOrUrl::Name("conda-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+
+        let polars_cutoff = config.cutoff_for_package(&polars, Some(my_private_forge.as_str()));
         assert_eq!(polars_cutoff, dependency_cutoff);
 
-        let openssl_cutoff = config.cutoff_for_package(&openssl, Some("my-private-forge"));
+        let openssl_cutoff = config.cutoff_for_package(&openssl, Some(my_private_forge.as_str()));
         assert_eq!(openssl_cutoff, constraint_cutoff);
 
-        let private_numpy_cutoff = config.cutoff_for_package(&numpy, Some("my-private-forge"));
+        let private_numpy_cutoff =
+            config.cutoff_for_package(&numpy, Some(my_private_forge.as_str()));
         assert_eq!(private_numpy_cutoff, channel_cutoff);
 
-        let forge_numpy_cutoff = config.cutoff_for_package(&numpy, Some("conda-forge"));
+        let forge_numpy_cutoff = config.cutoff_for_package(&numpy, Some(conda_forge.as_str()));
         assert_eq!(forge_numpy_cutoff, workspace_cutoff);
     }
 
@@ -1357,5 +1425,62 @@ mod tests {
                 "Channel priorities were expected to be compatible"
             );
         }
+    }
+
+    struct EnvVarGuard;
+
+    // prevents race conditions on the env variable PIXI_OVERRIDE_PLATFORM
+    static ENV_VAR_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            unsafe {
+                std::env::remove_var(consts::PIXI_OVERRIDE_PLATFORM);
+            }
+        }
+    }
+
+    #[test]
+    fn test_best_platform_override_env_var() {
+        let _lock = ENV_VAR_MUTEX.lock().unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let contents = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#;
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+        unsafe {
+            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "linux-aarch64");
+        }
+        let _guard = EnvVarGuard;
+
+        let env = workspace.default_environment();
+        let result = env.best_platform();
+        assert_eq!(result, Platform::LinuxAarch64);
+    }
+
+    #[test]
+    fn test_best_platform_override_invalid_value() {
+        let _lock = ENV_VAR_MUTEX.lock().unwrap();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let contents = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#;
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+        unsafe {
+            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "not-a-platform");
+        }
+        let _guard = EnvVarGuard;
+
+        let env = workspace.default_environment();
+        let result = env.best_platform();
+        assert_eq!(result, Platform::current());
     }
 }

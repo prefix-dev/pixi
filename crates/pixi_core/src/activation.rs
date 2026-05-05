@@ -34,7 +34,13 @@ pub enum CurrentEnvVarBehavior {
 
 #[derive(Serialize, Deserialize)]
 struct ActivationCache {
-    /// The hash of the environment which produced the activation's environment variables.
+    /// Hash of the environment that produced these activation results.
+    /// Captures input env vars, activation scripts, project activation
+    /// env vars, and either:
+    /// - the prefix's install fingerprint (preferred — see
+    ///   `InstallPixiEnvironmentResult::installed_fingerprint`), or
+    /// - locked package URLs (legacy fallback when no fingerprint is
+    ///   stored next to the prefix).
     hash: EnvironmentHash,
     /// The environment variables set by the activation.
     environment_variables: HashMap<String, String>,
@@ -191,12 +197,19 @@ fn get_environment_variable_from_shell_environment(
 }
 
 /// Try to get the activation cache from the cache file.
-/// If it can get the cache, it will validate it with the lock file and the current environment.
-/// If the cache is valid, it will return the environment variables from the cache.
+/// Try to load a still-valid activation cache for `environment`.
 ///
-/// Without a lock file it will not use the cache, as it indicates the cache is not interesting
+/// Cache hits require:
+/// 1. The cache file exists and parses.
+/// 2. An install fingerprint marker exists for the environment (set
+///    by `LockFileDerivedData::prefix` after a successful install).
+/// 3. The cache's recorded hash matches a freshly-computed
+///    [`EnvironmentHash::for_activation`] using that fingerprint.
+///
+/// Returns `None` on any other outcome — including a missing
+/// fingerprint marker — so the caller falls through to running
+/// activation fresh.
 async fn try_get_valid_activation_cache(
-    lock_file: &LockFile,
     environment: &Environment<'_>,
     cache_file: PathBuf,
 ) -> Option<HashMap<String, String>> {
@@ -230,8 +243,19 @@ async fn try_get_valid_activation_cache(
             .collect(),
     );
 
-    // Hash the current state
-    let hash = EnvironmentHash::from_environment(environment, &current_input_env_vars, lock_file);
+    // The activation cache is keyed on the prefix's install
+    // fingerprint (see `EnvironmentHash::for_activation`). Without one
+    // we have no authoritative summary of what's in the prefix and
+    // can't reuse a cached activation safely, so treat the cache as
+    // missing. The fingerprint is written by
+    // `LockFileDerivedData::prefix` after a successful install.
+    let installed_fingerprint =
+        pixi_command_dispatcher::EnvironmentFingerprint::read(&environment.dir())?;
+    let hash = EnvironmentHash::for_activation(
+        environment,
+        &current_input_env_vars,
+        &installed_fingerprint,
+    );
 
     // Check if the hash matches
     if cache.hash == hash {
@@ -242,31 +266,36 @@ async fn try_get_valid_activation_cache(
 }
 
 /// Runs and caches the activation script.
+///
+/// The `_lock_file` parameter is retained for API stability (several
+/// callers still pass one) but is no longer consulted: the activation
+/// cache is now keyed on the prefix's install fingerprint instead of
+/// locked package URLs (see [`EnvironmentHash::for_activation`]).
+#[allow(clippy::needless_pass_by_value)]
 pub async fn run_activation(
     environment: &Environment<'_>,
     env_var_behavior: &CurrentEnvVarBehavior,
-    lock_file: Option<&LockFile>,
+    _lock_file: Option<&LockFile>,
     force_activate: bool,
     experimental: bool,
 ) -> miette::Result<HashMap<String, String>> {
-    // If the user requested to use the cache and the lockfile is provided, we can try to use the cache.
+    // Try the activation cache first. The cache is keyed on the
+    // prefix's install fingerprint
+    // (`InstallPixiEnvironmentResult::installed_fingerprint`), which
+    // changes whenever any package's content changes — so a cache
+    // hit means the activation env-var map is still authoritative.
+    // The inner lookup short-circuits to `None` when no fingerprint
+    // marker exists yet (e.g. before the first install), so this
+    // path is always safe to attempt.
+    //
     if !force_activate && experimental {
         let cache_file = environment
             .workspace()
             .activation_env_cache_folder()
             .join(environment.activation_cache_name());
-        if let Some(lock_file) = lock_file {
-            if let Some(env_vars) =
-                try_get_valid_activation_cache(lock_file, environment, cache_file).await
-            {
-                tracing::debug!("Using activation cache for {:?}", environment.name());
-                return Ok(env_vars);
-            }
-        } else {
-            tracing::debug!(
-                "No lock file provided for activation, not using activation cache for {:?}",
-                environment.name()
-            );
+        if let Some(env_vars) = try_get_valid_activation_cache(environment, cache_file).await {
+            tracing::debug!("Using activation cache for {:?}", environment.name());
+            return Ok(env_vars);
         }
     }
     tracing::debug!("Running activation script for {:?}", environment.name());
@@ -340,19 +369,32 @@ pub async fn run_activation(
         }
     };
 
-    // If the lock file is provided, and we can compute the environment hash, let's rewrite the
-    // cache file.
-    if experimental && let Some(lock_file) = lock_file {
+    // Persist the cache so future calls can short-circuit. Same
+    // gate as the read side — when caching is disabled or no
+    // install fingerprint is available we just return the
+    // freshly-computed activation result.
+    if experimental {
         // Get the current environment variables from the shell to be part of the hash
         let current_input_env_vars = get_environment_variable_from_shell_environment(
             activator_result.keys().map(String::as_str).collect(),
         );
         let cache_file = environment.activation_cache_file_path();
+        // Skip the write side too when no install fingerprint is
+        // available — the read side won't be able to produce a
+        // matching key, so any cache file we wrote would never be
+        // reused. Falling through here just means the next
+        // activation will re-run; correctness over a tempting but
+        // dead cache.
+        let Some(installed_fingerprint) =
+            pixi_command_dispatcher::EnvironmentFingerprint::read(&environment.dir())
+        else {
+            return Ok(activator_result);
+        };
         let cache = ActivationCache {
-            hash: EnvironmentHash::from_environment(
+            hash: EnvironmentHash::for_activation(
                 environment,
                 &current_input_env_vars,
-                lock_file,
+                &installed_fingerprint,
             ),
             environment_variables: activator_result.clone(),
         };
@@ -491,7 +533,6 @@ pub(crate) async fn initialize_env_variables(
 mod tests {
     use super::*;
     use std::path::Path;
-    use std::str::FromStr;
 
     #[test]
     fn test_metadata_env() {
@@ -612,12 +653,13 @@ mod tests {
 
     /// Test that the activation cache is created and used correctly based on the lockfile.
     ///
-    /// This test will validate the cache usages by running the activation script and checking if the cache is created.
-    /// - It will then modify the cache and check if the cache is used.
-    /// - It will then modify the lock file and check if the cache is not used and recreated.
-    /// - It will then modify the cache again and check if the cache is used again.
+    /// Validates that the activation cache:
+    /// - is not written without an install fingerprint marker;
+    /// - is written and reused once a marker exists;
+    /// - re-runs activation when the fingerprint changes (mimicking
+    ///   a re-install with different content).
     #[tokio::test]
-    async fn test_run_activation_cache_based_on_lockfile() {
+    async fn test_run_activation_cache_based_on_install_fingerprint() {
         let temp_dir = tempfile::tempdir().unwrap();
         let workspace = r#"
         [workspace]
@@ -632,48 +674,47 @@ mod tests {
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
 
-        // Don't create cache, by not giving it a lockfile
+        // Without an install fingerprint, the cache is never written
+        // even with experimental=true and a lock file present.
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,
-            None,
+            Some(&LockFile::default()),
             false,
             true,
         )
         .await
         .unwrap();
-        assert!(!project.activation_env_cache_folder().exists());
         assert!(env.contains_key("CONDA_PREFIX"));
+        assert!(!project.activation_env_cache_folder().exists());
 
-        // Create cache
-        let lock_file = LockFile::default();
+        // Write a fingerprint marker so the cache becomes operative.
+        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-1".to_string())
+            .write(&default_env.dir())
+            .unwrap();
+
         let _env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,
-            Some(&lock_file),
+            Some(&LockFile::default()),
             false,
             true,
         )
         .await
         .unwrap();
         assert!(project.activation_env_cache_folder().exists());
-        assert!(
-            project
-                .activation_env_cache_folder()
-                .join(project.default_environment().activation_cache_name())
-                .exists()
-        );
-
-        // Verify that the cache is used, by overwriting the cache and checking if that persisted
         let cache_file = project.default_environment().activation_cache_file_path();
+        assert!(cache_file.exists());
+
+        // Hand-edit the cache to confirm the next call returns
+        // the stored value rather than re-running activation.
         let contents = tokio_fs::read_to_string(&cache_file).await.unwrap();
         let modified = contents.replace("ACTIVATION123", "ACTIVATION456");
         tokio_fs::write(&cache_file, modified).await.unwrap();
-
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,
-            Some(&lock_file),
+            Some(&LockFile::default()),
             false,
             true,
         )
@@ -681,57 +722,28 @@ mod tests {
         .unwrap();
         assert_eq!(env.get("TEST").unwrap(), "ACTIVATION456");
 
-        // Verify that the cache is not used when the hash is different.
-        //
-        // We change the hash by modifying the lock-file. This should invalidate the cache and thus
-        // result in the activation script being run again.
-        let mock_lock = &format!(
-            r#"
-version: 6
-environments:
-  default:
-    channels:
-    - url: https://prefix.dev/conda-forge/
-    packages:
-      {platform}:
-      - conda: https://prefix.dev/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2
-packages:
-- conda: https://prefix.dev/conda-forge/noarch/_r-mutex-1.0.1-anacondar_1.tar.bz2
-  sha256: e58f9eeb416b92b550e824bcb1b9fb1958dee69abfe3089dfd1a9173e3a0528a
-  md5: 19f9db5f4f1b7f5ef5f6d67207f25f38
-  license: BSD
-  size: 3566
-  timestamp: 1562343890778
-"#,
-            platform = Platform::current()
-        );
-        let lock_file = LockFile::from_str(mock_lock).unwrap();
+        // Bumping the fingerprint mimics a fresh install with
+        // different content — the cache key changes, so activation
+        // runs again and overwrites the cache file.
+        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-2".to_string())
+            .write(&default_env.dir())
+            .unwrap();
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,
-            Some(&lock_file),
+            Some(&LockFile::default()),
             false,
             true,
         )
         .await
         .unwrap();
         assert_eq!(env.get("TEST").unwrap(), "ACTIVATION123");
-
-        // Verify that the cache is used again after the hash is the same
-        let contents = tokio_fs::read_to_string(&cache_file).await.unwrap();
-        let modified = contents.replace("ACTIVATION123", "ACTIVATION456");
-        tokio_fs::write(&cache_file, modified).await.unwrap();
-
-        let env = run_activation(
-            &default_env,
-            &CurrentEnvVarBehavior::Include,
-            Some(&lock_file),
-            false,
-            true,
-        );
-        assert_eq!(env.await.unwrap().get("TEST").unwrap(), "ACTIVATION456");
     }
 
+    /// Activation env vars are part of [`EnvironmentHash::for_activation`]'s
+    /// hashed inputs (via `hash_common_inputs`), so adding or
+    /// changing one in the manifest invalidates the cache even when
+    /// the install fingerprint is unchanged.
     #[tokio::test]
     async fn test_run_activation_cache_based_on_activation_env() {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -747,6 +759,10 @@ packages:
         let project =
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
+        // A fingerprint marker is required for the cache to engage at all.
+        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-stable".to_string())
+            .write(&default_env.dir())
+            .unwrap();
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,
@@ -778,6 +794,10 @@ packages:
         let project =
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
+        // Marker survives the manifest edit (same prefix dir).
+        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-stable".to_string())
+            .write(&default_env.dir())
+            .unwrap();
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,

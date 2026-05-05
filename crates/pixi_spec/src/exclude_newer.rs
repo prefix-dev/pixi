@@ -1,5 +1,5 @@
 use chrono::{DateTime, Days, NaiveDate, NaiveTime, Utc};
-use rattler_conda_types::PackageName;
+use rattler_conda_types::{ChannelUrl, PackageName};
 use std::{collections::BTreeMap, str::FromStr};
 
 /// Specifies how to exclude newer packages from the solve.
@@ -26,7 +26,7 @@ pub struct ResolvedExcludeNewer {
     /// Channel-specific cutoff dates that override [`Self::cutoff`] for
     /// records from matching channels.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub channel_cutoffs: BTreeMap<String, DateTime<Utc>>,
+    pub channel_cutoffs: BTreeMap<ChannelUrl, DateTime<Utc>>,
 
     /// Package-specific cutoff dates that override both [`Self::cutoff`] and
     /// [`Self::channel_cutoffs`] for matching package names.
@@ -65,12 +65,8 @@ impl ResolvedExcludeNewer {
     }
 
     /// Adds a channel-specific cutoff override.
-    pub fn with_channel_cutoff(
-        mut self,
-        channel: impl Into<String>,
-        cutoff: DateTime<Utc>,
-    ) -> Self {
-        self.channel_cutoffs.insert(channel.into(), cutoff);
+    pub fn with_channel_cutoff(mut self, channel: ChannelUrl, cutoff: DateTime<Utc>) -> Self {
+        self.channel_cutoffs.insert(channel, cutoff);
         self
     }
 
@@ -87,7 +83,7 @@ impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
             .with_include_unknown_timestamp(value.include_unknown_timestamp);
 
         for (channel, cutoff) in value.channel_cutoffs {
-            config = config.with_channel_cutoff(channel, cutoff);
+            config = config.with_channel_cutoff(channel.to_string(), cutoff);
         }
 
         for (package, cutoff) in value.package_cutoffs {
@@ -303,7 +299,10 @@ mod test {
 
         let config: rattler_solve::ExcludeNewer =
             ResolvedExcludeNewer::from_datetime(default_cutoff)
-                .with_channel_cutoff("https://prefix.dev/conda-forge", channel_cutoff)
+                .with_channel_cutoff(
+                    ChannelUrl::from(url::Url::parse("https://prefix.dev/conda-forge").unwrap()),
+                    channel_cutoff,
+                )
                 .with_package_cutoff(PackageName::new_unchecked("foo"), package_cutoff)
                 .into();
 
@@ -314,14 +313,14 @@ mod test {
         assert_eq!(
             config.cutoff_for_package(
                 &PackageName::new_unchecked("bar"),
-                Some("https://prefix.dev/conda-forge"),
+                Some("https://prefix.dev/conda-forge/"),
             ),
             channel_cutoff
         );
         assert_eq!(
             config.cutoff_for_package(
                 &PackageName::new_unchecked("foo"),
-                Some("https://prefix.dev/conda-forge"),
+                Some("https://prefix.dev/conda-forge/"),
             ),
             package_cutoff
         );

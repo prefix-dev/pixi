@@ -108,6 +108,8 @@ impl MockRepoData {
                 info: Some(ChannelInfo {
                     subdir: Some(platform.to_string()),
                     base_url: None,
+                    channel_relations: None,
+                    repodata_revisions: vec![],
                 }),
                 packages: tar_bz2_packages.into_iter().collect(),
                 conda_packages: conda_packages.into_iter().collect(),
@@ -356,6 +358,7 @@ impl PackageBuilder {
                 run_exports: self.run_exports.clone(),
                 python_site_packages_path: None,
                 experimental_extra_depends: Default::default(),
+                flags: vec![],
             },
             subdir,
             archive_type: self.archive_type,
@@ -402,6 +405,8 @@ pub fn create_conda_package(
         timestamp: package.package_record.timestamp,
         track_features: package.package_record.track_features.clone(),
         version: package.package_record.version.clone(),
+        flags: package.package_record.flags.clone(),
+        repodata_revision: None,
     };
 
     let index_json_content = serde_json::to_string_pretty(&index_json)?;

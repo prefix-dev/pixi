@@ -756,6 +756,91 @@ async fn test_old_lock_install() {
     );
 }
 
+/// A v6 lock file has a local path dependency whose directory is called
+/// `foo.tar.gz`.  On upgrade to v7, `is_wheel_or_archive_location` matches
+/// the `.tar.gz` suffix and misclassifies the entry as a
+/// `PypiDistributionData`.  This test verifies that a re-resolve corrects
+/// the entry to `PypiSourceData` and that the resulting lock file
+/// round-trips cleanly.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_v6_local_archive_path_upgrade() {
+    setup_tracing();
+
+    let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
+    let test_dir = workspace_root.join("tests/data/v6-local-archive-path");
+
+    // Save the original lock file content so we can restore it at the end.
+    let lock_path = test_dir.join("pixi.lock");
+    let original_lock = fs_err::read_to_string(&lock_path).unwrap();
+
+    // Load the v6 lock file — foo.tar.gz is misdetected as Distribution.
+    let lock_file = rattler_lock::LockFile::from_path(&lock_path).unwrap();
+    let env = lock_file.default_environment().unwrap();
+    let foo = env
+        .pypi_packages_by_platform()
+        .flat_map(|(_, pkgs)| pkgs)
+        .find(|p| p.name().as_ref() == "foo")
+        .expect("foo should be in the lock file");
+    assert!(
+        foo.as_wheel().is_some(),
+        "v6→v7 upgrade should (incorrectly) parse foo.tar.gz as Distribution"
+    );
+
+    // Re-resolve — should detect the mismatch and re-solve.
+    let project = Workspace::from_path(&test_dir.join("pixi.toml")).unwrap();
+    pixi_core::environment::get_update_lock_file_and_prefix(
+        &project.default_environment(),
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Update,
+            no_install: true,
+            ..Default::default()
+        },
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await
+    .unwrap();
+
+    // After re-resolve, foo.tar.gz should be a Source package.
+    let new_lock = rattler_lock::LockFile::from_path(&test_dir.join("pixi.lock")).unwrap();
+    let new_env = new_lock.default_environment().unwrap();
+    let foo = new_env
+        .pypi_packages_by_platform()
+        .flat_map(|(_, pkgs)| pkgs)
+        .find(|p| p.name().as_ref() == "foo")
+        .expect("foo should be in the re-resolved lock file");
+    assert!(
+        foo.as_source().is_some(),
+        "after re-resolve foo.tar.gz should be a Source package, not Distribution"
+    );
+
+    // Round-trip: a second revalidate should not change the lock file.
+    let lock_str = fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap();
+    pixi_core::environment::get_update_lock_file_and_prefix(
+        &project.default_environment(),
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Update,
+            no_install: true,
+            ..Default::default()
+        },
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        lock_str,
+        fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap(),
+        "lock file should round-trip without changes"
+    );
+
+    // Restore the original v6 lock file so the test is idempotent.
+    fs_err::write(&lock_path, &original_lock).unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
@@ -834,8 +919,13 @@ setup(
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
 
+    // Only pin the uv wheel cache — conda packages and repodata can be reused
+    // from prior runs, which keeps the test fast.
     temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        [(
+            "PIXI_CACHE_PYPI_WHEELS_DIR",
+            Some(tmp_dir_path.to_str().unwrap()),
+        )],
         async {
             pixi.install().await.expect("cannot install project");
         },
@@ -958,8 +1048,13 @@ setup(
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
 
+    // Only pin the uv wheel cache — conda packages and repodata can be reused
+    // from prior runs, which keeps the test fast.
     temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        [(
+            "PIXI_CACHE_PYPI_WHEELS_DIR",
+            Some(tmp_dir_path.to_str().unwrap()),
+        )],
         async {
             pixi.install()
                 .await
@@ -1024,8 +1119,13 @@ async fn test_setuptools_override_failure() {
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
 
+    // Only pin the uv wheel cache — conda packages and repodata can be reused
+    // from prior runs, which keeps the test fast.
     temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        [(
+            "PIXI_CACHE_PYPI_WHEELS_DIR",
+            Some(tmp_dir_path.to_str().unwrap()),
+        )],
         async {
             pixi.install().await.expect("cannot install project");
         },
@@ -1342,7 +1442,6 @@ async fn test_multiple_prefix_update() {
 
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
-        group.workspace().channel_config(),
         name,
         prefix,
         current_platform,
@@ -1353,8 +1452,8 @@ async fn test_multiple_prefix_update() {
     );
 
     let pixi_records = Vec::from([
-        PixiRecord::Binary(wheel_repo_data_record),
-        PixiRecord::Binary(python_repo_data_record),
+        PixiRecord::from(wheel_repo_data_record),
+        PixiRecord::from(python_repo_data_record),
     ]);
 
     let mut sets = JoinSet::new();
@@ -1364,7 +1463,14 @@ async fn test_multiple_prefix_update() {
         let pixi_records = pixi_records.clone();
         // tasks.push(conda_prefix_updater.update(pixi_records));
         let updater = conda_prefix_updater.clone();
-        sets.spawn(async move { updater.update(pixi_records, None, None).await.cloned() });
+        let unresolved_records: Vec<pixi_record::UnresolvedPixiRecord> =
+            pixi_records.into_iter().map(Into::into).collect();
+        sets.spawn(async move {
+            updater
+                .update(unresolved_records, None, None)
+                .await
+                .cloned()
+        });
     }
 
     let mut first_modified = None;
@@ -1535,7 +1641,7 @@ async fn test_exclude_newer() {
     ))
     .unwrap();
 
-    // Relock and check that an older version of the package is selected
+    // Re-lock and check that an older version of the package is selected
     pixi.lock().await.unwrap();
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
@@ -1861,4 +1967,71 @@ async fn test_uv_skip_wheel_filename_check() {
         is_pypi_package_installed(&env, "test-malformed"),
         "Package should be installed when env var takes precedence"
     );
+}
+
+/// Verifies that `pixi install --all` skips environments that do not support
+/// the current platform instead of failing the entire install. See issue #5760.
+#[tokio::test]
+async fn install_all_skips_unsupported_environments() {
+    setup_tracing();
+
+    let current_platform = Platform::current();
+    // Pick a platform from a different OS family so that no `best_platform`
+    // fallback (e.g. osx-arm64 -> osx-64) accidentally rescues the env.
+    let other_platform = if current_platform.is_linux() {
+        Platform::Osx64
+    } else {
+        Platform::Linux64
+    };
+
+    let mut db = MockRepoData::default();
+    db.add_package(
+        Package::build("foo", "1")
+            .with_subdir(current_platform)
+            .with_materialize(true)
+            .finish(),
+    );
+    db.add_package(
+        Package::build("foo", "1")
+            .with_subdir(other_platform)
+            .with_materialize(true)
+            .finish(),
+    );
+    let channel = db.into_channel().await.unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "test-filter-unsupported"
+        channels = ["{channel}"]
+        platforms = ["{current_platform}", "{other_platform}"]
+
+        [dependencies]
+        foo = "*"
+
+        [feature.other-only]
+        platforms = ["{other_platform}"]
+
+        [environments]
+        other = ["other-only"]
+        "#,
+        channel = channel.url(),
+    ))
+    .unwrap();
+
+    // `pixi install --all` should succeed because the unsupported `other`
+    // environment is filtered out instead of failing the whole command.
+    pixi.install()
+        .with_all(true)
+        .await
+        .expect("install --all should skip environments that do not support the current platform");
+
+    // Explicitly requesting the unsupported environment should still fail so
+    // that the user gets a clear error rather than silently doing nothing.
+    pixi.install()
+        .with_environment(vec!["other".to_string()])
+        .await
+        .expect_err(
+            "install -e other should fail because it does not support the current platform",
+        );
 }

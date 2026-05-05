@@ -502,6 +502,11 @@ impl InstallBuilder {
         self.args.environment = Some(env);
         self
     }
+
+    pub fn with_all(mut self, all: bool) -> Self {
+        self.args.all = all;
+        self
+    }
 }
 
 impl IntoFuture for InstallBuilder {

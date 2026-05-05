@@ -1,5 +1,6 @@
 mod build_script;
 mod config;
+mod inputs;
 
 use build_script::{BuildPlatform, BuildScriptContext};
 use config::CMakeBackendConfig;
@@ -26,6 +27,22 @@ use std::{
 
 #[derive(Default, Clone)]
 pub struct CMakeGenerator {}
+
+/// Globs used when ninja-based exact input extraction is unavailable
+/// (e.g. the build dir was wiped, ninja exited non-zero, or this is a
+/// dry-run). Kept intentionally broad so we don't miss real changes.
+fn fallback_input_globs() -> BTreeSet<String> {
+    [
+        // Source files
+        "**/*.{c,cc,cxx,cpp,h,hpp,hxx}",
+        // CMake files
+        "**/*.{cmake,cmake.in}",
+        "**/CMakeLists.txt",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
+}
 
 #[async_trait::async_trait]
 impl GenerateRecipe for CMakeGenerator {
@@ -137,20 +154,22 @@ impl GenerateRecipe for CMakeGenerator {
     fn extract_input_globs_from_build(
         &self,
         config: &Self::Config,
-        _workdir: impl AsRef<Path>,
+        workdir: impl AsRef<Path>,
         _editable: bool,
     ) -> miette::Result<BTreeSet<String>> {
-        Ok([
-            // Source files
-            "**/*.{c,cc,cxx,cpp,h,hpp,hxx}",
-            // CMake files
-            "**/*.{cmake,cmake.in}",
-            "**/CMakeFiles.txt",
-        ]
-        .iter()
-        .map(|s: &&str| s.to_string())
-        .chain(config.extra_input_globs.clone())
-        .collect())
+        let workdir = workdir.as_ref();
+        let mut globs = match inputs::exact_inputs_from_ninja(workdir) {
+            Ok(set) => set,
+            Err(err) => {
+                tracing::warn!(
+                    "falling back to glob-based input tracking for cmake build at {}: {err}",
+                    workdir.display()
+                );
+                fallback_input_globs()
+            }
+        };
+        globs.extend(config.extra_input_globs.iter().cloned());
+        Ok(globs)
     }
 
     fn default_variants(

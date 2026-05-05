@@ -1,0 +1,13 @@
+[package]
+authors = ["Bas Zalmstra <bas@prefix.dev>"]
+description = "C ABI types and the particle pool runtime for the polyglot demo"
+name = "particle_core"
+version = "0.1.0"
+
+[package.build.backend]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pixi-build-cmake"
+version = "0.3.*"
+
+[package.build.config]
+compilers = ["c"]

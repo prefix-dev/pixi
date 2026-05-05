@@ -6,7 +6,7 @@ use typed_path::Utf8TypedPath;
 /// `SourceAnchor` represents the resolved base location of a `SourceSpec`.
 /// It serves as a reference point for interpreting relative or recursive
 /// source specifications, enabling consistent resolution of nested sources.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum SourceAnchor {
     /// The source is relative to the workspace root.
     Workspace,

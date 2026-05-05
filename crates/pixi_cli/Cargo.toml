@@ -113,7 +113,6 @@ pixi_pty = { path = "../pixi_pty" }
 [features]
 default = []
 native-tls = [
-  "pixi_api/native-tls",
   "pixi_auth/native-tls",
   "pixi_utils/native-tls",
   "rattler/native-tls",
@@ -123,7 +122,6 @@ native-tls = [
 # run tests connecting to remote Internet services
 online_tests = []
 rustls-tls = [
-  "pixi_api/rustls-tls",
   "pixi_auth/rustls-tls",
   "pixi_utils/rustls-tls",
   "rattler/rustls-tls",

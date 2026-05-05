@@ -1,0 +1,12 @@
+[package]
+name = "particle_rs"
+version = "0.1.0"
+edition = "2021"
+description = "Rust implementations of particle emitters and modifiers, exposed to Python via PyO3"
+
+[lib]
+name = "particle_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.28", features = ["extension-module"] }
