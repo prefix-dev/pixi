@@ -1,0 +1,15 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-index-removed"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+# The user removed the explicit `index = "..."` from the requirement,
+# but the lock-file still has the package locked from a non-default
+# custom index. The satisfiability check must invalidate the lock so
+# the package gets re-resolved from the default index list.
+
+[pypi-dependencies]
+my-dep = "==1.0.0"
