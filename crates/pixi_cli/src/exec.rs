@@ -153,7 +153,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let status = cmd
         .status()
         .into_diagnostic()
-        .with_context(|| format!("failed to execute '{}'", &command))?;
+        .with_context(|| format!("failed to execute '{}'", command))?;
 
     // Return the exit code of the command
     std::process::exit(status.code().unwrap_or(1));

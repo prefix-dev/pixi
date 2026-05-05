@@ -110,15 +110,7 @@ def test_git_path_build(
     )
 
     verify_cli_command(
-        [
-            pixi,
-            "build",
-            "-v",
-            "--path",
-            tmp_pixi_workspace,
-            "--output-dir",
-            tmp_pixi_workspace,
-        ],
+        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", tmp_pixi_workspace],
     )
 
     built_packages = list(tmp_pixi_workspace.glob("*.conda"))
@@ -238,21 +230,13 @@ def test_git_path_build_has_absolutely_no_respect_to_lock_file(
     assert new_branch_rev != local_cpp_git_repo_mutable.other_feature_rev
 
     verify_cli_command(
-        [
-            pixi,
-            "build",
-            "-v",
-            "--path",
-            tmp_pixi_workspace,
-            "--output-dir",
-            tmp_pixi_workspace,
-        ],
+        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", tmp_pixi_workspace],
     )
 
     built_packages = list(tmp_pixi_workspace.glob("*.conda"))
     assert built_packages
 
-    # lock file should remain untouched when running `pixi build`
+    # lock file should remain untouched when running `pixi publish`
     assert extract_git_sources(lock_path) == initial_sources
 
     work_dir = tmp_pixi_workspace / ".pixi" / "bld" / "simple-app"

@@ -31,9 +31,9 @@ def test_workspace_variants_separate_work_directories(
     # Copy to workspace
     shutil.copytree(workspace_variants_project, tmp_pixi_workspace, dirs_exist_ok=True)
 
-    # Build the packages for all variants
+    # TODO: Needs to publish to a local directory instead to be fully compatible with pixi build
     verify_cli_command(
-        [pixi, "build", "--path", tmp_pixi_workspace, "--output-dir", str(tmp_pixi_workspace)],
+        [pixi, "publish", "--path", tmp_pixi_workspace, "--to", f"file://{tmp_pixi_workspace}"],
     )
 
     # Check that the package's bld root exists.

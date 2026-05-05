@@ -13,7 +13,7 @@ use crate::{
     common::{LockFileExt, PixiControl},
     setup_tracing,
 };
-use pixi_cli::{build, publish};
+use pixi_cli::publish;
 use pixi_test_utils::{GitRepoFixture, MockRepoData, Package, format_diagnostic};
 
 fn write_source_package_manifest(path: &std::path::Path, name: &str, version: &str, extra: &str) {
@@ -397,65 +397,6 @@ my-package = {{ path = "./my-package" }}
     ));
 }
 
-/// Test that verifies the build command can accept a path to a recipe.yaml file
-/// via the --build-manifest argument
-#[tokio::test]
-async fn test_build_command_with_recipe_yaml_path() {
-    setup_tracing();
-
-    let pixi = PixiControl::new().unwrap();
-
-    // Create a separate directory with a recipe.yaml
-    let recipe_dir = pixi.workspace_path().join("my-recipe");
-    fs::create_dir_all(&recipe_dir).unwrap();
-
-    let recipe_content = r#"
-package:
-  name: test-package-from-recipe
-  version: 0.1.0
-
-build:
-  number: 0
-  noarch: generic
-
-about:
-  summary: Test package built from recipe.yaml
-"#;
-    let recipe_path = recipe_dir.join("recipe.yaml");
-    fs::write(&recipe_path, recipe_content).unwrap();
-
-    // Create a workspace manifest (pixi.toml) for workspace configuration
-    let manifest_content = format!(
-        r#"
-[workspace]
-channels = ["conda-forge"]
-platforms = ["{}"]
-preview = ["pixi-build"]
-"#,
-        Platform::current()
-    );
-
-    fs::write(pixi.manifest_path(), manifest_content).unwrap();
-
-    // Verify that the recipe.yaml file exists and is readable
-    assert!(
-        recipe_path.exists(),
-        "recipe.yaml should exist at the expected path"
-    );
-
-    assert!(
-        recipe_path.is_file(),
-        "recipe.yaml should be a file, not a directory"
-    );
-
-    // Verify the content can be read
-    let content = fs::read_to_string(&recipe_path).unwrap();
-    assert!(
-        content.contains("test-package-from-recipe"),
-        "recipe.yaml should contain the package name"
-    );
-}
-
 /// Test that verifies [package.build] source.path is resolved relative to the
 /// package manifest directory, not the workspace root.
 ///
@@ -544,62 +485,6 @@ test-build-source = {{ path = "." }}
             "test-build-source",
         ),
         "Built package should be in the lock file"
-    );
-}
-
-/// Test that verifies `.pixi/.gitignore` is created during `pixi build`
-/// This fixes issue #4761 where pixi build didn't create the .gitignore file,
-/// causing recursion errors in rattler-build when source files reference the project root
-#[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-async fn test_build_creates_gitignore() {
-    setup_tracing();
-
-    // Create a PixiControl instance
-    let pixi = PixiControl::new().unwrap();
-
-    // Create a minimal manifest with build configuration
-    // We're not setting up a real backend, so the build will fail,
-    // but the .gitignore should still be created
-    let manifest_content = format!(
-        r#"
-[workspace]
-channels = []
-platforms = ["{}"]
-preview = ["pixi-build"]
-
-[package]
-name = "test-gitignore-build"
-version = "0.1.0"
-description = "Test package for .gitignore creation during build"
-
-[package.build]
-backend.name = "nonexistent-backend"
-backend.version = "0.1.0"
-"#,
-        Platform::current(),
-    );
-
-    // Write the manifest
-    fs::write(pixi.manifest_path(), manifest_content).unwrap();
-
-    let gitignore_path = pixi.workspace().unwrap().pixi_dir().join(".gitignore");
-
-    // Verify .pixi/.gitignore doesn't exist initially
-    assert!(
-        !gitignore_path.exists(),
-        ".pixi/.gitignore file should not exist before build"
-    );
-
-    // Run pixi build - this will fail because the backend doesn't exist,
-    // but it should still create the .pixi/.gitignore file as part of
-    // the sanity_check_workspace call
-    let _ = pixi.build().await;
-
-    // Verify .pixi/.gitignore was created even though the build failed
-    assert!(
-        gitignore_path.exists(),
-        ".pixi/.gitignore file was not created after build"
     );
 }
 
@@ -721,61 +606,6 @@ backend = {{ name = "in-memory", version = "0.1.0" }}
 sdl2 = "*"
 "#,
     )
-}
-
-#[tokio::test]
-async fn test_build_fails_before_any_build_when_one_variant_is_unsatisfiable() {
-    setup_tracing();
-
-    let mut package_database = MockRepoData::default();
-    package_database.add_package(
-        Package::build("sdl2", "2.26.5")
-            .with_materialize(true)
-            .finish(),
-    );
-    let channel = package_database.into_channel().await.unwrap();
-
-    let (instantiator, mut observer) =
-        ObservableBackend::instantiator(PassthroughBackend::instantiator());
-    let pixi = PixiControl::from_manifest(&variant_fail_fast_manifest(
-        channel.url().as_ref(),
-        Platform::current(),
-    ))
-    .unwrap();
-
-    let output_dir = pixi.workspace_path().join("dist");
-    let err = build::execute(build::Args {
-        backend_override: Some(BackendOverride::from_memory(instantiator)),
-        config_cli: Default::default(),
-        lock_and_install_config: Default::default(),
-        target_platform: Platform::current(),
-        build_platform: Platform::current(),
-        output_dir: output_dir.clone(),
-        build_dir: None,
-        clean: false,
-        path: Some(pixi.manifest_path()),
-    })
-    .await
-    .expect_err("build should fail when one variant cannot be resolved");
-
-    let rendered = format_diagnostic(err.as_ref());
-    assert!(
-        rendered.contains("solve the host environment"),
-        "{rendered}"
-    );
-    assert!(rendered.contains("sdl2"), "{rendered}");
-    assert!(
-        observer.build_events().is_empty(),
-        "build should fail during pre-resolution before conda_build_v1 runs"
-    );
-    let built_artifacts = fs::read_dir(&output_dir)
-        .ok()
-        .map(|entries| entries.count())
-        .unwrap_or(0);
-    assert_eq!(
-        built_artifacts, 0,
-        "no artifacts should be produced on failure"
-    );
 }
 
 #[tokio::test]

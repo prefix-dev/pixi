@@ -23,14 +23,7 @@ def test_build_conda_package(
 ) -> None:
     simple_workspace.write_files()
     verify_cli_command(
-        [
-            pixi,
-            "build",
-            "--path",
-            simple_workspace.package_dir,
-            "--output-dir",
-            simple_workspace.workspace_dir,
-        ],
+        [pixi, "publish", str(simple_workspace.workspace_dir), "--path", simple_workspace.package_dir],
     )
 
     # Ensure that we don't create directories we don't need
@@ -245,20 +238,20 @@ def test_build_using_rattler_build_backend(
 
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
-    # Running pixi build should build the recipe.yaml
+    # Running pixi publish should build the recipe.yaml and copy the package
     verify_cli_command(
-        [pixi, "build", "-v", "--path", manifest_path, "--output-dir", tmp_pixi_workspace],
+        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", manifest_path],
     )
 
     # really make sure that conda package was built
-    package_to_be_built = next(manifest_path.parent.glob("*.conda"))
+    package_to_be_built = next(tmp_pixi_workspace.glob("*.conda"))
 
     assert "array-api-extra" in package_to_be_built.name
     assert package_to_be_built.exists()
 
     # check that immediately repeating the build also works (prefix-dev/pixi-build-backends#287)
     verify_cli_command(
-        [pixi, "build", "-v", "--path", manifest_path, "--output-dir", tmp_pixi_workspace],
+        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", manifest_path],
     )
 
 
@@ -279,14 +272,14 @@ def test_incremental_builds(
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
     verify_cli_command(
-        [pixi, "build", "-v", "--path", manifest_path, "--output-dir", tmp_pixi_workspace],
+        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", manifest_path],
         stderr_contains=non_incremental_evidence,
         strip_ansi=True,
     )
 
     # immediately repeating the build should give evidence of incremental compilation
     verify_cli_command(
-        [pixi, "build", "-v", "--path", manifest_path, "--output-dir", tmp_pixi_workspace],
+        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", manifest_path],
         stderr_excludes=non_incremental_evidence,
         strip_ansi=True,
     )
@@ -369,15 +362,7 @@ def test_rattler_build_point_to_recipe(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     verify_cli_command(
-        [
-            pixi,
-            "build",
-            "-v",
-            "--path",
-            manifest_path,
-            "--output-dir",
-            output_dir,
-        ],
+        [pixi, "publish", "-v", str(output_dir), "--path", manifest_path],
         expected_exit_code=ExitCode.SUCCESS,
     )
 
@@ -400,15 +385,7 @@ def test_rattler_build_autodiscovery(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     verify_cli_command(
-        [
-            pixi,
-            "build",
-            "-v",
-            "--path",
-            manifest_path,
-            "--output-dir",
-            output_dir,
-        ],
+        [pixi, "publish", "-v", str(output_dir), "--path", manifest_path],
         expected_exit_code=ExitCode.SUCCESS,
     )
 
@@ -430,13 +407,7 @@ def test_suggest_what_manifest_file_should_be(
     manifest_path.mkdir(parents=True, exist_ok=True)
 
     verify_cli_command(
-        [
-            pixi,
-            "build",
-            "-v",
-            "--path",
-            manifest_path,
-        ],
+        [pixi, "publish", "-v", "--path", manifest_path],
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="Ensure that the source directory contains a valid manifest file: pixi.toml, pyproject.toml, mojoproject.toml, recipe.yaml, recipe.yml",
     )
@@ -536,14 +507,7 @@ def test_source_path(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> 
     manifest_path.write_text(tomli_w.dumps(manifest))
 
     verify_cli_command(
-        [
-            pixi,
-            "build",
-            "--path",
-            tmp_pixi_workspace,
-            "--output-dir",
-            tmp_pixi_workspace,
-        ],
+        [pixi, "publish", str(tmp_pixi_workspace), "--path", tmp_pixi_workspace],
     )
 
     # Ensure that exactly one conda package has been built
@@ -595,5 +559,5 @@ def test_target_specific_dependency(
     manifest_path.write_text(tomli_w.dumps(manifest))
 
     verify_cli_command(
-        [pixi, "build", "--path", manifest_path, "--output-dir", tmp_pixi_workspace],
+        [pixi, "publish", str(tmp_pixi_workspace), "--path", manifest_path],
     )

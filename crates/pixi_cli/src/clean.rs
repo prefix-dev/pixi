@@ -275,7 +275,7 @@ async fn remove_folder_with_progress(
             eprintln!(
                 "{} Folder {:?} was already clean.",
                 console::style("INFO:").yellow(),
-                &folder
+                folder
             );
         }
         return Ok(());
@@ -343,7 +343,7 @@ async fn remove_file(file: PathBuf, warning_non_existent: bool) -> miette::Resul
         if warning_non_existent {
             eprintln!(
                 "{}",
-                console::style(format!("File {:?} was not found.", &file)).yellow()
+                console::style(format!("File {:?} was not found.", file)).yellow()
             );
         }
         return Ok(());

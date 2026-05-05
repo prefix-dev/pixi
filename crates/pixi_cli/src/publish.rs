@@ -1,5 +1,11 @@
+use fs_err::tokio as tokio_fs;
+use pixi_consts::consts::{
+    MOJOPROJECT_MANIFEST, PYPROJECT_MANIFEST, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES,
+    WORKSPACE_MANIFEST,
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ffi::OsStr,
     path::PathBuf,
     sync::Arc,
 };
@@ -15,7 +21,7 @@ use pixi_command_dispatcher::{
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
 use pixi_config::{Config, ConfigCli};
-use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
+use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart};
 use pixi_manifest::FeaturesExt;
 use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
@@ -27,7 +33,6 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::AuthenticationStorage;
 use rattler_package_streaming::seek::read_package_file;
 
-use crate::build::{determine_discovery_start, validate_package_manifest};
 use crate::cli_config::LockAndInstallConfig;
 
 /// Build a conda package and publish it to a channel.
@@ -98,6 +103,107 @@ pub struct Args {
     /// Generate sigstore attestation (prefix.dev only)
     #[arg(long)]
     pub generate_attestation: bool,
+}
+
+/// Validate that the full path of package manifest exists and is a supported
+/// format. Directories are allowed (for discovery), and specific manifest files
+/// must be supported formats.
+async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
+    let supported_file_names: Vec<&str> = [
+        // backend-specific build files
+        // that will be autodiscovered
+        &ROS_BACKEND_FILE_NAMES[..],
+        &RATTLER_BUILD_FILE_NAMES[..],
+        // manifests that can contain a package section in it
+        &[WORKSPACE_MANIFEST],
+        &[PYPROJECT_MANIFEST],
+        &[MOJOPROJECT_MANIFEST],
+    ]
+    .concat();
+
+    // we dont allow for now passing directories without a manifest file
+    // from the list below
+    let unsupported_implicit_file_names: Vec<&str> = [&ROS_BACKEND_FILE_NAMES[..]].concat();
+
+    // Iterate over the files in the directory to provide a more helpful error
+    // of what manifests were found.
+    if path.is_dir() {
+        let mut entries = tokio_fs::read_dir(&path).await.into_diagnostic()?;
+
+        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+            let path = entry.path();
+            if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
+                if unsupported_implicit_file_names.contains(&filename) {
+                    return Err(miette::diagnostic!(
+                        help = format!("did you mean {filename}?"),
+                        "the build manifest path '{}' is a directory, please provide the path to the manifest file",
+                        path.display(),
+                    ).into());
+                }
+
+                // we found a supported manifest file
+                // which means that we will let our backend discovery handle it
+                if supported_file_names.contains(&filename) {
+                    return Ok(());
+                }
+            }
+        }
+    } else {
+        let filename = path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .ok_or_else(|| miette::miette!("Failed to extract file name from {:?}", path))?;
+
+        if !supported_file_names
+            .iter()
+            .any(|names| names.contains(filename))
+        {
+            let supported_names = supported_file_names
+                .iter()
+                .map(|name| name.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            return Err(miette::diagnostic!(
+                help = format!("Supported formats are: {supported_names}"),
+                "the build manifest file '{}' is not a supported format.",
+                path.display(),
+            )
+            .into());
+        }
+    }
+
+    Ok(())
+}
+
+async fn determine_discovery_start(path: &Option<PathBuf>) -> miette::Result<DiscoveryStart> {
+    match path {
+        Some(path) => {
+            // We need to solve the path to an absolute path
+            // because we can point to specific package manifest file
+            // but still want to discover the workspace from the package location.
+            // For this, we need to take the parent directory of the package manifest file
+            // which `WorkspaceLocator` will use to discover the workspace.
+            let resolved_path = if path.is_relative() {
+                std::env::current_dir().into_diagnostic()?.join(path)
+            } else {
+                path.to_path_buf()
+            };
+
+            // If it's a directory, use it as the search root
+            if resolved_path.is_dir() {
+                Ok(DiscoveryStart::SearchRoot(resolved_path))
+            } else {
+                // If it's a file, use its parent directory as the search root
+                let package_dir = resolved_path.parent().ok_or_else(|| {
+                    miette::miette!("Failed to get parent directory of package manifest")
+                })?;
+                Ok(DiscoveryStart::SearchRoot(package_dir.to_path_buf()))
+            }
+        }
+        // If no path is provided, use the current directory
+        None => Ok(DiscoveryStart::CurrentDir),
+    }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {

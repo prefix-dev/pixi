@@ -1428,10 +1428,10 @@ dependencies:
         ),
         # Upgrade commands
         (["upgrade"], [], "pixi upgrade"),
-        # Pixi build (can lock its source)
-        (["build"], [], "pixi build"),
         # Pixi publish (builds and uploads)
         (["publish", "--to", "https://prefix.dev/test-channel"], [], "pixi publish"),
+        # pixi build has been removed; the stub still accepts --frozen/--no-install
+        (["build"], [], "pixi build"),
     ]
     # This command needs to stay last so we always have something that requires a re-solve
     # Dont move this!
@@ -1452,9 +1452,10 @@ dependencies:
                 expected_exit_code=ExitCode.FAILURE,
             )
         elif command_name == "pixi build":
-            # Special case: build uses --path instead of --manifest-path
+            # pixi build has been removed; always fails
             verify_cli_command(
-                [pixi, "build", "--path", manifest_path, "--locked", "--no-install"],
+                [pixi, "build", "--frozen", "--no-install"],
+                expected_exit_code=ExitCode.FAILURE,
             )
         elif command_name == "pixi publish":
             # Special case: publish uses --path instead of --manifest-path
