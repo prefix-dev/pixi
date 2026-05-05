@@ -6,9 +6,11 @@ use pixi_consts::consts::{
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsStr,
-    path::PathBuf,
+    fmt,
+    path::{Path, PathBuf},
     sync::Arc,
 };
+use url::Url;
 
 use clap::Parser;
 use indicatif::ProgressBar;
@@ -39,11 +41,12 @@ use crate::cli_config::LockAndInstallConfig;
 ///
 /// This is a convenience command that combines `pixi build` and `pixi upload`.
 ///
-/// Supported target channel URLs:
+/// Supported target URLs (--target-channel / --to):
 ///   - prefix.dev: `https://prefix.dev/<channel-name>`
 ///   - anaconda.org: `https://anaconda.org/<owner>/<label>`
 ///   - S3: `s3://bucket-name`
-///   - Filesystem: `file:///path/to/channel`
+///   - Local channel (with indexing): `channel:///path/to/channel`
+///   - Local path (copy only): `file:///path/to/output`
 ///   - Quetz: `quetz://server/<channel>`
 ///   - Artifactory: `artifactory://server/<channel>`
 #[derive(Parser, Debug)]
@@ -87,8 +90,16 @@ pub struct Args {
     ///   <https://prefix.dev/my-channel>
     ///   <https://anaconda.org/my-user>
     ///   s3://my-bucket/my-channel
+    ///   channel:///path/to/local/channel
     ///   file:///path/to/local/channel
-    pub to: Option<String>,
+    #[arg(long, conflicts_with = "target_dir")]
+    pub target_channel: Option<String>,
+
+    /// The target local directory to copy packages into (no channel indexing).
+    ///
+    /// Accepts a local filesystem path.  Mutually exclusive with `--target-channel`.
+    #[arg(long, alias = "to", conflicts_with = "target_channel")]
+    pub target_dir: Option<PathBuf>,
 
     /// Force overwrite existing packages
     #[arg(long)]
@@ -147,6 +158,16 @@ async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
                 }
             }
         }
+
+        let supported_names = supported_file_names.join(", ");
+        return Err(miette::diagnostic!(
+            help = format!(
+                "Ensure that the source directory contains a valid manifest file: {supported_names}"
+            ),
+            "'{}' does not contain a supported build manifest",
+            path.display(),
+        )
+        .into());
     } else {
         let filename = path
             .file_name()
@@ -202,6 +223,20 @@ async fn determine_discovery_start(path: &Option<PathBuf>) -> miette::Result<Dis
         }
         // If no path is provided, use the current directory
         None => Ok(DiscoveryStart::CurrentDir),
+    }
+}
+
+enum UrlOrPath {
+    Url(Url),
+    Path(PathBuf),
+}
+
+impl fmt::Display for UrlOrPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UrlOrPath::Url(url) => write!(f, "{url}"),
+            UrlOrPath::Path(path) => write!(f, "{}", path.display()),
+        }
     }
 }
 
@@ -420,44 +455,64 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("No packages were built. Nothing to publish.");
     }
 
-    let Some(target_url) = args
-        .to
-        .as_ref()
-        .map(|to| parse_target_url(to))
-        .transpose()?
-    else {
-        return Ok(());
-    };
+    let base = std::env::current_dir()
+        .into_diagnostic()
+        .context("Could not get current work directory.")?;
+
+    let target = match (args.target_channel, args.target_dir) {
+        (Some(channel), None) => {
+            Ok::<UrlOrPath, miette::Error>(UrlOrPath::Url(parse_target(&channel, base.as_path())?))
+        }
+        (None, Some(dir)) => Ok(UrlOrPath::Path(dir)),
+        (None, None) => Ok(UrlOrPath::Path(base)),
+        (Some(_), Some(_)) => unreachable!("clap enforces mutual exclusion"),
+    }?;
 
     // === Phase 2: Upload the built packages ===
 
+    let target_type = if matches!(&target, UrlOrPath::Url(_)) {
+        "channel"
+    } else {
+        "directory"
+    };
+    let target_str = target.to_string();
+
     pixi_progress::println!(
-        "\n{}Publishing {} package(s) to {}",
+        "\n{}Publishing {} package(s) to {} {}",
         console::style(console::Emoji("📦 ", "")).cyan(),
         built_package_paths.len(),
-        target_url
+        target_type,
+        target_str,
     );
 
     let config = Config::load_global();
     let auth_storage = get_auth_store(&config).into_diagnostic()?;
 
-    pixi_progress::await_in_progress("uploading packages", |_| {
-        upload_packages(
-            &target_url,
-            &built_package_paths,
-            &auth_storage,
-            args.force,
-            args.skip_existing,
-            args.generate_attestation,
-        )
-    })
-    .await?;
+    match &target {
+        UrlOrPath::Url(url) => {
+            pixi_progress::await_in_progress("uploading packages", |_| {
+                upload_packages_to_channel(
+                    url,
+                    &built_package_paths,
+                    &auth_storage,
+                    args.force,
+                    args.skip_existing,
+                    args.generate_attestation,
+                )
+            })
+            .await?;
+        }
+        UrlOrPath::Path(destination) => {
+            upload_to_local_filesystem_path(&built_package_paths, destination).await?
+        }
+    }
 
     pixi_progress::println!(
-        "{}Successfully published {} package(s) to {}",
+        "{}Successfully published {} package(s) to {} {}",
         console::style(console::Emoji("✔ ", "")).green(),
         built_package_paths.len(),
-        target_url
+        target_type,
+        target_str,
     );
     for path in &built_package_paths {
         let name = path
@@ -470,9 +525,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-/// Parse a target URL string into a URL, handling various schemes.
-fn parse_target_url(to: &str) -> miette::Result<url::Url> {
-    url::Url::parse(to).map_err(|e| miette::miette!("Invalid target URL '{}': {}", to, e))
+/// Parse a target URL string, treating bare paths as `file://` URLs resolved against `base`.
+///
+/// Single-character schemes (Windows drive letters like `C:`) are treated as paths.
+fn parse_target(to: &str, base: &Path) -> miette::Result<Url> {
+    if let Ok(url) = Url::parse(to)
+        && url.scheme().len() > 1
+    {
+        return Ok(url);
+    }
+
+    let path = Path::new(to);
+    let abs = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        base.join(path)
+    };
+    Url::from_file_path(&abs).map_err(|()| miette::miette!("'{}' is not a valid path or URL", to))
 }
 
 /// Determine the subdirectory (platform) of a conda package.
@@ -486,8 +555,8 @@ fn determine_package_subdir(package_path: &std::path::Path) -> miette::Result<St
 /// Upload packages to the target channel based on the URL scheme/host.
 ///
 /// This logic is adapted from `rattler_build_core::publish::upload_and_index_channel`.
-async fn upload_packages(
-    url: &url::Url,
+async fn upload_packages_to_channel(
+    url: &Url,
     package_paths: &[PathBuf],
     auth_storage: &AuthenticationStorage,
     force: bool,
@@ -512,10 +581,11 @@ async fn upload_packages(
             .await
         }
         "file" => {
-            let path = url
+            let destination = url
                 .to_file_path()
                 .map_err(|()| miette::miette!("Invalid file URL: {}", url))?;
-            upload_to_local_filesystem(&path, package_paths, force, skip_existing).await
+            upload_to_local_filesystem_channel(&destination, package_paths, force, skip_existing)
+                .await
         }
         "http" | "https" => {
             let host = url.host_str().unwrap_or("");
@@ -549,9 +619,39 @@ async fn upload_packages(
     }
 }
 
+/// Copy packages into a local directory without creating a channel structure.
+async fn upload_to_local_filesystem_path(
+    package_paths: &[PathBuf],
+    destination: &Path,
+) -> miette::Result<()> {
+    tokio_fs::create_dir_all(destination)
+        .await
+        .into_diagnostic()
+        .context(format!(
+            "Failed to create output directory '{}'",
+            destination.display()
+        ))?;
+
+    for p in package_paths {
+        let file_name = p
+            .file_name()
+            .ok_or_else(|| miette::miette!("Package path '{}' has no filename", p.display()))?;
+        let dest = destination.join(file_name);
+        tokio_fs::copy(p, &dest)
+            .await
+            .into_diagnostic()
+            .context(format!(
+                "Failed to copy '{}' to '{}'",
+                p.display(),
+                dest.display()
+            ))?;
+    }
+
+    Ok(())
+}
 /// Upload packages to a Prefix.dev server.
 async fn upload_to_prefix(
-    url: &url::Url,
+    url: &Url,
     package_paths: &[PathBuf],
     auth_storage: &AuthenticationStorage,
     force: bool,
@@ -602,7 +702,7 @@ async fn upload_to_prefix(
 
 /// Upload packages to Anaconda.org.
 async fn upload_to_anaconda(
-    url: &url::Url,
+    url: &Url,
     package_paths: &[PathBuf],
     auth_storage: &AuthenticationStorage,
     force: bool,
@@ -642,7 +742,7 @@ async fn upload_to_anaconda(
 
 /// Upload packages to a Quetz server.
 async fn upload_to_quetz(
-    url: &url::Url,
+    url: &Url,
     package_paths: &[PathBuf],
     auth_storage: &AuthenticationStorage,
 ) -> miette::Result<()> {
@@ -672,7 +772,7 @@ async fn upload_to_quetz(
 
 /// Upload packages to an Artifactory server.
 async fn upload_to_artifactory(
-    url: &url::Url,
+    url: &Url,
     package_paths: &[PathBuf],
     auth_storage: &AuthenticationStorage,
 ) -> miette::Result<()> {
@@ -702,7 +802,7 @@ async fn upload_to_artifactory(
 
 /// Upload packages to S3 and run indexing.
 async fn upload_to_s3(
-    url: &url::Url,
+    url: &Url,
     package_paths: &[PathBuf],
     auth_storage: &AuthenticationStorage,
     force: bool,
@@ -770,7 +870,7 @@ async fn upload_to_s3(
 }
 
 /// Upload packages to local filesystem and run indexing.
-async fn upload_to_local_filesystem(
+async fn upload_to_local_filesystem_channel(
     target_dir: &std::path::Path,
     package_paths: &[PathBuf],
     force: bool,

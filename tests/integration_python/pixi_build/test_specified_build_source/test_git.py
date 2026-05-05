@@ -110,7 +110,15 @@ def test_git_path_build(
     )
 
     verify_cli_command(
-        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", tmp_pixi_workspace],
+        [
+            pixi,
+            "publish",
+            "-v",
+            "--target-dir",
+            str(tmp_pixi_workspace),
+            "--path",
+            tmp_pixi_workspace,
+        ],
     )
 
     built_packages = list(tmp_pixi_workspace.glob("*.conda"))
@@ -230,7 +238,15 @@ def test_git_path_build_has_absolutely_no_respect_to_lock_file(
     assert new_branch_rev != local_cpp_git_repo_mutable.other_feature_rev
 
     verify_cli_command(
-        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", tmp_pixi_workspace],
+        [
+            pixi,
+            "publish",
+            "-v",
+            "--target-dir",
+            str(tmp_pixi_workspace),
+            "--path",
+            tmp_pixi_workspace,
+        ],
     )
 
     built_packages = list(tmp_pixi_workspace.glob("*.conda"))

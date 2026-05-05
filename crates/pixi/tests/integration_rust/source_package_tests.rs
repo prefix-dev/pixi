@@ -639,7 +639,8 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         build_dir: None,
         clean: false,
         path: Some(pixi.manifest_path()),
-        to: Some(target_url.to_string()),
+        target_channel: Some(target_url.to_string()),
+        target_dir: None,
         force: false,
         skip_existing: true,
         generate_attestation: false,
@@ -2457,16 +2458,17 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         build_dir: None,
         clean: false,
         path: Some(pixi.manifest_path()),
-        to: None,
+        target_channel: None,
+        target_dir: None,
         force: false,
         skip_existing: true,
         generate_attestation: false,
     })
     .await
-    .expect("publish without `to` should succeed");
+    .expect("publish without target should succeed");
 
     assert!(
         !observer.build_events().is_empty(),
-        "publish without `to` should still build the package"
+        "publish without target should still build the package"
     );
 }

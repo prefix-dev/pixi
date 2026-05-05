@@ -23,7 +23,14 @@ def test_build_conda_package(
 ) -> None:
     simple_workspace.write_files()
     verify_cli_command(
-        [pixi, "publish", str(simple_workspace.workspace_dir), "--path", simple_workspace.package_dir],
+        [
+            pixi,
+            "publish",
+            "--target-dir",
+            str(simple_workspace.workspace_dir),
+            "--path",
+            simple_workspace.package_dir,
+        ],
     )
 
     # Ensure that we don't create directories we don't need
@@ -240,7 +247,7 @@ def test_build_using_rattler_build_backend(
 
     # Running pixi publish should build the recipe.yaml and copy the package
     verify_cli_command(
-        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", manifest_path],
+        [pixi, "publish", "-v", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
     )
 
     # really make sure that conda package was built
@@ -251,7 +258,7 @@ def test_build_using_rattler_build_backend(
 
     # check that immediately repeating the build also works (prefix-dev/pixi-build-backends#287)
     verify_cli_command(
-        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", manifest_path],
+        [pixi, "publish", "-v", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
     )
 
 
@@ -272,14 +279,14 @@ def test_incremental_builds(
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
     verify_cli_command(
-        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", manifest_path],
+        [pixi, "publish", "-v", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
         stderr_contains=non_incremental_evidence,
         strip_ansi=True,
     )
 
     # immediately repeating the build should give evidence of incremental compilation
     verify_cli_command(
-        [pixi, "publish", "-v", str(tmp_pixi_workspace), "--path", manifest_path],
+        [pixi, "publish", "-v", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
         stderr_excludes=non_incremental_evidence,
         strip_ansi=True,
     )
@@ -362,7 +369,7 @@ def test_rattler_build_point_to_recipe(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     verify_cli_command(
-        [pixi, "publish", "-v", str(output_dir), "--path", manifest_path],
+        [pixi, "publish", "-v", "--target-dir", str(output_dir), "--path", manifest_path],
         expected_exit_code=ExitCode.SUCCESS,
     )
 
@@ -385,7 +392,7 @@ def test_rattler_build_autodiscovery(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     verify_cli_command(
-        [pixi, "publish", "-v", str(output_dir), "--path", manifest_path],
+        [pixi, "publish", "-v", "--target-dir", str(output_dir), "--path", manifest_path],
         expected_exit_code=ExitCode.SUCCESS,
     )
 
@@ -409,7 +416,7 @@ def test_suggest_what_manifest_file_should_be(
     verify_cli_command(
         [pixi, "publish", "-v", "--path", manifest_path],
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="Ensure that the source directory contains a valid manifest file: pixi.toml, pyproject.toml, mojoproject.toml, recipe.yaml, recipe.yml",
+        stderr_contains="Ensure that the source directory contains a valid manifest file: package.xml, recipe.yaml, recipe.yml, pixi.toml, pyproject.toml, mojoproject.toml",
     )
 
 
@@ -507,7 +514,7 @@ def test_source_path(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> 
     manifest_path.write_text(tomli_w.dumps(manifest))
 
     verify_cli_command(
-        [pixi, "publish", str(tmp_pixi_workspace), "--path", tmp_pixi_workspace],
+        [pixi, "publish", "--target-dir", str(tmp_pixi_workspace), "--path", tmp_pixi_workspace],
     )
 
     # Ensure that exactly one conda package has been built
@@ -559,5 +566,5 @@ def test_target_specific_dependency(
     manifest_path.write_text(tomli_w.dumps(manifest))
 
     verify_cli_command(
-        [pixi, "publish", str(tmp_pixi_workspace), "--path", manifest_path],
+        [pixi, "publish", "--target-dir", str(tmp_pixi_workspace), "--path", manifest_path],
     )

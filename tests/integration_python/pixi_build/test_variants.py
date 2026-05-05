@@ -31,7 +31,7 @@ def test_inline_variants_produce_multiple_outputs(
     output_dir = tmp_pixi_workspace.joinpath("dist")
 
     verify_cli_command(
-        [pixi, "publish", str(output_dir), "--path", manifest_path],
+        [pixi, "publish", "--target-dir", str(output_dir), "--path", manifest_path],
     )
 
     # Ensure that we don't create directories we don't need
@@ -118,7 +118,7 @@ def test_variant_files_produce_multiple_outputs(
     output_dir = tmp_pixi_workspace.joinpath("dist")
 
     verify_cli_command(
-        [pixi, "publish", str(output_dir), "--path", manifest_path],
+        [pixi, "publish", "--target-dir", str(output_dir), "--path", manifest_path],
     )
 
     built_packages = list(output_dir.glob("*.conda"))

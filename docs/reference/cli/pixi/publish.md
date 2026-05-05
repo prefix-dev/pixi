@@ -10,13 +10,8 @@ Build a conda package and publish it to a channel.
 
 ## Usage
 ```
-pixi publish [OPTIONS] <TO>
+pixi publish [OPTIONS]
 ```
-
-## Arguments
-- <a id="arg-<TO>" href="#arg-<TO>">`<TO>`</a>
-:  The target channel URL to publish packages to
-<br>**required**: `true`
 
 ## Options
 - <a id="arg---target-platform" href="#arg---target-platform">`--target-platform (-t) <TARGET_PLATFORM>`</a>
@@ -31,6 +26,10 @@ pixi publish [OPTIONS] <TO>
 :  Whether to clean the build directory before building
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
 :  The path to a directory containing a package manifest, or to a specific manifest file
+- <a id="arg---target-channel" href="#arg---target-channel">`--target-channel <TARGET_CHANNEL>`</a>
+:  The target channel URL to publish packages to
+- <a id="arg---target-dir" href="#arg---target-dir">`--target-dir <TARGET_DIR>`</a>
+:  The target local directory to copy packages into (no channel indexing)
 - <a id="arg---force" href="#arg---force">`--force`</a>
 :  Force overwrite existing packages
 - <a id="arg---skip-existing" href="#arg---skip-existing">`--skip-existing <SKIP_EXISTING>`</a>
@@ -90,11 +89,12 @@ Build a conda package and publish it to a channel.
 
 This is a convenience command that combines `pixi build` and `pixi upload`.
 
-Supported target channel URLs:
+Supported target URLs (--target-channel / --to):
   - prefix.dev: `https://prefix.dev/<channel-name>`
   - anaconda.org: `https://anaconda.org/<owner>/<label>`
   - S3: `s3://bucket-name`
-  - Filesystem: `file:///path/to/channel`
+  - Local channel (with indexing): `channel:///path/to/channel`
+  - Local path (copy only): `file:///path/to/output`
   - Quetz: `quetz://server/<channel>`
   - Artifactory: `artifactory://server/<channel>`
 

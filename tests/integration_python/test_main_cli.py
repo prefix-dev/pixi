@@ -1429,7 +1429,7 @@ dependencies:
         # Upgrade commands
         (["upgrade"], [], "pixi upgrade"),
         # Pixi publish (builds and uploads)
-        (["publish", "https://prefix.dev/test-channel"], [], "pixi publish"),
+        (["publish", "--target-channel", "https://prefix.dev/test-channel"], [], "pixi publish"),
         # pixi build has been removed; the stub still accepts --frozen/--no-install
         (["build"], [], "pixi build"),
     ]
@@ -1452,9 +1452,10 @@ dependencies:
                 expected_exit_code=ExitCode.FAILURE,
             )
         elif command_name == "pixi build":
-            # pixi build has been removed; always fails
+            # pixi build is deprecated; it delegates to pixi publish.
+            # With --no-install the build environment can't be set up, so it fails.
             verify_cli_command(
-                [pixi, "build", "--frozen", "--no-install"],
+                [pixi, "build", "--path", manifest_path, "--frozen", "--no-install"],
                 expected_exit_code=ExitCode.FAILURE,
             )
         elif command_name == "pixi publish":
@@ -1467,6 +1468,7 @@ dependencies:
                     manifest_path,
                     "--frozen",
                     "--no-install",
+                    "--target-channel",
                     "https://prefix.dev/test-channel",
                 ],
                 expected_exit_code=ExitCode.FAILURE,

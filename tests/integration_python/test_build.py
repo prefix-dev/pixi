@@ -33,7 +33,7 @@ def test_workspace_variants_separate_work_directories(
 
     # TODO: Needs to publish to a local directory instead to be fully compatible with pixi build
     verify_cli_command(
-        [pixi, "publish", "--path", tmp_pixi_workspace, f"file://{tmp_pixi_workspace}"],
+        [pixi, "publish", "--path", tmp_pixi_workspace, f"channel://{tmp_pixi_workspace}"],
     )
 
     # Check that the package's bld root exists.

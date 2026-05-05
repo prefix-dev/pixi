@@ -36,7 +36,7 @@ def test_ros_packages_build(
     manifest_path = workspace.joinpath("src", package_dir, "pixi.toml")
 
     verify_cli_command(
-        [pixi, "publish", str(output_dir), "--path", manifest_path],
+        [pixi, "publish", "--target-dir", str(output_dir), "--path", manifest_path],
     )
 
     expected_name = ROS_PACKAGE_OUTPUT_NAMES[package_dir]
@@ -58,7 +58,7 @@ def test_ros_packages_build_point_to_package_xml(
     manifest_path = workspace.joinpath("src", package_dir, "package.xml")
 
     verify_cli_command(
-        [pixi, "publish", str(output_dir), "--path", manifest_path],
+        [pixi, "publish", "--target-dir", str(output_dir), "--path", manifest_path],
     )
 
     expected_name = ROS_PACKAGE_OUTPUT_NAMES[package_dir]
@@ -79,7 +79,7 @@ def test_ros_packages_build_point_to_package_xml_in_the_same_dir(
     manifest_path = workspace.joinpath("src", ROS_IMPLICIT_PACKAGE_DIR)
 
     verify_cli_command(
-        [pixi, "publish", str(output_dir), "--path", "package.xml"],
+        [pixi, "publish", "--target-dir", str(output_dir), "--path", "package.xml"],
         cwd=manifest_path,
     )
 
@@ -99,7 +99,7 @@ def test_ros_packages_build_point_to_implicit_package_xml_fails(
     manifest_path = workspace.joinpath("src", ROS_IMPLICIT_PACKAGE_DIR)
 
     verify_cli_command(
-        [pixi, "publish", str(output_dir), "--path", manifest_path],
+        [pixi, "publish", "--target-dir", str(output_dir), "--path", manifest_path],
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains=[
             "is a directory, please provide the path to the manifest file",

@@ -1,10 +1,10 @@
 
 --8<-- [start:description]
 
-`pixi publish` **builds** a conda package from your workspace and optionally **uploads** it to a channel.
+`pixi publish` **builds** a conda package from your workspace and **uploads** it to a channel.
 
-- With a target URL: builds and uploads in one step.
-- Without a target URL: builds only, nothing is uploaded.
+- With a target URL: builds and uploads to the specified destination.
+- Without a target URL: builds and copies the package to the current working directory.
 
 The target URL determines the upload backend:
 
@@ -13,7 +13,8 @@ The target URL determines the upload backend:
 | `https://prefix.dev/<channel>` | [prefix.dev](https://prefix.dev) |
 | `https://anaconda.org/<owner>` | [Anaconda.org](https://anaconda.org) |
 | `s3://bucket-name/channel` | S3-compatible storage |
-| `file:///path/to/channel` | Local filesystem |
+| `channel:///path/to/channel` | Local filesystem channel |
+| `file:///path/to/dir` | Copy to local directory |
 | `quetz://server/<channel>` | [Quetz](https://github.com/mamba-org/quetz) |
 | `artifactory://server/<channel>` | [JFrog Artifactory](https://jfrog.com/artifactory/) |
 
@@ -23,12 +24,12 @@ The target URL determines the upload backend:
 
 ## Examples
 
-### Build only (no upload)
+### Build and copy to current directory
 
-Omit the target URL to build without uploading. This is useful for local testing before publishing.
+Omit the target URL to build and copy the resulting package to the current working directory.
 
 ```shell
-# Build the package; nothing is uploaded
+# Build the package and copy it to the current directory
 pixi publish
 ```
 
@@ -90,11 +91,26 @@ Local channels are useful for development and testing. The channel directory is 
 
 ```shell
 # Build and publish to a local channel
-pixi publish file:///path/to/my-channel
+pixi publish channel:///path/to/my-channel
 
 # Force overwrite if the package already exists
-pixi publish file:///path/to/my-channel --force
+pixi publish channel:///path/to/my-channel --force
 ```
+
+### Copying to a local path
+
+Use `file://` or a bare path to copy the built `.conda` artifact directly to a directory, without creating a channel structure.
+
+```shell
+# Copy the built package to a directory (file:// URL)
+pixi publish file:///path/to/output/dir
+
+# Bare paths also work -- relative or absolute
+pixi publish /tmp/my-packages
+pixi publish ../my-packages
+```
+
+If the directory looks like a conda channel (contains `repodata.json`), pixi warns that you may have meant to use `channel://` instead.
 
 ### Publishing from a specific manifest
 
