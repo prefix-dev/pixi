@@ -21,7 +21,7 @@ use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec, SpecConversionErro
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName,
-    PackageNameMatcher, ParseStrictness, Platform,
+    PackageNameMatcher, ParseMatchSpecOptions, Platform, RepodataRevision,
 };
 use rattler_repodata_gateway::GatewayError;
 use rattler_solve::{ChannelPriority, SolveError, SolveStrategy};
@@ -285,7 +285,10 @@ fn derive_fetch_specs_from_source_repodata(spec: &SolveCondaSpec) -> Vec<MatchSp
         for record in &sm.records {
             let sources = record.sources();
             for depend in &record.package_record().depends {
-                let Ok(match_spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) else {
+                let Ok(match_spec) = MatchSpec::from_str(
+                    depend,
+                    ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+                ) else {
                     continue;
                 };
                 if let PackageNameMatcher::Exact(ref name) = match_spec.name

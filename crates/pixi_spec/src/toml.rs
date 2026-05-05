@@ -1,11 +1,11 @@
 use std::{borrow::Cow, fmt::Display, path::PathBuf};
 
 use itertools::Either;
-use pixi_toml::{TomlDigest, TomlFromStr};
+use pixi_toml::{TomlDigest, TomlFromStr, TomlWith};
 use rattler_conda_types::{
-    BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec,
+    BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseMatchSpecOptions,
     ParseStrictness::{Lenient, Strict},
-    StringMatcher, VersionSpec,
+    RepodataRevision, StringMatcher, VersionSpec,
     version_spec::{ParseConstraintError, ParseVersionSpecError},
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
@@ -49,6 +49,13 @@ pub struct TomlSpec {
     /// Match the specific filename of the package
     pub file_name: Option<String>,
 
+    /// Optional extra dependencies to select for the package.
+    pub extras: Option<Vec<String>>,
+
+    /// Plain string flags used to select package variants.
+    #[serde_as(as = "Option<Vec<serde_with::DisplayFromStr>>")]
+    pub flags: Option<Vec<StringMatcher>>,
+
     /// The channel of the package
     pub channel: Option<NamedChannelOrUrl>,
 
@@ -57,6 +64,12 @@ pub struct TomlSpec {
 
     /// The license
     pub license: Option<String>,
+
+    /// The license family
+    pub license_family: Option<String>,
+
+    /// The track features of the package
+    pub track_features: Option<Vec<String>>,
 }
 
 /// A TOML representation of a package source location specification.
@@ -120,7 +133,10 @@ fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
         ));
     }
 
-    if let Ok(match_spec) = NamelessMatchSpec::from_str(&input, Lenient) {
+    if let Ok(match_spec) = NamelessMatchSpec::from_str(
+        &input,
+        ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+    ) {
         let spec = PixiSpec::from_nameless_matchspec(
             match_spec,
             &ChannelConfig::default_with_root_dir(PathBuf::default()),
@@ -240,8 +256,11 @@ impl TomlSpec {
                 ("`build`", self.build.is_some()),
                 ("`build_number`", self.build_number.is_some()),
                 ("`file_name`", self.file_name.is_some()),
+                ("`extras`", self.extras.is_some()),
+                ("`flags`", self.flags.is_some()),
                 ("`channel`", self.channel.is_some()),
                 ("`subdir`", self.subdir.is_some()),
+                ("`track_features`", self.track_features.is_some()),
             ] {
                 if is_some {
                     return Err(SpecError::InvalidCombination(
@@ -321,11 +340,15 @@ impl TomlSpec {
                         || self.build.is_some()
                         || self.build_number.is_some()
                         || self.file_name.is_some()
+                        || self.extras.is_some()
+                        || self.flags.is_some()
                         || self.channel.is_some()
                         || self.subdir.is_some()
                         || loc.md5.is_some()
                         || loc.sha256.is_some()
-                        || self.license.is_some();
+                        || self.license.is_some()
+                        || self.license_family.is_some()
+                        || self.track_features.is_some();
                     if !is_detailed {
                         return Err(SpecError::MissingDetailedIdentifier);
                     }
@@ -335,11 +358,16 @@ impl TomlSpec {
                         build: self.build,
                         build_number: self.build_number,
                         file_name: self.file_name,
+                        extras: self.extras,
+                        flags: self.flags,
                         channel: self.channel,
                         subdir: self.subdir,
                         md5: loc.md5,
                         sha256: loc.sha256,
                         license: self.license,
+                        license_family: self.license_family,
+                        condition: None,
+                        track_features: self.track_features,
                     }))
                 }
                 (_, _, _) => return Err(SpecError::MultipleIdentifiers),
@@ -349,9 +377,13 @@ impl TomlSpec {
                 || self.build.is_some()
                 || self.build_number.is_some()
                 || self.file_name.is_some()
+                || self.extras.is_some()
+                || self.flags.is_some()
                 || self.channel.is_some()
                 || self.subdir.is_some()
-                || self.license.is_some();
+                || self.license.is_some()
+                || self.license_family.is_some()
+                || self.track_features.is_some();
             if !is_detailed {
                 return Err(SpecError::MissingDetailedIdentifier);
             }
@@ -361,11 +393,16 @@ impl TomlSpec {
                 build: self.build,
                 build_number: self.build_number,
                 file_name: self.file_name,
+                extras: self.extras,
+                flags: self.flags,
                 channel: self.channel,
                 subdir: self.subdir,
                 md5: None,
                 sha256: None,
                 license: self.license,
+                license_family: self.license_family,
+                condition: None,
+                track_features: self.track_features,
             }));
         }
 
@@ -412,11 +449,15 @@ impl TomlSpec {
                         || self.build.is_some()
                         || self.build_number.is_some()
                         || self.file_name.is_some()
+                        || self.extras.is_some()
+                        || self.flags.is_some()
                         || self.channel.is_some()
                         || self.subdir.is_some()
                         || loc.md5.is_some()
                         || loc.sha256.is_some()
-                        || self.license.is_some();
+                        || self.license.is_some()
+                        || self.license_family.is_some()
+                        || self.track_features.is_some();
                     if !is_detailed {
                         return Err(SpecError::MissingDetailedIdentifier);
                     }
@@ -426,11 +467,16 @@ impl TomlSpec {
                         build: self.build,
                         build_number: self.build_number,
                         file_name: self.file_name,
+                        extras: self.extras,
+                        flags: self.flags,
                         channel: self.channel,
                         subdir: self.subdir,
                         md5: loc.md5,
                         sha256: loc.sha256,
                         license: self.license,
+                        license_family: self.license_family,
+                        condition: None,
+                        track_features: self.track_features,
                     }))
                 }
                 (_, _, _) => return Err(SpecError::MultipleIdentifiers),
@@ -440,9 +486,13 @@ impl TomlSpec {
                 || self.build.is_some()
                 || self.build_number.is_some()
                 || self.file_name.is_some()
+                || self.extras.is_some()
+                || self.flags.is_some()
                 || self.channel.is_some()
                 || self.subdir.is_some()
-                || self.license.is_some();
+                || self.license.is_some()
+                || self.license_family.is_some()
+                || self.track_features.is_some();
             if !is_detailed {
                 return Err(SpecError::MissingDetailedIdentifier);
             }
@@ -452,11 +502,16 @@ impl TomlSpec {
                 build: self.build,
                 build_number: self.build_number,
                 file_name: self.file_name,
+                extras: self.extras,
+                flags: self.flags,
                 channel: self.channel,
                 subdir: self.subdir,
                 md5: None,
                 sha256: None,
                 license: self.license,
+                license_family: self.license_family,
+                condition: None,
+                track_features: self.track_features,
             }));
         };
         Ok(spec)
@@ -597,9 +652,15 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
             .optional::<TomlFromStr<_>>("build-number")
             .map(TomlFromStr::into_inner);
         let file_name = th.optional("file-name");
+        let extras = th.optional::<Vec<String>>("extras");
+        let flags = th
+            .optional::<TomlWith<_, Vec<TomlFromStr<StringMatcher>>>>("flags")
+            .map(TomlWith::into_inner);
         let channel = th.optional("channel").map(TomlFromStr::into_inner);
         let subdir = th.optional("subdir");
         let license = th.optional("license");
+        let license_family = th.optional("license-family");
+        let track_features = th.optional::<Vec<String>>("track-features");
         let md5 = th
             .optional::<TomlDigest<rattler_digest::Md5>>("md5")
             .map(TomlDigest::into_inner);
@@ -625,9 +686,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
             build,
             build_number,
             file_name,
+            extras,
+            flags,
             channel,
             subdir,
             license,
+            license_family,
+            track_features,
         })
     }
 }
@@ -859,5 +924,34 @@ mod test {
         }
 
         insta::assert_yaml_snapshot!(snapshot);
+    }
+
+    #[test]
+    fn test_v3_detailed_fields() {
+        let spec: PixiSpec = serde_json::from_value(json!({
+            "version": ">=1.0",
+            "extras": ["cuda"],
+            "flags": ["cuda", "blas:*"],
+            "license-family": "BSD",
+            "track-features": ["legacy"],
+        }))
+        .unwrap();
+        let detailed = spec.as_detailed().unwrap();
+        assert_eq!(detailed.extras, Some(vec!["cuda".to_string()]));
+        assert_eq!(
+            detailed
+                .flags
+                .as_ref()
+                .unwrap()
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            vec!["cuda".to_string(), "blas:*".to_string()]
+        );
+        assert_eq!(detailed.license_family.as_deref(), Some("BSD"));
+        assert_eq!(detailed.track_features, Some(vec!["legacy".to_string()]));
+
+        let err = serde_json::from_value::<PixiSpec>(json!("1.2.3[flags=[cuda]]")).unwrap_err();
+        assert!(err.to_string().contains("flags"));
     }
 }

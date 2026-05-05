@@ -356,8 +356,8 @@ async fn assemble_source_record_inner(
         track_features: vec![],
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
-        experimental_extra_depends: Default::default(),
-        flags: Default::default(),
+        experimental_extra_depends: output.extra_depends.clone(),
+        flags: output.metadata.flags.clone(),
     };
 
     let sources_by_str: BTreeMap<String, SourceLocationSpec> = sources

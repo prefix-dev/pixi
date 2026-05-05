@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use minijinja::Value;
 use ordermap::OrderMap;
 use pixi_build_types::{
-    BinaryPackageSpec, PackageSpec, SourcePackageName, SourcePackageSpec, Target, TargetSelector,
-    Targets,
+    BinaryPackageSpec, ExtraDependencies, PackageSpec, SourcePackageName, SourcePackageSpec,
+    Target, TargetSelector, Targets,
     procedures::conda_build_v1::{
         CondaBuildV1Dependency, CondaBuildV1DependencySource, CondaBuildV1Prefix,
         CondaBuildV1RunExports,
@@ -181,6 +181,22 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Require
     }
 }
 
+pub fn from_extras_v1_to_conditional_requirements(
+    extras: ExtraDependencies,
+) -> BTreeMap<String, ConditionalList<SerializableMatchSpec>> {
+    extras
+        .into_iter()
+        .map(|(name, deps)| {
+            let items = package_specs_to_package_dependency(deps)
+                .unwrap()
+                .into_iter()
+                .map(package_dependency_to_item)
+                .collect();
+            (name, ConditionalList::new(items))
+        })
+        .collect()
+}
+
 pub(crate) fn source_package_spec_to_package_dependency(
     name: PackageName,
     source_spec: SourcePackageSpec,
@@ -205,12 +221,17 @@ fn binary_package_spec_to_package_dependency(
         build,
         build_number,
         file_name,
+        extras,
+        flags,
         channel,
         subdir,
         md5,
         sha256,
         url,
         license,
+        license_family,
+        condition,
+        track_features,
     } = binary_spec;
 
     // If the version is "*", we treat it as None
@@ -223,7 +244,7 @@ fn binary_package_spec_to_package_dependency(
         build,
         build_number,
         file_name,
-        extras: None,
+        extras,
         channel: channel.map(Channel::from_url).map(Arc::new),
         subdir,
         namespace: None,
@@ -231,10 +252,10 @@ fn binary_package_spec_to_package_dependency(
         sha256,
         url,
         license,
-        condition: None,
-        track_features: None,
-        flags: None,
-        license_family: None,
+        condition,
+        track_features,
+        flags,
+        license_family,
     })
 }
 
@@ -243,9 +264,10 @@ fn package_spec_to_package_dependency(
     spec: PackageSpec,
 ) -> miette::Result<PackageDependency> {
     match spec {
-        PackageSpec::Binary(binary_spec) => {
-            Ok(binary_package_spec_to_package_dependency(name, binary_spec))
-        }
+        PackageSpec::Binary(binary_spec) => Ok(binary_package_spec_to_package_dependency(
+            name,
+            *binary_spec,
+        )),
         PackageSpec::Source(source_spec) => Ok(PackageDependency::Source(
             source_package_spec_to_package_dependency(name, source_spec)?,
         )),
@@ -409,6 +431,7 @@ pub fn from_build_v1_args_to_finalized_dependencies(
                 .into_iter()
                 .map(from_build_v1_dependency_to_dependency_info)
                 .collect(),
+            extra_depends: Default::default(),
             run_exports: run_exports
                 .map(from_build_v1_run_exports_to_run_exports)
                 .unwrap_or_default(),
@@ -440,5 +463,31 @@ mod test {
         };
         let match_spec = binary_package_spec_to_package_dependency(name, spec);
         assert_eq!(match_spec.to_string(), "python");
+    }
+
+    #[test]
+    fn test_extras_conversion() {
+        let mut dependencies = OrderMap::new();
+        dependencies.insert(
+            SourcePackageName::from(PackageName::new_unchecked("gtest")),
+            BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+
+        let mut extras = ExtraDependencies::new();
+        extras.insert("test".to_string(), dependencies);
+
+        let extras = from_extras_v1_to_conditional_requirements(extras);
+        let value = serde_json::to_value(&extras).unwrap();
+
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "test": ["gtest"]
+            })
+        );
     }
 }

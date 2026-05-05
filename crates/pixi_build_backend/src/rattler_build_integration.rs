@@ -199,6 +199,7 @@ pub async fn get_build_output(
                 solve_strategy: Default::default(),
                 exclude_newer: None,
                 env_isolation: Default::default(),
+                v3: true,
             },
             finalized_dependencies: None,
             finalized_sources: None,

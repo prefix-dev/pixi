@@ -1,3 +1,8 @@
+use indexmap::IndexMap;
+use pixi_spec::PixiSpec;
+use pixi_spec_containers::DependencyMap;
+use rattler_conda_types::PackageName;
+
 use crate::target::PackageTarget;
 use crate::{PackageBuild, Targets, package::Package};
 
@@ -13,4 +18,7 @@ pub struct PackageManifest {
 
     /// Defines the dependencies of the package
     pub targets: Targets<PackageTarget>,
+
+    /// Optional dependency groups declared by the package.
+    pub extras: IndexMap<String, DependencyMap<PackageName, PixiSpec>>,
 }

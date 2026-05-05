@@ -7666,7 +7666,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_core"
 version = "0.2.4"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#ea85410517c549abf5878079cc653284fbeb8867"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#4c303435b8b81dd369bc48b1d93252898b966294"
 dependencies = [
  "anyhow",
  "arwen-codesign",
@@ -7750,7 +7750,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_jinja"
 version = "0.1.6"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#ea85410517c549abf5878079cc653284fbeb8867"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#4c303435b8b81dd369bc48b1d93252898b966294"
 dependencies = [
  "fs-err",
  "indexmap 2.14.0",
@@ -7771,7 +7771,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_networking"
 version = "0.1.5"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#ea85410517c549abf5878079cc653284fbeb8867"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#4c303435b8b81dd369bc48b1d93252898b966294"
 dependencies = [
  "rattler_networking",
  "reqwest 0.12.28",
@@ -7783,7 +7783,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_recipe"
 version = "0.1.6"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#ea85410517c549abf5878079cc653284fbeb8867"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#4c303435b8b81dd369bc48b1d93252898b966294"
 dependencies = [
  "fs-err",
  "globset",
@@ -7816,7 +7816,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_script"
 version = "0.2.3"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#ea85410517c549abf5878079cc653284fbeb8867"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#4c303435b8b81dd369bc48b1d93252898b966294"
 dependencies = [
  "clap",
  "console",
@@ -7838,7 +7838,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_source_cache"
 version = "0.1.5"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#ea85410517c549abf5878079cc653284fbeb8867"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#4c303435b8b81dd369bc48b1d93252898b966294"
 dependencies = [
  "async-trait",
  "bzip2 0.6.1",
@@ -7876,7 +7876,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_types"
 version = "0.1.6"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#ea85410517c549abf5878079cc653284fbeb8867"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#4c303435b8b81dd369bc48b1d93252898b966294"
 dependencies = [
  "globset",
  "itertools 0.14.0",
@@ -7891,7 +7891,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_variant_config"
 version = "0.1.6"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#ea85410517c549abf5878079cc653284fbeb8867"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#4c303435b8b81dd369bc48b1d93252898b966294"
 dependencies = [
  "fs-err",
  "marked-yaml",
@@ -7911,7 +7911,7 @@ dependencies = [
 [[package]]
 name = "rattler_build_yaml_parser"
 version = "0.1.6"
-source = "git+https://github.com/prefix-dev/rattler-build?branch=main#ea85410517c549abf5878079cc653284fbeb8867"
+source = "git+https://github.com/prefix-dev/rattler-build?branch=main#4c303435b8b81dd369bc48b1d93252898b966294"
 dependencies = [
  "marked-yaml",
  "miette 7.6.0",

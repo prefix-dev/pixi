@@ -16,7 +16,9 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 use url::Url;
 
-use crate::specs_conversion::from_targets_v1_to_conditional_requirements;
+use crate::specs_conversion::{
+    from_extras_v1_to_conditional_requirements, from_targets_v1_to_conditional_requirements,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct PythonParams {
@@ -213,8 +215,12 @@ impl GeneratedRecipe {
             Value::new_concrete(version_with_source, None),
         );
 
-        let requirements =
+        let mut requirements =
             from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default());
+        requirements.extras = model
+            .extras
+            .map(from_extras_v1_to_conditional_requirements)
+            .unwrap_or_default();
 
         macro_rules! derive_value {
             ($ident:ident) => {
@@ -266,6 +272,14 @@ impl GeneratedRecipe {
 
         let mut recipe = SingleOutputRecipe::new(package);
         recipe.requirements = requirements;
+        if let Some(flags) = model.build_flags {
+            recipe.build.flags = ConditionalList::new(
+                flags
+                    .into_iter()
+                    .map(|flag| Item::Value(Value::new_concrete(flag, None)))
+                    .collect(),
+            );
+        }
         recipe.about = about;
 
         Ok(GeneratedRecipe {
@@ -324,4 +338,64 @@ pub struct DefaultMetadataProvider;
 
 impl MetadataProvider for DefaultMetadataProvider {
     type Error = Infallible;
+}
+
+#[cfg(test)]
+mod tests {
+    use ordermap::OrderMap;
+    use pixi_build_types::{BinaryPackageSpec, ExtraDependencies, SourcePackageName};
+    use rattler_conda_types::{Flag, PackageName};
+
+    use super::*;
+
+    #[test]
+    fn generated_recipe_declares_package_extras() {
+        let mut dependencies = OrderMap::new();
+        dependencies.insert(
+            SourcePackageName::from(PackageName::new_unchecked("gtest")),
+            BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+
+        let mut extras = ExtraDependencies::new();
+        extras.insert("test".to_string(), dependencies);
+
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            extras: Some(extras),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+        let value = serde_json::to_value(&generated.recipe.requirements.extras).unwrap();
+
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "test": ["gtest"]
+            })
+        );
+    }
+
+    #[test]
+    fn generated_recipe_declares_build_flags() {
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            build_flags: Some(vec![
+                "cuda".parse::<Flag>().unwrap(),
+                "blas_openblas".parse::<Flag>().unwrap(),
+            ]),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+        let value = serde_json::to_value(&generated.recipe.build.flags).unwrap();
+
+        assert_eq!(value, serde_json::json!(["cuda", "blas_openblas"]));
+    }
 }

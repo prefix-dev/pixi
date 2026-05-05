@@ -2,7 +2,7 @@
 
 use indexmap::IndexMap;
 use pixi_spec::{PixiSpec, SourceLocationSpec};
-use rattler_conda_types::NamedChannelOrUrl;
+use rattler_conda_types::{Flag, NamedChannelOrUrl};
 
 use crate::TargetSelector;
 use crate::{
@@ -30,6 +30,9 @@ pub struct PackageBuild {
     /// Additional configuration for the build backend.
     pub config: Option<serde_value::Value>,
 
+    /// V3 package variant flags declared by the source package.
+    pub flags: Vec<Flag>,
+
     /// Target-specific configuration for different platforms
     pub target_config: Option<IndexMap<TargetSelector, serde_value::Value>>,
 }
@@ -43,6 +46,7 @@ impl PackageBuild {
             additional_dependencies: IndexMap::default(),
             source: None,
             config: None,
+            flags: Vec::new(),
             target_config: None,
         }
     }

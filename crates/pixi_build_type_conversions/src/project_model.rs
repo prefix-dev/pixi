@@ -31,10 +31,13 @@ fn to_pixi_spec_v1(
                 build,
                 build_number,
                 extras: None,
+                flags: None,
                 subdir,
                 namespace: None,
                 license,
+                license_family: None,
                 condition: None,
+                track_features: None,
             } = source
             else {
                 unimplemented!(
@@ -94,32 +97,38 @@ fn to_pixi_spec_v1(
                 build,
                 build_number,
                 file_name,
+                extras,
+                flags,
                 channel,
                 subdir,
                 md5,
                 sha256,
                 url,
                 license,
+                license_family,
+                condition,
+                track_features,
                 // These are currently explicitly ignored in the conversion
                 namespace: _,
-                extras: _,
-                condition: _,
-                track_features: _,
-                flags: _,
-                license_family: _,
             } = binary.try_into_nameless_match_spec(channel_config)?;
-            pbt::PackageSpec::Binary(pbt::BinaryPackageSpec {
+            pbt::BinaryPackageSpec {
                 version,
                 build,
                 build_number,
                 file_name,
+                extras,
+                flags,
                 channel: channel.map(|c| c.base_url.url().clone().into()),
                 subdir,
                 md5,
                 sha256,
                 url,
                 license,
-            })
+                license_family,
+                condition,
+                track_features,
+            }
+            .into()
         }
     };
     Ok(pbt_spec)
@@ -200,6 +209,25 @@ fn to_targets_v1(
     })
 }
 
+fn to_extras_v1(
+    manifest: &PackageManifest,
+    channel_config: &ChannelConfig,
+) -> Result<Option<pbt::ExtraDependencies>, SpecConversionError> {
+    if manifest.extras.is_empty() {
+        return Ok(None);
+    }
+
+    manifest
+        .extras
+        .iter()
+        .map(|(name, deps)| {
+            to_pbt_dependencies(deps.iter_specs(), channel_config)
+                .map(|dependencies| (name.clone(), dependencies))
+        })
+        .collect::<Result<_, _>>()
+        .map(Some)
+}
+
 /// Converts a [`PackageManifest`] to a [`pbt::ProjectModel`].
 pub fn to_project_model_v1(
     manifest: &PackageManifest,
@@ -211,6 +239,7 @@ pub fn to_project_model_v1(
         build_number: None,
         version: manifest.package.version.clone(),
         description: manifest.package.description.clone(),
+        build_flags: (!manifest.build.flags.is_empty()).then(|| manifest.build.flags.clone()),
         authors: manifest.package.authors.clone(),
         license: manifest.package.license.clone(),
         license_file: manifest.package.license_file.clone(),
@@ -219,6 +248,7 @@ pub fn to_project_model_v1(
         repository: manifest.package.repository.clone(),
         documentation: manifest.package.documentation.clone(),
         targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
+        extras: to_extras_v1(manifest, channel_config)?,
     };
     Ok(project)
 }
@@ -227,6 +257,10 @@ pub fn to_project_model_v1(
 mod tests {
     use std::path::PathBuf;
 
+    use pixi_manifest::Preview;
+    use pixi_manifest::toml::{
+        FromTomlStr, PackageDefaults, TomlPackage, WorkspacePackageProperties,
+    };
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
 
@@ -286,5 +320,67 @@ mod tests {
         manifest_path: PathBuf,
     ) {
         snapshot_test!(manifest_path);
+    }
+
+    #[test]
+    fn test_package_extras_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+
+        [extra-dependencies.test]
+        gtest = "*"
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let extras = project_model.extras.expect("extras are forwarded");
+        let test_extra = extras.get("test").expect("test extra exists");
+
+        assert!(test_extra.keys().any(|name| name.as_str() == "gtest"));
+    }
+
+    #[test]
+    fn test_package_build_flags_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+        flags = ["cuda", "blas_openblas"]
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let flags = project_model
+            .build_flags
+            .expect("build flags are forwarded");
+        let flags = flags.iter().map(|flag| flag.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(flags, vec!["cuda", "blas_openblas"]);
     }
 }

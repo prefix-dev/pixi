@@ -1,6 +1,8 @@
 //! This module makes it a bit easier to pass around a package name and the pixi specification
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, ParseStrictness};
+use rattler_conda_types::{
+    MatchSpec, NamelessMatchSpec, PackageName, ParseMatchSpecOptions, RepodataRevision,
+};
 
 /// The encapsulation of a package name and its associated
 /// Pixi specification.
@@ -39,7 +41,10 @@ impl GlobalSpec {
         spec_str: &str,
         channel_config: &rattler_conda_types::ChannelConfig,
     ) -> Result<Self, FromMatchSpecError> {
-        let match_spec = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?;
+        let match_spec = MatchSpec::from_str(
+            spec_str,
+            ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+        )?;
         GlobalSpec::try_from_matchspec_with_name(match_spec, channel_config)
     }
 

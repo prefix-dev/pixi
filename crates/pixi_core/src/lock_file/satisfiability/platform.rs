@@ -29,7 +29,7 @@ use pixi_uv_conversions::{
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseChannelError, ParseMatchSpecError,
-    ParseStrictness::Lenient, Platform,
+    ParseMatchSpecOptions, Platform, RepodataRevision,
 };
 use rattler_lock::{LockedPackage, UrlOrPath};
 use uv_distribution_types::{RequirementSource, RequiresPython};
@@ -876,7 +876,12 @@ async fn verify_package_platform_satisfiability(
 
                 let record = &locked_pixi_records.records[idx.0];
                 for depends in &record.package_record().depends {
-                    let spec = MatchSpec::from_str(depends.as_str(), Lenient).map_err(|e| {
+                    let spec = MatchSpec::from_str(
+                        depends.as_str(),
+                        ParseMatchSpecOptions::lenient()
+                            .with_repodata_revision(RepodataRevision::V3),
+                    )
+                    .map_err(|e| {
                         CommandDispatcherError::Failed(Box::new(
                             PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e),
                         ))
