@@ -38,7 +38,7 @@ use uv_pypi_types::PyProjectToml;
 use uv_resolver::FlatIndex;
 
 use super::errors::PlatformUnsat;
-use super::platform::VerifySatisfiabilityContext;
+use super::platform::{RequirementOrigin, VerifySatisfiabilityContext};
 use super::pypi_metadata;
 use crate::{
     lock_file::{
@@ -123,10 +123,18 @@ pub(crate) fn pypi_satisfies_editable(
 /// Check satisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
+///
+/// `origin` disambiguates the meaning of an absent `index` on the
+/// requirement. For [`RequirementOrigin::Manifest`] a missing index means
+/// the user did not pin one and the strict "removed the index" check
+/// applies. For [`RequirementOrigin::RequiresDist`] the missing index just
+/// reflects that pep508 cannot encode one, so the lock-file's recorded
+/// index is taken as authoritative.
 pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
     locked_record: &LockedPypiRecord,
     project_root: &Path,
+    origin: RequirementOrigin,
 ) -> Result<(), Box<PlatformUnsat>> {
     let locked_data = &locked_record.data;
     if spec.name.to_string() != locked_data.name().to_string() {
@@ -171,7 +179,10 @@ pub(crate) fn pypi_satisfies_requirement(
                         .into());
                     }
                 }
-                (None, Some(locked_url)) if !is_default_pypi_index(locked_url) => {
+                (None, Some(locked_url))
+                    if origin == RequirementOrigin::Manifest
+                        && !is_default_pypi_index(locked_url) =>
+                {
                     return Err(PlatformUnsat::LockedPyPIIndexMismatch {
                         name: spec.name.to_string(),
                         expected_index: "<default>".to_string(),
@@ -179,8 +190,10 @@ pub(crate) fn pypi_satisfies_requirement(
                     }
                     .into());
                 }
-                // No locked index: the lockfile predates per-package
-                // index tracking (pre-v7), so we can't verify the index.
+                // Either the locked index is missing (pre-v7 lockfile) or the
+                // requirement comes from a parent's `requires_dist` (pep508
+                // carries no index info, so we trust the lock-file's
+                // recorded index).
                 (_, None) | (None, _) => {}
             }
 
@@ -848,6 +861,7 @@ mod tests {
     use uv_distribution_types::RequirementSource;
 
     use super::super::PypiNoBuildCheck;
+    use super::super::platform::RequirementOrigin;
     use super::pypi_satisfies_requirement;
     use crate::lock_file::tests::{make_source_package_with, make_wheel_package_with};
 
@@ -882,7 +896,13 @@ mod tests {
         let project_root = PathBuf::from_str("/").unwrap();
         // This will not satisfy because the rev length is different, even being
         // resolved to the same one
-        pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap_err();
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        )
+        .unwrap_err();
 
         let locked_data = lock_for_test(make_wheel_package_with(
             "mypkg",
@@ -904,12 +924,24 @@ mod tests {
         .unwrap();
         let project_root = PathBuf::from_str("/").unwrap();
         // This will satisfy
-        pypi_satisfies_requirement(&spec, &locked_data, &project_root).unwrap();
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        )
+        .unwrap();
         let non_matching_spec = pep508_requirement_to_uv_requirement(
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg@defgd").unwrap(),
         )
         .unwrap();
-        pypi_satisfies_requirement(&non_matching_spec, &locked_data, &project_root).unwrap_err();
+        pypi_satisfies_requirement(
+            &non_matching_spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        )
+        .unwrap_err();
 
         // Removing the rev from the Requirement should NOT satisfy when lock has
         // explicit Rev. This ensures that when a user removes an explicit ref
@@ -918,7 +950,13 @@ mod tests {
             pep508_rs::Requirement::from_str("mypkg @ git+https://github.com/mypkg").unwrap(),
         )
         .unwrap();
-        pypi_satisfies_requirement(&spec_without_rev, &locked_data, &project_root).unwrap_err();
+        pypi_satisfies_requirement(
+            &spec_without_rev,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        )
+        .unwrap_err();
 
         // When lock has DefaultBranch (no explicit ref), removing rev from manifest
         // should satisfy
@@ -938,6 +976,7 @@ mod tests {
             &spec_without_rev,
             &locked_data_default_branch,
             &project_root,
+            RequirementOrigin::Manifest,
         )
         .unwrap();
     }
@@ -964,7 +1003,13 @@ mod tests {
 
         let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
 
-        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            Path::new(""),
+            RequirementOrigin::Manifest,
+        )
+        .unwrap();
     }
 
     #[test]
@@ -985,7 +1030,13 @@ mod tests {
 
         let spec = pep508_requirement_to_uv_requirement(spec).unwrap();
 
-        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            Path::new(""),
+            RequirementOrigin::Manifest,
+        )
+        .unwrap();
     }
 
     #[test]
@@ -1030,7 +1081,13 @@ mod tests {
 
         // A path-based source dependency without a version should still satisfy
         // a path-based requirement.
-        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            Path::new(""),
+            RequirementOrigin::Manifest,
+        )
+        .unwrap();
     }
 
     /// Windows variant of the path-based dynamic version test.
@@ -1056,7 +1113,13 @@ mod tests {
 
         // A path-based source dependency without a version should still satisfy
         // a path-based requirement.
-        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            Path::new(""),
+            RequirementOrigin::Manifest,
+        )
+        .unwrap();
     }
 
     /// Test that `pypi_satisfies_requirement` works with a git-based
@@ -1078,7 +1141,13 @@ mod tests {
         .unwrap();
 
         // A git-based source dependency without a version should still satisfy.
-        pypi_satisfies_requirement(&spec, &locked_data, Path::new("")).unwrap();
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            Path::new(""),
+            RequirementOrigin::Manifest,
+        )
+        .unwrap();
     }
 
     /// Regression test: removing a PyPI `index` from the manifest should
@@ -1110,12 +1179,71 @@ mod tests {
 
         let project_root = PathBuf::from_str("/").unwrap();
 
-        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        let result = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        );
         assert!(
             result.is_err(),
             "expected index removal to invalidate satisfiability, \
              but pypi_satisfies_requirement returned Ok(())"
         );
+    }
+
+    /// Regression test for a false-positive index mismatch on transitive
+    /// dependencies pulled from a custom index.
+    ///
+    /// When a package resolved from a custom index has a transitive
+    /// `requires_dist` entry, that requirement is materialized from pep508
+    /// and therefore carries no `index` info. The locked record for the
+    /// transitive dep, however, faithfully records the custom index it was
+    /// resolved from. Treating that as a mismatch incorrectly marks the
+    /// environment as out-of-date on every subsequent `pixi lock` run.
+    #[test]
+    fn test_pypi_transitive_custom_index_should_satisfy() {
+        // Locked transitive package was resolved from a custom index.
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://custom.example.com/simple/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            Some(Url::parse("https://custom.example.com/simple").unwrap()),
+            vec![],
+            None,
+        ));
+
+        // Transitive requirement: parsed from a parent's `requires_dist`.
+        // pep508 has no concept of an index, so `index` is always None here.
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("my-dep>=1.0,<2.0").unwrap(),
+        )
+        .unwrap();
+
+        let project_root = PathBuf::from_str("/").unwrap();
+
+        // Direct (non-transitive) check should still flag the mismatch as
+        // before, because the user could have removed the `index` from the
+        // manifest.
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        )
+        .expect_err("direct requirement without index must not satisfy custom-index lock");
+
+        // Transitive check must accept the lock-file's recorded index.
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::RequiresDist,
+        )
+        .expect("transitive requirement with no pep508 index must satisfy a custom-index lock");
     }
 
     /// Helper to build a `uv_distribution_types::Requirement` with an explicit index.
@@ -1168,7 +1296,12 @@ mod tests {
         );
 
         let project_root = PathBuf::from_str("/").unwrap();
-        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        let result = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        );
         assert!(
             result.is_err(),
             "expected index change to invalidate satisfiability"
@@ -1194,7 +1327,12 @@ mod tests {
         let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
 
         let project_root = PathBuf::from_str("/").unwrap();
-        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        let result = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        );
         assert!(
             result.is_ok(),
             "expected matching index to satisfy, got: {:?}",
@@ -1222,7 +1360,12 @@ mod tests {
             registry_requirement_with_index("my-dep", ">=1.0", "https://custom.example.com/simple");
 
         let project_root = PathBuf::from_str("/").unwrap();
-        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        let result = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        );
         assert!(
             result.is_err(),
             "expected adding an index to invalidate satisfiability"
@@ -1258,7 +1401,12 @@ mod tests {
         let spec = registry_requirement_with_index("my-dep", ">=1.0", index_url);
 
         let project_root = PathBuf::from_str("/").unwrap();
-        let result = pypi_satisfies_requirement(&spec, &locked_data, &project_root);
+        let result = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        );
         assert!(
             result.is_ok(),
             "v6 lockfile with missing index_url should still satisfy a \

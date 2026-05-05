@@ -1,0 +1,10 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-index-transitive"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+my-root = { version = "==1.0.0", index = "https://custom.example.com/simple" }
