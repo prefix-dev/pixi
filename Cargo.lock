@@ -4843,6 +4843,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nanoid"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8628de41fe064cc3f0cf07f3d299ee3e73521adaff72278731d5c8cae3797873"
+dependencies = [
+ "rand 0.9.2",
+]
+
+[[package]]
 name = "native-tls"
 version = "0.2.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6149,7 +6158,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
- "nanoid",
+ "nanoid 0.5.0",
  "once_cell",
  "ordermap",
  "parking_lot 0.12.5",
@@ -11263,7 +11272,7 @@ version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.9.5#d5f39331a73d5042e70ab770463dff632e20c127"
 dependencies = [
  "fs-err",
- "nanoid",
+ "nanoid 0.4.0",
  "rmp-serde",
  "rustc-hash",
  "same-file",
@@ -11455,7 +11464,7 @@ dependencies = [
  "either",
  "fs-err",
  "futures",
- "nanoid",
+ "nanoid 0.4.0",
  "owo-colors",
  "reqwest 0.12.28",
  "reqwest-middleware",
