@@ -18,8 +18,7 @@ use std::hash::Hasher;
 use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
 use url::Url;
 
-/// The source package name of a package. Not normalized per se.
-pub type SourcePackageName = String;
+pub use rattler_conda_types::SourcePackageName;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
@@ -158,21 +157,21 @@ pub struct Target {
     /// Host dependencies of the project
     #[cfg_attr(
         feature = "schemars",
-        schemars(with = "Option<std::collections::HashMap<SourcePackageName, PackageSpec>>")
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
     )]
     pub host_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
 
     /// Build dependencies of the project
     #[cfg_attr(
         feature = "schemars",
-        schemars(with = "Option<std::collections::HashMap<SourcePackageName, PackageSpec>>")
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
     )]
     pub build_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
 
     /// Run dependencies of the project
     #[cfg_attr(
         feature = "schemars",
-        schemars(with = "Option<std::collections::HashMap<SourcePackageName, PackageSpec>>")
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
     )]
     pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
 }
@@ -265,6 +264,7 @@ pub enum PinBound {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct NamedSpec<T> {
+    #[cfg_attr(feature = "schemars", schemars(with = "String"))]
     pub name: SourcePackageName,
 
     #[serde(flatten)]
@@ -930,7 +930,7 @@ mod tests {
         // Add a real dependency (should change hash)
         let mut deps = OrderMap::new();
         deps.insert(
-            "python".to_string(),
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
             PackageSpec::Binary(BinaryPackageSpec::default()),
         );
 
@@ -1026,15 +1026,21 @@ mod tests {
     fn create_sample_target_v1() -> Target {
         Target {
             host_dependencies: Some(OrderMap::from([(
-                "host_dep1".to_string(),
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "host_dep1",
+                )),
                 PackageSpec::Binary(BinaryPackageSpec::default()),
             )])),
             build_dependencies: Some(OrderMap::from([(
-                "build_dep1".to_string(),
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "build_dep1",
+                )),
                 PackageSpec::Binary(BinaryPackageSpec::default()),
             )])),
             run_dependencies: Some(OrderMap::from([(
-                "run_dep1".to_string(),
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "run_dep1",
+                )),
                 PackageSpec::Binary(BinaryPackageSpec::default()),
             )])),
         }
@@ -1143,7 +1149,7 @@ mod tests {
 
         let mut deps = OrderMap::new();
         deps.insert(
-            "python".to_string(),
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
             PackageSpec::Binary(BinaryPackageSpec::default()),
         );
 

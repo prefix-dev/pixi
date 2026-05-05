@@ -81,6 +81,8 @@ impl DetailedSpec {
             extras: Default::default(),
             condition: None,
             track_features: None,
+            flags: None,
+            license_family: None,
         })
     }
 }
@@ -130,7 +132,6 @@ impl Display for DetailedSpec {
         if let Some(sha256) = &self.sha256 {
             parts.push(format!("sha256={sha256:x}"));
         }
-
         if parts.is_empty() {
             write!(f, "*")
         } else {

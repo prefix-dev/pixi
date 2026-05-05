@@ -46,6 +46,11 @@ pub fn is_python_record(record: impl AsRef<PackageRecord>) -> bool {
     package_name_is_python(&record.as_ref().name)
 }
 
+/// Returns true if the specified package name refers to a version/variant of python.
+pub fn is_python_package_name(name: &PackageName) -> bool {
+    package_name_is_python(name)
+}
+
 /// Returns true if the specified name refers to a version/variant of python.
 /// TODO: Add support for more variants.
 pub fn package_name_is_python(record: &rattler_conda_types::PackageName) -> bool {
@@ -235,9 +240,7 @@ fn gil_disabled(python_record: &PackageRecord) -> Result<bool, PyPITagError> {
     let python_abi =
         PackageName::from_str("python_abi").expect("python_abi is a valid package name");
     Ok(deps.iter().any(|spec| {
-        spec.name
-            .as_ref()
-            .is_some_and(|name| name.matches(&python_abi))
+        spec.name.matches(&python_abi)
             && spec.build.as_ref().is_some_and(|build| {
                 let raw_str = format!("{build}");
                 regex.is_match(&raw_str)

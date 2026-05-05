@@ -13,7 +13,7 @@ This shift towards workspaces offers a more organized and efficient way to manag
 |-----------------------------|---------------------------------------------------|---------------------------------------------------------------------------|
 | Installation                | Requires an installer                             | Download and add to path (See [installation](../index.md))                |
 | Creating an Environment     | `conda create -n myenv -c conda-forge python=3.8` | `pixi init myenv` followed by `pixi add python=3.8`                       |
-| Activating an Environment   | `conda activate myenv`                            | `pixi shell` within the workspace directory                                 |
+| Activating an Environment   | `conda activate myenv`                            | `pixi shell` within the workspace directory, or `pixi shell -w myenv`     |
 | Deactivating an Environment | `conda deactivate`                                | `exit` from the `pixi shell`                                              |
 | Running a Task              | `conda run -n myenv python my_program.py`         | `pixi run python my_program.py` (See [run](../reference/cli/pixi/run.md)) |
 | Installing a Package        | `conda install numpy`                             | `pixi add numpy`                                                          |
@@ -66,6 +66,38 @@ bat pixi.toml
     Installations with `pixi global` get their own isolated environment.
     Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary.
     Using that `pip` binary will install packages in the `pip` environment, making it unreachable from anywhere as you can't activate it.
+
+## Named workspaces
+
+`conda` provides the ability to perform actions on an environment by name or path to a prefix. For example,
+
+```shell
+# installs package into an environment named `myenv`
+conda install --name myenv numpy
+# installs a package into an environment that is located at `{_CONDA_ROOT}/envs/myenv`
+conda install --prefix {_CONDA_ROOT}/envs/myenv numpy
+```
+
+`pixi` provides a similar functionality. You may register a named workspace using the `pixi workspace register` command.
+
+```shell
+pixi workspace register --name myproject --path /path/to/myproject
+```
+
+??? tip "Creating a new named workspace"
+    Registering a workspace in pixi is currently a two step process. First you must create a workspace, for example using the `pixi init` command. Then, you may add it to the workspace registry with the `pixi workspace register` command. This is in contrast to conda, which allows creating a new named environment, for example using the command `conda create --name myenv`.
+
+Then, you may use the named workspace similar to how `conda` works 
+
+```shell
+# adds a package into a workspace that has been registered with name `myproject`
+pixi add numpy --workspace myproject
+# adds a package into a workspace at the location `/path/to/myproject`
+pixi add numpy --manifest-path /path/to/myproject
+```
+
+??? tip "Use `pixi workspace register prune` to clean up disassociated workspaces"
+    Your named workspace will be disassociated if you move the workspace path. To list all existing associations try running `pixi workspace register list`. To remove disassociated paths try running `pixi workspace register prune`.
 
 
 ## Automated switching

@@ -377,6 +377,8 @@ impl WorkspaceMut {
             command_dispatcher,
             glob_hash_cache,
             io_concurrency_limit,
+            build_caches,
+            ..
         } = UpdateContext::builder(self.workspace(), None)?
             .with_lock_file(unlocked_lock_file)
             .with_no_install(no_install || dry_run)
@@ -432,17 +434,20 @@ impl WorkspaceMut {
             self.save_inner().await.into_diagnostic()?;
         }
 
-        let updated_lock_file = LockFileDerivedData {
-            workspace: self.workspace(),
+        // Re-wrap the derived data under the longer-lived workspace
+        // reference.
+        let mut updated_lock_file = LockFileDerivedData::from_input_lock_file(
+            self.workspace(),
             lock_file,
             package_cache,
-            updated_conda_prefixes,
-            updated_pypi_prefixes,
-            uv_context,
-            io_concurrency_limit,
             command_dispatcher,
             glob_hash_cache,
-        };
+        );
+        updated_lock_file.updated_conda_prefixes = updated_conda_prefixes;
+        updated_lock_file.updated_pypi_prefixes = updated_pypi_prefixes;
+        updated_lock_file.uv_context = uv_context;
+        updated_lock_file.io_concurrency_limit = io_concurrency_limit;
+        updated_lock_file.build_caches = build_caches;
         if !dry_run {
             updated_lock_file.write_to_disk()?;
         }
@@ -481,12 +486,7 @@ impl WorkspaceMut {
     ) -> Result<(), miette::Error> {
         for spec in conda_deps {
             // Determine the name of the package to add
-            let (Some(name_matcher), spec) = spec.clone().into_nameless() else {
-                miette::bail!(
-                    "{} does not support wildcard dependencies",
-                    pixi_utils::executable_name()
-                );
-            };
+            let (name_matcher, spec) = spec.clone().into_nameless();
             let Some(name) = name_matcher.as_exact() else {
                 miette::bail!(
                     "{} does not support wildcard dependencies",
@@ -537,7 +537,8 @@ impl WorkspaceMut {
             // platforms
             .filter_map(|(env, platform)| {
                 let locked_env = updated_lock_file.environment(&env)?;
-                locked_env.conda_repodata_records(platform).ok()?
+                let lock_platform = updated_lock_file.platform(&platform.to_string())?;
+                locked_env.conda_repodata_records(lock_platform).ok()?
             })
             .flatten()
             .collect_vec();
@@ -622,7 +623,10 @@ impl WorkspaceMut {
             // Get all the conda and pypi records for the combination of environments and
             // platforms
             .iter()
-            .filter_map(|(env, platform)| env.pypi_packages(*platform))
+            .filter_map(|(env, platform)| {
+                let lock_platform = env.lock_file().platform(&platform.to_string())?;
+                env.pypi_packages(lock_platform)
+            })
             .flatten()
             .collect_vec();
 
@@ -637,9 +641,10 @@ impl WorkspaceMut {
             let version_constraint = pinning_strategy.determine_version_constraint(
                 pypi_records
                     .iter()
-                    .filter_map(|(data, _)| {
-                        if &data.name == name.as_normalized() {
-                            Version::from_str(&data.version.to_string()).ok()
+                    .filter_map(|data| {
+                        if data.name() == name.as_normalized() {
+                            data.version()
+                                .and_then(|v| Version::from_str(&v.to_string()).ok())
                         } else {
                             None
                         }

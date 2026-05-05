@@ -351,8 +351,8 @@ async fn list_tasks(
 
     if args.machine_readable {
         let unformatted: String = tasks_per_env
-            .iter()
-            .flat_map(|(_, v)| v.keys())
+            .values()
+            .flat_map(|v| v.keys())
             .sorted()
             .map(|name| name.as_str())
             .join(" ");

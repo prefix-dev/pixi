@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use miette::Diagnostic;
-use rattler_lock::LockedPackageRef;
+use rattler_lock::LockedPackage;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// A simplified representation of a package and its dependencies for efficient filtering.
@@ -29,45 +29,36 @@ struct PackageNode {
     pub source: PackageSource,
 }
 
-impl<'a> From<LockedPackageRef<'a>> for PackageNode {
+impl From<&LockedPackage> for PackageNode {
     /// Convert a LockedPackageRef to a PackageNode for efficient processing.
-    fn from(package_ref: LockedPackageRef<'a>) -> Self {
-        let name = package_ref.name().to_string();
+    fn from(package: &LockedPackage) -> Self {
+        let name = package.name().to_string();
 
-        let dependency_names: Vec<String> = match package_ref {
-            LockedPackageRef::Conda(conda_data) => {
+        let dependency_names: Vec<String> = match package {
+            LockedPackage::Conda(conda_data) => {
                 // Extract dependencies from conda data and parse as MatchSpec
-                let depends = match conda_data {
-                    rattler_lock::CondaPackageData::Binary(binary_data) => {
-                        &binary_data.package_record.depends
-                    }
-                    rattler_lock::CondaPackageData::Source(source_data) => {
-                        &source_data.package_record.depends
-                    }
-                };
-
-                depends
+                conda_data
+                    .depends()
                     .iter()
                     .filter_map(|dep_spec| {
                         // Parse as MatchSpec to get the package name
                         dep_spec
                             .parse::<rattler_conda_types::MatchSpec>()
                             .ok()
-                            .and_then(|spec| {
-                                spec.name.map(|name| {
-                                    name.as_exact()
-                                        .expect("depends can only contain exact package names")
-                                        .as_normalized()
-                                        .to_string()
-                                })
+                            .map(|spec| {
+                                spec.name
+                                    .as_exact()
+                                    .expect("depends can only contain exact package names")
+                                    .as_normalized()
+                                    .to_string()
                             })
                     })
                     .collect()
             }
-            LockedPackageRef::Pypi(pypi_data, _env_data) => {
+            LockedPackage::Pypi(pypi_data) => {
                 // For PyPI, use the requirement directly to get the name
                 pypi_data
-                    .requires_dist
+                    .requires_dist()
                     .iter()
                     .map(|req| req.name.to_string())
                     .collect()
@@ -77,9 +68,9 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
         PackageNode {
             name,
             dependencies: dependency_names,
-            source: match package_ref {
-                LockedPackageRef::Conda(_) => PackageSource::Conda,
-                LockedPackageRef::Pypi(_, _) => PackageSource::Pypi,
+            source: match &package {
+                LockedPackage::Conda(_) => PackageSource::Conda,
+                LockedPackage::Pypi(_) => PackageSource::Pypi,
             },
         }
     }
@@ -101,7 +92,7 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
 /// `stop_set` while the `skip_direct` maps into the passthrough set. Intuitively it feels like the opposite.
 /// To make sense of this, first consider that the algorithms is interested in finding what can still be reached under new constraints.
 ///
-/// So while the user is interested in what to *skip*, we are interested in what we can still *reach*. Thats why things are the inverse.
+/// So while the user is interested in what to *skip*, we are interested in what we can still *reach*. That's why things are the inverse.
 /// 1. Hence, think of the `skip_with_deps` as pruning parts of the the tree so the place for it is the `stop_set`.
 /// 2. And think of `skip_direct` as edge joining two nodes, basically ignoring the skipped node, so the place for it is the `passthrough_set`.
 /// 3. Finally, think of the `target` node as zooming into the tree selecting that nodes and its dependencies and basically ignoring the rest.
@@ -147,7 +138,7 @@ impl<'a> InstallSubset<'a> {
     ///   nodes in `skip_direct` from the final result.
     pub fn filter<'lock>(
         &self,
-        packages: Option<impl IntoIterator<Item = LockedPackageRef<'lock>> + 'lock>,
+        packages: Option<impl IntoIterator<Item = &'lock LockedPackage> + 'lock>,
     ) -> Result<FilteredPackages<'lock>, InstallSubsetError> {
         // Handle None packages
         let Some(packages) = packages else {
@@ -208,7 +199,7 @@ impl<'a> InstallSubset<'a> {
     /// required by any remaining (non-skipped) package.
     fn filter_with_skips<'lock>(
         &self,
-        all_packages: &[LockedPackageRef<'lock>],
+        all_packages: &[&'lock LockedPackage],
     ) -> FilteredPackages<'lock> {
         if self.skip_with_deps.is_empty() && self.skip_direct.is_empty() {
             return FilteredPackages::new(all_packages.to_vec(), Vec::new());
@@ -234,7 +225,7 @@ impl<'a> InstallSubset<'a> {
     }
 
     /// Build a reachability analyzer for a set of packages.
-    fn build_reachability(all_packages: &[LockedPackageRef<'_>]) -> PackageReachability {
+    fn build_reachability(all_packages: &[&'_ LockedPackage]) -> PackageReachability {
         let nodes: Vec<PackageNode> = all_packages.iter().copied().map(Into::into).collect();
         PackageReachability::new(nodes)
     }
@@ -243,15 +234,12 @@ impl<'a> InstallSubset<'a> {
 /// Result of applying an InstallSubset over a package set.
 #[derive(Default)]
 pub struct FilteredPackages<'lock> {
-    pub install: Vec<LockedPackageRef<'lock>>,
-    pub ignore: Vec<LockedPackageRef<'lock>>,
+    pub install: Vec<&'lock LockedPackage>,
+    pub ignore: Vec<&'lock LockedPackage>,
 }
 
 impl<'lock> FilteredPackages<'lock> {
-    pub fn new(
-        install: Vec<LockedPackageRef<'lock>>,
-        ignore: Vec<LockedPackageRef<'lock>>,
-    ) -> Self {
+    pub fn new(install: Vec<&'lock LockedPackage>, ignore: Vec<&'lock LockedPackage>) -> Self {
         FilteredPackages { install, ignore }
     }
 }

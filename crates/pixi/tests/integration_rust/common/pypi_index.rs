@@ -17,6 +17,8 @@ use url::Url;
 use zip::ZipWriter;
 use zip::write::SimpleFileOptions;
 
+type ProjectFileEntry = (String, Option<DateTime<Utc>>);
+
 /// A wheel tag triple: (python tag, abi tag, platform tag).
 /// Defaults to `py3-none-any`.
 #[derive(Clone, Debug)]
@@ -45,7 +47,7 @@ pub struct PyPIPackage {
     pub requires_dist: Vec<String>,
     pub requires_python: Option<String>,
     pub summary: Option<String>,
-    pub timestamp: Option<DateTime<Utc>>, // Not embedded, but kept for parity/extension
+    pub timestamp: Option<DateTime<Utc>>,
 }
 
 impl PyPIPackage {
@@ -90,6 +92,11 @@ impl PyPIPackage {
         self.summary = Some(summary.into());
         self
     }
+
+    pub fn with_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
 }
 
 /// A collection of packages that can be materialized as either flat or simple indexes.
@@ -129,7 +136,7 @@ impl Database {
 
         // Group wheels by normalized project name
         use std::collections::BTreeMap;
-        let mut projects: BTreeMap<String, Vec<String>> = BTreeMap::new();
+        let mut projects: BTreeMap<String, Vec<ProjectFileEntry>> = BTreeMap::new();
 
         for pkg in &self.packages {
             let project = normalize_simple_name(&pkg.name);
@@ -137,13 +144,14 @@ impl Database {
             fs::create_dir_all(&project_dir).into_diagnostic()?;
             // write wheel inside project dir
             let wheel_path = write_wheel(&project_dir, pkg)?;
-            projects.entry(project).or_default().push(
+            projects.entry(project).or_default().push((
                 wheel_path
                     .file_name()
                     .unwrap()
                     .to_string_lossy()
                     .to_string(),
-            );
+                pkg.timestamp,
+            ));
         }
 
         // Write per-project index.html files
@@ -151,8 +159,11 @@ impl Database {
             "<!-- generated -->\n<!DOCTYPE html>\n<html><body>\n%LINKS%\n</body></html>\n";
         for (project, files) in &projects {
             let mut links = String::new();
-            for fname in files {
-                let _ = writeln!(links, "<a href=\"{fname}\">{fname}</a>");
+            for (fname, timestamp) in files {
+                let upload_time = timestamp
+                    .map(|timestamp| format!(" data-upload-time=\"{}\"", timestamp.to_rfc3339()))
+                    .unwrap_or_default();
+                let _ = writeln!(links, "<a href=\"{fname}\"{upload_time}>{fname}</a>");
             }
             let html = INDEX_TMPL.replace("%LINKS%", &links);
             fs::write(index_root.join(project).join("index.html"), html).into_diagnostic()?;

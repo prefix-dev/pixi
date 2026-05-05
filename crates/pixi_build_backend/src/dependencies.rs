@@ -80,7 +80,7 @@ impl<'a> MatchspecExtractor<'a> {
                 .context("failed to convert variant to matchspec")?;
                 specs.push(MatchSpec::from_nameless(
                     spec,
-                    Some(PackageNameMatcher::Exact(name)),
+                    PackageNameMatcher::Exact(name),
                 ));
                 continue;
             }
@@ -184,7 +184,7 @@ fn convert_nameless_matchspec(spec: NamelessMatchSpec) -> pbt::BinaryPackageSpec
 fn can_apply_variant(spec: &MatchSpec) -> Option<&PackageName> {
     match &spec {
         MatchSpec {
-            name: Some(name),
+            name,
             version: None,
             build: None,
             build_number: None,
@@ -199,6 +199,8 @@ fn can_apply_variant(spec: &MatchSpec) -> Option<&PackageName> {
             url: None,
             condition: None,
             track_features: None,
+            flags: None,
+            license_family: None,
         } => name.as_exact(),
         _ => None,
     }
@@ -231,7 +233,7 @@ fn apply_variant_and_convert(
         .map_err(|e| ConvertDependencyError::VariantSpecParseError(variant.clone(), e))?;
 
     Ok(Some(pbt::NamedSpec {
-        name: name.as_source().to_owned(),
+        name: pbt::SourcePackageName::from(name.clone()),
         spec: convert_nameless_matchspec(spec),
     }))
 }
@@ -249,14 +251,11 @@ fn convert_dependency(
             if let Some(source_package) =
                 spec.url.clone().and_then(from_source_url_to_source_package)
             {
-                let Some(name_matcher) = spec.name else {
-                    return Err(ConvertDependencyError::MissingName);
-                };
-                let Some(name) = name_matcher.as_exact() else {
+                let Some(name) = spec.name.as_exact() else {
                     return Err(ConvertDependencyError::MissingName);
                 };
                 return Ok(pbt::NamedSpec {
-                    name: name.as_source().into(),
+                    name: pbt::SourcePackageName::from(name.clone()),
                     spec: pbt::PackageSpec::Source(source_package),
                 });
             }
@@ -284,7 +283,7 @@ fn convert_dependency(
             let name = &pin.name;
             let args = &pin.args;
             return Ok(pbt::NamedSpec {
-                name: name.as_source().to_owned(),
+                name: pbt::SourcePackageName::from(name.clone()),
                 spec: pbt::PackageSpec::PinCompatible(pbt::PinCompatibleSpec {
                     lower_bound: args.lower_bound.clone().map(convert_pin_bound),
                     upper_bound: args.upper_bound.clone().map(convert_pin_bound),
@@ -295,9 +294,7 @@ fn convert_dependency(
         }
     };
 
-    let (Some(name_matcher), spec) = match_spec.into_nameless() else {
-        return Err(ConvertDependencyError::MissingName);
-    };
+    let (name_matcher, spec) = match_spec.into_nameless();
     let Some(name) = name_matcher.as_exact() else {
         return Err(ConvertDependencyError::MissingName);
     };
@@ -315,12 +312,12 @@ fn convert_dependency(
         source_spec.license = spec.license.or(source_spec.license);
 
         Ok(pbt::NamedSpec {
-            name: name.as_source().to_owned(),
+            name: pbt::SourcePackageName::from(name.clone()),
             spec: pbt::PackageSpec::Source(source_spec),
         })
     } else {
         Ok(pbt::NamedSpec {
-            name: name.as_source().to_owned(),
+            name: pbt::SourcePackageName::from(name.clone()),
             spec: pbt::PackageSpec::Binary(convert_nameless_matchspec(spec)),
         })
     }
@@ -372,15 +369,13 @@ fn convert_constraint_dependency(
         });
     }
 
-    let (Some(name_matcher), spec) = match_spec.into_nameless() else {
-        return Err(ConvertDependencyError::MissingName);
-    };
+    let (name_matcher, spec) = match_spec.into_nameless();
     let Some(name) = name_matcher.as_exact() else {
         return Err(ConvertDependencyError::MissingName);
     };
 
     Ok(pbt::NamedSpec {
-        name: name.as_source().to_owned(),
+        name: pbt::SourcePackageName::from(name.clone()),
         spec: pbt::ConstraintSpec::Binary(convert_nameless_matchspec(spec)),
     })
 }
@@ -426,8 +421,7 @@ pub fn apply_variant(
                     if build_time
                         && m.version.is_none()
                         && m.build.is_none()
-                        && let Some(name_matcher) = &m.name
-                        && let Some(exact_name) = name_matcher.as_exact()
+                        && let Some(exact_name) = m.name.as_exact()
                         && let Some(version) = variant.get(&exact_name.into())
                     {
                         // if the variant starts with an alphanumeric character,
@@ -445,7 +439,7 @@ pub fn apply_variant(
                             .parse()
                             .map_err(|e| ResolveError::VariantSpecParseError(variant.clone(), e))?;
 
-                        let spec = MatchSpec::from_nameless(spec, Some(name_matcher.clone()));
+                        let spec = MatchSpec::from_nameless(spec, exact_name.clone().into());
 
                         return Ok(VariantDependency { spec, variant }.into());
                     }

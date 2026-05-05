@@ -31,7 +31,6 @@ To use the ROS backend in your `pixi.toml`, add it to your package's build confi
 [workspace]
 preview = ["pixi-build"]
 channels = [
-    "https://prefix.dev/pixi-build-backends",
     "https://prefix.dev/robostack-jazzy",  # or robostack-humble, robostack-noetic, etc.
     "https://prefix.dev/conda-forge"
 ]
@@ -195,17 +194,21 @@ Additional glob patterns to include as input files for the build process. These 
 ```toml title="pixi.toml"
 [package.build.config]
 extra-input-globs = [
-    "launch/**/*.py",
-    "config/*.yaml",
-    "msgs/**/*.msg",
-    "srvs/**/*.srv"
+    "urdf/**/*.urdf",
+    "worlds/**/*.sdf"
 ]
 ```
 
 Default input globs include:
+
 - Source files: `**/*.{c,cpp,h,hpp,rs,sh,py,pyx}`
 - ROS configuration: `package.xml`, `setup.py`, `setup.cfg`, `pyproject.toml`
 - Build files: `CMakeLists.txt`
+- Launch files: `launch/**/*.py`
+- Config files: `config/*.yaml`
+- Message definitions: `msg/**/*.msg`
+- Service definitions: `srv/**/*.srv`
+- Action definitions: `action/**/*.action`
 
 ### `extra-package-mappings`
 

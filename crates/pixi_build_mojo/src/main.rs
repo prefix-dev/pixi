@@ -8,12 +8,13 @@ use pixi_build_backend::generated_recipe::DefaultMetadataProvider;
 use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
+    tools::BackendIdentifier,
     traits::ProjectModel,
 };
 use rattler_build_jinja::Variable;
+use rattler_build_recipe::stage0::{Script, Value};
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Platform};
-use recipe_stage0::recipe::Script;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{
@@ -65,8 +66,9 @@ impl GenerateRecipe for MojoGenerator {
                 .recipe
                 .package
                 .name
-                .concrete()
-                .ok_or(Error::msg("Package is missing a name"))?,
+                .as_concrete()
+                .ok_or(Error::msg("Package is missing a name"))?
+                .as_str(),
         );
 
         // Auto-derive bins and pkg fields/configs if needed
@@ -102,11 +104,13 @@ impl GenerateRecipe for MojoGenerator {
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script {
-            content: build_script,
-            env: config.env.clone(),
-            ..Default::default()
-        };
+        generated_recipe.recipe.build.script = Script::from_content(build_script).with_env(
+            config
+                .env
+                .iter()
+                .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                .collect(),
+        );
 
         generated_recipe.build_input_globs = Self::globs().collect::<BTreeSet<_>>();
 
@@ -157,7 +161,11 @@ impl MojoGenerator {
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<MojoGenerator>::new(log, Arc::default())
+        IntermediateBackendInstantiator::<MojoGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            log,
+            Arc::default(),
+        )
     })
     .await
     {
@@ -173,7 +181,7 @@ mod tests {
     use crate::config::{MojoBinConfig, MojoPkgConfig};
     use fs_err as fs;
     use indexmap::IndexMap;
-    use recipe_stage0::recipe::{Item, Value};
+    use rattler_build_recipe::stage0::Item;
 
     use super::*;
 
@@ -477,7 +485,10 @@ mod tests {
         let compiler_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
+                Item::Value(v) => {
+                    let s = v.as_template()?.to_string();
+                    s.contains("compiler").then_some(s)
+                }
                 _ => None,
             })
             .collect();
@@ -552,7 +563,10 @@ mod tests {
         let compiler_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
+                Item::Value(v) => {
+                    let s = v.as_template()?.to_string();
+                    s.contains("compiler").then_some(s)
+                }
                 _ => None,
             })
             .collect();
@@ -620,7 +634,10 @@ mod tests {
         let compiler_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
+                Item::Value(v) => {
+                    let s = v.as_template()?.to_string();
+                    s.contains("compiler").then_some(s)
+                }
                 _ => None,
             })
             .collect();

@@ -2,12 +2,8 @@
 description = "R build backend for Pixi"
 edition.workspace = true
 license.workspace = true
-name = "pixi_build_r"
-version = "0.1.1"
-
-[[bin]]
 name = "pixi-build-r"
-path = "src/main.rs"
+version = "0.1.1"
 
 [package.metadata.dist]
 dist = false
@@ -33,7 +29,7 @@ tokio = { workspace = true, features = ["macros"] }
 pixi_build_backend = { workspace = true }
 pixi_build_types = { workspace = true }
 
-recipe_stage0 = { workspace = true }
+rattler_build_recipe = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }

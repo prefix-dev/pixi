@@ -22,6 +22,11 @@ pub enum MetadataError {
     PyProjectToml(#[from] toml::de::Error),
     #[error("failed to parse version from pyproject.toml, {0}")]
     ParseVersion(ParseVersionError),
+    #[error("`pixi-build-python` requires a `pyproject.toml` at {0}")]
+    #[diagnostic(help(
+        "Add a PEP 517/518 `pyproject.toml` to the package source directory, or use a different build backend."
+    ))]
+    MissingPyProjectToml(PathBuf),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
@@ -72,8 +77,15 @@ impl PyprojectMetadataProvider {
     /// Ensures that the manifest is loaded
     fn ensure_manifest(&self) -> Result<&PyProjectToml, MetadataError> {
         self.pyproject_manifest.get_or_try_init(move || {
+            let pyproject_toml_path = self.manifest_root.join("pyproject.toml");
             let pyproject_toml_content =
-                fs_err::read_to_string(self.manifest_root.join("pyproject.toml"))?;
+                fs_err::read_to_string(&pyproject_toml_path).map_err(|err| {
+                    if err.kind() == std::io::ErrorKind::NotFound {
+                        MetadataError::MissingPyProjectToml(pyproject_toml_path.clone())
+                    } else {
+                        MetadataError::Io(err)
+                    }
+                })?;
             toml::from_str(&pyproject_toml_content).map_err(MetadataError::PyProjectToml)
         })
     }
@@ -244,7 +256,20 @@ impl MetadataProvider for PyprojectMetadataProvider {
         if license_files.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(license_files))
+            // Resolve relative paths to absolute using manifest_root. rattler-build
+            // requires absolute paths when there is no source directory in the recipe.
+            let resolved = license_files
+                .into_iter()
+                .map(|f| {
+                    let p = std::path::Path::new(&f);
+                    if p.is_relative() {
+                        self.manifest_root.join(p).to_string_lossy().into_owned()
+                    } else {
+                        f
+                    }
+                })
+                .collect();
+            Ok(Some(resolved))
         }
     }
 
@@ -423,7 +448,13 @@ license = {file = "LICENSE.txt"}
         assert_eq!(provider.license().unwrap(), None);
         assert_eq!(
             provider.license_files().unwrap(),
-            Some(vec!["LICENSE.txt".to_string()])
+            Some(vec![
+                temp_dir
+                    .path()
+                    .join("LICENSE.txt")
+                    .to_string_lossy()
+                    .into_owned()
+            ])
         );
     }
 
@@ -442,7 +473,18 @@ license-files = ["LICENSE.txt", "COPYING.txt"]
         assert_eq!(provider.license().unwrap(), None);
         assert_eq!(
             provider.license_files().unwrap(),
-            Some(vec!["LICENSE.txt".to_string(), "COPYING.txt".to_string()])
+            Some(vec![
+                temp_dir
+                    .path()
+                    .join("LICENSE.txt")
+                    .to_string_lossy()
+                    .into_owned(),
+                temp_dir
+                    .path()
+                    .join("COPYING.txt")
+                    .to_string_lossy()
+                    .into_owned(),
+            ])
         );
     }
 
@@ -463,9 +505,21 @@ license-files = ["NOTICE.txt", "AUTHORS.txt"]
         assert_eq!(
             provider.license_files().unwrap(),
             Some(vec![
-                "LICENSE".to_string(),
-                "NOTICE.txt".to_string(),
-                "AUTHORS.txt".to_string()
+                temp_dir
+                    .path()
+                    .join("LICENSE")
+                    .to_string_lossy()
+                    .into_owned(),
+                temp_dir
+                    .path()
+                    .join("NOTICE.txt")
+                    .to_string_lossy()
+                    .into_owned(),
+                temp_dir
+                    .path()
+                    .join("AUTHORS.txt")
+                    .to_string_lossy()
+                    .into_owned(),
             ])
         );
     }
@@ -485,7 +539,42 @@ license-files = ["LICENSE"]
         assert_eq!(provider.license().unwrap(), None);
         assert_eq!(
             provider.license_files().unwrap(),
-            Some(vec!["LICENSE".to_string()])
+            Some(vec![
+                temp_dir
+                    .path()
+                    .join("LICENSE")
+                    .to_string_lossy()
+                    .into_owned()
+            ])
+        );
+    }
+
+    #[test]
+    fn test_license_files_are_absolute_for_out_of_source_builds() {
+        // When the source code lives outside the build directory (out-of-source build),
+        // `source: []` is empty in the recipe so rattler-build has no source directory
+        // to resolve relative license file paths against. The metadata provider must
+        // return absolute paths so rattler-build can find them.
+        let pyproject_toml_content = r#"
+[project]
+name = "ruff"
+version = "0.15.7"
+license-files = ["LICENSE"]
+"#;
+
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+        let mut provider = create_metadata_provider(temp_dir.path());
+
+        let license_files = provider.license_files().unwrap().unwrap();
+        assert_eq!(license_files.len(), 1);
+        assert!(
+            std::path::Path::new(&license_files[0]).is_absolute(),
+            "license file path must be absolute, got: {}",
+            license_files[0]
+        );
+        assert_eq!(
+            license_files[0],
+            temp_dir.path().join("LICENSE").to_string_lossy()
         );
     }
 
@@ -671,6 +760,32 @@ version = "1.0.0"
             MetadataError::PyProjectToml(_) => {}
             err => panic!("Expected PyProjectToml, got: {err:?}"),
         }
+    }
+
+    #[test]
+    fn test_missing_pyproject_toml_errors_clearly() {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let mut provider = create_metadata_provider(temp_dir.path());
+
+        let err = provider
+            .name()
+            .expect_err("missing pyproject.toml should return an error");
+        let message = err.to_string();
+        let expected_path = temp_dir.path().join("pyproject.toml");
+
+        match &err {
+            MetadataError::MissingPyProjectToml(path) => assert_eq!(path, &expected_path),
+            other => panic!("Expected MissingPyProjectToml, got: {other:?}"),
+        }
+
+        assert!(
+            message.contains("requires a `pyproject.toml`"),
+            "unexpected error message: {message}"
+        );
+        assert!(
+            message.contains(&expected_path.display().to_string()),
+            "error should mention the `pyproject.toml` path: {message}"
+        );
     }
 
     #[test]

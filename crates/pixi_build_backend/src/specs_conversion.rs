@@ -3,7 +3,8 @@ use std::sync::Arc;
 use minijinja::Value;
 use ordermap::OrderMap;
 use pixi_build_types::{
-    BinaryPackageSpec, PackageSpec, SourcePackageSpec, Target, TargetSelector, Targets,
+    BinaryPackageSpec, PackageSpec, SourcePackageName, SourcePackageSpec, Target, TargetSelector,
+    Targets,
     procedures::conda_build_v1::{
         CondaBuildV1Dependency, CondaBuildV1DependencySource, CondaBuildV1Prefix,
         CondaBuildV1RunExports,
@@ -14,13 +15,14 @@ use rattler_build_core::render::resolved_dependencies::{
     RunExportDependency, SourceDependency,
 };
 use rattler_build_jinja::Variable;
+use rattler_build_recipe::stage0::{
+    Conditional, ConditionalList, Item, JinjaExpression, NestedItemList, Requirements,
+    SerializableMatchSpec, Value as RecipeValue,
+};
+
+use crate::package_dependency::{PackageDependency, SourceMatchSpec};
 use rattler_conda_types::{
     Channel, MatchSpec, PackageName, PackageNameMatcher, package::RunExportsJson,
-};
-use recipe_stage0::{
-    matchspec::{PackageDependency, SourceMatchSpec},
-    recipe::{Conditional, ConditionalList, ConditionalRequirements, Item, ListOrItem},
-    requirements::PackageSpecDependencies,
 };
 use serde::Deserialize;
 use url::Url;
@@ -80,24 +82,36 @@ pub fn to_rattler_build_selector(selector: &TargetSelector, platform_kind: Platf
     }
 }
 
-pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> ConditionalRequirements {
-    let mut build_items = ConditionalList::new();
-    let mut host_items = ConditionalList::new();
-    let mut run_items = ConditionalList::new();
-    let run_constraints_items = ConditionalList::new();
+/// Convert a `PackageDependency` to a `SerializableMatchSpec` for use in
+/// rattler-build's `Requirements`.
+fn package_dependency_to_matchspec(dep: PackageDependency) -> SerializableMatchSpec {
+    dep.into()
+}
+
+/// Convert a `PackageDependency` into an `Item<SerializableMatchSpec>`.
+fn package_dependency_to_item(dep: PackageDependency) -> Item<SerializableMatchSpec> {
+    Item::Value(RecipeValue::new_concrete(
+        package_dependency_to_matchspec(dep),
+        None,
+    ))
+}
+
+pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Requirements {
+    let mut build_items = ConditionalList::default();
+    let mut host_items = ConditionalList::default();
+    let mut run_items = ConditionalList::default();
+    let run_constraints_items = ConditionalList::default();
 
     // Add default target
     if let Some(default_target) = &targets.default_target {
-        let package_requirements = target_to_package_spec(default_target);
-
-        // source_target_requirements.default_target = source_requirements;
+        let package_requirements = PackageSpecDependencies::from(default_target);
 
         build_items.extend(
             package_requirements
                 .build
                 .into_iter()
                 .map(|spec| spec.1)
-                .map(Item::from),
+                .map(package_dependency_to_item),
         );
 
         host_items.extend(
@@ -105,7 +119,7 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Conditi
                 .host
                 .into_iter()
                 .map(|spec| spec.1)
-                .map(Item::from),
+                .map(package_dependency_to_item),
         );
 
         run_items.extend(
@@ -113,67 +127,57 @@ pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Conditi
                 .run
                 .into_iter()
                 .map(|spec| spec.1)
-                .map(Item::from),
+                .map(package_dependency_to_item),
         );
     }
 
     // Add specific targets
     if let Some(specific_targets) = &targets.targets {
         for (selector, target) in specific_targets {
-            let package_requirements = target_to_package_spec(target);
+            let package_requirements = PackageSpecDependencies::from(target);
+            let selector_str = to_rattler_build_selector(selector, PlatformKind::Host);
 
-            // Add the binary requirements
-            // Use host_platform for all dependency types to match the actual target platform
+            // Helper to wrap a dep in a conditional
+            let make_conditional = |dep: PackageDependency| -> Item<SerializableMatchSpec> {
+                Item::Conditional(Conditional {
+                    condition: JinjaExpression::new(selector_str.clone())
+                        .expect("valid jinja expression"),
+                    then: NestedItemList::single(package_dependency_to_item(dep)),
+                    else_value: None,
+                    condition_span: None,
+                })
+            };
+
             build_items.extend(
                 package_requirements
                     .build
                     .into_iter()
                     .map(|spec| spec.1)
-                    .map(|spec| {
-                        Conditional {
-                            condition: to_rattler_build_selector(selector, PlatformKind::Host),
-                            then: ListOrItem(vec![spec]),
-                            else_value: ListOrItem::default(),
-                        }
-                        .into()
-                    }),
+                    .map(make_conditional),
             );
             host_items.extend(
                 package_requirements
                     .host
                     .into_iter()
                     .map(|spec| spec.1)
-                    .map(|spec| {
-                        Conditional {
-                            condition: to_rattler_build_selector(selector, PlatformKind::Host),
-                            then: ListOrItem(vec![spec]),
-                            else_value: ListOrItem::default(),
-                        }
-                        .into()
-                    }),
+                    .map(make_conditional),
             );
             run_items.extend(
                 package_requirements
                     .run
                     .into_iter()
                     .map(|spec| spec.1)
-                    .map(|spec| {
-                        Conditional {
-                            condition: to_rattler_build_selector(selector, PlatformKind::Host),
-                            then: ListOrItem(vec![spec]),
-                            else_value: ListOrItem::default(),
-                        }
-                        .into()
-                    }),
+                    .map(make_conditional),
             );
         }
     }
 
-    ConditionalRequirements {
+    Requirements {
         build: build_items,
         host: host_items,
         run: run_items,
         run_constraints: run_constraints_items,
+        ..Default::default()
     }
 }
 
@@ -182,7 +186,7 @@ pub(crate) fn source_package_spec_to_package_dependency(
     source_spec: SourcePackageSpec,
 ) -> miette::Result<SourceMatchSpec> {
     let spec = MatchSpec {
-        name: Some(PackageNameMatcher::Exact(name)),
+        name: PackageNameMatcher::Exact(name),
         ..Default::default()
     };
 
@@ -214,7 +218,7 @@ fn binary_package_spec_to_package_dependency(
     let version = version.filter(|v| v != &rattler_conda_types::VersionSpec::Any);
 
     PackageDependency::Binary(MatchSpec {
-        name: Some(PackageNameMatcher::Exact(name)),
+        name: PackageNameMatcher::Exact(name),
         version,
         build,
         build_number,
@@ -229,6 +233,8 @@ fn binary_package_spec_to_package_dependency(
         license,
         condition: None,
         track_features: None,
+        flags: None,
+        license_family: None,
     })
 }
 
@@ -250,51 +256,67 @@ fn package_spec_to_package_dependency(
 }
 
 pub(crate) fn package_specs_to_package_dependency(
-    specs: OrderMap<String, PackageSpec>,
+    specs: OrderMap<SourcePackageName, PackageSpec>,
 ) -> miette::Result<Vec<PackageDependency>> {
     specs
         .into_iter()
         .map(|(name, spec)| {
-            package_spec_to_package_dependency(PackageName::new_unchecked(name), spec)
+            package_spec_to_package_dependency(PackageName::new_unchecked(name.as_str()), spec)
         })
         .collect()
 }
 
-// TODO: Should it be a From implementation?
-pub fn target_to_package_spec(target: &Target) -> PackageSpecDependencies<PackageDependency> {
-    let build_reqs = target
-        .clone()
-        .build_dependencies
-        .map(|deps| package_specs_to_package_dependency(deps).unwrap())
-        .unwrap_or_default();
+/// A helper struct for organizing dependencies by type.
+#[derive(Clone, Default)]
+pub struct PackageSpecDependencies {
+    pub build: indexmap::IndexMap<PackageName, PackageDependency>,
+    pub host: indexmap::IndexMap<PackageName, PackageDependency>,
+    pub run: indexmap::IndexMap<PackageName, PackageDependency>,
+    pub run_constraints: indexmap::IndexMap<PackageName, PackageDependency>,
+}
 
-    let host_reqs = target
-        .clone()
-        .host_dependencies
-        .map(|deps| package_specs_to_package_dependency(deps).unwrap())
-        .unwrap_or_default();
+impl From<&Target> for PackageSpecDependencies {
+    fn from(target: &Target) -> Self {
+        let build_reqs = target
+            .clone()
+            .build_dependencies
+            .map(|deps| package_specs_to_package_dependency(deps).unwrap())
+            .unwrap_or_default();
 
-    let run_reqs = target
-        .clone()
-        .run_dependencies
-        .map(|deps| package_specs_to_package_dependency(deps).unwrap())
-        .unwrap_or_default();
+        let host_reqs = target
+            .clone()
+            .host_dependencies
+            .map(|deps| package_specs_to_package_dependency(deps).unwrap())
+            .unwrap_or_default();
 
-    let mut bin_reqs = PackageSpecDependencies::default();
+        let run_reqs = target
+            .clone()
+            .run_dependencies
+            .map(|deps| package_specs_to_package_dependency(deps).unwrap())
+            .unwrap_or_default();
 
-    for spec in build_reqs.iter() {
-        bin_reqs.build.insert(spec.package_name(), spec.clone());
+        let mut bin_reqs = PackageSpecDependencies::default();
+
+        for spec in build_reqs.iter() {
+            if let Some(name) = spec.package_name() {
+                bin_reqs.build.insert(name.clone(), spec.clone());
+            }
+        }
+
+        for spec in host_reqs.iter() {
+            if let Some(name) = spec.package_name() {
+                bin_reqs.host.insert(name.clone(), spec.clone());
+            }
+        }
+
+        for spec in run_reqs.iter() {
+            if let Some(name) = spec.package_name() {
+                bin_reqs.run.insert(name.clone(), spec.clone());
+            }
+        }
+
+        bin_reqs
     }
-
-    for spec in host_reqs.iter() {
-        bin_reqs.host.insert(spec.package_name(), spec.clone());
-    }
-
-    for spec in run_reqs.iter() {
-        bin_reqs.run.insert(spec.package_name(), spec.clone());
-    }
-
-    bin_reqs
 }
 
 pub(crate) fn from_build_v1_dependency_to_dependency_info(

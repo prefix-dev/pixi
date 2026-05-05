@@ -50,7 +50,13 @@ GitUrl = Annotated[
 ]
 ExcludeNewer = Annotated[
     str,
-    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$"),
+    StringConstraints(
+        # Matches either:
+        # - An RFC 3339 timestamp, e.g. YYYY-MM-DDTHH:MM:SSZ or with fractional seconds
+        # - A date, e.g. YYYY-MM-DD
+        # - A duration token sequence accepted by humantime, e.g. 7d, 1h, 30m, 1h30m, 1ms
+        pattern=r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})|\d{4}-\d{2}-\d{2}|(\d+\s*[A-Za-z]+\s*)+)$"
+    ),
 ]
 
 
@@ -104,6 +110,10 @@ class ChannelInlineTable(StrictBaseModel):
 
     channel: ChannelName = Field(description="The channel the packages needs to be fetched from")
     priority: int | None = Field(None, description="The priority of the channel")
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        description="Override the workspace-level `exclude-newer` cutoff for this channel only",
+    )
 
 
 Channel = ChannelName | ChannelInlineTable
@@ -170,8 +180,19 @@ class Workspace(StrictBaseModel):
     )
     exclude_newer: ExcludeNewer | None = Field(
         None,
-        examples=["2023-11-03", "2023-11-03T03:33:12Z"],
-        description="Exclude any package newer than this date",
+        examples=[
+            "2023-11-03T03:33:12Z",
+            "2026-04-01",
+            "0d",
+            "1 week",
+            "2w",
+            "1 month",
+            "1M",
+            "72h",
+            "72 hours",
+            "1h30m",
+        ],
+        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
     )
     platforms: list[Platform] | None = Field(
         None, description="The platforms that the project supports"
@@ -388,7 +409,10 @@ class ReservedTaskArgName(str, Enum):
     pixi = "pixi"
 
 
-TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
+TaskName = Annotated[
+    NonEmptyStr,
+    Field(pattern=r"^[^\s\$]+$", description="A valid task name."),
+]
 NotReservedSchema: Any = {"not": {"enum": sorted(r.value for r in ReservedTaskArgName)}}
 TaskArgName = Annotated[
     str,
@@ -811,7 +835,7 @@ class Package(StrictBaseModel):
     build_dependencies: Dependencies = BuildDependenciesField
     run_dependencies: Dependencies = RunDependenciesField
 
-    target: dict[TargetName, Target] | None = Field(
+    target: dict[TargetName, PackageTarget] | None = Field(
         None,
         description="Machine-specific aspects of the package",
         examples=[{"linux": {"host-dependencies": {"python": "3.8"}}}],
@@ -902,8 +926,16 @@ class BaseManifest(BaseModel):
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
     constraints: Dependencies = ConstraintsField
+    exclude_newer: dict[CondaPackageName, ExcludeNewer] | None = Field(
+        None,
+        description="Workspace-wide per-package `exclude-newer` overrides for conda packages",
+    )
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
+    )
+    pypi_exclude_newer: dict[PyPIPackageName, ExcludeNewer] | None = Field(
+        None,
+        description="Workspace-wide per-package `exclude-newer` overrides for PyPI packages",
     )
     dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
         None,

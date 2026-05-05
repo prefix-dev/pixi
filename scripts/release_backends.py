@@ -61,14 +61,9 @@ BACKEND_DEFS: list[dict[str, Any]] = [
         "feedstock": "conda-forge/pixi-build-rattler-build-feedstock",
     },
     {
-        "binary": "py-pixi-build-backend",
-        "version_file": "pixi-build-backends/py-pixi-build-backend/Cargo.toml",
-        "feedstock": "conda-forge/py-pixi-build-backend-feedstock",
-    },
-    {
         "binary": "pixi-build-ros",
-        "version_file": "pixi-build-backends/backends/pixi-build-ros/pyproject.toml",
-        "version_table": "project",
+        "version_file": "crates/pixi_build_ros/Cargo.toml",
+        "in_cargo_workspace": True,
         "feedstock": "conda-forge/pixi-build-ros-feedstock",
     },
 ]
@@ -112,7 +107,7 @@ class Backend:
     @property
     def cargo_name(self) -> str:
         """Cargo package name for `cargo update --package`."""
-        return self.binary.replace("-", "_")
+        return self.binary
 
     @property
     def version_path(self) -> Path:
@@ -436,21 +431,6 @@ def main() -> None:
                 for b in workspace_updated:
                     pkgs.extend(["--package", b.cargo_name])
                 run(["cargo", "update", *pkgs])
-
-            # Update Cargo.lock for py-pixi-build-backend (separate workspace)
-            py_backend = next((b for b in updated if b.binary == "py-pixi-build-backend"), None)
-            if py_backend:
-                console.print()
-                run(
-                    [
-                        "cargo",
-                        "update",
-                        "--package",
-                        py_backend.binary,
-                        "--manifest-path",
-                        str(py_backend.version_path),
-                    ]
-                )
 
             completed.append("Applied version bumps and updated lockfiles")
 

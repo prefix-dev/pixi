@@ -3,6 +3,7 @@
 
 [tool.inline-snapshot]
 format-command = "pixi run -e lint ruff format --stdin-filename {filename}"
+test-dir = "tests/integration_python"
 
 [tool.basedpyright]
 ignore = [
@@ -13,6 +14,8 @@ ignore = [
   "tests/data",
   "site",
   "output",
+  "target",
+  "pytest-temp",
 ]
 pythonPlatform = "All"
 pythonVersion = "3.13"

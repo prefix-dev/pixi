@@ -54,14 +54,13 @@ jobs:
       code: ${{ steps.changed.outputs.code_any_changed }}
       unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
       win_installer: ${{ steps.win_installer_changed.outputs.code_any_changed }}
-      ros_backend: ${{ steps.ros_backend_changed.outputs.code_any_changed }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68 # v47
+      - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: changed
         with:
           files_yaml: |
@@ -74,26 +73,19 @@ jobs:
               - "!assets/**"
               - "!**/*.md"
 
-      - uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68 # v47
+      - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: unix_installer_changed
         with:
           files_yaml: |
             code:
               - "install/install.sh"
 
-      - uses: step-security/changed-files@60967b822d3001fa82242f8d6b4ed46bc3600a68 # v47
+      - uses: step-security/changed-files@2e07db73e5ccdb319b9a6c7766bd46d39d304bad # v47
         id: win_installer_changed
         with:
           files_yaml: |
             code:
               - "install/install.ps1"
-
-      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
-        id: ros_backend_changed
-        with:
-          files_yaml: |
-            code:
-              - "pixi-build-backends/backends/pixi-build-ros/**"
 
   lint:
     name: "lint"
@@ -103,7 +95,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+        uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           environments: lefthook
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -156,7 +148,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           environments: "docs"
 
@@ -196,7 +188,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
@@ -221,7 +213,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
@@ -246,7 +238,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
@@ -274,7 +266,7 @@ jobs:
           persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-      - uses: prefix-dev/setup-pixi@a0af7a228712d6121d37aba47adf55c1332c9c2e # v0.9.4
+      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
@@ -304,7 +296,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
-      - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
+      - uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
       - name: "Setup musl"
         run: |
           sudo apt update
@@ -322,7 +314,7 @@ jobs:
           --features pixi/self_update
           --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: |
@@ -332,14 +324,14 @@ jobs:
 
   build-binary-linux-riscv64gc:
     needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    if: ${{ needs.determine_changes.outputs.code == 'true' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     name: "build binary | linux riscv64gc"
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
-      - uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
+      - uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
       - name: "Setup cross-compilation toolchain"
         run: |
           sudo apt update
@@ -360,7 +352,7 @@ jobs:
           --features self_update
           --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-linux-riscv64gc-${{ github.sha }}
           path: ./target/riscv64gc-unknown-linux-gnu/${{ env.CARGO_BUILD_PROFILE }}/pixi
@@ -386,7 +378,7 @@ jobs:
           --features pixi/self_update
           --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: |
@@ -414,7 +406,7 @@ jobs:
           --features pixi/self_update
           --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-macos-x86_64-${{ github.sha }}
           path: |
@@ -449,7 +441,7 @@ jobs:
           --features pixi/self_update
           --workspace
       - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: |
@@ -487,7 +479,7 @@ jobs:
           --profile $env:CARGO_BUILD_PROFILE
           --features pixi/self_update
       - name: "Upload binary"
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pixi-windows-aarch64-${{ github.sha }}
           path: |
@@ -517,7 +509,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -541,7 +533,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -567,7 +559,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -600,7 +592,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -609,9 +601,9 @@ jobs:
         working-directory: ${{ env.PIXI_WORKSPACE }}
         run: pixi info
 
-      - name: Run long running integration tests
+      - name: Run extra slow integration tests
         working-directory: ${{ env.PIXI_WORKSPACE }}
-        run: pixi run --locked test-integration-extra-slow-ci
+        run: pixi run --locked test-integration-ci extra_slow
 
       - name: Test examples
         shell: bash
@@ -631,7 +623,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -642,11 +634,8 @@ jobs:
       - name: Verify pixi installation
         run: pixi info
 
-      - name: Run long running integration tests
-        run: pixi run --locked test-integration-extra-slow-ci
-
-      - name: Run integration tests
-        run: pixi run --locked test-integration-ci
+      - name: Run extra slow integration tests
+        run: pixi run --locked test-integration-ci extra_slow
 
       - name: Test examples
         run: bash tests/scripts/test-examples.sh
@@ -667,7 +656,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -678,12 +667,8 @@ jobs:
       - name: Verify pixi installation
         run: pixi info
 
-      - name: Run long running integration tests
-        if: ${{ github.ref == 'refs/heads/main' || contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
-        run: pixi run --locked test-integration-ci -m "extra_slow"
-
-      - name: Run integration tests
-        run: pixi run --locked test-integration-ci
+      - name: Run extra slow integration tests
+        run: pixi run --locked test-integration-ci extra_slow
 
       - name: "Test examples"
         run: bash tests/scripts/test-examples.sh
@@ -710,7 +695,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -765,7 +750,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -820,7 +805,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Download binary from build
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -907,27 +892,6 @@ jobs:
       runs-on: macos-15
 
   #
-  # Test pixi-build-ros backend
-  #
-
-  test-backends-ros:
-    name: Backends - ROS
-    # Run on when ros backend changed, on main branch, or when extra slow tests are requested
-    if: ${{ needs.determine_changes.outputs.ros_backend == 'true' || github.ref == 'refs/heads/main' ||  contains(github.event.pull_request.labels.*.name, 'test:extra_slow') }}
-    permissions:
-      id-token: write
-      attestations: write
-      contents: read
-    needs:
-      - build-binary-linux-x86_64
-      - build-binary-macos-aarch64
-      - build-binary-windows-x86_64
-      - determine_changes
-    uses: ./.github/workflows/backends-ros.yml
-    with:
-      sha: ${{ github.sha }}
-
-  #
   # Test unix installer on some platforms
   #
 
@@ -1006,7 +970,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda # v2
+        uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2
         with:
           msystem: UCRT64
           install: unzip
@@ -1030,7 +994,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda # v2
+        uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2
         with:
           msystem: UCRT64
       - name: "Install"
@@ -1054,7 +1018,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@4f806de0a5a7294ffabaff804b38a9b435a73bda # v2
+        uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2
         with:
           msystem: UCRT64
       - name: "Before Install"

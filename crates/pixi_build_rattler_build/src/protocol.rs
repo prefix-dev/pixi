@@ -32,7 +32,7 @@ use rattler_build_core::{
     DiscoveredOutput,
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
-    metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
+    metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
     tool_configuration::Configuration,
     types::{PackageIdentifier, PackagingSettings},
 };
@@ -431,8 +431,8 @@ impl Protocol for RattlerBuildBackend {
                 store_recipe: false,
                 force_colors: true,
                 sandbox_config: None,
-                debug: Debug::new(false),
                 exclude_newer: None,
+                env_isolation: Default::default(),
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,
@@ -445,8 +445,12 @@ impl Protocol for RattlerBuildBackend {
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
             build_summary: Arc::default(),
-            system_tools: Default::default(),
+            system_tools: rattler_build_core::system_tools::SystemTools::new(
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+            ),
             extra_meta: None,
+            staging_library_name_map: None,
         };
 
         let (output, output_path) =
@@ -608,7 +612,7 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
                         match spec {
                             pixi_build_types::PackageSpec::Source(source_spec) => {
                                 // Source dependencies are allowed - they represent workspace packages
-                                workspace_deps.insert(name, source_spec);
+                                workspace_deps.insert(name.to_string(), source_spec);
                             }
                             pixi_build_types::PackageSpec::Binary(_) => {
                                 // Binary dependencies must be specified in the recipe, not here

@@ -7,7 +7,7 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use rattler_build_core::{
     DiscoveredOutput,
-    metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
+    metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
     system_tools::SystemTools,
     types::{Directories, PackageIdentifier, PackagingSettings},
 };
@@ -32,7 +32,23 @@ pub const VARIANTS_CONFIG_FILE: &str = "variants.yaml";
 /// The principal concepts is that all rattler-build concepts
 /// should be hidden behind this struct and all pixi-build-backends
 /// should only interact with this struct.
+#[derive(Clone, Copy)]
+pub struct BackendIdentifier {
+    /// The build backend name reported to rattler-build system tools.
+    pub name: &'static str,
+    /// The build backend version reported to rattler-build system tools.
+    pub version: &'static str,
+}
+
+impl BackendIdentifier {
+    pub fn new(name: &'static str, version: &'static str) -> Self {
+        Self { name, version }
+    }
+}
+
 pub struct RattlerBuild {
+    /// The build backend identity reported to rattler-build system tools.
+    pub backend: BackendIdentifier,
     /// The source of the recipe
     pub recipe_source: Source,
     /// The target platform for the build.
@@ -153,6 +169,7 @@ pub enum OneOrMultipleOutputs {
 impl RattlerBuild {
     /// Create a new `RattlerBuild` instance.
     pub fn new(
+        backend: BackendIdentifier,
         source: Source,
         target_platform: Platform,
         host_platform: Platform,
@@ -161,6 +178,7 @@ impl RattlerBuild {
         work_directory: PathBuf,
     ) -> Self {
         Self {
+            backend,
             recipe_source: source,
             target_platform,
             host_platform,
@@ -353,16 +371,17 @@ impl RattlerBuild {
                     store_recipe: false,
                     force_colors: true,
                     sandbox_config: None,
-                    debug: Debug::new(false),
                     exclude_newer: None,
+                    env_isolation: Default::default(),
                 },
                 finalized_dependencies: None,
                 finalized_cache_dependencies: None,
                 finalized_cache_sources: None,
                 finalized_sources: None,
-                system_tools: SystemTools::new(),
+                system_tools: SystemTools::new(self.backend.name, self.backend.version),
                 build_summary: Default::default(),
                 extra_meta: None,
+                staging_library_name_map: None,
             });
         }
 

@@ -90,9 +90,7 @@ impl MappedCondaDependency {
     /// Convert to a conda MatchSpec.
     pub fn to_match_spec(&self) -> MatchSpec {
         MatchSpec {
-            name: Some(rattler_conda_types::PackageNameMatcher::Exact(
-                self.name.clone(),
-            )),
+            name: rattler_conda_types::PackageNameMatcher::Exact(self.name.clone()),
             version: self.version_spec.clone(),
             ..Default::default()
         }
@@ -494,7 +492,7 @@ pub fn filter_mapped_pypi_deps(
     mapped_deps
         .iter()
         .filter(|dep| {
-            let pkg_name = pixi_build_types::SourcePackageName::from(dep.name.as_normalized());
+            let pkg_name = pixi_build_types::SourcePackageName::from(dep.name.clone());
             !skip_packages.contains(&pkg_name)
         })
         .map(|dep| dep.to_match_spec())
@@ -737,7 +735,9 @@ mod tests {
 
         // Pixi specifies "requests" - it should be filtered out
         let skip_packages: HashSet<pixi_build_types::SourcePackageName> =
-            HashSet::from([pixi_build_types::SourcePackageName::from("requests")]);
+            HashSet::from([pixi_build_types::SourcePackageName::from(
+                PackageName::new_unchecked("requests"),
+            )]);
 
         let result = filter_mapped_pypi_deps(&mapped_deps, &skip_packages);
 
@@ -758,8 +758,8 @@ mod tests {
         ];
 
         let skip_packages: HashSet<pixi_build_types::SourcePackageName> = HashSet::from([
-            pixi_build_types::SourcePackageName::from("requests"),
-            pixi_build_types::SourcePackageName::from("flask"),
+            pixi_build_types::SourcePackageName::from(PackageName::new_unchecked("requests")),
+            pixi_build_types::SourcePackageName::from(PackageName::new_unchecked("flask")),
         ]);
 
         let result = filter_mapped_pypi_deps(&mapped_deps, &skip_packages);

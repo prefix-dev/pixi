@@ -1,7 +1,7 @@
 github_url = "https://github.com/prefix-dev/pixi"
 
 [version]
-current = "0.66.0"
+current = "0.67.2"
 
 # Example of a semver regexp.
 # Make sure this matches current_version before
@@ -64,6 +64,10 @@ src = "tests/integration_python/common.py"
 [[file]]
 search = "None => \"{current_version}\","
 src = "crates/pixi_consts/src/consts.rs"
+
+[[file]]
+search = "ghcr.io/prefix-dev/pixi:{current_version}"
+src = "docs/deployment/container.md"
 
 [[field]]
 # the name of the field

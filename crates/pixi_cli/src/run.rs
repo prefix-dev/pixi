@@ -163,12 +163,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into());
     }
 
+    if args.lock_and_install_config.allow_installs() {
+        environment.emit_emulation_warning();
+    }
+
     // Ensure that the lock-file is up-to-date.
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
             no_install: args.lock_and_install_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
         })
         .await?
         .0;
@@ -509,12 +514,12 @@ fn disambiguate_task_interactive<'p>(
 }
 
 /// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or
-/// other exceptions: https://github.com/console-rs/dialoguer/issues/188.
+/// other exceptions: <https://github.com/console-rs/dialoguer/issues/188>.
 ///
 /// `dialoguer`, as a library, doesn't want to mess with signal handlers,
 /// but we, as an application, are free to mess with signal handlers if we feel
 /// like it, since we own the process.
-/// This function was taken from https://github.com/dnjstrom/git-select-branch/blob/16c454624354040bc32d7943b9cb2e715a5dab92/src/main.rs#L119
+/// This function was taken from <https://github.com/dnjstrom/git-select-branch/blob/16c454624354040bc32d7943b9cb2e715a5dab92/src/main.rs#L119>.
 fn reset_cursor() {
     let term = console::Term::stdout();
     let _ = term.show_cursor();
@@ -587,7 +592,7 @@ async fn listen_ctrl_c_windows() {
 /// from which we could get PGID and do things right.
 ///
 /// Resulting approach should mimic
-/// https://github.com/astral-sh/uv/blob/9d17dfa3537312b928f94479f632891f918c4760/crates/uv/src/child.rs#L156C21-L168C77.
+/// <https://github.com/astral-sh/uv/blob/9d17dfa3537312b928f94479f632891f918c4760/crates/uv/src/child.rs#L156C21-L168C77>
 #[cfg(unix)]
 async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
     use futures::FutureExt;

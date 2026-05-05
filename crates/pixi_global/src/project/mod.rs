@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
@@ -20,11 +20,12 @@ pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
-use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
-    Limits, PixiEnvironmentSpec,
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, ComputeResultExt,
+    EnvironmentRef, EnvironmentSpec, EphemeralEnv, InstallPixiEnvironmentSpec, Limits,
+    keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
+    source_checkout::SourceCheckoutExt,
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
@@ -35,6 +36,7 @@ use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
 use pixi_spec_containers::DependencyMap;
+use pixi_utils::variants::VariantConfig;
 use pixi_utils::{
     executable_from_path,
     prefix::{Executable, Prefix},
@@ -614,20 +616,34 @@ impl Project {
             platform,
             Self::virtual_packages_for(&platform).into_diagnostic()?,
         );
-        // Create solve spec
-        let solve_spec = PixiEnvironmentSpec {
-            name: Some(env_name.to_string()),
+        // Create solve spec (compute-engine keys path).
+        let solve_spec = SolvePixiEnvironmentSpec {
             dependencies: pixi_specs,
-            build_environment: build_environment.clone(),
-            channels: channels.clone(),
-            channel_config: self.config.global_channel_config().clone(),
-            ..Default::default()
+            constraints: DependencyMap::default(),
+            dev_sources: ordermap::OrderMap::new(),
+            installed: Arc::from([]),
+            installed_source_hints: Default::default(),
+            strategy: Default::default(),
+            preferred_build_source: Arc::new(BTreeMap::new()),
+            env_ref: EnvironmentRef::Ephemeral(EphemeralEnv::new(
+                env_name.to_string(),
+                EnvironmentSpec {
+                    channels: channels.clone(),
+                    build_environment: build_environment.clone(),
+                    variants: VariantConfig::default(),
+                    exclude_newer: None,
+                    channel_priority: Default::default(),
+                },
+            )),
         };
 
-        // Solve using CommandDispatcher
-        let pixi_records = command_dispatcher
-            .solve_pixi_environment(solve_spec)
-            .await?;
+        // Solve via SolvePixiEnvironmentKey (new keys path).
+        let records_arc = command_dispatcher
+            .engine()
+            .compute(&SolvePixiEnvironmentKey::new(solve_spec))
+            .await
+            .map_err_into_dispatcher(std::convert::identity)?;
+        let pixi_records: Vec<_> = (*records_arc).clone();
 
         // Move this to a separate function to avoid code duplication
         try_increase_rlimit_to_sensible();
@@ -640,16 +656,28 @@ impl Project {
             Default::default()
         };
 
+        // Force-reinstall also invalidates the source-build caches for
+        // every package the user named. The prefix installer handles
+        // binary reinstalls on its own; source-package rebuilds need
+        // their artifact + workspace entries wiped so SourceBuildKey
+        // sees a cache miss.
+        if force_reinstall {
+            for name in &dependencies_names {
+                command_dispatcher
+                    .clear_source_build_cache(name)
+                    .into_diagnostic()?;
+            }
+        }
+
         let result = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: env_name.to_string(),
-                records: pixi_records,
+                records: pixi_records.into_iter().map(Into::into).collect(),
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
+                exclude_newer: None,
                 channels,
-                channel_config: self.config.global_channel_config().clone(),
-                enabled_protocols: EnabledProtocols::default(),
                 installed: None,
                 ignore_packages: None,
                 force_reinstall: force_reinstall_packages,
@@ -923,7 +951,7 @@ impl Project {
                         .ok_or_else(|| {
                             miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
                         })?,
-                    Some(name.clone().into()),
+                    name.clone().into(),
                 );
                 Ok(match_spec)
             })
@@ -1393,6 +1421,7 @@ impl Project {
                         .flatten()
                         .unwrap_or_default()
                 }))
+                .with_channel_config(self.global_channel_config().clone())
                 .execute_link_scripts(match self.config.run_post_link_scripts() {
                     RunPostLinkScripts::Insecure => true,
                     RunPostLinkScripts::False => false,
@@ -1409,27 +1438,34 @@ impl Project {
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
-            .pin_and_checkout(source_spec.location)
+            .engine()
+            .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec.location).await)
             .await
+            .map_err_into_dispatcher(std::convert::identity)
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
         let pinned_source_spec = checkout.pinned;
 
         // Create the metadata spec
+        let channels = self
+            .config()
+            .default_channels()
+            .iter()
+            .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
+            .collect();
         let metadata_spec = BuildBackendMetadataSpec {
-            manifest_source: pinned_source_spec,
+            manifest_source: pinned_source_spec.clone(),
             preferred_build_source: None,
-            channel_config: self.global_channel_config().clone(),
-            channels: self
-                .config()
-                .default_channels()
-                .iter()
-                .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
-                .collect(),
-            build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
-            variant_configuration: None,
-            variant_files: None,
-            enabled_protocols: Default::default(),
+            env_ref: EnvironmentRef::Ephemeral(EphemeralEnv::new(
+                pinned_source_spec.to_string(),
+                EnvironmentSpec {
+                    channels,
+                    build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
+                    variants: VariantConfig::default(),
+                    exclude_newer: None,
+                    channel_priority: Default::default(),
+                },
+            )),
         };
 
         // Get the metadata using the command dispatcher
@@ -1441,16 +1477,13 @@ impl Project {
 
         // Get the available outputs and use exactly_one to handle the single output
         // case
-        let packages = metadata.metadata.outputs();
+        let packages = metadata.metadata.output_names();
 
         match packages.len() {
             0 => Err(InferPackageNameError::NoPackageOutputs),
-            1 => {
-                let package = &packages[0];
-                Ok(package.name.clone())
-            }
+            1 => Ok(packages[0].clone()),
             _ => {
-                let package_names: Vec<_> = packages.iter().map(|p| p.name.as_source()).collect();
+                let package_names: Vec<_> = packages.iter().map(|p| p.as_source()).collect();
                 Err(InferPackageNameError::MultiplePackageOutputs {
                     package_names: package_names.join(", "),
                 })
@@ -1500,7 +1533,6 @@ impl Repodata for Project {
 mod tests {
     use std::{collections::HashMap, io::Write};
 
-    use fake::{Fake, faker::filesystem::en::FilePath};
     use itertools::Itertools;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
@@ -1523,7 +1555,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_project_from_str() {
-        let manifest_path: PathBuf = FilePath().fake();
+        // Use a deterministic path with a parent. `FilePath().fake()` from
+        // the `fake` crate occasionally produces "/" (no parent), which
+        // panics `from_manifest`'s `expect("manifest path should always
+        // have a parent")` and made this test flake under nextest.
+        let manifest_path = PathBuf::from("/fake/pixi-global.toml");
         let env_root = EnvRoot::from_env().await.unwrap();
         let bin_dir = BinDir::from_env().await.unwrap();
 
@@ -1554,7 +1590,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_project_from_manifest() {
-        let manifest_path: PathBuf = FilePath().fake();
+        let manifest_path = PathBuf::from("/fake/pixi-global.toml");
 
         let env_root = EnvRoot::from_env().await.unwrap();
         let bin_dir = BinDir::from_env().await.unwrap();

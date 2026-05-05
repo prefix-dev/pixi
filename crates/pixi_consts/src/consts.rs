@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.66.0",
+    None => "0.67.2",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -40,12 +40,31 @@ pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 pub const CACHED_GIT_DIR: &str = "git-v0";
 pub const CACHED_URL_DIR: &str = "url-v0";
-pub const CACHED_BUILD_WORK_DIR: &str = "work";
 pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
 pub const CACHED_PACKAGES: &str = "pkgs";
-pub const CACHED_BUILD_BACKEND_METADATA: &str = "metadata";
-pub const CACHED_SOURCE_METADATA: &str = "source_metadata";
-pub const CACHED_SOURCE_BUILDS: &str = "pkgs";
+/// Base name of the per-workspace backend-metadata cache, versioned
+/// so that entry-schema changes don't collide. Also houses the backend
+/// work directories for `conda/outputs` under `<source>/work/` — the
+/// cache entries and the backend's scratch space for the same source
+/// live side by side.
+pub const CACHED_BUILD_BACKEND_METADATA: &str = "meta";
+/// Subdirectory under each `<source>/` cache entry that holds the
+/// backend's scratch space for the `conda/outputs` call on that
+/// source.
+pub const BACKEND_METADATA_WORK_SUBDIR: &str = "work";
+/// Content-addressed built packages from source-build, stored directly
+/// under `.pixi/`. Versioned because the sidecar schema is part of the
+/// cache entry.
+pub const SOURCE_BUILD_ARTIFACTS_DIR: &str = "artifacts-v0";
+/// Backend workspaces for source-build. Held directly under `.pixi/`
+/// and named tersely to keep the full path short on Windows
+/// (`MAX_PATH = 260`).
+pub const SOURCE_BUILD_WORKSPACES_DIR: &str = "bld";
+/// Per-workspace cache for legacy (pre-v7) source-record build/host
+/// environments. Each entry is keyed by a stable hash of the inputs
+/// that drive the underlying `ResolveSourcePackageKey` dispatch; entry
+/// schema is versioned in-file so the directory itself is unversioned.
+pub const LEGACY_SOURCE_ENV_DIR: &str = "legacy-source-env";
 pub const WORKSPACES_REGISTRY: &str = "workspaces.toml";
 
 /// The directory relative to the .pixi folder that stores build related caches.
@@ -66,6 +85,8 @@ pub const PIXI_DIR: &str = match option_env!("PIXI_DIR") {
     Some(dir) => dir,
     None => ".pixi",
 };
+/// Environment variable to override the detected platform.
+pub const PIXI_OVERRIDE_PLATFORM: &str = "PIXI_OVERRIDE_PLATFORM";
 /// The default manifest name for the global manifest file in the pixi config directory.
 pub const GLOBAL_MANIFEST_DEFAULT_NAME: &str =
     match option_env!("PIXI_GLOBAL_MANIFEST_DEFAULT_NAME") {

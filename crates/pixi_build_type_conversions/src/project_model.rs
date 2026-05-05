@@ -105,6 +105,8 @@ fn to_pixi_spec_v1(
                 extras: _,
                 condition: _,
                 track_features: _,
+                flags: _,
+                license_family: _,
             } = binary.try_into_nameless_match_spec(channel_config)?;
             pbt::PackageSpec::Binary(pbt::BinaryPackageSpec {
                 version,
@@ -131,7 +133,7 @@ fn to_pbt_dependencies<'a>(
 ) -> Result<OrderMap<pbt::SourcePackageName, pbt::PackageSpec>, SpecConversionError> {
     iter.map(|(name, spec)| {
         let converted = to_pixi_spec_v1(spec, channel_config)?;
-        Ok((name.as_normalized().to_string(), converted))
+        Ok((pbt::SourcePackageName::from(name.clone()), converted))
     })
     .collect()
 }

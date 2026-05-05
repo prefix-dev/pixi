@@ -89,13 +89,13 @@ impl PackageSpec for pbt::PackageSpec {
                 // Always use to_nameless() to preserve all fields including build constraints
                 let match_spec = MatchSpec::from_nameless(
                     binary_spec.to_nameless(),
-                    Some(PackageNameMatcher::Exact(name)),
+                    PackageNameMatcher::Exact(name),
                 );
                 Ok((match_spec, None))
             }
             pbt::PackageSpec::Source(source_spec) => Ok((
                 MatchSpec {
-                    name: Some(PackageNameMatcher::Exact(name)),
+                    name: PackageNameMatcher::Exact(name),
                     ..MatchSpec::default()
                 },
                 Some(source_spec.clone()),
@@ -133,6 +133,8 @@ impl BinarySpecExt for pbt::BinaryPackageSpec {
             namespace: None,
             condition: None,
             track_features: None,
+            flags: None,
+            license_family: None,
         }
     }
 }
@@ -174,9 +176,7 @@ mod tests {
         // Verify the build constraint is preserved
         assert_eq!(
             match_spec.name,
-            Some(PackageNameMatcher::Exact(
-                PackageName::try_from("tk").unwrap()
-            ))
+            PackageNameMatcher::Exact(PackageName::try_from("tk").unwrap())
         );
         assert_eq!(match_spec.version, Some(VersionSpec::Any));
         assert_eq!(match_spec.build, Some(build_matcher));
@@ -209,9 +209,7 @@ mod tests {
         // Verify both version and build constraint are preserved
         assert_eq!(
             match_spec.name,
-            Some(PackageNameMatcher::Exact(
-                PackageName::try_from("tk").unwrap()
-            ))
+            PackageNameMatcher::Exact(PackageName::try_from("tk").unwrap())
         );
         assert_eq!(match_spec.version, Some(version));
         assert_eq!(match_spec.build, Some(build_matcher));
@@ -242,9 +240,7 @@ mod tests {
         // Verify the match spec is correct
         assert_eq!(
             match_spec.name,
-            Some(PackageNameMatcher::Exact(
-                PackageName::try_from("python").unwrap()
-            ))
+            PackageNameMatcher::Exact(PackageName::try_from("python").unwrap())
         );
         assert_eq!(match_spec.version, Some(VersionSpec::Any));
         assert_eq!(match_spec.build, None);

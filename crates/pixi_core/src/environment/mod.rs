@@ -5,6 +5,7 @@ pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdate
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};
 use miette::{Context, IntoDiagnostic};
+use pixi_command_dispatcher::EnvironmentFingerprint;
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
@@ -15,7 +16,7 @@ pub use pixi_python_status::PythonStatus;
 use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_lock::{LockFile, LockedPackage};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::{
@@ -110,44 +111,31 @@ async fn prefix_location_changed(
 pub struct EnvironmentHash(String);
 
 impl EnvironmentHash {
+    /// Compute a hash that combines the project + locked-environment
+    /// state.
+    ///
+    /// Used for **task** caching: a task's cached result is keyed on
+    /// inputs the user can change without going through an install
+    /// (manifest, lockfile, env vars, activation scripts), so this
+    /// flavour folds locked package URLs into the hash directly.
+    ///
+    /// The activation cache uses [`Self::for_activation`] instead —
+    /// see the docs there for why URL-based hashing is too coarse for
+    /// that use case.
     pub fn from_environment(
         run_environment: &workspace::Environment<'_>,
         input_environment_variables: &HashMap<String, Option<String>>,
         lock_file: &LockFile,
     ) -> Self {
         let mut hasher = Xxh3::new();
-
-        // Hash the environment variables
-        let mut sorted_input_environment_variables: Vec<_> =
-            input_environment_variables.iter().collect();
-        sorted_input_environment_variables.sort_by_key(|(key, _)| *key);
-        for (key, value) in sorted_input_environment_variables {
-            key.hash(&mut hasher);
-            value.hash(&mut hasher);
-        }
-
-        // Hash the activation scripts
-        let activation_scripts =
-            run_environment.activation_scripts(Some(run_environment.best_platform()));
-        for script in activation_scripts {
-            script.hash(&mut hasher);
-        }
-
-        // Hash the environment variables
-        let project_activation_env =
-            run_environment.activation_env(Some(run_environment.best_platform()));
-        let mut env_vars: Vec<_> = project_activation_env.iter().collect();
-        env_vars.sort_by_key(|(key, _)| *key);
-
-        for (key, value) in env_vars {
-            key.hash(&mut hasher);
-            value.hash(&mut hasher);
-        }
+        Self::hash_common_inputs(&mut hasher, run_environment, input_environment_variables);
 
         // Hash the packages
         let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str())
-            && let Some(packages) = env.packages(run_environment.best_platform())
+            && let Some(lock_platform) =
+                lock_file.platform(&run_environment.best_platform().to_string())
+            && let Some(packages) = env.packages(lock_platform)
         {
             for package in packages {
                 urls.push(package.location().to_string())
@@ -157,6 +145,70 @@ impl EnvironmentHash {
         urls.hash(&mut hasher);
 
         EnvironmentHash(format!("{:x}", hasher.finish()))
+    }
+
+    /// Compute the cache key for the activation env-var map.
+    ///
+    /// Activation results depend on:
+    /// 1. Shell input env vars referenced by the activation scripts.
+    /// 2. The project's activation scripts and activation env.
+    /// 3. What is actually installed in the prefix.
+    ///
+    /// (3) is captured by `installed_fingerprint`, which is the
+    /// per-record sha256 hash of every package in the prefix
+    /// (binaries + built source-build artifacts) computed by
+    /// [`pixi_command_dispatcher::EnvironmentFingerprint`].
+    ///
+    /// We deliberately do **not** fold locked package URLs into this
+    /// hash like [`Self::from_environment`] does: for source
+    /// packages a URL is a stable path string that doesn't change
+    /// when the source content (and therefore the built artifact)
+    /// changes, so a URL-based key would falsely accept stale
+    /// activation env vars after a source-rebuild. The fingerprint
+    /// is the smallest authoritative summary of the prefix's
+    /// content, so URLs add no signal beyond it.
+    pub fn for_activation(
+        run_environment: &workspace::Environment<'_>,
+        input_environment_variables: &HashMap<String, Option<String>>,
+        installed_fingerprint: &EnvironmentFingerprint,
+    ) -> Self {
+        let mut hasher = Xxh3::new();
+        Self::hash_common_inputs(&mut hasher, run_environment, input_environment_variables);
+        installed_fingerprint.as_str().hash(&mut hasher);
+        EnvironmentHash(format!("{:x}", hasher.finish()))
+    }
+
+    /// Fold every input shared by both hash flavours into `hasher`:
+    /// the shell input env vars (sorted by key for determinism),
+    /// the activation scripts in declaration order, and the project
+    /// activation env (sorted by key).
+    fn hash_common_inputs(
+        hasher: &mut Xxh3,
+        run_environment: &workspace::Environment<'_>,
+        input_environment_variables: &HashMap<String, Option<String>>,
+    ) {
+        let mut sorted_input_environment_variables: Vec<_> =
+            input_environment_variables.iter().collect();
+        sorted_input_environment_variables.sort_by_key(|(key, _)| *key);
+        for (key, value) in sorted_input_environment_variables {
+            key.hash(hasher);
+            value.hash(hasher);
+        }
+
+        let activation_scripts =
+            run_environment.activation_scripts(Some(run_environment.best_platform()));
+        for script in activation_scripts {
+            script.hash(hasher);
+        }
+
+        let project_activation_env =
+            run_environment.activation_env(Some(run_environment.best_platform()));
+        let mut env_vars: Vec<_> = project_activation_env.iter().collect();
+        env_vars.sort_by_key(|(key, _)| *key);
+        for (key, value) in env_vars {
+            key.hash(hasher);
+            value.hash(hasher);
+        }
     }
 }
 
@@ -178,24 +230,24 @@ impl LockedEnvironmentHash {
         // Intentionally ignore `skipped` here: the quick-validate cache is only
         // used during runs, and should not vary based on transient install
         // filters.
-        if let Some(packages) = environment.packages(platform) {
+        let lock_platform = environment.lock_file().platform(&platform.to_string());
+        if let Some(packages) = lock_platform.and_then(|p| environment.packages(p)) {
             for package in packages {
                 // Always has the url or path
                 package.location().to_owned().to_string().hash(&mut hasher);
 
-                match package {
+                match &package {
                     // A select set of fields are used to hash the package
-                    LockedPackageRef::Conda(pack) => {
-                        if let Some(sha) = pack.record().sha256 {
-                            sha.hash(&mut hasher);
-                        } else if let Some(md5) = pack.record().md5 {
-                            md5.hash(&mut hasher);
+                    LockedPackage::Conda(pack) => {
+                        if let Some(record) = pack.record() {
+                            if let Some(sha) = record.sha256 {
+                                sha.hash(&mut hasher);
+                            } else if let Some(md5) = record.md5 {
+                                md5.hash(&mut hasher);
+                            }
                         }
                     }
-                    LockedPackageRef::Pypi(pack, env) => {
-                        pack.editable.hash(&mut hasher);
-                        env.extras.hash(&mut hasher);
-                    }
+                    LockedPackage::Pypi(_) => {}
                 }
             }
         }
@@ -212,6 +264,12 @@ impl LockedEnvironmentHash {
 }
 
 /// Information about the environment that was used to create the environment.
+///
+/// The install fingerprint that downstream caches key on lives in a
+/// separate marker file managed by
+/// [`pixi_command_dispatcher::EnvironmentFingerprint::read`] /
+/// [`pixi_command_dispatcher::EnvironmentFingerprint::write`], so
+/// it isn't part of this struct.
 #[derive(Serialize, Deserialize)]
 pub(crate) struct EnvironmentFile {
     /// The path to the manifest file that was used to create the environment.
@@ -231,6 +289,7 @@ fn environment_file_path(environment_dir: &Path) -> PathBuf {
         .join(consts::CONDA_META_DIR)
         .join(consts::ENVIRONMENT_FILE_NAME)
 }
+
 /// Write information about the environment to a file in the environment
 /// directory. Used by the prefix updating to validate if it needs to be
 /// updated.
@@ -572,6 +631,9 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
             }
             .into());
         }
+        if !no_install {
+            env.emit_emulation_warning();
+        }
     }
 
     // Make sure the project is in a sane state
@@ -587,6 +649,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
             lock_file_usage: update_lock_file_options.lock_file_usage,
             no_install,
             max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
+            ..Default::default()
         })
         .await?
         .0;

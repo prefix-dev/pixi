@@ -7,13 +7,15 @@ use miette::IntoDiagnostic;
 use pixi_build_backend::{
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
+    tools::BackendIdentifier,
     traits::ProjectModel,
 };
 use pixi_build_types::SourcePackageName;
 use rattler_build_jinja::Variable;
+use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_build_types::NormalizedKey;
+use rattler_conda_types::PackageName;
 use rattler_conda_types::{ChannelUrl, Platform};
-use recipe_stage0::recipe::Script;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{
@@ -91,9 +93,12 @@ impl GenerateRecipe for CMakeGenerator {
 
         // add necessary build tools
         for tool in ["cmake", "ninja"] {
-            let tool_name = SourcePackageName::from(tool);
+            let tool_name = SourcePackageName::from(PackageName::new_unchecked(tool));
             if !model_dependencies.build.contains_key(&tool_name) {
-                requirements.build.push(tool.parse().into_diagnostic()?);
+                requirements.build.push(Item::Value(Value::new_concrete(
+                    SerializableMatchSpec::from(tool),
+                    None,
+                )));
             }
         }
 
@@ -102,7 +107,9 @@ impl GenerateRecipe for CMakeGenerator {
         // executable
         let has_host_python = model_dependencies
             .host
-            .contains_key(&SourcePackageName::from("python"));
+            .contains_key(&SourcePackageName::from(PackageName::new_unchecked(
+                "python",
+            )));
 
         let build_script = BuildScriptContext {
             build_platform: if Platform::current().is_windows() {
@@ -116,11 +123,13 @@ impl GenerateRecipe for CMakeGenerator {
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script {
-            content: build_script,
-            env: config.env.clone(),
-            ..Default::default()
-        };
+        generated_recipe.recipe.build.script = Script::from_content(build_script).with_env(
+            config
+                .env
+                .iter()
+                .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                .collect(),
+        );
 
         Ok(generated_recipe)
     }
@@ -136,7 +145,7 @@ impl GenerateRecipe for CMakeGenerator {
             "**/*.{c,cc,cxx,cpp,h,hpp,hxx}",
             // CMake files
             "**/*.{cmake,cmake.in}",
-            "**/CMakeFiles.txt",
+            "**/CMakeLists.txt",
         ]
         .iter()
         .map(|s: &&str| s.to_string())
@@ -166,7 +175,11 @@ impl GenerateRecipe for CMakeGenerator {
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<CMakeGenerator>::new(log, Arc::default())
+        IntermediateBackendInstantiator::<CMakeGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            log,
+            Arc::default(),
+        )
     })
     .await
     {
@@ -188,7 +201,6 @@ mod tests {
         procedures::{conda_outputs::CondaOutputsParams, initialize::InitializeParams},
     };
     use rattler_build_core::console_utils::LoggingOutputHandler;
-    use recipe_stage0::recipe::{Item, Value};
     use tokio::fs;
 
     use super::*;
@@ -334,12 +346,14 @@ mod tests {
         insta::assert_yaml_snapshot!(generated_recipe.recipe.build,
 
             {
-            ".script.content" => insta::dynamic_redaction(|value, _path| {
-                dbg!(&value);
-                // assert that the value looks like a uuid here
-                assert!(value.as_str().unwrap().lines()
-                    .any(|c| c.contains("-DPython_EXECUTABLE"))
-                );
+            ".script.content[]" => insta::dynamic_redaction(|value, _path| {
+                // content is a ConditionalList<String>, serialized as an array
+                if let Some(s) = value.as_str() {
+                    assert!(s.lines()
+                        .any(|c| c.contains("-DPython_EXECUTABLE")),
+                        "expected -DPython_EXECUTABLE in build script, got: {s}"
+                    );
+                }
                 "[content]"
             })
         });
@@ -391,6 +405,7 @@ mod tests {
         });
 
         let factory = IntermediateBackendInstantiator::<CMakeGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
             LoggingOutputHandler::default(),
             Arc::default(),
         )
@@ -555,7 +570,10 @@ mod tests {
         let compiler_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
+                Item::Value(value) => value
+                    .as_template()
+                    .filter(|t| t.to_string().contains("compiler"))
+                    .map(|t| t.to_string()),
                 _ => None,
             })
             .collect();
@@ -611,7 +629,10 @@ mod tests {
         let compiler_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
+                Item::Value(value) => value
+                    .as_template()
+                    .filter(|t| t.to_string().contains("compiler"))
+                    .map(|t| t.to_string()),
                 _ => None,
             })
             .collect();
@@ -657,7 +678,10 @@ mod tests {
         let stdlib_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("stdlib") => Some(s.clone()),
+                Item::Value(value) => value
+                    .as_template()
+                    .filter(|t| t.to_string().contains("stdlib"))
+                    .map(|t| t.to_string()),
                 _ => None,
             })
             .collect();

@@ -7,8 +7,9 @@ use std::{
 use indexmap::IndexMap;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{Platform, Version};
+use pixi_spec::ExcludeNewer;
+use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
+use rattler_conda_types::{PackageName, Platform, Version};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -49,8 +50,10 @@ pub struct TomlManifest {
     /// Version constraints - limit versions of packages that can be installed
     /// without explicitly requiring them.
     pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+    pub exclude_newer: Option<PixiSpanned<IndexMap<PackageName, ExcludeNewer>>>,
 
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
+    pub pypi_exclude_newer: Option<PixiSpanned<IndexMap<PypiPackageName, ExcludeNewer>>>,
     pub dev_dependencies: Option<
         PixiSpanned<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
     >,
@@ -97,7 +100,7 @@ impl TomlManifest {
         external: WorkspacePackageProperties,
         package_defaults: PackageDefaults,
         workspace: &WorkspaceManifest,
-        root_directory: Option<&Path>,
+        root_directory: &Path,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
         let Some(PixiSpanned {
             value: package,
@@ -146,7 +149,7 @@ impl TomlManifest {
         self,
         mut external: ExternalWorkspaceProperties,
         package_defaults: PackageDefaults,
-        root_directory: Option<&Path>,
+        root_directory: &Path,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
         let workspace = self
             .workspace
@@ -418,7 +421,7 @@ impl TomlManifest {
 
         let WithWarnings {
             warnings: mut workspace_warnings,
-            value: workspace,
+            value: mut workspace,
         } = workspace.value.into_workspace(
             ExternalWorkspaceProperties {
                 name: project_name.or(external.name),
@@ -427,6 +430,14 @@ impl TomlManifest {
             root_directory,
         )?;
         warnings.append(&mut workspace_warnings);
+        workspace.exclude_newer_package_overrides = self
+            .exclude_newer
+            .map(PixiSpanned::into_inner)
+            .unwrap_or_default();
+        workspace.pypi_exclude_newer_package_overrides = self
+            .pypi_exclude_newer
+            .map(PixiSpanned::into_inner)
+            .unwrap_or_default();
 
         let workspace_manifest = WorkspaceManifest {
             workspace,
@@ -525,10 +536,42 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         let build_dependencies = build_dependencies.map(From::from);
 
         let constraints = th.optional("constraints");
+        let exclude_newer = th
+            .optional::<PixiSpanned<TomlIndexMap<PackageName, TomlFromStr<ExcludeNewer>>>>(
+                "exclude-newer",
+            )
+            .map(|map| PixiSpanned {
+                span: map.span,
+                value: map
+                    .value
+                    .into_inner()
+                    .into_iter()
+                    .map(|(name, cutoff): (PackageName, TomlFromStr<ExcludeNewer>)| {
+                        (name, cutoff.into_inner())
+                    })
+                    .collect::<IndexMap<_, _>>(),
+            });
 
         let pypi_dependencies = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-dependencies")
             .map(TomlWith::into_inner);
+        let pypi_exclude_newer = th
+            .optional::<PixiSpanned<TomlIndexMap<PypiPackageName, TomlFromStr<ExcludeNewer>>>>(
+                "pypi-exclude-newer",
+            )
+            .map(|map| PixiSpanned {
+                span: map.span,
+                value: map
+                    .value
+                    .into_inner()
+                    .into_iter()
+                    .map(
+                        |(name, cutoff): (PypiPackageName, TomlFromStr<ExcludeNewer>)| {
+                            (name, cutoff.into_inner())
+                        },
+                    )
+                    .collect::<IndexMap<_, _>>(),
+            });
         let dev = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("dev")
             .map(TomlWith::into_inner);
@@ -593,7 +636,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             host_dependencies,
             build_dependencies,
             constraints,
+            exclude_newer,
             pypi_dependencies,
+            pypi_exclude_newer,
             dev_dependencies: dev,
             activation,
             tasks,
@@ -641,7 +686,7 @@ mod test {
                 manifest.into_workspace_manifest(
                     ExternalWorkspaceProperties::default(),
                     PackageDefaults::default(),
-                    None,
+                    Path::new(""),
                 )
             })
             .expect_err("parsing should fail");
@@ -668,7 +713,7 @@ mod test {
 
     #[test]
     fn test_workspace_name_from_package() {
-        let workspace_manifest = WorkspaceManifest::from_toml_str(
+        let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         channels = []
@@ -682,6 +727,7 @@ mod test {
         [package.build]
         backend = { name = "foobar", version = "*" }
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -1034,7 +1080,7 @@ mod test {
 
     #[test]
     fn test_parse_dev_path() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "test"
@@ -1044,6 +1090,7 @@ mod test {
         [dev]
         test-package = { path = "../test-package" }
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -1058,7 +1105,7 @@ mod test {
 
     #[test]
     fn test_parse_dev_git() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "test"
@@ -1068,6 +1115,7 @@ mod test {
         [dev]
         my-lib = { git = "https://github.com/example/my-lib.git", branch = "main" }
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -1082,7 +1130,7 @@ mod test {
 
     #[test]
     fn test_parse_dev_multiple() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "test"
@@ -1094,6 +1142,7 @@ mod test {
         pkg-b = { git = "https://github.com/example/pkg-b.git" }
         pkg-c = { url = "https://example.com/pkg-c.tar.gz" }
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -1110,7 +1159,7 @@ mod test {
 
     #[test]
     fn test_parse_feature_dev() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "test"
@@ -1124,6 +1173,7 @@ mod test {
         default = []
         extra = ["extra"]
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -1144,7 +1194,7 @@ mod test {
 
     #[test]
     fn test_parse_target_dev() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [workspace]
         name = "test"
@@ -1157,6 +1207,7 @@ mod test {
         [target.win-64.dev]
         windows-pkg = { path = "../windows-pkg" }
         "#,
+            Path::new(""),
         )
         .unwrap();
 

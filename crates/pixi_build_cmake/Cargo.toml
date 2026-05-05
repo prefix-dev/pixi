@@ -2,12 +2,8 @@
 description = "CMake build backend for Pixi"
 edition.workspace = true
 license.workspace = true
-name = "pixi_build_cmake"
-version = "0.3.10"
-
-[[bin]]
 name = "pixi-build-cmake"
-path = "src/main.rs"
+version = "0.3.11"
 
 [package.metadata.dist]
 dist = false
@@ -26,9 +22,9 @@ pixi_build_backend = { workspace = true }
 pixi_build_types = { workspace = true }
 rattler_build_core = { workspace = true }
 rattler_build_jinja = { workspace = true }
+rattler_build_recipe = { workspace = true }
 rattler_build_types = { workspace = true }
 rattler_conda_types = { workspace = true }
-recipe_stage0 = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["macros"] }
 

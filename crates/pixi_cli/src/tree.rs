@@ -13,7 +13,7 @@ use pixi_core::workspace::Environment;
 use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
-use rattler_lock::LockedPackageRef;
+use rattler_lock::LockedPackage;
 use std::collections::HashMap;
 
 /// Show a tree of workspace dependencies
@@ -78,6 +78,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
             no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
         })
         .await
         .wrap_err("Failed to update lock file")?
@@ -87,7 +88,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
     let locked_deps = lock_file
         .environment(environment.name().as_str())
-        .and_then(|env| env.packages(platform).map(Vec::from_iter))
+        .and_then(|env| {
+            let p = lock_file.platform(&platform.to_string())?;
+            env.packages(p).map(Vec::from_iter)
+        })
         .unwrap_or_default();
 
     let dep_map = generate_dependency_map(&locked_deps);
@@ -117,14 +121,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 /// Helper function to extract package information from a package reference obtained from a lock file.
 pub(crate) fn extract_package_info(
-    package: rattler_lock::LockedPackageRef<'_>,
+    package: &'_ rattler_lock::LockedPackage,
 ) -> Option<PackageInfo> {
     if let Some(conda_package) = package.as_conda() {
-        let name = conda_package.record().name.as_normalized().to_string();
+        let name = conda_package.name().as_normalized().to_string();
 
         let dependencies: Vec<String> = conda_package
-            .record()
-            .depends
+            .depends()
             .iter()
             .map(|d| {
                 d.split_once(' ')
@@ -137,10 +140,10 @@ pub(crate) fn extract_package_info(
             dependencies,
             source: PackageSource::Conda,
         })
-    } else if let Some((pypi_package_data, _pypi_env_data)) = package.as_pypi() {
-        let name = pypi_package_data.name.as_dist_info_name().into_owned();
+    } else if let Some(pypi_package_data) = package.as_pypi() {
+        let name = pypi_package_data.name().as_dist_info_name().into_owned();
         let dependencies = pypi_package_data
-            .requires_dist
+            .requires_dist()
             .iter()
             .filter_map(|p| {
                 if p.marker.is_true() {
@@ -168,7 +171,7 @@ pub(crate) fn extract_package_info(
 }
 
 /// Generate a map of dependencies from a list of locked packages.
-pub fn generate_dependency_map(locked_deps: &[LockedPackageRef<'_>]) -> HashMap<String, Package> {
+pub fn generate_dependency_map(locked_deps: &[&'_ LockedPackage]) -> HashMap<String, Package> {
     let mut package_dependencies_map = HashMap::new();
 
     for &package in locked_deps {
@@ -178,10 +181,11 @@ pub fn generate_dependency_map(locked_deps: &[LockedPackageRef<'_>]) -> HashMap<
                 Package {
                     name: package_info.name,
                     version: match package {
-                        LockedPackageRef::Conda(conda_data) => {
-                            conda_data.record().version.to_string()
-                        }
-                        LockedPackageRef::Pypi(pypi_data, _) => pypi_data.version.to_string(),
+                        LockedPackage::Conda(conda_data) => conda_data
+                            .record()
+                            .map(|r| r.version.to_string())
+                            .unwrap_or_default(),
+                        LockedPackage::Pypi(pypi_data) => pypi_data.version_string(),
                     },
                     dependencies: package_info
                         .dependencies

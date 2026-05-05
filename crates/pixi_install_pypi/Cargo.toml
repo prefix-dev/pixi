@@ -10,7 +10,6 @@ version = "0.1.0"
 
 [dependencies]
 ahash = { workspace = true }
-chrono = { workspace = true }
 console = { workspace = true }
 csv = { workspace = true }
 fancy_display = { workspace = true }

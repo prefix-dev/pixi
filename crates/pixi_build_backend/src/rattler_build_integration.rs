@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc};
 use miette::IntoDiagnostic;
 use rattler_build_core::{
     DiscoveredOutput,
-    metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
+    metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
     render::resolved_dependencies::RunExportsDownload,
     system_tools::SystemTools,
     tool_configuration,
@@ -28,6 +28,8 @@ use crate::{generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe};
 /// use the `IntermediateRecipe` directly.
 #[allow(clippy::too_many_arguments)]
 pub async fn get_build_output(
+    backend_name: &'static str,
+    backend_version: &'static str,
     generated_recipe: &GeneratedRecipe,
     tool_config: Arc<tool_configuration::Configuration>,
     target_platform: Platform,
@@ -40,7 +42,7 @@ pub async fn get_build_output(
     output_dir: PathBuf,
 ) -> miette::Result<Vec<Output>> {
     let recipe_path = recipe_folder.join("recipe.yaml");
-    let recipe_code = generated_recipe.recipe.to_yaml_pretty().into_diagnostic()?;
+    let recipe_code = serde_yaml::to_string(&generated_recipe.recipe).into_diagnostic()?;
 
     // Create source for error reporting
     let source = rattler_build_recipe::source_code::Source::from_string(
@@ -194,17 +196,18 @@ pub async fn get_build_output(
                 store_recipe: false,
                 force_colors: false,
                 sandbox_config: None,
-                debug: Debug::default(),
                 solve_strategy: Default::default(),
                 exclude_newer: None,
+                env_isolation: Default::default(),
             },
             finalized_dependencies: None,
             finalized_sources: None,
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
-            system_tools: SystemTools::default(),
+            system_tools: SystemTools::new(backend_name, backend_version),
             build_summary: Arc::default(),
             extra_meta: None,
+            staging_library_name_map: None,
         };
 
         let temp_recipe = TemporaryRenderedRecipe::from_output(&output)?;

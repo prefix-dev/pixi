@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.66.0/schema/manifest/pyproject/schema.json",
+  "$id": "https://pixi.sh/v0.67.2/schema/manifest/pyproject/schema.json",
   "title": "`pyproject.toml` manifest file for `pixi`",
   "description": "A `pyproject.toml` with `[tool.pixi]`.",
   "type": "object",
@@ -338,6 +338,12 @@
             }
           ]
         },
+        "exclude-newer": {
+          "title": "Exclude-Newer",
+          "description": "Override the workspace-level `exclude-newer` cutoff for this channel only",
+          "type": "string",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+        },
         "priority": {
           "title": "Priority",
           "description": "The priority of the channel",
@@ -404,6 +410,7 @@
           "title": "Task",
           "description": "the name of the task to depend on",
           "type": "string",
+          "minLength": 1,
           "pattern": "^[^\\s\\$]+$"
         }
       }
@@ -671,7 +678,8 @@
             }
           },
           "propertyNames": {
-            "description": "A valid task name."
+            "description": "A valid task name.",
+            "minLength": 1
           }
         }
       }
@@ -1060,7 +1068,7 @@
           "description": "Machine-specific aspects of the package",
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/$defs/Target"
+            "$ref": "#/$defs/PackageTarget"
           },
           "propertyNames": {
             "minLength": 1
@@ -1093,6 +1101,75 @@
               "workspace": true
             }
           ]
+        }
+      }
+    },
+    "PackageTarget": {
+      "title": "PackageTarget",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build-dependencies": {
+          "title": "Build-Dependencies",
+          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "host-dependencies": {
+          "title": "Host-Dependencies",
+          "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "python": ">=3.8"
+            }
+          ]
+        },
+        "run-dependencies": {
+          "title": "Run-Dependencies",
+          "description": "The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
         }
       }
     },
@@ -1623,6 +1700,18 @@
             }
           }
         },
+        "exclude_newer": {
+          "title": "Exclude Newer",
+          "description": "Workspace-wide per-package `exclude-newer` overrides for conda packages",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "feature": {
           "title": "Feature",
           "description": "The features of the project",
@@ -1700,6 +1789,18 @@
             "minLength": 1
           }
         },
+        "pypi_exclude_newer": {
+          "title": "Pypi Exclude Newer",
+          "description": "Workspace-wide per-package `exclude-newer` overrides for PyPI packages",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "pypi_options": {
           "$ref": "#/$defs/PyPIOptions",
           "description": "Options related to PyPI indexes, on the default feature"
@@ -1752,7 +1853,8 @@
             }
           },
           "propertyNames": {
-            "description": "A valid task name."
+            "description": "A valid task name.",
+            "minLength": 1
           }
         },
         "tool": {
@@ -2194,7 +2296,8 @@
             }
           },
           "propertyNames": {
-            "description": "A valid task name."
+            "description": "A valid task name.",
+            "minLength": 1
           }
         }
       }
@@ -2336,6 +2439,7 @@
                   {
                     "description": "A valid task name.",
                     "type": "string",
+                    "minLength": 1,
                     "pattern": "^[^\\s\\$]+$"
                   }
                 ]
@@ -2347,6 +2451,7 @@
             {
               "description": "A valid task name.",
               "type": "string",
+              "minLength": 1,
               "pattern": "^[^\\s\\$]+$"
             }
           ]
@@ -2360,12 +2465,14 @@
               "items": {
                 "description": "A valid task name.",
                 "type": "string",
+                "minLength": 1,
                 "pattern": "^[^\\s\\$]+$"
               }
             },
             {
               "description": "A valid task name.",
               "type": "string",
+              "minLength": 1,
               "pattern": "^[^\\s\\$]+$"
             }
           ]
@@ -2522,12 +2629,20 @@
         },
         "exclude-newer": {
           "title": "Exclude-Newer",
-          "description": "Exclude any package newer than this date",
+          "description": "Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
           "type": "string",
-          "pattern": "^\\d{4}-\\d{2}-\\d{2}([T ]\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))?$",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$",
           "examples": [
-            "2023-11-03",
-            "2023-11-03T03:33:12Z"
+            "2023-11-03T03:33:12Z",
+            "2026-04-01",
+            "0d",
+            "1 week",
+            "2w",
+            "1 month",
+            "1M",
+            "72h",
+            "72 hours",
+            "1h30m"
           ]
         },
         "homepage": {

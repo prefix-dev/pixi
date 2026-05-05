@@ -10,15 +10,24 @@ use pixi_build_backend::{
     Variable,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
+    tools::BackendIdentifier,
     traits::ProjectModel,
     variants::NormalizedKey,
 };
 use pixi_build_types::SourcePackageName;
+use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
+use rattler_conda_types::PackageName;
 use rattler_conda_types::{ChannelUrl, Platform};
-use recipe_stage0::recipe::Script;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+/// Parse a string into an `Item<SerializableMatchSpec>` for use in requirements.
+fn matchspec_item(
+    spec: &str,
+) -> Result<Item<SerializableMatchSpec>, rattler_conda_types::ParseMatchSpecError> {
+    Ok(Item::Value(Value::new_concrete(spec.parse()?, None)))
+}
 
 #[derive(Default, Clone)]
 pub struct RGenerator {}
@@ -107,14 +116,18 @@ impl GenerateRecipe for RGenerator {
         );
 
         // Add R runtime to host requirements
-        let r_pkg = SourcePackageName::from("r-base");
+        let r_pkg = SourcePackageName::from(PackageName::new_unchecked("r-base"));
         if !model_dependencies.host.contains_key(&r_pkg) {
-            requirements.host.push("r-base".parse().into_diagnostic()?);
+            requirements
+                .host
+                .push(matchspec_item("r-base").into_diagnostic()?);
         }
 
         // Add R runtime to run requirements
         if !model_dependencies.run.contains_key(&r_pkg) {
-            requirements.run.push("r-base".parse().into_diagnostic()?);
+            requirements
+                .run
+                .push(matchspec_item("r-base").into_diagnostic()?);
         }
 
         // Add R package dependencies from DESCRIPTION (Imports + Depends)
@@ -138,10 +151,14 @@ impl GenerateRecipe for RGenerator {
             };
 
             // Add to host requirements (runtime dependencies)
-            requirements.host.push(dep_spec.parse().into_diagnostic()?);
+            requirements
+                .host
+                .push(matchspec_item(&dep_spec).into_diagnostic()?);
 
             // Also add to run requirements
-            requirements.run.push(dep_spec.parse().into_diagnostic()?);
+            requirements
+                .run
+                .push(matchspec_item(&dep_spec).into_diagnostic()?);
         }
 
         // Add LinkingTo dependencies (packages providing headers for C/C++ compilation)
@@ -165,7 +182,9 @@ impl GenerateRecipe for RGenerator {
             };
 
             // Add to host requirements only (LinkingTo packages provide headers at compile time)
-            requirements.host.push(dep_spec.parse().into_diagnostic()?);
+            requirements
+                .host
+                .push(matchspec_item(&dep_spec).into_diagnostic()?);
         }
 
         // Generate build script
@@ -182,11 +201,13 @@ impl GenerateRecipe for RGenerator {
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script {
-            content: build_script,
-            env: config.env.clone(),
-            ..Default::default()
-        };
+        generated_recipe.recipe.build.script = Script::from_content(build_script).with_env(
+            config
+                .env
+                .iter()
+                .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                .collect(),
+        );
 
         // Add metadata input globs
         generated_recipe
@@ -257,7 +278,11 @@ impl GenerateRecipe for RGenerator {
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<RGenerator>::new(log, Arc::default())
+        IntermediateBackendInstantiator::<RGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            log,
+            Arc::default(),
+        )
     })
     .await
     {
@@ -269,7 +294,6 @@ pub async fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use recipe_stage0::recipe::{Item, Value};
     use tempfile::TempDir;
     use tokio::fs;
 
@@ -327,9 +351,12 @@ LinkingTo: Rcpp
 
         // Verify compilers were added
         let build_reqs = &generated_recipe.recipe.requirements.build;
-        let has_compilers = build_reqs
-            .iter()
-            .any(|item| matches!(item, Item::Value(Value::Template(t)) if t.contains("compiler")));
+        let has_compilers = build_reqs.iter().any(|item| match item {
+            Item::Value(v) => v
+                .as_template()
+                .is_some_and(|t| t.to_string().contains("compiler")),
+            _ => false,
+        });
         assert!(has_compilers, "Native code package should have compilers");
 
         // Verify r-base is in host and run requirements
@@ -386,9 +413,12 @@ LinkingTo: Rcpp
 
         // Verify no compilers were added for pure R package
         let build_reqs = &generated_recipe.recipe.requirements.build;
-        let has_compilers = build_reqs
-            .iter()
-            .any(|item| matches!(item, Item::Value(Value::Template(t)) if t.contains("compiler")));
+        let has_compilers = build_reqs.iter().any(|item| match item {
+            Item::Value(v) => v
+                .as_template()
+                .is_some_and(|t| t.to_string().contains("compiler")),
+            _ => false,
+        });
         assert!(!has_compilers, "Pure R package should not have compilers");
 
         insta::assert_yaml_snapshot!(generated_recipe.recipe, {
@@ -586,8 +616,11 @@ Imports:
         let build_reqs = &generated_recipe.recipe.requirements.build;
         let compiler_count = build_reqs
             .iter()
-            .filter(|item| {
-                matches!(item, Item::Value(Value::Template(t)) if t.contains("compiler('c')"))
+            .filter(|item| match item {
+                Item::Value(v) => v
+                    .as_template()
+                    .is_some_and(|t| t.to_string().contains("compiler('c')")),
+                _ => false,
             })
             .count();
 

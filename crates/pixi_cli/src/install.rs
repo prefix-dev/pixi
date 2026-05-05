@@ -117,6 +117,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             lock_file_usage: args.lock_file_usage.to_usage(),
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
         },
         ReinstallPackages::default(),
         &filter,

@@ -756,6 +756,91 @@ async fn test_old_lock_install() {
     );
 }
 
+/// A v6 lock file has a local path dependency whose directory is called
+/// `foo.tar.gz`.  On upgrade to v7, `is_wheel_or_archive_location` matches
+/// the `.tar.gz` suffix and misclassifies the entry as a
+/// `PypiDistributionData`.  This test verifies that a re-resolve corrects
+/// the entry to `PypiSourceData` and that the resulting lock file
+/// round-trips cleanly.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_v6_local_archive_path_upgrade() {
+    setup_tracing();
+
+    let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
+    let test_dir = workspace_root.join("tests/data/v6-local-archive-path");
+
+    // Save the original lock file content so we can restore it at the end.
+    let lock_path = test_dir.join("pixi.lock");
+    let original_lock = fs_err::read_to_string(&lock_path).unwrap();
+
+    // Load the v6 lock file — foo.tar.gz is misdetected as Distribution.
+    let lock_file = rattler_lock::LockFile::from_path(&lock_path).unwrap();
+    let env = lock_file.default_environment().unwrap();
+    let foo = env
+        .pypi_packages_by_platform()
+        .flat_map(|(_, pkgs)| pkgs)
+        .find(|p| p.name().as_ref() == "foo")
+        .expect("foo should be in the lock file");
+    assert!(
+        foo.as_wheel().is_some(),
+        "v6→v7 upgrade should (incorrectly) parse foo.tar.gz as Distribution"
+    );
+
+    // Re-resolve — should detect the mismatch and re-solve.
+    let project = Workspace::from_path(&test_dir.join("pixi.toml")).unwrap();
+    pixi_core::environment::get_update_lock_file_and_prefix(
+        &project.default_environment(),
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Update,
+            no_install: true,
+            ..Default::default()
+        },
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await
+    .unwrap();
+
+    // After re-resolve, foo.tar.gz should be a Source package.
+    let new_lock = rattler_lock::LockFile::from_path(&test_dir.join("pixi.lock")).unwrap();
+    let new_env = new_lock.default_environment().unwrap();
+    let foo = new_env
+        .pypi_packages_by_platform()
+        .flat_map(|(_, pkgs)| pkgs)
+        .find(|p| p.name().as_ref() == "foo")
+        .expect("foo should be in the re-resolved lock file");
+    assert!(
+        foo.as_source().is_some(),
+        "after re-resolve foo.tar.gz should be a Source package, not Distribution"
+    );
+
+    // Round-trip: a second revalidate should not change the lock file.
+    let lock_str = fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap();
+    pixi_core::environment::get_update_lock_file_and_prefix(
+        &project.default_environment(),
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Update,
+            no_install: true,
+            ..Default::default()
+        },
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        lock_str,
+        fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap(),
+        "lock file should round-trip without changes"
+    );
+
+    // Restore the original v6 lock file so the test is idempotent.
+    fs_err::write(&lock_path, &original_lock).unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
@@ -834,8 +919,13 @@ setup(
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
 
+    // Only pin the uv wheel cache — conda packages and repodata can be reused
+    // from prior runs, which keeps the test fast.
     temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        [(
+            "PIXI_CACHE_PYPI_WHEELS_DIR",
+            Some(tmp_dir_path.to_str().unwrap()),
+        )],
         async {
             pixi.install().await.expect("cannot install project");
         },
@@ -958,8 +1048,13 @@ setup(
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
 
+    // Only pin the uv wheel cache — conda packages and repodata can be reused
+    // from prior runs, which keeps the test fast.
     temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        [(
+            "PIXI_CACHE_PYPI_WHEELS_DIR",
+            Some(tmp_dir_path.to_str().unwrap()),
+        )],
         async {
             pixi.install()
                 .await
@@ -969,6 +1064,20 @@ setup(
     .await;
 }
 
+/// Regression test for issue #1686.
+///
+/// When a pypi package is provided by conda, pixi tells the pypi resolver
+/// to treat that package as already installed rather than fetching it from
+/// PyPI. Before #1969 the resolver's in-memory index was also shared with
+/// uv's build-dispatch, so PEP 517 builds whose `build-system.requires`
+/// listed the same package couldn't install it from PyPI either, and the
+/// build failed.
+///
+/// The setup below exercises exactly that path: `setuptools` is a conda
+/// dependency (so pixi registers it as conda-provided), and the local
+/// pypi package's `build-system.requires = ["setuptools>=60"]` forces uv
+/// to invoke build-dispatch to fetch setuptools from PyPI during the
+/// wheel build.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
@@ -977,38 +1086,46 @@ setup(
 async fn test_setuptools_override_failure() {
     setup_tracing();
 
-    // This was causing issues like: https://github.com/prefix-dev/pixi/issues/1686
+    let current_platform = Platform::current();
+    let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
+    let pkg_source = workspace_root.join("tests/data/setuptools-override-repro");
+    let pkg_path = pkg_source.to_str().unwrap().replace('\\', "/");
+
     let manifest = format!(
         r#"
         [project]
         channels = ["https://prefix.dev/conda-forge"]
-        name = "pixi-source-problem"
-        platforms = ["{platform}"]
-        exclude-newer = "2024-08-29"
+        name = "setuptools-override-minimal"
+        platforms = ["{current_platform}"]
 
         [dependencies]
-        pip = ">=24.0,<25"
-        python = "<3.13"
-        # we need to pin them because xalas start to fail with newer versions
-        ninja = "*"
-        cmake = "<4"
+        # `setuptools` on the conda side is what causes pixi to register
+        # it as a conda-provided package for the pypi resolver. The local
+        # pypi package below then forces a PEP 517 build that needs its
+        # own `setuptools>=60` from PyPI, which exercises the fix in
+        # #1969: build-dispatch now has a separate in-memory index so
+        # the conda-provided-package hint doesn't block the build.
+        python = ">=3.11,<3.13"
+        pip = "*"
+        setuptools = ">=60"
 
-        [pypi-options]
-        no-build-isolation = ["xatlas"]
-
-        # The transitive dependencies of viser were causing issues
         [pypi-dependencies]
-        viser = "==0.2.7"
-        "#,
-        platform = Platform::current()
+        setuptools-override-repro = {{ path = "{pkg_path}" }}
+        "#
     );
+
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
 
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
 
+    // Only pin the uv wheel cache — conda packages and repodata can be reused
+    // from prior runs, which keeps the test fast.
     temp_env::async_with_vars(
-        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        [(
+            "PIXI_CACHE_PYPI_WHEELS_DIR",
+            Some(tmp_dir_path.to_str().unwrap()),
+        )],
         async {
             pixi.install().await.expect("cannot install project");
         },
@@ -1325,18 +1442,18 @@ async fn test_multiple_prefix_update() {
 
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
-        group.workspace().channel_config(),
         name,
         prefix,
         current_platform,
         virtual_packages,
         variant_config,
+        None,
         command_dispatcher,
     );
 
     let pixi_records = Vec::from([
-        PixiRecord::Binary(wheel_repo_data_record),
-        PixiRecord::Binary(python_repo_data_record),
+        PixiRecord::from(wheel_repo_data_record),
+        PixiRecord::from(python_repo_data_record),
     ]);
 
     let mut sets = JoinSet::new();
@@ -1346,7 +1463,14 @@ async fn test_multiple_prefix_update() {
         let pixi_records = pixi_records.clone();
         // tasks.push(conda_prefix_updater.update(pixi_records));
         let updater = conda_prefix_updater.clone();
-        sets.spawn(async move { updater.update(pixi_records, None, None).await.cloned() });
+        let unresolved_records: Vec<pixi_record::UnresolvedPixiRecord> =
+            pixi_records.into_iter().map(Into::into).collect();
+        sets.spawn(async move {
+            updater
+                .update(unresolved_records, None, None)
+                .await
+                .cloned()
+        });
     }
 
     let mut first_modified = None;
@@ -1517,13 +1641,149 @@ async fn test_exclude_newer() {
     ))
     .unwrap();
 
-    // Relock and check that an older version of the package is selected
+    // Re-lock and check that an older version of the package is selected
     pixi.lock().await.unwrap();
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
         Platform::current(),
         "foo ==1"
+    ));
+}
+
+#[tokio::test]
+async fn test_exclude_newer_per_package_dependency_override() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-per-package-dependency-override"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+
+    [exclude-newer]
+    foo = "0d"
+    "#,
+        channel = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==2"
+    ));
+}
+
+#[tokio::test]
+async fn test_exclude_newer_url_channel_override() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-url-channel-override"
+    channels = [{{ channel = "{channel}", exclude-newer = "0d" }}]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "foo ==2"
+    ));
+}
+
+#[tokio::test]
+async fn test_exclude_newer_per_package_constraint_override() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("bar", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("bar", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .with_dependency("bar >=1")
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-per-package-constraint-override"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+
+    [exclude-newer]
+    bar = "0d"
+    "#,
+        channel = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "bar ==2"
     ));
 }
 
