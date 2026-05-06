@@ -248,8 +248,15 @@ pub async fn simple_test() {
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let tempdir = tempfile::tempdir().unwrap();
     let prefix_dir = tempdir.path().join("prefix");
+    // Use a fresh build-backends dir so the EphemeralEnvKey disk cache never
+    // fires and the snapshot always captures the full cold-cache event tree
+    // (ephemeral-env solve + main solve), regardless of prior test runs.
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_cache_dirs(
+            default_cache_dirs()
+                .with_workspace(to_abs_dir(tempdir.path()))
+                .with_build_backends(to_abs_dir(tempdir.path().join("build-backends"))),
+        )
         .with_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
