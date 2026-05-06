@@ -4195,10 +4195,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-build-host-and-run-dependencies-tables" class="md-nav__link">
+  <a href="#the-build-host-run-and-run-constraints-dependency-tables" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The build host and run dependencies tables
+        The build, host, run and run-constraints dependency tables
       
     </span>
   </a>
@@ -4232,6 +4232,17 @@
     <span class="md-ellipsis">
       
         run-dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run-constraints
       
     </span>
   </a>
@@ -5094,10 +5105,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#the-build-host-and-run-dependencies-tables" class="md-nav__link">
+  <a href="#the-build-host-run-and-run-constraints-dependency-tables" class="md-nav__link">
     <span class="md-ellipsis">
       
-        The build host and run dependencies tables
+        The build, host, run and run-constraints dependency tables
       
     </span>
   </a>
@@ -5131,6 +5142,17 @@
     <span class="md-ellipsis">
       
         run-dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run-constraints
       
     </span>
   </a>
@@ -6239,6 +6261,7 @@ The package section is defined using the following fields:</p>
 <li><code>build-dependencies</code>: The build dependencies of the package.</li>
 <li><code>host-dependencies</code>: The host dependencies of the package.</li>
 <li><code>run-dependencies</code>: The run dependencies of the package.</li>
+<li><code>run-constraints</code>: Version constraints applied to the package's run environment.</li>
 <li><code>target</code>: The target table to configure target specific dependencies. (Similar to the <a href="#the-target-table">target</a> table)</li>
 </ul>
 <p>And to extend the basics, it can also contain the following fields:</p>
@@ -6323,13 +6346,14 @@ The build system is a table that can contain the following fields:</p>
 </span><span id="__span-74-13"><a id="__codelineno-74-13" name="__codelineno-74-13" href="#__codelineno-74-13"></a><span class="c1"># Windows-specific configuration</span>
 </span><span id="__span-74-14"><a id="__codelineno-74-14" name="__codelineno-74-14" href="#__codelineno-74-14"></a><span class="n">extra-args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-DCMAKE_BUILD_TYPE=Debug&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;-DWIN_FLAG=ON&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-<h3 id="the-build-host-and-run-dependencies-tables">The <code>build</code> <code>host</code> and <code>run</code> dependencies tables<a class="headerlink" href="#the-build-host-and-run-dependencies-tables" title="Permanent link">#</a></h3>
-<p>The dependencies of a package are split into three tables.
+<h3 id="the-build-host-run-and-run-constraints-dependency-tables">The <code>build</code>, <code>host</code>, <code>run</code> and <code>run-constraints</code> dependency tables<a class="headerlink" href="#the-build-host-run-and-run-constraints-dependency-tables" title="Permanent link">#</a></h3>
+<p>The dependencies of a package are split into four tables.
 Each of these tables has a different purpose and is used to define the dependencies of the package.</p>
 <ul>
 <li><a href="#build-dependencies"><code>build-dependencies</code></a>: Dependencies that are required to build the package on the build platform.</li>
 <li><a href="#host-dependencies"><code>host-dependencies</code></a>: Dependencies that are required during the build process, to link against the package on the target platform.</li>
 <li><a href="#run-dependencies"><code>run-dependencies</code></a>: Dependencies that are required to run the package on the target platform.</li>
+<li><a href="#run-constraints"><code>run-constraints</code></a>: Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.</li>
 </ul>
 <h3 id="build-dependencies"><code>build-dependencies</code><a class="headerlink" href="#build-dependencies" title="Permanent link">#</a></h3>
 <p>Build dependencies are required in the build environment and contain all tools that are not needed on the host of the package.</p>
@@ -6373,6 +6397,13 @@ For more details on how to do this, check the <a href="https://docs.github.com/e
 </ul>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-77-1"><a id="__codelineno-77-1" name="__codelineno-77-1" href="#__codelineno-77-1"></a><span class="k">[package.run-dependencies]</span>
 </span><span id="__span-77-2"><a id="__codelineno-77-2" name="__codelineno-77-2" href="#__codelineno-77-2"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
+</span></code></pre></div>
+<h3 id="run-constraints"><code>run-constraints</code><a class="headerlink" href="#run-constraints" title="Permanent link">#</a></h3>
+<p>The <code>run-constraints</code> are version constraints applied to the package's run environment.
+They constrain the versions of packages that may be installed <em>if</em> they are pulled in by another dependency, without themselves causing those packages to be installed.</p>
+<p>This mirrors the conda concept that surfaces as <code>run_constrained</code> in the package metadata.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-78-1"><a id="__codelineno-78-1" name="__codelineno-78-1" href="#__codelineno-78-1"></a><span class="k">[package.run-constraints]</span>
+</span><span id="__span-78-2"><a id="__codelineno-78-2" name="__codelineno-78-2" href="#__codelineno-78-2"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2&quot;</span>
 </span></code></pre></div>
 
 

@@ -88,3 +88,9 @@ Conda packages, can define `run-exports`, that are dependencies that when specif
 ### [Dependencies (Run Dependencies)](../../reference/pixi_manifest/#dependencies)
 
 These are the dependencies that are required to when running the package, they are the most common dependencies. And are what you would usually use in a `workspace`.
+
+### [Run Constraints](../../reference/pixi_manifest/#run-constraints)
+
+Constraints that apply to the package's run environment, but only when the constrained package is pulled in as a dependency by something else. They never cause a package to be installed on their own. To do that, use run-dependencies (#dependencies-run-dependencies).
+
+This corresponds to conda's `run_constrained` package metadata.

@@ -1871,6 +1871,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#run-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run Constraints
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4070,6 +4081,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#run-constraints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run Constraints
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -4215,6 +4237,10 @@ When using something like <code>zlib</code>, you would only need to specify it i
 <h3 id="dependencies-run-dependencies"><a href="../../reference/pixi_manifest/#dependencies">Dependencies (Run Dependencies)</a><a class="headerlink" href="#dependencies-run-dependencies" title="Permanent link">#</a></h3>
 <p>These are the dependencies that are required to when running the package, they are the most common dependencies.
 And are what you would usually use in a <code>workspace</code>.</p>
+<h3 id="run-constraints"><a href="../../reference/pixi_manifest/#run-constraints">Run Constraints</a><a class="headerlink" href="#run-constraints" title="Permanent link">#</a></h3>
+<p>Constraints that apply to the package's run environment, but only when the constrained package is pulled in as a dependency by something else.
+They never cause a package to be installed on their own. To do that, use run-dependencies (#dependencies-run-dependencies).</p>
+<p>This corresponds to conda's <code>run_constrained</code> package metadata.</p>
 
 
 
