@@ -1968,3 +1968,70 @@ async fn test_uv_skip_wheel_filename_check() {
         "Package should be installed when env var takes precedence"
     );
 }
+
+/// Verifies that `pixi install --all` skips environments that do not support
+/// the current platform instead of failing the entire install. See issue #5760.
+#[tokio::test]
+async fn install_all_skips_unsupported_environments() {
+    setup_tracing();
+
+    let current_platform = Platform::current();
+    // Pick a platform from a different OS family so that no `best_platform`
+    // fallback (e.g. osx-arm64 -> osx-64) accidentally rescues the env.
+    let other_platform = if current_platform.is_linux() {
+        Platform::Osx64
+    } else {
+        Platform::Linux64
+    };
+
+    let mut db = MockRepoData::default();
+    db.add_package(
+        Package::build("foo", "1")
+            .with_subdir(current_platform)
+            .with_materialize(true)
+            .finish(),
+    );
+    db.add_package(
+        Package::build("foo", "1")
+            .with_subdir(other_platform)
+            .with_materialize(true)
+            .finish(),
+    );
+    let channel = db.into_channel().await.unwrap();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "test-filter-unsupported"
+        channels = ["{channel}"]
+        platforms = ["{current_platform}", "{other_platform}"]
+
+        [dependencies]
+        foo = "*"
+
+        [feature.other-only]
+        platforms = ["{other_platform}"]
+
+        [environments]
+        other = ["other-only"]
+        "#,
+        channel = channel.url(),
+    ))
+    .unwrap();
+
+    // `pixi install --all` should succeed because the unsupported `other`
+    // environment is filtered out instead of failing the whole command.
+    pixi.install()
+        .with_all(true)
+        .await
+        .expect("install --all should skip environments that do not support the current platform");
+
+    // Explicitly requesting the unsupported environment should still fail so
+    // that the user gets a clear error rather than silently doing nothing.
+    pixi.install()
+        .with_environment(vec!["other".to_string()])
+        .await
+        .expect_err(
+            "install -e other should fail because it does not support the current platform",
+        );
+}

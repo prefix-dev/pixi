@@ -112,7 +112,7 @@ impl Display for LegacySourceEnvKey {
 
 impl LegacySourceEnvKey {
     /// Stable hash for the on-disk cache filename. Resolves
-    /// [`EnvironmentRef`] to its underlying [`EnvironmentSpec`] via the
+    /// [`EnvironmentRef`] to its underlying `EnvironmentSpec` via the
     /// registry so the hash is content-driven (registry ids are
     /// allocation-order-dependent and thus unstable across runs).
     /// Excludes `installed_source_hints` (optimization input only); the

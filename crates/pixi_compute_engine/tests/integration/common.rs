@@ -83,10 +83,20 @@ impl Key for PlusTenKey {
 
 /// Poll `fut` exactly once. Used by the cancellation-with-subscribers
 /// test to force a subscription into the dedup store before proceeding.
+///
+/// Panics if the inner future returns `Ready`: callers rely on the
+/// future remaining live afterwards so they can `.await` it (or drop
+/// it) later, and silently swallowing a `Ready` value would leave the
+/// caller polling a completed `async` block — which the compiler turns
+/// into a "`async fn` resumed after completion" panic with a stack
+/// trace that points away from the test bug.
 pub async fn poll_once<F: Future + Unpin>(fut: &mut F) {
-    futures::future::poll_fn(|cx| {
-        let _ = Pin::new(&mut *fut).poll(cx);
-        Poll::Ready(())
+    futures::future::poll_fn(|cx| match Pin::new(&mut *fut).poll(cx) {
+        Poll::Pending => Poll::Ready(()),
+        Poll::Ready(_) => panic!(
+            "poll_once: future returned Ready on first poll; \
+                 the test must keep the compute parked until subscribers attach"
+        ),
     })
     .await;
 }

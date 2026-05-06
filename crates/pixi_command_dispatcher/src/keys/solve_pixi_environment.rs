@@ -321,7 +321,7 @@ async fn compute_inner(
                 .then_with(|| cmp_variants(&a.variants, &b.variants))
         });
     }
-    grouped.sort_by(|a, b| a.0.to_string().cmp(&b.0.to_string()));
+    grouped.sort_by_key(|(source, _)| source.to_string());
     let source_repodata: Vec<Arc<SourceMetadata>> = grouped
         .into_iter()
         .map(|(source, records)| Arc::new(SourceMetadata { source, records }))

@@ -1,3 +1,13 @@
+//! Cache for the `conda/outputs` response from a build backend.
+//!
+//! Calling a backend to discover what packages a source checkout
+//! produces is expensive (it spawns the backend, resolves a tool env,
+//! and runs user code). This cache stores the response keyed on the
+//! inputs that affect it (channels, build environment, source location,
+//! enabled protocols, exclude-newer cutoff) so the backend isn't
+//! re-invoked when nothing relevant changed. Source-file freshness is
+//! tracked separately via globs + recorded paths in the entry.
+
 use super::common::{
     CacheError, CacheKeyString, CacheRevision, MetadataCache, MetadataCacheEntry, MetadataCacheKey,
     VersionedCacheEntry, WriteResult as CommonWriteResult,

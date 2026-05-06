@@ -1536,7 +1536,6 @@ impl Repodata for Project {
 mod tests {
     use std::{collections::HashMap, io::Write};
 
-    use fake::{Fake, faker::filesystem::en::FilePath};
     use itertools::Itertools;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
@@ -1559,7 +1558,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_project_from_str() {
-        let manifest_path: PathBuf = FilePath().fake();
+        // Use a deterministic path with a parent. `FilePath().fake()` from
+        // the `fake` crate occasionally produces "/" (no parent), which
+        // panics `from_manifest`'s `expect("manifest path should always
+        // have a parent")` and made this test flake under nextest.
+        let manifest_path = PathBuf::from("/fake/pixi-global.toml");
         let env_root = EnvRoot::from_env().await.unwrap();
         let bin_dir = BinDir::from_env().await.unwrap();
 
@@ -1590,7 +1593,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_project_from_manifest() {
-        let manifest_path: PathBuf = FilePath().fake();
+        let manifest_path = PathBuf::from("/fake/pixi-global.toml");
 
         let env_root = EnvRoot::from_env().await.unwrap();
         let bin_dir = BinDir::from_env().await.unwrap();

@@ -63,7 +63,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Rust
-        uses: taiki-e/setup-cross-toolchain-action@d62f33b587e73b0004731caebc7d2d46b18a7567 # v1
+        uses: taiki-e/setup-cross-toolchain-action@129361238c06ff2cc1c4ca5c5d2217af441ffdf6 # v1
         with:
           target: ${{ matrix.target }}
 

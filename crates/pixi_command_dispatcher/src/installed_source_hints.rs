@@ -27,7 +27,7 @@
 //! Each hint entry is sourced from a locked source record, so when the
 //! caller wants to discard locked content (e.g. workspace channels
 //! changed and the previous resolution is no longer trustworthy) it
-//! must drop the records before calling [`Self::from_records`]. There
+//! must drop the records before calling [`InstalledSourceHints::from_records`]. There
 //! is no "disregard this hint" knob inside the map: passing the empty
 //! slice produces the singleton empty map shared by every "no hints"
 //! caller. Pixi's update path performs the drop one level up, in the

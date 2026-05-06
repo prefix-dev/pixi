@@ -106,6 +106,7 @@ fn build_platform_verification_setup(
 /// occurred. The [`PlatformUnsat`] error should contain enough information for
 /// the user and developer to figure out what went wrong.
 ///
+#[allow(clippy::result_large_err)]
 pub async fn verify_platform_satisfiability(
     ctx: &VerifySatisfiabilityContext<'_>,
     locked_environment: rattler_lock::Environment<'_>,
@@ -310,13 +311,32 @@ pub async fn verify_platform_satisfiability(
     package_verification_future.await
 }
 
+/// Where a pypi requirement came from. The `index` semantics of a
+/// [`uv_distribution_types::Requirement`] depend on this: a `None` index from
+/// the manifest means the user did not pin a per-package index, while a
+/// `None` index from a parent's `requires_dist` simply means pep508 cannot
+/// encode an index at all.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum RequirementOrigin {
+    /// A direct pypi-dependency declared in the workspace manifest.
+    Manifest,
+    /// A transitive requirement parsed from another package's
+    /// `requires_dist`. The originating pep508 syntax carries no `index`
+    /// information.
+    RequiresDist,
+}
+
 #[allow(clippy::large_enum_variant)]
 /// A dependency that needs to be checked in the lock file
 pub enum Dependency {
     Input(PackageName, PixiSpec, Cow<'static, str>),
     Conda(MatchSpec, Cow<'static, str>),
     CondaSource(PackageName, SourceSpec, Cow<'static, str>),
-    PyPi(uv_distribution_types::Requirement, Cow<'static, str>),
+    PyPi(
+        uv_distribution_types::Requirement,
+        Cow<'static, str>,
+        RequirementOrigin,
+    ),
 }
 
 impl Dependency {
@@ -327,7 +347,7 @@ impl Dependency {
             Dependency::Input(name, _, _) => Some(name.clone()),
             Dependency::Conda(spec, _) => spec.name.as_exact().cloned(),
             Dependency::CondaSource(name, _, _) => Some(name.clone()),
-            Dependency::PyPi(_, _) => None,
+            Dependency::PyPi(_, _, _) => None,
         }
     }
 }
@@ -561,6 +581,7 @@ async fn verify_package_platform_satisfiability(
                             ))
                         })?,
                         "<environment>".into(),
+                        RequirementOrigin::Manifest,
                     ))
                 })
         })
@@ -662,7 +683,7 @@ async fn verify_package_platform_satisfiability(
     let mut pypi_requirements_visited = pypi_requirements
         .iter()
         .filter_map(|r| match r {
-            Dependency::PyPi(req, _) => Some(req.clone()),
+            Dependency::PyPi(req, _, _) => Some(req.clone()),
             _ => None,
         })
         .collect::<HashSet<_>>();
@@ -736,7 +757,7 @@ async fn verify_package_platform_satisfiability(
                         .map_err(CommandDispatcherError::Failed)?,
                 )
             }
-            Dependency::PyPi(requirement, source) => {
+            Dependency::PyPi(requirement, source, origin) => {
                 // Check if there is a pypi identifier that matches our requirement.
                 if let Some((identifier, repodata_idx, _)) =
                     locked_conda_pypi_packages.get(&requirement.name)
@@ -814,6 +835,7 @@ async fn verify_package_platform_satisfiability(
                                     &requirement,
                                     record,
                                     ctx.project_root,
+                                    origin,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -1004,6 +1026,7 @@ async fn verify_package_platform_satisfiability(
                     pypi_queue.push(Dependency::PyPi(
                         requirement.clone(),
                         pkg.name().as_ref().to_string().into(),
+                        RequirementOrigin::RequiresDist,
                     ));
                 }
             }

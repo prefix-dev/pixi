@@ -8,7 +8,7 @@
 //!
 //! Centralizing the construction here keeps the inputs identical
 //! across call sites, which is what makes the
-//! [`WorkspaceEnvRegistry`] dedup actually fire: drift between two
+//! `WorkspaceEnvRegistry` dedup actually fire: drift between two
 //! sites would silently mint two distinct
 //! [`WorkspaceEnvRef`]s and defeat any in-memory cache the engine
 //! built up under the first.

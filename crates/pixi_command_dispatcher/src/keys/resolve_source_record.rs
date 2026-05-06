@@ -105,6 +105,7 @@ pub(super) async fn assemble_source_record(
     }
 }
 
+#[allow(clippy::result_large_err)]
 async fn assemble_source_record_inner(
     ctx: &mut ComputeCtx,
     source: &PinnedSourceCodeLocation,
@@ -406,7 +407,6 @@ async fn assemble_source_record_inner(
 /// `preferred_build_source` is the full pin map (propagated verbatim
 /// from the outer solve) so pins for source deps reachable from the
 /// nested build/host env are honoured.
-#[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_arguments)]
 async fn nested_solve(
     ctx: &mut ComputeCtx,

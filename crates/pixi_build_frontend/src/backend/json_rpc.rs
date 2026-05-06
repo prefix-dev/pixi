@@ -136,6 +136,7 @@ pub struct JsonRpcBackend {
     stderr: Option<Arc<Mutex<Lines<BufReader<ChildStderr>>>>>,
 }
 
+#[allow(clippy::result_large_err)]
 impl JsonRpcBackend {
     /// Set up a new protocol instance.
     /// This will spawn a new backend process and establish a JSON-RPC
