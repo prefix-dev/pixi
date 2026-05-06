@@ -1,9 +1,9 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use pep508_rs::ExtraName;
+use pep508_rs::{ExtraName, PackageName};
 use pixi_core::{WorkspaceLocator, workspace::Environment};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::FindLinksUrlOrPath};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
@@ -11,7 +11,7 @@ use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
     ParseStrictness, Platform,
 };
-use rattler_lock::{CondaPackageData, LockFile, LockedPackageRef, PypiPackageData, UrlOrPath};
+use rattler_lock::{CondaPackageData, LockFile, LockedPackage, PypiPackageData, UrlOrPath};
 
 use crate::cli_config::WorkspaceConfig;
 
@@ -226,13 +226,12 @@ fn build_env_yaml(
     Ok(env_yaml)
 }
 
-fn format_locked_pypi_dependency(pypi: &PypiPackageData) -> String {
-    let name = pypi.name.to_string();
-    let editable = pypi.editable;
+fn format_locked_pypi_dependency(pypi: &PypiPackageData, is_editable: bool) -> String {
+    let name = pypi.name().to_string();
 
-    match &pypi.location {
+    match pypi.location().inner() {
         UrlOrPath::Path(path) => {
-            if editable {
+            if is_editable {
                 format!("-e {path}")
             } else {
                 path.to_string()
@@ -250,7 +249,10 @@ fn format_locked_pypi_dependency(pypi: &PypiPackageData) -> String {
                 // For plain registry URLs, use a simple version pin so the
                 // resulting environment file is human friendly while still
                 // matching the resolved version.
-                format!("{name}=={version}", version = pypi.version)
+                let version = pypi
+                    .version()
+                    .map_or_else(|| String::from("*"), ToString::to_string);
+                format!("{name}=={version}")
             }
         }
     }
@@ -278,18 +280,41 @@ fn build_env_yaml_from_lockfile(
         ..Default::default()
     };
 
-    let packages = lockfile_env.packages(*platform).ok_or_else(|| {
+    // Resolve the rattler_conda_types::Platform we were given to the
+    // rattler_lock::Platform<'_> handle that `Environment::packages` expects.
+    let lock_platform = lockfile_env
+        .platforms()
+        .find(|p| p.subdir() == *platform)
+        .ok_or_else(|| {
+            miette::miette!(
+                help = "Run `pixi lock` to update the lock file for this platform.",
+                "platform '{platform}' not found in the lock file for environment '{env_name}'"
+            )
+        })?;
+    let packages = lockfile_env.packages(lock_platform).ok_or_else(|| {
         miette::miette!(
             help = "Run `pixi lock` to update the lock file for this platform.",
             "platform '{platform}' not found in the lock file for environment '{env_name}'"
         )
     })?;
 
+    // Editable status is a manifest-level property: a pypi dependency is
+    // editable when the workspace requests it (pixi.toml `editable = true`),
+    // not because of how the resolver pinned it. Collect the set of editable
+    // names from the manifest for this environment + platform up front and
+    // look each locked package up.
+    let editable_packages: HashSet<PackageName> = environment
+        .pypi_dependencies(Some(*platform))
+        .iter_specs()
+        .filter(|(_, spec)| spec.editable() == Some(true))
+        .map(|(name, _)| name.as_normalized().clone())
+        .collect();
+
     let mut pip_dependencies: Vec<String> = Vec::new();
 
     for package in packages {
         match package {
-            LockedPackageRef::Conda(CondaPackageData::Binary(p)) => {
+            LockedPackage::Conda(CondaPackageData::Binary(p)) => {
                 let pr = &p.package_record;
                 let spec_str = format!(
                     "{name} =={version} {build}",
@@ -306,14 +331,15 @@ fn build_env_yaml_from_lockfile(
                     .dependencies
                     .push(MatchSpecOrSubSection::MatchSpec(Box::new(spec)));
             }
-            LockedPackageRef::Conda(CondaPackageData::Source(source)) => {
+            LockedPackage::Conda(CondaPackageData::Source(source)) => {
                 tracing::warn!(
                     "Skipping conda source package '{}' since source packages cannot be expressed in a conda environment file.",
-                    source.package_record.name.as_source()
+                    source.name().as_source()
                 );
             }
-            LockedPackageRef::Pypi(pypi, _env_data) => {
-                pip_dependencies.push(format_locked_pypi_dependency(pypi));
+            LockedPackage::Pypi(pypi) => {
+                let is_editable = editable_packages.contains(pypi.name());
+                pip_dependencies.push(format_locked_pypi_dependency(pypi, is_editable));
             }
         }
     }
