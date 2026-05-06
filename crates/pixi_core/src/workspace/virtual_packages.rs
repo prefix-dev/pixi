@@ -23,7 +23,6 @@ pub(crate) fn get_minimal_virtual_packages(
     platform: Platform,
     system_requirements: &SystemRequirements,
 ) -> Vec<VirtualPackage> {
-    // TODO: How to add a default cuda requirements
     let mut virtual_packages: Vec<VirtualPackage> = vec![];
 
     // Match high level platforms
@@ -64,7 +63,11 @@ pub(crate) fn get_minimal_virtual_packages(
     }
 
     // Cuda
-    if let Some(version) = system_requirements.cuda.clone() {
+    let cuda_version = system_requirements
+        .cuda
+        .clone()
+        .or_else(|| Cuda::current().map(|c| c.version));
+    if let Some(version) = cuda_version {
         virtual_packages.push(VirtualPackage::Cuda(Cuda { version }));
     }
 
@@ -165,5 +168,20 @@ mod tests {
                 assert_debug_snapshot!(packages);
             });
         }
+    }
+
+    #[test]
+    fn test_cuda_system_requirement_takes_priority() {
+        let mut system_requirements = SystemRequirements::default();
+        system_requirements.cuda = Some("11.5".parse().unwrap());
+        let packages = get_minimal_virtual_packages(Platform::Linux64, &system_requirements)
+            .into_iter()
+            .map(GenericVirtualPackage::from)
+            .collect_vec();
+        let cuda_pkg = packages
+            .iter()
+            .find(|p| p.name.as_normalized() == "__cuda");
+        assert!(cuda_pkg.is_some(), "expected a __cuda virtual package");
+        assert_eq!(cuda_pkg.unwrap().version.to_string(), "11.5");
     }
 }
