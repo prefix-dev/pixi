@@ -105,6 +105,6 @@ And are what you would usually use in a `workspace`.
 ### [Run Constraints](../reference/pixi_manifest.md#run-constraints)
 
 Constraints that apply to the package's run environment, but only when the constrained package is pulled in as a dependency by something else.
-They never cause a package to be installed on their own — use [`run-dependencies`](#dependencies-run-dependencies) for that.
+They never cause a package to be installed on their own. To do that, use run-dependencies (#dependencies-run-dependencies).
 
 This corresponds to conda's `run_constrained` package metadata.
