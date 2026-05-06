@@ -17,18 +17,17 @@ use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataSpec, EnvironmentRef, InstalledSourceHints, PtrArc, Reporter,
-    ReporterContext, SourceMetadataError, SourceMetadataSpec,
+    ReporterContext, SourceMetadataError, SourceMetadataReporterSpec, SourceRecordError,
     build::PinnedSourceCodeLocation,
     compute_data::HasReporter,
     keys::{
         resolve_source_record::assemble_source_record,
-        source_metadata::{SourceMetadataKey, SourceMetadataSpecV2},
+        source_metadata::{SourceMetadataKey, SourceMetadataSpec},
     },
     reporter::{SourceMetadataId, SourceMetadataReporter},
     reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context},
     reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle},
     source_checkout::SourceCheckoutExt,
-    source_record::SourceRecordError,
 };
 
 /// Input to [`ResolveSourcePackageKey`]. `preferred_build_source` is the
@@ -114,7 +113,7 @@ impl Key for ResolveSourcePackageKey {
         // `assemble_source_record` fires `Source record`; scoping
         // both under this lifecycle nests them as children of
         // `Source metadata` in the event tree.
-        let reporter_spec = SourceMetadataSpec {
+        let reporter_spec = SourceMetadataReporterSpec {
             package: spec.package.clone(),
             backend_metadata: BuildBackendMetadataSpec {
                 manifest_source: checkout.pinned.clone(),
@@ -158,7 +157,7 @@ async fn resolve_source_package_inner(
     // SMK only needs this package's pin as a checkout override;
     // the full pin map flows through assembly for recursion.
     let outputs = ctx
-        .compute(&SourceMetadataKey::new(SourceMetadataSpecV2 {
+        .compute(&SourceMetadataKey::new(SourceMetadataSpec {
             package: spec.package.clone(),
             source_location: spec.source_location.clone(),
             preferred_build_source: own_pin,
@@ -205,7 +204,7 @@ struct SourceMetadataReporterLifecycle;
 impl LifecycleKind for SourceMetadataReporterLifecycle {
     type Reporter<'r> = dyn SourceMetadataReporter + 'r;
     type Id = SourceMetadataId;
-    type Env = SourceMetadataSpec;
+    type Env = SourceMetadataReporterSpec;
 
     fn queue<'r>(
         reporter: Option<&'r dyn Reporter>,

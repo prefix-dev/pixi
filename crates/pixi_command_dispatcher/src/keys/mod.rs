@@ -14,5 +14,5 @@ pub mod source_metadata;
 pub use resolve_source_package::{ResolveSourcePackageKey, ResolveSourcePackageSpec};
 pub use solve_conda::{SolveCondaKey, SolveCondaKeyError, SolveCondaSpec};
 pub use solve_pixi_environment::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec};
-pub use source_build::{ArtifactCache, SourceBuildKey, SourceBuildSpecV2, WorkspaceCache};
-pub use source_metadata::{SourceMetadataKey, SourceMetadataSpecV2, SourceOutputs};
+pub use source_build::{ArtifactCache, SourceBuildKey, SourceBuildSpec, WorkspaceCache};
+pub use source_metadata::{SourceMetadata, SourceMetadataKey, SourceMetadataSpec, SourceOutputs};

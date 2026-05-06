@@ -3003,7 +3003,7 @@ foo = { path = "../foo" }
 ///
 /// Exercises the cross-env deduplication guarantee that the compute
 /// engine gives us when two callers request equivalent
-/// `SourceBuildSpecV2` inputs. If `Hash` or `Eq` on the spec starts
+/// `SourceBuildSpec` inputs. If `Hash` or `Eq` on the spec starts
 /// discriminating between equivalent callers, or the engine stops
 /// deduping Keys, this test fails.
 #[tokio::test]

@@ -22,7 +22,7 @@ use crate::install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
     reporter::WrappingInstallReporter,
 };
-use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpecV2, WorkspaceCache};
+use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpec, WorkspaceCache};
 use crate::reporter::{Reporter, ReporterContext};
 use crate::reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context};
 
@@ -168,7 +168,7 @@ async fn install_inner(
         > {
             let name = source.name().clone();
             let manifest_source = source.manifest_source.clone();
-            let build_spec = SourceBuildSpecV2 {
+            let build_spec = SourceBuildSpec {
                 record: source,
                 channels: shared.channels.clone(),
                 exclude_newer: shared.exclude_newer.clone(),
