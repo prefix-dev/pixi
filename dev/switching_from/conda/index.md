@@ -103,6 +103,12 @@ If you are working with Conda users or systems, you can [export your environment
 pixi workspace export conda-environment
 ```
 
+Pass `--from-lockfile` to render a frozen environment file using the exact versions from your `pixi.lock`:
+
+```shell
+pixi workspace export conda-environment --from-lockfile
+```
+
 Additionally you can export a [conda explicit specification](../../reference/cli/pixi/workspace/export/).
 
 ## Troubleshooting

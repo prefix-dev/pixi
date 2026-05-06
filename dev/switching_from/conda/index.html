@@ -4309,6 +4309,9 @@ Using that <code>pip</code> binary will install packages in the <code>pip</code>
 <p>If you are working with Conda users or systems, you can <a href="../../reference/cli/pixi/workspace/export/">export your environment to a <code>environment.yml</code></a> file to share them.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>workspace<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment
 </span></code></pre></div>
+Pass <code>--from-lockfile</code> to render a frozen environment file using the exact versions from your <code>pixi.lock</code>:
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>workspace<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment<span class="w"> </span>--from-lockfile
+</span></code></pre></div>
 Additionally you can export a <a href="../../reference/cli/pixi/workspace/export/">conda explicit specification</a>.</p>
 </details>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">#</a></h2>
