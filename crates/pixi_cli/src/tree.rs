@@ -74,12 +74,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .wrap_err("Environment not found")?;
 
     let lock_file = workspace
-        .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-            no_install: args.no_install_config.no_install,
-            max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            ..Default::default()
-        })
+        .update_lock_file(
+            Some(pixi_reporters::TopLevelProgress::from_global()),
+            UpdateLockFileOptions {
+                lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+                no_install: args.no_install_config.no_install,
+                max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
+            },
+        )
         .await
         .wrap_err("Failed to update lock file")?
         .0

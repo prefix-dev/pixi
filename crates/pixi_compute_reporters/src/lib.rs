@@ -1,13 +1,5 @@
-//! Operation-id reporting context shared by every pixi reporter
-//! implementation. Allocates a globally-unique [`OperationId`] per
-//! reporter event, records its parent (the most-recently-active id on
-//! the calling task), and propagates the active id across compute
-//! spawns via [`OperationIdSpawnHook`].
-//!
-//! Reporter traits return `OperationId` from `on_queued`. Reporter
-//! implementations look up parents via [`OperationRegistry::parent_of`]
-//! and walk ancestry via [`OperationRegistry::ancestors`]; they don't
-//! need to manage parent threading themselves.
+//! Operation ids and the registry threading their parent links across
+//! compute-task spawns.
 
 use std::{
     future::Future,
@@ -102,7 +94,7 @@ impl Iterator for Ancestors<'_> {
     }
 }
 
-/// [`SpawnHook`] that propagates [`CURRENT_OPERATION_ID`] across
+/// [`SpawnHook`] that propagates the current operation id across
 /// compute-task spawns. Register once on the engine builder.
 pub struct OperationIdSpawnHook;
 

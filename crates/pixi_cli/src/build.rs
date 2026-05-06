@@ -217,10 +217,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_assume_dir();
         cache_dirs.set_backend_metadata(build_dir);
     }
-    let command_dispatcher = workspace
-        .command_dispatcher_builder()?
-        .with_cache_dirs(cache_dirs)
-        .with_reporter(TopLevelProgress::new(multi_progress, anchor_pb))
+    let progress = std::sync::Arc::new(TopLevelProgress::new(
+        pixi_compute_reporters::OperationRegistry::new(),
+        multi_progress,
+        anchor_pb,
+    ));
+    let command_dispatcher = progress
+        .clone()
+        .register_with(
+            workspace
+                .command_dispatcher_builder()?
+                .with_cache_dirs(cache_dirs),
+        )
         .finish();
 
     // Determine the variant configuration for the build.
@@ -387,7 +395,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_diagnostic()?;
 
         // Clear the top level progress
-        command_dispatcher.clear_reporter().await;
+        progress.on_clear();
 
         let package_path = dunce::canonicalize(&built.artifact)
             .expect("failed to canonicalize output file which must now exist");

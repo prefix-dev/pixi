@@ -2,9 +2,6 @@
 //! environment by (a) concurrently building every source record via
 //! [`SourceBuildKey`], then (b) running the
 //! rattler prefix installer over the resulting binary set.
-//!
-//! Reporter lifecycle, install reporter creation, and reporter-context
-//! scoping live here.
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -17,19 +14,19 @@ use crate::BuildProfile;
 use crate::CommandDispatcherError;
 use crate::compute_data::{
     HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasCacheDirs, HasDownloadClient,
-    HasPackageCache, HasReporter,
+    HasPackageCache, HasPixiInstallReporter,
 };
 use crate::install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
     reporter::WrappingInstallReporter,
 };
 use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpec, WorkspaceCache};
-use crate::reporter::{Reporter, ReporterContext};
-use crate::reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context};
+use crate::reporter::PixiInstallReporter;
 
 /// Extension trait on [`ComputeCtx`] that installs a pixi environment
 /// with source-build recursion routed through [`SourceBuildKey`].
 pub trait InstallPixiEnvironmentExt {
+    /// Reports progress via `Arc<dyn PixiInstallReporter>` set on the engine `DataStore`, if any.
     fn install_pixi_environment(
         &mut self,
         spec: InstallPixiEnvironmentSpec,
@@ -48,39 +45,27 @@ impl InstallPixiEnvironmentExt for ComputeCtx {
     ) -> Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>
     {
         // Reporter lifecycle for this pixi-install frame. Queue up-front
-        // so the reporter can count us against the parent context before
-        // any source builds fan out.
-        let reporter_arc = self.global_data().reporter().cloned();
-        let parent_reporter_ctx = current_reporter_context();
-        let reporter_fn = || {
-            reporter_arc
-                .as_deref()
-                .and_then(Reporter::as_pixi_install_reporter)
-        };
-        let reporter_id = reporter_fn().map(|r| r.on_queued(parent_reporter_ctx, &spec));
-        if let (Some(r), Some(id)) = (reporter_fn(), reporter_id) {
+        // so the reporter can count us before any source builds fan out.
+        let pixi_install_reporter = self.global_data().pixi_install_reporter().cloned();
+        let reporter_id = pixi_install_reporter.as_deref().map(|r| r.on_queued(&spec));
+        if let (Some(r), Some(id)) = (pixi_install_reporter.as_deref(), reporter_id) {
             r.on_started(id);
         }
 
-        // Build the rattler install reporter under the *parent* context
-        // so prefix-install events (validate/download/link) nest correctly
-        // alongside our own lifecycle events.
-        let install_reporter = reporter_arc
+        // Build the rattler install reporter; it nests under the
+        // currently-active reporter context.
+        let install_reporter = pixi_install_reporter
             .as_deref()
-            .and_then(|r| r.create_install_reporter(parent_reporter_ctx));
+            .and_then(PixiInstallReporter::create_install_reporter);
 
-        // Scope child reporter context to this install so source builds
-        // fanned out below attribute their progress to us.
-        let scope_ctx = reporter_id
-            .map(ReporterContext::InstallPixi)
-            .or(parent_reporter_ctx);
+        // Scope source builds fanned out below under this install's id.
         let work = install_inner(self, spec, install_reporter);
-        let result = match scope_ctx {
-            Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+        let result = match reporter_id {
+            Some(id) => id.scope_active(work).await,
             None => work.await,
         };
 
-        if let (Some(r), Some(id)) = (reporter_fn(), reporter_id) {
+        if let (Some(r), Some(id)) = (pixi_install_reporter.as_deref(), reporter_id) {
             r.on_finished(id);
         }
 

@@ -1,10 +1,4 @@
-//! Typestate for reporter events around a checkout: `on_queued` fires
-//! at construction, `on_started` at [`start`](ReporterLifecycle::start),
-//! `on_finished` when the returned [`StartedReporterLifecycle`] is
-//! dropped. Dropping a still-queued lifecycle does not fire
-//! `on_finished`.
-
-use crate::reporter::{Reporter, ReporterContext};
+//! Typestate: `on_queued` at construction, `on_started` from `start`, `on_finished` on drop.
 
 /// Reporter reference + id carried around inside the lifecycle.
 pub(crate) struct Active<'r, R: ?Sized, Id> {
@@ -24,8 +18,7 @@ pub(crate) trait LifecycleKind: 'static {
     /// Fire `on_queued` and build the active handle. Returns `None`
     /// when no reporter is attached.
     fn queue<'r>(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
+        reporter: Option<&'r Self::Reporter<'r>>,
         env: &Self::Env,
     ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>>;
 
@@ -52,13 +45,9 @@ impl<K: LifecycleKind> Drop for StartedReporterLifecycle<'_, K> {
 }
 
 impl<'r, K: LifecycleKind> ReporterLifecycle<'r, K> {
-    pub fn queued(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
-        env: &K::Env,
-    ) -> Self {
+    pub fn queued(reporter: Option<&'r K::Reporter<'r>>, env: &K::Env) -> Self {
         Self {
-            active: K::queue(reporter, parent, env),
+            active: K::queue(reporter, env),
         }
     }
 

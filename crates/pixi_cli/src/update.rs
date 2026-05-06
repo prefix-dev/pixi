@@ -162,7 +162,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let relaxed_lock_file = unlock_packages(&workspace, loaded_lock_file, &specs);
 
     // Update the packages in the lock-file.
-    let updated_lock_file = UpdateContext::builder(&workspace, None)?
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+    let dispatcher = progress
+        .clone()
+        .register_with(workspace.command_dispatcher_builder()?)
+        .finish();
+    let updated_lock_file = UpdateContext::builder(&workspace, dispatcher)?
         .with_lock_file(relaxed_lock_file.clone())
         .with_no_install(args.no_install)
         .with_update_targets(specs.packages.clone())

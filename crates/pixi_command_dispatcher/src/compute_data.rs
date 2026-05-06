@@ -19,7 +19,11 @@ use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
 
 use crate::cache::{BuildBackendMetadataCache, CacheDirs};
-use crate::reporter::Reporter;
+use crate::reporter::{
+    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
+    GitCheckoutReporter, InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter,
+    SourceMetadataReporter, SourceRecordReporter, UrlCheckoutReporter,
+};
 
 /// Access the conda repodata gateway from global data.
 pub trait HasGateway {
@@ -87,14 +91,113 @@ impl HasBuildBackendMetadataCache for DataStore {
     }
 }
 
-/// Access the optional dispatcher reporter from global data.
-pub trait HasReporter {
-    fn reporter(&self) -> Option<&Arc<dyn Reporter>>;
+/// Access the per-key git-checkout reporter.
+pub trait HasGitCheckoutReporter {
+    fn git_checkout_reporter(&self) -> Option<&Arc<dyn GitCheckoutReporter>>;
 }
 
-impl HasReporter for DataStore {
-    fn reporter(&self) -> Option<&Arc<dyn Reporter>> {
-        self.try_get::<Arc<dyn Reporter>>()
+impl HasGitCheckoutReporter for DataStore {
+    fn git_checkout_reporter(&self) -> Option<&Arc<dyn GitCheckoutReporter>> {
+        self.try_get::<Arc<dyn GitCheckoutReporter>>()
+    }
+}
+
+/// Access the per-key url-checkout reporter.
+pub trait HasUrlCheckoutReporter {
+    fn url_checkout_reporter(&self) -> Option<&Arc<dyn UrlCheckoutReporter>>;
+}
+
+impl HasUrlCheckoutReporter for DataStore {
+    fn url_checkout_reporter(&self) -> Option<&Arc<dyn UrlCheckoutReporter>> {
+        self.try_get::<Arc<dyn UrlCheckoutReporter>>()
+    }
+}
+
+/// Access the per-key conda-solve reporter.
+pub trait HasCondaSolveReporter {
+    fn conda_solve_reporter(&self) -> Option<&Arc<dyn CondaSolveReporter>>;
+}
+
+impl HasCondaSolveReporter for DataStore {
+    fn conda_solve_reporter(&self) -> Option<&Arc<dyn CondaSolveReporter>> {
+        self.try_get::<Arc<dyn CondaSolveReporter>>()
+    }
+}
+
+/// Access the per-key pixi-solve reporter.
+pub trait HasPixiSolveReporter {
+    fn pixi_solve_reporter(&self) -> Option<&Arc<dyn PixiSolveReporter>>;
+}
+
+impl HasPixiSolveReporter for DataStore {
+    fn pixi_solve_reporter(&self) -> Option<&Arc<dyn PixiSolveReporter>> {
+        self.try_get::<Arc<dyn PixiSolveReporter>>()
+    }
+}
+
+/// Access the per-key pixi-install reporter.
+pub trait HasPixiInstallReporter {
+    fn pixi_install_reporter(&self) -> Option<&Arc<dyn PixiInstallReporter>>;
+}
+
+impl HasPixiInstallReporter for DataStore {
+    fn pixi_install_reporter(&self) -> Option<&Arc<dyn PixiInstallReporter>> {
+        self.try_get::<Arc<dyn PixiInstallReporter>>()
+    }
+}
+
+/// Access the per-key instantiate-backend reporter.
+pub trait HasInstantiateBackendReporter {
+    fn instantiate_backend_reporter(&self) -> Option<&Arc<dyn InstantiateBackendReporter>>;
+}
+
+impl HasInstantiateBackendReporter for DataStore {
+    fn instantiate_backend_reporter(&self) -> Option<&Arc<dyn InstantiateBackendReporter>> {
+        self.try_get::<Arc<dyn InstantiateBackendReporter>>()
+    }
+}
+
+/// Access the per-key build-backend-metadata reporter.
+pub trait HasBuildBackendMetadataReporter {
+    fn build_backend_metadata_reporter(&self) -> Option<&Arc<dyn BuildBackendMetadataReporter>>;
+}
+
+impl HasBuildBackendMetadataReporter for DataStore {
+    fn build_backend_metadata_reporter(&self) -> Option<&Arc<dyn BuildBackendMetadataReporter>> {
+        self.try_get::<Arc<dyn BuildBackendMetadataReporter>>()
+    }
+}
+
+/// Access the per-key source-metadata reporter.
+pub trait HasSourceMetadataReporter {
+    fn source_metadata_reporter(&self) -> Option<&Arc<dyn SourceMetadataReporter>>;
+}
+
+impl HasSourceMetadataReporter for DataStore {
+    fn source_metadata_reporter(&self) -> Option<&Arc<dyn SourceMetadataReporter>> {
+        self.try_get::<Arc<dyn SourceMetadataReporter>>()
+    }
+}
+
+/// Access the per-key source-record reporter.
+pub trait HasSourceRecordReporter {
+    fn source_record_reporter(&self) -> Option<&Arc<dyn SourceRecordReporter>>;
+}
+
+impl HasSourceRecordReporter for DataStore {
+    fn source_record_reporter(&self) -> Option<&Arc<dyn SourceRecordReporter>> {
+        self.try_get::<Arc<dyn SourceRecordReporter>>()
+    }
+}
+
+/// Access the per-key backend-source-build reporter.
+pub trait HasBackendSourceBuildReporter {
+    fn backend_source_build_reporter(&self) -> Option<&Arc<dyn BackendSourceBuildReporter>>;
+}
+
+impl HasBackendSourceBuildReporter for DataStore {
+    fn backend_source_build_reporter(&self) -> Option<&Arc<dyn BackendSourceBuildReporter>> {
+        self.try_get::<Arc<dyn BackendSourceBuildReporter>>()
     }
 }
 

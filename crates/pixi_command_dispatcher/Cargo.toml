@@ -51,6 +51,7 @@ pixi_build_discovery = { workspace = true, features = ["serde"] }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_compute_engine = { workspace = true }
+pixi_compute_reporters = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }

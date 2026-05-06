@@ -36,18 +36,18 @@ use rattler_shell::{
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::compute_data::{HasCacheDirs, HasReporter};
+use crate::compute_data::{HasCacheDirs, HasInstantiateBackendReporter};
 use crate::discovered_backend::DiscoveredBackendKey;
 use crate::ephemeral_env::{EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec};
 use crate::injected_config::ToolBuildEnvironmentKey;
-use crate::reporter::{
-    InstantiateBackendId, InstantiateBackendReporter, Reporter, ReporterContext,
-};
-use crate::reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context};
+use crate::reporter::InstantiateBackendReporter;
 use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
 use crate::resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
+use pixi_compute_reporters::OperationId;
 
 /// Dedup key for spawning a build backend.
+///
+/// Reports progress via `Arc<dyn InstantiateBackendReporter>` set on the engine `DataStore`, if any.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct InstantiateBackendKey {
     /// Path to the directory containing the manifest. Canonicalized at
@@ -150,22 +150,21 @@ impl Key for InstantiateBackendKey {
             .clone()
             .resolve(self.manifest_source_anchor.clone());
 
-        // Fire the InstantiateBackendReporter lifecycle and scope
-        // CURRENT_REPORTER_CONTEXT so nested tasks (override resolve,
+        // Fire the InstantiateBackendReporter lifecycle and scope this
+        // id over the inner work so nested tasks (override resolve,
         // ephemeral env solve/install, JSON-RPC setup) attribute their
         // progress to this backend instantiation.
-        let reporter_arc = ctx.global_data().reporter().cloned();
+        let reporter_arc = ctx.global_data().instantiate_backend_reporter().cloned();
         let lifecycle = ReporterLifecycle::<InstantiateBackendLifecycle>::queued(
             reporter_arc.as_deref(),
-            current_reporter_context(),
             &resolved_spec,
         );
-        let reporter_ctx = lifecycle.id().map(ReporterContext::InstantiateBackend);
+        let active_id = lifecycle.id();
         let _started = lifecycle.start();
 
         let work = self.compute_inner(ctx, discovered, resolved_spec);
-        match reporter_ctx {
-            Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+        match active_id {
+            Some(id) => id.scope_active(work).await,
             None => work.await,
         }
     }
@@ -177,20 +176,17 @@ struct InstantiateBackendLifecycle;
 
 impl LifecycleKind for InstantiateBackendLifecycle {
     type Reporter<'r> = dyn InstantiateBackendReporter + 'r;
-    type Id = InstantiateBackendId;
+    type Id = OperationId;
     type Env = pixi_build_discovery::JsonRpcBackendSpec;
 
     fn queue<'r>(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
+        reporter: Option<&'r Self::Reporter<'r>>,
         env: &Self::Env,
     ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>> {
-        reporter
-            .and_then(|r| r.as_instantiate_backend_reporter())
-            .map(|r| Active {
-                reporter: r,
-                id: r.on_queued(parent, env),
-            })
+        reporter.map(|r| Active {
+            reporter: r,
+            id: r.on_queued(env),
+        })
     }
 
     fn on_started<'r>(active: &Active<'r, Self::Reporter<'r>, Self::Id>) {

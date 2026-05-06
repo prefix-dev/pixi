@@ -2,6 +2,12 @@
 //! environments. Source specs are rejected up-front. The prefix path is
 //! derived from the spec hash and locked with [`AsyncPrefixGuard`] for
 //! cross-process safety.
+//!
+//! This key has no per-key reporter trait of its own. The ephemeral
+//! prefix is populated as part of backend instantiation, so it reads
+//! [`InstantiateBackendReporter`](crate::reporter::InstantiateBackendReporter)
+//! from the engine `DataStore` to build the rattler installer's
+//! per-call reporter.
 
 use std::{
     collections::BTreeMap,
@@ -30,10 +36,10 @@ use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::SolveCondaEnvironmentSpec;
-use crate::compute_data::{HasCacheDirs, HasGateway, HasReporter};
+use crate::compute_data::{HasCacheDirs, HasGateway, HasInstantiateBackendReporter};
 use crate::injected_config::{ChannelConfigKey, ToolBuildEnvironmentKey};
 use crate::install_binary::install_binary_records;
-use crate::reporter_context::current_reporter_context;
+use crate::reporter::InstantiateBackendReporter;
 use crate::solve_binary::SolveCondaExt;
 use crate::solve_conda::SolveCondaEnvironmentError;
 
@@ -295,8 +301,8 @@ impl Key for EphemeralEnvKey {
             .collect::<Vec<_>>();
         let data: &DataStore = ctx.global_data();
         let install_reporter = data
-            .reporter()
-            .and_then(|r| r.create_install_reporter(current_reporter_context()));
+            .instantiate_backend_reporter()
+            .and_then(|r| InstantiateBackendReporter::create_install_reporter(r.as_ref()));
         install_binary_records(
             data,
             &prefix,

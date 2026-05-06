@@ -1173,7 +1173,7 @@ test-source-pkg = {{ path = "./source-package" }}
     // First invocation: Generate the lock-file
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, was_updated) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
 
@@ -1204,7 +1204,7 @@ test-source-pkg = {{ path = "./source-package" }}
     // Second invocation: Load the workspace again and check if lock-file is up to date
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_second) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Second lock file check should succeed");
 
@@ -1277,7 +1277,7 @@ my-package = {{ path = "./my-package" }}
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("initial lock-file generation should succeed");
     assert!(was_updated, "initial solve must create the lock-file");
@@ -1301,7 +1301,7 @@ dep-b = ">=1.0"
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_after_add) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("second lock-file check should succeed");
     assert!(
@@ -1367,7 +1367,7 @@ my-package = {{ path = "./my-package" }}
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("initial lock-file generation should succeed");
     assert!(was_updated, "initial solve must create the lock-file");
@@ -1390,7 +1390,7 @@ dep-a = ">=1.0"
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_after_remove) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("second lock-file check should succeed");
     assert!(
@@ -1481,7 +1481,7 @@ my-package = {{ path = "./my-package" }}
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("initial lock-file generation should succeed");
     assert!(was_updated, "initial solve must create the lock-file");
@@ -1505,7 +1505,7 @@ noarch = false
 
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_after_drop) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("second lock-file check should succeed");
     assert!(
@@ -1577,7 +1577,7 @@ my-package = {{ path = "./my-package" }}
     // First invocation: Generate the lock-file (no config section)
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, was_updated) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
 
@@ -1619,7 +1619,7 @@ backend = { name = "in-memory", version = "0.1.0" }
     // Second invocation with empty config section: Should NOT call backend again (cache hit)
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, was_updated_empty_config) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Second lock file check should succeed");
 
@@ -1653,7 +1653,7 @@ noarch = true
     // Third invocation: Should detect config change and call backend again
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, _was_updated_after_config_added) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Third lock file generation should succeed");
 
@@ -1668,7 +1668,7 @@ noarch = true
     // Fourth invocation without changes: Should NOT call backend again (cache hit)
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, was_updated_no_change) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Fourth lock file check should succeed");
 
@@ -1706,7 +1706,7 @@ noarch = false
     // Fifth invocation: Should detect config change and call backend again
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, _was_updated_after_config_change) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Fifth lock file generation should succeed");
 
@@ -1721,7 +1721,7 @@ noarch = false
     // Sixth invocation: Should NOT call backend again (cache is now fresh)
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_sixth) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Sixth lock file check should succeed");
 
@@ -1794,7 +1794,7 @@ my-package = {{ path = "./my-package" }}
     // (mutable sources are downgraded to partial on write).
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, was_updated) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
     assert!(was_updated, "First invocation should create the lock-file");
@@ -1840,7 +1840,7 @@ renamed-package = {{ path = "./my-package" }}
     // lock-file with "renamed-package".
     let workspace = pixi.workspace().unwrap();
     let result = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await;
 
     match result {
@@ -1906,7 +1906,7 @@ my-package = {{ path = "./my-package" }}
     // First lock
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, _) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock should succeed");
 
@@ -1955,7 +1955,7 @@ my-package = {{ path = "./my-package" }}
     // Second lock: records roundtrip through UnresolvedPixiRecord
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data_2, was_updated) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Second lock should succeed");
 
@@ -2090,7 +2090,7 @@ my-package = {{ path = "./my-package" }}
     // First solve. The build env should be locked with foo 1.0.
     let workspace = pixi.workspace().unwrap();
     let (lock_data, _) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("first solve should succeed");
     let lock_v1 = lock_data.into_lock_file();
@@ -2126,7 +2126,7 @@ bar = "*"
 
     let workspace = pixi.workspace().unwrap();
     let (lock_data, was_updated) = workspace
-        .update_lock_file(pixi_core::UpdateLockFileOptions::default())
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("second solve should succeed and re-lock");
     assert!(

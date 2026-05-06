@@ -9,7 +9,7 @@ use std::{
 
 use pixi_path::AbsPathBuf;
 
-use event_reporter::EventReporter;
+use event_reporter::{EventReporter, WithEventReporter};
 use fs_err as fs;
 use itertools::Itertools;
 use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
@@ -37,8 +37,9 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::{event_reporter::Event, event_tree::EventTree};
-use pixi_command_dispatcher::{ReporterContextSpawnHook, source_checkout::UrlCheckoutSemaphore};
+use pixi_command_dispatcher::source_checkout::UrlCheckoutSemaphore;
 use pixi_compute_engine::ComputeEngine;
+use pixi_compute_reporters::OperationIdSpawnHook;
 use tokio::sync::Semaphore;
 
 /// Converts a PathBuf to AbsPresumedDirPathBuf for tests.
@@ -224,7 +225,7 @@ fn file_url_for_test(tempdir: &TempDir, name: &str) -> Url {
 /// spawn hook so lifecycle events carry context across task spawns.
 fn url_test_engine(
     cache_dirs: CacheDirs,
-    reporter: Option<Arc<dyn pixi_command_dispatcher::Reporter>>,
+    reporter: Option<Arc<dyn pixi_command_dispatcher::reporter::UrlCheckoutReporter>>,
     sequential: bool,
     max_concurrent: Option<usize>,
 ) -> pixi_compute_engine::ComputeEngine {
@@ -233,7 +234,7 @@ fn url_test_engine(
         .with_data(pixi_url::UrlResolver::default())
         .with_data(rattler_networking::LazyClient::default())
         .with_data(cache_dirs)
-        .with_spawn_hook(Arc::new(ReporterContextSpawnHook));
+        .with_spawn_hook(Arc::new(OperationIdSpawnHook));
     if let Some(reporter) = reporter {
         builder = builder.with_data(reporter);
     }
@@ -255,7 +256,7 @@ pub async fn simple_test() {
     let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, registry) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let tempdir = test_tempdir();
     let prefix_dir = tempdir.path().join("prefix");
@@ -268,7 +269,7 @@ pub async fn simple_test() {
                 .with_workspace(to_abs_dir(tempdir.path()))
                 .with_build_backends(to_abs_dir(tempdir.path().join("build-backends"))),
         )
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
         .finish();
@@ -316,7 +317,7 @@ pub async fn simple_test() {
         prefix_dir.display()
     );
 
-    let event_tree = EventTree::from(events);
+    let event_tree = EventTree::from_store(&events, &registry);
 
     // Redact temp paths and git hashes for stable snapshots.
     //
@@ -540,7 +541,7 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
 #[tokio::test]
 pub async fn dropping_future_cancels_background_task() {
     // Arrange a dispatcher with an event reporter for synchronization.
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let root_dir = cargo_workspace_dir();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
@@ -558,7 +559,7 @@ pub async fn dropping_future_cancels_background_task() {
 
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(cache_dirs)
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
         .finish();
 
@@ -625,7 +626,7 @@ pub async fn dropping_future_cancels_background_task() {
 pub async fn test_cycle() {
     // Setup a reporter that allows us to trace the steps taken by the command
     // dispatcher.
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, registry) = EventReporter::new();
 
     // Use a fixed solve platform so the snapshot is stable across
     // host platforms. The tool platform still reflects the current
@@ -637,7 +638,7 @@ pub async fn test_cycle() {
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages)
         .with_backend_overrides(BackendOverride::from_memory(
@@ -665,7 +666,7 @@ pub async fn test_cycle() {
     .expect_err("expected a cycle error");
 
     // Output the error and the event tree to a snapshot for debugging.
-    let event_tree = EventTree::from(events);
+    let event_tree = EventTree::from_store(&events, &registry);
     insta::assert_snapshot!(format!(
         "ERROR:\n{}\n\nTRACE:\n{}",
         format_diagnostic(&error),
@@ -679,7 +680,7 @@ pub async fn test_cycle() {
 /// a three-frame ring mixing host and run edges.
 #[tokio::test]
 pub async fn test_cycle_three_packages() {
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, registry) = EventReporter::new();
 
     // Use a fixed solve platform so the snapshot is stable across hosts.
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -688,7 +689,7 @@ pub async fn test_cycle_three_packages() {
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages)
         .with_backend_overrides(BackendOverride::from_memory(
@@ -715,7 +716,7 @@ pub async fn test_cycle_three_packages() {
     .await
     .expect_err("expected a cycle error");
 
-    let event_tree = EventTree::from(events);
+    let event_tree = EventTree::from_store(&events, &registry);
     insta::assert_snapshot!(format!(
         "ERROR:\n{}\n\nTRACE:\n{}",
         format_diagnostic(&error),
@@ -745,8 +746,10 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
             ))
     };
 
-    let (reporter, first_events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, first_events, registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     // Solve an environment with package-a which will have a host dependency on
     // package-b, and package-c which has a run dependency on package-b.
@@ -808,8 +811,12 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
         .unwrap();
 
     // Construct a new command dispatcher (as if the program is restarted).
-    let (reporter, second_events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    // Reuse the same registry so the merged event tree can resolve
+    // parents from both runs.
+    let (reporter, second_events) = EventReporter::with_registry(registry.clone());
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     // Rerun the installation of the environment.
     let _ = dispatcher
@@ -823,7 +830,8 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 
     // Get all the events that happened.
     let second_events = second_events.take();
-    let event_tree = EventTree::new(first_events.iter().chain(second_events.iter())).to_string();
+    let event_tree =
+        EventTree::new(first_events.iter().chain(second_events.iter()), &registry).to_string();
     eprintln!("{event_tree}");
 
     // Ensure that both package-a and package-b were rebuilt.
@@ -1193,6 +1201,8 @@ pub async fn test_dev_source_metadata_with_variants() {
 #[tokio::test]
 pub async fn test_force_rebuild() {
     let root_dir = workspaces_dir().join("host-dependency");
+    // The shared registry threads through both dispatcher runs in this
+    // test so the merged event tree can resolve parents from either run.
     let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
@@ -1207,8 +1217,10 @@ pub async fn test_force_rebuild() {
             ))
     };
 
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     // Made a source build of package-b CacheStatus::UpToDate by installing the environment once.
     let records = run_pixi_solve(
@@ -1246,8 +1258,6 @@ pub async fn test_force_rebuild() {
 
     let first_events = events.take();
 
-    dispatcher.clear_reporter().await;
-
     // Now we want to rebuild package-b by forcing a rebuild. The
     // artifact-cache invalidation is the caller's responsibility:
     // install_pixi_environment's `force_reinstall` only drives the
@@ -1271,7 +1281,8 @@ pub async fn test_force_rebuild() {
 
     // Get all the events that happened.
     let second_events = events.take();
-    let event_tree = EventTree::new(first_events.iter().chain(second_events.iter())).to_string();
+    let event_tree =
+        EventTree::new(first_events.iter().chain(second_events.iter()), &registry).to_string();
     eprintln!("{event_tree}");
 
     // Ensure that package-b was not queued for rebuild since it is a fresh build already.
@@ -1292,8 +1303,11 @@ pub async fn test_force_rebuild() {
     drop(dispatcher);
 
     // Construct a new command dispatcher (as if the program is restarted).
-    let (reporter, second_events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    // Reuse the registry so the merged event tree resolves parents.
+    let (reporter, second_events) = EventReporter::with_registry(registry.clone());
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     // Same story across process restarts: the caller clears the cache
     // explicitly when forcing a rebuild.
@@ -1325,7 +1339,7 @@ pub async fn test_force_rebuild() {
         .collect::<Vec<_>>();
 
     eprintln!("Events after restart:\n");
-    let event_tree = EventTree::new(second_events.iter()).to_string();
+    let event_tree = EventTree::new(second_events.iter(), &registry).to_string();
     eprintln!("{event_tree}");
 
     assert_eq!(
@@ -1335,7 +1349,6 @@ pub async fn test_force_rebuild() {
     );
 
     // now queue again without force rebuild and ensure no builds are queued
-    dispatcher.clear_reporter().await;
     spec.force_reinstall = HashSet::new();
 
     let last_events = events.take();
@@ -1624,8 +1637,10 @@ pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
     drop(dispatcher);
 
     // Second session: reinstall WITHOUT modifying any files
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
@@ -1720,8 +1735,10 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
     fs_err::write(root_dir.join("package-b/TOUCH_FILE"), "trigger rebuild").unwrap();
 
     // Second session: reinstall after file modification
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
@@ -1813,8 +1830,10 @@ pub async fn test_package_rebuilt_when_source_file_modified() {
         .unwrap();
 
     // Second pass: reinstall with new dispatcher, expect rebuild
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
@@ -1854,7 +1873,7 @@ pub async fn test_package_not_rebuilt_when_no_files_changed() {
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -1863,7 +1882,7 @@ pub async fn test_package_not_rebuilt_when_no_files_changed() {
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .finish();
 
     // First pass: build and install package-b
@@ -1977,8 +1996,10 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
     };
 
     // First metadata request
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     dispatcher
         .dev_source_metadata(spec.clone())
@@ -2003,8 +2024,6 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
     );
 
     // Second metadata request (same dispatcher, no file changes)
-    dispatcher.clear_reporter().await;
-
     dispatcher
         .dev_source_metadata(spec)
         .await
@@ -2090,8 +2109,10 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
         .unwrap();
 
     // Second metadata request after file modification
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     dispatcher
         .dev_source_metadata(spec)
@@ -2172,8 +2193,8 @@ pub async fn reporter_url_checkout_lifecycle() {
     let archive = test_tempdir();
     let url = file_url_for_test(&archive, "archive.zip");
 
-    let (reporter, events) = EventReporter::new();
-    let engine = url_test_engine(cache_dirs, Some(Arc::new(reporter)), true, None);
+    let (reporter, events, _registry) = EventReporter::new();
+    let engine = url_test_engine(cache_dirs, Some(reporter), true, None);
 
     let spec = UrlSpec {
         url: url.clone(),
@@ -2208,7 +2229,7 @@ pub async fn reporter_url_checkout_lifecycle() {
     );
     assert!(matches!(
         url_events[0],
-        event_reporter::Event::UrlCheckoutQueued { context: None, .. }
+        event_reporter::Event::UrlCheckoutQueued { .. }
     ));
     assert!(matches!(
         url_events[1],
@@ -2229,8 +2250,8 @@ pub async fn reporter_url_checkout_dedup() {
     let archive = test_tempdir();
     let url = file_url_for_test(&archive, "archive.zip");
 
-    let (reporter, events) = EventReporter::new();
-    let engine = url_test_engine(cache_dirs, Some(Arc::new(reporter)), false, None);
+    let (reporter, events, _registry) = EventReporter::new();
+    let engine = url_test_engine(cache_dirs, Some(reporter), false, None);
 
     let spec = UrlSpec {
         url: url.clone(),
@@ -2284,8 +2305,8 @@ pub async fn semaphore_serializes_concurrent_url_checkouts() {
     let url_b = file_url_for_test(&archive, "b.zip");
     let url_c = file_url_for_test(&archive, "c.zip");
 
-    let (reporter, events) = EventReporter::new();
-    let engine = url_test_engine(cache_dirs, Some(Arc::new(reporter)), false, Some(1));
+    let (reporter, events, _registry) = EventReporter::new();
+    let engine = url_test_engine(cache_dirs, Some(reporter), false, Some(1));
 
     let mk = |url: Url| UrlSpec {
         url,
@@ -2310,7 +2331,7 @@ pub async fn semaphore_serializes_concurrent_url_checkouts() {
     // between any `UrlCheckoutStarted(id)` and its matching
     // `UrlCheckoutFinished(id)`, no other `UrlCheckoutStarted` appears.
     let events = events.take();
-    let mut in_flight: Option<pixi_command_dispatcher::reporter::UrlCheckoutId> = None;
+    let mut in_flight: Option<pixi_compute_reporters::OperationId> = None;
     for ev in &events {
         match ev {
             event_reporter::Event::UrlCheckoutStarted { id } => {
@@ -3037,7 +3058,7 @@ pub async fn test_source_build_key_dedups_across_parallel_installs() {
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -3046,7 +3067,7 @@ pub async fn test_source_build_key_dedups_across_parallel_installs() {
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .finish();
 
     let records = run_pixi_solve(
@@ -3106,7 +3127,7 @@ pub async fn test_instantiate_backend_key_dedups_across_parallel_installs() {
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -3115,7 +3136,7 @@ pub async fn test_instantiate_backend_key_dedups_across_parallel_installs() {
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .finish();
 
     let records = run_pixi_solve(
@@ -3176,7 +3197,7 @@ pub async fn test_solve_pixi_environment_key_dedups_parallel_identical_solves() 
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -3185,7 +3206,7 @@ pub async fn test_solve_pixi_environment_key_dedups_parallel_identical_solves() 
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .finish();
 
     let make_spec = || SolvePixiEnvironmentSpec {
@@ -3242,7 +3263,7 @@ pub async fn test_solve_pixi_environment_key_dedups_across_ephemeral_env_names()
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -3251,7 +3272,7 @@ pub async fn test_solve_pixi_environment_key_dedups_across_ephemeral_env_names()
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .finish();
 
     let make_env_ref = |name: &str| {

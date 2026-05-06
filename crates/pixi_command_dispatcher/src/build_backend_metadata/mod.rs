@@ -22,11 +22,11 @@ use crate::cache::{
     BuildBackendMetadataCacheKey, CacheEntry, CacheKey, CacheKeyString, CacheRevision,
     MetadataCache, MetadataCacheKey, WriteResult,
 };
-use crate::compute_data::{HasBuildBackendMetadataCache, HasCacheDirs, HasReporter};
+use crate::compute_data::{
+    HasBuildBackendMetadataCache, HasBuildBackendMetadataReporter, HasCacheDirs,
+};
 use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
-use crate::reporter::{Reporter, ReporterContext};
-use crate::reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context};
 use crate::{
     BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
     InstantiateBackendKey, SourceCheckout, SourceCheckoutError,
@@ -80,8 +80,10 @@ pub struct BuildBackendMetadataSpec {
 /// Compute-engine [`Key`] for the public-facing backend-metadata
 /// request. Thin orchestrator that reads projections off `env_ref` to
 /// build a [`BuildBackendMetadataInner`], then delegates to it via
-/// `ctx.compute`. All actual work (and the reporter lifecycle) lives
-/// on the inner Key.
+/// `ctx.compute`. All actual work (and the
+/// [`BuildBackendMetadataReporter`](crate::BuildBackendMetadataReporter)
+/// lifecycle, read from the engine `DataStore`) lives on the inner
+/// Key.
 #[derive(Clone, Debug, Hash, Eq, PartialEq, derive_more::Display)]
 #[display("{}", _0.manifest_source)]
 pub struct BuildBackendMetadataKey(pub Arc<BuildBackendMetadataSpec>);
@@ -507,36 +509,25 @@ impl Key for BuildBackendMetadataInnerKey {
 
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         // Reporter lifecycle: queue up-front so the reporter can count
-        // us against the parent context before any real work starts.
-        // The `on_started` event carries the log-output receiver so the
-        // reporter can stream backend output as it arrives.
-        let reporter_arc = ctx.global_data().reporter().cloned();
-        let parent_reporter_ctx = current_reporter_context();
-        let reporter_fn = || {
-            reporter_arc
-                .as_deref()
-                .and_then(Reporter::as_build_backend_metadata_reporter)
-        };
-        let reporter_id = reporter_fn().map(|r| r.on_queued(parent_reporter_ctx, &self.0));
+        // us before any real work starts. The `on_started` event carries
+        // the log-output receiver so the reporter can stream backend
+        // output as it arrives.
+        let reporter_arc = ctx.global_data().build_backend_metadata_reporter().cloned();
+        let reporter_id = reporter_arc.as_deref().map(|r| r.on_queued(&self.0));
 
         let (log_sink, log_rx) = futures::channel::mpsc::unbounded::<String>();
-        if let (Some(r), Some(id)) = (reporter_fn(), reporter_id) {
+        if let (Some(r), Some(id)) = (reporter_arc.as_deref(), reporter_id) {
             r.on_started(id, Box::new(log_rx));
         }
 
-        // Scope nested Keys under our reporter context so they attribute
-        // their progress to this backend-metadata request (falling back
-        // to the parent when no reporter is attached).
-        let scope_ctx = reporter_id
-            .map(ReporterContext::BuildBackendMetadata)
-            .or(parent_reporter_ctx);
+        // Scope nested Keys under this metadata request's id.
         let work = self.0.clone().compute_inner(ctx, log_sink);
-        let result = match scope_ctx {
-            Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+        let result = match reporter_id {
+            Some(id) => id.scope_active(work).await,
             None => work.await,
         };
 
-        if let (Some(r), Some(id)) = (reporter_fn(), reporter_id) {
+        if let (Some(r), Some(id)) = (reporter_arc.as_deref(), reporter_id) {
             r.on_finished(id, result.is_err());
         }
 

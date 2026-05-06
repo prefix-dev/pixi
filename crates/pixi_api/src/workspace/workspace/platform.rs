@@ -39,6 +39,7 @@ pub async fn add<I: Interface>(
     // Try to update the lock-file with the new channels
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
+        None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
@@ -84,6 +85,7 @@ pub async fn remove<I: Interface>(
 
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
+        None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,

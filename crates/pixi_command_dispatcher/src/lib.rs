@@ -59,7 +59,6 @@ mod instantiate_backend_key;
 mod instantiate_tool_env;
 pub mod keys;
 pub mod reporter;
-mod reporter_context;
 mod reporter_lifecycle;
 mod resolved_backend_command;
 mod solve_binary;
@@ -82,7 +81,7 @@ pub use cache::{
 };
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, ComputeResultExt, ReporterContextSpawnHook,
+    CommandDispatcherErrorResultExt, ComputeResultExt,
 };
 pub use cycle::{Cycle, CycleEnvironment};
 pub use dev_source_metadata::{
@@ -116,9 +115,10 @@ pub use instantiate_backend_key::{
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use keys::SourceMetadata;
 pub use reporter::{
-    CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,
-    PixiSolveReporter, Reporter, ReporterContext, SourceMetadataReporterSpec,
-    SourceRecordReporterSpec,
+    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
+    GitCheckoutReporter, InstantiateBackendReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,
+    PixiSolveReporter, SourceMetadataReporter, SourceMetadataReporterSpec, SourceRecordReporter,
+    SourceRecordReporterSpec, UrlCheckoutReporter,
 };
 pub use resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use serde::Serialize;

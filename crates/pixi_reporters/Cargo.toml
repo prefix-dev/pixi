@@ -28,7 +28,9 @@ regex = { workspace = true }
 tracing = { workspace = true }
 
 # Pixi ecosystem
+pixi_build_discovery = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
+pixi_compute_reporters = { workspace = true }
 pixi_git = { workspace = true }
 pixi_progress = { workspace = true }
 
