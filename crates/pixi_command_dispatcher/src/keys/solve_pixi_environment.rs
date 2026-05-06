@@ -27,17 +27,20 @@ use pixi_spec::{
 };
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
-use rattler_conda_types::{MatchSpec, PackageName, PackageNameMatcher, ParseStrictness};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, MatchSpec, PackageName, PackageNameMatcher, ParseStrictness,
+};
 use rattler_solve::SolveStrategy;
 use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, DevSourceMetadataKey, DevSourceMetadataSpec,
-    EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, PixiSolveEnvironmentSpec,
-    PixiSolveReporter, PtrArc, Reporter, ReporterContext, SolvePixiEnvironmentError,
-    SourceMetadata,
+    EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, MissingChannelError,
+    PixiSolveEnvironmentSpec, PixiSolveReporter, PtrArc, Reporter, ReporterContext,
+    SolvePixiEnvironmentError, SourceMetadata,
     build::PinnedSourceCodeLocation,
     compute_data::HasReporter,
+    cycle::CycleEnvironment,
     injected_config::ChannelConfigKey,
     keys::{
         resolve_source_package::{ResolveSourcePackageKey, ResolveSourcePackageSpec},
@@ -48,8 +51,39 @@ use crate::{
     reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context},
     reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle},
     source_checkout::SourceCheckoutExt,
-    source_metadata::CycleEnvironment,
 };
+
+/// Returns an error if any binary spec requests a channel that is not
+/// present in the environment's channel list.
+fn check_missing_channels(
+    binary_specs: DependencyMap<PackageName, BinarySpec>,
+    channels: &[ChannelUrl],
+    channel_config: &ChannelConfig,
+) -> Result<(), Box<SolvePixiEnvironmentError>> {
+    for (pkg, spec) in binary_specs.iter_specs() {
+        if let BinarySpec::DetailedVersion(v) = spec
+            && let Some(channel) = &v.channel
+        {
+            let base_url = channel
+                .clone()
+                .into_base_url(channel_config)
+                .map_err(|err| {
+                    Box::new(SolvePixiEnvironmentError::ParseChannelError(Arc::new(err)))
+                })?;
+
+            if !channels.iter().any(|c| c == &base_url) {
+                return Err(Box::new(SolvePixiEnvironmentError::MissingChannel(
+                    MissingChannelError {
+                        package: pkg.as_normalized().to_string(),
+                        channel: base_url,
+                        advice: None,
+                    },
+                )));
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Input to [`SolvePixiEnvironmentKey`]. The env display label comes
 /// from `env_ref`'s `Display` impl.
@@ -263,12 +297,8 @@ async fn compute_inner(
         spec.dependencies.clone().into_specs(),
     );
 
-    crate::solve_pixi::check_missing_channels(
-        binary_specs.clone(),
-        &env_spec.channels,
-        &channel_config,
-    )
-    .map_err(|b| *b)?;
+    check_missing_channels(binary_specs.clone(), &env_spec.channels, &channel_config)
+        .map_err(|b| *b)?;
 
     // BFS over (package, source_location) pairs. Driving the walk off
     // assembled records (not raw `CondaOutput.run_dependencies`) is

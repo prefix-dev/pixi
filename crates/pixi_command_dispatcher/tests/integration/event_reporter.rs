@@ -11,7 +11,8 @@ use pixi_build_discovery::JsonRpcBackendSpec;
 use pixi_command_dispatcher::{
     BackendSourceBuildSpec, BuildBackendMetadataInner, CondaSolveReporter, GitCheckoutReporter,
     InstallPixiEnvironmentSpec, PixiInstallReporter, PixiSolveEnvironmentSpec, PixiSolveReporter,
-    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceMetadataSpec, SourceRecordSpec,
+    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceMetadataReporterSpec,
+    SourceRecordReporterSpec,
     reporter::{
         BackendSourceBuildId, BackendSourceBuildReporter, BuildBackendMetadataId,
         BuildBackendMetadataReporter, CondaSolveId, GitCheckoutId, InstantiateBackendId,
@@ -114,7 +115,7 @@ pub enum Event {
     SourceMetadataQueued {
         id: SourceMetadataId,
         #[serde(flatten)]
-        spec: SourceMetadataSpec,
+        spec: SourceMetadataReporterSpec,
         #[serde(skip_serializing_if = "Option::is_none")]
         context: Option<ReporterContext>,
     },
@@ -128,7 +129,7 @@ pub enum Event {
     SourceRecordQueued {
         id: SourceRecordId,
         #[serde(flatten)]
-        spec: SourceRecordSpec,
+        spec: SourceRecordReporterSpec,
         #[serde(skip_serializing_if = "Option::is_none")]
         context: Option<ReporterContext>,
     },
@@ -477,7 +478,7 @@ impl SourceMetadataReporter for EventReporter {
     fn on_queued(
         &self,
         context: Option<ReporterContext>,
-        spec: &SourceMetadataSpec,
+        spec: &SourceMetadataReporterSpec,
     ) -> SourceMetadataId {
         let next_id =
             SourceMetadataId(self.next_source_metadata_id.fetch_add(1, Ordering::Relaxed));
@@ -509,7 +510,7 @@ impl SourceRecordReporter for EventReporter {
     fn on_queued(
         &self,
         context: Option<ReporterContext>,
-        spec: &SourceRecordSpec,
+        spec: &SourceRecordReporterSpec,
     ) -> SourceRecordId {
         let next_id = SourceRecordId(self.next_source_metadata_id.fetch_add(1, Ordering::Relaxed));
 
