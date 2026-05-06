@@ -981,6 +981,48 @@ mod tests {
         .unwrap();
     }
 
+    /// Reproduces issue #5661: PyPI dependency with full commit hash from a
+    /// `pyproject.toml`-style PEP 508 string roundtrips through pixi's manifest
+    /// types (PixiPypiSpec) and through `as_uv_req` -- which is the path
+    /// actually exercised by the satisfiability check -- and must satisfy a
+    /// lockfile entry that pixi just wrote for the same dependency.
+    #[test]
+    fn test_pypi_git_full_commit_via_as_uv_req() {
+        use pixi_pypi_spec::PixiPypiSpec;
+        use pixi_uv_conversions::as_uv_req;
+
+        // 1. Parse the pyproject.toml-style PEP 508 string the same way pixi
+        //    does when reading the manifest.
+        let pep_req = pep508_rs::Requirement::from_str(
+            "dacite @ git+https://github.com/konradhalas/dacite.git@9898ccbb783e7e6a35ae165e7deb9fa84edfe21c",
+        )
+        .unwrap();
+        let pixi_spec = PixiPypiSpec::try_from(pep_req).unwrap();
+
+        // 2. Convert into a uv Requirement using the same conversion the
+        //    satisfiability check uses for top-level PyPI requirements.
+        let project_root = PathBuf::from_str("/").unwrap();
+        let uv_req = as_uv_req(&pixi_spec, "dacite", &project_root).unwrap();
+
+        // 3. Build the locked record exactly as pixi writes it via
+        //    `into_locked_git_url`: ?rev=<sha>#<sha>.
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "dacite",
+            "1.8.1",
+            "git+https://github.com/konradhalas/dacite.git?rev=9898ccbb783e7e6a35ae165e7deb9fa84edfe21c#9898ccbb783e7e6a35ae165e7deb9fa84edfe21c"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+
+        // The manifest spec must satisfy the lockfile entry pixi wrote for
+        // the very same dependency.
+        pypi_satisfies_requirement(&uv_req, &locked_data, &project_root).unwrap();
+    }
+
     // Do not use unix paths on windows: The path gets normalized to something
     // unix-y, and the lockfile keeps the "pretty" path the user filled in at
     // all times. So on windows the test fails.

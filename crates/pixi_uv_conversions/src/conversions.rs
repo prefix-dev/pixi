@@ -302,10 +302,13 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 /// branch information. If provided, this original reference will be used instead
 /// of the one from uv's resolution.
 ///
-/// If no original reference is provided (user didn't specify branch/tag/rev),
-/// we store the resolved commit as `Rev(commit)` rather than `DefaultBranch`.
-/// This ensures the lock file has a precise reference that doesn't require
-/// cache lookups when re-resolving (similar to how uv's lockfile works).
+/// If no original reference is provided, which happens for git deps that
+/// aren't top-level workspace deps (e.g. transitive deps coming in through an
+/// editable self-package's `requires_dist`, issue #5661), fall back to
+/// whatever reference uv resolved. That keeps the lock-file
+/// `?branch=/?tag=/?rev=` in sync with what the manifest's PEP 508 string
+/// actually says, so the satisfiability check matches without relying on the
+/// no-ref fallback.
 pub fn into_pinned_git_spec(
     dist: GitSourceDist,
     original_reference: Option<PixiReference>,
@@ -320,11 +323,8 @@ pub fn into_pinned_git_spec(
     )
     .expect("we expect it to be a valid sha");
 
-    // Use the original reference from the manifest if provided.
-    // If no explicit reference was specified, use DefaultBranch.
-    // The precise commit is already captured in the fragment (`#commit`),
-    // so we don't need to duplicate it in the query string as `?rev=commit`.
-    let reference = original_reference.unwrap_or(PixiReference::DefaultBranch);
+    let reference =
+        original_reference.unwrap_or_else(|| into_pixi_reference(dist.git.reference().clone()));
 
     let pinned_checkout = PinnedGitCheckout::new(
         git_sha,
