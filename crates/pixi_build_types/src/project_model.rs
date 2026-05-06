@@ -174,6 +174,13 @@ pub struct Target {
         schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
     )]
     pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Run constraints of the project
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub run_constraints: Option<OrderMap<SourcePackageName, PackageSpec>>,
 }
 
 impl Target {
@@ -186,8 +193,9 @@ impl Target {
             .is_none_or(|d| d.is_empty());
         let has_no_host_deps = self.host_dependencies.as_ref().is_none_or(|d| d.is_empty());
         let has_no_run_deps = self.run_dependencies.as_ref().is_none_or(|d| d.is_empty());
+        let has_no_run_constraints = self.run_constraints.as_ref().is_none_or(|d| d.is_empty());
 
-        has_no_build_deps && has_no_host_deps && has_no_run_deps
+        has_no_build_deps && has_no_host_deps && has_no_run_deps && has_no_run_constraints
     }
 }
 
@@ -605,12 +613,14 @@ impl Hash for Target {
             build_dependencies,
             host_dependencies,
             run_dependencies,
+            run_constraints,
         } = self;
 
         StableHashBuilder::<H>::new()
             .field("build_dependencies", build_dependencies)
             .field("host_dependencies", host_dependencies)
             .field("run_dependencies", run_dependencies)
+            .field("run_constraints", run_constraints)
             .finish(state);
     }
 }
@@ -879,6 +889,7 @@ mod tests {
             host_dependencies: Some(OrderMap::new()),
             build_dependencies: Some(OrderMap::new()),
             run_dependencies: Some(OrderMap::new()),
+            run_constraints: Some(OrderMap::new()),
         };
         project_model.targets = Some(Targets {
             default_target: Some(empty_target),
@@ -938,6 +949,7 @@ mod tests {
             host_dependencies: Some(deps),
             build_dependencies: Some(OrderMap::new()),
             run_dependencies: Some(OrderMap::new()),
+            run_constraints: Some(OrderMap::new()),
         };
         project_model.targets = Some(Targets {
             default_target: Some(target_with_deps),
@@ -1043,6 +1055,12 @@ mod tests {
                 )),
                 PackageSpec::Binary(BinaryPackageSpec::default()),
             )])),
+            run_constraints: Some(OrderMap::from([(
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "run_const1",
+                )),
+                PackageSpec::Binary(BinaryPackageSpec::default()),
+            )])),
         }
     }
 
@@ -1142,6 +1160,36 @@ mod tests {
         );
     }
 
+    /// Regression test for the copy-paste bug where `is_empty()` checked
+    /// `self.run_dependencies` twice instead of once for each field. A target
+    /// populated only via `run_constraints` must not report itself as empty,
+    /// otherwise `IsDefault::is_non_default` filters it out and the constraints
+    /// silently disappear from the project model.
+    #[test]
+    fn test_target_is_empty_only_run_constraints() {
+        let mut deps = OrderMap::new();
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::Binary(BinaryPackageSpec::default()),
+        );
+
+        let target = Target {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: None,
+            run_constraints: Some(deps),
+        };
+        assert!(!target.is_empty());
+
+        let empty = Target {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: None,
+            run_constraints: None,
+        };
+        assert!(empty.is_empty());
+    }
+
     #[test]
     fn test_hash_collision_bug_dependency_fields() {
         // Test that moving dependencies between different dependency types produces
@@ -1158,6 +1206,7 @@ mod tests {
             host_dependencies: Some(deps.clone()),
             build_dependencies: None,
             run_dependencies: None,
+            run_constraints: None,
         };
 
         // Same dependency in run_dependencies
@@ -1165,6 +1214,7 @@ mod tests {
             host_dependencies: None,
             build_dependencies: None,
             run_dependencies: Some(deps.clone()),
+            run_constraints: None,
         };
 
         // Same dependency in build_dependencies
@@ -1172,11 +1222,20 @@ mod tests {
             host_dependencies: None,
             build_dependencies: Some(deps.clone()),
             run_dependencies: None,
+            run_constraints: None,
+        };
+        // Same dependency in run_constraints
+        let target4 = Target {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: None,
+            run_constraints: Some(deps.clone()),
         };
 
         let hash1 = calculate_hash(&target1);
         let hash2 = calculate_hash(&target2);
         let hash3 = calculate_hash(&target3);
+        let hash4 = calculate_hash(&target4);
 
         assert_ne!(
             hash1, hash2,
@@ -1189,6 +1248,18 @@ mod tests {
         assert_ne!(
             hash2, hash3,
             "Same dependency in run vs build should produce different hashes"
+        );
+        assert_ne!(
+            hash1, hash4,
+            "Same dependency in host vs run_constraints should produce different hashes"
+        );
+        assert_ne!(
+            hash2, hash4,
+            "Same dependency in build vs run_constraints should produce different hashes"
+        );
+        assert_ne!(
+            hash3, hash4,
+            "Same dependency in run vs run_constraints should produce different hashes"
         );
 
         // Test with TargetsV1 as well

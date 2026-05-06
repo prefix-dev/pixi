@@ -349,6 +349,11 @@ impl PackageTarget {
         self.dependencies.get(&SpecType::Run)
     }
 
+    /// Returns the run constraints of the target
+    pub fn run_constraints(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
+        self.dependencies.get(&SpecType::RunConstraints)
+    }
+
     /// Returns the host dependencies of the target
     pub fn host_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Host)
