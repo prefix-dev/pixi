@@ -7,6 +7,7 @@ use std::{
 };
 
 use dashmap::DashMap;
+use indexmap::IndexMap;
 use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
@@ -29,10 +30,7 @@ use url::Url;
 use uv_client::{BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution::DistributionDatabase;
-use uv_distribution_types::{
-    ConfigSettings, DependencyMetadata, DirectorySourceDist, Dist, HashPolicy, IndexUrl,
-    RequirementSource, SourceDist,
-};
+use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
 use uv_git_types::GitReference;
 use uv_pypi_types::PyProjectToml;
 use uv_resolver::FlatIndex;
@@ -385,8 +383,8 @@ pub(super) async fn lock_pypi_packages(
     for record in &unresolved_pypi_environment.records {
         let pkg = record.as_package_data();
 
-        // For path-based directories, read metadata from the source tree.
-        // The result is cached in ctx.static_metadata_cache for later use.
+        // Only local directories can drift. Git/URL/archive sources are
+        // content-pinned by the lock and trusted as-is.
         let metadata = if let UrlOrPath::Path(path) = &**pkg.location() {
             let absolute_path = if path.is_absolute() {
                 Cow::Borrowed(Path::new(path.as_str()))
@@ -395,6 +393,15 @@ pub(super) async fn lock_pypi_packages(
             };
 
             if absolute_path.is_dir() {
+                // Lock says wheel but path is a directory, needs re-solve.
+                if pkg.as_wheel().is_some() {
+                    return Err(CommandDispatcherError::Failed(Box::new(
+                        PlatformUnsat::DistributionShouldBeSource {
+                            name: pkg.name().clone(),
+                        },
+                    )));
+                }
+
                 let uv_ctx = ctx
                     .uv_context
                     .get_or_try_init(|| {
@@ -425,34 +432,22 @@ pub(super) async fn lock_pypi_packages(
                     static_metadata_cache: ctx.static_metadata_cache,
                 };
 
-                match read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx).await {
-                    Ok(m) => Some(m),
-                    Err(e) => {
-                        return Err(CommandDispatcherError::Failed(Box::new(
+                read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx)
+                    .await
+                    .map_err(|e| {
+                        CommandDispatcherError::Failed(Box::new(
                             PlatformUnsat::FailedToReadLocalMetadata(
                                 pkg.name().clone(),
                                 format!("failed to read metadata: {e}"),
                             ),
-                        )));
-                    }
-                }
+                        ))
+                    })?
             } else {
                 None
             }
         } else {
             None
         };
-
-        // A path-based directory that was parsed as Distribution (e.g. a
-        // directory named `foo.tar.gz`) needs a re-solve — it should be a
-        // Source package.
-        if pkg.as_wheel().is_some() && metadata.is_some() {
-            return Err(CommandDispatcherError::Failed(Box::new(
-                PlatformUnsat::DistributionShouldBeSource {
-                    name: pkg.name().clone(),
-                },
-            )));
-        }
 
         // Determine the version: prefer the wheel version from the lock file,
         // fall back to the version read from the source tree metadata.
@@ -484,36 +479,28 @@ struct BuildMetadataContext<'a> {
     static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
-/// Read metadata for a local directory package using UV's DistributionDatabase.
+/// Statically read metadata for a local directory PyPI package via
+/// [`DistributionDatabase::requires_dist`]. Returns `Ok(None)` when uv
+/// can't extract statically (dynamic deps, missing or unparsable
+/// pyproject), in which case the caller trusts the lock. Result is
+/// cached platform-independently in `static_metadata_cache`.
 ///
-/// This first tries to extract metadata statically via `database.requires_dist()`,
-/// which parses the pyproject.toml without building. If static extraction fails
-/// (e.g., dynamic dependencies), it falls back to building the wheel metadata.
-///
-/// Static metadata is cached across platforms since it doesn't depend on the platform.
+/// Building wheel metadata as a fallback would need Python in the host
+/// conda prefix, which is not guaranteed under cross-platform
+/// satisfiability, so we deliberately don't fall back to a build.
 #[allow(clippy::result_large_err)]
 async fn read_local_package_metadata(
     directory: &Path,
     package_name: &pep508_rs::PackageName,
     ctx: &BuildMetadataContext<'_>,
-) -> Result<pypi_metadata::LocalPackageMetadata, PlatformUnsat> {
+) -> Result<Option<pypi_metadata::LocalPackageMetadata>, PlatformUnsat> {
     // Check if we already have static metadata cached for this directory
     if let Some(cached_metadata) = ctx.static_metadata_cache.get(directory) {
-        tracing::debug!("Package {} - using cached static metadata", package_name);
-        return Ok(cached_metadata.value().clone());
+        tracing::debug!(package = %package_name, "using cached static metadata");
+        return Ok(Some(cached_metadata.value().clone()));
     }
 
     let pypi_options = ctx.environment.pypi_options();
-
-    // Look up editability from the manifest (not stored in lock file).
-    // This affects which PEP 517 hook uv calls
-    // (prepare_metadata_for_build_editable vs prepare_metadata_for_build_wheel).
-    let editable = ctx
-        .environment
-        .pypi_dependencies(Some(ctx.platform))
-        .get(package_name)
-        .and_then(|specs| specs.iter().find_map(|spec| spec.editable()))
-        .unwrap_or(false);
 
     // Find the Python interpreter from locked records
     let python_record = ctx
@@ -710,137 +697,89 @@ async fn read_local_package_metadata(
         ctx.uv_context.concurrency.downloads,
     );
 
-    // Try to read pyproject.toml and use requires_dist() first
+    // Missing or unparsable pyproject -> trust the lock.
     let pyproject_path = directory.join("pyproject.toml");
-    if let Ok(contents) = fs_err::read_to_string(&pyproject_path) {
-        // Parse with toml_edit for version/requires_python
-        if let Ok(toml) = contents.parse::<toml_edit::DocumentMut>() {
-            let version = toml
-                .get("project")
-                .and_then(|p| p.get("version"))
-                .and_then(|v| v.as_str())
-                .and_then(|v| v.parse::<pep440_rs::Version>().ok());
-
-            let requires_python = toml
-                .get("project")
-                .and_then(|p| p.get("requires-python"))
-                .and_then(|v| v.as_str())
-                .and_then(|rp| rp.parse::<VersionSpecifiers>().ok());
-
-            // Parse pyproject.toml with UV's parser for requires_dist
-            if let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) {
-                // Try to extract requires_dist statically using UV's database
-                // The `dynamic` flag on `RequiresDist` is true when any
-                // field is listed in `[project.dynamic]`, not just
-                // dependencies. Since we handle version separately (and
-                // skip comparison when it's `None`), we accept the
-                // statically extracted deps regardless of the flag.
-                match database.requires_dist(directory, &pyproject_toml).await {
-                    Ok(Some(requires_dist)) => {
-                        tracing::debug!(
-                            "Package {} - extracted requires_dist using database.requires_dist(). Dynamic: {}",
-                            package_name,
-                            requires_dist.dynamic
-                        );
-
-                        // Convert uv requirements to pep508_rs requirements
-                        let requires_dist_converted: Result<Vec<pep508_rs::Requirement>, _> =
-                            requires_dist
-                                .requires_dist
-                                .iter()
-                                .map(|req| {
-                                    let req_str = req.to_string();
-                                    req_str.parse::<pep508_rs::Requirement>().map_err(|e| {
-                                        PlatformUnsat::FailedToReadLocalMetadata(
-                                            package_name.clone(),
-                                            format!("Invalid requirement: {e}"),
-                                        )
-                                    })
-                                })
-                                .collect();
-
-                        if let Ok(requires_dist_vec) = requires_dist_converted {
-                            let metadata = pypi_metadata::LocalPackageMetadata {
-                                version,
-                                requires_dist: requires_dist_vec,
-                                requires_python,
-                            };
-                            // Cache the static metadata for reuse on other platforms
-                            ctx.static_metadata_cache
-                                .insert(directory.to_path_buf(), metadata.clone());
-                            return Ok(metadata);
-                        }
-                    }
-                    Ok(None) => {
-                        tracing::debug!(
-                            "Package {} - requires_dist() returned None, falling back to build",
-                            package_name
-                        );
-                    }
-                    Err(e) => {
-                        tracing::debug!(
-                            "Package {} - requires_dist() failed: {}, falling back to build",
-                            package_name,
-                            e
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    // Fall back to building the wheel metadata
-    tracing::debug!(
-        "Package {} - building wheel metadata with get_or_build_wheel_metadata()",
-        package_name
-    );
-
-    // Create the directory source dist
-    let uv_package_name =
-        uv_normalize::PackageName::from_str(package_name.as_ref()).map_err(|e| {
-            PlatformUnsat::FailedToReadLocalMetadata(
-                package_name.clone(),
-                format!("Invalid package name: {e}"),
-            )
-        })?;
-
-    let install_path = directory.to_path_buf();
-    let file_url = url::Url::from_file_path(&install_path).map_err(|_| {
-        PlatformUnsat::FailedToReadLocalMetadata(
-            package_name.clone(),
-            format!("Failed to convert path to URL: {}", install_path.display()),
-        )
-    })?;
-    let verbatim_url = uv_pep508::VerbatimUrl::from_url(file_url.into());
-    let source_dist = DirectorySourceDist {
-        name: uv_package_name,
-        install_path: install_path.into_boxed_path(),
-        editable: Some(editable),
-        r#virtual: Some(false),
-        url: verbatim_url,
+    let Ok(contents) = fs_err::read_to_string(&pyproject_path) else {
+        tracing::debug!(package = %package_name, "no readable pyproject.toml");
+        return Ok(None);
+    };
+    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) else {
+        tracing::debug!(package = %package_name, "pyproject.toml could not be parsed");
+        return Ok(None);
     };
 
-    // Build the metadata
-    let metadata_response = database
-        .get_or_build_wheel_metadata(
-            &Dist::Source(SourceDist::Directory(source_dist)),
-            HashPolicy::None,
-        )
-        .await
-        .map_err(|e| {
-            PlatformUnsat::FailedToReadLocalMetadata(
-                package_name.clone(),
-                format!("Failed to build metadata: {e}"),
-            )
-        })?;
+    // Read version and requires-python ourselves; uv's types differ so
+    // we round-trip via string.
+    let project = pyproject_toml.project.as_ref();
+    let version = project
+        .and_then(|p| p.version.as_ref())
+        .and_then(|v| v.to_string().parse::<pep440_rs::Version>().ok());
+    let requires_python = project
+        .and_then(|p| p.requires_python.as_ref())
+        .and_then(|rp| rp.parse::<VersionSpecifiers>().ok());
 
-    // Convert UV metadata to our format
-    pypi_metadata::from_uv_metadata(&metadata_response.metadata).map_err(|e| {
-        PlatformUnsat::FailedToReadLocalMetadata(
-            package_name.clone(),
-            format!("Failed to convert metadata: {e}"),
-        )
-    })
+    // `dynamic` is set when *any* `[project.dynamic]` field is listed,
+    // not just dependencies, so we accept the deps regardless.
+    let requires_dist = match database.requires_dist(directory, &pyproject_toml).await {
+        Ok(Some(rd)) => {
+            tracing::debug!(
+                package = %package_name,
+                dynamic = rd.dynamic,
+                "extracted requires_dist statically",
+            );
+            rd
+        }
+        // uv: "static doesn't apply", trust lock.
+        Ok(None) => {
+            tracing::debug!(
+                package = %package_name,
+                "requires_dist returned None, trusting lock",
+            );
+            return Ok(None);
+        }
+        // uv: hard error, source diverged, force re-solve.
+        Err(e) => {
+            return Err(PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("static metadata extraction failed: {e}"),
+            ));
+        }
+    };
+
+    // A round-trip failure here would be a uv bug, not "static doesn't
+    // apply", so propagate rather than swallow as `Ok(None)`.
+    let requires_dist_vec: Vec<pep508_rs::Requirement> = requires_dist
+        .requires_dist
+        .iter()
+        .map(|req| {
+            req.to_string()
+                .parse::<pep508_rs::Requirement>()
+                .map_err(|e| {
+                    PlatformUnsat::FailedToReadLocalMetadata(
+                        package_name.clone(),
+                        format!("Invalid requirement: {e}"),
+                    )
+                })
+        })
+        .collect::<Result<_, _>>()?;
+
+    // Match the wheel METADATA shape used at lock time.
+    let empty_optional_deps = IndexMap::new();
+    let optional_deps = project
+        .and_then(|p| p.optional_dependencies.as_ref())
+        .unwrap_or(&empty_optional_deps);
+    let expanded =
+        pypi_metadata::expand_self_extras(requires_dist_vec, package_name, optional_deps);
+    let metadata = pypi_metadata::LocalPackageMetadata {
+        version,
+        requires_dist: expanded,
+        requires_python,
+    };
+
+    ctx.static_metadata_cache
+        .insert(directory.to_path_buf(), metadata.clone());
+
+    Ok(Some(metadata))
 }
 
 #[cfg(test)]
@@ -1020,7 +959,13 @@ mod tests {
 
         // The manifest spec must satisfy the lockfile entry pixi wrote for
         // the very same dependency.
-        pypi_satisfies_requirement(&uv_req, &locked_data, &project_root).unwrap();
+        pypi_satisfies_requirement(
+            &uv_req,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+        )
+        .unwrap();
     }
 
     // Do not use unix paths on windows: The path gets normalized to something
