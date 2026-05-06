@@ -7,6 +7,8 @@ channels:
 - conda-forge
 - nodefaults
 dependencies:
+- python_abi ==3.13 8_cp313
+- tzdata ==2025b h78e105d_0
 - bzip2 ==1.0.8 hd037594_8
 - ca-certificates ==2024.8.30 hf0a4a13_0
 - icu ==75.1 hfee45f7_0
@@ -19,14 +21,12 @@ dependencies:
 - ncurses ==6.5 h5e97a16_3
 - openssl ==3.5.3 h5503f6c_1
 - python ==3.13.7 h5c937ed_100_cp313
-- python_abi ==3.13 8_cp313
 - readline ==8.2 h1d1bf99_2
 - tk ==8.6.13 h892fb3f_2
-- tzdata ==2025b h78e105d_0
 - pip
 - pip:
+  - test-git-subdir-roundtrip @ git+https://github.com/ihnorton/pixi.git?subdirectory=tests%2Fdata%2Fmock-projects%2Ftest-project-export%2Ftest-git-subdir-roundtrip&rev=ihn%2Ffix-pypi-git-subdir-roundtrip#86fd30aa3baa9bde1491fb1468f767b93f3d5009
+  - rich==13.9.4
   - markdown-it-py==4.0.0
   - mdurl==0.1.2
-  - test-git-subdir-roundtrip @ git+https://github.com/ihnorton/pixi.git?subdirectory=tests%2Fdata%2Fmock-projects%2Ftest-project-export%2Ftest-git-subdir-roundtrip&rev=ihn%2Ffix-pypi-git-subdir-roundtrip#86fd30aa3baa9bde1491fb1468f767b93f3d5009
   - pygments==2.19.2
-  - rich==13.9.4
