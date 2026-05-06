@@ -482,21 +482,33 @@ pub fn to_requirements<'req>(
     requirements
 }
 
-/// Convert back to PEP508 without the VerbatimParsedUrl
-/// We need this function because we need to convert to the introduced
-/// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
+/// Convert uv `Requirement<VerbatimParsedUrl>` to `pep508_rs::Requirement`.
+///
+/// Carries `verbatim.given()` over because `pep508_rs::VerbatimUrl`'s
+/// `Display`/`Serialize` ignore it, so a string round-trip would drop the
+/// original spelling and bake absolute paths into `pixi.lock` (#4680).
 pub fn convert_uv_requirements_to_pep508<'req>(
     requires_dist: impl Iterator<Item = &'req uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl>>,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
-    // Convert back top PEP508 Requirement<VerbatimUrl>
-    let requirements: Result<Vec<pep508_rs::Requirement>, _> = requires_dist
+    requires_dist
         .map(|r| {
             let requirement = r.to_string();
-            pep508_rs::Requirement::from_str(&requirement).map_err(crate::Pep508Error::Pep508Error)
-        })
-        .collect();
+            let mut converted = pep508_rs::Requirement::from_str(&requirement)
+                .map_err(crate::Pep508Error::Pep508Error)?;
 
-    Ok(requirements?)
+            if let (
+                Some(uv_pep508::VersionOrUrl::Url(uv_url)),
+                Some(pep508_rs::VersionOrUrl::Url(pep_url)),
+            ) = (&r.version_or_url, &mut converted.version_or_url)
+                && let Some(given) = uv_url.verbatim.given()
+            {
+                *pep_url =
+                    pep508_rs::VerbatimUrl::from_url(pep_url.raw().clone()).with_given(given);
+            }
+
+            Ok(converted)
+        })
+        .collect()
 }
 
 /// Converts `uv_normalize::PackageName` to `pep508_rs::PackageName`
@@ -794,5 +806,34 @@ mod tests {
 
         let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
         assert!(host_names.contains(&"packages.example.org".to_string()));
+    }
+
+    /// #4680: relative paths must survive the uv -> pep508_rs conversion.
+    #[test]
+    fn relative_path_requirement_round_trip_keeps_given() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project_root = tmp.path();
+        fs_err::create_dir_all(project_root.join("my_subdir")).unwrap();
+
+        let uv_req: uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl> =
+            uv_pep508::Requirement::parse("my-subdir @ ./my_subdir", project_root).unwrap();
+
+        let Some(uv_pep508::VersionOrUrl::Url(url)) = &uv_req.version_or_url else {
+            panic!("expected uv requirement to carry a Url");
+        };
+        assert_eq!(url.verbatim.given(), Some("./my_subdir"));
+
+        let converted = convert_uv_requirements_to_pep508(std::iter::once(&uv_req))
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
+
+        match converted.version_or_url {
+            Some(pep508_rs::VersionOrUrl::Url(url)) => {
+                assert_eq!(url.given(), Some("./my_subdir"));
+            }
+            other => panic!("expected a VersionOrUrl::Url, got {other:?}"),
+        }
     }
 }
