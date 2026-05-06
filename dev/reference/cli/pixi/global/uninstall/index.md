@@ -40,6 +40,24 @@ pixi global uninstall [OPTIONS] <ENVIRONMENT>...
 
 - [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
 
+- [`--no-symbolic-links`](#arg---no-symbolic-links) : Disallow symbolic links during package installation
+
+  ```
+  **env**: `PIXI_NO_SYMBOLIC_LINKS`
+  ```
+
+- [`--no-hard-links`](#arg---no-hard-links) : Disallow hard links during package installation
+
+  ```
+  **env**: `PIXI_NO_HARD_LINKS`
+  ```
+
+- [`--no-ref-links`](#arg---no-ref-links) : Disallow ref links (copy-on-write) during package installation
+
+  ```
+  **env**: `PIXI_NO_REF_LINKS`
+  ```
+
 - [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
 
 - [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
