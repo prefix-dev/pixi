@@ -134,6 +134,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Update the prefixes by installing all packages
     let (LockFileDerivedData { lock_file, .. }, _) = get_update_lock_file_and_prefixes(
         &environments,
+        Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: args.lock_file_usage.to_usage(),

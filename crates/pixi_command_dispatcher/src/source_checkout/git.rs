@@ -1,11 +1,12 @@
-use crate::compute_data::{HasCacheDirs, HasDownloadClient, HasGitResolver, HasReporter};
-use crate::reporter::GitCheckoutId;
-use crate::reporter_context::current_reporter_context;
+use crate::compute_data::{
+    HasCacheDirs, HasDownloadClient, HasGitCheckoutReporter, HasGitResolver,
+};
 use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
-use crate::{GitCheckoutReporter, Reporter, ReporterContext, SourceCheckout, SourceCheckoutError};
+use crate::{GitCheckoutReporter, SourceCheckout, SourceCheckoutError};
 use derive_more::Display;
 use futures::future::Either;
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
+use pixi_compute_reporters::OperationId;
 use pixi_git::git::GitReference;
 use pixi_git::resolver::RepositoryReference;
 use pixi_git::source::Fetch as GitFetch;
@@ -40,17 +41,16 @@ struct GitReporterLifecycle;
 
 impl LifecycleKind for GitReporterLifecycle {
     type Reporter<'r> = dyn GitCheckoutReporter + 'r;
-    type Id = GitCheckoutId;
+    type Id = OperationId;
     type Env = RepositoryReference;
 
     fn queue<'r>(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
+        reporter: Option<&'r Self::Reporter<'r>>,
         env: &Self::Env,
     ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>> {
-        reporter.and_then(|r| r.as_git_reporter()).map(|r| Active {
+        reporter.map(|r| Active {
             reporter: r,
-            id: r.on_queued(parent, env),
+            id: r.on_queued(env),
         })
     }
 
@@ -85,13 +85,10 @@ impl Key for CheckoutGit {
         let client = data.download_client().clone();
         let cache_dir = data.cache_dirs().git();
         let semaphore = data.git_checkout_semaphore().cloned();
-        let reporter = data.reporter().map(Arc::as_ref);
+        let reporter = data.git_checkout_reporter().cloned();
 
-        let lifecycle = ReporterLifecycle::<GitReporterLifecycle>::queued(
-            reporter,
-            current_reporter_context(),
-            &self.0,
-        );
+        let lifecycle =
+            ReporterLifecycle::<GitReporterLifecycle>::queued(reporter.as_deref(), &self.0);
 
         let _permit = match semaphore.as_ref() {
             Some(s) => Some(

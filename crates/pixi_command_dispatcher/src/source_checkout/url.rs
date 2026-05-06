@@ -1,10 +1,12 @@
-use crate::compute_data::{HasCacheDirs, HasDownloadClient, HasReporter, HasUrlResolver};
-use crate::reporter::{UrlCheckoutId, UrlCheckoutReporter};
-use crate::reporter_context::current_reporter_context;
+use crate::compute_data::{
+    HasCacheDirs, HasDownloadClient, HasUrlCheckoutReporter, HasUrlResolver,
+};
+use crate::reporter::UrlCheckoutReporter;
 use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
-use crate::{Reporter, ReporterContext, SourceCheckout, SourceCheckoutError};
+use crate::{SourceCheckout, SourceCheckoutError};
 use derive_more::Display;
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
+use pixi_compute_reporters::OperationId;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
 use pixi_record::{PinnedSourceSpec, PinnedUrlSpec};
 use pixi_spec::UrlSpec;
@@ -53,17 +55,16 @@ struct UrlReporterLifecycle;
 
 impl LifecycleKind for UrlReporterLifecycle {
     type Reporter<'r> = dyn UrlCheckoutReporter + 'r;
-    type Id = UrlCheckoutId;
+    type Id = OperationId;
     type Env = Url;
 
     fn queue<'r>(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
+        reporter: Option<&'r Self::Reporter<'r>>,
         env: &Self::Env,
     ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>> {
-        reporter.and_then(|r| r.as_url_reporter()).map(|r| Active {
+        reporter.map(|r| Active {
             reporter: r,
-            id: r.on_queued(parent, env),
+            id: r.on_queued(env),
         })
     }
 
@@ -89,13 +90,10 @@ impl Key for CheckoutUrl {
         let client = data.download_client().clone();
         let cache_dir = data.cache_dirs().url();
         let semaphore = data.url_checkout_semaphore().cloned();
-        let reporter = data.reporter().map(Arc::as_ref);
+        let reporter = data.url_checkout_reporter().cloned();
 
-        let lifecycle = ReporterLifecycle::<UrlReporterLifecycle>::queued(
-            reporter,
-            current_reporter_context(),
-            &self.0.url,
-        );
+        let lifecycle =
+            ReporterLifecycle::<UrlReporterLifecycle>::queued(reporter.as_deref(), &self.0.url);
 
         let _permit = match semaphore.as_ref() {
             Some(s) => Some(

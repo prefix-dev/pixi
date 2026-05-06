@@ -226,6 +226,7 @@ impl Workspace {
     /// prefixes as soon as possible.
     pub async fn update_lock_file(
         &self,
+        progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
         options: UpdateLockFileOptions,
     ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
         let lock_file_result = self.load_lock_file().await?;
@@ -271,16 +272,12 @@ impl Workspace {
 
         let glob_hash_cache = GlobHashCache::default();
 
-        // Construct a command dispatcher that will be used to run the tasks.
-        let multi_progress = global_multi_progress();
-        let anchor_pb = multi_progress.add(ProgressBar::hidden());
-        let command_dispatcher = self
-            .command_dispatcher_builder()?
-            .with_reporter(pixi_reporters::TopLevelProgress::new(
-                global_multi_progress(),
-                anchor_pb,
-            ))
-            .finish();
+        // Construct a command dispatcher to run the tasks.
+        let mut builder = self.command_dispatcher_builder()?;
+        if let Some(progress) = progress {
+            builder = progress.register_with(builder);
+        }
+        let command_dispatcher = builder.finish();
 
         // Get the package cache from the dispatcher.
         let package_cache = command_dispatcher.package_cache().clone();
@@ -375,7 +372,7 @@ impl Workspace {
         } = derived;
 
         // Construct an update context and perform the actual update.
-        let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))?
+        let lock_file_derived_data = UpdateContext::builder(self, command_dispatcher)?
             .with_package_cache(package_cache)
             .with_no_install(options.no_install)
             .with_outdated_environments(outdated)
@@ -1863,22 +1860,8 @@ impl<'p> UpdateContext<'p> {
     /// Construct a new builder for the update context.
     pub fn builder(
         project: &'p Workspace,
-        command_dispatcher: Option<CommandDispatcher>,
+        command_dispatcher: CommandDispatcher,
     ) -> miette::Result<UpdateContextBuilder<'p>> {
-        let multi_progress = pixi_progress::global_multi_progress();
-        let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
-
-        let command_dispatcher = match command_dispatcher {
-            Some(cd) => cd,
-            None => project
-                .command_dispatcher_builder()?
-                .with_reporter(pixi_reporters::TopLevelProgress::new(
-                    multi_progress,
-                    anchor_pb,
-                ))
-                .finish(),
-        };
-
         Ok(UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),

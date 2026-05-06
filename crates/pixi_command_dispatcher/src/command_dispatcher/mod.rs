@@ -11,7 +11,7 @@
 
 use std::sync::Arc;
 
-pub use builder::{CommandDispatcherBuilder, ReporterContextSpawnHook};
+pub use builder::CommandDispatcherBuilder;
 pub use error::{CommandDispatcherError, CommandDispatcherErrorResultExt, ComputeResultExt};
 use pixi_build_frontend::BackendOverride;
 use pixi_compute_engine::ComputeEngine;
@@ -27,7 +27,7 @@ use tokio::sync::Semaphore;
 use crate::{
     BackendHandle, BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
     DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec, Executor,
-    InstantiateBackendError, InstantiateBackendKey, Reporter,
+    InstantiateBackendError, InstantiateBackendKey,
     cache::{BuildBackendMetadataCache, CacheDirs},
     environment::WorkspaceEnvRegistry,
     install_pixi::{
@@ -52,10 +52,6 @@ pub struct CommandDispatcher {
     /// The generic compute engine. All real work runs through Keys
     /// computed via this engine.
     pub(crate) engine: ComputeEngine,
-
-    /// The progress reporter. Shared among clones so `clear_reporter`
-    /// can call through to it without routing via a background task.
-    pub(crate) reporter: Option<Arc<dyn Reporter>>,
 
     /// Held so that when the last [`CommandDispatcher`] clone drops,
     /// the compute dep-graph snapshot is written if the
@@ -321,13 +317,6 @@ impl CommandDispatcher {
     /// Returns true if execution of link scripts is enabled.
     pub fn allow_execute_link_scripts(&self) -> bool {
         self.data.execute_link_scripts
-    }
-
-    /// Notifies the progress reporter that it should clear its output.
-    pub async fn clear_reporter(&self) {
-        if let Some(reporter) = self.reporter.as_ref() {
-            reporter.on_clear();
-        }
     }
 
     /// Returns whether symbolic links are allowed during package installation.

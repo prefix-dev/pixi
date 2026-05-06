@@ -610,8 +610,9 @@ impl Workspace {
             .clone()
     }
 
-    /// Returns a pre-filled command dispatcher builder that can be used to
-    /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
+    /// Returns a pre-filled command dispatcher builder. Seeds a
+    /// [`RayonPrimer`](crate::rayon_primer::RayonPrimer) in the install /
+    /// solve / instantiate-backend reporter slots; UI reporters override.
     pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
         let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
             .expect("cache dir is not absolute")
@@ -639,6 +640,7 @@ impl Workspace {
             .expect("root dir is not absolute")
             .into_assume_dir();
 
+        let rayon_primer = std::sync::Arc::new(crate::rayon_primer::RayonPrimer::default());
         Ok(CommandDispatcher::builder()
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
@@ -663,6 +665,9 @@ impl Workspace {
             .with_allow_symbolic_links(self.config.allow_symbolic_links)
             .with_allow_hard_links(self.config.allow_hard_links)
             .with_allow_ref_links(self.config.allow_ref_links)
+            .with_pixi_install_reporter(rayon_primer.clone())
+            .with_pixi_solve_reporter(rayon_primer.clone())
+            .with_instantiate_backend_reporter(rayon_primer)
             .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 

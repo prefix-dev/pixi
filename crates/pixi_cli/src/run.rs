@@ -167,14 +167,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         environment.emit_emulation_warning();
     }
 
+    // Top-level progress, kept here so we can clear it between phases.
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+
     // Ensure that the lock-file is up-to-date.
     let lock_file = workspace
-        .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
-            no_install: args.lock_and_install_config.no_install(),
-            max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            ..Default::default()
-        })
+        .update_lock_file(
+            Some(progress.clone()),
+            UpdateLockFileOptions {
+                lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+                no_install: args.lock_and_install_config.no_install(),
+                max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
+            },
+        )
         .await?
         .0;
 
@@ -328,7 +334,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
 
                 // Clear the current progress reports.
-                lock_file.command_dispatcher.clear_reporter().await;
+                progress.on_clear();
 
                 // Clear caches based on the filesystem. The tasks might change files on disk.
                 lock_file.command_dispatcher.clear_filesystem_caches().await;

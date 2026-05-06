@@ -20,6 +20,7 @@ use derive_more::Display;
 use futures::stream::{FuturesUnordered, StreamExt};
 use ordermap::OrderMap;
 use pixi_compute_engine::{ComputeCtx, Demand, Key, ParallelBuilder};
+use pixi_compute_reporters::OperationId;
 use pixi_record::{DevSourceRecord, PinnedSourceSpec, PixiRecord, UnresolvedPixiRecord};
 use pixi_spec::{
     BinarySpec, DevSourceSpec, PixiSpec, ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec,
@@ -36,10 +37,9 @@ use tracing::instrument;
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, DevSourceMetadataKey, DevSourceMetadataSpec,
     EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, MissingChannelError,
-    PixiSolveEnvironmentSpec, PixiSolveReporter, PtrArc, Reporter, ReporterContext,
-    SolvePixiEnvironmentError, SourceMetadata,
+    PixiSolveEnvironmentSpec, PixiSolveReporter, PtrArc, SolvePixiEnvironmentError, SourceMetadata,
     build::PinnedSourceCodeLocation,
-    compute_data::HasReporter,
+    compute_data::HasPixiSolveReporter,
     cycle::CycleEnvironment,
     injected_config::ChannelConfigKey,
     keys::{
@@ -47,8 +47,7 @@ use crate::{
         resolve_source_record::{SourceCycleFrame, render_cycle},
         solve_conda::{SolveCondaKey, SolveCondaKeyError, SolveCondaSpec},
     },
-    reporter::{PixiSolveId, has_direct_conda_dependency},
-    reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context},
+    reporter::has_direct_conda_dependency,
     reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle},
     source_checkout::SourceCheckoutExt,
 };
@@ -166,6 +165,9 @@ impl PartialEq for SolvePixiEnvironmentSpec {
 
 impl Eq for SolvePixiEnvironmentSpec {}
 
+/// Compute-engine Key that solves a pixi environment.
+///
+/// Reports progress via `Arc<dyn PixiSolveReporter>` set on the engine `DataStore`, if any.
 #[derive(Clone, Debug, Display)]
 #[display("{}", _0.env_ref)]
 pub struct SolvePixiEnvironmentKey(pub Arc<SolvePixiEnvironmentSpec>);
@@ -216,31 +218,21 @@ impl Key for SolvePixiEnvironmentKey {
         // `ctx` alive across later mutable-borrow calls in this
         // function.
         let reporter_spec = reporter_view_spec(spec.env_ref.to_string(), &spec);
-        let reporter_arc: Option<Arc<dyn Reporter>> = ctx.global_data().reporter().cloned();
-        let parent_reporter_ctx = current_reporter_context();
+        let reporter_arc: Option<Arc<dyn PixiSolveReporter>> =
+            ctx.global_data().pixi_solve_reporter().cloned();
         let lifecycle = ReporterLifecycle::<PixiSolveReporterLifecycle>::queued(
             reporter_arc.as_deref(),
-            parent_reporter_ctx,
             &reporter_spec,
         );
-        // Scope nested Keys under our reporter context so downstream
-        // computes (source metadata, build backend metadata, nested
-        // solves, etc.) attribute to this solve rather than the caller,
-        // producing a nested trace. Falls back to the parent's context
-        // when no reporter is attached.
-        let scope_ctx = lifecycle
-            .id()
-            .map(ReporterContext::SolvePixi)
-            .or(parent_reporter_ctx);
+        let active_id = lifecycle.id();
         let _lifecycle = lifecycle.start();
 
-        // Scope nested Keys under our reporter context so downstream
-        // computes (dev-source metadata, source metadata, build
-        // backend metadata, nested SPEK solves, top-level conda solve)
-        // attribute to this solve and render a nested event tree.
+        // Scope nested Keys under this solve's id so downstream computes
+        // attribute to it; falls through to the parent context unchanged
+        // when no reporter is attached.
         let work = compute_inner(ctx, spec, env_spec, channel_config);
-        match scope_ctx {
-            Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+        match active_id {
+            Some(id) => id.scope_active(work).await,
             None => work.await,
         }
     }
@@ -270,8 +262,7 @@ impl Key for SolvePixiEnvironmentKey {
 }
 
 /// Core body of [`SolvePixiEnvironmentKey::compute`], separated so
-/// the caller can run it inside a [`CURRENT_REPORTER_CONTEXT`] scope
-/// keyed on this solve's reporter id.
+/// the caller can wrap it in `OperationId::scope_active`.
 async fn compute_inner(
     ctx: &mut ComputeCtx,
     spec: Arc<SolvePixiEnvironmentSpec>,
@@ -642,20 +633,17 @@ struct PixiSolveReporterLifecycle;
 
 impl LifecycleKind for PixiSolveReporterLifecycle {
     type Reporter<'r> = dyn PixiSolveReporter + 'r;
-    type Id = PixiSolveId;
+    type Id = OperationId;
     type Env = PixiSolveEnvironmentSpec;
 
     fn queue<'r>(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
+        reporter: Option<&'r Self::Reporter<'r>>,
         env: &Self::Env,
     ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>> {
-        reporter
-            .and_then(|r| r.as_pixi_solve_reporter())
-            .map(|r| Active {
-                reporter: r,
-                id: r.on_queued(parent, env),
-            })
+        reporter.map(|r| Active {
+            reporter: r,
+            id: r.on_queued(env),
+        })
     }
 
     fn on_started<'r>(active: &Active<'r, Self::Reporter<'r>, Self::Id>) {

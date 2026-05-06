@@ -13,6 +13,7 @@ use std::{
 use itertools::Either;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_compute_engine::ComputeCtx;
+use pixi_compute_reporters::OperationId;
 use pixi_record::{
     FullSourceRecordData, PinnedSourceSpec, PixiRecord, SourceRecord, UnresolvedPixiRecord,
 };
@@ -24,14 +25,13 @@ use rattler_solve::SolveStrategy;
 
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, InstalledSourceHints, PtrArc,
-    Reporter, ReporterContext, SourceRecordError, SourceRecordReporterSpec,
+    SourceRecordError, SourceRecordReporterSpec,
     build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports},
-    compute_data::{HasGateway, HasReporter},
+    compute_data::{HasGateway, HasSourceRecordReporter},
     cycle::CycleEnvironment,
     injected_config::ChannelConfigKey,
     keys::solve_pixi_environment::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
-    reporter::{SourceRecordId, SourceRecordReporter},
-    reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context},
+    reporter::SourceRecordReporter,
     reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle},
 };
 
@@ -45,6 +45,8 @@ use crate::{
 /// `preferred_build_source` is the FULL pin map, propagated verbatim
 /// into the nested build/host env solves so pins for every package
 /// in the subtree remain visible.
+///
+/// Reports progress via `Arc<dyn SourceRecordReporter>` set on the engine `DataStore`, if any.
 pub(super) async fn assemble_source_record(
     ctx: &mut ComputeCtx,
     source: &PinnedSourceCodeLocation,
@@ -74,20 +76,16 @@ pub(super) async fn assemble_source_record(
         },
         exclude_newer: None,
     };
-    let reporter_arc: Option<Arc<dyn Reporter>> = ctx.global_data().reporter().cloned();
-    let parent_reporter_ctx = current_reporter_context();
+    let reporter_arc: Option<Arc<dyn SourceRecordReporter>> =
+        ctx.global_data().source_record_reporter().cloned();
     let lifecycle = ReporterLifecycle::<SourceRecordReporterLifecycle>::queued(
         reporter_arc.as_deref(),
-        parent_reporter_ctx,
         &reporter_spec,
     );
-    // Scope nested computes (build/host env `nested_solve`s) under
-    // this source-record's reporter context so their events attribute
-    // to the record being assembled.
-    let scope_ctx = lifecycle
-        .id()
-        .map(ReporterContext::SourceRecord)
-        .or(parent_reporter_ctx);
+    // Scope nested computes (build/host env `nested_solve`s) under this
+    // source-record's id so their events attribute to the record being
+    // assembled.
+    let active_id = lifecycle.id();
     let _lifecycle = lifecycle.start();
 
     let work = assemble_source_record_inner(
@@ -98,8 +96,8 @@ pub(super) async fn assemble_source_record(
         env_ref,
         installed_source_hints,
     );
-    match scope_ctx {
-        Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+    match active_id {
+        Some(id) => id.scope_active(work).await,
         None => work.await,
     }
 }
@@ -530,26 +528,22 @@ pub(crate) struct SourceCycleFrame {
     pub env: CycleEnvironment,
 }
 
-/// [`LifecycleKind`] wiring [`SourceRecordReporter`] events for a
-/// per-variant [`assemble_source_record`] call.
+/// `LifecycleKind` for [`assemble_source_record`].
 struct SourceRecordReporterLifecycle;
 
 impl LifecycleKind for SourceRecordReporterLifecycle {
     type Reporter<'r> = dyn SourceRecordReporter + 'r;
-    type Id = SourceRecordId;
+    type Id = OperationId;
     type Env = SourceRecordReporterSpec;
 
     fn queue<'r>(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
+        reporter: Option<&'r Self::Reporter<'r>>,
         env: &Self::Env,
     ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>> {
-        reporter
-            .and_then(|r| r.as_source_record_reporter())
-            .map(|r| Active {
-                reporter: r,
-                id: r.on_queued(parent, env),
-            })
+        reporter.map(|r| Active {
+            reporter: r,
+            id: r.on_queued(env),
+        })
     }
 
     fn on_started<'r>(active: &Active<'r, Self::Reporter<'r>, Self::Id>) {

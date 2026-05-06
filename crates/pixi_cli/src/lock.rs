@@ -50,17 +50,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // created for the solve.
     // Use the silent version here since update_lock_file() will display the warning.
     let original_lock_file = workspace.load_lock_file().await?.into_lock_file_or_empty();
+    let progress = pixi_reporters::TopLevelProgress::from_global();
     let (LockFileDerivedData { lock_file, .. }, lock_updated) = workspace
-        .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: if args.dry_run {
-                LockFileUsage::DryRun
-            } else {
-                LockFileUsage::Update
+        .update_lock_file(
+            Some(progress),
+            UpdateLockFileOptions {
+                lock_file_usage: if args.dry_run {
+                    LockFileUsage::DryRun
+                } else {
+                    LockFileUsage::Update
+                },
+                no_install: args.no_install_config.no_install || args.dry_run,
+                upgrade_lock_file_format: true,
+                max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
-            no_install: args.no_install_config.no_install || args.dry_run,
-            upgrade_lock_file_format: true,
-            max_concurrent_solves: workspace.config().max_concurrent_solves(),
-        })
+        )
         .await?;
 
     // Determine the diff between the old and new lock-file.

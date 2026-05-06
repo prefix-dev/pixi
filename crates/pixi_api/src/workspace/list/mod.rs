@@ -32,12 +32,15 @@ pub async fn list(
     let environment = workspace.environment_from_name_or_env_var(environment)?;
 
     let lock_file = workspace
-        .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage,
-            no_install,
-            max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            ..Default::default()
-        })
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage,
+                no_install,
+                max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
+            },
+        )
         .await?
         .0
         .into_lock_file();
