@@ -6325,6 +6325,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_compute_reporters"
+version = "0.1.0"
+dependencies = [
+ "dashmap",
+ "futures",
+ "pixi_compute_engine",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "pixi_config"
 version = "0.1.0"
 dependencies = [

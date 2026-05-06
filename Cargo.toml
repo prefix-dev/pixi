@@ -103,6 +103,7 @@ pixi_build_types = { path = "crates/pixi_build_types" }
 pixi_cli = { path = "crates/pixi_cli" }
 pixi_command_dispatcher = { path = "crates/pixi_command_dispatcher" }
 pixi_compute_engine = { path = "crates/pixi_compute_engine" }
+pixi_compute_reporters = { path = "crates/pixi_compute_reporters" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_core = { path = "crates/pixi_core" }
