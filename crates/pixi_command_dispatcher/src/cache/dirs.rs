@@ -69,6 +69,17 @@ impl CacheDirs {
         }
     }
 
+    /// Overrides the directory where ephemeral build-backend environments are
+    /// cached. Passing a fresh directory forces the cold-cache path so every
+    /// compute rebuilds the backend prefix; useful in tests to guarantee a
+    /// deterministic event tree regardless of prior runs.
+    pub fn with_build_backends(self, dir: AbsPresumedDirPathBuf) -> Self {
+        Self {
+            build_backends: Some(dir),
+            ..self
+        }
+    }
+
     /// Overrides the backend-metadata root. Both cached metadata
     /// entries and the backend's `conda/outputs` scratch dir nest
     /// under this path; see [`Self::backend_metadata`] for the layout.
