@@ -136,8 +136,7 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    /// Set the link mode for the build dispatch
-    #[expect(unused)]
+    /// Set the link mode for the build dispatch.
     pub fn with_link_mode(mut self, link_mode: LinkMode) -> Self {
         self.link_mode = link_mode;
         self

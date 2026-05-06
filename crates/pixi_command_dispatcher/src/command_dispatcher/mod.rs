@@ -126,6 +126,15 @@ pub(crate) struct CommandDispatcherData {
     /// True if execution of link scripts is enabled.
     pub execute_link_scripts: bool,
 
+    /// Whether symbolic links are allowed during package installation.
+    pub allow_symbolic_links: Option<bool>,
+
+    /// Whether hard links are allowed during package installation.
+    pub allow_hard_links: Option<bool>,
+
+    /// Whether ref links (copy-on-write) are allowed during package installation.
+    pub allow_ref_links: Option<bool>,
+
     /// The execution type of the dispatcher.
     pub executor: Executor,
 
@@ -319,6 +328,21 @@ impl CommandDispatcher {
         if let Some(reporter) = self.reporter.as_ref() {
             reporter.on_clear();
         }
+    }
+
+    /// Returns whether symbolic links are allowed during package installation.
+    pub fn allow_symbolic_links(&self) -> Option<bool> {
+        self.data.allow_symbolic_links
+    }
+
+    /// Returns whether hard links are allowed during package installation.
+    pub fn allow_hard_links(&self) -> Option<bool> {
+        self.data.allow_hard_links
+    }
+
+    /// Returns whether ref links (copy-on-write) are allowed during package installation.
+    pub fn allow_ref_links(&self) -> Option<bool> {
+        self.data.allow_ref_links
     }
 
     /// Returns the metadata of the source spec.
