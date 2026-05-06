@@ -1,0 +1,33 @@
+---
+source: crates/pixi_cli/src/workspace/export/conda_environment.rs
+expression: env_yaml.to_yaml_string()
+---
+name: default
+channels:
+- conda-forge
+- nodefaults
+dependencies:
+- bzip2 ==1.0.8 h500dc9f_8
+- ca-certificates ==2024.8.30 h8857fd0_0
+- libexpat ==2.7.1 h21dd04a_0
+- libffi ==3.4.6 h281671d_1
+- liblzma ==5.8.1 hd471939_2
+- libmpdec ==4.0.0 h6e16a3a_0
+- libsqlite ==3.50.4 h39a8b3b_0
+- libzlib ==1.3.1 hd23fc13_2
+- ncurses ==6.5 h0622a9a_3
+- openssl ==3.5.3 h230baf5_1
+- python ==3.13.7 h5eba815_100_cp313
+- python_abi ==3.13 8_cp313
+- pyyaml ==6.0.3 py313h0f4d31d_0
+- readline ==8.2 h9e318b2_1
+- tk ==8.6.13 hf689a15_2
+- tzdata ==2025b h78e105d_0
+- yaml ==0.2.5 h4132b18_3
+- pip
+- pip:
+  - markdown-it-py==4.0.0
+  - mdurl==0.1.2
+  - test-git-subdir-roundtrip @ git+https://github.com/ihnorton/pixi.git?subdirectory=tests%2Fdata%2Fmock-projects%2Ftest-project-export%2Ftest-git-subdir-roundtrip&rev=ihn%2Ffix-pypi-git-subdir-roundtrip#86fd30aa3baa9bde1491fb1468f767b93f3d5009
+  - pygments==2.19.2
+  - rich==13.9.4
