@@ -1,0 +1,18 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-index-transitive"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+# Both `foo` and `bar` are declared as direct dependencies on the same
+# custom index. `bar` transitively requires `foo` via its
+# `requires_dist`. The transitive copy of the `foo` requirement is
+# parsed from pep508 and therefore lacks an `index` field; the locked
+# `foo` record correctly preserves the index it was resolved from. The
+# satisfiability check must accept that and not report a mismatch.
+
+[pypi-dependencies]
+foo = { version = "==1.0.0", index = "https://custom.example.com/simple" }
+bar = { version = "==1.0.0", index = "https://custom.example.com/simple" }

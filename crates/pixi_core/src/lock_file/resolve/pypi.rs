@@ -57,6 +57,7 @@ use uv_distribution_types::{
     SourceDist, ToUrlError,
 };
 use uv_git::RepositoryReference;
+use uv_install_wheel::LinkMode;
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests, ResolutionMetadata};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
@@ -304,6 +305,7 @@ pub async fn resolve_pypi(
     exclude_newer: uv_resolver::ExcludeNewer,
     solve_strategy: SolveStrategy,
     build_cache: Arc<PypiEnvironmentBuildCache>,
+    link_mode: LinkMode,
 ) -> miette::Result<(LockedPypiRecords, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -579,7 +581,8 @@ pub async fn resolve_pypi(
     // non-tampered requests.
     .with_shared_state(context.shared_state.fork())
     .with_source_strategy(context.source_strategy)
-    .with_concurrency(context.concurrency);
+    .with_concurrency(context.concurrency)
+    .with_link_mode(link_mode);
 
     // Use cached build dispatch dependencies
     let lazy_build_dispatch_deps = &build_cache.lazy_build_dispatch_deps;

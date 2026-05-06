@@ -44,10 +44,12 @@ mod build_backend_metadata;
 pub mod cache;
 mod command_dispatcher;
 pub mod compute_data;
+mod cycle;
 mod dev_source_metadata;
 mod discovered_backend;
 pub mod environment;
 mod ephemeral_env;
+mod errors;
 mod injected_config;
 mod input_hash;
 mod install_binary;
@@ -62,11 +64,7 @@ mod reporter_lifecycle;
 mod resolved_backend_command;
 mod solve_binary;
 mod solve_conda;
-mod solve_pixi;
-mod source_build;
 pub mod source_checkout;
-mod source_metadata;
-mod source_record;
 mod util;
 
 pub use backend_source_build::{
@@ -86,6 +84,7 @@ pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
     CommandDispatcherErrorResultExt, ComputeResultExt, ReporterContextSpawnHook,
 };
+pub use cycle::{Cycle, CycleEnvironment};
 pub use dev_source_metadata::{
     DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataKey, DevSourceMetadataSpec,
     PackageNotProvidedError,
@@ -99,6 +98,10 @@ pub use environment::{
 pub use ephemeral_env::{
     EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec, InstalledEphemeralEnv,
 };
+pub use errors::{
+    MissingChannelError, SolvePixiEnvironmentError, SourceBuildError, SourceMetadataError,
+    SourceRecordError,
+};
 pub use injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
@@ -111,18 +114,16 @@ pub use instantiate_backend_key::{
     BackendHandle, InstantiateBackendError, InstantiateBackendKey, resolve_backend_identifier,
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
+pub use keys::SourceMetadata;
 pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,
-    PixiSolveReporter, Reporter, ReporterContext,
+    PixiSolveReporter, Reporter, ReporterContext, SourceMetadataReporterSpec,
+    SourceRecordReporterSpec,
 };
 pub use resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use serde::Serialize;
 pub use solve_conda::SolveCondaEnvironmentSpec;
-pub use solve_pixi::{MissingChannelError, SolvePixiEnvironmentError};
-pub use source_build::SourceBuildError;
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
-pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
-pub use source_record::{ResolvedSourceRecord, SourceRecordError, SourceRecordSpec};
 pub use util::executor;
 pub use util::{Executor, Limit, Limits, PtrArc};
 

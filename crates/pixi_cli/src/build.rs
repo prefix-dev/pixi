@@ -13,7 +13,7 @@ use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, ComputeResultExt,
     EnvironmentRef, EnvironmentSpec, EphemeralEnv,
-    keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpecV2},
+    keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
 use pixi_config::ConfigCli;
 use pixi_consts::consts::{
@@ -368,7 +368,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
     for record in resolved_records {
         let record = Arc::unwrap_or_clone(record);
-        let build_spec = SourceBuildSpecV2 {
+        let build_spec = SourceBuildSpec {
             record: Arc::new(record.into()),
             channels: channels.clone(),
             // `pixi build` ignores exclude_newer (it's only meaningful

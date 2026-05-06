@@ -34,7 +34,7 @@ use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
-    PyPIUpdateConfig,
+    PyPIUpdateConfig, derive_link_mode,
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
@@ -54,6 +54,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
+use uv_install_wheel::LinkMode;
 use uv_normalize::ExtraName;
 
 use super::{
@@ -970,7 +971,7 @@ impl<'p> LockFileDerivedData<'p> {
                     let skip_wheel_filename_check =
                         environment.pypi_options().skip_wheel_filename_check;
 
-                    let config = PyPIUpdateConfig {
+                    let pypi_update_config = PyPIUpdateConfig {
                         environment_name: environment.name(),
                         prefix: &prefix,
                         platform: environment.best_platform(),
@@ -978,6 +979,7 @@ impl<'p> LockFileDerivedData<'p> {
                         system_requirements: &environment.system_requirements(),
                     };
 
+                    let workspace_config = self.workspace.config();
                     let build_config = PyPIBuildConfig {
                         no_build_isolation: &non_isolated_packages,
                         no_build: &no_build,
@@ -985,6 +987,11 @@ impl<'p> LockFileDerivedData<'p> {
                         index_strategy: index_strategy.as_ref(),
                         exclude_newer: &pypi_exclude_newer,
                         skip_wheel_filename_check,
+                        link_mode: Some(derive_link_mode(
+                            workspace_config.allow_symbolic_links,
+                            workspace_config.allow_hard_links,
+                            workspace_config.allow_ref_links,
+                        )),
                     };
 
                     let lazy_env_vars = LazyPixiEnvironmentVars {
@@ -1002,7 +1009,7 @@ impl<'p> LockFileDerivedData<'p> {
                         .map(to_uv_normalize)
                         .collect::<Result<Vec<_>, _>>()
                         .into_diagnostic()?;
-                    PyPIEnvironmentUpdater::new(config, build_config, context_config)
+                    PyPIEnvironmentUpdater::new(pypi_update_config, build_config, context_config)
                         .with_ignored_extraneous(names)
                         .update(&python_status, &resolved_pixi_records, &pypi_records)
                         .await
@@ -2018,6 +2025,14 @@ impl<'p> UpdateContext<'p> {
         }
 
         // Spawn tasks to update the pypi packages.
+        let project_link_mode = {
+            let config = project.config();
+            derive_link_mode(
+                config.allow_symbolic_links,
+                config.allow_hard_links,
+                config.allow_ref_links,
+            )
+        };
         for (environment, platform) in
             self.outdated_envs
                 .pypi
@@ -2101,6 +2116,7 @@ impl<'p> UpdateContext<'p> {
                 locked_group_records,
                 self.no_install,
                 build_cache,
+                project_link_mode,
             );
 
             pending_futures.push(
@@ -2995,6 +3011,7 @@ async fn spawn_solve_pypi_task<'p>(
     locked_pypi_packages: Arc<PypiRecordsByName>,
     disallow_install_conda_prefix: bool,
     build_cache: Arc<lock_file::outdated::PypiEnvironmentBuildCache>,
+    link_mode: LinkMode,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = grouped_environment.pypi_dependencies(Some(platform));
@@ -3073,6 +3090,7 @@ async fn spawn_solve_pypi_task<'p>(
             exclude_newer,
             solve_strategy,
             build_cache,
+            link_mode,
         )
         .await
         .with_context(|| {

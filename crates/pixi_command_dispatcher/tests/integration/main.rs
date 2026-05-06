@@ -48,6 +48,17 @@ fn to_abs_dir(path: impl Into<PathBuf>) -> pixi_path::AbsPresumedDirPathBuf {
         .into_assume_dir()
 }
 
+/// Returns a fresh tempdir under `CARGO_TARGET_TMPDIR` so per-test
+/// workspaces land on the same drive as the cargo target dir. The
+/// short prefix keeps the deeply nested backend build paths under
+/// Windows' `MAX_PATH = 260` limit.
+fn test_tempdir() -> tempfile::TempDir {
+    tempfile::Builder::new()
+        .prefix("p-")
+        .tempdir_in(env!("CARGO_TARGET_TMPDIR"))
+        .expect("create test tempdir")
+}
+
 /// Empty `SolvePixiEnvironmentSpec` for tests that only care about a
 /// few fields. Used with struct update syntax:
 /// `SolvePixiEnvironmentSpec { dependencies: ..., env_ref: env_ref_of(...),
@@ -246,7 +257,7 @@ pub async fn simple_test() {
 
     let (reporter, events) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let prefix_dir = tempdir.path().join("prefix");
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -333,8 +344,9 @@ pub async fn instantiate_backend_with_compatible_api_version() {
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
@@ -357,8 +369,9 @@ pub async fn instantiate_backend_without_compatible_api_version() {
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
@@ -383,8 +396,9 @@ pub async fn instantiate_backend_with_compatible_api_version_respects_exclude_ne
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
@@ -428,8 +442,9 @@ pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newe
     let channel_url = Url::from_directory_path(channel_dir).unwrap().into();
     let allowed_cutoff = "2026-12-31T00:00:00Z".parse().unwrap();
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
@@ -467,8 +482,9 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
@@ -610,7 +626,7 @@ pub async fn test_cycle() {
     // solve uses a deterministic BuildEnvironment.
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("cycle");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -661,7 +677,7 @@ pub async fn test_cycle_three_packages() {
     // Use a fixed solve platform so the snapshot is stable across hosts.
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("cycle_three");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -706,7 +722,7 @@ pub async fn test_cycle_three_packages() {
 pub async fn test_stale_host_dependency_triggers_rebuild() {
     // Copy workspace to temp directory so we can modify files without affecting other tests
     let source_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let root_dir = tempdir.path().join("workspace");
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -832,7 +848,7 @@ pub async fn instantiate_backend_with_from_source() {
 
     // Copy source-backends workspace to temp directory so we can modify the channel
     let source_dir = workspaces_dir().join("source-backends");
-    let tmp_dir = tempfile::tempdir().unwrap();
+    let tmp_dir = test_tempdir();
     let root_dir = tmp_dir.path().to_path_buf();
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
 
@@ -877,7 +893,7 @@ pub async fn test_dev_source_metadata() {
 
     // Setup: Create a dispatcher with the in-memory backend
     let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let dispatcher = CommandDispatcher::builder()
@@ -966,7 +982,7 @@ pub async fn test_dev_source_metadata_package_not_provided() {
 
     // Setup: Create a dispatcher with the in-memory backend
     let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let dispatcher = CommandDispatcher::builder()
@@ -1028,7 +1044,7 @@ pub async fn test_dev_source_metadata_with_variants() {
 
     // Setup: Create a dispatcher with the in-memory backend
     let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let dispatcher = CommandDispatcher::builder()
@@ -1170,7 +1186,7 @@ pub async fn test_dev_source_metadata_with_variants() {
 #[tokio::test]
 pub async fn test_force_rebuild() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
     let build_command_dispatcher = || {
@@ -1348,7 +1364,7 @@ pub async fn test_force_rebuild() {
 #[tokio::test]
 pub async fn test_compute_ctx_install_force_reinstall_rebuilds_source_package() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -1431,7 +1447,7 @@ pub async fn test_compute_ctx_install_force_reinstall_rebuilds_source_package() 
 
 #[tokio::test]
 pub async fn pin_and_checkout_url_reuses_cached_checkout() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
     let url_cache_root = cache_dirs.url();
 
@@ -1467,9 +1483,9 @@ pub async fn pin_and_checkout_url_reuses_cached_checkout() {
 
 #[tokio::test]
 pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let archive = tempfile::tempdir().unwrap();
+    let archive = test_tempdir();
     let url = file_url_for_test(&archive, "archive.zip");
 
     let engine = url_test_engine(cache_dirs, None, false, None);
@@ -1503,9 +1519,9 @@ pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request()
 
 #[tokio::test]
 pub async fn pin_and_checkout_url_validates_cached_results() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let archive = tempfile::tempdir().unwrap();
+    let archive = test_tempdir();
     let url = file_url_for_test(&archive, "archive.zip");
 
     let engine = url_test_engine(cache_dirs, None, true, None);
@@ -1548,7 +1564,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
 #[tokio::test]
 pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -1638,7 +1654,7 @@ pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
 pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
     // Copy workspace to temp directory so we can modify files without affecting other tests
     let source_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let root_dir = tempdir.path().join("workspace");
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
 
@@ -1735,7 +1751,7 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
 pub async fn test_package_rebuilt_when_source_file_modified() {
     // Copy workspace to temp directory so we can modify files without affecting other tests
     let source_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let root_dir = tempdir.path().join("workspace");
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -1827,7 +1843,7 @@ pub async fn test_package_rebuilt_when_source_file_modified() {
 #[tokio::test]
 pub async fn test_package_not_rebuilt_when_no_files_changed() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -1922,7 +1938,7 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
     use pixi_record::PinnedPathSpec;
 
     let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let build_command_dispatcher = || {
@@ -2015,7 +2031,7 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
 
     // Copy workspace to temp directory so we can modify files without affecting other tests
     let source_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let root_dir = tempdir.path().join("workspace");
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -2127,8 +2143,9 @@ pub async fn compute_engine_wired_into_dispatcher() {
         }
     }
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .finish();
 
     // Run a Key through the engine; if global data is missing this panics.
@@ -2143,9 +2160,9 @@ pub async fn compute_engine_wired_into_dispatcher() {
 /// `on_finished` via a drop-guard.
 #[tokio::test]
 pub async fn reporter_url_checkout_lifecycle() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let archive = tempfile::tempdir().unwrap();
+    let archive = test_tempdir();
     let url = file_url_for_test(&archive, "archive.zip");
 
     let (reporter, events) = EventReporter::new();
@@ -2200,9 +2217,9 @@ pub async fn reporter_url_checkout_lifecycle() {
 /// single compute, so the reporter lifecycle fires exactly once.
 #[tokio::test]
 pub async fn reporter_url_checkout_dedup() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let archive = tempfile::tempdir().unwrap();
+    let archive = test_tempdir();
     let url = file_url_for_test(&archive, "archive.zip");
 
     let (reporter, events) = EventReporter::new();
@@ -2253,9 +2270,9 @@ pub async fn reporter_url_checkout_dedup() {
 /// `on_queued` and `on_started` inside the `CheckoutUrl` Key.
 #[tokio::test]
 pub async fn semaphore_serializes_concurrent_url_checkouts() {
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let archive = tempfile::tempdir().unwrap();
+    let archive = test_tempdir();
     let url_a = file_url_for_test(&archive, "a.zip");
     let url_b = file_url_for_test(&archive, "b.zip");
     let url_c = file_url_for_test(&archive, "c.zip");
@@ -2329,7 +2346,7 @@ pub async fn test_installed_pins_binary_version() {
         cargo_workspace_dir().join("tests/data/channels/channels/multiple_versions_channel_1");
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let (tool_platform, tool_virtual_packages) = tool_platform();
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
@@ -2407,7 +2424,7 @@ pub async fn test_installed_host_packages_pin_nested_solve() {
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("host-dep-binary");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -2536,7 +2553,7 @@ pub async fn test_installed_hint_reused_across_variants() {
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("host-dep-binary");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -2681,7 +2698,7 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("host-dep-binary");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -2818,7 +2835,7 @@ pub async fn test_top_level_and_nested_source_hints_for_same_package_are_normali
         cargo_workspace_dir().join("tests/data/channels/channels/multiple_versions_channel_1");
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let (tool_platform, tool_virtual_packages) = tool_platform();
-    let root_dir = tempfile::tempdir().unwrap();
+    let root_dir = test_tempdir();
     fs::write(
         root_dir.path().join("pixi.toml"),
         r#"
@@ -2862,7 +2879,7 @@ foo = { path = "../foo" }
     )
     .unwrap();
 
-    let scratch = tempfile::tempdir().unwrap();
+    let scratch = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.path()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(scratch.path())))
@@ -3003,13 +3020,13 @@ foo = { path = "../foo" }
 ///
 /// Exercises the cross-env deduplication guarantee that the compute
 /// engine gives us when two callers request equivalent
-/// `SourceBuildSpecV2` inputs. If `Hash` or `Eq` on the spec starts
+/// `SourceBuildSpec` inputs. If `Hash` or `Eq` on the spec starts
 /// discriminating between equivalent callers, or the engine stops
 /// deduping Keys, this test fails.
 #[tokio::test]
 pub async fn test_source_build_key_dedups_across_parallel_installs() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -3078,7 +3095,7 @@ pub async fn test_source_build_key_dedups_across_parallel_installs() {
 #[tokio::test]
 pub async fn test_instantiate_backend_key_dedups_across_parallel_installs() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -3148,7 +3165,7 @@ pub async fn test_instantiate_backend_key_dedups_across_parallel_installs() {
 #[tokio::test]
 pub async fn test_solve_pixi_environment_key_dedups_parallel_identical_solves() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -3214,7 +3231,7 @@ pub async fn test_solve_pixi_environment_key_dedups_parallel_identical_solves() 
 #[tokio::test]
 pub async fn test_solve_pixi_environment_key_dedups_across_ephemeral_env_names() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 

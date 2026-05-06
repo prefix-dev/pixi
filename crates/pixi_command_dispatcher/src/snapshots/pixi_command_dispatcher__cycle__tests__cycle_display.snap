@@ -1,5 +1,5 @@
 ---
-source: crates/pixi_command_dispatcher/src/source_metadata/cycle.rs
+source: crates/pixi_command_dispatcher/src/cycle.rs
 expression: cycle.to_string()
 ---
 ┌──→──┐

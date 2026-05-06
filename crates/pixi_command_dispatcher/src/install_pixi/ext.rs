@@ -16,13 +16,14 @@ use rattler_conda_types::{PackageName, RepoDataRecord};
 use crate::BuildProfile;
 use crate::CommandDispatcherError;
 use crate::compute_data::{
-    HasAllowExecuteLinkScripts, HasCacheDirs, HasDownloadClient, HasPackageCache, HasReporter,
+    HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasCacheDirs, HasDownloadClient,
+    HasPackageCache, HasReporter,
 };
 use crate::install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
     reporter::WrappingInstallReporter,
 };
-use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpecV2, WorkspaceCache};
+use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpec, WorkspaceCache};
 use crate::reporter::{Reporter, ReporterContext};
 use crate::reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context};
 
@@ -168,7 +169,7 @@ async fn install_inner(
         > {
             let name = source.name().clone();
             let manifest_source = source.manifest_source.clone();
-            let build_spec = SourceBuildSpecV2 {
+            let build_spec = SourceBuildSpec {
                 record: source,
                 channels: shared.channels.clone(),
                 exclude_newer: shared.exclude_newer.clone(),
@@ -242,7 +243,8 @@ async fn install_inner(
         .with_package_cache(data.package_cache().clone())
         .with_reinstall_packages(std::mem::take(&mut spec.force_reinstall))
         .with_ignored_packages(spec.ignore_packages.take().unwrap_or_default())
-        .with_execute_link_scripts(data.allow_execute_link_scripts());
+        .with_execute_link_scripts(data.allow_execute_link_scripts())
+        .with_link_options(data.allow_link_options());
     if let Some(installed) = spec.installed.take() {
         installer = installer.with_installed_packages(installed);
     }
