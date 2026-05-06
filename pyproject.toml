@@ -7,12 +7,9 @@ test-dir = "tests/integration_python"
 
 [tool.pytest.ini_options]
 addopts = "--basetemp=pytest-temp --timeout=600 --durations=0"
-tmp_path_retention_policy = "failed"
+markers = ["slow: marks tests as slow", "extra_slow: marks tests as extra slow"]
 testpaths = ["tests/integration_python"]
-markers = [
-  "slow: marks tests as slow",
-  "extra_slow: marks tests as extra slow",
-]
+tmp_path_retention_policy = "failed"
 
 [tool.ruff]
 line-length = 100

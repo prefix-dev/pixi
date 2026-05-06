@@ -1452,11 +1452,12 @@ dependencies:
                 expected_exit_code=ExitCode.FAILURE,
             )
         elif command_name == "pixi build":
-            # pixi build is deprecated; it delegates to pixi publish.
-            # With --no-install the build environment can't be set up, so it fails.
+            # pixi build is a deprecation shim that delegates to pixi publish
+            # with target_dir=".". It builds into the workspace directory and
+            # uses ephemeral environments, so it does not touch the workspace
+            # lockfile or conda-meta -- the invariants still hold.
             verify_cli_command(
                 [pixi, "build", "--path", manifest_path, "--frozen", "--no-install"],
-                expected_exit_code=ExitCode.FAILURE,
             )
         elif command_name == "pixi publish":
             # Special case: publish uses --path instead of --manifest-path

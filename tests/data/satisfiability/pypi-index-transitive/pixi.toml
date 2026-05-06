@@ -14,5 +14,5 @@ python = "3.12.*"
 # satisfiability check must accept that and not report a mismatch.
 
 [pypi-dependencies]
-foo = { version = "==1.0.0", index = "https://custom.example.com/simple" }
 bar = { version = "==1.0.0", index = "https://custom.example.com/simple" }
+foo = { version = "==1.0.0", index = "https://custom.example.com/simple" }

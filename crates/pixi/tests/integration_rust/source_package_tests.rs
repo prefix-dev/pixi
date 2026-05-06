@@ -2472,3 +2472,65 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         "publish without target should still build the package"
     );
 }
+
+/// Regression test for #4761: `.pixi/.gitignore` must be created during
+/// `sanity_check_workspace`, even when the publish itself fails because the
+/// configured backend cannot be resolved. Without the gitignore, rattler-build
+/// recurses into the workspace when source files reference the project root.
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_publish_creates_gitignore() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+
+    // Manifest references a backend that cannot be resolved, so publish will
+    // fail – but only after sanity_check_workspace has run.
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[package]
+name = "test-gitignore-publish"
+version = "0.1.0"
+description = "Test package for .gitignore creation during publish"
+
+[package.build]
+backend.name = "nonexistent-backend"
+backend.version = "0.1.0"
+"#,
+        Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    let gitignore_path = pixi.workspace().unwrap().pixi_dir().join(".gitignore");
+    assert!(
+        !gitignore_path.exists(),
+        ".pixi/.gitignore should not exist before publish"
+    );
+
+    let _ = publish::execute(publish::Args {
+        backend_override: None,
+        config_cli: Default::default(),
+        lock_and_install_config: Default::default(),
+        target_platform: Platform::current(),
+        build_platform: Platform::current(),
+        build_dir: None,
+        clean: false,
+        path: Some(pixi.manifest_path()),
+        target_channel: None,
+        target_dir: None,
+        force: false,
+        skip_existing: true,
+        generate_attestation: false,
+    })
+    .await;
+
+    assert!(
+        gitignore_path.exists(),
+        ".pixi/.gitignore was not created after publish"
+    );
+}

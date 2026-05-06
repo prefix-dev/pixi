@@ -1,7 +1,7 @@
 [build-system]
-requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+requires = ["setuptools"]
 
 [project]
-name = "dynamic-dep"
 dynamic = ["version"]
+name = "dynamic-dep"
