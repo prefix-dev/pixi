@@ -1,5 +1,6 @@
 import json
 import shutil
+import subprocess
 import tomllib
 from collections.abc import Iterator
 from pathlib import Path
@@ -197,10 +198,10 @@ def test_git_path_build_has_absolutely_no_respect_to_lock_file(
     pixi: Path,
     build_data: Path,
     tmp_pixi_workspace: Path,
-    local_cpp_git_repo: LocalGitRepo,
+    local_cpp_git_repo_mutable: LocalGitRepo,
 ) -> None:
     prepare_cpp_git_workspace(
-        tmp_pixi_workspace, build_data, local_cpp_git_repo, branch="other-feature"
+        tmp_pixi_workspace, build_data, local_cpp_git_repo_mutable, branch="other-feature"
     )
 
     lock_path = tmp_pixi_workspace / "pixi.lock"
@@ -209,26 +210,32 @@ def test_git_path_build_has_absolutely_no_respect_to_lock_file(
     )
 
     initial_sources = extract_git_sources(lock_path)
-    assert any(local_cpp_git_repo.other_feature_rev in entry for entry in initial_sources)
+    assert any(local_cpp_git_repo_mutable.other_feature_rev in entry for entry in initial_sources)
 
-    repo_path = local_cpp_git_repo.path
+    repo_path = local_cpp_git_repo_mutable.path
     main_path = repo_path.joinpath("src", "main.cpp")
-    verify_cli_command([pixi, "run", "git", "checkout", "other-feature"], cwd=repo_path)
+    subprocess.run(["git", "checkout", "other-feature"], cwd=repo_path, check=True)
     main_path.write_text(
         main_path.read_text().replace("Build backend works", "Build backend works v2")
     )
-    verify_cli_command(
-        [pixi, "run", "git", "add", main_path.relative_to(repo_path).as_posix()],
+    subprocess.run(
+        ["git", "add", main_path.relative_to(repo_path).as_posix()],
         cwd=repo_path,
+        check=True,
     )
-    verify_cli_command(
-        [pixi, "run", "git", "commit", "-m", "Update branch for pixi build test"],
+    subprocess.run(
+        ["git", "commit", "-m", "Update branch for pixi build test"],
         cwd=repo_path,
+        check=True,
     )
-    new_branch_rev = verify_cli_command(
-        [pixi, "run", "git", "rev-parse", "HEAD"], cwd=repo_path
+    new_branch_rev = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_path,
+        check=True,
+        capture_output=True,
+        text=True,
     ).stdout.strip()
-    assert new_branch_rev != local_cpp_git_repo.other_feature_rev
+    assert new_branch_rev != local_cpp_git_repo_mutable.other_feature_rev
 
     verify_cli_command(
         [
