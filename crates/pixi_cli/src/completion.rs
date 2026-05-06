@@ -94,8 +94,15 @@ fn replace_bash_completion(script: &str) -> Cow<'_, str> {
     // Replace the '-' with '__' since that's what clap's generator does as well for Bash Shell completion.
     let bin_name: &str = pixi_utils::executable_name();
     let clap_name = bin_name.replace("-", "__");
-    let pattern = format!(r#"(?s){}__run\).*?opts="(.*?)".*?(if.*?fi)"#, clap_name);
-    let replacement = r#"CLAP_NAME__run)
+    // clap_complete >=4.6.2 separates each segment of the bin name from each
+    // subcommand with an explicit `__subcmd__` marker, so the function for the
+    // `run` subcommand of `pixi` is `pixi__subcmd__run`.
+    let func_prefix = clap_name.replace("__", "__subcmd__");
+    let pattern = format!(
+        r#"(?s){}__subcmd__run\).*?opts="(.*?)".*?(if.*?fi)"#,
+        &func_prefix
+    );
+    let replacement = r#"FUNC_PREFIX__subcmd__run)
             opts="$1"
             if [[ $${cur} == -* ]] ; then
                COMPREPLY=( $$(compgen -W "$${opts}" -- "$${cur}") )
@@ -112,7 +119,7 @@ fn replace_bash_completion(script: &str) -> Cow<'_, str> {
         script,
         replacement
             .replace("BIN_NAME", bin_name)
-            .replace("CLAP_NAME", &clap_name),
+            .replace("FUNC_PREFIX", &func_prefix),
     )
 }
 
