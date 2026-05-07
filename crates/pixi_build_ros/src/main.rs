@@ -22,13 +22,209 @@ use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Platform};
 
 use crate::build_script::render_build_script;
-use crate::config::{PackageMappingSource, extract_distro_from_channels_list};
+use crate::config::{PackageMappingSource, RosMode, extract_distro_from_channels_list};
 use crate::distro::Distro;
 use crate::metadata::parse_and_render;
 use crate::package_map::{
     load_package_map_data, merge_conditional_lists, package_xml_to_conda_requirements,
 };
 use crate::package_xml::PackageXml;
+
+fn resolve_mode(config: &RosBackendConfig, manifest_root: &Path) -> RosMode {
+    if let Some(mode) = config.mode {
+        return mode;
+    }
+    if manifest_root.join("package.xml").exists() {
+        RosMode::PackageXml
+    } else {
+        tracing::info!(
+            "no package.xml found at {} and `mode` unset; defaulting to pixi-native",
+            manifest_root.display()
+        );
+        RosMode::PixiNative
+    }
+}
+
+async fn generate_recipe_package_xml(
+    model: &pixi_build_types::ProjectModel,
+    config: &RosBackendConfig,
+    manifest_root: PathBuf,
+    host_platform: Platform,
+    channels: Vec<ChannelUrl>,
+) -> miette::Result<GeneratedRecipe> {
+    // Resolve distro from config or channels
+    let distro_name = config
+        .distro
+        .clone()
+        .or_else(|| extract_distro_from_channels_list(&channels))
+        .ok_or_else(|| {
+            miette::miette!(
+                "ROS distro must be either explicitly configured or \
+                 auto-detected from robostack channels. \
+                 A 'robostack-<distro>' channel (e.g. 'robostack-kilted') was not \
+                 found in the provided channels."
+            )
+        })?;
+
+    let distro = Distro::fetch(&distro_name).await?;
+
+    // Parse package.xml
+    let package_xml_path = manifest_root.join("package.xml");
+    let package_xml_content = fs::read_to_string(&package_xml_path).into_diagnostic()?;
+
+    // Set up ROS environment for condition evaluation
+    let ros_version_str = if distro.is_ros1 { "1" } else { "2" };
+    let mut env_vars: HashMap<String, String> = HashMap::new();
+    env_vars.insert("ROS_DISTRO".to_string(), distro_name.clone());
+    env_vars.insert("ROS_VERSION".to_string(), ros_version_str.to_string());
+    if let Some(user_env) = &config.env {
+        for (k, v) in user_env {
+            env_vars.insert(k.clone(), v.clone());
+        }
+    }
+
+    let package_xml = PackageXml::parse(&package_xml_content)
+        .map(|package_xml| package_xml.evaluate_conditions(&env_vars))?;
+
+    // Create metadata provider
+    let package_mapping_files: Vec<String> = config
+        .get_package_mapping_file_paths()
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect();
+    let extra_input_globs = config.extra_input_globs.clone().unwrap_or_default();
+
+    let mut generated_recipe = parse_and_render(
+        package_xml.clone(),
+        &distro_name,
+        model.clone(),
+        extra_input_globs.clone(),
+        package_mapping_files,
+    )?;
+
+    // Load package mappings
+    let robostack_yaml: &str = include_str!("../robostack.yaml");
+    let robostack_mapping: HashMap<String, package_map::PackageMapEntry> =
+        serde_yaml::from_str(robostack_yaml).into_diagnostic()?;
+
+    let mut all_mapping_sources = config.extra_package_mappings.clone();
+    all_mapping_sources.push(PackageMappingSource::Mapping(robostack_mapping));
+
+    let package_map_data = load_package_map_data(&all_mapping_sources);
+
+    // Get requirements from package.xml
+    let package_requirements = package_xml_to_conda_requirements(
+        &package_xml,
+        &distro,
+        host_platform,
+        &package_map_data,
+    )?;
+
+    // Add standard build dependencies
+    let mut build_deps: Vec<&str> = vec![
+        "ninja",
+        "python",
+        "setuptools",
+        "git",
+        "git-lfs",
+        "cmake",
+        "cpython",
+    ];
+
+    if host_platform.is_unix() {
+        build_deps.extend(["patch", "make", "coreutils"]);
+    }
+    if host_platform.is_windows() {
+        build_deps.push("m2-patch");
+    }
+    if host_platform.is_osx() {
+        build_deps.push("tapi");
+    }
+
+    let mut build_items = package_requirements.build.clone();
+    let mut host_items = package_requirements.host.clone();
+    let mut run_items = package_requirements.run.clone();
+
+    for dep in &build_deps {
+        build_items.push(Item::Value(Value::new_concrete(
+            SerializableMatchSpec::from(*dep),
+            None,
+        )));
+    }
+
+    // Add compiler dependencies
+    let c_compiler =
+        JinjaTemplate::new("${{ compiler('c') }}".to_string()).expect("valid jinja template");
+    let cxx_compiler =
+        JinjaTemplate::new("${{ compiler('cxx') }}".to_string()).expect("valid jinja template");
+    build_items.push(Item::Value(Value::new_template(c_compiler, None)));
+    build_items.push(Item::Value(Value::new_template(cxx_compiler, None)));
+
+    // ament_cargo packages need the rust toolchain plus the cargo-ament-build
+    // wrapper from this distro's channel. The wrapper has no upstream package.xml,
+    // so it ships as a hand-authored vendor recipe.
+    if package_xml.build_type() == "ament_cargo" {
+        build_items.push(Item::Value(Value::new_concrete(
+            SerializableMatchSpec::from("rust"),
+            None,
+        )));
+        let cargo_ament_build = format!("ros-{distro_name}-cargo-ament-build");
+        build_items.push(Item::Value(Value::new_concrete(
+            SerializableMatchSpec::from(cargo_ament_build.as_str()),
+            None,
+        )));
+    }
+
+    // Add host dependencies
+    let host_dep_names = ["python", "numpy", "pip", "pkg-config"];
+    for dep in &host_dep_names {
+        host_items.push(Item::Value(Value::new_concrete(
+            SerializableMatchSpec::from(*dep),
+            None,
+        )));
+    }
+
+    // Add distro mutex to host and run
+    let mutex_name = distro.ros_distro_mutex_name();
+    host_items.push(Item::Value(Value::new_concrete(
+        SerializableMatchSpec::from(mutex_name.as_str()),
+        None,
+    )));
+    run_items.push(Item::Value(Value::new_concrete(
+        SerializableMatchSpec::from(mutex_name.as_str()),
+        None,
+    )));
+
+    // Merge package requirements into the model requirements
+    let requirements = &mut generated_recipe.recipe.requirements;
+    requirements.host = merge_conditional_lists(&requirements.host, &host_items)?;
+    requirements.build = merge_conditional_lists(&requirements.build, &build_items)?;
+    requirements.run = merge_conditional_lists(&requirements.run, &run_items)?;
+
+    // Generate build script
+    let build_type = package_xml.build_type();
+    let build_script_content = render_build_script(&build_type, &distro_name, &manifest_root)?;
+
+    let mut script_env: indexmap::IndexMap<String, Value<String>> = indexmap::IndexMap::new();
+    script_env.insert(
+        "ROS_DISTRO".to_string(),
+        Value::new_concrete(distro_name.clone(), None),
+    );
+    script_env.insert(
+        "ROS_VERSION".to_string(),
+        Value::new_concrete(ros_version_str.to_string(), None),
+    );
+    if let Some(user_env) = &config.env {
+        for (k, v) in user_env {
+            script_env.insert(k.clone(), Value::new_concrete(v.clone(), None));
+        }
+    }
+
+    generated_recipe.recipe.build.script =
+        Script::from_content(build_script_content).with_env(script_env);
+
+    Ok(generated_recipe)
+}
 
 #[derive(Default, Clone)]
 pub struct RosGenerator {}
@@ -48,7 +244,6 @@ impl GenerateRecipe for RosGenerator {
         channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
-        // Determine the manifest root
         let manifest_root = if manifest_path.is_file() {
             manifest_path
                 .parent()
@@ -63,178 +258,15 @@ impl GenerateRecipe for RosGenerator {
             manifest_path.clone()
         };
 
-        // Resolve distro from config or channels
-        let distro_name = config
-            .distro
-            .clone()
-            .or_else(|| extract_distro_from_channels_list(&channels))
-            .ok_or_else(|| {
-                miette::miette!(
-                    "ROS distro must be either explicitly configured or \
-                     auto-detected from robostack channels. \
-                     A 'robostack-<distro>' channel (e.g. 'robostack-kilted') was not \
-                     found in the provided channels."
-                )
-            })?;
-
-        let distro = Distro::fetch(&distro_name).await?;
-
-        // Parse package.xml
-        let package_xml_path = manifest_root.join("package.xml");
-        let package_xml_content = fs::read_to_string(&package_xml_path).into_diagnostic()?;
-
-        // Set up ROS environment for condition evaluation
-        let ros_version_str = if distro.is_ros1 { "1" } else { "2" };
-        let mut env_vars: HashMap<String, String> = HashMap::new();
-        env_vars.insert("ROS_DISTRO".to_string(), distro_name.clone());
-        env_vars.insert("ROS_VERSION".to_string(), ros_version_str.to_string());
-        if let Some(user_env) = &config.env {
-            for (k, v) in user_env {
-                env_vars.insert(k.clone(), v.clone());
+        match resolve_mode(config, &manifest_root) {
+            RosMode::PixiNative => {
+                pixi_native::generate(model, config, manifest_root, host_platform, channels).await
+            }
+            RosMode::PackageXml => {
+                generate_recipe_package_xml(model, config, manifest_root, host_platform, channels)
+                    .await
             }
         }
-
-        let package_xml = PackageXml::parse(&package_xml_content)
-            .map(|package_xml| package_xml.evaluate_conditions(&env_vars))?;
-
-        // Create metadata provider
-        let package_mapping_files: Vec<String> = config
-            .get_package_mapping_file_paths()
-            .iter()
-            .map(|p| p.display().to_string())
-            .collect();
-        let extra_input_globs = config.extra_input_globs.clone().unwrap_or_default();
-
-        let mut generated_recipe = parse_and_render(
-            package_xml.clone(),
-            &distro_name,
-            model.clone(),
-            extra_input_globs.clone(),
-            package_mapping_files,
-        )?;
-
-        // Load package mappings
-        let robostack_yaml: &str = include_str!("../robostack.yaml");
-        let robostack_mapping: HashMap<String, package_map::PackageMapEntry> =
-            serde_yaml::from_str(robostack_yaml).into_diagnostic()?;
-
-        let mut all_mapping_sources = config.extra_package_mappings.clone();
-        all_mapping_sources.push(PackageMappingSource::Mapping(robostack_mapping));
-
-        let package_map_data = load_package_map_data(&all_mapping_sources);
-
-        // Get requirements from package.xml
-        let package_requirements = package_xml_to_conda_requirements(
-            &package_xml,
-            &distro,
-            host_platform,
-            &package_map_data,
-        )?;
-
-        // Add standard build dependencies
-        let mut build_deps: Vec<&str> = vec![
-            "ninja",
-            "python",
-            "setuptools",
-            "git",
-            "git-lfs",
-            "cmake",
-            "cpython",
-        ];
-
-        if host_platform.is_unix() {
-            build_deps.extend(["patch", "make", "coreutils"]);
-        }
-        if host_platform.is_windows() {
-            build_deps.push("m2-patch");
-        }
-        if host_platform.is_osx() {
-            build_deps.push("tapi");
-        }
-
-        let mut build_items = package_requirements.build.clone();
-        let mut host_items = package_requirements.host.clone();
-        let mut run_items = package_requirements.run.clone();
-
-        for dep in &build_deps {
-            build_items.push(Item::Value(Value::new_concrete(
-                SerializableMatchSpec::from(*dep),
-                None,
-            )));
-        }
-
-        // Add compiler dependencies
-        let c_compiler =
-            JinjaTemplate::new("${{ compiler('c') }}".to_string()).expect("valid jinja template");
-        let cxx_compiler =
-            JinjaTemplate::new("${{ compiler('cxx') }}".to_string()).expect("valid jinja template");
-        build_items.push(Item::Value(Value::new_template(c_compiler, None)));
-        build_items.push(Item::Value(Value::new_template(cxx_compiler, None)));
-
-        // ament_cargo packages need the rust toolchain plus the cargo-ament-build
-        // wrapper from this distro's channel. The wrapper has no upstream package.xml,
-        // so it ships as a hand-authored vendor recipe.
-        if package_xml.build_type() == "ament_cargo" {
-            build_items.push(Item::Value(Value::new_concrete(
-                SerializableMatchSpec::from("rust"),
-                None,
-            )));
-            let cargo_ament_build = format!("ros-{distro_name}-cargo-ament-build");
-            build_items.push(Item::Value(Value::new_concrete(
-                SerializableMatchSpec::from(cargo_ament_build.as_str()),
-                None,
-            )));
-        }
-
-        // Add host dependencies
-        let host_dep_names = ["python", "numpy", "pip", "pkg-config"];
-        for dep in &host_dep_names {
-            host_items.push(Item::Value(Value::new_concrete(
-                SerializableMatchSpec::from(*dep),
-                None,
-            )));
-        }
-
-        // Add distro mutex to host and run
-        let mutex_name = distro.ros_distro_mutex_name();
-        host_items.push(Item::Value(Value::new_concrete(
-            SerializableMatchSpec::from(mutex_name.as_str()),
-            None,
-        )));
-        run_items.push(Item::Value(Value::new_concrete(
-            SerializableMatchSpec::from(mutex_name.as_str()),
-            None,
-        )));
-
-        // Merge package requirements into the model requirements
-        let requirements = &mut generated_recipe.recipe.requirements;
-        requirements.host = merge_conditional_lists(&requirements.host, &host_items)?;
-        requirements.build = merge_conditional_lists(&requirements.build, &build_items)?;
-        requirements.run = merge_conditional_lists(&requirements.run, &run_items)?;
-
-        // Generate build script
-        let build_type = package_xml.build_type();
-        let build_script_content = render_build_script(&build_type, &distro_name, &manifest_root)?;
-
-        let mut script_env: indexmap::IndexMap<String, Value<String>> = indexmap::IndexMap::new();
-        script_env.insert(
-            "ROS_DISTRO".to_string(),
-            Value::new_concrete(distro_name.clone(), None),
-        );
-        script_env.insert(
-            "ROS_VERSION".to_string(),
-            Value::new_concrete(ros_version_str.to_string(), None),
-        );
-        if let Some(user_env) = &config.env {
-            for (k, v) in user_env {
-                script_env.insert(k.clone(), Value::new_concrete(v.clone(), None));
-            }
-        }
-
-        generated_recipe.recipe.build.script =
-            Script::from_content(build_script_content).with_env(script_env);
-
-        Ok(generated_recipe)
     }
 
     fn extract_input_globs_from_build(
@@ -1181,6 +1213,61 @@ mod tests {
             run_deps.iter().any(|d| d == "ros-noetic-ros-custom2-msgs"),
             "Expected ros-noetic-ros-custom2-msgs in run deps: {run_deps:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn test_pixi_native_mode_skips_package_xml() {
+        // Pixi-native mode should generate a recipe even with no package.xml present.
+        let model = project_fixture!({
+            "name": "demo",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "ros-kilted-rclcpp": {"binary": {"version": "*"}}
+                    },
+                    "buildDependencies": {},
+                    "runDependencies": {
+                        "ros-kilted-rclcpp": {"binary": {"version": "*"}}
+                    }
+                },
+                "targets": {}
+            }
+        });
+
+        let mut config = RosBackendConfig::default();
+        config.mode = Some(crate::config::RosMode::PixiNative);
+        config.build_type = Some(crate::config::RosBuildType::AmentCmake);
+        config.distro = Some("kilted".to_string());
+
+        let tmp = tempfile::tempdir().unwrap();
+        // No package.xml written into tmp.
+
+        let recipe = RosGenerator::default()
+            .generate_recipe(
+                &model,
+                &config,
+                tmp.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .unwrap();
+
+        let host_specs: Vec<String> = recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .filter_map(|i| match i {
+                Item::Value(v) => v.as_concrete().map(|s| s.to_string()),
+                _ => None,
+            })
+            .collect();
+        assert!(host_specs.iter().any(|s| s == "ros-kilted-ros-workspace"));
     }
 
     #[tokio::test]
