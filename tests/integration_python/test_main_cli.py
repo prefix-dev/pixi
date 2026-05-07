@@ -1467,8 +1467,6 @@ dependencies:
                     "publish",
                     "--path",
                     manifest_path,
-                    "--frozen",
-                    "--no-install",
                     "--target-channel",
                     "https://prefix.dev/test-channel",
                 ],
