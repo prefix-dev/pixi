@@ -232,13 +232,10 @@ pub async fn generate(
         RosBuildType::AmentCargo => "ament_cargo",
         RosBuildType::AmentIdl => "ament_idl",
     };
-    // ament_idl needs a synthesized package.xml at build time (rosidl_cmake
-    // hard-requires one). Other build types ignore this argument.
-    let synth_xml = if build_type == RosBuildType::AmentIdl {
-        Some(synthesize_package_xml(model))
-    } else {
-        None
-    };
+    // All ament_* build types need a synthesized package.xml at build time:
+    // ament_package() / setup.py / cargo-ament-build all read or install it.
+    // Plain cmake/catkin builds ignore this argument.
+    let synth_xml = Some(synthesize_package_xml(model, build_type));
     let script_content =
         render_build_script(build_type_str, &distro, &manifest_root, synth_xml.as_deref())
             .map_err(|e| miette::miette!("failed to render build script: {e}"))?;
@@ -281,18 +278,26 @@ fn spec(name: &str) -> Item<SerializableMatchSpec> {
     Item::Value(Value::new_concrete(SerializableMatchSpec::from(name), None))
 }
 
-/// Synthesize a minimal package.xml for an ament_idl pixi-native package.
+/// Synthesize a minimal package.xml for a pixi-native package.
 ///
-/// rosidl_cmake reads this at codegen time to extract package metadata and
-/// to verify the `<member_of_group>rosidl_interface_packages</member_of_group>`
-/// declaration. Build/run dep declarations are intentionally omitted: the
-/// consumer's CMakeLists.txt has explicit `find_package(...)` calls for
-/// every dep that matters at codegen time, and conda manages runtime deps
-/// independently.
+/// Build/run dep declarations are intentionally omitted: the consumer's
+/// CMakeLists.txt / setup.py / Cargo.toml has explicit references to every
+/// dep that matters at build time, and conda manages runtime deps
+/// independently. Translating conda package names back to rosdep keys would
+/// require a mapping table we don't want to own.
+///
+/// What we DO emit:
+///   - metadata (name, version, description, license, maintainer)
+///   - one `<buildtool_depend>` matching the ament flavor
+///   - for ament_idl, additionally `rosidl_default_generators` as a
+///     `<buildtool_depend>` and the
+///     `<member_of_group>rosidl_interface_packages</member_of_group>`
+///     declaration that rosidl_cmake hard-requires
+///   - the matching `<export><build_type>` tag
 ///
 /// Maintainer is required by the package format. We parse the first author
 /// in the model; if absent or unparseable, fall back to a placeholder.
-fn synthesize_package_xml(model: &ProjectModel) -> String {
+fn synthesize_package_xml(model: &ProjectModel, build_type: RosBuildType) -> String {
     let name = model.name.as_deref().unwrap_or("unnamed");
     let version = model
         .version
@@ -316,6 +321,25 @@ fn synthesize_package_xml(model: &ProjectModel) -> String {
             )
         });
 
+    // <build_type> in the export section follows ROS conventions; ament_idl
+    // packages are built with ament_cmake under the hood, so they declare
+    // ament_cmake here.
+    let (buildtool, export_build_type) = match build_type {
+        RosBuildType::AmentCmake => ("ament_cmake", "ament_cmake"),
+        RosBuildType::AmentPython => ("ament_python", "ament_python"),
+        RosBuildType::AmentCargo => ("ament_cargo", "ament_cargo"),
+        RosBuildType::AmentIdl => ("ament_cmake", "ament_cmake"),
+    };
+
+    let mut buildtool_block = format!("  <buildtool_depend>{buildtool}</buildtool_depend>\n");
+    let mut group_block = String::new();
+    if build_type == RosBuildType::AmentIdl {
+        buildtool_block
+            .push_str("  <buildtool_depend>rosidl_default_generators</buildtool_depend>\n");
+        group_block
+            .push_str("  <member_of_group>rosidl_interface_packages</member_of_group>\n");
+    }
+
     format!(
         r#"<?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
@@ -326,13 +350,9 @@ fn synthesize_package_xml(model: &ProjectModel) -> String {
   <maintainer email="{email}">{maintainer}</maintainer>
   <license>{license}</license>
 
-  <buildtool_depend>ament_cmake</buildtool_depend>
-  <buildtool_depend>rosidl_default_generators</buildtool_depend>
-
-  <member_of_group>rosidl_interface_packages</member_of_group>
-
+{buildtool_block}{group_block}
   <export>
-    <build_type>ament_cmake</build_type>
+    <build_type>{export_build_type}</build_type>
   </export>
 </package>
 "#,

@@ -21,9 +21,9 @@ pub enum BuildScriptError {
 /// Selects the template based on `build_type` and platform, then performs
 /// variable substitution.
 ///
-/// `package_xml` is only consulted for `ament_idl`, where the template
-/// substitutes it into a heredoc that writes the file alongside the staged
-/// source copy at build time. Other build types ignore it.
+/// `package_xml` is consulted for every `ament_*` build type. The template
+/// substitutes it into a heredoc that writes the file alongside a staged
+/// source copy at build time. `cmake`/`catkin` templates ignore it.
 pub fn render_build_script(
     build_type: &str,
     distro: &str,
@@ -56,9 +56,10 @@ fn select_template(build_type: &str, is_windows: bool) -> Result<&'static str, B
         ("ament_python", false) => Ok(include_str!("../templates/build_ament_python.sh")),
         ("ament_python", true) => Ok(include_str!("../templates/bld_ament_python.bat")),
         ("ament_cargo", false) => Ok(include_str!("../templates/build_ament_cargo.sh")),
-        // ament_idl is ament_cmake plus a synthesized package.xml staged into
-        // a work-dir-local source copy. See templates/build_ament_idl.sh.
-        ("ament_idl", false) => Ok(include_str!("../templates/build_ament_idl.sh")),
+        // ament_idl uses the same template as ament_cmake; the synthesized
+        // package.xml differs (it carries the rosidl_interface_packages
+        // member_of_group declaration), but the build flow is identical.
+        ("ament_idl", false) => Ok(include_str!("../templates/build_ament_cmake.sh")),
         ("cmake" | "catkin", false) => Ok(include_str!("../templates/build_catkin.sh")),
         ("cmake" | "catkin", true) => Ok(include_str!("../templates/bld_catkin.bat")),
         _ => Err(BuildScriptError::UnsupportedBuildType {

@@ -4,7 +4,19 @@
 
 set -eo pipefail
 
-pushd @SRC_DIR@
+# Stage source into a work-dir-local copy and drop a synthesized package.xml
+# alongside Cargo.toml. cargo-ament-build copies package.xml into
+# share/<pkg>/ at install time and errors if it isn't present.
+STAGE_DIR="$PWD/src_stage"
+rm -rf "$STAGE_DIR"
+mkdir -p "$STAGE_DIR"
+cp -a @SRC_DIR@/. "$STAGE_DIR/"
+
+cat > "$STAGE_DIR/package.xml" <<'__PIXI_NATIVE_PACKAGE_XML__'
+@PACKAGE_XML_CONTENT@
+__PIXI_NATIVE_PACKAGE_XML__
+
+pushd "$STAGE_DIR"
 
 export ROS_DISTRO=@DISTRO@
 export AMENT_PREFIX_PATH="$PREFIX"
