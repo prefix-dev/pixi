@@ -633,7 +633,6 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
     let err = publish::execute(publish::Args {
         backend_override: Some(BackendOverride::from_memory(instantiator)),
         config_cli: Default::default(),
-        lock_and_install_config: Default::default(),
         target_platform: Platform::current(),
         build_platform: Platform::current(),
         build_dir: None,
@@ -2452,7 +2451,6 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
     publish::execute(publish::Args {
         backend_override: Some(BackendOverride::from_memory(instantiator)),
         config_cli: Default::default(),
-        lock_and_install_config: Default::default(),
         target_platform: Platform::current(),
         build_platform: Platform::current(),
         build_dir: None,
@@ -2515,7 +2513,6 @@ backend.version = "0.1.0"
     let _ = publish::execute(publish::Args {
         backend_override: None,
         config_cli: Default::default(),
-        lock_and_install_config: Default::default(),
         target_platform: Platform::current(),
         build_platform: Platform::current(),
         build_dir: None,

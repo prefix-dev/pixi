@@ -35,8 +35,6 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::AuthenticationStorage;
 use rattler_package_streaming::seek::read_package_file;
 
-use crate::cli_config::LockAndInstallConfig;
-
 /// Build a conda package and publish it to a channel.
 ///
 /// This is a convenience command that combines `pixi build` and `pixi upload`.
@@ -58,9 +56,6 @@ pub struct Args {
     /// Backend override for testing purposes.
     #[clap(skip)]
     pub backend_override: Option<BackendOverride>,
-
-    #[clap(flatten)]
-    pub lock_and_install_config: LockAndInstallConfig,
 
     /// The target platform to build for (defaults to the current platform)
     #[clap(long, short, default_value_t = Platform::current())]

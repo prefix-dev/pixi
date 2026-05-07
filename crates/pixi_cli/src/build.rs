@@ -92,7 +92,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     publish::execute(publish::Args {
         config_cli: args.config_cli,
         backend_override: args.backend_override,
-        lock_and_install_config: args.lock_and_install_config,
         target_platform: args.target_platform,
         build_platform: args.build_platform,
         build_dir: args.build_dir,
