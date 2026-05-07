@@ -9,6 +9,16 @@ version = "0.4.0"
 [package.metadata.dist]
 dist = false
 
+# GR fork: emit the binary as `pixi-build-ros-gr` so it matches the conda
+# package name shipped from ros-recipes/vendor_recipes/pixi-build-ros-gr/.
+# Pixi resolves a backend by package name then exec's $PREFIX/bin/<name>;
+# without this override the binary defaults to `pixi-build-ros` (the cargo
+# package name) and pixi can't find it. Drop this stanza if the upstream
+# rename of the conda package is dropped.
+[[bin]]
+name = "pixi-build-ros-gr"
+path = "src/main.rs"
+
 [features]
 default = ["rustls-tls"]
 native-tls = ["pixi_build_backend/native-tls"]
