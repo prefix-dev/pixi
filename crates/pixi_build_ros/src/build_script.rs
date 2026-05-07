@@ -89,8 +89,7 @@ mod tests {
 
     #[test]
     fn test_render_ament_cargo() {
-        let script =
-            render_build_script("ament_cargo", "kilted", &PathBuf::from("/work")).unwrap();
+        let script = render_build_script("ament_cargo", "kilted", &PathBuf::from("/work")).unwrap();
 
         assert!(script.contains("cargo ament-build"));
         assert!(script.contains("/work"));

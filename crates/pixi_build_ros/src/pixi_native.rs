@@ -9,9 +9,7 @@ use std::path::PathBuf;
 
 use indexmap::IndexMap;
 use miette::Diagnostic;
-use pixi_build_backend::generated_recipe::{
-    DefaultMetadataProvider, GeneratedRecipe,
-};
+use pixi_build_backend::generated_recipe::{DefaultMetadataProvider, GeneratedRecipe};
 use pixi_build_types::{ProjectModel, Target};
 use rattler_build_jinja::JinjaTemplate;
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
@@ -140,7 +138,15 @@ pub async fn generate(
 
     // Standard build deps (linux subset of existing flow).
     for dep in [
-        "cmake", "ninja", "python", "setuptools", "git", "git-lfs", "cpython", "patch", "make",
+        "cmake",
+        "ninja",
+        "python",
+        "setuptools",
+        "git",
+        "git-lfs",
+        "cpython",
+        "patch",
+        "make",
         "coreutils",
     ] {
         build_items.push(spec(dep));
@@ -240,8 +246,7 @@ fn spec(name: &str) -> Item<SerializableMatchSpec> {
 }
 
 fn template_value(template_str: &str) -> Item<SerializableMatchSpec> {
-    let tmpl =
-        JinjaTemplate::new(template_str.to_string()).expect("valid jinja template");
+    let tmpl = JinjaTemplate::new(template_str.to_string()).expect("valid jinja template");
     Item::Value(Value::new_template(tmpl, None))
 }
 
@@ -256,11 +261,21 @@ mod tests {
     fn model_with_deps(host: &[&str], run: &[&str]) -> ProjectModel {
         let host_obj = host
             .iter()
-            .map(|n| (n.to_string(), serde_json::json!({"binary": {"version": "*"}})))
+            .map(|n| {
+                (
+                    n.to_string(),
+                    serde_json::json!({"binary": {"version": "*"}}),
+                )
+            })
             .collect::<serde_json::Map<_, _>>();
         let run_obj = run
             .iter()
-            .map(|n| (n.to_string(), serde_json::json!({"binary": {"version": "*"}})))
+            .map(|n| {
+                (
+                    n.to_string(),
+                    serde_json::json!({"binary": {"version": "*"}}),
+                )
+            })
             .collect::<serde_json::Map<_, _>>();
         serde_json::from_value(serde_json::json!({
             "name": "test-pkg",

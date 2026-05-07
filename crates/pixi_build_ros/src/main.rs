@@ -123,12 +123,8 @@ async fn generate_recipe_package_xml(
     let package_map_data = load_package_map_data(&all_mapping_sources);
 
     // Get requirements from package.xml
-    let package_requirements = package_xml_to_conda_requirements(
-        &package_xml,
-        &distro,
-        host_platform,
-        &package_map_data,
-    )?;
+    let package_requirements =
+        package_xml_to_conda_requirements(&package_xml, &distro, host_platform, &package_map_data)?;
 
     // Add standard build dependencies
     let mut build_deps: Vec<&str> = vec![
