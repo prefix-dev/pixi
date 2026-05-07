@@ -4,6 +4,7 @@ mod distro;
 mod metadata;
 pub mod package_map;
 pub mod package_xml;
+mod pixi_native;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
