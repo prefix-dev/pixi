@@ -10,7 +10,9 @@ use thiserror::Error;
 #[derive(Debug, Error, Diagnostic)]
 pub enum BuildScriptError {
     #[error("unsupported ROS build type: '{build_type}'")]
-    #[diagnostic(help("Supported build types are: ament_cmake, ament_python, cmake, catkin"))]
+    #[diagnostic(help(
+        "Supported build types are: ament_cmake, ament_python, ament_cargo (linux only), cmake, catkin"
+    ))]
     UnsupportedBuildType { build_type: String },
 }
 
@@ -44,6 +46,7 @@ fn select_template(build_type: &str, is_windows: bool) -> Result<&'static str, B
         ("ament_cmake", true) => Ok(include_str!("../templates/bld_ament_cmake.bat")),
         ("ament_python", false) => Ok(include_str!("../templates/build_ament_python.sh")),
         ("ament_python", true) => Ok(include_str!("../templates/bld_ament_python.bat")),
+        ("ament_cargo", false) => Ok(include_str!("../templates/build_ament_cargo.sh")),
         ("cmake" | "catkin", false) => Ok(include_str!("../templates/build_catkin.sh")),
         ("cmake" | "catkin", true) => Ok(include_str!("../templates/bld_catkin.bat")),
         _ => Err(BuildScriptError::UnsupportedBuildType {
@@ -82,6 +85,18 @@ mod tests {
 
         assert!(script.contains("/pkg"));
         assert!(script.contains("noetic"));
+    }
+
+    #[test]
+    fn test_render_ament_cargo() {
+        let script =
+            render_build_script("ament_cargo", "kilted", &PathBuf::from("/work")).unwrap();
+
+        assert!(script.contains("cargo ament-build"));
+        assert!(script.contains("/work"));
+        assert!(script.contains("kilted"));
+        assert!(!script.contains("@SRC_DIR@"));
+        assert!(!script.contains("@DISTRO@"));
     }
 
     #[test]
