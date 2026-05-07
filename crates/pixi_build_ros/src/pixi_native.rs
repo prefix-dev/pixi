@@ -187,6 +187,28 @@ pub async fn generate(
         build_items.push(spec(&format!("ros-{distro}-cargo-ament-build")));
     }
 
+    // ament_idl auto-injects every rosidl generator we know about plus the
+    // runtimes their generated artifacts depend on. Generators register
+    // themselves as ament extensions at install time, so simply having them
+    // in the host env is enough to invoke them — no CMakeLists.txt edits
+    // needed by the consumer. Rule of thumb: if you want consumers to get a
+    // language binding for free, add its generator here AND its runtime to
+    // run-deps below.
+    if build_type == RosBuildType::AmentIdl {
+        for generator in [
+            "rosidl-default-generators",   // c, cpp, py
+            "rosidl-generator-pydantic",
+            "rosidl-generator-mypy",
+            "rosidl-generator-rs",
+        ] {
+            host_items.push(spec(&format!("ros-{distro}-{generator}")));
+        }
+        for runtime in ["rosidl-default-runtime", "rosidl-runtime-rs"] {
+            host_items.push(spec(&format!("ros-{distro}-{runtime}")));
+            run_items.push(spec(&format!("ros-{distro}-{runtime}")));
+        }
+    }
+
     // Standard host deps.
     for dep in ["python", "numpy", "pip", "pkg-config"] {
         host_items.push(spec(dep));
@@ -208,6 +230,7 @@ pub async fn generate(
         RosBuildType::AmentCmake => "ament_cmake",
         RosBuildType::AmentPython => "ament_python",
         RosBuildType::AmentCargo => "ament_cargo",
+        RosBuildType::AmentIdl => "ament_idl",
     };
     let script_content = render_build_script(build_type_str, &distro, &manifest_root)
         .map_err(|e| miette::miette!("failed to render build script: {e}"))?;

@@ -11,7 +11,7 @@ use thiserror::Error;
 pub enum BuildScriptError {
     #[error("unsupported ROS build type: '{build_type}'")]
     #[diagnostic(help(
-        "Supported build types are: ament_cmake, ament_python, ament_cargo (linux only), cmake, catkin"
+        "Supported build types are: ament_cmake, ament_python, ament_cargo (linux only), ament_idl, cmake, catkin"
     ))]
     UnsupportedBuildType { build_type: String },
 }
@@ -47,6 +47,9 @@ fn select_template(build_type: &str, is_windows: bool) -> Result<&'static str, B
         ("ament_python", false) => Ok(include_str!("../templates/build_ament_python.sh")),
         ("ament_python", true) => Ok(include_str!("../templates/bld_ament_python.bat")),
         ("ament_cargo", false) => Ok(include_str!("../templates/build_ament_cargo.sh")),
+        // ament_idl uses the same CMake-driven build as ament_cmake; the IDL
+        // semantics live entirely in dep injection (see pixi_native::generate).
+        ("ament_idl", false) => Ok(include_str!("../templates/build_ament_cmake.sh")),
         ("cmake" | "catkin", false) => Ok(include_str!("../templates/build_catkin.sh")),
         ("cmake" | "catkin", true) => Ok(include_str!("../templates/bld_catkin.bat")),
         _ => Err(BuildScriptError::UnsupportedBuildType {

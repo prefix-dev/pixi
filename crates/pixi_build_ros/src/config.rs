@@ -22,12 +22,16 @@ pub enum RosMode {
 
 /// ROS build type for pixi-native mode. Catkin is intentionally absent; pixi-native
 /// targets ROS 2 only, where catkin packages don't exist as a first-party shape.
+/// `AmentIdl` is a sugar variant for interface (msg/srv/action) packages: same
+/// CMake build as `AmentCmake`, plus auto-injection of all known rosidl
+/// generator and runtime packages so consumers don't have to enumerate them.
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RosBuildType {
     AmentCmake,
     AmentPython,
     AmentCargo,
+    AmentIdl,
 }
 
 /// Configuration for the ROS build backend.
