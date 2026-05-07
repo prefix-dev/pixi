@@ -749,6 +749,7 @@ pub async fn resolve_pypi(
             requirements,
             constraints,
             overrides,
+            uv_configuration::Excludes::default(),
             Preferences::from_iter(preferences, &resolver_env),
             None,
             Default::default(),
