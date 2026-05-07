@@ -204,14 +204,25 @@ pub async fn generate(
         "**/*.hpp",
         "**/*.rs",
         "**/*.py",
+        "**/*.pyx",
         "**/*.sh",
         "Cargo.toml",
         "Cargo.lock",
         "CMakeLists.txt",
+        "Makefile",
+        "MANIFEST.in",
         "setup.py",
         "setup.cfg",
         "pyproject.toml",
         "package.xml",
+        "tests/**/*.py",
+        "docs/**/*.rst",
+        "docs/**/*.md",
+        "launch/**/*.py",
+        "config/*.yaml",
+        "msg/**/*.msg",
+        "srv/**/*.srv",
+        "action/**/*.action",
     ] {
         generated.metadata_input_globs.insert(glob.to_string());
     }
@@ -423,6 +434,7 @@ mod tests {
         .unwrap();
         let (build, _, _) = host_run_concrete(&recipe.recipe);
         assert!(!build.iter().any(|s| s == "rust"));
+        assert!(!build.iter().any(|s| s == "ros-kilted-cargo-ament-build"));
     }
 
     #[tokio::test]
