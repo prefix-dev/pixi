@@ -1283,6 +1283,7 @@ The package section is defined using the following fields:
 - `build-dependencies`: The build dependencies of the package.
 - `host-dependencies`: The host dependencies of the package.
 - `run-dependencies`: The run dependencies of the package.
+- `run-constraints`: Version constraints applied to the package's run environment.
 - `target`: The target table to configure target specific dependencies. (Similar to the [target](#the-target-table) table)
 
 And to extend the basics, it can also contain the following fields:
@@ -1360,13 +1361,14 @@ extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"]
 ```
 
 
-### The `build` `host` and `run` dependencies tables
-The dependencies of a package are split into three tables.
+### The `build`, `host`, `run` and `run-constraints` dependency tables
+The dependencies of a package are split into four tables.
 Each of these tables has a different purpose and is used to define the dependencies of the package.
 
 - [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
 - [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link against the package on the target platform.
 - [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
+- [`run-constraints`](#run-constraints): Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.
 
 
 ### `build-dependencies`
@@ -1417,4 +1419,15 @@ The `run-dependencies` are the packages that will be installed in the environmen
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-dependencies"
+```
+
+### `run-constraints`
+
+The `run-constraints` are version constraints applied to the package's run environment.
+They constrain the versions of packages that may be installed *if* they are pulled in by another dependency, without themselves causing those packages to be installed.
+
+This mirrors the conda concept that surfaces as `run_constrained` in the package metadata.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-constraints"
 ```

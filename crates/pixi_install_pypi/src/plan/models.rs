@@ -44,7 +44,7 @@ pub(crate) enum NeedReinstall {
     /// The package is not installed
     VersionMismatch {
         installed_version: uv_pep440::Version,
-        locked_version: pep440_rs::Version,
+        locked_version: String,
     },
     /// The `direct_url.json` file is missing
     MissingDirectUrl,
@@ -56,7 +56,7 @@ pub(crate) enum NeedReinstall {
     UnableToConvertLockedPath { path: String },
     /// The editable status of the installed wheel changed with regards to the locked version
     EditableStatusChanged {
-        locked_editable: bool,
+        required_editable: bool,
         installed_editable: bool,
     },
     /// Somehow unable to parse the installed dist url
@@ -113,7 +113,7 @@ impl std::fmt::Display for NeedReinstall {
                 write!(f, "Unable to parse file url: {url}")
             }
             NeedReinstall::EditableStatusChanged {
-                locked_editable,
+                required_editable: locked_editable,
                 installed_editable,
             } => {
                 write!(

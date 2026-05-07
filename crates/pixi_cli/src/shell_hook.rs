@@ -167,11 +167,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
+        Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
             lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
             no_install: args.lock_and_install_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
         },
         ReinstallPackages::default(),
         &pixi_core::environment::InstallFilter::default(),

@@ -117,7 +117,7 @@ The backend always writes JSON-RPC request/response logs and the generated inter
 - **Default**: `[]`
 - **Target Merge Behavior**: `Overwrite` - Platform-specific globs completely replace base globs
 
-Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include source files (`**/*.{c,cc,cxx,cpp,h,hpp,hxx}`), CMake files (`**/*.{cmake,cmake.in}`, `**/CMakeLists.txt`), and other build-related files.
+Additional glob patterns to include as input files for the build process. These patterns are added to the input set that the backend extracts automatically from each successful build (see [Input tracking](#input-tracking) below). Use this for files that aren't visible to CMake (assets, runtime config, documentation, scripts invoked by `add_custom_command`, and so on).
 
 ```toml
 [package.build.config]
@@ -181,6 +181,36 @@ The CMake backend follows this build process:
    - `-DPython_EXECUTABLE=$PYTHON`: Use the conda Python executable if it's part of the host dependencies.
 3. **Build**: Executes `cmake --build` to compile the project
 4. **Install**: Installs the built artifacts to the conda package
+
+## Input tracking
+
+After a successful build, the backend asks Ninja which files were actually used and stores that exact set as the build's inputs. Pixi uses those inputs to decide whether the build cache is still valid, so a tighter set means fewer false rebuilds and stale-cache misses.
+
+Three Ninja sub-commands cover the build graph:
+
+- **`ninja -t inputs all`**: declared translation units (the source files listed in `add_executable` / `add_library`).
+- **`ninja -t deps`**: discovered headers, read from the depfile database the compiler emitted during the build.
+- **`ninja -t targets all`**: `CMakeLists.txt` and any `*.cmake` file that CMake registers on its regen rule (e.g. via `include()` or `CMAKE_MODULE_PATH`).
+
+Anything outside the project root is dropped (system headers, conda environment files, files in unrelated source trees). Anything under `<project>/.pixi/` is also dropped, since pixi's own cache and conda envs are tracked through the environment hash, not through input globs.
+
+### `file(GLOB CONFIGURE_DEPENDS ...)`
+
+If your `CMakeLists.txt` uses `file(GLOB ... CONFIGURE_DEPENDS ...)` to collect sources, the backend recovers the original glob patterns from CMake's `VerifyGlobs.cmake` and forwards them to pixi. Adding a new file matching one of those patterns invalidates the build cache and triggers a reconfigure, the same way it does for an in-tree `cmake --build` cycle.
+
+Plain `file(GLOB ...)` without `CONFIGURE_DEPENDS` follows CMake's own semantics: only the files that matched at configure time are tracked. Adding a new file does not invalidate the cache. This mirrors what plain `file(GLOB)` does inside CMake itself: the documented footgun where you have to re-run CMake by hand. Prefer `CONFIGURE_DEPENDS` if you want auto-detection.
+
+### Fallback
+
+If any of the queries fail (for example, the build directory was wiped between phases, or Ninja exited non-zero), the backend logs a warning and falls back to a coarse glob set:
+
+```text
+**/*.{c,cc,cxx,cpp,h,hpp,hxx}
+**/*.{cmake,cmake.in}
+**/CMakeLists.txt
+```
+
+This is strictly less precise but never misses a real input. Most users will never see the fallback path.
 
 ## CMake Flag Precedence
 

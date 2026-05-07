@@ -1,45 +1,45 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar};
-use pixi_command_dispatcher::{ReporterContext, reporter::GitCheckoutId};
+use parking_lot::Mutex;
+use pixi_compute_reporters::{OperationId, OperationRegistry};
 use pixi_git::{GIT_SSH_CLONING_WARNING_MSG, resolver::RepositoryReference, url::RepositoryUrl};
 use pixi_progress::style_warning_pb;
 
+struct GitCheckoutProgressInner {
+    bars: IndexMap<OperationId, ProgressBar>,
+    repository_references: HashMap<OperationId, RepositoryReference>,
+    checkout_helper_pb: Option<(ProgressBar, usize)>,
+}
+
 /// A reporter implementation for source checkouts.
 pub struct GitCheckoutProgress {
+    registry: Arc<OperationRegistry>,
     /// The multi-progress bar. Usually, this is the global multi-progress bar.
     multi_progress: MultiProgress,
     /// The progress bar that is used as an anchor for placing other progress.
     anchor: ProgressBar,
-    /// The id of the next checkout
-    next_id: usize,
-    /// A map of progress bars, by ID.
-    bars: IndexMap<GitCheckoutId, ProgressBar>,
-    /// References to the repository info
-    repository_references: HashMap<GitCheckoutId, RepositoryReference>,
-    /// Helper checkout progress bar for git SSH operations
-    checkout_helper_pb: Option<(ProgressBar, usize)>,
+    inner: Mutex<GitCheckoutProgressInner>,
 }
 
 impl GitCheckoutProgress {
     /// Creates a new source checkout reporter.
-    pub fn new(multi_progress: MultiProgress, anchor: ProgressBar) -> Self {
+    pub fn new(
+        registry: Arc<OperationRegistry>,
+        multi_progress: MultiProgress,
+        anchor: ProgressBar,
+    ) -> Self {
         Self {
+            registry,
             multi_progress,
             anchor,
-            next_id: 0,
-            bars: Default::default(),
-            repository_references: Default::default(),
-            checkout_helper_pb: None,
+            inner: Mutex::new(GitCheckoutProgressInner {
+                bars: Default::default(),
+                repository_references: Default::default(),
+                checkout_helper_pb: None,
+            }),
         }
-    }
-
-    /// Returns a unique ID for a new progress bar.
-    fn next_checkout_id(&mut self) -> GitCheckoutId {
-        let id = GitCheckoutId(self.next_id);
-        self.next_id += 1;
-        id
     }
 
     /// Similar to the default pixi_progress::default_progress_style, but with a
@@ -47,18 +47,6 @@ impl GitCheckoutProgress {
     pub fn spinner_style() -> indicatif::ProgressStyle {
         indicatif::ProgressStyle::with_template("  {spinner:.green} {prefix:30!} {wide_msg:.dim}")
             .expect("should be able to create a progress bar style")
-    }
-
-    /// Returns the repository reference for the given checkout ID.
-    pub fn repo_reference(&self, id: GitCheckoutId) -> &RepositoryReference {
-        self.repository_references
-            .get(&id)
-            .expect("the progress bar needs to be inserted for this checkout")
-    }
-
-    /// Returns the progress bar at the bottom
-    pub fn last_progress_bar(&self) -> Option<&ProgressBar> {
-        self.bars.last().map(|(_, pb)| pb)
     }
 
     /// Returns true if the specified URL refers to a checkout that might cause
@@ -69,23 +57,26 @@ impl GitCheckoutProgress {
 }
 
 impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
-    /// Called when a git checkout was queued on the [`CommandQueue`].
-    fn on_queued(
-        &mut self,
-        _context: Option<ReporterContext>,
-        env: &RepositoryReference,
-    ) -> GitCheckoutId {
-        let checkout_id = self.next_checkout_id();
-        self.repository_references.insert(checkout_id, env.clone());
-        checkout_id
+    /// Called when a git checkout was queued on the command queue.
+    fn on_queued(&self, env: &RepositoryReference) -> OperationId {
+        let id = self.registry.allocate();
+        self.inner
+            .lock()
+            .repository_references
+            .insert(id, env.clone());
+        id
     }
 
-    fn on_start(&mut self, checkout_id: GitCheckoutId) {
-        let pb = self.multi_progress.insert_after(
-            self.last_progress_bar().unwrap_or(&self.anchor),
-            ProgressBar::hidden(),
-        );
-        let repo = self.repo_reference(checkout_id);
+    fn on_started(&self, checkout_id: OperationId) {
+        let mut inner = self.inner.lock();
+        let repo = inner
+            .repository_references
+            .get(&checkout_id)
+            .expect("the progress bar needs to be inserted for this checkout");
+        let last_pb = inner.bars.last().map(|(_, pb)| pb).unwrap_or(&self.anchor);
+        let pb = self
+            .multi_progress
+            .insert_after(last_pb, ProgressBar::hidden());
         pb.set_style(GitCheckoutProgress::spinner_style());
         pb.set_prefix("fetching git dependencies");
         pb.set_message(format!(
@@ -96,7 +87,7 @@ impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
         pb.enable_steady_tick(Duration::from_millis(100));
 
         if Self::is_dangerous_ssh(&repo.url) {
-            match &mut self.checkout_helper_pb {
+            match &mut inner.checkout_helper_pb {
                 Some((_, count)) => {
                     *count += 1;
                 }
@@ -106,20 +97,24 @@ impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
                             .insert_before(&pb, ProgressBar::hidden()),
                         GIT_SSH_CLONING_WARNING_MSG.to_string(),
                     );
-                    self.checkout_helper_pb = Some((warning_pb, 1));
+                    inner.checkout_helper_pb = Some((warning_pb, 1));
                 }
             }
         };
 
-        self.bars.insert(checkout_id, pb);
+        inner.bars.insert(checkout_id, pb);
     }
 
-    fn on_finished(&mut self, checkout_id: GitCheckoutId) {
-        let removed_pb = self
+    fn on_finished(&self, checkout_id: OperationId) {
+        let mut inner = self.inner.lock();
+        let removed_pb = inner
             .bars
             .shift_remove(&checkout_id)
             .expect("the progress bar needs to be inserted for this checkout");
-        let repo = self.repo_reference(checkout_id);
+        let repo = inner
+            .repository_references
+            .get(&checkout_id)
+            .expect("the progress bar needs to be inserted for this checkout");
         removed_pb.finish_with_message(format!(
             "checkout complete {}@{}",
             repo.url.as_url(),
@@ -128,13 +123,13 @@ impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
         removed_pb.finish_and_clear();
 
         if Self::is_dangerous_ssh(&repo.url) {
-            let Some((pb, count)) = &mut self.checkout_helper_pb else {
+            let Some((pb, count)) = &mut inner.checkout_helper_pb else {
                 panic!("checkout helper progress bar should be present");
             };
             *count -= 1;
             if *count == 0 {
                 pb.finish_and_clear();
-                self.checkout_helper_pb = None;
+                inner.checkout_helper_pb = None;
             }
         }
     }

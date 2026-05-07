@@ -9,6 +9,7 @@ use conda_pypi_clobber::PypiCondaClobberRegistry;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use pep440_rs::VersionSpecifiers;
 use pixi_consts::consts;
 use pixi_manifest::{
     EnvironmentName, SystemRequirements,
@@ -31,7 +32,7 @@ use pypi_modifiers::{
     pypi_tags::{get_pypi_tags, is_python_record},
 };
 use rattler_conda_types::Platform;
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
@@ -51,7 +52,89 @@ use uv_resolver::{ExcludeNewer, FlatIndex};
 
 use crate::plan::{CachedWheels, RequiredDists};
 
-pub type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
+/// Extra data available from the manifest, not the lockfile
+#[derive(Clone)]
+pub struct ManifestData {
+    pub editable: bool,
+}
+
+#[derive(Clone)]
+pub struct LockedPypiRecord {
+    pub data: PypiPackageData,
+    pub locked_version: pep440_rs::Version,
+}
+
+#[derive(Clone, Debug)]
+pub struct UnresolvedPypiRecord(PypiPackageData);
+
+impl From<PypiPackageData> for UnresolvedPypiRecord {
+    fn from(value: PypiPackageData) -> Self {
+        UnresolvedPypiRecord(value)
+    }
+}
+
+impl UnresolvedPypiRecord {
+    pub fn as_package_data(&self) -> &PypiPackageData {
+        &self.0
+    }
+
+    pub fn lock(&self, locked_version: pep440_rs::Version) -> LockedPypiRecord {
+        let mut data = self.0.clone();
+
+        if let Some(wheel) = data.as_wheel_mut() {
+            wheel.version = locked_version.clone();
+        }
+
+        LockedPypiRecord {
+            data,
+            locked_version,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct InstallablePypiRecord {
+    pub manifest_data: ManifestData,
+    pub name: pep508_rs::PackageName,
+    pub index_url: Option<url::Url>,
+    pub hash: Option<rattler_lock::PackageHashes>,
+    pub location: UrlOrPath,
+    pub version: pep440_rs::Version,
+    pub requires_python: Option<VersionSpecifiers>,
+}
+
+impl InstallablePypiRecord {
+    pub fn new(
+        wheel: &PypiDistributionData,
+        manifest_data: ManifestData,
+        version_override: pep440_rs::Version,
+    ) -> Self {
+        Self {
+            manifest_data,
+            name: wheel.name.clone(),
+            location: wheel.location.inner().clone(),
+            hash: wheel.hash.clone(),
+            index_url: wheel.index_url.clone(),
+            requires_python: wheel.requires_python.clone(),
+            version: version_override,
+        }
+    }
+
+    /// Create from a [`LockedPypiRecord`], which works for both wheel and
+    /// source packages.
+    pub fn from_locked(locked: &LockedPypiRecord, manifest_data: ManifestData) -> Self {
+        let data = &locked.data;
+        Self {
+            manifest_data,
+            name: data.name().clone(),
+            location: data.location().inner().clone(),
+            hash: data.as_wheel().and_then(|w| w.hash.clone()),
+            index_url: data.as_wheel().and_then(|w| w.index_url.clone()),
+            requires_python: data.requires_python().cloned(),
+            version: locked.locked_version.clone(),
+        }
+    }
+}
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
@@ -126,7 +209,7 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
 pub async fn on_python_interpreter_change<'a>(
     status: &'a PythonStatus,
     prefix: &Prefix,
-    pypi_records: &[PyPIRecords],
+    pypi_records: &[InstallablePypiRecord],
 ) -> miette::Result<ContinuePyPIPrefixUpdate<'a>> {
     match status {
         PythonStatus::Removed { old } => {
@@ -177,6 +260,39 @@ pub struct PyPIBuildConfig<'a> {
     pub index_strategy: Option<&'a pixi_manifest::pypi::pypi_options::IndexStrategy>,
     pub exclude_newer: &'a ResolvedPypiExcludeNewer,
     pub skip_wheel_filename_check: Option<bool>,
+    /// The link mode to use when installing packages.
+    /// If `None`, uses the default for the platform (Clone on macOS, Hardlink on Linux).
+    pub link_mode: Option<LinkMode>,
+}
+
+/// Picks a `LinkMode` honoring the configured restrictions, preferring the
+/// platform default when it is allowed and otherwise falling through
+/// `Clone` → `Hardlink` → `Symlink` → `Copy`.
+pub fn derive_link_mode(
+    allow_symbolic_links: Option<bool>,
+    allow_hard_links: Option<bool>,
+    allow_ref_links: Option<bool>,
+) -> LinkMode {
+    let is_allowed = |mode: LinkMode| match mode {
+        LinkMode::Clone => allow_ref_links.unwrap_or(true),
+        LinkMode::Hardlink => allow_hard_links.unwrap_or(true),
+        LinkMode::Symlink => allow_symbolic_links.unwrap_or(true),
+        LinkMode::Copy => true,
+    };
+
+    let default = LinkMode::default();
+    if is_allowed(default) {
+        return default;
+    }
+    [
+        LinkMode::Clone,
+        LinkMode::Hardlink,
+        LinkMode::Symlink,
+        LinkMode::Copy,
+    ]
+    .into_iter()
+    .find(|&mode| is_allowed(mode))
+    .unwrap_or(LinkMode::Copy)
 }
 
 /// Configuration for PyPI context, grouping uv and environment settings
@@ -272,7 +388,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         &self,
         python_status: &PythonStatus,
         pixi_records: &[PixiRecord],
-        pypi_records: &[PyPIRecords],
+        pypi_records: &[InstallablePypiRecord],
     ) -> miette::Result<()> {
         // Initialize UV flags from environment variables and pypi-options before any operations
         initialize_uv_flags(self.build_config.skip_wheel_filename_check);
@@ -306,7 +422,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     async fn execute_update(
         &self,
         pixi_records: &[PixiRecord],
-        pypi_records: &[PyPIRecords],
+        pypi_records: &[InstallablePypiRecord],
         python_info: &rattler::install::PythonInfo,
     ) -> miette::Result<()> {
         // Cheap planning setup (no network I/O)
@@ -414,6 +530,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &planner_config.index_locations,
             index_strategy,
             None,
+            Connectivity::Online,
         );
 
         // Resolve the flat indexes from `--find-links`.
@@ -469,13 +586,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     /// Create the installation plan by analyzing current state vs requirements
     async fn create_installation_plan(
         &self,
-        pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
+        pypi_records: &[crate::InstallablePypiRecord],
         planner_config: &UvInstallerPlannerConfig,
     ) -> miette::Result<PyPIInstallationPlan> {
         // Create required distributions with pre-created Dist objects
-        let required_packages: Vec<_> = pypi_records.iter().map(|(pkg, _)| pkg.clone()).collect();
         let required_dists =
-            RequiredDists::from_packages(&required_packages, self.config.lock_file_dir)
+            RequiredDists::from_packages(pypi_records.iter(), self.config.lock_file_dir)
                 .into_diagnostic()
                 .context("Failed to create required distributions")?;
 
@@ -854,7 +970,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             setup.build_isolation.to_uv(&setup.venv),
             &self.context_config.uv_context.extra_build_requires,
             &self.context_config.uv_context.extra_build_variables,
-            LinkMode::default(),
+            self.build_config.link_mode.unwrap_or_default(),
             &setup.build_options,
             &self.context_config.uv_context.hash_strategy,
             setup.exclude_newer.clone(),
@@ -1033,7 +1149,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let start = std::time::Instant::now();
 
         uv_installer::Installer::new(&setup.venv, uv_preview::Preview::default())
-            .with_link_mode(LinkMode::default())
+            .with_link_mode(self.build_config.link_mode.unwrap_or_default())
             .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
             .with_reporter(UvReporter::new_arc(options))
             .install(all_dists.clone())

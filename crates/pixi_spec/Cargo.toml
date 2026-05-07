@@ -15,6 +15,7 @@ dirs = { workspace = true }
 file_url = { workspace = true }
 humantime = { workspace = true }
 itertools = { workspace = true }
+pixi_build_types = { workspace = true, optional = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 rattler_conda_types = { workspace = true }
@@ -36,4 +37,5 @@ toml-span = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "filters"] }
+rattler_lock = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }

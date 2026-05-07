@@ -166,6 +166,16 @@
           "additionalProperties": {
             "$ref": "#/$defs/PackageSpec"
           }
+        },
+        "runConstraints": {
+          "description": "Run constraints of the project",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/PackageSpec"
+          }
         }
       }
     },

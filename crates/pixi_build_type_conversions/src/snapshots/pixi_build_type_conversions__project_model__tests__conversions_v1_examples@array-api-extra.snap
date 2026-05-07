@@ -19,7 +19,8 @@ expression: project_model
     "defaultTarget": {
       "hostDependencies": {},
       "buildDependencies": {},
-      "runDependencies": {}
+      "runDependencies": {},
+      "runConstraints": {}
     },
     "targets": {}
   }

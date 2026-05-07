@@ -54,7 +54,9 @@ use pixi_utils::{
 };
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
-use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_lock::LockFile;
+
+use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
@@ -687,8 +689,9 @@ impl Workspace {
             .clone()
     }
 
-    /// Returns a pre-filled command dispatcher builder that can be used to
-    /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
+    /// Returns a pre-filled command dispatcher builder. Seeds a
+    /// [`RayonPrimer`](crate::rayon_primer::RayonPrimer) in the install /
+    /// solve / instantiate-backend reporter slots; UI reporters override.
     pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
         let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
             .expect("cache dir is not absolute")
@@ -716,6 +719,7 @@ impl Workspace {
             .expect("root dir is not absolute")
             .into_assume_dir();
 
+        let rayon_primer = std::sync::Arc::new(crate::rayon_primer::RayonPrimer::default());
         Ok(CommandDispatcher::builder()
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
@@ -732,10 +736,17 @@ impl Workspace {
                     .or_else(|| BackendOverride::from_env().ok().flatten())
                     .unwrap_or_default(),
             )
+            .with_channel_config(self.channel_config())
             .execute_link_scripts(match self.config.run_post_link_scripts() {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
             })
+            .with_allow_symbolic_links(self.config.allow_symbolic_links)
+            .with_allow_hard_links(self.config.allow_hard_links)
+            .with_allow_ref_links(self.config.allow_ref_links)
+            .with_pixi_install_reporter(rayon_primer.clone())
+            .with_pixi_solve_reporter(rayon_primer.clone())
+            .with_instantiate_backend_reporter(rayon_primer)
             .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 
@@ -887,10 +898,8 @@ impl Workspace {
         filter_lock_file(self, lock_file, |env, platform, package| {
             if affected_environments.contains(&(env.name().as_str(), platform)) {
                 match package {
-                    LockedPackageRef::Conda(package) => {
-                        !conda_packages.contains(&package.record().name)
-                    }
-                    LockedPackageRef::Pypi(package, _env) => !pypi_packages.contains(&package.name),
+                    LockedPackageKind::Conda(name) => !conda_packages.contains(name),
+                    LockedPackageKind::Pypi(name) => !pypi_packages.contains(name),
                 }
             } else {
                 true
@@ -1055,7 +1064,6 @@ mod tests {
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::{Platform, Version};
     use rattler_virtual_packages::{LibC, VirtualPackage};
-    use std::env;
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;

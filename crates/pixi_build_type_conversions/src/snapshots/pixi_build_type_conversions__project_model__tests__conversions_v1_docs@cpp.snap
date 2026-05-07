@@ -62,7 +62,8 @@ expression: project_model
         }
       },
       "buildDependencies": {},
-      "runDependencies": {}
+      "runDependencies": {},
+      "runConstraints": {}
     },
     "targets": {}
   }

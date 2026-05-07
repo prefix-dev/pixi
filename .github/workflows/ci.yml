@@ -188,20 +188,29 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          cache: rust
+          path: ~/.rustup
       - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          workspaces: ". -> target/pixi"
-          key: ${{ hashFiles('pixi.lock') }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
+      - name: Install cargo-sweep
+        if: github.ref == 'refs/heads/main'
+        uses: taiki-e/install-action@cca35edeb1d01366c2843b68fc3ca441446d73d3 # v2.77.1
+        with:
+          tool: cargo-sweep
+      - name: Prune target before save
+        if: github.ref == 'refs/heads/main'
+        env:
+          CARGO_TARGET_DIR: target/pixi
+        run: cargo sweep --time 7
 
   cargo-test-macos-aarch64:
     name: "cargo test | macos aarch64"
@@ -213,20 +222,29 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          cache: rust
+          path: ~/.rustup
       - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          workspaces: ". -> target/pixi"
-          key: ${{ hashFiles('pixi.lock') }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
+      - name: Install cargo-sweep
+        if: github.ref == 'refs/heads/main'
+        uses: taiki-e/install-action@cca35edeb1d01366c2843b68fc3ca441446d73d3 # v2.77.1
+        with:
+          tool: cargo-sweep
+      - name: Prune target before save
+        if: github.ref == 'refs/heads/main'
+        env:
+          CARGO_TARGET_DIR: target/pixi
+        run: cargo sweep --time 7
 
   cargo-test-macos-x86_64:
     name: "cargo test | macos x86_64"
@@ -238,20 +256,29 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          cache: rust
+          path: ~/.rustup
       - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          workspaces: ". -> target/pixi"
-          key: ${{ hashFiles('pixi.lock') }}
-          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
+      - name: Install cargo-sweep
+        if: github.ref == 'refs/heads/main'
+        uses: taiki-e/install-action@cca35edeb1d01366c2843b68fc3ca441446d73d3 # v2.77.1
+        with:
+          tool: cargo-sweep
+      - name: Prune target before save
+        if: github.ref == 'refs/heads/main'
+        env:
+          CARGO_TARGET_DIR: target/pixi
+        run: cargo sweep --time 7
 
   cargo-test-windows:
     name: "cargo test | windows x64"
@@ -296,15 +323,16 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
+        with:
+          cache: rust
+          path: ~/.rustup
       - uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
       - name: "Setup musl"
         run: |
           sudo apt update
           sudo apt install musl-tools
           rustup target add x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "Build"
         run: >
           cargo build
@@ -321,6 +349,14 @@ jobs:
             ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
             ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
           retention-days: 14
+      - name: Install cargo-sweep
+        if: github.ref == 'refs/heads/main'
+        uses: taiki-e/install-action@cca35edeb1d01366c2843b68fc3ca441446d73d3 # v2.77.1
+        with:
+          tool: cargo-sweep
+      - name: Prune target before save
+        if: github.ref == 'refs/heads/main'
+        run: cargo sweep --time 7
 
   build-binary-linux-riscv64gc:
     needs: determine_changes
@@ -367,9 +403,10 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0 # v1.4.3
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache: rust
+          path: ~/.rustup
       - name: "Build"
         run: >
           cargo build
@@ -385,6 +422,14 @@ jobs:
             ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
             ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi-build-*
           retention-days: 14
+      - name: Install cargo-sweep
+        if: github.ref == 'refs/heads/main'
+        uses: taiki-e/install-action@cca35edeb1d01366c2843b68fc3ca441446d73d3 # v2.77.1
+        with:
+          tool: cargo-sweep
+      - name: Prune target before save
+        if: github.ref == 'refs/heads/main'
+        run: cargo sweep --time 7
 
   build-binary-macos-x86_64:
     needs: determine_changes

@@ -24,6 +24,8 @@ pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
 :  The environment to render the environment file for. Defaults to the default environment
 - <a id="arg---name" href="#arg---name">`--name (-n) <NAME>`</a>
 :  The name to use for the rendered conda environment. Defaults to the environment name
+- <a id="arg---from-lockfile" href="#arg---from-lockfile">`--from-lockfile`</a>
+:  Render the environment with packages pinned to the versions resolved in the lock file instead of the manifest specs
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>

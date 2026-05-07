@@ -39,11 +39,13 @@ pub async fn add<I: Interface>(
     // Try to update the lock-file with the new channels
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
+        None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
             no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+            ..Default::default()
         },
         ReinstallPackages::default(),
         &InstallFilter::default(),
@@ -83,11 +85,13 @@ pub async fn remove<I: Interface>(
 
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
+        None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
             no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+            ..Default::default()
         },
         ReinstallPackages::default(),
         &InstallFilter::default(),

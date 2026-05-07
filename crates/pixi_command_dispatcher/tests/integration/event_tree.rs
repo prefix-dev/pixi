@@ -2,31 +2,13 @@
 //! operations that took place for a
 //! [`pixi_command_dispatcher::CommandDispatcher`].
 //!
-//! For example, this could be the output:
-//!
-//! ```
-//! Pixi solve (boost-check)
-//! ├── Source metadata ({ git = "https://github.com/wolfv/pixi-build-examples.git", rev = "a4c27e86a4a5395759486552abb3df8a47d50172", subdirectory = "boost-check" })
-//! │   ├── Git Checkout (https://github.com/wolfv/pixi-build-examples@a4c27e86a4a5395759486552abb3df8a47d50172)
-//! │   └── Instantiate tool environment (pixi-build-cmake)
-//! │       ├── Pixi solve (pixi-build-cmake)
-//! │       │   └── Conda solve #0
-//! │       └── Pixi install #0
-//! └── Conda solve #1
-//! ```
+//! The hierarchy is reconstructed by walking each operation's parent
+//! chain via the shared [`OperationRegistry`].
 
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use event_reporter::Event;
-use itertools::Itertools;
-use pixi_command_dispatcher::{
-    ReporterContext,
-    reporter::{
-        BackendSourceBuildId, BuildBackendMetadataId, CondaSolveId, GitCheckoutId,
-        InstantiateToolEnvId, PixiInstallId, PixiSolveId, SourceBuildId, SourceMetadataId,
-    },
-};
-use rattler_conda_types::PackageName;
+use pixi_compute_reporters::{OperationId, OperationRegistry};
 use slotmap::SlotMap;
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
@@ -49,163 +31,93 @@ struct Node {
     children: Vec<NodeId>,
 }
 
-impl From<EventStore> for EventTree {
-    fn from(store: EventStore) -> Self {
-        Self::new(store.0.lock().unwrap().iter())
-    }
-}
-
 impl EventTree {
-    pub fn new<'i>(events: impl IntoIterator<Item = &'i Event>) -> Self {
-        let mut builder = EventTreeBuilder::default();
+    pub fn from_store(store: &EventStore, registry: &Arc<OperationRegistry>) -> Self {
+        Self::new(store.0.lock().unwrap().iter(), registry)
+    }
 
-        let mut checkout_label = HashMap::new();
-        let mut pixi_solve_label = HashMap::new();
-        let mut pixi_install_label = HashMap::new();
-        let mut build_backend_metadata_label = HashMap::new();
-        let mut source_metadata_label = HashMap::new();
-        let mut source_build_label = HashMap::new();
-        let mut backend_source_build_labels = HashMap::new();
-        let mut instantiate_tool_env_label = HashMap::new();
+    pub fn new<'i>(
+        events: impl IntoIterator<Item = &'i Event>,
+        registry: &Arc<OperationRegistry>,
+    ) -> Self {
+        let mut builder = EventTreeBuilder::new(registry);
 
         for event in events {
             match event {
-                Event::CondaSolveQueued { id, context, .. } => {
-                    builder.set_event_parent((*id).into(), *context);
-                }
+                Event::CondaSolveQueued { id, .. } => builder.queue(*id),
                 Event::CondaSolveStarted { id } => {
-                    builder.alloc_node((*id).into(), format!("Conda solve #{}", id.0));
+                    builder.alloc_node(*id, format!("Conda solve #{}", id.0));
                 }
                 Event::CondaSolveFinished { .. } => {}
-                Event::PixiSolveQueued { id, context, spec } => {
-                    pixi_solve_label.insert(
-                        *id,
-                        spec.dependencies
-                            .names()
-                            .map(PackageName::as_source)
-                            .format(", ")
-                            .to_string(),
-                    );
-                    builder.set_event_parent((*id).into(), *context);
+                Event::PixiSolveQueued { id, spec } => {
+                    builder.queue_with_label(*id, format!("Pixi solve ({})", spec.name));
                 }
-                Event::PixiSolveStarted { id } => {
-                    builder.alloc_node(
-                        (*id).into(),
-                        format!("Pixi solve ({})", pixi_solve_label.get(id).unwrap()),
-                    );
-                }
+                Event::PixiSolveStarted { id } => builder.alloc_pending(*id),
                 Event::PixiSolveFinished { .. } => {}
-                Event::PixiInstallQueued { id, context, spec } => {
-                    pixi_install_label.insert(*id, &spec.name);
-                    builder.set_event_parent((*id).into(), *context);
+                Event::PixiInstallQueued { id, spec } => {
+                    builder.queue_with_label(*id, format!("Pixi install ({})", spec.name));
                 }
-                Event::PixiInstallStarted { id } => {
-                    builder.alloc_node(
-                        (*id).into(),
-                        format!("Pixi install ({})", pixi_install_label[id]),
-                    );
-                }
+                Event::PixiInstallStarted { id } => builder.alloc_pending(*id),
                 Event::PixiInstallFinished { .. } => {}
-                Event::GitCheckoutQueued {
-                    id,
-                    context,
-                    reference,
-                } => {
-                    checkout_label.insert(
-                        *id,
-                        format!("{}@{}", reference.url.as_url(), reference.reference),
-                    );
-                    builder.set_event_parent((*id).into(), *context);
-                }
-                Event::GitCheckoutStarted { id } => {
-                    builder.alloc_node(
-                        (*id).into(),
-                        format!("Git Checkout ({})", checkout_label.get(id).unwrap()),
-                    );
-                }
-                Event::GitCheckoutFinished { .. } => {}
-                Event::SourceMetadataQueued { id, context, spec } => {
-                    source_metadata_label.insert(
+                Event::GitCheckoutQueued { id, reference } => {
+                    builder.queue_with_label(
                         *id,
                         format!(
-                            "{} @ {}",
-                            &spec.package.as_source(),
+                            "Git Checkout ({}@{})",
+                            reference.url.as_url(),
+                            reference.reference
+                        ),
+                    );
+                }
+                Event::GitCheckoutStarted { id } => builder.alloc_pending(*id),
+                Event::GitCheckoutFinished { .. } => {}
+                Event::SourceMetadataQueued { id, spec } => {
+                    builder.queue_with_label(
+                        *id,
+                        format!(
+                            "Source metadata ({} @ {})",
+                            spec.package.as_source(),
                             spec.backend_metadata.manifest_source
                         ),
                     );
-                    builder.set_event_parent((*id).into(), *context);
                 }
-                Event::SourceMetadataStarted { id } => {
-                    builder.alloc_node(
-                        (*id).into(),
-                        format!(
-                            "Source metadata ({})",
-                            source_metadata_label.get(id).unwrap()
-                        ),
-                    );
-                }
+                Event::SourceMetadataStarted { id } => builder.alloc_pending(*id),
                 Event::SourceMetadataFinished { .. } => {}
-                Event::BuildBackendMetadataQueued { id, context, spec } => {
-                    build_backend_metadata_label.insert(*id, spec.manifest_source.to_string());
-                    builder.set_event_parent((*id).into(), *context);
-                }
-                Event::BuildBackendMetadataStarted { id } => {
-                    builder.alloc_node(
-                        (*id).into(),
-                        format!(
-                            "Build backend metadata ({})",
-                            build_backend_metadata_label.get(id).unwrap()
-                        ),
-                    );
-                }
-                Event::BuildBackendMetadataFinished { .. } => {}
-                Event::SourceBuildQueued { id, context, spec } => {
-                    source_build_label.insert(
+                Event::SourceRecordQueued { id, spec } => {
+                    builder.queue_with_label(
                         *id,
-                        format!("{} @ {}", spec.package.name.as_source(), spec.source),
-                    );
-                    builder.set_event_parent((*id).into(), *context);
-                }
-                Event::SourceBuildStarted { id } => {
-                    builder.alloc_node(
-                        (*id).into(),
-                        format!("Source build ({})", source_build_label.get(id).unwrap()),
-                    );
-                }
-                Event::SourceBuildFinished { .. } => {}
-                Event::BackendSourceBuildQueued {
-                    id,
-                    package,
-                    context,
-                } => {
-                    backend_source_build_labels.insert(*id, package.name.as_source().to_owned());
-                    builder.set_event_parent((*id).into(), *context);
-                }
-                Event::BackendSourceBuildStarted { id } => {
-                    builder.alloc_node(
-                        (*id).into(),
                         format!(
-                            "Backend source build ({})",
-                            backend_source_build_labels.get(id).unwrap()
+                            "Source record ({} @ {})",
+                            spec.package.as_source(),
+                            spec.backend_metadata.manifest_source
                         ),
                     );
                 }
+                Event::SourceRecordStarted { id } => builder.alloc_pending(*id),
+                Event::SourceRecordFinished { .. } => {}
+                Event::BuildBackendMetadataQueued { id, spec } => {
+                    builder.queue_with_label(
+                        *id,
+                        format!("Build backend metadata ({})", spec.manifest_source),
+                    );
+                }
+                Event::BuildBackendMetadataStarted { id } => builder.alloc_pending(*id),
+                Event::BuildBackendMetadataFinished { .. } => {}
+                Event::BackendSourceBuildQueued { id, package } => {
+                    builder.queue_with_label(*id, format!("Backend source build ({package})"));
+                }
+                Event::BackendSourceBuildStarted { id } => builder.alloc_pending(*id),
                 Event::BackendSourceBuildFinished { .. } => {}
-                Event::InstantiateToolEnvQueued { id, context, spec } => {
-                    instantiate_tool_env_label
-                        .insert(*id, spec.requirement.0.as_source().to_string());
-                    builder.set_event_parent((*id).into(), *context);
+                Event::InstantiateBackendQueued { id, spec } => {
+                    builder.queue_with_label(*id, format!("Instantiate backend ({})", spec.name));
                 }
-                Event::InstantiateToolEnvStarted { id } => {
-                    builder.alloc_node(
-                        (*id).into(),
-                        format!(
-                            "Instantiate tool environment ({})",
-                            instantiate_tool_env_label.get(id).unwrap()
-                        ),
-                    );
+                Event::InstantiateBackendStarted { id } => builder.alloc_pending(*id),
+                Event::InstantiateBackendFinished { .. } => {}
+                Event::UrlCheckoutQueued { .. }
+                | Event::UrlCheckoutStarted { .. }
+                | Event::UrlCheckoutFinished { .. } => {
+                    // URL checkouts don't participate in the tree display.
                 }
-                Event::InstantiateToolEnvFinished { .. } => {}
             }
         }
 
@@ -240,72 +152,67 @@ impl Display for EventTree {
 }
 
 /// A helper struct that aids in the construction of an [`EventTree`].
-#[derive(Default)]
-struct EventTreeBuilder {
+struct EventTreeBuilder<'r> {
+    registry: &'r Arc<OperationRegistry>,
     nodes: SlotMap<NodeId, Node>,
     rootes: Vec<NodeId>,
-    event_parent_nodes: HashMap<EventId, NodeId>,
-    event_nodes: HashMap<EventId, NodeId>,
+    /// Labels for queued ops not yet alloc'd; alloc-on-started picks these up.
+    pending_labels: HashMap<OperationId, String>,
+    /// Allocated node per operation id.
+    op_nodes: HashMap<OperationId, NodeId>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From)]
-pub enum EventId {
-    CondaSolve(CondaSolveId),
-    PixiSolve(PixiSolveId),
-    PixiInstall(PixiInstallId),
-    GitCheckout(GitCheckoutId),
-    SourceMetadata(SourceMetadataId),
-    BuildBackendMetadata(BuildBackendMetadataId),
-    InstantiateToolEnv(InstantiateToolEnvId),
-    SourceBuild(SourceBuildId),
-    BackendSourceBuild(BackendSourceBuildId),
-}
-
-impl From<ReporterContext> for EventId {
-    fn from(context: ReporterContext) -> Self {
-        match context {
-            ReporterContext::SolvePixi(id) => Self::PixiSolve(id),
-            ReporterContext::SolveConda(id) => Self::CondaSolve(id),
-            ReporterContext::InstallPixi(id) => Self::PixiInstall(id),
-            ReporterContext::BuildBackendMetadata(id) => Self::BuildBackendMetadata(id),
-            ReporterContext::InstantiateToolEnv(id) => Self::InstantiateToolEnv(id),
-            ReporterContext::SourceBuild(id) => Self::SourceBuild(id),
-            ReporterContext::SourceMetadata(id) => Self::SourceMetadata(id),
-            ReporterContext::BackendSourceBuild(id) => Self::BackendSourceBuild(id),
+impl<'r> EventTreeBuilder<'r> {
+    fn new(registry: &'r Arc<OperationRegistry>) -> Self {
+        Self {
+            registry,
+            nodes: SlotMap::with_key(),
+            rootes: Vec::new(),
+            pending_labels: HashMap::new(),
+            op_nodes: HashMap::new(),
         }
     }
-}
 
-impl EventTreeBuilder {
-    /// Allocate a node in the tree
-    fn alloc_node(&mut self, event_id: EventId, label: String) -> NodeId {
+    /// Record the existence of a queued op without a label (used for
+    /// conda-solve, which builds its label from the started event).
+    fn queue(&mut self, _id: OperationId) {}
+
+    fn queue_with_label(&mut self, id: OperationId, label: String) {
+        self.pending_labels.insert(id, label);
+    }
+
+    /// Allocate a tree node for `op_id` whose label was previously
+    /// recorded via [`queue_with_label`]. Walks parents via the
+    /// registry to attach the node to the correct slot.
+    fn alloc_pending(&mut self, op_id: OperationId) {
+        let label = self
+            .pending_labels
+            .remove(&op_id)
+            .unwrap_or_else(|| format!("op#{}", op_id.0));
+        self.alloc_node(op_id, label);
+    }
+
+    /// Allocate a tree node directly with the given label (used by
+    /// CondaSolveStarted which doesn't go through `queue_with_label`).
+    fn alloc_node(&mut self, op_id: OperationId, label: String) -> NodeId {
         let id = self.nodes.insert(Node {
             label,
             children: Vec::new(),
         });
 
-        if let Some(parent) = self.event_parent_nodes.get(&event_id) {
-            self.nodes[*parent].children.push(id);
-        } else {
-            self.rootes.push(id);
+        let parent = self
+            .registry
+            .ancestors(op_id)
+            .find_map(|ancestor| self.op_nodes.get(&ancestor).copied());
+        match parent {
+            Some(parent) => self.nodes[parent].children.push(id),
+            None => self.rootes.push(id),
         }
 
-        self.event_nodes.insert(event_id, id);
-
+        self.op_nodes.insert(op_id, id);
         id
     }
 
-    /// Set the parent for the node with the given [`EventId`].
-    fn set_event_parent(&mut self, id: EventId, context: Option<ReporterContext>) {
-        if let Some(context) = context
-            .and_then(|context| self.event_nodes.get(&context.into()))
-            .copied()
-        {
-            self.event_parent_nodes.insert(id, context);
-        }
-    }
-
-    /// Finish the construction of the tree
     fn finish(self) -> EventTree {
         EventTree {
             rootes: self.rootes,

@@ -87,7 +87,7 @@ pub enum CanSkip {
 }
 
 /// A task that contains enough information to be able to execute it. The
-/// lifetime [`'p`] refers to the lifetime of the project that contains the
+/// lifetime `'p` refers to the lifetime of the project that contains the
 /// tasks.
 ///
 /// For hierarchical-tasks member tasks, `workspace` is the **member's**

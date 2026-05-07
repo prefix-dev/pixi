@@ -37,6 +37,7 @@ pub struct Target {
     pub host_dependencies: HashMap<String, PackageSpec>,
     pub build_dependencies: HashMap<String, PackageSpec>,
     pub run_dependencies: HashMap<String, PackageSpec>,
+    pub run_constraints: HashMap<String, PackageSpec>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -164,6 +165,17 @@ fn convert_target_to_v1(target: &Target) -> PbtTarget {
         run_dependencies: Some(
             target
                 .run_dependencies
+                .iter()
+                .map(|(name, spec)| {
+                    let source_name =
+                        pixi_build_types::SourcePackageName::from(PackageName::new_unchecked(name));
+                    (source_name, convert_package_spec_to_v1(spec))
+                })
+                .collect(),
+        ),
+        run_constraints: Some(
+            target
+                .run_constraints
                 .iter()
                 .map(|(name, spec)| {
                     let source_name =

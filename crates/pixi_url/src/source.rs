@@ -45,6 +45,7 @@ pub struct UrlSource {
     progress: Arc<dyn ProgressHandler>,
 }
 
+#[allow(clippy::result_large_err)]
 impl UrlSource {
     /// Initialize a new URL source.
     pub fn new(spec: UrlSpec, client: LazyClient, cache: impl Into<PathBuf>) -> Self {

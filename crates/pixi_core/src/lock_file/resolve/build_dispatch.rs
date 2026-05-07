@@ -136,8 +136,7 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    /// Set the link mode for the build dispatch
-    #[expect(unused)]
+    /// Set the link mode for the build dispatch.
     pub fn with_link_mode(mut self, link_mode: LinkMode) -> Self {
         self.link_mode = link_mode;
         self
@@ -227,11 +226,14 @@ pub struct LazyBuildDispatch<'a> {
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily
-/// initialized. along with the build dispatch.
+/// initialized along with the build dispatch.
 ///
-/// This needs to be passed in externally or there will be problems with the
-/// borrows being shorter than the lifetime of the `BuildDispatch`, and we are
-/// returning the references.
+/// Fields are stored here for two reasons:
+/// 1. **Expensive operations**: `interpreter` requires disk I/O
+/// 2. **Lifetime requirements**: `BuildDispatch<'a>` needs references with lifetime `'a`,
+///    so values must be stored in a struct with that lifetime (not borrowed from `&self`)
+///
+/// The `last_error` field is for panic recovery during build dispatch initialization.
 #[derive(Default)]
 pub struct LazyBuildDispatchDependencies {
     /// The initialized python interpreter
@@ -239,6 +241,8 @@ pub struct LazyBuildDispatchDependencies {
     /// The non isolated packages
     non_isolated_packages: OnceCell<BuildIsolation>,
     /// The python environment
+    /// needed to be together with the interpreter
+    /// for passing correctly the lifetime of BuildDispatch<'a>
     python_env: OnceCell<PythonEnvironment>,
     /// The constraints for dependency resolution
     constraints: OnceCell<Constraints>,
@@ -336,7 +340,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 let prefix = self
                     .prefix_updater
                     .update(
-                        repodata_records.to_vec(),
+                        repodata_records.into_iter().map(Into::into).collect(),
                         None,
                         self.ignore_packages.clone(),
                     )
