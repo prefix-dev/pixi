@@ -1,10 +1,10 @@
-use crate::compute_data::{
-    HasCacheDirs, HasDownloadClient, HasUrlCheckoutReporter, HasUrlResolver,
-};
+use crate::cache::markers::UrlDir;
+use crate::compute_data::{HasDownloadClient, HasUrlCheckoutReporter, HasUrlResolver};
 use crate::reporter::UrlCheckoutReporter;
 use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
 use crate::{SourceCheckout, SourceCheckoutError};
 use derive_more::Display;
+use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
 use pixi_compute_reporters::OperationId;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
@@ -85,10 +85,10 @@ impl Key for CheckoutUrl {
     type Value = Arc<Result<UrlCheckout, UrlError>>;
 
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        let cache_dir = ctx.cache_dir::<UrlDir>().await;
         let data: &DataStore = ctx.global_data();
         let resolver = data.url_resolver().clone();
         let client = data.download_client().clone();
-        let cache_dir = data.cache_dirs().url();
         let semaphore = data.url_checkout_semaphore().cloned();
         let reporter = data.url_checkout_reporter().cloned();
 

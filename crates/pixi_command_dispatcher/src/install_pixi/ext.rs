@@ -12,9 +12,10 @@ use rattler_conda_types::{PackageName, RepoDataRecord};
 
 use crate::BuildProfile;
 use crate::CommandDispatcherError;
+use crate::cache::markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir};
 use crate::compute_data::{
-    HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasCacheDirs, HasDownloadClient,
-    HasPackageCache, HasPixiInstallReporter,
+    HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasDownloadClient, HasPackageCache,
+    HasPixiInstallReporter,
 };
 use crate::install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
@@ -22,6 +23,7 @@ use crate::install_pixi::{
 };
 use crate::keys::{ArtifactCache, SourceBuildKey, SourceBuildSpec, WorkspaceCache};
 use crate::reporter::PixiInstallReporter;
+use pixi_compute_cache_dirs::CacheDirsExt;
 
 /// Extension trait on [`ComputeCtx`] that installs a pixi environment
 /// with source-build recursion routed through [`SourceBuildKey`].
@@ -114,10 +116,10 @@ async fn install_inner(
     // `force_reinstall` for source packages must invalidate the
     // source-build caches before the SourceBuildKey fanout below.
     if !spec.force_reinstall.is_empty() {
-        let cache_dirs = ctx.global_data().cache_dirs();
-        let artifact_cache = ArtifactCache::new(cache_dirs.source_build_artifacts().as_std_path());
-        let workspace_cache =
-            WorkspaceCache::new(cache_dirs.source_build_workspaces().as_std_path());
+        let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
+        let workspaces_dir = ctx.cache_dir::<SourceBuildWorkspacesDir>().await;
+        let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path());
+        let workspace_cache = WorkspaceCache::new(workspaces_dir.as_std_path());
         for package in source_records
             .iter()
             .filter(|record| spec.force_reinstall.contains(record.name()))

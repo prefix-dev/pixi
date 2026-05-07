@@ -78,6 +78,10 @@ pub use build_backend_metadata::{
 pub use cache::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, CacheDirs, CacheEntry,
     CacheRevision, MetadataCache,
+    markers::{
+        BackendMetadataDir, BuildBackendsDir, GitDir, LegacySourceEnvDir, PackagesDir,
+        SourceBuildArtifactsDir, SourceBuildWorkspacesDir, UrlDir,
+    },
 };
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
@@ -115,6 +119,10 @@ pub use instantiate_backend_key::{
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use keys::SourceMetadata;
+pub use pixi_compute_cache_dirs::{
+    CacheBase, CacheDirKey, CacheDirsExt, CacheDirsKey, CacheLocation,
+};
+pub use pixi_compute_env_vars::{EnvVar, EnvVarsKey};
 pub use reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
     GitCheckoutReporter, InstantiateBackendReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,

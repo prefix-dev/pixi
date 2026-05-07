@@ -62,7 +62,7 @@ impl<L> Default for CacheDirKey<L> {
 
 impl<L> Clone for CacheDirKey<L> {
     fn clone(&self) -> Self {
-        Self::new()
+        *self
     }
 }
 

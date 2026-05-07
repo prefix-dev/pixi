@@ -18,7 +18,7 @@ use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
 
-use crate::cache::{BuildBackendMetadataCache, CacheDirs};
+use crate::cache::BuildBackendMetadataCache;
 use crate::reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
     GitCheckoutReporter, InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter,
@@ -66,17 +66,6 @@ pub trait HasDownloadClient {
 impl HasDownloadClient for DataStore {
     fn download_client(&self) -> &LazyClient {
         self.get::<LazyClient>()
-    }
-}
-
-/// Access the cache directories from global data.
-pub trait HasCacheDirs {
-    fn cache_dirs(&self) -> &CacheDirs;
-}
-
-impl HasCacheDirs for DataStore {
-    fn cache_dirs(&self) -> &CacheDirs {
-        self.get::<CacheDirs>()
     }
 }
 
