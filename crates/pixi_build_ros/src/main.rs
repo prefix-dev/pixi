@@ -170,6 +170,21 @@ impl GenerateRecipe for RosGenerator {
         build_items.push(Item::Value(Value::new_template(c_compiler, None)));
         build_items.push(Item::Value(Value::new_template(cxx_compiler, None)));
 
+        // ament_cargo packages need the rust toolchain plus the cargo-ament-build
+        // wrapper from this distro's channel. The wrapper has no upstream package.xml,
+        // so it ships as a hand-authored vendor recipe.
+        if package_xml.build_type() == "ament_cargo" {
+            build_items.push(Item::Value(Value::new_concrete(
+                SerializableMatchSpec::from("rust"),
+                None,
+            )));
+            let cargo_ament_build = format!("ros-{distro_name}-cargo-ament-build");
+            build_items.push(Item::Value(Value::new_concrete(
+                SerializableMatchSpec::from(cargo_ament_build.as_str()),
+                None,
+            )));
+        }
+
         // Add host dependencies
         let host_dep_names = ["python", "numpy", "pip", "pkg-config"];
         for dep in &host_dep_names {
@@ -1164,6 +1179,51 @@ mod tests {
         assert!(
             run_deps.iter().any(|d| d == "ros-noetic-ros-custom2-msgs"),
             "Expected ros-noetic-ros-custom2-msgs in run deps: {run_deps:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+    async fn test_generate_recipe_ament_cargo_injects_rust() {
+        let model = project_fixture!({
+            "name": "cargo_demo",
+            "version": "0.1.0",
+            "targets": { "defaultTarget": {} }
+        });
+
+        let test_data = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("test_data");
+        let generated = generate_recipe_for_fixture(
+            "ament_cargo_minimal.xml",
+            "jazzy",
+            &model,
+            vec![PackageMappingSource::File {
+                path: test_data.join("other_package_map.yaml"),
+            }],
+        )
+        .await;
+
+        let build_specs: Vec<String> = generated
+            .recipe
+            .requirements
+            .build
+            .iter()
+            .filter_map(|item| match item {
+                Item::Value(v) => v.as_concrete().map(|s| s.to_string()),
+                _ => None,
+            })
+            .collect();
+
+        assert!(
+            build_specs.iter().any(|s| s == "rust"),
+            "expected `rust` in build deps, got {:?}",
+            build_specs
+        );
+        assert!(
+            build_specs
+                .iter()
+                .any(|s| s == "ros-jazzy-cargo-ament-build"),
+            "expected `ros-jazzy-cargo-ament-build` in build deps, got {:?}",
+            build_specs
         );
     }
 }
