@@ -34,6 +34,34 @@ pub enum PixiNativeError {
          Remove or rename the conflicting `ros-<distro>-*` deps."
     ))]
     DistroConflict { distros: Vec<String> },
+
+    #[error("`build-type` is required when `mode = pixi-native`")]
+    #[diagnostic(help(
+        "Set `[package.build.config].build-type` to one of `ament_cmake`, `ament_python`, or `ament_cargo`."
+    ))]
+    BuildTypeRequired,
+
+    #[error("invalid ROS distro name: '{distro}'")]
+    #[diagnostic(help(
+        "ROS distro names must contain only letters, digits, `-`, `_`, or `.` characters."
+    ))]
+    InvalidDistroName { distro: String },
+}
+
+/// Validate a ROS distro string before it's interpolated into conda package
+/// names. Conda package names accept `[0-9a-zA-Z\-_.]`; anything else would
+/// later panic inside `SerializableMatchSpec::from`.
+fn validate_distro(distro: &str) -> Result<(), PixiNativeError> {
+    if distro.is_empty()
+        || !distro
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+    {
+        return Err(PixiNativeError::InvalidDistroName {
+            distro: distro.to_string(),
+        });
+    }
+    Ok(())
 }
 
 /// Resolve the ROS distro string for pixi-native mode.
@@ -45,13 +73,15 @@ pub fn resolve_distro(
     channels: &[ChannelUrl],
     model: &ProjectModel,
 ) -> Result<String, PixiNativeError> {
-    if let Some(d) = &config.distro {
-        return Ok(d.clone());
-    }
-    if let Some(d) = extract_distro_from_channels_list(channels) {
-        return Ok(d);
-    }
-    infer_distro_from_model(model)
+    let distro = if let Some(d) = &config.distro {
+        d.clone()
+    } else if let Some(d) = extract_distro_from_channels_list(channels) {
+        d
+    } else {
+        infer_distro_from_model(model)?
+    };
+    validate_distro(&distro)?;
+    Ok(distro)
 }
 
 /// Walk every dep table on every target in the model. Collect the distinct
@@ -112,13 +142,11 @@ pub async fn generate(
     _host_platform: Platform,
     channels: Vec<ChannelUrl>,
 ) -> miette::Result<GeneratedRecipe> {
-    use miette::IntoDiagnostic;
-
-    let distro = resolve_distro(config, &channels, model).into_diagnostic()?;
+    let distro = resolve_distro(config, &channels, model)?;
 
     let build_type = config
         .build_type
-        .ok_or_else(|| miette::miette!("build-type required in pixi-native mode"))?;
+        .ok_or(PixiNativeError::BuildTypeRequired)?;
 
     if !config.extra_package_mappings.is_empty() {
         tracing::warn!(
@@ -201,35 +229,13 @@ pub async fn generate(
 
     generated.recipe.build.script = Script::from_content(script_content).with_env(script_env);
 
-    // Add input globs the cache invalidator should watch.
-    for glob in [
-        "**/*.c",
-        "**/*.cpp",
-        "**/*.h",
-        "**/*.hpp",
-        "**/*.rs",
-        "**/*.py",
-        "**/*.pyx",
-        "**/*.sh",
-        "Cargo.toml",
-        "Cargo.lock",
-        "CMakeLists.txt",
-        "Makefile",
-        "MANIFEST.in",
-        "setup.py",
-        "setup.cfg",
-        "pyproject.toml",
-        "package.xml",
-        "tests/**/*.py",
-        "docs/**/*.rst",
-        "docs/**/*.md",
-        "launch/**/*.py",
-        "config/*.yaml",
-        "msg/**/*.msg",
-        "srv/**/*.srv",
-        "action/**/*.action",
-    ] {
-        generated.metadata_input_globs.insert(glob.to_string());
+    // Add input globs the cache invalidator should watch. Pixi-native mode
+    // doesn't distinguish editable installs, so include the python globs too.
+    for glob in crate::globs::ROS_SOURCE_GLOBS
+        .iter()
+        .chain(crate::globs::ROS_PYTHON_SOURCE_GLOBS.iter())
+    {
+        generated.metadata_input_globs.insert((*glob).to_string());
     }
     if let Some(extra) = &config.extra_input_globs {
         for g in extra {
@@ -472,7 +478,37 @@ mod tests {
             Ok(_) => panic!("expected error, got Ok"),
             Err(e) => e,
         };
-        assert!(format!("{:?}", err).contains("build-type"));
+        let typed = err
+            .downcast_ref::<PixiNativeError>()
+            .expect("expected a PixiNativeError");
+        assert!(matches!(typed, PixiNativeError::BuildTypeRequired));
+    }
+
+    #[tokio::test]
+    async fn generate_invalid_distro_name_errors() {
+        let cfg = RosBackendConfig {
+            mode: Some(RosMode::PixiNative),
+            build_type: Some(RosBuildType::AmentCmake),
+            distro: Some("kilted hat".to_string()), // space invalid
+            ..Default::default()
+        };
+        let model = model_with_deps(&[], &[]);
+        let err = match generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        {
+            Ok(_) => panic!("expected error, got Ok"),
+            Err(e) => e,
+        };
+        let typed = err
+            .downcast_ref::<PixiNativeError>()
+            .expect("expected a PixiNativeError");
+        assert!(matches!(typed, PixiNativeError::InvalidDistroName { .. }));
     }
 
     #[tokio::test]

@@ -11,6 +11,7 @@
 mod build_script;
 pub mod config;
 mod distro;
+mod globs;
 mod metadata;
 pub mod package_map;
 pub mod package_xml;
@@ -281,35 +282,15 @@ impl GenerateRecipe for RosGenerator {
         _workdir: impl AsRef<Path>,
         editable: bool,
     ) -> miette::Result<BTreeSet<String>> {
-        let mut globs: Vec<&str> = vec![
-            "**/*.c",
-            "**/*.cpp",
-            "**/*.h",
-            "**/*.hpp",
-            "**/*.rs",
-            "**/*.sh",
-            "package.xml",
-            "setup.py",
-            "setup.cfg",
-            "pyproject.toml",
-            "Makefile",
-            "CMakeLists.txt",
-            "MANIFEST.in",
-            "tests/**/*.py",
-            "docs/**/*.rst",
-            "docs/**/*.md",
-            "launch/**/*.py",
-            "config/*.yaml",
-            "msg/**/*.msg",
-            "srv/**/*.srv",
-            "action/**/*.action",
-        ];
-
+        let mut result: BTreeSet<String> = globs::ROS_SOURCE_GLOBS
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
         if !editable {
-            globs.extend(["**/*.py", "**/*.pyx"]);
+            for g in globs::ROS_PYTHON_SOURCE_GLOBS {
+                result.insert((*g).to_string());
+            }
         }
-
-        let mut result: BTreeSet<String> = globs.iter().map(|s| s.to_string()).collect();
         if let Some(extra) = &config.extra_input_globs {
             for g in extra {
                 result.insert(g.clone());
