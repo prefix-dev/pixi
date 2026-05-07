@@ -2155,10 +2155,9 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
 /// that extension traits on DataStore provide access to shared resources.
 #[tokio::test]
 pub async fn compute_engine_wired_into_dispatcher() {
-    use pixi_command_dispatcher::compute_data::{
-        HasDownloadClient, HasGateway, HasGitResolver, HasUrlResolver,
-    };
+    use pixi_command_dispatcher::compute_data::{HasGateway, HasGitResolver, HasUrlResolver};
     use pixi_compute_engine::{ComputeCtx, Key};
+    use pixi_compute_network::HasDownloadClient;
     use std::fmt;
 
     // A trivial Key that reads Gateway from global_data to prove the wiring works.

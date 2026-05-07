@@ -1,10 +1,11 @@
 use crate::cache::markers::UrlDir;
-use crate::compute_data::{HasDownloadClient, HasUrlCheckoutReporter, HasUrlResolver};
+use crate::compute_data::{HasUrlCheckoutReporter, HasUrlResolver};
 use crate::reporter::UrlCheckoutReporter;
 use crate::{SourceCheckout, SourceCheckoutError};
 use derive_more::Display;
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
+use pixi_compute_network::HasDownloadClient;
 use pixi_compute_reporters::{Active, LifecycleKind, OperationId, ReporterLifecycle};
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
 use pixi_record::{PinnedSourceSpec, PinnedUrlSpec};

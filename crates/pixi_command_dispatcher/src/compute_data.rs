@@ -14,7 +14,6 @@ use pixi_compute_engine::DataStore;
 use pixi_git::resolver::GitResolver;
 use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
-use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
 
@@ -55,17 +54,6 @@ pub trait HasUrlResolver {
 impl HasUrlResolver for DataStore {
     fn url_resolver(&self) -> &UrlResolver {
         self.get::<UrlResolver>()
-    }
-}
-
-/// Access the download client from global data.
-pub trait HasDownloadClient {
-    fn download_client(&self) -> &LazyClient;
-}
-
-impl HasDownloadClient for DataStore {
-    fn download_client(&self) -> &LazyClient {
-        self.get::<LazyClient>()
     }
 }
 

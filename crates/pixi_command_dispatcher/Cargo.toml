@@ -53,6 +53,7 @@ pixi_build_types = { workspace = true }
 pixi_compute_cache_dirs = { workspace = true }
 pixi_compute_engine = { workspace = true }
 pixi_compute_env_vars = { workspace = true }
+pixi_compute_network = { workspace = true }
 pixi_compute_reporters = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
