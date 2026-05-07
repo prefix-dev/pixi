@@ -26,9 +26,9 @@ use crate::{
         source_metadata::{SourceMetadataKey, SourceMetadataSpec},
     },
     reporter::SourceMetadataReporter,
-    reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle},
     source_checkout::SourceCheckoutExt,
 };
+use pixi_compute_reporters::{Active, LifecycleKind, ReporterLifecycle};
 
 /// Input to [`ResolveSourcePackageKey`]. `preferred_build_source` is the
 /// full pin map inherited from the enclosing

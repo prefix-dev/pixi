@@ -59,7 +59,6 @@ mod instantiate_backend_key;
 mod instantiate_tool_env;
 pub mod keys;
 pub mod reporter;
-mod reporter_lifecycle;
 mod resolved_backend_command;
 mod solve_binary;
 mod solve_conda;

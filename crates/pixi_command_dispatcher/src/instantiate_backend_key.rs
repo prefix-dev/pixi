@@ -41,9 +41,8 @@ use crate::discovered_backend::DiscoveredBackendKey;
 use crate::ephemeral_env::{EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec};
 use crate::injected_config::ToolBuildEnvironmentKey;
 use crate::reporter::InstantiateBackendReporter;
-use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
 use crate::resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
-use pixi_compute_reporters::OperationId;
+use pixi_compute_reporters::{Active, LifecycleKind, OperationId, ReporterLifecycle};
 
 /// Dedup key for spawning a build backend.
 ///

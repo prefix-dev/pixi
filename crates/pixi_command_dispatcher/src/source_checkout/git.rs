@@ -1,12 +1,11 @@
 use crate::compute_data::{
     HasCacheDirs, HasDownloadClient, HasGitCheckoutReporter, HasGitResolver,
 };
-use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
 use crate::{GitCheckoutReporter, SourceCheckout, SourceCheckoutError};
 use derive_more::Display;
 use futures::future::Either;
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
-use pixi_compute_reporters::OperationId;
+use pixi_compute_reporters::{Active, LifecycleKind, OperationId, ReporterLifecycle};
 use pixi_git::git::GitReference;
 use pixi_git::resolver::RepositoryReference;
 use pixi_git::source::Fetch as GitFetch;
