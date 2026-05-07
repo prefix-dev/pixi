@@ -26,7 +26,7 @@ The easiest way is to use `pixi publish`, which builds the package and uploads i
 
 ```bash
 # Build and publish in one step
-pixi publish --to https://prefix.dev/<channel-name>
+pixi publish https://prefix.dev/<channel-name>
 ```
 
 You can also build and upload separately for more control:
@@ -101,10 +101,10 @@ jobs:
       - uses: prefix-dev/setup-pixi@v0.8.0
 
       # Build and publish in one step — no stored secrets needed!
-      - run: pixi publish --to https://prefix.dev/<channel-name>
+      - run: pixi publish https://prefix.dev/<channel-name>
 
       # Or with sigstore attestation for supply chain security:
-      # - run: pixi publish --to https://prefix.dev/<channel-name> --generate-attestation
+      # - run: pixi publish https://prefix.dev/<channel-name> --generate-attestation
 ```
 
 With trusted publishing configured, pixi automatically handles the OIDC token exchange with prefix.dev — no stored API keys required.

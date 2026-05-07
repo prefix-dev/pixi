@@ -4311,7 +4311,7 @@ Once this CEP is implemented, Pixi will switch the behavior of <code>exclude-new
 <p>You can generate attestations directly during publish or upload an existing attestation in CI.</p>
 <p>For more background on Sigstore attestations in the conda ecosystem, see the <a href="https://rattler-build.prefix.dev/latest/sigstore/">Rattler-Build Sigstore documentation</a>.</p>
 <p>For example:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--to<span class="w"> </span>https://prefix.dev/&lt;channel-name&gt;<span class="w"> </span>--generate-attestation
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>publish<span class="w"> </span>https://prefix.dev/&lt;channel-name&gt;<span class="w"> </span>--generate-attestation
 </span></code></pre></div>
 <p>When using the lower-level upload command for prefix.dev, Pixi can also upload an existing attestation or generate one during CI:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>upload<span class="w"> </span>prefix<span class="w"> </span>--channel<span class="w"> </span>&lt;channel-name&gt;<span class="w"> </span>--generate-attestation<span class="w"> </span>dist/*.conda

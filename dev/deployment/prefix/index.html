@@ -4243,7 +4243,7 @@ Create a channel by navigating to <code>Channels</code> and clicking "New Channe
 <p>Alternatively, you can build and publish packages using the <code>pixi</code> CLI. To do so locally, you need to generate an API key for your user account (User -&gt; Settings -&gt; Api Keys).</p>
 <p>The easiest way is to use <code>pixi publish</code>, which builds the package and uploads it in one step:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Build and publish in one step</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--to<span class="w"> </span>https://prefix.dev/&lt;channel-name&gt;
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>https://prefix.dev/&lt;channel-name&gt;
 </span></code></pre></div>
 <p>You can also build and upload separately for more control:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Build first, then upload the artifact</span>
@@ -4297,10 +4297,10 @@ Create a channel by navigating to <code>Channels</code> and clicking "New Channe
 </span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">uses</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">prefix-dev/setup-pixi@v0.8.0</span>
 </span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
 </span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">      </span><span class="c1"># Build and publish in one step — no stored secrets needed!</span>
-</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi publish --to https://prefix.dev/&lt;channel-name&gt;</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">run</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pixi publish https://prefix.dev/&lt;channel-name&gt;</span>
 </span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>
 </span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">      </span><span class="c1"># Or with sigstore attestation for supply chain security:</span>
-</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">      </span><span class="c1"># - run: pixi publish --to https://prefix.dev/&lt;channel-name&gt; --generate-attestation</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">      </span><span class="c1"># - run: pixi publish https://prefix.dev/&lt;channel-name&gt; --generate-attestation</span>
 </span></code></pre></div>
 <p>With trusted publishing configured, pixi automatically handles the OIDC token exchange with prefix.dev — no stored API keys required.</p>
 
