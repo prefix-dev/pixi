@@ -457,4 +457,24 @@ mod tests {
         };
         assert!(format!("{:?}", err).contains("build-type"));
     }
+
+    #[tokio::test]
+    async fn pixi_native_ament_cmake_recipe() {
+        let cfg = cfg_pixi_native(RosBuildType::AmentCmake);
+        let model = model_with_deps(&["ros-kilted-rclcpp"], &["ros-kilted-rclcpp"]);
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+
+        insta::assert_yaml_snapshot!(recipe.recipe, {
+            ".source[0].path" => "[path]",
+            ".build.script" => "[script]",
+        });
+    }
 }
