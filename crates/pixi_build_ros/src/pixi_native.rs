@@ -92,10 +92,9 @@ fn collect_distros_from_target(target: &Target, found: &mut BTreeSet<String>) {
                 .as_str()
                 .strip_prefix("ros-")
                 .and_then(|rest| rest.split('-').next())
+                .filter(|d| !d.is_empty())
             {
-                if !distro.is_empty() {
-                    found.insert(distro.to_string());
-                }
+                found.insert(distro.to_string());
             }
         }
     }
@@ -362,11 +361,12 @@ mod tests {
     use std::path::PathBuf;
 
     fn cfg_pixi_native(build_type: RosBuildType) -> RosBackendConfig {
-        let mut cfg = RosBackendConfig::default();
-        cfg.mode = Some(RosMode::PixiNative);
-        cfg.build_type = Some(build_type);
-        cfg.distro = Some("kilted".to_string());
-        cfg
+        RosBackendConfig {
+            mode: Some(RosMode::PixiNative),
+            build_type: Some(build_type),
+            distro: Some("kilted".to_string()),
+            ..Default::default()
+        }
     }
 
     fn host_run_concrete(
@@ -454,9 +454,11 @@ mod tests {
 
     #[tokio::test]
     async fn generate_missing_build_type_errors() {
-        let mut cfg = RosBackendConfig::default();
-        cfg.mode = Some(RosMode::PixiNative);
-        cfg.distro = Some("kilted".to_string());
+        let cfg = RosBackendConfig {
+            mode: Some(RosMode::PixiNative),
+            distro: Some("kilted".to_string()),
+            ..Default::default()
+        };
         let model = model_with_deps(&["ros-kilted-rclcpp"], &[]);
         let result = generate(
             &model,
