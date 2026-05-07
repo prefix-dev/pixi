@@ -6313,6 +6313,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_compute_cache_dirs"
+version = "0.1.0"
+dependencies = [
+ "pixi_compute_engine",
+ "pixi_compute_env_vars",
+ "pixi_path",
+ "tokio-test",
+]
+
+[[package]]
 name = "pixi_compute_engine"
 version = "0.1.0"
 dependencies = [
@@ -6325,6 +6335,14 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-test",
+]
+
+[[package]]
+name = "pixi_compute_env_vars"
+version = "0.1.0"
+dependencies = [
+ "pixi_compute_engine",
  "tokio-test",
 ]
 
