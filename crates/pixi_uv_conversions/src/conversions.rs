@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::GitUrlWithPrefix;
+use crate::git_url::decode_windows_drive_letter;
 use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
@@ -79,7 +80,7 @@ pub fn pypi_options_to_index_locations(
     let index = options
         .index_url
         .clone()
-        .map(DisplaySafeUrl::from)
+        .map(DisplaySafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
@@ -92,7 +93,7 @@ pub fn pypi_options_to_index_locations(
         .into_iter()
         .flat_map(|urls| {
             urls.into_iter()
-                .map(DisplaySafeUrl::from)
+                .map(DisplaySafeUrl::from_url)
                 .map(VerbatimUrl::from_url)
                 .map(IndexUrl::from)
                 .map(Index::from_extra_index_url)
@@ -105,7 +106,9 @@ pub fn pypi_options_to_index_locations(
             .map(|url| match url {
                 FindLinksUrlOrPath::Path(relative) => VerbatimUrl::from_path(&relative, base_path)
                     .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative)),
-                FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone().into())),
+                FindLinksUrlOrPath::Url(url) => {
+                    Ok(VerbatimUrl::from_url(DisplaySafeUrl::from_url(url.clone())))
+                }
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -141,7 +144,7 @@ pub fn locked_indexes_to_index_locations(
         .indexes
         .first()
         .cloned()
-        .map(DisplaySafeUrl::from)
+        .map(DisplaySafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
@@ -151,7 +154,7 @@ pub fn locked_indexes_to_index_locations(
         .iter()
         .skip(1)
         .cloned()
-        .map(DisplaySafeUrl::from)
+        .map(DisplaySafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_extra_index_url);
@@ -165,7 +168,7 @@ pub fn locked_indexes_to_index_locations(
                 })
             }
             rattler_lock::FindLinksUrlOrPath::Url(url) => {
-                Ok(VerbatimUrl::from_url(url.clone().into()))
+                Ok(VerbatimUrl::from_url(DisplaySafeUrl::from_url(url.clone())))
             }
         })
         .collect::<Result<Vec<_>, _>>()?
@@ -334,7 +337,11 @@ pub fn into_pinned_git_spec(
         reference,
     );
 
-    PinnedGitSpec::new(dist.git.repository().clone().into(), pinned_checkout)
+    // uv stores the percent-encoded drive-letter form internally (see
+    // `encode_windows_drive_letter`). Decode it back here so the lock file
+    // shows `file:///D:/...` rather than `file:///D%3A/...`.
+    let repository: url::Url = dist.git.repository().clone().into();
+    PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
 }
 
 /// Convert a locked git url into a parsed git url
@@ -707,19 +714,16 @@ pub fn to_exclude_newer(exclude_newer: &ResolvedPypiExcludeNewer) -> uv_resolver
 #[cfg(test)]
 mod tests {
     use super::*;
-    use url::Url;
     use uv_distribution_types::{Index, IndexUrl};
 
     #[test]
     fn test_configure_insecure_hosts_for_tls_bypass_enabled() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://pypi.org/simple/").unwrap().into(),
+            DisplaySafeUrl::parse("https://pypi.org/simple/").unwrap(),
         ));
         let extra_index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://test-index.example.com/simple/")
-                .unwrap()
-                .into(),
+            DisplaySafeUrl::parse("https://test-index.example.com/simple/").unwrap(),
         ));
 
         let indexes = vec![
@@ -748,7 +752,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_tls_bypass_disabled() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://pypi.org/simple/").unwrap().into(),
+            DisplaySafeUrl::parse("https://pypi.org/simple/").unwrap(),
         ));
         let indexes = vec![Index::from_index_url(index_url)];
         let index_locations = IndexLocations::new(indexes, vec![], false);
@@ -769,7 +773,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_tls_bypass_preserves_existing() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://pypi.org/simple/").unwrap().into(),
+            DisplaySafeUrl::parse("https://pypi.org/simple/").unwrap(),
         ));
         let indexes = vec![Index::from_index_url(index_url)];
         let index_locations = IndexLocations::new(indexes, vec![], false);
@@ -796,9 +800,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_flat_index_hosts() {
         // Flat index hosted on a custom domain should be added when tls_no_verify is enabled
         let flat_index = Index::from_find_links(IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://packages.example.org/simple/")
-                .unwrap()
-                .into(),
+            DisplaySafeUrl::parse("https://packages.example.org/simple/").unwrap(),
         )));
         let index_locations = IndexLocations::new(vec![], vec![flat_index], true);
 

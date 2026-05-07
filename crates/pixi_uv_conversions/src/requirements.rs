@@ -101,7 +101,7 @@ pub fn as_uv_req(
             specifier: manifest_version_to_version_specifiers(version)?,
             index: index.clone().map(|url| {
                 uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
-                    VerbatimUrl::from_url(url.into()),
+                    VerbatimUrl::from_url(DisplaySafeUrl::from_url(url)),
                 ))
             }),
             conflict: None,
@@ -152,7 +152,7 @@ pub fn as_uv_req(
                         url: git.to_string(),
                     })?;
 
-                    VerbatimUrl::from_url(created_url.into())
+                    VerbatimUrl::from_url(DisplaySafeUrl::from_url(created_url))
                 },
             }
         }
@@ -202,7 +202,7 @@ pub fn as_uv_req(
             // So that we can normalize the URL for comparison.
             let mut location_url = url.clone();
             location_url.set_fragment(None);
-            let verbatim_url = VerbatimUrl::from_url(url.clone().into());
+            let verbatim_url = VerbatimUrl::from_url(DisplaySafeUrl::from_url(url.clone()));
 
             RequirementSource::Url {
                 subdirectory: if subdirectory.is_empty() {
@@ -210,7 +210,7 @@ pub fn as_uv_req(
                 } else {
                     Some(subdirectory.as_path().to_path_buf().into_boxed_path())
                 },
-                location: location_url.into(),
+                location: DisplaySafeUrl::from_url(location_url),
                 url: verbatim_url,
                 ext: DistExtension::from_path(url.path())?,
             }
@@ -255,7 +255,7 @@ pub fn pep508_requirement_to_uv_requirement(
                             Ok(ext) => ParsedUrl::Path(ParsedPathUrl::from_source(
                                 PathBuf::from(path.as_str()).into_boxed_path(),
                                 ext,
-                                verbatim_url.to_url().into(),
+                                DisplaySafeUrl::from_url(verbatim_url.to_url()),
                             )),
                             Err(_) => {
                                 // If no extension, treat as a directory
@@ -263,24 +263,24 @@ pub fn pep508_requirement_to_uv_requirement(
                                     PathBuf::from(path.as_str()).into_boxed_path(),
                                     Some(false), // Set editable to false, might require post-processing on the result
                                     Some(false), // we do not support virtual packages yet
-                                    DisplaySafeUrl::from(verbatim_url.to_url()),
+                                    DisplaySafeUrl::from_url(verbatim_url.to_url()),
                                 ))
                             }
                         };
 
                         VerbatimParsedUrl {
                             parsed_url,
-                            verbatim: uv_pep508::VerbatimUrl::from_url(
-                                verbatim_url.raw().clone().into(),
-                            )
+                            verbatim: uv_pep508::VerbatimUrl::from_url(DisplaySafeUrl::from_url(
+                                verbatim_url.raw().clone(),
+                            ))
                             .with_given(verbatim_url.given().expect("should have given string")),
                         }
                     }
                     // It is a URL
                     UrlOrPath::Url(u) => VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(DisplaySafeUrl::from(u.clone()))
+                        parsed_url: ParsedUrl::try_from(DisplaySafeUrl::from_url(u.clone()))
                             .expect("cannot convert to url"),
-                        verbatim: uv_pep508::VerbatimUrl::from_url(u.into()),
+                        verbatim: uv_pep508::VerbatimUrl::from_url(DisplaySafeUrl::from_url(u)),
                     },
                 };
 

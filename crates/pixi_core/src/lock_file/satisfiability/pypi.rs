@@ -5,6 +5,7 @@ use std::{
     str::FromStr,
     sync::{Arc, LazyLock},
 };
+use uv_redacted::DisplaySafeUrl;
 
 use dashmap::DashMap;
 use indexmap::IndexMap;
@@ -211,7 +212,7 @@ pub(crate) fn pypi_satisfies_requirement(
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
 
-                if *spec_url.raw() == locked_url.clone().into() {
+                if *spec_url.raw() == DisplaySafeUrl::from_url(locked_url.clone()) {
                     return Ok(());
                 } else {
                     return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
@@ -798,6 +799,7 @@ mod tests {
     use rattler_lock::{PypiPackageData, UrlOrPath, Verbatim};
     use url::Url;
     use uv_distribution_types::RequirementSource;
+    use uv_redacted::DisplaySafeUrl;
 
     use super::super::PypiNoBuildCheck;
     use super::super::platform::RequirementOrigin;
@@ -1244,7 +1246,7 @@ mod tests {
 
         let index =
             uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
-                uv_pep508::VerbatimUrl::from_url(Url::parse(index_url).unwrap().into()),
+                uv_pep508::VerbatimUrl::from_url(DisplaySafeUrl::parse(index_url).unwrap()),
             ));
         uv_distribution_types::Requirement {
             name: UvPackageName::from_str(name).unwrap(),
