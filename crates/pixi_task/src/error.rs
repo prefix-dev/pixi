@@ -23,7 +23,7 @@ pub struct AmbiguousTaskError {
 
 impl Display for AmbiguousTaskError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "the task '{}' is ambiguous", &self.task_name)
+        write!(f, "the task '{}' is ambiguous", self.task_name)
     }
 }
 
@@ -39,7 +39,7 @@ impl Diagnostic for AmbiguousTaskError {
             self.environments
                 .first()
                 .expect("there should be at least two environment"),
-            task_name = &self.task_name
+            task_name = self.task_name
         )))
     }
 }

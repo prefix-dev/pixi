@@ -80,7 +80,7 @@ impl WorkspaceRegistry {
             .into_diagnostic()
             .wrap_err(format!(
                 "failed to write workspace registry config to '{}'",
-                &path.display()
+                path.display()
             ))
     }
 

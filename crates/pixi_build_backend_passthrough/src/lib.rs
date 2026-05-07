@@ -154,7 +154,7 @@ impl InMemoryBackend for PassthroughBackend {
                     "{}-{}-{}.conda",
                     self.index_json.name.as_normalized(),
                     self.index_json.version,
-                    &build_string
+                    build_string
                 );
                 let output_path = output_dir.join(&file_name);
 

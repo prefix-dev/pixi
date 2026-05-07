@@ -892,7 +892,7 @@ async fn verify_package_platform_satisfiability(
                             Cow::Owned(format!(
                                 "{} @ {}",
                                 record.name().as_source(),
-                                &record.manifest_source
+                                record.manifest_source
                             )),
                             SourceLocationSpec::from(record.manifest_source.clone()).into(),
                         ),

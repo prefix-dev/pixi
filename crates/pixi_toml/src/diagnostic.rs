@@ -40,7 +40,7 @@ impl Display for TomlDiagnostic {
                         .format_with(", ", |key, f| f(&format_args!("'{key}'")))
                 )
             }
-            _ => write!(f, "{}", &self.0),
+            _ => write!(f, "{}", self.0),
         }
     }
 }

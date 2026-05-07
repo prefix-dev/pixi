@@ -348,8 +348,8 @@ pub async fn resolve_pypi(
                 .values()
                 .format_with(", ", |(_, p), f| f(&format_args!(
                     "{name} {version}",
-                    name = &p.name.as_source(),
-                    version = &p.version
+                    name = p.name.as_source(),
+                    version = p.version
                 )))
                 .to_string()
         );

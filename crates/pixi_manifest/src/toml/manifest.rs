@@ -332,7 +332,7 @@ impl TomlManifest {
 
                 if let Some(previous_span) = features_seen_where.insert(feature_name, *span) {
                     return Err(TomlError::from(
-                        GenericError::new(format!("The feature '{}' is included more than once.", &feature.name))
+                        GenericError::new(format!("The feature '{}' is included more than once.", feature.name))
                             .with_span((*span).into())
                             .with_span_label("the feature is included here")
                             .with_help("Since the order of the features matters, a duplicate feature is ambiguous")
