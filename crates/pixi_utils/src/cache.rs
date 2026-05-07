@@ -32,6 +32,6 @@ impl EnvironmentHash {
         let mut hasher = DefaultHasher::new();
         self.hash(&mut hasher);
         let hash = hasher.finish();
-        format!("{}-{:x}", &self.command, hash)
+        format!("{}-{:x}", self.command, hash)
     }
 }

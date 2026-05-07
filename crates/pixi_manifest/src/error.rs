@@ -146,7 +146,7 @@ impl Display for TomlError {
                 }
             }
             TomlError::MissingField(key, _) => write!(f, "Missing field `{key}`"),
-            TomlError::Generic(err) => write!(f, "{}", &err.message),
+            TomlError::Generic(err) => write!(f, "{}", err.message),
             TomlError::FeatureNotEnabled(err) => write!(f, "{err}"),
             TomlError::TableError { part, table_name } => write!(
                 f,

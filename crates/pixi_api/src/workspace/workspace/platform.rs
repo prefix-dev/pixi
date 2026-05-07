@@ -58,7 +58,7 @@ pub async fn add<I: Interface>(
         interface
             .success(&format!(
                 "Added {}",
-                &feature_name.non_default().map_or_else(
+                feature_name.non_default().map_or_else(
                     || platform.to_string(),
                     |name| format!("{platform} to the feature {name}")
                 )
@@ -104,7 +104,7 @@ pub async fn remove<I: Interface>(
         interface
             .success(&format!(
                 "Removed {}",
-                &feature_name.non_default().map_or_else(
+                feature_name.non_default().map_or_else(
                     || platform.to_string(),
                     |name| format!("{platform} from the feature {name}")
                 )
