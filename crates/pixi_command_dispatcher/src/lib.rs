@@ -62,7 +62,6 @@ pub mod reporter;
 mod resolved_backend_command;
 mod solve_binary;
 mod solve_conda;
-pub mod source_checkout;
 mod util;
 
 pub use backend_source_build::{
@@ -78,8 +77,8 @@ pub use cache::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, CacheDirs, CacheEntry,
     CacheRevision, MetadataCache,
     markers::{
-        BackendMetadataDir, BuildBackendsDir, GitDir, LegacySourceEnvDir, PackagesDir,
-        SourceBuildArtifactsDir, SourceBuildWorkspacesDir, UrlDir,
+        BackendMetadataDir, BuildBackendsDir, LegacySourceEnvDir, PackagesDir,
+        SourceBuildArtifactsDir, SourceBuildWorkspacesDir,
     },
 };
 pub use command_dispatcher::{
@@ -122,16 +121,19 @@ pub use pixi_compute_cache_dirs::{
     CacheBase, CacheDirKey, CacheDirsExt, CacheDirsKey, CacheLocation,
 };
 pub use pixi_compute_env_vars::{EnvVar, EnvVarsKey};
+pub use pixi_compute_sources::{
+    GitCheckoutReporter, GitDir, InvalidPathError, SourceCheckout, SourceCheckoutError,
+    SourceCheckoutExt, UrlCheckoutReporter, UrlDir,
+};
 pub use reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
-    GitCheckoutReporter, InstantiateBackendReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,
-    PixiSolveReporter, SourceMetadataReporter, SourceMetadataReporterSpec, SourceRecordReporter,
-    SourceRecordReporterSpec, UrlCheckoutReporter,
+    InstantiateBackendReporter, PixiInstallReporter, PixiSolveEnvironmentSpec, PixiSolveReporter,
+    SourceMetadataReporter, SourceMetadataReporterSpec, SourceRecordReporter,
+    SourceRecordReporterSpec,
 };
 pub use resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use serde::Serialize;
 pub use solve_conda::SolveCondaEnvironmentSpec;
-pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use util::executor;
 pub use util::{Executor, Limit, Limits, PtrArc};
 

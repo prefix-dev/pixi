@@ -104,6 +104,7 @@ pixi_compute_engine = { path = "crates/pixi_compute_engine" }
 pixi_compute_env_vars = { path = "crates/pixi_compute_env_vars" }
 pixi_compute_network = { path = "crates/pixi_compute_network" }
 pixi_compute_reporters = { path = "crates/pixi_compute_reporters" }
+pixi_compute_sources = { path = "crates/pixi_compute_sources" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_core = { path = "crates/pixi_core" }

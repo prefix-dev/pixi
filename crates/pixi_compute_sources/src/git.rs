@@ -1,31 +1,63 @@
-use crate::cache::markers::GitDir;
-use crate::compute_data::{HasGitCheckoutReporter, HasGitResolver};
-use crate::{GitCheckoutReporter, SourceCheckout, SourceCheckoutError};
+//! Git checkout Key plus its reporter trait, semaphore, and cache
+//! marker.
+
+use std::sync::Arc;
+
 use derive_more::Display;
 use futures::future::Either;
-use pixi_compute_cache_dirs::CacheDirsExt;
+use pixi_compute_cache_dirs::{CacheBase, CacheDirsExt, CacheLocation};
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
 use pixi_compute_network::HasDownloadClient;
 use pixi_compute_reporters::{Active, LifecycleKind, OperationId, ReporterLifecycle};
+use pixi_consts::consts;
 use pixi_git::git::GitReference;
 use pixi_git::resolver::RepositoryReference;
 use pixi_git::source::Fetch as GitFetch;
 use pixi_git::{GitError, GitUrl};
 use pixi_record::{PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitSpec;
-use std::sync::Arc;
 use tokio::sync::Semaphore;
 
+use crate::data::HasGitResolver;
+use crate::{SourceCheckout, SourceCheckoutError};
+
+/// [`CacheLocation`] marker for the cached git checkouts directory.
+pub struct GitDir;
+impl CacheLocation for GitDir {
+    fn name() -> &'static str {
+        consts::CACHED_GIT_DIR
+    }
+    fn base() -> CacheBase {
+        CacheBase::Root
+    }
+}
+
+/// Per-key reporter for git checkouts.
+pub trait GitCheckoutReporter: Send + Sync {
+    fn on_queued(&self, env: &RepositoryReference) -> OperationId;
+    fn on_started(&self, checkout_id: OperationId);
+    fn on_finished(&self, checkout_id: OperationId);
+}
+
+/// Access the per-key git-checkout reporter from global data.
+pub trait HasGitCheckoutReporter {
+    fn git_checkout_reporter(&self) -> Option<&Arc<dyn GitCheckoutReporter>>;
+}
+
+impl HasGitCheckoutReporter for DataStore {
+    fn git_checkout_reporter(&self) -> Option<&Arc<dyn GitCheckoutReporter>> {
+        self.try_get::<Arc<dyn GitCheckoutReporter>>()
+    }
+}
+
 /// Newtype around the semaphore that bounds concurrent git checkouts.
-/// Having a distinct type lets [`DataStore`] store it keyed by its own
-/// `TypeId`, independent of any other `Arc<Semaphore>` on the store.
+/// A distinct type lets [`DataStore`] key it independently from any
+/// other `Arc<Semaphore>` registered alongside.
 #[derive(Clone)]
 pub struct GitCheckoutSemaphore(pub Arc<Semaphore>);
 
-/// Access the semaphore bounding concurrent git checkouts.
-///
-/// Returns `None` when no semaphore was registered, which is treated as
-/// "unlimited concurrency": the Key skips permit acquisition entirely.
+/// Access the semaphore bounding concurrent git checkouts. `None` means
+/// "unlimited concurrency": the Key skips permit acquisition.
 pub trait HasGitCheckoutSemaphore {
     fn git_checkout_semaphore(&self) -> Option<&Arc<Semaphore>>;
 }
@@ -68,10 +100,10 @@ impl LifecycleKind for GitReporterLifecycle {
 /// only in whether they pre-resolved the commit still dedup.
 #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
 #[display("{}@{}", _0.url.as_url(), _0.reference)]
-pub(crate) struct CheckoutGit(RepositoryReference);
+pub struct CheckoutGit(RepositoryReference);
 
 impl CheckoutGit {
-    pub(crate) fn new(git_url: &GitUrl) -> Self {
+    pub fn new(git_url: &GitUrl) -> Self {
         Self(RepositoryReference::from(git_url))
     }
 }
@@ -113,6 +145,7 @@ impl Key for CheckoutGit {
     }
 }
 
+/// Per-spec git checkout entry points on [`ComputeCtx`].
 pub trait GitSourceCheckoutExt {
     /// Check out the git repository associated with the given spec.
     fn pin_and_checkout_git(
@@ -120,7 +153,7 @@ pub trait GitSourceCheckoutExt {
         git_spec: GitSpec,
     ) -> impl Future<Output = Result<SourceCheckout, SourceCheckoutError>> + Send + use<Self>;
 
-    /// Checkout a pinned git repository.
+    /// Check out a pinned git repository at the given commit.
     fn checkout_pinned_git(
         &mut self,
         git_spec: PinnedGitSpec,

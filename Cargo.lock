@@ -6254,7 +6254,6 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "derive_more",
- "dirs",
  "dunce",
  "fs-err",
  "futures",
@@ -6276,6 +6275,7 @@ dependencies = [
  "pixi_compute_env_vars",
  "pixi_compute_network",
  "pixi_compute_reporters",
+ "pixi_compute_sources",
  "pixi_config",
  "pixi_consts",
  "pixi_git",
@@ -6366,6 +6366,37 @@ dependencies = [
  "pixi_compute_engine",
  "serde",
  "tokio",
+]
+
+[[package]]
+name = "pixi_compute_sources"
+version = "0.1.0"
+dependencies = [
+ "derive_more",
+ "dirs",
+ "fs-err",
+ "futures",
+ "miette 7.6.0",
+ "pixi_compute_cache_dirs",
+ "pixi_compute_engine",
+ "pixi_compute_env_vars",
+ "pixi_compute_network",
+ "pixi_compute_reporters",
+ "pixi_consts",
+ "pixi_git",
+ "pixi_path",
+ "pixi_record",
+ "pixi_spec",
+ "pixi_test_utils",
+ "pixi_url",
+ "rattler_digest",
+ "rattler_networking",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "typed-path",
+ "url",
 ]
 
 [[package]]

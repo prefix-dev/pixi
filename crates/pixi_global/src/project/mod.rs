@@ -23,8 +23,8 @@ use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, ComputeResultExt,
     EnvironmentRef, EnvironmentSpec, EphemeralEnv, InstallPixiEnvironmentSpec, Limits,
+    SourceCheckoutExt,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
-    source_checkout::SourceCheckoutExt,
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};

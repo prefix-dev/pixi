@@ -9,9 +9,10 @@ use pixi_command_dispatcher::{
     BackendSourceBuildSpec, BuildBackendMetadataInner, CondaSolveReporter, GitCheckoutReporter,
     InstallPixiEnvironmentSpec, PixiInstallReporter, PixiSolveEnvironmentSpec, PixiSolveReporter,
     SolveCondaEnvironmentSpec, SourceMetadataReporterSpec, SourceRecordReporterSpec,
+    UrlCheckoutReporter,
     reporter::{
         BackendSourceBuildReporter, BuildBackendMetadataReporter, InstantiateBackendReporter,
-        SourceMetadataReporter, SourceRecordReporter, UrlCheckoutReporter,
+        SourceMetadataReporter, SourceRecordReporter,
     },
 };
 use pixi_compute_reporters::{OperationId, OperationRegistry};

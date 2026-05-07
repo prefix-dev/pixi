@@ -5,12 +5,10 @@ use std::collections::BTreeMap;
 use futures::Stream;
 use pixi_build_discovery::JsonRpcBackendSpec;
 use pixi_compute_reporters::OperationId;
-use pixi_git::resolver::RepositoryReference;
 use pixi_spec::{PixiSpec, ResolvedExcludeNewer};
 use pixi_variant::VariantValue;
 use rattler_conda_types::PackageName;
 use serde::Serialize;
-use url::Url;
 
 use crate::{
     BackendSourceBuildSpec, BuildBackendMetadataInner, BuildBackendMetadataSpec,
@@ -79,18 +77,6 @@ pub trait CondaSolveReporter: Send + Sync {
     fn on_queued(&self, env: &SolveCondaEnvironmentSpec) -> OperationId;
     fn on_started(&self, solve_id: OperationId);
     fn on_finished(&self, solve_id: OperationId);
-}
-
-pub trait GitCheckoutReporter: Send + Sync {
-    fn on_queued(&self, env: &RepositoryReference) -> OperationId;
-    fn on_started(&self, checkout_id: OperationId);
-    fn on_finished(&self, checkout_id: OperationId);
-}
-
-pub trait UrlCheckoutReporter: Send + Sync {
-    fn on_queued(&self, env: &Url) -> OperationId;
-    fn on_started(&self, checkout_id: OperationId);
-    fn on_finished(&self, checkout_id: OperationId);
 }
 
 /// Reporter for the compute-engine [`InstantiateBackendKey`](crate::InstantiateBackendKey).
