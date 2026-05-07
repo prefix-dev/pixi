@@ -45,6 +45,7 @@ pub struct RosBackendConfig {
 
     /// ROS build type. Required when `mode = pixi-native`. Ignored in package-xml
     /// mode (build type comes from `<export><build_type>` in package.xml there).
+    /// Accepted values: `"ament_cmake"`, `"ament_python"`, `"ament_cargo"`.
     pub build_type: Option<RosBuildType>,
 
     /// Whether to build a noarch package.

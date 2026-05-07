@@ -40,7 +40,7 @@ pub enum PixiNativeError {
 
 /// Resolve the ROS distro string for pixi-native mode.
 ///
-/// Priority: explicit config > robostack-<distro> channel > inference from
+/// Priority: explicit config > `robostack-<distro>` channel > inference from
 /// `ros-<distro>-*` deps in the model.
 pub fn resolve_distro(
     config: &RosBackendConfig,

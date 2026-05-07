@@ -1,3 +1,13 @@
+//! ROS build backend for Pixi.
+//!
+//! Two modes:
+//! - **package.xml** (default when a `package.xml` exists alongside the manifest):
+//!   parse the upstream package.xml, translate rosdep keys to conda packages
+//!   via the embedded `robostack.yaml`, fetch rosdistro metadata.
+//! - **pixi-native** (`[package.build.config].mode = "pixi-native"` or
+//!   no `package.xml` present): consume `pixi.toml` directly. ROS2-only.
+//!   Linux-only for ament_cargo. See `pixi_native` module.
+
 mod build_script;
 pub mod config;
 mod distro;
