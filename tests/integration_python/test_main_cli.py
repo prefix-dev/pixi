@@ -1428,10 +1428,10 @@ dependencies:
         ),
         # Upgrade commands
         (["upgrade"], [], "pixi upgrade"),
-        # Pixi build (can lock its source)
-        (["build"], [], "pixi build"),
         # Pixi publish (builds and uploads)
-        (["publish", "--to", "https://prefix.dev/test-channel"], [], "pixi publish"),
+        (["publish", "--target-channel", "https://prefix.dev/test-channel"], [], "pixi publish"),
+        # pixi build has been removed; the stub still accepts --frozen/--no-install
+        (["build"], [], "pixi build"),
     ]
     # This command needs to stay last so we always have something that requires a re-solve
     # Dont move this!
@@ -1452,9 +1452,12 @@ dependencies:
                 expected_exit_code=ExitCode.FAILURE,
             )
         elif command_name == "pixi build":
-            # Special case: build uses --path instead of --manifest-path
+            # pixi build is a deprecation shim that delegates to pixi publish
+            # with target_dir=".". It builds into the workspace directory and
+            # uses ephemeral environments, so it does not touch the workspace
+            # lockfile or conda-meta -- the invariants still hold.
             verify_cli_command(
-                [pixi, "build", "--path", manifest_path, "--locked", "--no-install"],
+                [pixi, "build", "--path", manifest_path, "--frozen", "--no-install"],
             )
         elif command_name == "pixi publish":
             # Special case: publish uses --path instead of --manifest-path
@@ -1462,12 +1465,12 @@ dependencies:
                 [
                     pixi,
                     "publish",
-                    "--to",
-                    "https://prefix.dev/test-channel",
                     "--path",
                     manifest_path,
                     "--frozen",
                     "--no-install",
+                    "--target-channel",
+                    "https://prefix.dev/test-channel",
                 ],
                 expected_exit_code=ExitCode.FAILURE,
             )

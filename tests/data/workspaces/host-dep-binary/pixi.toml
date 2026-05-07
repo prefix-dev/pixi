@@ -1,6 +1,6 @@
 [workspace]
-name = "host-dep-binary"
 channels = []
+name = "host-dep-binary"
 platforms = []
 preview = ["pixi-build"]
 

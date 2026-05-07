@@ -94,7 +94,7 @@ fn replace_bash_completion(script: &str) -> Cow<'_, str> {
     // Replace the '-' with '__' since that's what clap's generator does as well for Bash Shell completion.
     let bin_name: &str = pixi_utils::executable_name();
     let clap_name = bin_name.replace("-", "__");
-    let pattern = format!(r#"(?s){}__run\).*?opts="(.*?)".*?(if.*?fi)"#, &clap_name);
+    let pattern = format!(r#"(?s){}__run\).*?opts="(.*?)".*?(if.*?fi)"#, clap_name);
     let replacement = r#"CLAP_NAME__run)
             opts="$1"
             if [[ $${cur} == -* ]] ; then
