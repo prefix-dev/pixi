@@ -39,6 +39,10 @@ pixi publish [OPTIONS]
   **default**: `current_platform`
   ```
 
+- [`--build-string-prefix <BUILD_STRING_PREFIX>`](#arg---build-string-prefix) : An optional prefix prepended to the auto-generated build string
+
+- [`--build-number <BUILD_NUMBER>`](#arg---build-number) : An optional override for the package's build number
+
 - [`--build-dir (-b) <BUILD_DIR>`](#arg---build-dir) : The directory to use for incremental builds artifacts
 
 - [`--clean (-c)`](#arg---clean) : Whether to clean the build directory before building
