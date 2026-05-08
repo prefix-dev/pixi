@@ -709,7 +709,7 @@ async fn read_local_package_metadata(
         tracing::debug!(package = %package_name, "no readable pyproject.toml");
         return Ok(None);
     };
-    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) else {
+    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents, pyproject_path.display()) else {
         tracing::debug!(package = %package_name, "pyproject.toml could not be parsed");
         return Ok(None);
     };
