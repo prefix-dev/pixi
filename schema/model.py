@@ -900,6 +900,12 @@ class Build(StrictBaseModel):
             },
         ],
     )
+    build_string_prefix: NonEmptyStr | None = Field(
+        None, description="An optional prefix to prepend to the auto-generated build string"
+    )
+    build_number: UnsignedInt | None = Field(
+        None, description="The build number to record in the produced package"
+    )
 
 
 class BuildBackend(MatchspecTable):
