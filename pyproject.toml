@@ -23,7 +23,7 @@ quote-style = "double"
 github_url = "https://github.com/prefix-dev/pixi"
 
 [tool.tbump.version]
-current = "0.67.2"
+current = "0.68.0"
 
 # Example of a semver regexp.
 # Make sure this matches current_version before
