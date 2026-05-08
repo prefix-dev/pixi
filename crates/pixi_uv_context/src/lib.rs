@@ -144,11 +144,7 @@ fn build_concurrency(config: &Config) -> Concurrency {
     let builds = read_usize_env("UV_CONCURRENT_BUILDS").unwrap_or(defaults.builds);
     let installs = read_usize_env("UV_CONCURRENT_INSTALLS").unwrap_or(defaults.installs);
 
-    Concurrency {
-        downloads,
-        builds,
-        installs,
-    }
+    Concurrency::new(downloads, builds, installs)
 }
 
 impl UvResolutionContext {

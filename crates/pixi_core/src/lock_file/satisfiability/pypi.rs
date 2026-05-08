@@ -640,7 +640,7 @@ async fn read_local_package_metadata(
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
     .with_shared_state(ctx.uv_context.shared_state.fork())
     .with_no_sources(ctx.uv_context.no_sources.clone())
-    .with_concurrency(ctx.uv_context.concurrency);
+    .with_concurrency(ctx.uv_context.concurrency.clone());
 
     // Get or create conda prefix updater for the environment
     // Use best_platform() because we can only install/run Python on the host platform
@@ -700,7 +700,7 @@ async fn read_local_package_metadata(
     let database = DistributionDatabase::new(
         &registry_client,
         &lazy_build_dispatch,
-        ctx.uv_context.concurrency.downloads,
+        ctx.uv_context.concurrency.downloads_semaphore.clone(),
     );
 
     // Missing or unparsable pyproject -> trust the lock.

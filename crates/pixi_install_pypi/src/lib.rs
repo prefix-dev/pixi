@@ -903,7 +903,11 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let distribution_database = DistributionDatabase::new(
             setup.registry_client.as_ref(),
             &build_dispatch,
-            self.context_config.uv_context.concurrency.downloads,
+            self.context_config
+                .uv_context
+                .concurrency
+                .downloads_semaphore
+                .clone(),
         );
 
         // Before hitting the network let's make sure the credentials are available to
@@ -980,7 +984,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             setup.exclude_newer.clone(),
             self.context_config.uv_context.no_sources.clone(),
             self.context_config.uv_context.workspace_cache.clone(),
-            self.context_config.uv_context.concurrency,
+            self.context_config.uv_context.concurrency.clone(),
             self.context_config.uv_context.preview,
         )
         // Important: this passes any CONDA activation to the uv build process

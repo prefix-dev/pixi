@@ -426,7 +426,7 @@ impl<'a> LazyBuildDispatch<'a> {
                     self.params.exclude_newer.clone().unwrap_or_default(),
                     self.params.sources.clone(),
                     self.params.workspace_cache.clone(),
-                    self.params.concurrency,
+                    self.params.concurrency.clone(),
                     self.params.preview,
                 )
                 .with_build_extra_env_vars(env_vars);
