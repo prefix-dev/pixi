@@ -1,17 +1,8 @@
-{%- set is_cmd_exe = build_platform == "windows" -%}
-{%- macro env(key) -%}
-{%- if is_cmd_exe %}{{ "%" ~ key ~ "%" }}{% else %}{{ "$" ~key }}{% endif -%}
-{% endmacro -%}
-
 {# - Set up common variables -#}
-{%- set library_prefix =  "%LIBRARY_PREFIX%" if build_platform == "windows" else "$PREFIX" -%}
+{%- set library_prefix = "$PREFIX" -%}
 
 mojo --version
-{% if is_cmd_exe -%}
-cd /d "{{ source_dir }}"
-{% else -%}
 cd "{{ source_dir }}"
-{% endif %}
 
 {#- Build any binaries -#}
 {% if bins %}

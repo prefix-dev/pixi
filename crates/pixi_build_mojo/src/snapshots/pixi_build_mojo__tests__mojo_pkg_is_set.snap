@@ -9,7 +9,7 @@ package:
 build:
   script:
     content:
-      - "mojo --version\ncd \".\"\n\n\nmojo build -i . \"./main.mojo\" -o $PREFIX/bin/example\n\n\nmojo package -i . \"mylib\" -o $PREFIX/lib/mojo/lib.mojopkg"
+      - "mojo --version\ncd \".\"\n\nmojo build -i . \"./main.mojo\" -o $PREFIX/bin/example\n\n\nmojo package -i . \"mylib\" -o $PREFIX/lib/mojo/lib.mojopkg"
   python:
     entry_points: []
     skip_pyc_compilation: []
