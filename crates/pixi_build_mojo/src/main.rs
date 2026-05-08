@@ -72,7 +72,8 @@ impl GenerateRecipe for MojoGenerator {
         );
 
         // Auto-derive bins and pkg fields/configs if needed
-        let (bins, pkg) = config.auto_derive(&manifest_root, &cleaned_project_name)?;
+        let (mut bins, mut pkg) = config.auto_derive(&manifest_root, &cleaned_project_name)?;
+        Self::make_paths_absolute(&manifest_root, &mut bins, &mut pkg)?;
 
         // Add compiler
         let requirements = &mut generated_recipe.recipe.requirements;
@@ -97,12 +98,7 @@ impl GenerateRecipe for MojoGenerator {
             variants,
         );
 
-        let build_script = BuildScriptContext {
-            source_dir: manifest_root.display().to_string(),
-            bins,
-            pkg,
-        }
-        .render();
+        let build_script = BuildScriptContext { bins, pkg }.render();
 
         generated_recipe.recipe.build.script = Script::from_content(build_script).with_env(
             config
@@ -148,6 +144,41 @@ impl GenerateRecipe for MojoGenerator {
 }
 
 impl MojoGenerator {
+    fn make_paths_absolute(
+        manifest_root: &Path,
+        bins: &mut Option<Vec<config::MojoBinConfig>>,
+        pkg: &mut Option<config::MojoPkgConfig>,
+    ) -> miette::Result<()> {
+        if let Some(bins) = bins {
+            for bin in bins {
+                if let Some(path) = &mut bin.path {
+                    *path = Self::absolute_path(manifest_root, path)?;
+                }
+            }
+        }
+        if let Some(pkg) = pkg
+            && let Some(path) = &mut pkg.path
+        {
+            *path = Self::absolute_path(manifest_root, path)?;
+        }
+        Ok(())
+    }
+
+    fn absolute_path(manifest_root: &Path, path: &str) -> miette::Result<String> {
+        let path = Path::new(path);
+        if path.is_absolute() {
+            return Ok(path.display().to_string());
+        }
+        let manifest_root = if manifest_root.is_absolute() {
+            manifest_root.to_path_buf()
+        } else {
+            std::env::current_dir()
+                .into_diagnostic()?
+                .join(manifest_root)
+        };
+        Ok(manifest_root.join(path).display().to_string())
+    }
+
     fn globs() -> impl Iterator<Item = String> {
         [
             // Source files
@@ -249,6 +280,7 @@ mod tests {
 
         insta::assert_yaml_snapshot!(generated_recipe.recipe, {
         ".source[0].path" => "[ ... path ... ]",
+        ".build.script" => "[ ... script ... ]",
         });
     }
 
@@ -298,11 +330,12 @@ mod tests {
 
         insta::assert_yaml_snapshot!(generated_recipe.recipe, {
         ".source[0].path" => "[ ... path ... ]",
+        ".build.script" => "[ ... script ... ]",
         });
     }
 
     #[tokio::test]
-    async fn test_relative_paths_are_resolved_from_source_dir() {
+    async fn test_relative_paths_are_made_absolute() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -345,18 +378,22 @@ mod tests {
             .unwrap()
             .as_concrete()
             .unwrap();
-        let cd = format!("cd \"{}\"", source_dir.display());
+        let bin_path = source_dir.join("src/main.mojo").display().to_string();
+        let pkg_path = source_dir.join("src/foobar").display().to_string();
 
-        let cd_pos = script
-            .find(&cd)
-            .unwrap_or_else(|| panic!("script did not cd into source dir:\n{script}"));
-        let build_pos = script.find("mojo build").unwrap();
-        let package_pos = script.find("mojo package").unwrap();
-
-        assert!(cd_pos < build_pos, "script changes dir after mojo build");
         assert!(
-            cd_pos < package_pos,
-            "script changes dir after mojo package"
+            !script
+                .lines()
+                .any(|line| line.trim_start().starts_with("cd ")),
+            "script should not change directory:\n{script}"
+        );
+        assert!(
+            script.contains(&format!("\"{bin_path}\"")),
+            "script should use absolute bin path:\n{script}"
+        );
+        assert!(
+            script.contains(&format!("\"{pkg_path}\"")),
+            "script should use absolute pkg path:\n{script}"
         );
     }
 
