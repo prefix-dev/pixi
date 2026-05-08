@@ -639,7 +639,7 @@ async fn read_local_package_metadata(
     .with_index_strategy(index_strategy)
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
     .with_shared_state(ctx.uv_context.shared_state.fork())
-    .with_source_strategy(ctx.uv_context.source_strategy)
+    .with_no_sources(ctx.uv_context.no_sources.clone())
     .with_concurrency(ctx.uv_context.concurrency);
 
     // Get or create conda prefix updater for the environment

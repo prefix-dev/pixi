@@ -978,7 +978,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &setup.build_options,
             &self.context_config.uv_context.hash_strategy,
             setup.exclude_newer.clone(),
-            self.context_config.uv_context.source_strategy,
+            self.context_config.uv_context.no_sources.clone(),
             self.context_config.uv_context.workspace_cache.clone(),
             self.context_config.uv_context.concurrency,
             self.context_config.uv_context.preview,
