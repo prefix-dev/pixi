@@ -744,6 +744,21 @@ impl<'p> LockFileDerivedData<'p> {
             );
         }
 
+        // Reproducible-build hook: when SOURCE_DATE_EPOCH is set, clamp
+        // the mtime of every pixi-owned entry under `.pixi/` so repeated
+        // installs of the same workspace produce a bit-stable layout.
+        // No-op when the env var is unset. Best-effort: an error here is
+        // logged but doesn't fail the install.
+        if let Some(mtime) = pixi_utils::reproducible::reproducible_mtime() {
+            let pixi_dir = environment.workspace().pixi_dir();
+            if let Err(err) = pixi_utils::reproducible::stamp_pixi_tree(&pixi_dir, mtime) {
+                tracing::warn!(
+                    "Failed to apply SOURCE_DATE_EPOCH mtimes under {}: {err}",
+                    pixi_dir.display()
+                );
+            }
+        }
+
         Ok(prefix)
     }
 

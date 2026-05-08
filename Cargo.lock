@@ -6982,6 +6982,7 @@ name = "pixi_utils"
 version = "0.1.0"
 dependencies = [
  "async-fd-lock",
+ "filetime",
  "fs-err",
  "indicatif",
  "insta",
@@ -7005,6 +7006,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "temp-env",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
