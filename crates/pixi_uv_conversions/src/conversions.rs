@@ -678,7 +678,7 @@ pub fn configure_insecure_hosts_for_tls_bypass(
 
 fn to_exclude_newer_timestamp(
     exclude_newer: chrono::DateTime<chrono::Utc>,
-) -> uv_resolver::ExcludeNewerTimestamp {
+) -> uv_resolver::ExcludeNewerValue {
     let seconds_since_epoch = exclude_newer.timestamp();
     let nanoseconds = exclude_newer.timestamp_subsec_nanos();
     let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
