@@ -156,7 +156,21 @@ pub async fn generate(
 
     // Start from the framework's default recipe-from-model. The framework
     // populates name, version, license, source, and the dep tables from the model.
-    let mut generated = GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
+    //
+    // If the user opted into `prefix-with-distro`, rewrite the model name to
+    // `ros-<distro>-<name>` before handing it to the framework so that both
+    // the recipe `package.name` and any downstream uses see the prefixed
+    // form. Dependency names in the model are NOT rewritten — only the
+    // produced package name.
+    let mut model_for_recipe = model.clone();
+    if config.prefix_with_distro.unwrap_or(false) {
+        if let Some(name) = &model_for_recipe.name {
+            if !name.starts_with(&format!("ros-{distro}-")) {
+                model_for_recipe.name = Some(format!("ros-{distro}-{name}"));
+            }
+        }
+    }
+    let mut generated = GeneratedRecipe::from_model(model_for_recipe, &mut DefaultMetadataProvider)
         .map_err(|e| miette::miette!("failed to derive recipe from model: {e:?}"))?;
 
     let mut build_items: Vec<Item<SerializableMatchSpec>> = Vec::new();
@@ -594,6 +608,79 @@ mod tests {
         let (build, _, _) = host_run_concrete(&recipe.recipe);
         assert!(!build.iter().any(|s| s == "rust"));
         assert!(!build.iter().any(|s| s == "ros-kilted-cargo-ament-build"));
+    }
+
+    #[tokio::test]
+    async fn package_name_unprefixed_by_default() {
+        let cfg = cfg_pixi_native(RosBuildType::AmentCmake);
+        let model = model_with_deps(&["ros-kilted-rclcpp"], &[]);
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+        let name = recipe
+            .recipe
+            .package
+            .name
+            .as_concrete()
+            .expect("concrete name")
+            .to_string();
+        assert_eq!(name, "test-pkg");
+    }
+
+    #[tokio::test]
+    async fn package_name_prefixed_when_flag_set() {
+        let mut cfg = cfg_pixi_native(RosBuildType::AmentCmake);
+        cfg.prefix_with_distro = Some(true);
+        let model = model_with_deps(&["ros-kilted-rclcpp"], &[]);
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+        let name = recipe
+            .recipe
+            .package
+            .name
+            .as_concrete()
+            .expect("concrete name")
+            .to_string();
+        assert_eq!(name, "ros-kilted-test-pkg");
+    }
+
+    #[tokio::test]
+    async fn package_name_not_double_prefixed() {
+        let mut cfg = cfg_pixi_native(RosBuildType::AmentCmake);
+        cfg.prefix_with_distro = Some(true);
+        // model name already has the prefix; ensure we don't add another.
+        let mut model = model_with_deps(&["ros-kilted-rclcpp"], &[]);
+        model.name = Some("ros-kilted-test-pkg".to_string());
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+        let name = recipe
+            .recipe
+            .package
+            .name
+            .as_concrete()
+            .expect("concrete name")
+            .to_string();
+        assert_eq!(name, "ros-kilted-test-pkg");
     }
 
     #[tokio::test]

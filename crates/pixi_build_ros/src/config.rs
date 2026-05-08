@@ -69,6 +69,12 @@ pub struct RosBackendConfig {
     /// Extra package mapping sources. No-op in pixi-native mode (warning emitted).
     #[serde(default)]
     pub extra_package_mappings: Vec<PackageMappingSource>,
+
+    /// When true, the published package name is prefixed with `ros-<distro>-`.
+    /// Only applies in `pixi-native` mode; `package-xml` mode already prefixes
+    /// the name through its metadata provider. Defaults to false so that
+    /// `pixi.toml` `name` is used verbatim.
+    pub prefix_with_distro: Option<bool>,
 }
 
 impl RosBackendConfig {
@@ -115,6 +121,9 @@ impl BackendConfig for RosBackendConfig {
             } else {
                 target_config.extra_package_mappings.clone()
             },
+            prefix_with_distro: target_config
+                .prefix_with_distro
+                .or(self.prefix_with_distro),
         })
     }
 }
