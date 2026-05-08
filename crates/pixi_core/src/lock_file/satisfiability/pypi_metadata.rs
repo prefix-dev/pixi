@@ -118,10 +118,45 @@ pub fn compare_metadata(
 ///
 /// This ensures that semantically equivalent requirements compare equal,
 /// regardless of formatting differences (e.g., whitespace, order of extras).
+///
+/// In particular, git URLs written by pixi's lock file writer use `@` as the
+/// separator between the repository URL and the commit/reference
+/// (e.g. `git+ssh://host/repo@<ref>`), while uv's static metadata parser
+/// re-derives them with `#` as the separator
+/// (e.g. `git+ssh://host/repo#<ref>`). Both forms are semantically
+/// equivalent; we normalise to `#` before comparing so that a just-written
+/// lock file is always considered up-to-date.
 fn normalize_requirement(req: &Requirement) -> String {
-    // Use the canonical string representation
-    // The pep508_rs library already normalizes package names and versions
-    req.to_string()
+    let s = req.to_string();
+    normalize_git_url_separator(&s)
+}
+
+/// Canonicalise the separator between a git URL and its commit/reference.
+///
+/// Pixi's lock-file writer serialises git refs as `git+<url>@<ref>`, but
+/// uv's static-metadata reader produces `git+<url>#<ref>`.  We normalise
+/// both to the `#` form so the comparison in [`compare_metadata`] is
+/// insensitive to that cosmetic difference.
+fn normalize_git_url_separator(s: &str) -> String {
+    // Only touch strings that look like a git URL requirement.
+    // Pattern: " @ git+<something>@<ref>" → " @ git+<something>#<ref>"
+    // We locate the last `@` that comes *after* the `git+` scheme prefix
+    // and is *not* part of the userinfo section (i.e. before any `/` in the
+    // host portion).  The simplest heuristic: find " @ git+" and then
+    // replace the *next* `@` that follows with `#`.
+    if let Some(git_plus_pos) = s.find("git+") {
+        let after_scheme = &s[git_plus_pos + 4..]; // skip "git+"
+        // Skip past any userinfo `user@host` – find the first `/` which
+        // marks the start of the path, then look for `@` only after that.
+        let search_from = after_scheme.find('/').map(|p| p + 1).unwrap_or(0);
+        if let Some(at_offset) = after_scheme[search_from..].find('@') {
+            let abs_at = git_plus_pos + 4 + search_from + at_offset;
+            let mut result = s.to_string();
+            result.replace_range(abs_at..abs_at + 1, "#");
+            return result;
+        }
+    }
+    s.to_string()
 }
 
 /// Replace each `pkg[group]` self-reference with the raw entries of
