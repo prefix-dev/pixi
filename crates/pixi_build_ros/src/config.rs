@@ -12,13 +12,45 @@ use serde::{Deserialize, Serialize};
 
 use crate::package_map::PackageMapEntry;
 
+/// Top-level dispatch: which input format the backend should consume.
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum RosMode {
+    PackageXml,
+    PixiNative,
+}
+
+/// ROS build type for pixi-native mode. Catkin is intentionally absent; pixi-native
+/// targets ROS 2 only, where catkin packages don't exist as a first-party shape.
+/// `AmentIdl` is a sugar variant for interface (msg/srv/action) packages: same
+/// CMake build as `AmentCmake`, plus auto-injection of all known rosidl
+/// generator and runtime packages so consumers don't have to enumerate them.
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RosBuildType {
+    AmentCmake,
+    AmentPython,
+    AmentCargo,
+    AmentIdl,
+}
+
 /// Configuration for the ROS build backend.
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct RosBackendConfig {
     /// ROS distribution name (e.g., "humble", "jazzy", "noetic").
-    /// If not set, auto-detected from robostack channel names.
+    /// If not set, auto-detected from robostack channel names or inferred from
+    /// `ros-<distro>-*` deps in pixi-native mode.
     pub distro: Option<String>,
+
+    /// Selects which input format to consume. Default behavior:
+    /// `package-xml` if a `package.xml` exists at the manifest root, else `pixi-native`.
+    pub mode: Option<RosMode>,
+
+    /// ROS build type. Required when `mode = pixi-native`. Ignored in package-xml
+    /// mode (build type comes from `<export><build_type>` in package.xml there).
+    /// Accepted values: `"ament_cmake"`, `"ament_python"`, `"ament_cargo"`.
+    pub build_type: Option<RosBuildType>,
 
     /// Whether to build a noarch package.
     pub noarch: Option<bool>,
@@ -34,7 +66,7 @@ pub struct RosBackendConfig {
     #[serde(default)]
     pub extra_input_globs: Option<Vec<String>>,
 
-    /// Extra package mapping sources.
+    /// Extra package mapping sources. No-op in pixi-native mode (warning emitted).
     #[serde(default)]
     pub extra_package_mappings: Vec<PackageMappingSource>,
 }
@@ -60,6 +92,8 @@ impl BackendConfig for RosBackendConfig {
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
         Ok(Self {
             distro: target_config.distro.clone().or_else(|| self.distro.clone()),
+            mode: target_config.mode.or(self.mode),
+            build_type: target_config.build_type.or(self.build_type),
             noarch: target_config.noarch.or(self.noarch),
             env: match (&self.env, &target_config.env) {
                 (Some(base), Some(target)) => {
@@ -231,5 +265,32 @@ mod tests {
             merged.env.as_ref().unwrap().get("TARGET_VAR"),
             Some(&"target_value".to_string())
         );
+    }
+
+    #[test]
+    fn test_deserialize_mode_pixi_native() {
+        let json = serde_json::json!({"mode": "pixi-native"});
+        let cfg: RosBackendConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(cfg.mode, Some(RosMode::PixiNative));
+    }
+
+    #[test]
+    fn test_deserialize_mode_package_xml() {
+        let json = serde_json::json!({"mode": "package-xml"});
+        let cfg: RosBackendConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(cfg.mode, Some(RosMode::PackageXml));
+    }
+
+    #[test]
+    fn test_deserialize_build_type_ament_cargo() {
+        let json = serde_json::json!({"build-type": "ament_cargo"});
+        let cfg: RosBackendConfig = serde_json::from_value(json).unwrap();
+        assert_eq!(cfg.build_type, Some(RosBuildType::AmentCargo));
+    }
+
+    #[test]
+    fn test_unknown_mode_rejected() {
+        let json = serde_json::json!({"mode": "wat"});
+        assert!(serde_json::from_value::<RosBackendConfig>(json).is_err());
     }
 }

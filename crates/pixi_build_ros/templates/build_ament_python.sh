@@ -3,8 +3,24 @@
 
 set -eo pipefail
 
-# Rattler-build will not set the SRC_DIR anymore so we set it through templating
-export SRC_DIR="@SRC_DIR@"
+# Stage source into a work-dir-local copy and drop a synthesized package.xml
+# next to setup.py. setup.py declares package.xml as a data_files entry, so
+# the file must exist in the source tree at install time.
+#
+# In pixi-native mode @SRC_DIR@ is the user's manifest dir and $PWD is
+# <SRC_DIR>/.pixi/build/work/.../work — STAGE_DIR therefore sits inside
+# @SRC_DIR@ and a plain `cp -a SRC_DIR/. STAGE_DIR/` recurses into itself.
+# Tar with excludes side-steps that and skips junk we don't want in the build.
+STAGE_DIR="$PWD/src_stage"
+rm -rf "$STAGE_DIR"
+mkdir -p "$STAGE_DIR"
+tar -C "@SRC_DIR@" --exclude=./.pixi --exclude=./.git -cf - . | tar -C "$STAGE_DIR" -xf -
+
+cat > "$STAGE_DIR/package.xml" <<'__PIXI_NATIVE_PACKAGE_XML__'
+@PACKAGE_XML_CONTENT@
+__PIXI_NATIVE_PACKAGE_XML__
+
+export SRC_DIR="$STAGE_DIR"
 
 pushd $SRC_DIR
 
