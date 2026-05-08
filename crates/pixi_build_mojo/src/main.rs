@@ -307,6 +307,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_relative_paths_are_resolved_from_source_dir() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+        let temp = tempfile::TempDir::new().unwrap();
+        let source_dir = temp.path().to_path_buf();
+
+        let generated_recipe = MojoGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &MojoBackendConfig {
+                    bins: Some(vec![MojoBinConfig {
+                        name: Some(String::from("example")),
+                        path: Some(String::from("src/main.mojo")),
+                        extra_args: None,
+                    }]),
+                    pkg: Some(MojoPkgConfig {
+                        name: Some(String::from("lib")),
+                        path: Some(String::from("src/foobar")),
+                        extra_args: None,
+                    }),
+                    ..Default::default()
+                },
+                source_dir.clone(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let content = generated_recipe.recipe.build.script.content.unwrap();
+        let script = content
+            .iter()
+            .next()
+            .unwrap()
+            .as_value()
+            .unwrap()
+            .as_concrete()
+            .unwrap();
+        let cd = if Platform::current().is_windows() {
+            format!("cd /d \"{}\"", source_dir.display())
+        } else {
+            format!("cd \"{}\"", source_dir.display())
+        };
+
+        let cd_pos = script
+            .find(&cd)
+            .unwrap_or_else(|| panic!("script did not cd into source dir:\n{script}"));
+        let build_pos = script.find("mojo build").unwrap();
+        let package_pos = script.find("mojo package").unwrap();
+
+        assert!(cd_pos < build_pos, "script changes dir after mojo build");
+        assert!(
+            cd_pos < package_pos,
+            "script changes dir after mojo package"
+        );
+    }
+
+    #[tokio::test]
     async fn test_compiler_is_in_build_requirements() {
         let project_model = project_fixture!({
             "name": "foobar",
