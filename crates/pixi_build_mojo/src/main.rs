@@ -1,7 +1,7 @@
 mod build_script;
 mod config;
 
-use build_script::BuildScriptContext;
+use build_script::{BuildPlatform, BuildScriptContext};
 use config::{MojoBackendConfig, clean_project_name};
 use miette::{Error, IntoDiagnostic};
 use pixi_build_backend::generated_recipe::DefaultMetadataProvider;
@@ -98,6 +98,11 @@ impl GenerateRecipe for MojoGenerator {
         );
 
         let build_script = BuildScriptContext {
+            build_platform: if Platform::current().is_windows() {
+                BuildPlatform::Windows
+            } else {
+                BuildPlatform::Unix
+            },
             source_dir: manifest_root.display().to_string(),
             bins,
             pkg,
