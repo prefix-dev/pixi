@@ -73,6 +73,8 @@ pub(super) async fn assemble_source_record(
             manifest_source: source.manifest_source().clone(),
             preferred_build_source: preferred_build_source.get(&output.metadata.name).cloned(),
             env_ref: env_ref.clone(),
+            build_string_prefix: None,
+            build_number: None,
         },
         exclude_newer: None,
     };

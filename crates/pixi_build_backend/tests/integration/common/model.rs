@@ -133,7 +133,7 @@ pub(crate) fn convert_test_model_to_project_model_v1(test_model: TestProjectMode
             .and_then(|d| url::Url::parse(&d).ok()),
         targets: Some(targets_v1),
         build_number: None,
-        build_string: None,
+        build_string_prefix: None,
     }
 }
 

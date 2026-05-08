@@ -471,7 +471,7 @@ fn compute_build_string(
         if base_build.is_empty() {
             variant_hash
         } else {
-            format!("{}_{}", base_build, variant_hash)
+            format!("{base_build}_{variant_hash}")
         }
     }
 }

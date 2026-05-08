@@ -28,7 +28,8 @@ use crate::{
     BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method, BuildEnvironment,
     BuildProfile, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey, SourceBuildError,
+    InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
+    ProjectModelOverrides, SourceBuildError,
     build::{Dependencies, PixiRunExports},
     source_checkout::SourceCheckoutExt,
 };
@@ -65,6 +66,14 @@ pub struct SourceBuildSpec {
     pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
 
     pub variant_files: Option<Vec<PathBuf>>,
+
+    /// User-supplied build string prefix forwarded to the backend's
+    /// project model. Overrides any value declared in the manifest.
+    pub build_string_prefix: Option<String>,
+
+    /// User-supplied build number forwarded to the backend's project
+    /// model. Overrides any value declared in the manifest.
+    pub build_number: Option<u64>,
 }
 
 /// Built artifact plus its sha256 and a
@@ -161,6 +170,10 @@ async fn compute_inner(
 
     // Cache key covers structural identity + dep content addresses;
     // source-file freshness lives in the sidecar, not the key.
+    let project_model_overrides = ProjectModelOverrides {
+        build_string_prefix: spec.build_string_prefix.clone(),
+        build_number: spec.build_number,
+    };
     let cache_key = compute_artifact_cache_key(
         &spec.record,
         spec.build_environment.build_platform,
@@ -168,6 +181,7 @@ async fn compute_inner(
         &backend_identifier,
         &build_source_dep_sha256s,
         &host_source_dep_sha256s,
+        &project_model_overrides,
     );
 
     // On artifact cache hit, return without invoking the backend.
@@ -202,12 +216,15 @@ async fn compute_inner(
     // resolve already cached, so this only pays for the JSON-RPC
     // spawn + handshake + activator.
     let backend = ctx
-        .compute(&InstantiateBackendKey::new(
-            manifest_checkout.path.as_std_path(),
-            manifest_anchor.clone(),
-            build_source_dir,
-            spec.exclude_newer.clone(),
-        ))
+        .compute(
+            &InstantiateBackendKey::new(
+                manifest_checkout.path.as_std_path(),
+                manifest_anchor.clone(),
+                build_source_dir,
+                spec.exclude_newer.clone(),
+            )
+            .with_project_model_overrides(project_model_overrides),
+        )
         .await
         .map_err(|err: Arc<crate::InstantiateBackendError>| {
             SourceBuildError::Initialize((*err).clone())
@@ -432,6 +449,11 @@ async fn build_source_deps(
                 build_profile: spec.build_profile,
                 variant_configuration: spec.variant_configuration.clone(),
                 variant_files: spec.variant_files.clone(),
+                // Nested source builds inherit the user-supplied
+                // overrides from the top-level invocation so the entire
+                // dependency closure builds against consistent values.
+                build_string_prefix: spec.build_string_prefix.clone(),
+                build_number: spec.build_number,
             };
             let result = sub_ctx.compute(&SourceBuildKey::new(nested_spec)).await?;
             Ok(result.artifact_sha256)

@@ -937,6 +937,8 @@ pub async fn test_dev_source_metadata() {
                 vec![],
                 BuildEnvironment::simple(tool_platform, tool_virtual_packages),
             ),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
@@ -1026,6 +1028,8 @@ pub async fn test_dev_source_metadata_package_not_provided() {
                 vec![],
                 BuildEnvironment::simple(tool_platform, tool_virtual_packages),
             ),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
@@ -1111,6 +1115,8 @@ pub async fn test_dev_source_metadata_with_variants() {
                     channel_priority: Default::default(),
                 },
             )),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
@@ -1992,6 +1998,8 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
                 vec![],
                 BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone()),
             ),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
@@ -2087,6 +2095,8 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
                 vec![],
                 BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone()),
             ),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
