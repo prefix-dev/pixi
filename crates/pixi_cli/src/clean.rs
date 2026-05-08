@@ -12,6 +12,7 @@ use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use fs_err::tokio as tokio_fs;
+use human_bytes::human_bytes;
 use indicatif::ProgressBar;
 use miette::IntoDiagnostic;
 use pixi_progress::{global_multi_progress, long_running_progress_style};
@@ -123,16 +124,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .transpose()?;
 
+    let mut total_removed: u64 = 0;
     if let Some(explicit_env) = explicit_environment {
         if args.activation_cache {
-            remove_file(explicit_env.activation_cache_file_path(), true).await?;
+            total_removed += remove_file(explicit_env.activation_cache_file_path(), true).await?;
             tracing::info!(
                 "Only removing activation cache for explicit environment '{}'",
                 explicit_env.name().fancy_display()
             );
         } else {
-            remove_folder_with_progress(explicit_env.dir(), true).await?;
-            remove_file(explicit_env.activation_cache_file_path(), false).await?;
+            total_removed += remove_folder_with_progress(explicit_env.dir(), true).await?;
+            total_removed += remove_file(explicit_env.activation_cache_file_path(), false).await?;
             tracing::info!(
                 "Skipping removal of task cache and solve group environments for explicit environment '{}'",
                 explicit_env.name().fancy_display()
@@ -142,24 +144,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Remove all pixi related work from the workspace. Always clean both
         // the default .pixi location and the effective (possibly detached) location
         // so leftover artifacts are removed regardless of config changes.
-        remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
-        remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
-            .await?;
-        remove_folder_with_progress(workspace.environments_dir(), false).await?;
-        remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
-        remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
-        remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
+        total_removed +=
+            remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
+        total_removed +=
+            remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
+                .await?;
+        total_removed += remove_folder_with_progress(workspace.environments_dir(), false).await?;
+        total_removed +=
+            remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
+        total_removed += remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
+        total_removed +=
+            remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
         for dir in workspace_build_cache_dirs(&workspace) {
-            remove_folder_with_progress(dir, false).await?;
+            total_removed += remove_folder_with_progress(dir, false).await?;
         }
         prune_workspace_registry().await?;
     } else {
         if args.activation_cache {
-            remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
+            total_removed +=
+                remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
         }
         if args.build {
             for dir in workspace_build_cache_dirs(&workspace) {
-                remove_folder_with_progress(dir, false).await?;
+                total_removed += remove_folder_with_progress(dir, false).await?;
             }
             eprintln!(
                 "{}When issues persist, you can remove all build related global cache with: {}",
@@ -171,6 +178,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             prune_workspace_registry().await?;
         }
     }
+    print_total_removed(total_removed);
     Ok(())
 }
 
@@ -245,9 +253,11 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         return Ok(());
     }
 
+    let mut total_removed: u64 = 0;
     for dir in dirs {
-        remove_folder_with_progress(dir, true).await?;
+        total_removed += remove_folder_with_progress(dir, true).await?;
     }
+    print_total_removed(total_removed);
     Ok(())
 }
 
@@ -269,7 +279,7 @@ async fn prune_workspace_registry() -> miette::Result<()> {
 async fn remove_folder_with_progress(
     folder: PathBuf,
     warning_non_existent: bool,
-) -> miette::Result<()> {
+) -> miette::Result<u64> {
     if !folder.exists() {
         if warning_non_existent {
             eprintln!(
@@ -278,7 +288,7 @@ async fn remove_folder_with_progress(
                 folder
             );
         }
-        return Ok(());
+        return Ok(0);
     }
     let pb = global_multi_progress().add(ProgressBar::new_spinner());
     pb.enable_steady_tick(Duration::from_millis(100));
@@ -289,13 +299,22 @@ async fn remove_folder_with_progress(
         folder.clone().display()
     ));
 
+    let size = {
+        let folder = folder.clone();
+        tokio::task::spawn_blocking(move || dir_size(&folder).unwrap_or(0))
+            .await
+            .unwrap_or(0)
+    };
+
     match tokio_fs::remove_dir_all(&folder).await {
         Ok(()) => {
             pb.finish_with_message(format!(
-                "{} {}",
+                "{} {} ({})",
                 console::style("Removed").green(),
-                folder.display()
+                folder.display(),
+                human_bytes(size as f64)
             ));
+            Ok(size)
         }
         Err(e) => {
             pb.finish_with_message(format!(
@@ -304,9 +323,44 @@ async fn remove_folder_with_progress(
                 folder.display(),
                 e
             ));
+            Ok(0)
         }
     }
-    Ok(())
+}
+
+/// Recursively computes the total size in bytes of all files within `path`.
+/// Symlinks are not followed; their own metadata length is counted.
+fn dir_size(path: &std::path::Path) -> std::io::Result<u64> {
+    let meta = match fs_err::symlink_metadata(path) {
+        Ok(m) => m,
+        Err(_) => return Ok(0),
+    };
+    if meta.file_type().is_symlink() {
+        return Ok(meta.len());
+    }
+    if !meta.is_dir() {
+        return Ok(meta.len());
+    }
+    let mut total = 0u64;
+    let entries = match fs_err::read_dir(path) {
+        Ok(e) => e,
+        Err(_) => return Ok(0),
+    };
+    for entry in entries.flatten() {
+        total = total.saturating_add(dir_size(&entry.path()).unwrap_or(0));
+    }
+    Ok(total)
+}
+
+fn print_total_removed(total: u64) {
+    if total == 0 {
+        return;
+    }
+    eprintln!(
+        "{} {}",
+        console::style("Removed").green().bold(),
+        human_bytes(total as f64)
+    );
 }
 
 /// Build-related per-workspace cache directories. Aggregated here so
@@ -338,7 +392,7 @@ fn workspace_build_cache_dirs(workspace: &Workspace) -> Vec<PathBuf> {
     ]
 }
 
-async fn remove_file(file: PathBuf, warning_non_existent: bool) -> miette::Result<()> {
+async fn remove_file(file: PathBuf, warning_non_existent: bool) -> miette::Result<u64> {
     if !file.exists() {
         if warning_non_existent {
             eprintln!(
@@ -346,15 +400,23 @@ async fn remove_file(file: PathBuf, warning_non_existent: bool) -> miette::Resul
                 console::style(format!("File {:?} was not found.", file)).yellow()
             );
         }
-        return Ok(());
+        return Ok(0);
     }
+
+    let size = fs_err::metadata(&file).map(|m| m.len()).unwrap_or(0);
 
     // Ignore errors
     let result = tokio_fs::remove_file(&file).await;
     if let Err(e) = result {
         tracing::info!("Failed to remove file {:?}: {}", file, e);
+        Ok(0)
     } else {
-        eprintln!("{} {}", console::style("removed").green(), file.display());
+        eprintln!(
+            "{} {} ({})",
+            console::style("removed").green(),
+            file.display(),
+            human_bytes(size as f64)
+        );
+        Ok(size)
     }
-    Ok(())
 }

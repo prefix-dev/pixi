@@ -6172,6 +6172,7 @@ dependencies = [
  "flate2",
  "fs-err",
  "futures",
+ "human_bytes",
  "indexmap 2.14.0",
  "indicatif",
  "insta",
