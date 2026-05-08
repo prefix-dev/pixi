@@ -545,12 +545,20 @@ impl BuildContext for LazyBuildDispatch<'_> {
         source: &'a Path,
         subdirectory: Option<&'a Path>,
         output_dir: &'a Path,
+        sources: uv_configuration::SourceStrategy,
         build_kind: BuildKind,
         version_id: Option<&'a str>,
     ) -> Result<Option<DistFilename>, impl IsBuildBackendError> {
         let dispatch = self.get_or_try_init().await?;
         dispatch
-            .direct_build(source, subdirectory, output_dir, build_kind, version_id)
+            .direct_build(
+                source,
+                subdirectory,
+                output_dir,
+                sources,
+                build_kind,
+                version_id,
+            )
             .await
             .map_err(LazyBuildDispatchError::from)
     }
