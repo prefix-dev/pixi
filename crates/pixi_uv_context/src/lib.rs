@@ -253,7 +253,7 @@ impl UvResolutionContext {
             .extra_middleware(self.extra_middleware.clone());
 
         if let Some(timeout) = self.http_timeout {
-            base_client_builder = base_client_builder.timeout(timeout);
+            base_client_builder = base_client_builder.read_timeout(timeout);
         }
 
         if let Some(retries) = self.http_retries {
