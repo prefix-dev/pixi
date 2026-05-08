@@ -16,6 +16,7 @@ use human_bytes::human_bytes;
 use indicatif::ProgressBar;
 use miette::IntoDiagnostic;
 use pixi_progress::{global_multi_progress, long_running_progress_style};
+use std::path::Path;
 use std::str::FromStr;
 
 /// Command to clean the parts of your system which are touched by pixi.
@@ -299,15 +300,15 @@ async fn remove_folder_with_progress(
         folder.clone().display()
     ));
 
-    let size = {
+    let removed = {
         let folder = folder.clone();
-        tokio::task::spawn_blocking(move || dir_size(&folder).unwrap_or(0))
+        tokio::task::spawn_blocking(move || remove_dir_recording_size(&folder))
             .await
-            .unwrap_or(0)
+            .unwrap_or(Ok(0))
     };
 
-    match tokio_fs::remove_dir_all(&folder).await {
-        Ok(()) => {
+    match removed {
+        Ok(size) => {
             pb.finish_with_message(format!(
                 "{} {} ({})",
                 console::style("Removed").green(),
@@ -316,40 +317,54 @@ async fn remove_folder_with_progress(
             ));
             Ok(size)
         }
-        Err(e) => {
+        Err((size, e)) => {
             pb.finish_with_message(format!(
                 "{} {} ({})",
                 console::style("Failed to remove").red(),
                 folder.display(),
                 e
             ));
-            Ok(0)
+            Ok(size)
         }
     }
 }
 
-/// Recursively computes the total size in bytes of all files within `path`.
-/// Symlinks are not followed; their own metadata length is counted.
-fn dir_size(path: &std::path::Path) -> std::io::Result<u64> {
+/// Recursively delete `path`, summing the size of every file/symlink that was
+/// successfully removed. On error, returns the partial total alongside the
+/// first I/O error encountered.
+fn remove_dir_recording_size(path: &Path) -> Result<u64, (u64, std::io::Error)> {
     let meta = match fs_err::symlink_metadata(path) {
         Ok(m) => m,
-        Err(_) => return Ok(0),
+        Err(e) => return Err((0, e)),
     };
-    if meta.file_type().is_symlink() {
-        return Ok(meta.len());
+
+    if meta.is_dir() && !meta.file_type().is_symlink() {
+        let mut total = 0u64;
+        let entries = match fs_err::read_dir(path) {
+            Ok(e) => e,
+            Err(e) => return Err((0, e)),
+        };
+        for entry in entries {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(e) => return Err((total, e)),
+            };
+            match remove_dir_recording_size(&entry.path()) {
+                Ok(size) => total = total.saturating_add(size),
+                Err((size, e)) => return Err((total.saturating_add(size), e)),
+            }
+        }
+        if let Err(e) = fs_err::remove_dir(path) {
+            return Err((total, e));
+        }
+        Ok(total)
+    } else {
+        let size = meta.len();
+        if let Err(e) = fs_err::remove_file(path) {
+            return Err((0, e));
+        }
+        Ok(size)
     }
-    if !meta.is_dir() {
-        return Ok(meta.len());
-    }
-    let mut total = 0u64;
-    let entries = match fs_err::read_dir(path) {
-        Ok(e) => e,
-        Err(_) => return Ok(0),
-    };
-    for entry in entries.flatten() {
-        total = total.saturating_add(dir_size(&entry.path()).unwrap_or(0));
-    }
-    Ok(total)
 }
 
 fn print_total_removed(total: u64) {
