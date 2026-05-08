@@ -137,6 +137,8 @@ impl Key for SourceMetadataKey {
             manifest_source: checkout.pinned,
             preferred_build_source: spec.preferred_build_source.clone(),
             env_ref: spec.env_ref.clone(),
+            build_string_prefix: None,
+            build_number: None,
         };
         let build_backend_metadata = ctx
             .compute(&BuildBackendMetadataKey::new(backend_metadata_spec))

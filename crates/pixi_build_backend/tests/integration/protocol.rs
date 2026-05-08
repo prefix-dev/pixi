@@ -4,6 +4,7 @@ use crate::common::model::{convert_test_model_to_project_model_v1, load_project_
 use imp::TestGenerateRecipe;
 use pixi_build_backend::{
     intermediate_backend::IntermediateBackend, protocol::Protocol, tools::BackendIdentifier,
+    utils::test::intermediate_conda_outputs,
 };
 use pixi_build_types::procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params};
 use rattler_build_core::console_utils::LoggingOutputHandler;
@@ -143,4 +144,100 @@ async fn test_conda_build_v1() {
     });
 
     assert!(build_dir.join("debug").join("recipe.yaml").exists());
+}
+
+#[tokio::test]
+async fn test_conda_outputs_build_string_prefix() {
+    let original_model = load_project_model_from_json("minimal_project_model_for_build.json");
+
+    // Build without prefix
+    let model_no_prefix = convert_test_model_to_project_model_v1(original_model.clone());
+    let result_no_prefix = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model_no_prefix),
+        None,
+        Platform::current(),
+        None,
+        None,
+    )
+    .await;
+
+    assert!(
+        !result_no_prefix.outputs.is_empty(),
+        "should produce at least one output"
+    );
+    let default_build = &result_no_prefix.outputs[0].metadata.build;
+    assert!(
+        !default_build.is_empty(),
+        "default build string should not be empty"
+    );
+    // Default build string should contain a hash (starts with 'h')
+    assert!(
+        default_build.contains('h'),
+        "default build string should contain a hash, got: {default_build}"
+    );
+
+    // Build with prefix
+    let mut model_with_prefix = convert_test_model_to_project_model_v1(original_model);
+    model_with_prefix.build_string_prefix = Some("mypfx".to_string());
+    let result_with_prefix = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model_with_prefix),
+        None,
+        Platform::current(),
+        None,
+        None,
+    )
+    .await;
+
+    assert!(
+        !result_with_prefix.outputs.is_empty(),
+        "should produce at least one output"
+    );
+    let prefixed_build = &result_with_prefix.outputs[0].metadata.build;
+
+    // Prefixed build string should be "mypfx_" + the default build string
+    assert_eq!(
+        *prefixed_build,
+        format!("mypfx_{default_build}"),
+        "prefixed build string should be 'mypfx_' + default"
+    );
+}
+
+#[tokio::test]
+async fn test_conda_outputs_build_number() {
+    let original_model = load_project_model_from_json("minimal_project_model_for_build.json");
+
+    // Without build number override -- should default to 0
+    let model_default = convert_test_model_to_project_model_v1(original_model.clone());
+    let result_default = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model_default),
+        None,
+        Platform::current(),
+        None,
+        None,
+    )
+    .await;
+
+    assert!(!result_default.outputs.is_empty());
+    assert_eq!(
+        result_default.outputs[0].metadata.build_number, 0,
+        "default build number should be 0"
+    );
+
+    // With build number override
+    let mut model_with_bn = convert_test_model_to_project_model_v1(original_model);
+    model_with_bn.build_number = Some(42);
+    let result_with_bn = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model_with_bn),
+        None,
+        Platform::current(),
+        None,
+        None,
+    )
+    .await;
+
+    assert!(!result_with_bn.outputs.is_empty());
+    assert_eq!(
+        result_with_bn.outputs[0].metadata.build_number, 42,
+        "build number should be 42"
+    );
 }

@@ -27,8 +27,8 @@ pub struct ProjectModel {
     /// The name of the project
     pub name: Option<String>,
 
-    /// A build string configured by the user.
-    pub build_string: Option<String>,
+    /// An optional prefix to prepend to the auto-generated build string.
+    pub build_string_prefix: Option<String>,
 
     /// The build number configured by the user.
     #[cfg_attr(feature = "schemars", schemars(with = "Option<u64>"))]
@@ -538,7 +538,7 @@ impl Hash for ProjectModel {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let ProjectModel {
             name,
-            build_string,
+            build_string_prefix,
             build_number,
             version,
             description,
@@ -554,7 +554,7 @@ impl Hash for ProjectModel {
 
         StableHashBuilder::<H>::new()
             .field("authors", authors)
-            .field("build_string", build_string)
+            .field("build_string_prefix", build_string_prefix)
             .field("build_number", build_number)
             .field("description", description)
             .field("documentation", documentation)
@@ -860,7 +860,7 @@ mod tests {
         let mut project_model = ProjectModel {
             name: Some("test-project".to_string()),
             build_number: None,
-            build_string: None,
+            build_string_prefix: None,
             version: None,
             description: None,
             authors: None,
@@ -919,7 +919,7 @@ mod tests {
         let mut project_model = ProjectModel {
             name: Some("test-project".to_string()),
             build_number: None,
-            build_string: None,
+            build_string_prefix: None,
             version: None,
             description: None,
             authors: None,

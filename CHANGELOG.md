@@ -5,6 +5,85 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.68.0] - 2026-05-07
+#### ✨ Highlights
+
+This release bump the lock file version to v7. A lockfile bump is friction: once one developer
+regenerates pixi.lock in version 7, every collaborator (and CI) needs a pixi that understands the
+new format.
+
+Lockfile v7 enables us to deliver this:
+
+ * Reproducible source package builds
+ * Less lockfile churn: We store more stable information
+ * More portable lockfiles: The lockfile will no longer contain absolute, machine-specific paths.
+
+#### <!-- 0 --> Breaking changes
+
+- Lockfile-v7 by @baszalmstra in [#5607](https://github.com/prefix-dev/pixi/pull/5607)
+- Implement feature activation environment precedence by @ruben-arts in [#5956](https://github.com/prefix-dev/pixi/pull/5956)
+
+#### Added
+
+- Support multi-line tasks by @baszalmstra in [#5957](https://github.com/prefix-dev/pixi/pull/5957)
+- Add platform override by @DaniAffCH in [#5960](https://github.com/prefix-dev/pixi/pull/5960)
+- Accept PEP 794 in pyproject.toml by @baszalmstra in [#5986](https://github.com/prefix-dev/pixi/pull/5986)
+- Handle 501 in sharded repodata by @pavelzw in [#6001](https://github.com/prefix-dev/pixi/pull/6001)
+- Track exact build inputs from ninja instead of broad globs by @baszalmstra in [#5972](https://github.com/prefix-dev/pixi/pull/5972)
+- Add configuration options to control package link modes by @baszalmstra in [#5525](https://github.com/prefix-dev/pixi/pull/5525)
+- Add `--from-lockfile` to `pixi workspace export` by @baszalmstra in [#5989](https://github.com/prefix-dev/pixi/pull/5989)
+- Support `package.run-constraints` by @hunger in [#5982](https://github.com/prefix-dev/pixi/pull/5982)
+
+
+#### Changed
+
+- Rebuild when CMakeLists.txt changes by @ubaidsk in [#5961](https://github.com/prefix-dev/pixi/pull/5961)
+- Share git-source fixture, drop pixi-run-git overhead by @baszalmstra in [#6033](https://github.com/prefix-dev/pixi/pull/6033)
+
+
+#### Documentation
+
+- Add polyglot-particles pixi-build workspace by @baszalmstra in [#5974](https://github.com/prefix-dev/pixi/pull/5974)
+- Absolute path to a conda package in `pixi add` by @benmoss in [#6018](https://github.com/prefix-dev/pixi/pull/6018)
+
+
+#### Fixed
+
+- Replace viser-based setuptools override repro with minimal fixture by @baszalmstra in [#5954](https://github.com/prefix-dev/pixi/pull/5954)
+- Use different cache location when on netfs by @nichmor in [#5953](https://github.com/prefix-dev/pixi/pull/5953)
+- Use PackageTarget for package.target definitions by @SipanP in [#5971](https://github.com/prefix-dev/pixi/pull/5971)
+- Add standard ROS default globs for input file discovery by @rshanor in [#6000](https://github.com/prefix-dev/pixi/pull/6000)
+- Set GIT_TERMINAL_PROMPT=0 so invalid git deps fail fast by @baszalmstra in [#5988](https://github.com/prefix-dev/pixi/pull/5988)
+- Skip installing unsupported environments with `--all` by @baszalmstra in [#5987](https://github.com/prefix-dev/pixi/pull/5987)
+- Surface logs emitted by the `rattler_upload` crate by @dhirschfeld in [#5979](https://github.com/prefix-dev/pixi/pull/5979)
+- Don't false-positive on transitive pypi deps from a custom index by @baszalmstra in [#6017](https://github.com/prefix-dev/pixi/pull/6017)
+- Record git ref for transitive Pypi deps by @baszalmstra in [#5996](https://github.com/prefix-dev/pixi/pull/5996)
+- Expand extras self-refs, drop PEP 517 fallback by @baszalmstra in [#5992](https://github.com/prefix-dev/pixi/pull/5992)
+- Give every integration test its own bld dir on the cargo target drive by @baszalmstra in [#6022](https://github.com/prefix-dev/pixi/pull/6022)
+- Rebase workspace-export-from-lockfile onto rattler_lock 0.29 by @baszalmstra in [#6028](https://github.com/prefix-dev/pixi/pull/6028)
+- Preserve relative paths in lockfile by @baszalmstra in [#6029](https://github.com/prefix-dev/pixi/pull/6029)
+
+
+#### Performance
+
+- Make uv the default installer in pixi-build-python by @baszalmstra in [#5985](https://github.com/prefix-dev/pixi/pull/5985)
+
+
+#### Refactor
+
+- Consolidate utility modules under util/ by @baszalmstra in [#5991](https://github.com/prefix-dev/pixi/pull/5991)
+- Split satisfiability/mod.rs into focused submodules by @baszalmstra in [#5993](https://github.com/prefix-dev/pixi/pull/5993)
+- Consolidate caching code under src/cache/ by @baszalmstra in [#5994](https://github.com/prefix-dev/pixi/pull/5994)
+- Unify per-key reporter ids behind OperationId by @baszalmstra in [#6025](https://github.com/prefix-dev/pixi/pull/6025)
+- Remove `pixi build`, merge it into `pixi publish` by @hunger in [#6021](https://github.com/prefix-dev/pixi/pull/6021)
+
+
+#### New Contributors
+* @rshanor made their first contribution in [#6000](https://github.com/prefix-dev/pixi/pull/6000)
+* @SipanP made their first contribution in [#5971](https://github.com/prefix-dev/pixi/pull/5971)
+* @DaniAffCH made their first contribution in [#5960](https://github.com/prefix-dev/pixi/pull/5960)
+* @ubaidsk made their first contribution in [#5961](https://github.com/prefix-dev/pixi/pull/5961)
+
 ### [0.67.2] - 2026-04-23
 #### Added
 

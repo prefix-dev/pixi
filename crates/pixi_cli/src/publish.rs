@@ -65,6 +65,14 @@ pub struct Args {
     #[clap(long, default_value_t = Platform::current())]
     pub build_platform: Platform,
 
+    /// An optional prefix prepended to the auto-generated build string.
+    #[clap(long)]
+    pub build_string_prefix: Option<String>,
+
+    /// An optional override for the package's build number.
+    #[clap(long)]
+    pub build_number: Option<u64>,
+
     /// The directory to use for incremental builds artifacts.
     #[clap(long, short)]
     pub build_dir: Option<PathBuf>,
@@ -361,6 +369,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         manifest_source: manifest_source.clone(),
         preferred_build_source: None,
         env_ref: env_ref.clone(),
+        build_string_prefix: args.build_string_prefix.clone(),
+        build_number: args.build_number,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -430,6 +440,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             build_profile: BuildProfile::Release,
             variant_configuration: Some(variant_configuration.clone()),
             variant_files: Some(variant_files.clone()),
+            build_string_prefix: args.build_string_prefix.clone(),
+            build_number: args.build_number,
         };
         let built = command_dispatcher
             .engine()

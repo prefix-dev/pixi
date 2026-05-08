@@ -125,6 +125,8 @@ pub(super) async fn verify_partial_source_record_against_backend(
             env_ref: pixi_command_dispatcher::EnvironmentRef::Workspace(
                 platform_setup.workspace_env_ref.clone(),
             ),
+            build_string_prefix: None,
+            build_number: None,
         })
         .await
         .map_err(|e| match e {

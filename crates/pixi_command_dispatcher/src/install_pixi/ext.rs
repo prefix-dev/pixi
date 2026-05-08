@@ -164,6 +164,11 @@ async fn install_inner(
                 build_profile: BuildProfile::Development,
                 variant_configuration: shared.variant_configuration.clone(),
                 variant_files: shared.variant_files.clone(),
+                // `pixi install` does not expose CLI-level overrides for
+                // build_string_prefix / build_number; only `pixi publish`
+                // forwards user-supplied values here.
+                build_string_prefix: None,
+                build_number: None,
             };
             sub_ctx
                 .compute(&SourceBuildKey::new(build_spec))

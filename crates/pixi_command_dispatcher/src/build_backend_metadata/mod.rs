@@ -29,7 +29,7 @@ use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use crate::{
     BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
-    InstantiateBackendKey, SourceCheckout, SourceCheckoutError,
+    InstantiateBackendKey, ProjectModelOverrides, SourceCheckout, SourceCheckoutError,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
     source_checkout::SourceCheckoutExt,
 };
@@ -75,6 +75,16 @@ pub struct BuildBackendMetadataSpec {
     /// at compute time.
     #[serde(skip)]
     pub env_ref: EnvironmentRef,
+
+    /// User-supplied build string prefix forwarded to the backend's
+    /// project model. Overrides any value declared in the manifest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_string_prefix: Option<String>,
+
+    /// User-supplied build number forwarded to the backend's project
+    /// model. Overrides any value declared in the manifest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_number: Option<u64>,
 }
 
 /// Compute-engine [`Key`] for the public-facing backend-metadata
@@ -121,6 +131,8 @@ impl Key for BuildBackendMetadataKey {
             variant_configuration: variants.variant_configuration.clone(),
             variant_files: variants.variant_files.clone(),
             exclude_newer: (*exclude_newer).clone(),
+            build_string_prefix: self.0.build_string_prefix.clone(),
+            build_number: self.0.build_number,
         };
 
         ctx.compute(&BuildBackendMetadataInnerKey::new(inner)).await
@@ -161,6 +173,17 @@ pub struct BuildBackendMetadataInner {
 
     /// Variant file paths provided by the workspace.
     pub variant_files: Vec<PathBuf>,
+
+    /// User-supplied build string prefix; overrides the manifest's
+    /// project model when set. Part of the cache key so different
+    /// overrides produce distinct backend invocations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_string_prefix: Option<String>,
+
+    /// User-supplied build number; overrides the manifest's project
+    /// model when set. Part of the cache key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_number: Option<u64>,
 }
 
 /// The metadata of a source checkout.
@@ -585,6 +608,17 @@ enum CacheProbe {
 }
 
 impl BuildBackendMetadataInner {
+    /// Bundle the user-supplied project-model overrides into the shape
+    /// expected by [`InstantiateBackendKey`]. Backend instantiation is
+    /// content-addressed on these overrides, so callers with the same
+    /// values share a single backend handle.
+    fn project_model_overrides(&self) -> ProjectModelOverrides {
+        ProjectModelOverrides {
+            build_string_prefix: self.build_string_prefix.clone(),
+            build_number: self.build_number,
+        }
+    }
+
     /// Resolve the manifest and build-source checkouts and the backend
     /// that owns them.
     async fn resolve_checkouts(
@@ -682,10 +716,17 @@ impl BuildBackendMetadataInner {
             .await
             .map_err(BuildBackendMetadataError::Cache)?;
 
-        let project_model_hash = checkouts
-            .discovered_backend
-            .init_params
-            .project_model
+        // Apply CLI overrides before hashing the project model so the
+        // cache distinguishes builds invoked with different overrides.
+        let overrides = self.project_model_overrides();
+        let overridden_project_model = overrides.apply(
+            checkouts
+                .discovered_backend
+                .init_params
+                .project_model
+                .clone(),
+        );
+        let project_model_hash = overridden_project_model
             .as_ref()
             .map(ProjectModelHash::from);
         let configuration_hash = ConfigurationHash::compute(
@@ -772,16 +813,19 @@ impl BuildBackendMetadataInner {
         // Instantiate the backend. `DiscoveredBackendKey` dedups inside
         // the key, so the re-discovery is free.
         let backend = ctx
-            .compute(&InstantiateBackendKey::new(
-                checkouts.manifest_source_checkout.path.as_std_path(),
-                checkouts.manifest_source_anchor.clone(),
-                checkouts
-                    .build_source_checkout
-                    .path
-                    .as_dir_or_file_parent()
-                    .to_path_buf(),
-                self.exclude_newer.clone(),
-            ))
+            .compute(
+                &InstantiateBackendKey::new(
+                    checkouts.manifest_source_checkout.path.as_std_path(),
+                    checkouts.manifest_source_anchor.clone(),
+                    checkouts
+                        .build_source_checkout
+                        .path
+                        .as_dir_or_file_parent()
+                        .to_path_buf(),
+                    self.exclude_newer.clone(),
+                )
+                .with_project_model_overrides(self.project_model_overrides()),
+            )
             .await
             .map_err(|e: Arc<InstantiateBackendError>| {
                 BuildBackendMetadataError::Initialize((*e).clone())

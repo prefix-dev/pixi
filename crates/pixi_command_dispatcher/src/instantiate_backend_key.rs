@@ -20,7 +20,7 @@ use pixi_build_frontend::{
     tool::{IsolatedTool, SystemTool, Tool},
 };
 use pixi_build_types::{
-    PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion,
+    PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion, ProjectModel,
     procedures::initialize::InitializeParams,
 };
 use pixi_compute_engine::{ComputeCtx, Key};
@@ -45,6 +45,33 @@ use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
 use crate::resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use pixi_compute_reporters::OperationId;
 
+/// CLI-driven overrides applied to the discovered project model before
+/// the backend is initialized. Each field is content-addressed into
+/// [`InstantiateBackendKey`] so different overrides spawn distinct
+/// backend handles.
+#[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
+pub struct ProjectModelOverrides {
+    /// When set, replaces the project model's `build_string_prefix`.
+    pub build_string_prefix: Option<String>,
+    /// When set, replaces the project model's `build_number`.
+    pub build_number: Option<u64>,
+}
+
+impl ProjectModelOverrides {
+    /// Returns a project model with the requested overrides applied.
+    /// Fields the user did not set are left untouched.
+    pub fn apply(&self, project_model: Option<ProjectModel>) -> Option<ProjectModel> {
+        let mut model = project_model?;
+        if self.build_string_prefix.is_some() {
+            model.build_string_prefix = self.build_string_prefix.clone();
+        }
+        if self.build_number.is_some() {
+            model.build_number = self.build_number;
+        }
+        Some(model)
+    }
+}
+
 /// Dedup key for spawning a build backend.
 ///
 /// Reports progress via `Arc<dyn InstantiateBackendReporter>` set on the engine `DataStore`, if any.
@@ -64,6 +91,10 @@ pub struct InstantiateBackendKey {
 
     /// Exclude-newer cutoff applied when solving the backend's tool env.
     pub exclude_newer: Option<ResolvedExcludeNewer>,
+
+    /// User-supplied overrides applied to the discovered project model
+    /// before backend initialization.
+    pub project_model_overrides: ProjectModelOverrides,
 }
 
 impl InstantiateBackendKey {
@@ -81,7 +112,15 @@ impl InstantiateBackendKey {
             manifest_source_anchor,
             build_source_dir,
             exclude_newer,
+            project_model_overrides: ProjectModelOverrides::default(),
         }
+    }
+
+    /// Override the project model with CLI-driven values before the
+    /// backend's `initialize` call.
+    pub fn with_project_model_overrides(mut self, overrides: ProjectModelOverrides) -> Self {
+        self.project_model_overrides = overrides;
+        self
     }
 }
 
@@ -250,7 +289,15 @@ impl InstantiateBackendKey {
 
         check_project_model_invariant(api_version, &discovered.init_params)?;
 
-        spawn_json_rpc(ctx, source_dir, &discovered.init_params, tool, api_version).await
+        spawn_json_rpc(
+            ctx,
+            source_dir,
+            &discovered.init_params,
+            &self.project_model_overrides,
+            tool,
+            api_version,
+        )
+        .await
     }
 
     /// Canonicalize the build source directory.
@@ -272,13 +319,16 @@ impl InstantiateBackendKey {
         source_dir: &std::path::Path,
         init_params: &BackendInitializationParams,
     ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
+        let project_model = self
+            .project_model_overrides
+            .apply(init_params.project_model.clone());
         let memory = in_mem
             .initialize(InitializeParams {
                 manifest_path: init_params.manifest_path.clone(),
                 source_directory: Some(source_dir.to_path_buf()),
                 workspace_directory: Some(init_params.workspace_root.clone()),
                 cache_directory: Some(ctx.global_data().cache_dirs().root().to_owned().into()),
-                project_model: init_params.project_model.clone(),
+                project_model,
                 configuration: init_params.configuration.clone(),
                 target_configuration: init_params.target_configuration.clone(),
             })
@@ -506,15 +556,17 @@ async fn spawn_json_rpc(
     ctx: &ComputeCtx,
     source_dir: PathBuf,
     init_params: &BackendInitializationParams,
+    project_model_overrides: &ProjectModelOverrides,
     tool: Tool,
     api_version: PixiBuildApiVersion,
 ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
     let cache_dir = ctx.global_data().cache_dirs().root().to_owned().into();
+    let project_model = project_model_overrides.apply(init_params.project_model.clone());
     let backend = JsonRpcBackend::setup(
         source_dir,
         init_params.manifest_path.clone(),
         init_params.workspace_root.clone(),
-        init_params.project_model.clone(),
+        project_model,
         init_params.configuration.clone(),
         init_params.target_configuration.clone(),
         Some(cache_dir),
@@ -526,4 +578,70 @@ async fn spawn_json_rpc(
         backend.into(),
         api_version,
     ))))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn model_with(prefix: Option<&str>, number: Option<u64>) -> ProjectModel {
+        ProjectModel {
+            build_string_prefix: prefix.map(str::to_string),
+            build_number: number,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn apply_returns_none_when_no_project_model() {
+        let overrides = ProjectModelOverrides {
+            build_string_prefix: Some("foo".into()),
+            build_number: Some(42),
+        };
+        assert!(overrides.apply(None).is_none());
+    }
+
+    #[test]
+    fn apply_leaves_manifest_values_when_no_overrides_set() {
+        // Without this guarantee a `pixi publish` call without the CLI
+        // flags would silently wipe values declared in the manifest.
+        let manifest = model_with(Some("manifest_prefix"), Some(7));
+        let result = ProjectModelOverrides::default()
+            .apply(Some(manifest))
+            .unwrap();
+        assert_eq!(
+            result.build_string_prefix.as_deref(),
+            Some("manifest_prefix")
+        );
+        assert_eq!(result.build_number, Some(7));
+    }
+
+    #[test]
+    fn apply_replaces_manifest_values_when_overrides_set() {
+        let manifest = model_with(Some("manifest_prefix"), Some(7));
+        let overrides = ProjectModelOverrides {
+            build_string_prefix: Some("cli_prefix".into()),
+            build_number: Some(99),
+        };
+        let result = overrides.apply(Some(manifest)).unwrap();
+        assert_eq!(result.build_string_prefix.as_deref(), Some("cli_prefix"));
+        assert_eq!(result.build_number, Some(99));
+    }
+
+    #[test]
+    fn apply_only_overrides_set_fields() {
+        // Mixed Some/None overrides: only the Some side replaces the
+        // manifest, the other field stays as declared.
+        let manifest = model_with(Some("manifest_prefix"), Some(7));
+        let overrides = ProjectModelOverrides {
+            build_string_prefix: None,
+            build_number: Some(99),
+        };
+        let result = overrides.apply(Some(manifest)).unwrap();
+        assert_eq!(
+            result.build_string_prefix.as_deref(),
+            Some("manifest_prefix")
+        );
+        assert_eq!(result.build_number, Some(99));
+    }
 }

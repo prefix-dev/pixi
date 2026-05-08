@@ -4,7 +4,7 @@ expression: project_model
 ---
 {
   "name": null,
-  "buildString": null,
+  "buildStringPrefix": null,
   "buildNumber": null,
   "version": null,
   "description": null,

@@ -94,6 +94,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         backend_override: args.backend_override,
         target_platform: args.target_platform,
         build_platform: args.build_platform,
+        build_string_prefix: None,
+        build_number: None,
         build_dir: args.build_dir,
         clean: args.clean,
         path: args.path,
