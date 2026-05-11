@@ -1,0 +1,13 @@
+---
+source: crates/pixi_cli/src/tree.rs
+assertion_line: 469
+expression: "render_pypi_tree(manifest, Platform::Linux64)"
+input_file: examples/editable-with-extras/pixi.toml
+---
+└── package_with_extras <unknown> 
+    ├── boltons 24.0.0 
+    ├── rich 13.7.1 (extra: color)
+    │   ├── markdown_it_py 3.0.0 
+    │   │   └── mdurl 0.1.2 
+    │   └── pygments 2.18.0 
+    └── click 8.1.7 (extra: cli)

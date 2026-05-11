@@ -63,6 +63,7 @@ pixi_spec = { workspace = true }
 pixi_task = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
+pypi_modifiers = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_index = { workspace = true }
@@ -106,7 +107,7 @@ which = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["filters"] }
+insta = { workspace = true, features = ["filters", "glob"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
