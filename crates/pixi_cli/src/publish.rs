@@ -95,13 +95,13 @@ pub struct Args {
     ///   s3://my-bucket/my-channel
     ///   channel:///path/to/local/channel
     ///   file:///path/to/local/channel
-    #[arg(long, conflicts_with = "target_dir")]
+    #[arg(long, visible_alias = "to", conflicts_with = "target_dir")]
     pub target_channel: Option<String>,
 
     /// The target local directory to copy packages into (no channel indexing).
     ///
     /// Accepts a local filesystem path.  Mutually exclusive with `--target-channel`.
-    #[arg(long, alias = "to", conflicts_with = "target_channel")]
+    #[arg(long, conflicts_with = "target_channel")]
     pub target_dir: Option<PathBuf>,
 
     /// Force overwrite existing packages
