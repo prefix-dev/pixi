@@ -304,6 +304,7 @@ pub async fn verify_platform_satisfiability(
             &pixi_records_by_name,
             &pypi_records_by_name,
             building_pixi_records,
+            locked_environment.pypi_indexes(),
         )
         .await
     };
@@ -495,6 +496,7 @@ async fn verify_package_platform_satisfiability(
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
+    locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
 ) -> Result<
     (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
     CommandDispatcherError<Box<PlatformUnsat>>,
@@ -513,6 +515,14 @@ async fn verify_package_platform_satisfiability(
         .combined_dev_dependencies(Some(ctx.platform))
         .into_specs()
         .collect_vec();
+
+    // Indexes the lock-file was resolved against. Authoritative because
+    // `verify_pypi_indexes` already confirmed they match the manifest. A
+    // locked package URL must be one of these to satisfy a requirement
+    // with no per-package `index`. None for pre-v7 lockfiles.
+    let locked_indexes: &[url::Url] = locked_pypi_indexes
+        .map(|i| i.indexes.as_slice())
+        .unwrap_or(&[]);
 
     // retrieve dependency-overrides
     // map it to (name => requirement) for later matching
@@ -838,6 +848,7 @@ async fn verify_package_platform_satisfiability(
                                     record,
                                     ctx.project_root,
                                     origin,
+                                    locked_indexes,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }

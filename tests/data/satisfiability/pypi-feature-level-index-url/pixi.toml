@@ -1,0 +1,19 @@
+[workspace]
+channels = ["conda-forge"]
+name = "pypi-feature-level-index-url"
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.12.*"
+
+# Regression for #6060: feature-level `index-url` + no per-package `index`
+# must satisfy a lock-file recorded under that custom URL.
+
+[pypi-dependencies]
+my-dep = "==1.0.0"
+
+[feature.custom-index.pypi-options]
+index-url = "https://custom.example.com/simple"
+
+[environments]
+default = ["custom-index"]
