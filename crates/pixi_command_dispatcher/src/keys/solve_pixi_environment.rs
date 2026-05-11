@@ -593,6 +593,8 @@ async fn process_dev_sources(
                 manifest_source: pinned,
                 preferred_build_source,
                 env_ref,
+                build_string_prefix: None,
+                build_number: None,
             },
         });
         metadata_futs.push(ctx.compute(&key));

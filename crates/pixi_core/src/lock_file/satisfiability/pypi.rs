@@ -7,7 +7,6 @@ use std::{
 };
 
 use dashmap::DashMap;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
@@ -769,16 +768,9 @@ async fn read_local_package_metadata(
         })
         .collect::<Result<_, _>>()?;
 
-    // Match the wheel METADATA shape used at lock time.
-    let empty_optional_deps = IndexMap::new();
-    let optional_deps = project
-        .and_then(|p| p.optional_dependencies.as_ref())
-        .unwrap_or(&empty_optional_deps);
-    let expanded =
-        pypi_metadata::expand_self_extras(requires_dist_vec, package_name, optional_deps);
     let metadata = pypi_metadata::LocalPackageMetadata {
         version,
-        requires_dist: expanded,
+        requires_dist: requires_dist_vec,
         requires_python,
     };
 

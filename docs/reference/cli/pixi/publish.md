@@ -20,6 +20,10 @@ pixi publish [OPTIONS]
 - <a id="arg---build-platform" href="#arg---build-platform">`--build-platform <BUILD_PLATFORM>`</a>
 :  The build platform to use for building (defaults to the current platform)
 <br>**default**: `current_platform`
+- <a id="arg---build-string-prefix" href="#arg---build-string-prefix">`--build-string-prefix <BUILD_STRING_PREFIX>`</a>
+:  An optional prefix prepended to the auto-generated build string
+- <a id="arg---build-number" href="#arg---build-number">`--build-number <BUILD_NUMBER>`</a>
+:  An optional override for the package's build number
 - <a id="arg---build-dir" href="#arg---build-dir">`--build-dir (-b) <BUILD_DIR>`</a>
 :  The directory to use for incremental builds artifacts
 - <a id="arg---clean" href="#arg---clean">`--clean (-c)`</a>
