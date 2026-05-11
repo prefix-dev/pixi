@@ -624,13 +624,49 @@ mod tests {
         assert_eq!(
             as_pypi_req,
             PixiPypiSpec::new(PixiPypiSource::Path {
-                path: pixi_spec::Verbatim::new_with_given(
-                    PathBuf::from("/path/to/boltons"),
-                    "/path/to/boltons".to_string(),
-                ),
+                path: pixi_spec::Verbatim::new(PathBuf::from("/path/to/boltons")),
                 editable: None,
             })
         );
+    }
+
+    #[test]
+    fn test_pep508_file_url_serializes_as_path() {
+        // Regression: a `file://` URL in a PEP 508 requirement must round-trip
+        // through the manifest as a filesystem path, NOT as `path = "file://..."`.
+        // The latter is unloadable because, on reload, the string is treated as
+        // a relative PathBuf and joined with the project root.
+        // See prefix-dev/pixi#6071.
+        #[cfg(target_os = "windows")]
+        let pypi: pep508_rs::Requirement = "boltons @ file:///C:/path/to/boltons".parse().unwrap();
+        #[cfg(not(target_os = "windows"))]
+        let pypi: pep508_rs::Requirement = "boltons @ file:///path/to/boltons".parse().unwrap();
+
+        let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
+        let serialized = as_pypi_req.to_string();
+        assert!(
+            !serialized.contains("file://"),
+            "serialized PixiPypiSpec must not contain `file://`, got: {serialized}",
+        );
+    }
+
+    #[test]
+    fn test_pep508_relative_path_preserves_given() {
+        // Counterpart to `test_pep508_file_url_serializes_as_path`: when the
+        // user writes a *bare relative path* (pep508_rs's non-PEP-508 extension),
+        // we must keep their original spelling as `given` so the lockfile and
+        // manifest stay portable. Only the `file://` URL form should be discarded.
+        let working_dir = std::env::temp_dir();
+        let pypi: pep508_rs::Requirement =
+            pep508_rs::Requirement::parse("mine @ ./mine", &working_dir).unwrap();
+
+        let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
+        match as_pypi_req.source() {
+            PixiPypiSource::Path { path, .. } => {
+                assert_eq!(path.given(), Some("./mine"));
+            }
+            other => panic!("expected Path source, got {other:?}"),
+        }
     }
 
     #[test]

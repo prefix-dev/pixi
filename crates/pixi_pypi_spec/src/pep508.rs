@@ -85,14 +85,21 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                             req.marker,
                         )
                     } else if url.scheme().eq_ignore_ascii_case("file") {
-                        // Convert the file url to a path.
+                        // Convert the file URL to a filesystem path. Preserve `u.given()`
+                        // only when it is already in path form (e.g. `./mine`, `/abs/p`):
+                        // the destination `path = "..."` field expects a filesystem path,
+                        // so a `file://...` `given` would round-trip into an unloadable
+                        // manifest. See prefix-dev/pixi#6071.
                         let file = url.to_file_path().map_err(|_| {
                             Pep508ToPyPiRequirementError::PathUrlIntoPath(url.clone())
                         })?;
-                        let path = if let Some(g) = u.given() {
-                            Verbatim::new_with_given(file, g.to_string())
-                        } else {
-                            Verbatim::new(file)
+                        let path = match u.given() {
+                            Some(g)
+                                if !g.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("file:")) =>
+                            {
+                                Verbatim::new_with_given(file, g.to_string())
+                            }
+                            _ => Verbatim::new(file),
                         };
                         PixiPypiSpec::with_extras_and_markers(
                             PixiPypiSource::Path {
