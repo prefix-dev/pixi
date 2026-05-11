@@ -947,8 +947,11 @@ async fn verify_package_platform_satisfiability(
                         };
                         if let Some(current_metadata) =
                             ctx.static_metadata_cache.get(&absolute_path)
-                            && let Some(mismatch) =
-                                pypi_metadata::compare_metadata(record, &current_metadata)
+                            && let Some(mismatch) = pypi_metadata::compare_metadata(
+                                record,
+                                pkg.name(),
+                                &current_metadata,
+                            )
                         {
                             let local_mismatch = match mismatch {
                                 pypi_metadata::MetadataMismatch::RequiresDist(diff) => {
