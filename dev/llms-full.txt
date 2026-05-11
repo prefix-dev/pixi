@@ -17385,6 +17385,10 @@ pixi publish [OPTIONS]
 
 - [`--target-channel <TARGET_CHANNEL>`](#arg---target-channel) : The target channel URL to publish packages to
 
+  ```
+  **aliases**: to
+  ```
+
 - [`--target-dir <TARGET_DIR>`](#arg---target-dir) : The target local directory to copy packages into (no channel indexing)
 
 - [`--force`](#arg---force) : Force overwrite existing packages
