@@ -228,9 +228,25 @@ fn binary_package_spec_to_package_dependency(
         license,
     } = binary_spec;
 
-    // If the version is "*", we treat it as None
+    // If the version is "*" and no other constraints are present, treat it as None
     // so later rattler-build can detect the PackageDependency as a variant.
-    let version = version.filter(|v| v != &rattler_conda_types::VersionSpec::Any);
+    // If other constraints (e.g. `build`) are present, the spec is not a variant
+    // and we must keep `Some(Any)` so the resulting `MatchSpec` round-trips correctly
+    // through its `Display`/`FromStr` representation.
+    let has_other_constraints = build.is_some()
+        || build_number.is_some()
+        || file_name.is_some()
+        || channel.is_some()
+        || subdir.is_some()
+        || md5.is_some()
+        || sha256.is_some()
+        || url.is_some()
+        || license.is_some();
+    let version = if has_other_constraints {
+        Some(version.unwrap_or(rattler_conda_types::VersionSpec::Any))
+    } else {
+        version.filter(|v| v != &rattler_conda_types::VersionSpec::Any)
+    };
 
     PackageDependency::Binary(MatchSpec {
         name: PackageNameMatcher::Exact(name),
@@ -467,6 +483,37 @@ mod test {
         };
         let match_spec = binary_package_spec_to_package_dependency(name, spec);
         assert_eq!(match_spec.to_string(), "python");
+    }
+
+    /// Regression test for <https://github.com/prefix-dev/pixi/issues/4526>:
+    /// `version = "*"` combined with a `build` constraint must preserve both
+    /// fields so the resulting `MatchSpec` round-trips correctly through its
+    /// `Display`/`FromStr` representation (e.g. `hdf5 * *openmpi*`).
+    #[test]
+    fn test_binary_package_conversion_any_version_with_build_preserves_version() {
+        let name = PackageName::new_unchecked("hdf5");
+        let spec = BinaryPackageSpec {
+            version: Some("*".parse().unwrap()),
+            build: Some("*openmpi*".parse().unwrap()),
+            ..BinaryPackageSpec::default()
+        };
+        let match_spec = binary_package_spec_to_package_dependency(name, spec);
+        assert_eq!(match_spec.to_string(), "hdf5 * *openmpi*");
+    }
+
+    /// A missing version combined with a `build` constraint should be treated
+    /// as `*` so the resulting `MatchSpec` does not promote the build glob to
+    /// a version constraint when rendered to a string.
+    #[test]
+    fn test_binary_package_conversion_no_version_with_build_inserts_any() {
+        let name = PackageName::new_unchecked("hdf5");
+        let spec = BinaryPackageSpec {
+            version: None,
+            build: Some("*openmpi*".parse().unwrap()),
+            ..BinaryPackageSpec::default()
+        };
+        let match_spec = binary_package_spec_to_package_dependency(name, spec);
+        assert_eq!(match_spec.to_string(), "hdf5 * *openmpi*");
     }
 
     /// Build a `pbt::Target` whose only populated field is `run_constraints`.
