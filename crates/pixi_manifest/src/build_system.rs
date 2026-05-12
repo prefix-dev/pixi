@@ -32,6 +32,12 @@ pub struct PackageBuild {
 
     /// Target-specific configuration for different platforms
     pub target_config: Option<IndexMap<TargetSelector, serde_value::Value>>,
+
+    /// An optional prefix to prepend to the auto-generated build string.
+    pub build_string_prefix: Option<String>,
+
+    /// The build number configured by the user.
+    pub build_number: Option<u64>,
 }
 
 impl PackageBuild {
@@ -44,6 +50,8 @@ impl PackageBuild {
             source: None,
             config: None,
             target_config: None,
+            build_string_prefix: None,
+            build_number: None,
         }
     }
 }

@@ -25,6 +25,9 @@ pub struct TomlPackageBuild {
     pub configuration: Option<serde_value::Value>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
     pub warnings: Vec<crate::Warning>,
+
+    pub build_string_prefix: Option<String>,
+    pub build_number: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -101,6 +104,8 @@ impl TomlPackageBuild {
                 } else {
                     Some(target_config)
                 },
+                build_string_prefix: self.build_string_prefix,
+                build_number: self.build_number,
             },
             warnings: self.warnings,
         })
@@ -218,6 +223,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .map(TomlWith::into_inner)
             .unwrap_or_default();
 
+        let build_string_prefix = th.optional("build-string-prefix");
+        let build_number = th.optional("build-number");
+
         th.finalize(None)?;
 
         // Issue a warning if both legacy channels and backend.channels are present
@@ -268,6 +276,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             configuration,
             target,
             warnings,
+            build_string_prefix,
+            build_number,
         })
     }
 }
@@ -496,5 +506,23 @@ mod test {
                 .additional_dependencies
                 .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
         );
+    }
+
+    #[test]
+    fn test_build_string_prefix_and_build_number() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            build-string-prefix = "myprefix"
+            build-number = 42
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert_eq!(
+            parsed.value.build_string_prefix.as_deref(),
+            Some("myprefix")
+        );
+        assert_eq!(parsed.value.build_number, Some(42));
     }
 }

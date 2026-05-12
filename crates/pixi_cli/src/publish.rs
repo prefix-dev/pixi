@@ -18,8 +18,8 @@ use miette::{Context, IntoDiagnostic};
 use pixi_auth::get_auth_store;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv,
+    BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs,
+    ComputeResultExt, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
 use pixi_config::{Config, ConfigCli};
@@ -272,7 +272,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let build_dir = AbsPathBuf::new(build_dir)
             .expect("build dir is not absolute")
             .into_assume_dir();
-        cache_dirs.set_backend_metadata(build_dir);
+        cache_dirs.set_override::<BackendMetadataDir>(build_dir);
     }
     let progress = std::sync::Arc::new(TopLevelProgress::new(
         pixi_compute_reporters::OperationRegistry::new(),

@@ -10,9 +10,8 @@ use crate::SolveCondaEnvironmentSpec;
 use crate::compute_data::{HasCondaSolveReporter, HasCondaSolveSemaphore};
 use crate::injected_config::ChannelConfigKey;
 use crate::reporter::CondaSolveReporter;
-use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
 use crate::solve_conda::{SolveCondaBlockingError, SolveCondaEnvironmentError};
-use pixi_compute_reporters::OperationId;
+use pixi_compute_reporters::{Active, LifecycleKind, OperationId, ReporterLifecycle};
 
 /// `LifecycleKind` for conda solves.
 struct CondaSolveReporterLifecycle;

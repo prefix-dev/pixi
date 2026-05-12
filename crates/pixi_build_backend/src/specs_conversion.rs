@@ -461,6 +461,7 @@ pub fn from_build_v1_args_to_finalized_dependencies(
             run_exports: run_exports
                 .map(from_build_v1_run_exports_to_run_exports)
                 .unwrap_or_default(),
+            extra_depends: Default::default(),
         },
     }
 }

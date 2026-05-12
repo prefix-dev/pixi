@@ -17,24 +17,24 @@ use std::{
 use thiserror::Error;
 
 use crate::build::CanonicalSourceCodeLocation;
+use crate::cache::markers::BackendMetadataDir;
 use crate::cache::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, BuildBackendMetadataCacheError,
     BuildBackendMetadataCacheKey, CacheEntry, CacheKey, CacheKeyString, CacheRevision,
     MetadataCache, MetadataCacheKey, WriteResult,
 };
-use crate::compute_data::{
-    HasBuildBackendMetadataCache, HasBuildBackendMetadataReporter, HasCacheDirs,
-};
+use crate::compute_data::{HasBuildBackendMetadataCache, HasBuildBackendMetadataReporter};
 use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use crate::{
     BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
     InstantiateBackendKey, ProjectModelOverrides, SourceCheckout, SourceCheckoutError,
+    SourceCheckoutExt,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
-    source_checkout::SourceCheckoutExt,
 };
 use pixi_build_discovery::BackendSpec;
 use pixi_build_frontend::BackendOverride;
+use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_path::normalize::normalize_typed;
 
@@ -414,7 +414,7 @@ impl BuildBackendMetadataInner {
     /// checkout.
     async fn call_conda_outputs(
         &self,
-        cache_dirs: &crate::CacheDirs,
+        metadata_dir: &pixi_path::AbsPresumedDirPath,
         build_source_checkout: &SourceCheckout,
         source_unique_key: &str,
         backend: BackendHandle,
@@ -445,8 +445,10 @@ impl BuildBackendMetadataInner {
             // cache, so cache entries for this source and the backend's
             // scratch for the same source live side by side (single
             // `rm -rf` cleans both).
-            work_directory: cache_dirs
-                .backend_metadata_work_dir(source_unique_key)
+            work_directory: metadata_dir
+                .join(source_unique_key)
+                .join(pixi_consts::consts::BACKEND_METADATA_WORK_SUBDIR)
+                .into_assume_dir()
                 .join(
                     WorkDirKey {
                         source: SourceRecordOrCheckout::Checkout {
@@ -845,9 +847,10 @@ impl BuildBackendMetadataInner {
             pixi_build_types::procedures::conda_outputs::METHOD_NAME
         );
 
-        // Snapshot cache dirs for the conda_outputs call (work-dir path
-        // derivation). Cheap clone: `CacheDirs` is a handful of paths.
-        let cache_dirs = ctx.global_data().cache_dirs().clone();
+        // Resolve the metadata cache root once for the conda_outputs
+        // call below so the work-dir path derivation does not duplicate
+        // the dependency edge to `BackendMetadataDir`.
+        let metadata_dir = ctx.cache_dir::<BackendMetadataDir>().await;
 
         // Compute the source's cache_unique_key up front: the work dir
         // is nested under the same `<source>/` slot the metadata cache
@@ -867,7 +870,7 @@ impl BuildBackendMetadataInner {
 
         let raw = self
             .call_conda_outputs(
-                &cache_dirs,
+                &metadata_dir,
                 &checkouts.build_source_checkout,
                 &source_unique_key,
                 backend,

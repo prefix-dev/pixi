@@ -1,7 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::BuildEnvironment;
-use crate::cache::BuildBackendMetadataCache;
+use crate::cache::{
+    BuildBackendMetadataCache,
+    markers::{BackendMetadataDir, PackagesDir},
+};
 use crate::compute_data::{
     AllowExecuteLinkScripts, AllowLinkOptions, BackendSourceBuildSemaphore, CondaSolveSemaphore,
 };
@@ -11,19 +14,22 @@ use crate::injected_config::{
 };
 use crate::reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
-    GitCheckoutReporter, InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter,
-    SourceMetadataReporter, SourceRecordReporter, UrlCheckoutReporter,
+    InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter, SourceMetadataReporter,
+    SourceRecordReporter,
 };
 use crate::util::limits::ResolvedLimits;
-use crate::util::path::RootDir;
 use crate::{
     CacheDirs, CommandDispatcher, Executor, Limits,
     command_dispatcher::{CommandDispatcherData, DepGraphDumpGuard},
-    source_checkout::{GitCheckoutSemaphore, UrlCheckoutSemaphore},
 };
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::BackendOverride;
+use pixi_compute_cache_dirs::CacheDirsKey;
 use pixi_compute_engine::ComputeEngine;
+use pixi_compute_env_vars::EnvVarsKey;
+use pixi_compute_sources::{
+    GitCheckoutReporter, GitCheckoutSemaphore, RootDir, UrlCheckoutReporter, UrlCheckoutSemaphore,
+};
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
@@ -132,7 +138,7 @@ impl CommandDispatcherBuilder {
     }
 
     /// Register the per-key
-    /// [`UrlCheckoutReporter`](crate::reporter::UrlCheckoutReporter) used
+    /// [`UrlCheckoutReporter`](crate::UrlCheckoutReporter) used
     /// by the url-checkout key.
     pub fn with_url_checkout_reporter(self, reporter: Arc<dyn UrlCheckoutReporter>) -> Self {
         Self {
@@ -335,11 +341,18 @@ impl CommandDispatcherBuilder {
                 .into_assume_dir()
         });
 
-        let cache_dirs = self
-            .cache_dirs
-            .unwrap_or_else(|| CacheDirs::new(root_dir.join(".cache").into_assume_dir()));
+        let cache_dirs = Arc::new(
+            self.cache_dirs
+                .unwrap_or_else(|| CacheDirs::new(root_dir.join(".cache").into_assume_dir())),
+        );
+        // Snapshot env vars once. Reused for the sync resolves below
+        // and injected via `EnvVarsKey` so compute bodies see the same
+        // map.
+        let env_snapshot: Arc<HashMap<String, String>> = Arc::new(std::env::vars().collect());
+
         let download_client = self.download_client.unwrap_or_default();
-        let package_cache = PackageCache::new(cache_dirs.packages());
+        let package_cache =
+            PackageCache::new(cache_dirs.resolve_with_env::<PackagesDir>(&env_snapshot));
         let gateway = self.gateway.unwrap_or_else(|| {
             Gateway::builder()
                 .with_client(download_client.clone())
@@ -350,8 +363,11 @@ impl CommandDispatcherBuilder {
         });
 
         let git_resolver = self.git_resolver.unwrap_or_default();
-        let build_backend_metadata_cache =
-            BuildBackendMetadataCache::new(cache_dirs.backend_metadata().into());
+        let build_backend_metadata_cache = BuildBackendMetadataCache::new(
+            cache_dirs
+                .resolve_with_env::<BackendMetadataDir>(&env_snapshot)
+                .into(),
+        );
 
         let url_resolver = self.url_resolver.unwrap_or_default();
 
@@ -413,20 +429,18 @@ impl CommandDispatcherBuilder {
         // Build the compute engine, populating its global data store with
         // the individual shared resources that pixi-specific Keys read
         // through the extension traits on DataStore (HasGateway,
-        // HasGitResolver, HasUrlResolver, HasCacheDirs, ...). Values are
-        // stored by `TypeId`, so tests can populate only the subset their
-        // Keys actually touch without constructing a full dispatcher. The
-        // spawn hook captures the calling task's
-        // `CURRENT_REPORTER_CONTEXT` task-local and scopes the spawned
-        // compute with it, so Keys can read their caller's reporter
-        // context even though the compute runs on a fresh tokio task.
+        // HasGitResolver, HasUrlResolver, ...). Values are stored by
+        // `TypeId`, so tests can populate only the subset their Keys
+        // actually touch without constructing a full dispatcher.
+        // CacheDirs and the env-var snapshot are injected separately
+        // via `CacheDirsKey` and `EnvVarsKey` so consumers depend on
+        // them through the engine graph.
         let mut engine_builder = ComputeEngine::builder()
             .sequential_branches(matches!(self.executor, Executor::Serial))
             .with_data(data.gateway.clone())
             .with_data(data.git_resolver.clone())
             .with_data(data.url_resolver.clone())
             .with_data(data.download_client.clone())
-            .with_data(data.cache_dirs.clone())
             .with_data(data.build_backend_metadata_cache.clone())
             .with_data(data.package_cache.clone())
             .with_data(data.workspace_env_registry.clone())
@@ -486,6 +500,8 @@ impl CommandDispatcherBuilder {
 
         // Inject engine-wide configuration values that Keys read through
         // `ctx.compute(&ChannelConfigKey)` etc.
+        engine.inject(CacheDirsKey, data.cache_dirs.clone());
+        engine.inject(EnvVarsKey, env_snapshot);
         engine.inject(ChannelConfigKey, Arc::new(channel_config));
         engine.inject(EnabledProtocolsKey, Arc::new(enabled_protocols));
         let tool_build_environment = BuildEnvironment {

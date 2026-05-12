@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_manifest/src/toml/build_backend.rs
-assertion_line: 299
 expression: parsed
 ---
 TomlPackageBuild {
@@ -119,4 +118,6 @@ TomlPackageBuild {
             },
         ),
     ],
+    build_string_prefix: None,
+    build_number: None,
 }

@@ -13,7 +13,7 @@ use once_cell::sync::OnceCell;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, ComputeResultExt, DevSourceMetadataSpec, EnvironmentRef,
-    WorkspaceEnvRef, executor::CancellationAwareFutures, source_checkout::SourceCheckoutExt,
+    SourceCheckoutExt, WorkspaceEnvRef, executor::CancellationAwareFutures,
 };
 use pixi_config::Config;
 use pixi_install_pypi::UnresolvedPypiRecord;

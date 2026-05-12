@@ -11,10 +11,9 @@ use pixi_compute_engine::DataStore;
 use rattler::install::{Installer, InstallerError};
 use rattler_conda_types::{Platform, RepoDataRecord, prefix::Prefix};
 
-use crate::compute_data::{
-    HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasDownloadClient, HasPackageCache,
-};
+use crate::compute_data::{HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasPackageCache};
 use crate::install_pixi::reporter::WrappingInstallReporter;
+use pixi_compute_network::HasDownloadClient;
 
 /// Install the given binary records into `prefix`.
 ///

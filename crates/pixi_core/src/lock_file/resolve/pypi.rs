@@ -387,7 +387,8 @@ pub async fn resolve_pypi(
                 let uv_reference = into_uv_git_reference(pixi_git_ref);
                 let uv_sha = into_uv_git_sha(pinned_git_spec.source.commit);
 
-                let display_safe_url = pinned_git_spec.git.clone().into();
+                let display_safe_url =
+                    uv_redacted::DisplaySafeUrl::from_url(pinned_git_spec.git.clone());
 
                 let repository_url = RepositoryUrl::new(&display_safe_url);
                 let reference = RepositoryReference {
@@ -749,6 +750,7 @@ pub async fn resolve_pypi(
             requirements,
             constraints,
             overrides,
+            uv_configuration::Excludes::default(),
             Preferences::from_iter(preferences, &resolver_env),
             None,
             Default::default(),
