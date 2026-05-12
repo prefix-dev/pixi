@@ -29,8 +29,8 @@ use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 use crate::{
     BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
     InstantiateBackendKey, ProjectModelOverrides, SourceCheckout, SourceCheckoutError,
+    SourceCheckoutExt,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
-    source_checkout::SourceCheckoutExt,
 };
 use pixi_build_discovery::BackendSpec;
 use pixi_build_frontend::BackendOverride;

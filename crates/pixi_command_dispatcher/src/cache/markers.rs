@@ -34,28 +34,6 @@ impl CacheLocation for PackagesDir {
     }
 }
 
-/// Cached git checkouts.
-pub struct GitDir;
-impl CacheLocation for GitDir {
-    fn name() -> &'static str {
-        consts::CACHED_GIT_DIR
-    }
-    fn base() -> CacheBase {
-        CacheBase::Root
-    }
-}
-
-/// Cached URL archive checkouts.
-pub struct UrlDir;
-impl CacheLocation for UrlDir {
-    fn name() -> &'static str {
-        consts::CACHED_URL_DIR
-    }
-    fn base() -> CacheBase {
-        CacheBase::Root
-    }
-}
-
 /// Backend metadata cache + per-source backend scratch tree.
 ///
 /// The `meta-v0` literal mirrors `consts::CACHED_BUILD_BACKEND_METADATA`

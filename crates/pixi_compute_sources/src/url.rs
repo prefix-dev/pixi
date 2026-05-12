@@ -1,31 +1,62 @@
-use crate::cache::markers::UrlDir;
-use crate::compute_data::{HasDownloadClient, HasUrlCheckoutReporter, HasUrlResolver};
-use crate::reporter::UrlCheckoutReporter;
-use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
-use crate::{SourceCheckout, SourceCheckoutError};
+//! URL archive checkout Key plus its reporter trait, semaphore, and
+//! cache marker.
+
+use std::sync::Arc;
+
 use derive_more::Display;
-use pixi_compute_cache_dirs::CacheDirsExt;
+use pixi_compute_cache_dirs::{CacheBase, CacheDirsExt, CacheLocation};
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
-use pixi_compute_reporters::OperationId;
+use pixi_compute_network::HasDownloadClient;
+use pixi_compute_reporters::{Active, LifecycleKind, OperationId, ReporterLifecycle};
+use pixi_consts::consts;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
 use pixi_record::{PinnedSourceSpec, PinnedUrlSpec};
 use pixi_spec::UrlSpec;
 use pixi_url::UrlError;
-use std::sync::Arc;
 use tokio::sync::Semaphore;
 use url::Url;
 
+use crate::data::HasUrlResolver;
+use crate::{SourceCheckout, SourceCheckoutError};
+
+/// [`CacheLocation`] marker for the cached URL-archive directory.
+pub struct UrlDir;
+impl CacheLocation for UrlDir {
+    fn name() -> &'static str {
+        consts::CACHED_URL_DIR
+    }
+    fn base() -> CacheBase {
+        CacheBase::Root
+    }
+}
+
+/// Per-key reporter for URL archive checkouts.
+pub trait UrlCheckoutReporter: Send + Sync {
+    fn on_queued(&self, env: &Url) -> OperationId;
+    fn on_started(&self, checkout_id: OperationId);
+    fn on_finished(&self, checkout_id: OperationId);
+}
+
+/// Access the per-key url-checkout reporter from global data.
+pub trait HasUrlCheckoutReporter {
+    fn url_checkout_reporter(&self) -> Option<&Arc<dyn UrlCheckoutReporter>>;
+}
+
+impl HasUrlCheckoutReporter for DataStore {
+    fn url_checkout_reporter(&self) -> Option<&Arc<dyn UrlCheckoutReporter>> {
+        self.try_get::<Arc<dyn UrlCheckoutReporter>>()
+    }
+}
+
 /// Newtype around the semaphore that bounds concurrent URL archive
-/// fetches. Having a distinct type lets [`DataStore`] store it keyed
-/// by its own `TypeId`, independent of any other `Arc<Semaphore>` on
-/// the store.
+/// fetches. A distinct type lets [`DataStore`] key it independently
+/// from any other `Arc<Semaphore>` registered alongside.
 #[derive(Clone)]
 pub struct UrlCheckoutSemaphore(pub Arc<Semaphore>);
 
 /// Access the semaphore bounding concurrent URL archive fetches.
-///
-/// Returns `None` when no semaphore was registered, which is treated as
-/// "unlimited concurrency": the Key skips permit acquisition entirely.
+/// `None` means "unlimited concurrency": the Key skips permit
+/// acquisition.
 pub trait HasUrlCheckoutSemaphore {
     fn url_checkout_semaphore(&self) -> Option<&Arc<Semaphore>>;
 }
@@ -36,11 +67,13 @@ impl HasUrlCheckoutSemaphore for DataStore {
     }
 }
 
+/// Result of a URL archive checkout: the pinned spec plus the
+/// directory where the archive was extracted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UrlCheckout {
     pub pinned_url: PinnedUrlSpec,
 
-    /// Directory which contains checkout.
+    /// Directory containing the extracted archive.
     pub dir: AbsPresumedDirPathBuf,
 }
 
@@ -50,7 +83,7 @@ impl UrlCheckout {
     }
 }
 
-/// `LifecycleKind` for url checkouts.
+/// `LifecycleKind` for URL checkouts.
 struct UrlReporterLifecycle;
 
 impl LifecycleKind for UrlReporterLifecycle {
@@ -77,9 +110,11 @@ impl LifecycleKind for UrlReporterLifecycle {
     }
 }
 
+/// Dedup key for a URL archive checkout. Keyed on the full
+/// [`UrlSpec`] so subdirectory variations dedup distinctly.
 #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
 #[display("{_0}")]
-pub(crate) struct CheckoutUrl(pub UrlSpec);
+pub struct CheckoutUrl(pub UrlSpec);
 
 impl Key for CheckoutUrl {
     type Value = Arc<Result<UrlCheckout, UrlError>>;
@@ -119,14 +154,15 @@ impl Key for CheckoutUrl {
     }
 }
 
+/// Per-spec URL checkout entry points on [`ComputeCtx`].
 pub trait UrlSourceCheckoutExt {
-    /// Check out the url associated with the given spec.
+    /// Check out the URL archive associated with the given spec.
     fn pin_and_checkout_url(
         &mut self,
         url_spec: UrlSpec,
     ) -> impl Future<Output = Result<SourceCheckout, SourceCheckoutError>> + Send + use<Self>;
 
-    /// Checkout a pinned url.
+    /// Check out a pinned URL archive at the recorded checksum.
     fn checkout_pinned_url(
         &mut self,
         pinned_url_spec: PinnedUrlSpec,

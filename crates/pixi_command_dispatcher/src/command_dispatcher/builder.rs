@@ -14,21 +14,22 @@ use crate::injected_config::{
 };
 use crate::reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
-    GitCheckoutReporter, InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter,
-    SourceMetadataReporter, SourceRecordReporter, UrlCheckoutReporter,
+    InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter, SourceMetadataReporter,
+    SourceRecordReporter,
 };
 use crate::util::limits::ResolvedLimits;
-use crate::util::path::RootDir;
 use crate::{
     CacheDirs, CommandDispatcher, Executor, Limits,
     command_dispatcher::{CommandDispatcherData, DepGraphDumpGuard},
-    source_checkout::{GitCheckoutSemaphore, UrlCheckoutSemaphore},
 };
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::BackendOverride;
 use pixi_compute_cache_dirs::CacheDirsKey;
 use pixi_compute_engine::ComputeEngine;
 use pixi_compute_env_vars::EnvVarsKey;
+use pixi_compute_sources::{
+    GitCheckoutReporter, GitCheckoutSemaphore, RootDir, UrlCheckoutReporter, UrlCheckoutSemaphore,
+};
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
@@ -137,7 +138,7 @@ impl CommandDispatcherBuilder {
     }
 
     /// Register the per-key
-    /// [`UrlCheckoutReporter`](crate::reporter::UrlCheckoutReporter) used
+    /// [`UrlCheckoutReporter`](crate::UrlCheckoutReporter) used
     /// by the url-checkout key.
     pub fn with_url_checkout_reporter(self, reporter: Arc<dyn UrlCheckoutReporter>) -> Self {
         Self {

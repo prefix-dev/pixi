@@ -13,7 +13,6 @@ async-fd-lock = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 derive_more = { workspace = true, features = ["display", "from", "try_into"] }
-dirs = { workspace = true }
 dunce = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
@@ -53,7 +52,9 @@ pixi_build_types = { workspace = true }
 pixi_compute_cache_dirs = { workspace = true }
 pixi_compute_engine = { workspace = true }
 pixi_compute_env_vars = { workspace = true }
+pixi_compute_network = { workspace = true }
 pixi_compute_reporters = { workspace = true }
+pixi_compute_sources = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }

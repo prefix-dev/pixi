@@ -1,12 +1,18 @@
-use crate::InvalidPathError;
-use pixi_compute_engine::ComputeCtx;
-use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf};
+//! [`RootDir`] and the [`RootDirExt`] resolver. The root directory is
+//! the workspace anchor for relative source paths.
+
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+
+use pixi_compute_engine::ComputeCtx;
+use pixi_path::{AbsPathBuf, AbsPresumedDirPath, AbsPresumedDirPathBuf};
 use typed_path::Utf8TypedPath;
 
-/// The root directory of the computations. This is the directory that
-/// contains the workspace manifest.
+use crate::InvalidPathError;
+
+/// Workspace root directory (the directory containing the workspace
+/// manifest). Stored in the engine's global data via
+/// [`pixi_compute_engine::DataStore`].
 pub struct RootDir(pub AbsPresumedDirPathBuf);
 
 impl Deref for RootDir {
@@ -17,16 +23,20 @@ impl Deref for RootDir {
     }
 }
 
-pub(crate) trait RootDirExt {
-    /// Returns the root directory of the computations. IF a relative path is
-    /// provided, it is resolved against this directory (unless another base
-    /// directory is specified).
+/// Resolve relative source paths against the workspace root, with
+/// `~/` expansion and absolute-path passthrough.
+pub trait RootDirExt {
+    /// Reads the [`RootDir`] from global data.
     fn root_dir(&self) -> &RootDir;
 
-    /// Resolves the source path to a full path.
+    /// Resolve `path_spec` to a full path:
     ///
-    /// This function does not check if the path exists and also does not follow
-    /// symlinks.
+    /// - Absolute paths are returned unchanged.
+    /// - `~/...` paths expand against the user's home directory.
+    /// - Relative paths resolve against [`Self::root_dir`].
+    ///
+    /// No filesystem checks are performed and no symlinks are
+    /// followed; `..` segments that escape the root are rejected.
     fn resolve_typed_path(&self, path_spec: Utf8TypedPath) -> Result<AbsPathBuf, InvalidPathError> {
         if path_spec.is_absolute() {
             // SAFETY: we checked that the path is absolute

@@ -33,9 +33,9 @@ use crate::{
     InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
     ProjectModelOverrides, SourceBuildError,
     build::{Dependencies, PixiRunExports},
-    source_checkout::SourceCheckoutExt,
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
+use pixi_compute_sources::SourceCheckoutExt;
 
 /// Unwrap a `CommandDispatcherError<E>` produced by a `ctx.*` ext call.
 /// Cancellation is handled at the engine layer, so it shouldn't reach
