@@ -46,10 +46,8 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{
-    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
-};
-use uv_configuration::{Constraints, Overrides};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
+use uv_configuration::{Constraints, Excludes, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
@@ -474,26 +472,13 @@ pub async fn resolve_pypi(
         &index_locations,
     );
 
-    let registry_client = {
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts)
-            .markers(&marker_environment)
-            .keyring(context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(context.use_native_tls)
-            .extra_middleware(context.extra_middleware.clone());
-
-        let mut uv_client_builder =
-            RegistryClientBuilder::new(base_client_builder, context.cache.clone())
-                .index_locations(index_locations.clone())
-                .index_strategy(index_strategy);
-
-        for p in &context.proxies {
-            uv_client_builder = uv_client_builder.proxy(p.clone())
-        }
-
-        Arc::new(uv_client_builder.build())
-    };
+    let registry_client = context.build_registry_client(
+        allow_insecure_hosts,
+        &index_locations,
+        index_strategy,
+        Some(&marker_environment),
+        Connectivity::Online,
+    )?;
     let dependency_overrides =
         pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
             overrides
@@ -580,8 +565,8 @@ pub async fn resolve_pypi(
     // mostly with build isolation. In that case we want to use fresh
     // non-tampered requests.
     .with_shared_state(context.shared_state.fork())
-    .with_source_strategy(context.source_strategy)
-    .with_concurrency(context.concurrency)
+    .with_source_strategy(context.source_strategy.clone())
+    .with_concurrency(context.concurrency.clone())
     .with_link_mode(link_mode);
 
     // Use cached build dispatch dependencies
@@ -724,16 +709,17 @@ pub async fn resolve_pypi(
 
     let resolution_future = panic::AssertUnwindSafe(async {
         let lookahead_index = InMemoryIndex::default();
-        let lookaheads = LookaheadResolver::new(
+        let mut hasher = context.hash_strategy.clone();
+        let (lookaheads, updated_hasher) = LookaheadResolver::new(
             &requirements,
             &constraints,
             &overrides,
-            &context.hash_strategy,
+            &hasher,
             &lookahead_index,
             DistributionDatabase::new(
                 &registry_client,
                 &lazy_build_dispatch,
-                context.concurrency.downloads,
+                context.concurrency.downloads_semaphore.clone(),
             ),
         )
         .with_reporter(UvReporter::new_arc(
@@ -743,12 +729,14 @@ pub async fn resolve_pypi(
         .await
         .into_diagnostic()
         .map_err(|e| SolveError::LookAhead(e.into()))?;
+        hasher = updated_hasher;
 
         // Move manifest and provider setup inside catch_unwind
         let manifest = Manifest::new(
             requirements,
             constraints,
             overrides,
+            Excludes::default(),
             Preferences::from_iter(preferences, &resolver_env),
             None,
             Default::default(),
@@ -761,14 +749,15 @@ pub async fn resolve_pypi(
             DistributionDatabase::new(
                 &registry_client,
                 &lazy_build_dispatch,
-                context.concurrency.downloads,
+                context.concurrency.downloads_semaphore.clone(),
             ),
             &flat_index,
             Some(&provider_tags),
             &requires_python,
             AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
-            &context.hash_strategy,
+            &hasher,
             options.exclude_newer.clone(),
+            &index_locations,
             &build_options,
             &context.capabilities,
         );
@@ -831,7 +820,7 @@ pub async fn resolve_pypi(
             &registry_client,
             resolution,
             &context.capabilities,
-            context.concurrency.downloads,
+            context.concurrency.downloads_semaphore.clone(),
             project_root,
             &original_git_references,
         )
@@ -995,7 +984,7 @@ async fn lock_pypi_packages(
     registry_client: &Arc<RegistryClient>,
     resolution: Resolution,
     index_capabilities: &IndexCapabilities,
-    concurrent_downloads: usize,
+    concurrent_downloads: Arc<tokio::sync::Semaphore>,
     abs_project_root: &Path,
     original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
 ) -> miette::Result<LockedPypiRecords> {

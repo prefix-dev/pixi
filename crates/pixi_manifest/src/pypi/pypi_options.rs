@@ -1,10 +1,11 @@
-use std::path::PathBuf;
+use std::{fmt, path::PathBuf};
 
 use indexmap::IndexMap;
 use indexmap::IndexSet;
 use pep508_rs::PackageName;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use serde::{Serialize, Serializer, ser::SerializeSeq};
+use pixi_spec::ExcludeNewer;
+use serde::{Serialize, Serializer, ser::SerializeSeq, ser::SerializeStruct};
 use thiserror::Error;
 use url::Url;
 
@@ -82,6 +83,82 @@ pub enum FindLinksUrlOrPath {
     Url(Url),
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum PypiIndexExcludeNewer {
+    /// Disable the workspace-level PyPI exclude-newer cutoff for this index.
+    Disabled,
+    /// Override the workspace-level PyPI exclude-newer cutoff for this index.
+    Enabled(ExcludeNewer),
+}
+
+impl fmt::Display for PypiIndexExcludeNewer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Disabled => write!(f, "false"),
+            Self::Enabled(exclude_newer) => exclude_newer.fmt(f),
+        }
+    }
+}
+
+impl Serialize for PypiIndexExcludeNewer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Disabled => serializer.serialize_bool(false),
+            Self::Enabled(exclude_newer) => exclude_newer.serialize(serializer),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PypiIndex {
+    pub url: Url,
+    pub exclude_newer: Option<PypiIndexExcludeNewer>,
+}
+
+impl PypiIndex {
+    pub fn new(url: Url) -> Self {
+        Self {
+            url,
+            exclude_newer: None,
+        }
+    }
+
+    pub fn url(&self) -> &Url {
+        &self.url
+    }
+}
+
+impl From<Url> for PypiIndex {
+    fn from(url: Url) -> Self {
+        Self::new(url)
+    }
+}
+
+impl fmt::Display for PypiIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.url.fmt(f)
+    }
+}
+
+impl Serialize for PypiIndex {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let Some(exclude_newer) = self.exclude_newer else {
+            return self.url.serialize(serializer);
+        };
+
+        let mut state = serializer.serialize_struct("PypiIndex", 2)?;
+        state.serialize_field("url", &self.url)?;
+        state.serialize_field("exclude-newer", &exclude_newer)?;
+        state.end()
+    }
+}
+
 /// Don't build sdist for all or certain packages
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, strum::Display)]
 #[strum(serialize_all = "kebab-case")]
@@ -154,9 +231,9 @@ impl NoBinary {
 #[serde(rename_all = "kebab-case")]
 pub struct PypiOptions {
     /// The index URL to use as the primary pypi index
-    pub index_url: Option<Url>,
+    pub index_url: Option<PypiIndex>,
     /// Any extra indexes to use, that will be searched after the primary index
-    pub extra_index_urls: Option<Vec<Url>>,
+    pub extra_index_urls: Option<Vec<PypiIndex>>,
     /// Flat indexes also called `--find-links` in pip
     /// These are flat listings of distributions
     pub find_links: Option<Vec<FindLinksUrlOrPath>>,
@@ -196,8 +273,9 @@ impl PypiOptions {
         skip_wheel_filename_check: Option<bool>,
     ) -> Self {
         Self {
-            index_url: index,
-            extra_index_urls: extra_indexes,
+            index_url: index.map(Into::into),
+            extra_index_urls: extra_indexes
+                .map(|extra_indexes| extra_indexes.into_iter().map(Into::into).collect()),
             find_links: flat_indexes,
             no_build_isolation,
             index_strategy,
@@ -224,10 +302,10 @@ impl PypiOptions {
                 FindLinksUrlOrPath::Url(url) => Some(url),
             });
 
-        let extra_indexes = self.extra_index_urls.iter().flatten();
+        let extra_indexes = self.extra_index_urls.iter().flatten().map(PypiIndex::url);
         find_links
             .chain(extra_indexes)
-            .chain(std::iter::once(self.index_url.as_ref()).flatten())
+            .chain(std::iter::once(self.index_url.as_ref().map(PypiIndex::url)).flatten())
     }
 
     /// Merges two `PypiOptions` together, according to the following rules
@@ -323,10 +401,17 @@ impl From<PypiOptions> for rattler_lock::PypiIndexes {
     fn from(value: PypiOptions) -> Self {
         let primary_index = value
             .index_url
+            .map(|index| index.url)
             .unwrap_or(pixi_consts::consts::DEFAULT_PYPI_INDEX_URL.clone());
         Self {
             indexes: std::iter::once(primary_index)
-                .chain(value.extra_index_urls.into_iter().flatten())
+                .chain(
+                    value
+                        .extra_index_urls
+                        .into_iter()
+                        .flatten()
+                        .map(|index| index.url),
+                )
                 .collect(),
             find_links: value
                 .find_links
@@ -493,8 +578,10 @@ mod tests {
     fn test_merge_pypi_options() {
         // Create the first set of options
         let opts = PypiOptions {
-            index_url: Some(Url::parse("https://example.com/pypi").unwrap()),
-            extra_index_urls: Some(vec![Url::parse("https://example.com/extra").unwrap()]),
+            index_url: Some(Url::parse("https://example.com/pypi").unwrap().into()),
+            extra_index_urls: Some(vec![
+                Url::parse("https://example.com/extra").unwrap().into(),
+            ]),
             find_links: Some(vec![
                 FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
                 FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap()),
@@ -529,7 +616,9 @@ mod tests {
         // Create the second set of options
         let opts2 = PypiOptions {
             index_url: None,
-            extra_index_urls: Some(vec![Url::parse("https://example.com/extra2").unwrap()]),
+            extra_index_urls: Some(vec![
+                Url::parse("https://example.com/extra2").unwrap().into(),
+            ]),
             find_links: Some(vec![
                 FindLinksUrlOrPath::Path("/path/to/flat/index2".into()),
                 FindLinksUrlOrPath::Url(Url::parse("https://flat.index2").unwrap()),
@@ -645,7 +734,7 @@ mod tests {
     fn test_error_on_multiple_primary_indexes() {
         // Create the first set of options
         let opts = PypiOptions {
-            index_url: Some(Url::parse("https://example.com/pypi").unwrap()),
+            index_url: Some(Url::parse("https://example.com/pypi").unwrap().into()),
             extra_index_urls: None,
             find_links: None,
             no_build_isolation: NoBuildIsolation::default(),
@@ -659,7 +748,7 @@ mod tests {
 
         // Create the second set of options
         let opts2 = PypiOptions {
-            index_url: Some(Url::parse("https://example.com/pypi2").unwrap()),
+            index_url: Some(Url::parse("https://example.com/pypi2").unwrap().into()),
             extra_index_urls: None,
             find_links: None,
             no_build_isolation: NoBuildIsolation::default(),

@@ -312,6 +312,9 @@ For conda packages, the workspace-level cutoff can be overridden per package in 
 For PyPI packages, the workspace-level cutoff can be overridden per package in the
 [`[pypi-exclude-newer]`](#exclude-newer-optional) table.
 
+For PyPI indexes, the workspace-level cutoff can be overridden per index in
+[`[pypi-options]`](#the-pypi-options-table).
+
 This is especially useful when a package is pinned to a separate `channel` or `index` and needs a
 different cutoff than the rest of the workspace.
 
@@ -530,9 +533,18 @@ An example:
 ```toml
 [pypi-options]
 index-url = "https://pypi.org/simple"
-extra-index-urls = ["https://example.com/simple"]
+extra-index-urls = [
+  { url = "https://internal.example/simple", exclude-newer = "0d" },
+  "https://example.com/simple",
+]
 find-links = [{path = './links'}]
 ```
+
+`index-url` and entries in `extra-index-urls` can be either a URL string or a table with:
+
+- `url`: the PyPI index URL.
+- `exclude-newer`: an index-specific cutoff. Use a timestamp, date, relative duration, or `false`
+  to disable the workspace cutoff for packages resolved from that index.
 
 There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the Pixi repository, that make use of this feature.
 

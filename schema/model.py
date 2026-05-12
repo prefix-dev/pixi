@@ -716,18 +716,38 @@ class S3Options(StrictBaseModel):
     )
 
 
+class PyPIIndex(StrictBaseModel):
+    """A PyPI index URL with optional index-specific settings"""
+
+    url: NonEmptyStr = Field(
+        description="PyPI registry URL for this index",
+        examples=["https://pypi.org/simple"],
+    )
+    exclude_newer: ExcludeNewer | Literal[False] | None = Field(
+        None,
+        description="Override the workspace-level `exclude-newer` cutoff for this PyPI index, or set to false to disable it for this index",
+        examples=["0d", "2025-01-01", False],
+    )
+
+
 class PyPIOptions(StrictBaseModel):
     """Options that determine the behavior of PyPI package resolution and installation"""
 
-    index_url: NonEmptyStr | None = Field(
+    index_url: NonEmptyStr | PyPIIndex | None = Field(
         None,
         description="PyPI registry that should be used as the primary index",
-        examples=["https://pypi.org/simple"],
+        examples=[
+            "https://pypi.org/simple",
+            {"url": "https://pypi.org/simple", "exclude-newer": "0d"},
+        ],
     )
-    extra_index_urls: list[NonEmptyStr] | None = Field(
+    extra_index_urls: list[NonEmptyStr | PyPIIndex] | None = Field(
         None,
         description="Additional PyPI registries that should be used as extra indexes",
-        examples=[["https://pypi.org/simple"]],
+        examples=[
+            ["https://pypi.org/simple"],
+            [{"url": "https://internal.example/simple", "exclude-newer": False}],
+        ],
     )
     find_links: list[FindLinksPath | FindLinksURL] | None = Field(
         None,

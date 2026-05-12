@@ -79,6 +79,14 @@ pub fn should_use_builtin_certs_uv(config: &Config) -> bool {
     matches!(config.tls_root_certs(), pixi_config::TlsRootCerts::All)
 }
 
+/// Returns whether uv should use the system certificate store.
+pub fn should_use_system_certs_uv(config: &Config) -> bool {
+    matches!(
+        config.tls_root_certs(),
+        pixi_config::TlsRootCerts::Native | pixi_config::TlsRootCerts::All
+    )
+}
+
 /// Returns the name of the TLS backend used by this build.
 ///
 /// This is determined at compile time based on the enabled features.

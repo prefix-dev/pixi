@@ -1621,6 +1621,45 @@
         }
       }
     },
+    "PyPIIndex": {
+      "title": "PyPIIndex",
+      "description": "A PyPI index URL with optional index-specific settings",
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "exclude-newer": {
+          "title": "Exclude-Newer",
+          "description": "Override the workspace-level `exclude-newer` cutoff for this PyPI index, or set to false to disable it for this index",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+            },
+            {
+              "type": "boolean",
+              "const": false
+            }
+          ],
+          "examples": [
+            "0d",
+            "2025-01-01",
+            false
+          ]
+        },
+        "url": {
+          "title": "Url",
+          "description": "PyPI registry URL for this index",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "https://pypi.org/simple"
+          ]
+        }
+      }
+    },
     "PyPIOptions": {
       "title": "PyPIOptions",
       "description": "Options that determine the behavior of PyPI package resolution and installation",
@@ -1671,12 +1710,25 @@
           "description": "Additional PyPI registries that should be used as extra indexes",
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIIndex"
+              }
+            ]
           },
           "examples": [
             [
               "https://pypi.org/simple"
+            ],
+            [
+              {
+                "exclude-newer": false,
+                "url": "https://internal.example/simple"
+              }
             ]
           ]
         },
@@ -1726,10 +1778,21 @@
         "index-url": {
           "title": "Index-Url",
           "description": "PyPI registry that should be used as the primary index",
-          "type": "string",
-          "minLength": 1,
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/PyPIIndex"
+            }
+          ],
           "examples": [
-            "https://pypi.org/simple"
+            "https://pypi.org/simple",
+            {
+              "exclude-newer": "0d",
+              "url": "https://pypi.org/simple"
+            }
           ]
         },
         "no-binary": {

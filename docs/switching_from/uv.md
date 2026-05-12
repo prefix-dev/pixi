@@ -352,6 +352,32 @@ And a PyPI package uses the same pattern, but with PyPI-specific tables:
     tqdm = "2025-02-01"
     ```
 
+Pixi can also override `exclude-newer` for a whole PyPI index:
+
+=== "pixi.toml"
+
+    ```toml
+    [workspace]
+    exclude-newer = "7d"
+
+    [pypi-options]
+    extra-index-urls = [
+      { url = "https://internal.example/simple", exclude-newer = "0d" },
+    ]
+    ```
+
+=== "pyproject.toml"
+
+    ```toml
+    [tool.pixi.workspace]
+    exclude-newer = "7d"
+
+    [tool.pixi.pypi-options]
+    extra-index-urls = [
+      { url = "https://internal.example/simple", exclude-newer = "0d" },
+    ]
+    ```
+
 Unlike uv, Pixi can also override `exclude-newer` on a per-channel level:
 
 === "pixi.toml"

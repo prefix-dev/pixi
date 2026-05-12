@@ -27,7 +27,7 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient};
 use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
@@ -565,26 +565,21 @@ async fn read_local_package_metadata(
         &index_locations,
     );
 
-    let registry_client = {
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts.clone())
-            .markers(&marker_environment)
-            .keyring(ctx.uv_context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(ctx.uv_context.use_native_tls)
-            .extra_middleware(ctx.uv_context.extra_middleware.clone());
-
-        let mut uv_client_builder =
-            RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
-                .index_locations(index_locations.clone())
-                .index_strategy(index_strategy);
-
-        for p in &ctx.uv_context.proxies {
-            uv_client_builder = uv_client_builder.proxy(p.clone())
-        }
-
-        Arc::new(uv_client_builder.build())
-    };
+    let registry_client = ctx
+        .uv_context
+        .build_registry_client(
+            allow_insecure_hosts,
+            &index_locations,
+            index_strategy,
+            Some(&marker_environment),
+            Connectivity::Online,
+        )
+        .map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to build uv registry client: {e}"),
+            )
+        })?;
 
     // Get tags for this platform (needed for FlatIndex)
     let system_requirements = ctx.environment.system_requirements();
@@ -638,8 +633,8 @@ async fn read_local_package_metadata(
     .with_index_strategy(index_strategy)
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
     .with_shared_state(ctx.uv_context.shared_state.fork())
-    .with_source_strategy(ctx.uv_context.source_strategy)
-    .with_concurrency(ctx.uv_context.concurrency);
+    .with_source_strategy(ctx.uv_context.source_strategy.clone())
+    .with_concurrency(ctx.uv_context.concurrency.clone());
 
     // Get or create conda prefix updater for the environment
     // Use best_platform() because we can only install/run Python on the host platform
@@ -699,7 +694,7 @@ async fn read_local_package_metadata(
     let database = DistributionDatabase::new(
         &registry_client,
         &lazy_build_dispatch,
-        ctx.uv_context.concurrency.downloads,
+        ctx.uv_context.concurrency.downloads_semaphore.clone(),
     );
 
     // Missing or unparsable pyproject -> trust the lock.
@@ -708,7 +703,7 @@ async fn read_local_package_metadata(
         tracing::debug!(package = %package_name, "no readable pyproject.toml");
         return Ok(None);
     };
-    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) else {
+    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents, pyproject_path.display()) else {
         tracing::debug!(package = %package_name, "pyproject.toml could not be parsed");
         return Ok(None);
     };

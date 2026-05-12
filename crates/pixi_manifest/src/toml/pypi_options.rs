@@ -1,7 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use indexmap::IndexSet;
-use pixi_toml::{TomlEnum, TomlFromStr, TomlIndexMap, TomlWith};
+use pixi_toml::{TomlEnum, TomlFromStr, TomlIndexMap};
 use toml_span::{
     DeserError, ErrorKind, Value,
     de_helpers::{TableHelper, expected},
@@ -10,7 +10,8 @@ use toml_span::{
 use url::Url;
 
 use crate::pypi::pypi_options::{
-    FindLinksUrlOrPath, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode, PypiOptions,
+    FindLinksUrlOrPath, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode, PypiIndex,
+    PypiIndexExcludeNewer, PypiOptions,
 };
 
 /// A helper struct to deserialize a [`pep508_rs::PackageName`] from a TOML
@@ -107,16 +108,49 @@ impl<'de> toml_span::Deserialize<'de> for NoBinary {
     }
 }
 
+impl<'de> toml_span::Deserialize<'de> for PypiIndexExcludeNewer {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        if value.as_bool().is_some() {
+            if bool::deserialize(value)? {
+                return Err(toml_span::Error {
+                    kind: ErrorKind::Custom("expected false to disable exclude-newer".into()),
+                    span: value.span,
+                    line_info: None,
+                }
+                .into());
+            }
+
+            return Ok(Self::Disabled);
+        }
+
+        TomlFromStr::deserialize(value)
+            .map(|exclude_newer| Self::Enabled(exclude_newer.into_inner()))
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for PypiIndex {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        if value.as_str().is_some() {
+            return Ok(Self::new(
+                TomlFromStr::deserialize(value).map(TomlFromStr::into_inner)?,
+            ));
+        }
+
+        let mut th = TableHelper::new(value)?;
+        let url = th.required::<TomlFromStr<_>>("url")?.into_inner();
+        let exclude_newer = th.optional("exclude-newer");
+        th.finalize(None)?;
+
+        Ok(Self { url, exclude_newer })
+    }
+}
+
 impl<'de> toml_span::Deserialize<'de> for PypiOptions {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
 
-        let index_url = th
-            .optional::<TomlFromStr<_>>("index-url")
-            .map(TomlFromStr::into_inner);
-        let extra_index_urls = th
-            .optional::<TomlWith<_, Vec<TomlFromStr<_>>>>("extra-index-urls")
-            .map(|x| x.into_inner());
+        let index_url = th.optional("index-url");
+        let extra_index_urls = th.optional::<Vec<PypiIndex>>("extra-index-urls");
         let find_links = th.optional("find-links");
         let no_build_isolation = th.optional("no-build-isolation").unwrap_or_default();
         let index_strategy = th
@@ -282,8 +316,10 @@ mod test {
         assert_eq!(
             deserialized_options,
             PypiOptions {
-                index_url: Some(Url::parse("https://example.com/pypi").unwrap()),
-                extra_index_urls: Some(vec![Url::parse("https://example.com/extra").unwrap()]),
+                index_url: Some(Url::parse("https://example.com/pypi").unwrap().into()),
+                extra_index_urls: Some(vec![
+                    Url::parse("https://example.com/extra").unwrap().into()
+                ]),
                 find_links: Some(vec![
                     FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
                     FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap())
@@ -305,6 +341,37 @@ mod test {
                 no_binary: Default::default(),
                 skip_wheel_filename_check: None,
             },
+        );
+    }
+
+    #[test]
+    fn test_deserialize_pypi_index_exclude_newer() {
+        let toml_str = r#"
+        index-url = { url = "https://example.com/pypi", exclude-newer = "7d" }
+        extra-index-urls = [
+            { url = "https://example.com/internal", exclude-newer = false },
+            "https://example.com/extra",
+        ]
+        "#;
+
+        let deserialized_options: PypiOptions = PypiOptions::from_toml_str(toml_str).unwrap();
+
+        assert_eq!(
+            deserialized_options.index_url,
+            Some(PypiIndex {
+                url: Url::parse("https://example.com/pypi").unwrap(),
+                exclude_newer: Some(PypiIndexExcludeNewer::Enabled("7d".parse().unwrap())),
+            })
+        );
+        assert_eq!(
+            deserialized_options.extra_index_urls,
+            Some(vec![
+                PypiIndex {
+                    url: Url::parse("https://example.com/internal").unwrap(),
+                    exclude_newer: Some(PypiIndexExcludeNewer::Disabled),
+                },
+                Url::parse("https://example.com/extra").unwrap().into(),
+            ])
         );
     }
 

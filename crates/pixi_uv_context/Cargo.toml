@@ -16,6 +16,7 @@ pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
 reqwest = { workspace = true }
 tracing = { workspace = true }
+url = { workspace = true }
 uv-cache = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }

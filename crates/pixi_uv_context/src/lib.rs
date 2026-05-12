@@ -4,15 +4,13 @@ use std::time::Duration;
 use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, CacheKind, Config};
-use pixi_utils::reqwest::{
-    LazyReqwestClient, should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares,
-};
+use pixi_utils::reqwest::{LazyReqwestClient, should_use_system_certs_uv};
 use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 use uv_cache::Cache;
 use uv_client::{
     BaseClientBuilder, Connectivity, ExtraMiddleware, RegistryClient, RegistryClientBuilder,
 };
-use uv_configuration::{Concurrency, IndexStrategy, SourceStrategy, TrustedHost};
+use uv_configuration::{Concurrency, IndexStrategy, NoSources, ProxyUrl, TrustedHost};
 use uv_dispatch::SharedState;
 use uv_distribution_types::{
     ExtraBuildRequires, ExtraBuildVariables, IndexCapabilities, IndexLocations,
@@ -31,17 +29,17 @@ pub struct UvResolutionContext {
     pub hash_strategy: HashStrategy,
     pub keyring_provider: uv_configuration::KeyringProviderType,
     pub concurrency: Concurrency,
-    pub source_strategy: SourceStrategy,
+    pub source_strategy: NoSources,
     pub capabilities: IndexCapabilities,
     pub allow_insecure_host: Vec<TrustedHost>,
     pub shared_state: SharedState,
     pub extra_middleware: ExtraMiddleware,
-    pub proxies: Vec<reqwest::Proxy>,
     pub tls_no_verify: bool,
-    /// Whether UV should use native TLS (system certificates).
-    /// This is computed based on the `tls-root-certs` config and the TLS feature used.
-    pub use_native_tls: bool,
-    pub use_builtin_certs: bool,
+    /// Whether uv should use the system certificate store.
+    pub use_system_certs: bool,
+    pub http_proxy: Option<ProxyUrl>,
+    pub https_proxy: Option<ProxyUrl>,
+    pub no_proxy: Option<Vec<String>>,
     pub package_config_settings: PackageConfigSettings,
     pub extra_build_requires: ExtraBuildRequires,
     pub extra_build_variables: ExtraBuildVariables,
@@ -144,15 +142,69 @@ fn build_concurrency(config: &Config) -> Concurrency {
     let builds = read_usize_env("UV_CONCURRENT_BUILDS").unwrap_or(defaults.builds);
     let installs = read_usize_env("UV_CONCURRENT_INSTALLS").unwrap_or(defaults.installs);
 
-    Concurrency {
-        downloads,
-        builds,
-        installs,
+    Concurrency::new(downloads, builds, installs)
+}
+
+fn proxy_from_env_enabled() -> bool {
+    [
+        "https_proxy",
+        "HTTPS_PROXY",
+        "http_proxy",
+        "all_proxy",
+        "ALL_PROXY",
+    ]
+    .iter()
+    .any(|key| std::env::var(key).is_ok_and(|value| !value.is_empty()))
+}
+
+fn parse_proxy_url(url: &url::Url) -> miette::Result<ProxyUrl> {
+    url.as_str()
+        .parse()
+        .into_diagnostic()
+        .with_context(|| format!("failed to parse proxy URL '{}'", url))
+}
+
+fn build_uv_proxy_config(
+    config: &Config,
+) -> miette::Result<(Option<ProxyUrl>, Option<ProxyUrl>, Option<Vec<String>>)> {
+    if (config.proxy_config.https.is_none() && config.proxy_config.http.is_none())
+        || proxy_from_env_enabled()
+    {
+        return Ok((None, None, None));
     }
+
+    let no_proxy = (!config.proxy_config.non_proxy_hosts.is_empty())
+        .then(|| config.proxy_config.non_proxy_hosts.clone());
+
+    if config.proxy_config.https == config.proxy_config.http {
+        let proxy = parse_proxy_url(
+            config
+                .proxy_config
+                .https
+                .as_ref()
+                .expect("matching proxies must contain a URL"),
+        )?;
+        return Ok((Some(proxy.clone()), Some(proxy), no_proxy));
+    }
+
+    let http_proxy = config
+        .proxy_config
+        .http
+        .as_ref()
+        .map(parse_proxy_url)
+        .transpose()?;
+    let https_proxy = config
+        .proxy_config
+        .https
+        .as_ref()
+        .map(parse_proxy_url)
+        .transpose()?;
+
+    Ok((http_proxy, https_proxy, no_proxy))
 }
 
 impl UvResolutionContext {
-    pub fn from_config(config: &Config, client: LazyReqwestClient) -> miette::Result<Self> {
+    pub fn from_config(config: &Config, _client: LazyReqwestClient) -> miette::Result<Self> {
         let uv_cache = config.cache_dir_for(CacheKind::PypiWheels)?;
         if !uv_cache.exists() {
             create_dir_all(&uv_cache)
@@ -190,6 +242,7 @@ impl UvResolutionContext {
         let http_timeout = read_http_timeout_from_env();
         let http_retries = read_http_retries_from_env();
         let concurrency = build_concurrency(config);
+        let (http_proxy, https_proxy, no_proxy) = build_uv_proxy_config(config)?;
 
         Ok(Self {
             cache,
@@ -197,15 +250,18 @@ impl UvResolutionContext {
             hash_strategy: HashStrategy::None,
             keyring_provider,
             concurrency,
-            source_strategy: SourceStrategy::Enabled,
+            source_strategy: NoSources::None,
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
-            extra_middleware: ExtraMiddleware(uv_middlewares(config, client)),
-            proxies: config.get_proxies().into_diagnostic()?,
+            // Pixi's reqwest middleware stack currently targets reqwest 0.12,
+            // while uv 0.11 uses reqwest 0.13 internally.
+            extra_middleware: ExtraMiddleware(Vec::new()),
             tls_no_verify: config.tls_no_verify(),
-            use_native_tls: should_use_native_tls_for_uv(),
-            use_builtin_certs: should_use_builtin_certs_uv(config),
+            use_system_certs: should_use_system_certs_uv(config),
+            http_proxy,
+            https_proxy,
+            no_proxy,
             package_config_settings: PackageConfigSettings::default(),
             extra_build_requires: ExtraBuildRequires::default(),
             extra_build_variables: ExtraBuildVariables::default(),
@@ -243,17 +299,19 @@ impl UvResolutionContext {
         index_strategy: IndexStrategy,
         markers: Option<&MarkerEnvironment>,
         connectivity: Connectivity,
-    ) -> Arc<RegistryClient> {
+    ) -> miette::Result<Arc<RegistryClient>> {
         let mut base_client_builder = BaseClientBuilder::default()
             .allow_insecure_host(allow_insecure_hosts)
             .keyring(self.keyring_provider)
             .connectivity(connectivity)
-            .native_tls(self.use_native_tls)
-            .built_in_root_certs(self.use_builtin_certs)
+            .with_system_certs(self.use_system_certs)
+            .http_proxy(self.http_proxy.clone())
+            .https_proxy(self.https_proxy.clone())
+            .no_proxy(self.no_proxy.clone())
             .extra_middleware(self.extra_middleware.clone());
 
         if let Some(timeout) = self.http_timeout {
-            base_client_builder = base_client_builder.timeout(timeout);
+            base_client_builder = base_client_builder.read_timeout(timeout);
         }
 
         if let Some(retries) = self.http_retries {
@@ -264,16 +322,15 @@ impl UvResolutionContext {
             base_client_builder = base_client_builder.markers(markers);
         }
 
-        let mut uv_client_builder =
-            RegistryClientBuilder::new(base_client_builder, self.cache.clone())
-                .index_locations(index_locations.clone())
-                .index_strategy(index_strategy);
+        let uv_client_builder = RegistryClientBuilder::new(base_client_builder, self.cache.clone())
+            .index_locations(index_locations.clone())
+            .index_strategy(index_strategy);
 
-        for p in &self.proxies {
-            uv_client_builder = uv_client_builder.proxy(p.clone());
-        }
-
-        Arc::new(uv_client_builder.build())
+        uv_client_builder
+            .build()
+            .map(Arc::new)
+            .into_diagnostic()
+            .context("failed to build uv registry client")
     }
 }
 

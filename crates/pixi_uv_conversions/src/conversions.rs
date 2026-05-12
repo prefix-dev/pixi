@@ -1,4 +1,5 @@
 use std::{
+    ops::Deref,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -11,7 +12,7 @@ use pixi_manifest::pypi::{
     ResolvedPypiExcludeNewer,
     pypi_options::{
         FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PrereleaseMode,
-        PypiOptions,
+        PypiIndex, PypiIndexExcludeNewer, PypiOptions,
     },
 };
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
@@ -24,6 +25,7 @@ use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
 use uv_redacted::DisplaySafeUrl;
+use uv_resolver::{ExcludeNewerOverride, ExcludeNewerValue};
 
 use crate::{ConversionError, VersionError};
 
@@ -79,10 +81,7 @@ pub fn pypi_options_to_index_locations(
     let index = options
         .index_url
         .clone()
-        .map(DisplaySafeUrl::from)
-        .map(VerbatimUrl::from_url)
-        .map(IndexUrl::from)
-        .map(Index::from_index_url)
+        .map(|index| pypi_index_to_uv_index(index, Index::from_index_url))
         .into_iter();
 
     // Convert to list of extra indexes
@@ -92,10 +91,7 @@ pub fn pypi_options_to_index_locations(
         .into_iter()
         .flat_map(|urls| {
             urls.into_iter()
-                .map(DisplaySafeUrl::from)
-                .map(VerbatimUrl::from_url)
-                .map(IndexUrl::from)
-                .map(Index::from_extra_index_url)
+                .map(|index| pypi_index_to_uv_index(index, Index::from_extra_index_url))
         });
 
     let flat_indexes = if let Some(flat_indexes) = options.find_links.clone() {
@@ -122,6 +118,35 @@ pub fn pypi_options_to_index_locations(
     let no_index = indexes.is_empty() && !flat_indexes.is_empty();
 
     Ok(IndexLocations::new(indexes, flat_indexes, no_index))
+}
+
+fn pypi_index_to_uv_index(index: PypiIndex, build_index: impl FnOnce(IndexUrl) -> Index) -> Index {
+    let PypiIndex { url, exclude_newer } = index;
+    let mut index = build_index(IndexUrl::from(VerbatimUrl::from_url(DisplaySafeUrl::from(
+        url,
+    ))));
+
+    if let Some(exclude_newer) = exclude_newer {
+        enable_uv_index_exclude_newer_preview();
+        index.exclude_newer = Some(to_uv_exclude_newer_override(exclude_newer));
+    }
+
+    index
+}
+
+fn enable_uv_index_exclude_newer_preview() {
+    let _ = uv_preview::init(uv_preview::Preview::new(&[
+        uv_preview::PreviewFeature::IndexExcludeNewer,
+    ]));
+}
+
+fn to_uv_exclude_newer_override(exclude_newer: PypiIndexExcludeNewer) -> ExcludeNewerOverride {
+    match exclude_newer {
+        PypiIndexExcludeNewer::Disabled => ExcludeNewerOverride::Disabled,
+        PypiIndexExcludeNewer::Enabled(exclude_newer) => {
+            ExcludeNewerOverride::Enabled(Box::new(to_exclude_newer_value(exclude_newer.cutoff())))
+        }
+    }
 }
 
 /// Convert locked indexes to IndexLocations
@@ -334,7 +359,7 @@ pub fn into_pinned_git_spec(
         reference,
     );
 
-    PinnedGitSpec::new(dist.git.repository().clone().into(), pinned_checkout)
+    PinnedGitSpec::new(dist.git.repository().deref().clone(), pinned_checkout)
 }
 
 /// Convert a locked git url into a parsed git url
@@ -365,6 +390,7 @@ pub fn to_parsed_git_url(
             },
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),
+            uv_git_types::GitLfs::default(),
         )
         .into_diagnostic()?,
         if git_source.subdirectory.is_empty() {
@@ -668,19 +694,20 @@ pub fn configure_insecure_hosts_for_tls_bypass(
     allow_insecure_hosts
 }
 
-fn to_exclude_newer_timestamp(
-    exclude_newer: chrono::DateTime<chrono::Utc>,
-) -> uv_resolver::ExcludeNewerTimestamp {
+fn to_exclude_newer_timestamp(exclude_newer: chrono::DateTime<chrono::Utc>) -> jiff::Timestamp {
     let seconds_since_epoch = exclude_newer.timestamp();
     let nanoseconds = exclude_newer.timestamp_subsec_nanos();
-    let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
+    jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
         if seconds_since_epoch < 0 {
             jiff::Timestamp::MIN
         } else {
             jiff::Timestamp::MAX
         },
-    );
-    timestamp.into()
+    )
+}
+
+fn to_exclude_newer_value(exclude_newer: chrono::DateTime<chrono::Utc>) -> ExcludeNewerValue {
+    ExcludeNewerValue::new(to_exclude_newer_timestamp(exclude_newer), None)
 }
 
 /// Converts a resolved PyPI exclude-newer configuration to `uv_resolver::ExcludeNewer`.
@@ -692,14 +719,14 @@ pub fn to_exclude_newer(exclude_newer: &ResolvedPypiExcludeNewer) -> uv_resolver
             (
                 PackageName::from_str(package.as_ref())
                     .expect("pep508 package name should be valid uv package name"),
-                to_exclude_newer_timestamp(*cutoff),
+                to_exclude_newer_value(*cutoff),
             )
         })
         .map(uv_resolver::ExcludeNewerPackageEntry::from)
         .collect();
 
     uv_resolver::ExcludeNewer::new(
-        exclude_newer.cutoff.map(to_exclude_newer_timestamp),
+        exclude_newer.cutoff.map(to_exclude_newer_value),
         package_cutoffs,
     )
 }

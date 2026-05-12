@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use url::Url;
 use uv_pep508::VerbatimUrl;
-use uv_redacted::DisplaySafeUrl;
+use uv_redacted::{DisplaySafeUrl, DisplaySafeUrlError};
 
 /// A URL that may have a git+ prefix, with methods to handle both representations
 #[derive(Debug, Clone, PartialEq)]
@@ -70,7 +70,7 @@ impl GitUrlWithPrefix {
     }
 
     /// Convert to VerbatimUrl (preserving git+ prefix)
-    pub fn to_verbatim_url(&self) -> Result<VerbatimUrl, url::ParseError> {
+    pub fn to_verbatim_url(&self) -> Result<VerbatimUrl, DisplaySafeUrlError> {
         let display_safe_url = DisplaySafeUrl::parse(&self.with_git_prefix())?;
         Ok(VerbatimUrl::from_url(display_safe_url))
     }
