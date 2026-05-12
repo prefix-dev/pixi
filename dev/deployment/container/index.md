@@ -30,7 +30,7 @@ More examples
 For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.68.0 AS build
+FROM ghcr.io/prefix-dev/pixi:0.68.1 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
