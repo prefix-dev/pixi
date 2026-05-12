@@ -5836,7 +5836,7 @@ dependencies = [
 name = "pixi"
 version = "0.68.1"
 dependencies = [
- "astral-reqwest-middleware 0.4.2",
+ "astral-reqwest-middleware 0.5.1",
  "async-trait",
  "chrono",
  "dunce",
@@ -6260,7 +6260,7 @@ name = "pixi_cli"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "astral-reqwest-middleware 0.4.2",
+ "astral-reqwest-middleware 0.5.1",
  "chrono",
  "clap",
  "clap_complete",
@@ -6685,7 +6685,7 @@ dependencies = [
 name = "pixi_git"
 version = "0.0.1"
 dependencies = [
- "astral-reqwest-middleware 0.4.2",
+ "astral-reqwest-middleware 0.5.1",
  "dashmap",
  "dunce",
  "fs-err",
@@ -7116,7 +7116,7 @@ dependencies = [
 name = "pixi_url"
 version = "0.1.0"
 dependencies = [
- "astral-reqwest-middleware 0.4.2",
+ "astral-reqwest-middleware 0.5.1",
  "axum",
  "bzip2 0.6.1",
  "dashmap",
@@ -7146,7 +7146,7 @@ dependencies = [
 name = "pixi_utils"
 version = "0.1.0"
 dependencies = [
- "astral-reqwest-middleware 0.4.2",
+ "astral-reqwest-middleware 0.5.1",
  "astral-reqwest-retry 0.8.0",
  "async-fd-lock",
  "fs-err",
@@ -7520,7 +7520,7 @@ dependencies = [
 name = "pypi_mapping"
 version = "0.1.0"
 dependencies = [
- "astral-reqwest-middleware 0.4.2",
+ "astral-reqwest-middleware 0.5.1",
  "astral-reqwest-retry 0.8.0",
  "async-once-cell",
  "dashmap",
@@ -8967,6 +8967,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures-core",
+ "futures-util",
  "h2",
  "http 1.4.0",
  "http-body 1.0.1",
@@ -8977,6 +8978,7 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
+ "mime_guess",
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
