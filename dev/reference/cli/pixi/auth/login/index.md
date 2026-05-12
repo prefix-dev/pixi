@@ -16,6 +16,10 @@ pixi auth login [OPTIONS] <HOST>
   **required**: `true`
   ```
 
+## Options
+
+- [`--user-agent <USER_AGENT>`](#arg---user-agent) : User-Agent header used for requests
+
 ## OAuth/OIDC Authentication
 
 - [`--oauth`](#arg---oauth) : Use OAuth/OIDC authentication
@@ -37,6 +41,8 @@ pixi auth login [OPTIONS] <HOST>
   ```
   May be provided more than once.
   ```
+
+- [`--oauth-redirect-uri <OAUTH_REDIRECT_URI>`](#arg---oauth-redirect-uri) : OAuth redirect URI (defaults to a random localhost port). Set this when the OAuth client on the `IdP` side is registered with a specific redirect URI such as `http://127.0.0.1:8000/auth/oidc`
 
 ## S3 Authentication
 
