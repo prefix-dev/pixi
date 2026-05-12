@@ -94,9 +94,7 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                             Pep508ToPyPiRequirementError::PathUrlIntoPath(url.clone())
                         })?;
                         let path = match u.given() {
-                            Some(g)
-                                if !g.get(..5).is_some_and(|p| p.eq_ignore_ascii_case("file:")) =>
-                            {
+                            Some(g) if !g.starts_with("file:") => {
                                 Verbatim::new_with_given(file, g.to_string())
                             }
                             _ => Verbatim::new(file),
