@@ -340,6 +340,18 @@
           "$ref": "#/$defs/BuildBackend",
           "description": "The build backend to instantiate"
         },
+        "build-number": {
+          "title": "Build-Number",
+          "description": "The build number to record in the produced package",
+          "type": "integer",
+          "minimum": 0
+        },
+        "build-string-prefix": {
+          "title": "Build-String-Prefix",
+          "description": "An optional prefix to prepend to the auto-generated build string",
+          "type": "string",
+          "minLength": 1
+        },
         "channels": {
           "title": "Channels",
           "description": "The `conda` channels that are used to fetch the build backend from",
