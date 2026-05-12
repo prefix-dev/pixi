@@ -28,6 +28,7 @@ pub struct TomlPackageBuild {
 
     pub build_string_prefix: Option<String>,
     pub build_number: Option<u64>,
+    pub secrets: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -106,6 +107,7 @@ impl TomlPackageBuild {
                 },
                 build_string_prefix: self.build_string_prefix,
                 build_number: self.build_number,
+                secrets: self.secrets,
             },
             warnings: self.warnings,
         })
@@ -225,6 +227,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
 
         let build_string_prefix = th.optional("build-string-prefix");
         let build_number = th.optional("build-number");
+        let secrets: Vec<String> = th.optional("secrets").unwrap_or_default();
 
         th.finalize(None)?;
 
@@ -278,6 +281,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             warnings,
             build_string_prefix,
             build_number,
+            secrets,
         })
     }
 }
@@ -506,6 +510,34 @@ mod test {
                 .additional_dependencies
                 .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
         );
+    }
+
+    #[test]
+    fn test_secrets() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            secrets = ["CARGO_REGISTRY_TOKEN", "SCCACHE_BUCKET"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert_eq!(
+            parsed.value.secrets,
+            vec!["CARGO_REGISTRY_TOKEN".to_string(), "SCCACHE_BUCKET".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_secrets_default_empty() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert!(parsed.value.secrets.is_empty());
     }
 
     #[test]

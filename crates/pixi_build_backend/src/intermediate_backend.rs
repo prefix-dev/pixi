@@ -58,6 +58,16 @@ use crate::{
 
 use fs_err::tokio as tokio_fs;
 
+/// Append project-model-declared secrets to a recipe's script secrets,
+/// skipping any names the backend has already added (e.g. sccache keys).
+fn merge_project_secrets(script_secrets: &mut Vec<String>, project_secrets: &[String]) {
+    for name in project_secrets {
+        if !script_secrets.iter().any(|existing| existing == name) {
+            script_secrets.push(name.clone());
+        }
+    }
+}
+
 #[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct IntermediateBackendConfig {
@@ -267,7 +277,7 @@ where
         variant_config.variants.append(&mut param_variants);
 
         // Construct the intermediate recipe
-        let generated_recipe = self
+        let mut generated_recipe = self
             .generate_recipe
             .generate_recipe(
                 &self.project_model,
@@ -280,6 +290,15 @@ where
                 self.cache_dir.clone(),
             )
             .await?;
+
+        // Forward user-declared passthrough secrets from the manifest into the
+        // generated recipe so rattler-build performs the host-env lookup at
+        // build time. Backends may have already populated `secrets` (e.g.
+        // sccache); we union without duplicates and preserve order.
+        merge_project_secrets(
+            &mut generated_recipe.recipe.build.script.secrets,
+            &self.project_model.secrets,
+        );
 
         // Convert the recipe to source code.
         // TODO(baszalmstra): In the future it would be great if we could just
@@ -622,6 +641,11 @@ where
                 self.cache_dir.clone(),
             )
             .await?;
+
+        merge_project_secrets(
+            &mut recipe.recipe.build.script.secrets,
+            &self.project_model.secrets,
+        );
 
         // Convert the recipe to source code.
         // TODO(baszalmstra): In the future it would be great if we could just

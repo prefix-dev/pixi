@@ -38,6 +38,11 @@ pub struct PackageBuild {
 
     /// The build number configured by the user.
     pub build_number: Option<u64>,
+
+    /// Names of environment variables to expose as secrets to the build
+    /// script. Values are looked up at build time from the host environment by
+    /// the build backend; only the names live in the manifest.
+    pub secrets: Vec<String>,
 }
 
 impl PackageBuild {
@@ -52,6 +57,7 @@ impl PackageBuild {
             target_config: None,
             build_string_prefix: None,
             build_number: None,
+            secrets: Vec::new(),
         }
     }
 }

@@ -65,6 +65,13 @@ pub struct ProjectModel {
     /// The target of the project, this may contain
     /// platform specific configurations.
     pub targets: Option<Targets>,
+
+    /// Names of environment variables that should be exposed as secrets to
+    /// the build script. Backends forward these into the generated
+    /// `build.script.secrets` so rattler-build performs the host-env
+    /// passthrough at build time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub secrets: Vec<String>,
 }
 
 impl IsDefault for ProjectModel {
@@ -550,6 +557,7 @@ impl Hash for ProjectModel {
             repository,
             documentation,
             targets,
+            secrets,
         } = self;
 
         StableHashBuilder::<H>::new()
@@ -564,6 +572,7 @@ impl Hash for ProjectModel {
             .field("name", name)
             .field("readme", readme)
             .field("repository", repository)
+            .field("secrets", secrets)
             .field("targets", targets)
             .field("version", version)
             .finish(state);
@@ -871,6 +880,7 @@ mod tests {
             repository: None,
             documentation: None,
             targets: None,
+            secrets: Vec::new(),
         };
 
         let hash1 = calculate_hash(&project_model);
@@ -930,6 +940,7 @@ mod tests {
             repository: None,
             documentation: None,
             targets: None,
+            secrets: Vec::new(),
         };
 
         let hash1 = calculate_hash(&project_model);
