@@ -400,6 +400,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "astral-reqwest-retry"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48c76a42c052d7a95249b90b83d44e8f1bbde7c8e08dbed50d49c58321815da3"
+dependencies = [
+ "anyhow",
+ "astral-reqwest-middleware 0.5.1",
+ "async-trait",
+ "futures",
+ "getrandom 0.2.17",
+ "http 1.4.0",
+ "hyper 1.9.0",
+ "reqwest 0.13.3",
+ "retry-policies 0.5.1",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "wasmtimer",
+]
+
+[[package]]
 name = "astral-tl"
 version = "0.7.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7147,7 +7168,7 @@ name = "pixi_utils"
 version = "0.1.0"
 dependencies = [
  "astral-reqwest-middleware 0.4.2",
- "astral-reqwest-retry 0.8.0",
+ "astral-reqwest-retry 0.9.1",
  "async-fd-lock",
  "fs-err",
  "indicatif",
@@ -7521,7 +7542,7 @@ name = "pypi_mapping"
 version = "0.1.0"
 dependencies = [
  "astral-reqwest-middleware 0.4.2",
- "astral-reqwest-retry 0.8.0",
+ "astral-reqwest-retry 0.9.1",
  "async-once-cell",
  "dashmap",
  "fs-err",

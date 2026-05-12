@@ -143,7 +143,7 @@ retry-policies = "0.5"
 roxmltree = "0.21.0"
 bzip2 = "0.6.1"
 reqwest-middleware = { package = "astral-reqwest-middleware", version = "0.4.2", features = ["multipart"] }
-reqwest-retry = { package = "astral-reqwest-retry", version = "0.8.0" }
+reqwest-retry = { package = "astral-reqwest-retry", version = "0.9.0" }
 rlimit = "0.11.0"
 rstest = "0.26.0"
 same-file = "1.0.6"
