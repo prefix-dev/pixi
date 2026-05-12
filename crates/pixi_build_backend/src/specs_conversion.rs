@@ -233,19 +233,25 @@ fn binary_package_spec_to_package_dependency(
     // If other constraints (e.g. `build`) are present, the spec is not a variant
     // and we must keep `Some(Any)` so the resulting `MatchSpec` round-trips correctly
     // through its `Display`/`FromStr` representation.
-    let has_other_constraints = build.is_some()
-        || build_number.is_some()
-        || file_name.is_some()
-        || channel.is_some()
-        || subdir.is_some()
-        || md5.is_some()
-        || sha256.is_some()
-        || url.is_some()
-        || license.is_some();
-    let version = if has_other_constraints {
-        Some(version.unwrap_or(rattler_conda_types::VersionSpec::Any))
-    } else {
-        version.filter(|v| v != &rattler_conda_types::VersionSpec::Any)
+    //
+    // The destructure of `BinaryPackageSpec` above and the match below are
+    // intentionally exhaustive: when a new field is added to `BinaryPackageSpec`,
+    // the compiler forces us to revisit whether it should count as a constraint.
+    let version = match (
+        &build,
+        &build_number,
+        &file_name,
+        &channel,
+        &subdir,
+        &md5,
+        &sha256,
+        &url,
+        &license,
+    ) {
+        (None, None, None, None, None, None, None, None, None) => {
+            version.filter(|v| v != &rattler_conda_types::VersionSpec::Any)
+        }
+        _ => Some(version.unwrap_or(rattler_conda_types::VersionSpec::Any)),
     };
 
     PackageDependency::Binary(MatchSpec {
