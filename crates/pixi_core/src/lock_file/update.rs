@@ -279,6 +279,13 @@ impl Workspace {
         }
         let command_dispatcher = builder.finish();
 
+        // Seed the dispatcher's git resolver with every locked git source.
+        // Without this, a dep like `git = "https://…"` (no `rev`) resolves
+        // its `DefaultBranch` reference against the remote on every command
+        // because the locked SHA never reaches the git checkout layer's
+        // fast-path. See https://github.com/prefix-dev/pixi/issues/6091.
+        seed_git_resolver_from_lock_file(&lock_file, command_dispatcher.git_resolver());
+
         // Get the package cache from the dispatcher.
         let package_cache = command_dispatcher.package_cache().clone();
 
@@ -3128,6 +3135,52 @@ fn is_editable_from_manifest(
         .unwrap_or(false)
 }
 
+/// Populates `resolver` with one entry per locked git source in `lock_file`,
+/// mapping `(repository_url, requested_reference)` to its resolved commit SHA.
+///
+/// The `GitResolver` already deduplicates fetches within a process: a hit on
+/// its precise-commit map short-circuits a remote fetch in
+/// [`pixi_git::source::GitSource::fetch`]. Without this seed step, a git dep
+/// declared as `{ git = "..." }` (no `rev`) maps to
+/// `GitReference::DefaultBranch`, the resolver has no precise commit on a
+/// fresh process, and every `pixi run` re-resolves `HEAD` from the remote —
+/// even though the lock file already records the commit. Seeding from the
+/// lock file at the start of the update flow lets the fast-path engage.
+fn seed_git_resolver_from_lock_file(
+    lock_file: &LockFile,
+    resolver: &pixi_git::resolver::GitResolver,
+) {
+    use pixi_git::{resolver::RepositoryReference, url::RepositoryUrl};
+    use pixi_record::LockedGitUrl;
+    use rattler_lock::UrlOrPath;
+
+    for package in lock_file.packages() {
+        let Some(source) = package.as_source_conda() else {
+            continue;
+        };
+        let UrlOrPath::Url(url) = &source.location else {
+            continue;
+        };
+        if !LockedGitUrl::is_locked_git_url(url) {
+            continue;
+        }
+        let pinned = match LockedGitUrl::new(url.clone()).to_pinned_git_spec() {
+            Ok(pinned) => pinned,
+            Err(err) => {
+                tracing::debug!(
+                    "skipping git resolver seed for malformed locked url {url}: {err:?}"
+                );
+                continue;
+            }
+        };
+        let repo_ref = RepositoryReference {
+            url: RepositoryUrl::new(&pinned.git),
+            reference: pinned.source.reference.into(),
+        };
+        resolver.insert(repo_ref, pinned.source.commit);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3204,5 +3257,94 @@ mod tests {
             !is_editable_from_manifest(&deps, &pep508_name),
             "Higher-priority feature's explicit editable=false should take precedence"
         );
+    }
+
+    /// `seed_git_resolver_from_lock_file` must populate the resolver with one
+    /// entry per locked git source, including a default-branch source whose
+    /// requested ref does not carry the SHA. Without this seed the
+    /// `pin_and_checkout` path for such a dep cannot reach the fetch
+    /// fast-path and re-resolves HEAD on every run.
+    #[test]
+    fn test_seed_git_resolver_seeds_default_branch_source() {
+        use pixi_git::{
+            GitUrl, git::GitReference as PixiGitReference, resolver::GitResolver, sha::GitSha,
+        };
+        use pixi_record::{PinnedGitCheckout, PinnedGitSpec};
+        use pixi_spec::{GitReference as SpecGitReference, Subdirectory};
+        use rattler_conda_types::{PackageName, PackageRecord, Version};
+        use rattler_lock::{
+            CondaPackageData, CondaSourceData, PlatformData, PlatformName, SourceMetadata,
+            UrlOrPath,
+        };
+        use std::collections::BTreeMap;
+        use url::Url;
+
+        let repo_url = Url::parse("https://example.com/owner/repo").unwrap();
+        let sha_str = "1234567890abcdef1234567890abcdef12345678";
+        let sha = GitSha::from_str(sha_str).unwrap();
+
+        let pinned = PinnedGitSpec {
+            git: repo_url.clone(),
+            source: PinnedGitCheckout {
+                commit: sha,
+                subdirectory: Subdirectory::default(),
+                reference: SpecGitReference::DefaultBranch,
+            },
+        };
+        let locked_url: Url = pinned.into_locked_git_url().into();
+
+        let record = PackageRecord::new(
+            PackageName::new_unchecked("my-pkg"),
+            Version::from_str("0.1.0").unwrap(),
+            "py_0".into(),
+        );
+
+        let source = CondaSourceData {
+            location: UrlOrPath::Url(locked_url),
+            package_build_source: None,
+            variants: BTreeMap::new(),
+            identifier_hash: None,
+            sources: BTreeMap::new(),
+            source_data: rattler_lock::SourceData::default(),
+            metadata: SourceMetadata::Full(Box::new(record)),
+        };
+
+        let lock_file = LockFile::builder()
+            .with_platforms(vec![PlatformData {
+                name: PlatformName::try_from("linux-64").unwrap(),
+                subdir: Platform::Linux64,
+                virtual_packages: Vec::new(),
+            }])
+            .unwrap()
+            .with_conda_package(
+                "default",
+                "linux-64",
+                CondaPackageData::Source(Box::new(source)),
+            )
+            .unwrap()
+            .finish();
+
+        let resolver = GitResolver::default();
+        seed_git_resolver_from_lock_file(&lock_file, &resolver);
+
+        // An unpinned spec built like `pin_and_checkout_git` does (no `rev`)
+        // should now resolve to the locked SHA via the resolver cache.
+        let unpinned = GitUrl::from_reference(repo_url.clone(), PixiGitReference::DefaultBranch);
+        let precise = resolver
+            .precise(unpinned)
+            .expect("resolver should now know the precise commit for the default branch");
+        assert_eq!(
+            precise.precise().map(|s| s.to_string()),
+            Some(sha_str.to_string()),
+        );
+
+        // Sanity: an empty lockfile produces no entries.
+        let resolver = GitResolver::default();
+        seed_git_resolver_from_lock_file(&LockFile::default(), &resolver);
+        let unrelated = GitUrl::from_reference(
+            Url::parse("https://example.com/other/repo").unwrap(),
+            PixiGitReference::DefaultBranch,
+        );
+        assert!(resolver.precise(unrelated).is_none());
     }
 }

@@ -313,6 +313,11 @@ impl CommandDispatcher {
         &self.data.package_cache
     }
 
+    /// Returns the git resolver used by the command dispatcher.
+    pub fn git_resolver(&self) -> &GitResolver {
+        &self.data.git_resolver
+    }
+
     /// Returns the platform and virtual packages used for tool environments.
     pub fn tool_platform(&self) -> (Platform, &[GenericVirtualPackage]) {
         (self.data.tool_platform.0, &self.data.tool_platform.1)
