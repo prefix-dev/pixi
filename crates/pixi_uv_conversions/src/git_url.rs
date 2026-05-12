@@ -3,6 +3,56 @@ use url::Url;
 use uv_pep508::VerbatimUrl;
 use uv_redacted::DisplaySafeUrl;
 
+/// Percent-encode the colon after a Windows drive letter in a `file://` URL,
+/// e.g. `file:///C:/path/@<sha>` -> `file:///C%3A/path/@<sha>`, so uv's
+/// `DisplaySafeUrl::parse` does not reject it as ambiguous credentials.
+fn encode_windows_drive_letter(url: &Url) -> Url {
+    if url.scheme() != "file" {
+        return url.clone();
+    }
+    let s = url.as_str();
+    let Some(rest) = s.strip_prefix("file:///") else {
+        return url.clone();
+    };
+    let bytes = rest.as_bytes();
+    if bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' {
+        let letter = bytes[0] as char;
+        let after = &rest[2..];
+        if let Ok(rewritten) = Url::parse(&format!("file:///{letter}%3A{after}")) {
+            return rewritten;
+        }
+    }
+    url.clone()
+}
+
+/// Reverse of `encode_windows_drive_letter`: decode the drive-letter
+/// `%3A` back to `:` so URLs handed back to user-visible surfaces (lock
+/// files, diagnostics) match what was originally on disk. The encoded
+/// form is an internal workaround for uv's parser; it should not leak.
+pub fn decode_windows_drive_letter(url: &Url) -> Url {
+    if url.scheme() != "file" {
+        return url.clone();
+    }
+    let s = url.as_str();
+    let Some(rest) = s.strip_prefix("file:///") else {
+        return url.clone();
+    };
+    let bytes = rest.as_bytes();
+    if bytes.len() >= 4
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b'%'
+        && bytes[2] == b'3'
+        && (bytes[3] == b'A' || bytes[3] == b'a')
+    {
+        let letter = bytes[0] as char;
+        let after = &rest[4..];
+        if let Ok(rewritten) = Url::parse(&format!("file:///{letter}:{after}")) {
+            return rewritten;
+        }
+    }
+    url.clone()
+}
+
 /// A URL that may have a git+ prefix, with methods to handle both representations
 #[derive(Debug, Clone, PartialEq)]
 pub struct GitUrlWithPrefix {
@@ -66,12 +116,18 @@ impl GitUrlWithPrefix {
 
     /// Convert to DisplaySafeUrl without git+ prefix
     pub fn to_display_safe_url(&self) -> DisplaySafeUrl {
-        self.base_url.clone().into()
+        DisplaySafeUrl::from_url(encode_windows_drive_letter(&self.base_url))
     }
 
     /// Convert to VerbatimUrl (preserving git+ prefix)
-    pub fn to_verbatim_url(&self) -> Result<VerbatimUrl, url::ParseError> {
-        let display_safe_url = DisplaySafeUrl::parse(&self.with_git_prefix())?;
+    pub fn to_verbatim_url(&self) -> Result<VerbatimUrl, uv_redacted::DisplaySafeUrlError> {
+        let encoded = encode_windows_drive_letter(&self.base_url);
+        let with_prefix = if self.has_git_plus {
+            format!("git+{encoded}")
+        } else {
+            encoded.to_string()
+        };
+        let display_safe_url = DisplaySafeUrl::parse(&with_prefix)?;
         Ok(VerbatimUrl::from_url(display_safe_url))
     }
 
