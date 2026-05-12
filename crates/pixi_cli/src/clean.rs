@@ -1,4 +1,7 @@
-use pixi_command_dispatcher::CacheDirs;
+use pixi_command_dispatcher::{
+    BackendMetadataDir, BuildBackendsDir, CacheDirs, GitDir, SourceBuildArtifactsDir,
+    SourceBuildWorkspacesDir, UrlDir,
+};
 use pixi_consts::consts;
 use pixi_core::Workspace;
 use pixi_core::WorkspaceLocator;
@@ -219,7 +222,7 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
                 .expect("cache dir is not absolute")
                 .into_assume_dir(),
         );
-        dirs.push(cache_dirs.build_backends().into());
+        dirs.push(cache_dirs.resolve_from_env::<BuildBackendsDir>().into());
         dirs.push(pixi_config::cache_dir_for(
             pixi_config::CacheKind::BuildToolEnvironments,
         )?);
@@ -233,12 +236,20 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
                 .expect("cache dir is not absolute")
                 .into_assume_dir(),
         );
-        dirs.push(cache_dirs.git().into());
-        dirs.push(cache_dirs.build_backends().into());
-        dirs.push(cache_dirs.url().into());
-        dirs.push(cache_dirs.source_build_artifacts().into());
-        dirs.push(cache_dirs.source_build_workspaces().into());
-        dirs.push(cache_dirs.backend_metadata().into());
+        dirs.push(cache_dirs.resolve_from_env::<GitDir>().into());
+        dirs.push(cache_dirs.resolve_from_env::<BuildBackendsDir>().into());
+        dirs.push(cache_dirs.resolve_from_env::<UrlDir>().into());
+        dirs.push(
+            cache_dirs
+                .resolve_from_env::<SourceBuildArtifactsDir>()
+                .into(),
+        );
+        dirs.push(
+            cache_dirs
+                .resolve_from_env::<SourceBuildWorkspacesDir>()
+                .into(),
+        );
+        dirs.push(cache_dirs.resolve_from_env::<BackendMetadataDir>().into());
     }
     if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
@@ -396,9 +407,13 @@ fn workspace_build_cache_dirs(workspace: &Workspace) -> Vec<PathBuf> {
     let cache_dirs =
         CacheDirs::new(cache_abs.into_assume_dir()).with_workspace(workspace_abs.into_assume_dir());
     vec![
-        cache_dirs.source_build_artifacts().into(),
-        cache_dirs.source_build_workspaces().into(),
-        cache_dirs.backend_metadata().into(),
+        cache_dirs
+            .resolve_from_env::<SourceBuildArtifactsDir>()
+            .into(),
+        cache_dirs
+            .resolve_from_env::<SourceBuildWorkspacesDir>()
+            .into(),
+        cache_dirs.resolve_from_env::<BackendMetadataDir>().into(),
         // Legacy pre-hoist location. Empty on fresh installs; still
         // wiped so users migrating from the old layout see a clean
         // `.pixi/`.

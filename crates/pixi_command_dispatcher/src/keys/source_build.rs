@@ -22,8 +22,10 @@ use tracing::instrument;
 use url::Url;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
-use crate::cache::{ArtifactCacheError, compute_artifact_cache_key, compute_workspace_key};
-use crate::compute_data::HasCacheDirs;
+use crate::cache::{
+    ArtifactCacheError, compute_artifact_cache_key, compute_workspace_key,
+    markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
+};
 use crate::{
     BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method, BuildEnvironment,
@@ -33,6 +35,7 @@ use crate::{
     build::{Dependencies, PixiRunExports},
     source_checkout::SourceCheckoutExt,
 };
+use pixi_compute_cache_dirs::CacheDirsExt;
 
 /// Unwrap a `CommandDispatcherError<E>` produced by a `ctx.*` ext call.
 /// Cancellation is handled at the engine layer, so it shouldn't reach
@@ -187,8 +190,8 @@ async fn compute_inner(
     // On artifact cache hit, return without invoking the backend.
     // Force-rebuild is handled by wiping the cache entry before calling;
     // this body honors whatever state it finds on disk.
-    let cache_dirs = ctx.global_data().cache_dirs().clone();
-    let artifact_cache = ArtifactCache::new(cache_dirs.source_build_artifacts().as_std_path());
+    let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
+    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path());
     let source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
@@ -238,7 +241,8 @@ async fn compute_inner(
         spec.build_environment.host_platform,
         &backend_identifier,
     );
-    let workspace_cache = WorkspaceCache::new(cache_dirs.source_build_workspaces().as_std_path());
+    let workspaces_dir = ctx.cache_dir::<SourceBuildWorkspacesDir>().await;
+    let workspace_cache = WorkspaceCache::new(workspaces_dir.as_std_path());
     // ensure_dir_locked holds an exclusive cross-process lock for the
     // guard's lifetime, so a concurrent pixi process building the same
     // (source, deps, variants, backend) combination blocks here.

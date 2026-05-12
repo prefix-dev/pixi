@@ -36,13 +36,14 @@ use rattler_shell::{
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::compute_data::{HasCacheDirs, HasInstantiateBackendReporter};
+use crate::compute_data::HasInstantiateBackendReporter;
 use crate::discovered_backend::DiscoveredBackendKey;
 use crate::ephemeral_env::{EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec};
 use crate::injected_config::ToolBuildEnvironmentKey;
 use crate::reporter::InstantiateBackendReporter;
 use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
 use crate::resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
+use pixi_compute_cache_dirs::CacheDirsKey;
 use pixi_compute_reporters::OperationId;
 
 /// CLI-driven overrides applied to the discovered project model before
@@ -249,6 +250,15 @@ impl InstantiateBackendKey {
     ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
         let source_dir = self.canonical_build_source_dir()?;
 
+        // Cache root is needed by both branches below; fetch once so
+        // the dependency edge to `CacheDirsKey` is recorded once.
+        let cache_dir_root: PathBuf = ctx
+            .compute(&CacheDirsKey)
+            .await
+            .root()
+            .to_owned()
+            .into_std_path_buf();
+
         // Apply the engine's backend override to the resolved spec.
         let resolved_command = ctx
             .compute(&ResolvedBackendCommandKey::new(resolved_spec.clone()))
@@ -259,10 +269,10 @@ impl InstantiateBackendKey {
         let (tool, api_version) = match resolved_command.as_ref() {
             ResolvedBackendCommand::InMemory(in_mem) => {
                 return self.instantiate_in_memory(
-                    ctx,
                     in_mem,
                     &source_dir,
                     &discovered.init_params,
+                    cache_dir_root,
                 );
             }
             ResolvedBackendCommand::Spec(CommandSpec::System(system_spec)) => (
@@ -290,12 +300,12 @@ impl InstantiateBackendKey {
         check_project_model_invariant(api_version, &discovered.init_params)?;
 
         spawn_json_rpc(
-            ctx,
             source_dir,
             &discovered.init_params,
             &self.project_model_overrides,
             tool,
             api_version,
+            cache_dir_root,
         )
         .await
     }
@@ -314,10 +324,10 @@ impl InstantiateBackendKey {
     /// per-request init params and wrap the resulting [`Backend`].
     fn instantiate_in_memory(
         &self,
-        ctx: &ComputeCtx,
         in_mem: &BoxedInMemoryBackend,
         source_dir: &std::path::Path,
         init_params: &BackendInitializationParams,
+        cache_dir_root: PathBuf,
     ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
         let project_model = self
             .project_model_overrides
@@ -327,7 +337,7 @@ impl InstantiateBackendKey {
                 manifest_path: init_params.manifest_path.clone(),
                 source_directory: Some(source_dir.to_path_buf()),
                 workspace_directory: Some(init_params.workspace_root.clone()),
-                cache_directory: Some(ctx.global_data().cache_dirs().root().to_owned().into()),
+                cache_directory: Some(cache_dir_root),
                 project_model,
                 configuration: init_params.configuration.clone(),
                 target_configuration: init_params.target_configuration.clone(),
@@ -553,14 +563,13 @@ fn check_project_model_invariant(
 /// Spawn a JSON-RPC backend for `tool` and wrap it in the standard
 /// [`BackendHandle`] mutex.
 async fn spawn_json_rpc(
-    ctx: &ComputeCtx,
     source_dir: PathBuf,
     init_params: &BackendInitializationParams,
     project_model_overrides: &ProjectModelOverrides,
     tool: Tool,
     api_version: PixiBuildApiVersion,
+    cache_dir_root: PathBuf,
 ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
-    let cache_dir = ctx.global_data().cache_dirs().root().to_owned().into();
     let project_model = project_model_overrides.apply(init_params.project_model.clone());
     let backend = JsonRpcBackend::setup(
         source_dir,
@@ -569,7 +578,7 @@ async fn spawn_json_rpc(
         project_model,
         init_params.configuration.clone(),
         init_params.target_configuration.clone(),
-        Some(cache_dir),
+        Some(cache_dir_root),
         tool,
     )
     .await

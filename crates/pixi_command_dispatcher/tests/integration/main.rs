@@ -15,10 +15,11 @@ use itertools::Itertools;
 use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, EnvironmentRef,
-    EnvironmentSpec, EphemeralEnv, Executor, InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec,
-    InstantiateToolEnvironmentSpec, SolvePixiEnvironmentError, SourceCheckoutError,
-    keys::SolvePixiEnvironmentSpec, source_checkout::UrlSourceCheckoutExt,
+    BuildBackendsDir, BuildEnvironment, CacheDirs, CacheDirsKey, CommandDispatcher,
+    CommandDispatcherError, EnvVarsKey, EnvironmentRef, EnvironmentSpec, EphemeralEnv, Executor,
+    InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec,
+    SolvePixiEnvironmentError, SourceCheckoutError, UrlDir, keys::SolvePixiEnvironmentSpec,
+    source_checkout::UrlSourceCheckoutExt,
 };
 use pixi_record::PinnedSourceSpec;
 use pixi_spec::{
@@ -233,7 +234,6 @@ fn url_test_engine(
         .sequential_branches(sequential)
         .with_data(pixi_url::UrlResolver::default())
         .with_data(rattler_networking::LazyClient::default())
-        .with_data(cache_dirs)
         .with_spawn_hook(Arc::new(OperationIdSpawnHook));
     if let Some(reporter) = reporter {
         builder = builder.with_data(reporter);
@@ -241,7 +241,10 @@ fn url_test_engine(
     if let Some(n) = max_concurrent {
         builder = builder.with_data(UrlCheckoutSemaphore(Arc::new(Semaphore::new(n))));
     }
-    builder.build()
+    let engine = builder.build();
+    engine.inject(CacheDirsKey, Arc::new(cache_dirs));
+    engine.inject(EnvVarsKey, Arc::new(HashMap::new()));
+    engine
 }
 
 #[tokio::test]
@@ -267,7 +270,9 @@ pub async fn simple_test() {
         .with_cache_dirs(
             default_cache_dirs()
                 .with_workspace(to_abs_dir(tempdir.path()))
-                .with_build_backends(to_abs_dir(tempdir.path().join("build-backends"))),
+                .with_override::<BuildBackendsDir>(to_abs_dir(
+                    tempdir.path().join("build-backends"),
+                )),
         )
         .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
@@ -574,8 +579,7 @@ pub async fn dropping_future_cancels_background_task() {
     // Hold the write lock for the target tool prefix so installation cannot
     // progress even if solve completes; this makes the test deterministic.
     let prefix_dir = dispatcher
-        .cache_dirs()
-        .build_backends()
+        .cache_dir::<BuildBackendsDir>()
         .join(spec.cache_key());
     let mut write_guard = pixi_utils::AsyncPrefixGuard::new(prefix_dir.as_std_path())
         .await
@@ -1475,7 +1479,7 @@ pub async fn test_compute_ctx_install_force_reinstall_rebuilds_source_package() 
 pub async fn pin_and_checkout_url_reuses_cached_checkout() {
     let tempdir = test_tempdir();
     let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let url_cache_root = cache_dirs.url();
+    let url_cache_root = cache_dirs.resolve::<UrlDir>(|n| std::env::var(n).ok());
 
     let sha = dummy_sha();
     let checkout_dir = prepare_cached_checkout(url_cache_root.as_std_path(), sha);
@@ -2152,7 +2156,7 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
 #[tokio::test]
 pub async fn compute_engine_wired_into_dispatcher() {
     use pixi_command_dispatcher::compute_data::{
-        HasCacheDirs, HasDownloadClient, HasGateway, HasGitResolver, HasUrlResolver,
+        HasDownloadClient, HasGateway, HasGitResolver, HasUrlResolver,
     };
     use pixi_compute_engine::{ComputeCtx, Key};
     use std::fmt;
@@ -2176,7 +2180,10 @@ pub async fn compute_engine_wired_into_dispatcher() {
             let _ = data.git_resolver();
             let _ = data.url_resolver();
             let _ = data.download_client();
-            let _ = data.cache_dirs();
+            // CacheDirs lives in the engine via `CacheDirsKey`; reading
+            // through the injected key proves the wiring without going
+            // back through the DataStore.
+            let _ = ctx.compute(&CacheDirsKey).await;
             true
         }
     }

@@ -1,10 +1,10 @@
-use crate::compute_data::{
-    HasCacheDirs, HasDownloadClient, HasGitCheckoutReporter, HasGitResolver,
-};
+use crate::cache::markers::GitDir;
+use crate::compute_data::{HasDownloadClient, HasGitCheckoutReporter, HasGitResolver};
 use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
 use crate::{GitCheckoutReporter, SourceCheckout, SourceCheckoutError};
 use derive_more::Display;
 use futures::future::Either;
+use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
 use pixi_compute_reporters::OperationId;
 use pixi_git::git::GitReference;
@@ -80,10 +80,10 @@ impl Key for CheckoutGit {
     type Value = Arc<Result<GitFetch, GitError>>;
 
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        let cache_dir = ctx.cache_dir::<GitDir>().await;
         let data: &DataStore = ctx.global_data();
         let resolver = data.git_resolver().clone();
         let client = data.download_client().clone();
-        let cache_dir = data.cache_dirs().git();
         let semaphore = data.git_checkout_semaphore().cloned();
         let reporter = data.git_checkout_reporter().cloned();
 
