@@ -5833,7 +5833,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-python"
-version = "0.4.9"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "fs-err",
