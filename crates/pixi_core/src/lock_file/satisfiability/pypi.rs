@@ -440,14 +440,7 @@ pub(super) async fn lock_pypi_packages(
 
                 read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx)
                     .await
-                    .map_err(|e| {
-                        CommandDispatcherError::Failed(Box::new(
-                            PlatformUnsat::FailedToReadLocalMetadata(
-                                pkg.name().clone(),
-                                format!("failed to read metadata: {e}"),
-                            ),
-                        ))
-                    })?
+                    .map_err(|e| CommandDispatcherError::Failed(Box::new(e)))?
             } else {
                 None
             }
@@ -508,18 +501,15 @@ async fn read_local_package_metadata(
 
     let pypi_options = ctx.environment.pypi_options();
 
-    // Find the Python interpreter from locked records
+    // Missing python is a conda-side gap (e.g. `unlock_packages` stripped
+    // it pre-resolve); raise the non-pypi-only variant so the env is
+    // marked `outdated_conda`. #6093.
     let python_record = ctx
         .locked_pixi_records
         .records
         .iter()
         .find(|r| is_python_record(r))
-        .ok_or_else(|| {
-            PlatformUnsat::FailedToReadLocalMetadata(
-                package_name.clone(),
-                "No Python interpreter found in locked packages".to_string(),
-            )
-        })?;
+        .ok_or(PlatformUnsat::MissingPythonInterpreter)?;
 
     // Create marker environment for the target platform
     let marker_environment = determine_marker_environment(ctx.platform, python_record.as_ref())
