@@ -233,6 +233,7 @@ mod tests {
             experimental_extra_depends: Default::default(),
             flags: Default::default(),
             purls: None,
+            license: None,
             run_exports: None,
             sources: Default::default(),
         });
@@ -351,6 +352,7 @@ mod tests {
             experimental_extra_depends: Default::default(),
             flags: Default::default(),
             purls: None,
+            license: None,
             run_exports: None,
             sources: Default::default(),
         });

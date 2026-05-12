@@ -18,6 +18,10 @@ pixi auth login [OPTIONS] <HOST>
 :  The host to authenticate with (e.g. prefix.dev)
 <br>**required**: `true`
 
+## Options
+- <a id="arg---user-agent" href="#arg---user-agent">`--user-agent <USER_AGENT>`</a>
+:  User-Agent header used for requests
+
 ## OAuth/OIDC Authentication
 - <a id="arg---oauth" href="#arg---oauth">`--oauth`</a>
 :  Use OAuth/OIDC authentication
@@ -33,6 +37,8 @@ pixi auth login [OPTIONS] <HOST>
 - <a id="arg---oauth-scope" href="#arg---oauth-scope">`--oauth-scope <OAUTH_SCOPES>`</a>
 :  Additional OAuth scopes to request (repeatable)
 <br>May be provided more than once.
+- <a id="arg---oauth-redirect-uri" href="#arg---oauth-redirect-uri">`--oauth-redirect-uri <OAUTH_REDIRECT_URI>`</a>
+:  OAuth redirect URI (defaults to a random localhost port). Set this when the OAuth client on the `IdP` side is registered with a specific redirect URI such as `http://127.0.0.1:8000/auth/oidc`
 
 ## S3 Authentication
 - <a id="arg---s3-access-key-id" href="#arg---s3-access-key-id">`--s3-access-key-id <S3_ACCESS_KEY_ID>`</a>
