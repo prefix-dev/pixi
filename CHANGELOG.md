@@ -13,7 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Fixed
 
-- Pixi-build-mojo source directory builds by @sstadick in [#6055](https://github.com/prefix-dev/pixi/pull/6055)
 - V0.68.0 `pixi-aarch64-pc-windows-msvc.zip` contains an x86_64 binary by @baszalmstra in [#6064](https://github.com/prefix-dev/pixi/pull/6064)
 - Normalize self-ref extras on both sides of compare by @baszalmstra in [#6052](https://github.com/prefix-dev/pixi/pull/6052)
 - Satisfy lock-file when feature-level index-url is set by @baszalmstra in [#6065](https://github.com/prefix-dev/pixi/pull/6065)
