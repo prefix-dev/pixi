@@ -19,4 +19,4 @@ http2 = ["inner/http2"]
 rustls-tls = ["inner/rustls-tls"]
 
 [dependencies]
-inner = { package = "astral-reqwest-middleware", version = "0.4.2" }
+inner = { package = "astral-reqwest-middleware", version = "0.5.0" }
