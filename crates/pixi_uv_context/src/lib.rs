@@ -12,7 +12,7 @@ use uv_cache::Cache;
 use uv_client::{
     BaseClientBuilder, Connectivity, ExtraMiddleware, RegistryClient, RegistryClientBuilder,
 };
-use uv_configuration::{Concurrency, IndexStrategy, SourceStrategy, TrustedHost};
+use uv_configuration::{Concurrency, IndexStrategy, NoSources, TrustedHost};
 use uv_dispatch::SharedState;
 use uv_distribution_types::{
     ExtraBuildRequires, ExtraBuildVariables, IndexCapabilities, IndexLocations,
@@ -31,7 +31,7 @@ pub struct UvResolutionContext {
     pub hash_strategy: HashStrategy,
     pub keyring_provider: uv_configuration::KeyringProviderType,
     pub concurrency: Concurrency,
-    pub source_strategy: SourceStrategy,
+    pub no_sources: NoSources,
     pub capabilities: IndexCapabilities,
     pub allow_insecure_host: Vec<TrustedHost>,
     pub shared_state: SharedState,
@@ -144,11 +144,7 @@ fn build_concurrency(config: &Config) -> Concurrency {
     let builds = read_usize_env("UV_CONCURRENT_BUILDS").unwrap_or(defaults.builds);
     let installs = read_usize_env("UV_CONCURRENT_INSTALLS").unwrap_or(defaults.installs);
 
-    Concurrency {
-        downloads,
-        builds,
-        installs,
-    }
+    Concurrency::new(downloads, builds, installs)
 }
 
 impl UvResolutionContext {
@@ -197,7 +193,7 @@ impl UvResolutionContext {
             hash_strategy: HashStrategy::None,
             keyring_provider,
             concurrency,
-            source_strategy: SourceStrategy::Enabled,
+            no_sources: NoSources::None,
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
@@ -253,7 +249,7 @@ impl UvResolutionContext {
             .extra_middleware(self.extra_middleware.clone());
 
         if let Some(timeout) = self.http_timeout {
-            base_client_builder = base_client_builder.timeout(timeout);
+            base_client_builder = base_client_builder.read_timeout(timeout);
         }
 
         if let Some(retries) = self.http_retries {

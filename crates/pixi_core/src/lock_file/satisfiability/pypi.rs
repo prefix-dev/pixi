@@ -639,8 +639,8 @@ async fn read_local_package_metadata(
     .with_index_strategy(index_strategy)
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
     .with_shared_state(ctx.uv_context.shared_state.fork())
-    .with_source_strategy(ctx.uv_context.source_strategy)
-    .with_concurrency(ctx.uv_context.concurrency);
+    .with_no_sources(ctx.uv_context.no_sources.clone())
+    .with_concurrency(ctx.uv_context.concurrency.clone());
 
     // Get or create conda prefix updater for the environment
     // Use best_platform() because we can only install/run Python on the host platform
@@ -700,7 +700,7 @@ async fn read_local_package_metadata(
     let database = DistributionDatabase::new(
         &registry_client,
         &lazy_build_dispatch,
-        ctx.uv_context.concurrency.downloads,
+        ctx.uv_context.concurrency.downloads_semaphore.clone(),
     );
 
     // Missing or unparsable pyproject -> trust the lock.
@@ -709,7 +709,7 @@ async fn read_local_package_metadata(
         tracing::debug!(package = %package_name, "no readable pyproject.toml");
         return Ok(None);
     };
-    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) else {
+    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents, pyproject_path.display()) else {
         tracing::debug!(package = %package_name, "pyproject.toml could not be parsed");
         return Ok(None);
     };
