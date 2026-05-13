@@ -101,13 +101,15 @@ impl GenerateRecipe for MojoGenerator {
 
         let build_script = BuildScriptContext { bins, pkg }.render();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script).with_env(
-            config
-                .env
-                .iter()
-                .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
-                .collect(),
-        );
+        generated_recipe.recipe.build.script = Script::from_content(build_script)
+            .with_env(
+                config
+                    .env
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                    .collect(),
+            )
+            .with_secrets(model.secrets.iter().cloned().collect());
 
         generated_recipe.build_input_globs = Self::globs().collect::<BTreeSet<_>>();
 
