@@ -226,6 +226,7 @@ pub fn to_project_model_v1(
         repository: manifest.package.repository.clone(),
         documentation: manifest.package.documentation.clone(),
         targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
+        secrets: manifest.build.secrets.clone(),
     };
     Ok(project)
 }

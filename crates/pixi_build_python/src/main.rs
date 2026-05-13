@@ -376,13 +376,15 @@ impl GenerateRecipe for PythonGenerator {
         generated_recipe.recipe.build.python = python;
         generated_recipe.recipe.build.noarch = noarch_kind;
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script).with_env(
-            config
-                .env
-                .iter()
-                .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
-                .collect(),
-        );
+        generated_recipe.recipe.build.script = Script::from_content(build_script)
+            .with_env(
+                config
+                    .env
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                    .collect(),
+            )
+            .with_secrets(model.secrets.iter().cloned().collect());
 
         // Add the metadata input globs from the MetadataProvider
         generated_recipe
