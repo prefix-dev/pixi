@@ -186,16 +186,28 @@ fn detect_network_filesystem(path: &Path) -> Option<bool> {
     use nix::sys::statfs::{
         AUTOFS_SUPER_MAGIC, FUSE_SUPER_MAGIC, FsType, NFS_SUPER_MAGIC, SMB_SUPER_MAGIC,
     };
-    // CIFS magic isn't re-exported by `nix`
-    // so define it inline (fs/smb/client/cifsfs.h).
+    // Magics not re-exported by `nix` are defined inline below.
+    // CIFS: fs/smb/client/cifsfs.h
     let cifs_magic = FsType(0xff53_4d42_u32 as _);
+    // BeeGFS (a.k.a. fhgfs): client_module/source/common/Common.h
+    let beegfs_magic = FsType(0x1983_0326_u32 as _);
+    // Lustre: include/uapi/linux/lustre/lustre_user.h (LL_SUPER_MAGIC)
+    let lustre_magic = FsType(0x0bd0_0bd0_u32 as _);
+    // GPFS / IBM Spectrum Scale ("GPFS" in ASCII)
+    let gpfs_magic = FsType(0x4750_4653_u32 as _);
+    // CephFS: include/linux/magic.h (CEPH_SUPER_MAGIC)
+    let ceph_magic = FsType(0x00c3_6400_u32 as _);
     let fs = statfs_nearest_existing(path)?.filesystem_type();
     Some(
         fs == NFS_SUPER_MAGIC
             || fs == SMB_SUPER_MAGIC
             || fs == cifs_magic
             || fs == FUSE_SUPER_MAGIC
-            || fs == AUTOFS_SUPER_MAGIC,
+            || fs == AUTOFS_SUPER_MAGIC
+            || fs == beegfs_magic
+            || fs == lustre_magic
+            || fs == gpfs_magic
+            || fs == ceph_magic,
     )
 }
 
@@ -556,7 +568,8 @@ fn resolve_cache_kind_dir(cache_cfg: &CacheConfig, kind: CacheKind) -> miette::R
     let mut warned = NETFS_REDIRECT_WARNED.lock().unwrap();
     if warned.insert(kind) {
         tracing::warn!(
-            "cache for {:?} at {} is on a network filesystem (NFS/SMB/FUSE), \
+            "cache for {:?} at {} is on a network/parallel filesystem \
+             (NFS/SMB/FUSE/BeeGFS/Lustre/GPFS/CephFS), \
              redirected to {} for this run. Set [cache.{}] in config.toml or \
              PIXI_CACHE_DIR to override, or [cache.netfs-redirect] = \"never\" \
              to keep the original path.",
