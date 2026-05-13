@@ -6,6 +6,7 @@ use config::{MojoBackendConfig, clean_project_name};
 use miette::{Error, IntoDiagnostic};
 use pixi_build_backend::generated_recipe::DefaultMetadataProvider;
 use pixi_build_backend::{
+    compilers::default_compiler_variants,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
@@ -130,18 +131,7 @@ impl GenerateRecipe for MojoGenerator {
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        let mut variants = BTreeMap::new();
-
-        if host_platform.is_windows() {
-            // Default to the Visual Studio 2022 compiler on Windows
-            // Not 2019 due to Conda-forge switching and the mainstream support dropping in 2024.
-            // rattler-build will default to vs2017 which for most github runners is too
-            // old.
-            variants.insert(NormalizedKey::from("c_compiler"), vec!["vs2022".into()]);
-            variants.insert(NormalizedKey::from("cxx_compiler"), vec!["vs2022".into()]);
-        }
-
-        Ok(variants)
+        Ok(default_compiler_variants(host_platform))
     }
 }
 

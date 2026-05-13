@@ -6,6 +6,7 @@ use build_script::{BuildPlatform, BuildScriptContext};
 use config::CMakeBackendConfig;
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
+    compilers::default_compiler_variants,
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
@@ -178,18 +179,7 @@ impl GenerateRecipe for CMakeGenerator {
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        let mut variants = BTreeMap::new();
-
-        if host_platform.is_windows() {
-            // Default to the Visual Studio 2022 compiler on Windows
-            // Not 2019 due to Conda-forge switching and the mainstream support dropping in 2024.
-            // rattler-build will default to vs2017 which for most github runners is too
-            // old.
-            variants.insert(NormalizedKey::from("c_compiler"), vec!["vs2022".into()]);
-            variants.insert(NormalizedKey::from("cxx_compiler"), vec!["vs2022".into()]);
-        }
-
-        Ok(variants)
+        Ok(default_compiler_variants(host_platform))
     }
 }
 
@@ -461,6 +451,53 @@ mod tests {
             Some(&VariantValue::from("vs2022")),
             "On windows the default cxx_compiler variant should be vs2022"
         );
+    }
+
+    #[tokio::test]
+    async fn test_default_cuda_compiler() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        for platform in [Platform::Linux64, Platform::Win64] {
+            let factory = IntermediateBackendInstantiator::<CMakeGenerator>::new(
+                BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+                LoggingOutputHandler::default(),
+                Arc::default(),
+            )
+            .initialize(InitializeParams {
+                workspace_directory: None,
+                source_directory: None,
+                manifest_path: PathBuf::from("pixi.toml"),
+                project_model: Some(project_model.clone()),
+                configuration: Some(serde_json::json!({ "compilers": ["cuda"] })),
+                target_configuration: None,
+                cache_directory: None,
+            })
+            .await
+            .unwrap();
+
+            let current_dir = std::env::current_dir().unwrap();
+            let outputs = factory
+                .0
+                .conda_outputs(CondaOutputsParams {
+                    channels: vec![],
+                    host_platform: platform,
+                    build_platform: platform,
+                    variant_configuration: None,
+                    variant_files: None,
+                    work_directory: current_dir,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(
+                outputs.outputs[0].metadata.variant.get("cuda_compiler"),
+                Some(&VariantValue::from("cuda-nvcc")),
+                "On {platform} the default cuda_compiler variant should be cuda-nvcc",
+            );
+        }
     }
 
     #[tokio::test]
