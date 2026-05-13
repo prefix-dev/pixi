@@ -317,7 +317,23 @@ fn alter_config(
                 }
             }
         }
-        AlterMode::Set | AlterMode::Unset => config.set(key, value)?,
+        AlterMode::Set => config.set(key, value)?,
+        AlterMode::Unset => {
+            config.set(key, None)?;
+
+            if !config.get_keys().contains(&key) {
+                if let Ok(contents) = fs_err::read_to_string(&to)
+                    && let Some(contents) = pixi_config::remove_key_from_toml(&contents, key)?
+                {
+                    fs_err::write(&to, contents)
+                        .into_diagnostic()
+                        .wrap_err(format!("failed to write config to '{}'", to.display()))?;
+                }
+
+                eprintln!("鉁?Updated config at {}", to.display());
+                return Ok(());
+            }
+        }
     }
 
     config.save(&to)?;

@@ -2581,6 +2581,30 @@ impl Config {
     }
 }
 
+/// Remove a dotted key from the given TOML document while preserving the rest
+/// of the document.
+pub fn remove_key_from_toml(toml: &str, key: &str) -> miette::Result<Option<String>> {
+    let mut document = toml_edit::DocumentMut::from_str(toml).into_diagnostic()?;
+    let path = key.split('.').collect::<Vec<_>>();
+
+    if remove_key_from_table(document.as_table_mut(), &path) {
+        Ok(Some(document.to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+fn remove_key_from_table(table: &mut toml_edit::Table, path: &[&str]) -> bool {
+    match path {
+        [] => false,
+        [key] => table.remove(key).is_some(),
+        [head, rest @ ..] => table
+            .get_mut(head)
+            .and_then(toml_edit::Item::as_table_mut)
+            .is_some_and(|table| remove_key_from_table(table, rest)),
+    }
+}
+
 /// Returns the path to the system-level pixi config file.
 pub fn config_path_system() -> PathBuf {
     // TODO: the base_path for Windows is currently hardcoded, it should be
@@ -3417,35 +3441,26 @@ UNUSED = "unused"
     }
 
     #[test]
-    fn test_unset_unknown_key_rewrites_config_without_stale_key() {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let config_path = std::env::temp_dir().join(format!(
-            "pixi-config-unset-unknown-{}-{nonce}.toml",
-            std::process::id()
-        ));
+    fn test_unset_unknown_key_removes_only_requested_toml_key() {
+        let toml = r#"[repodata-config]
+disable-jlap = true
+kept-unknown = "keep"
+also-kept = 42
+disable-bzip2 = true
+"#;
 
-        fs_err::write(
-            &config_path,
-            r#"
-            [repodata-config]
-            disable-jlap = true
-            disable-bzip2 = true
-        "#,
-        )
-        .unwrap();
-
-        let mut config = Config::from_path(&config_path).unwrap();
+        let (mut config, _) = Config::from_toml(toml, None).unwrap();
         config.set("repodata-config.disable-jlap", None).unwrap();
-        config.save(&config_path).unwrap();
+        let saved = remove_key_from_toml(toml, "repodata-config.disable-jlap")
+            .unwrap()
+            .unwrap();
 
-        let saved = fs_err::read_to_string(&config_path).unwrap();
-        fs_err::remove_file(&config_path).unwrap();
-
-        assert!(!saved.contains("disable-jlap"));
-        assert!(saved.contains("disable-bzip2"));
+        insta::assert_snapshot!(saved, @r#"
+[repodata-config]
+kept-unknown = "keep"
+also-kept = 42
+disable-bzip2 = true
+"#);
     }
 
     #[rstest]
