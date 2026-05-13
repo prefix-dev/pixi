@@ -144,7 +144,7 @@ pixi publish --variant python=3.12 --variant cuda-version=12.8,13.0
 
 CLI overrides replace the matching key from the workspace `build-variants`; workspace keys that aren't named on the command line keep their full value list.
 
-`--variant-config` / `-m` adds extra variant YAML files on top of the workspace-level `build-variants-files`. Files are loaded in order, so values from a CLI-supplied file override any earlier (workspace) file with the same key. Mirrors `rattler-build --variant-config`.
+For shared variant configuration, prefer listing the YAML files in [`[workspace.build-variants-files]`](../../pixi_manifest.md#build-variants-files-optional) in `pixi.toml` so every contributor and CI run picks them up automatically. The `--variant-config` / `-m` flag is meant for one-off overrides — for example, an extra file you don't want to commit. CLI-supplied files are appended after the workspace files, so values from `-m` override any matching key from the workspace files (`rattler-build --variant-config` semantics).
 
 ```shell
 # Use an extra variant file for this build only
