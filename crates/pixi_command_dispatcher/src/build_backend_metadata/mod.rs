@@ -25,7 +25,7 @@ use crate::cache::{
 };
 use crate::compute_data::{HasBuildBackendMetadataCache, HasBuildBackendMetadataReporter};
 use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
-use crate::input_hash::{ConfigurationHash, ProjectModelHash};
+use crate::input_hash::{BackendSpecHash, ConfigurationHash, ProjectModelHash};
 use crate::{
     BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
     InstantiateBackendKey, ProjectModelOverrides, SourceCheckout, SourceCheckoutError,
@@ -271,6 +271,7 @@ impl BuildBackendMetadataInner {
         build_source_checkout: &SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
         configuration_hash: ConfigurationHash,
+        backend_spec_hash: BackendSpecHash,
         requested_variants: &BTreeMap<String, Vec<VariantValue>>,
     ) -> Result<
         Result<
@@ -295,6 +296,16 @@ impl BuildBackendMetadataInner {
         if cache_entry.configuration_hash != configuration_hash {
             tracing::info!(
                 "found cached outputs with different build configuration, invalidating cache."
+            );
+            return Ok(Err(Some(cache_entry)));
+        }
+
+        // Check the backend spec. Entries written before this field existed
+        // have `None`; treat them as stale so they get repopulated with a
+        // recorded spec hash.
+        if cache_entry.backend_spec_hash != Some(backend_spec_hash) {
+            tracing::info!(
+                "found cached outputs with different backend specification, invalidating cache."
             );
             return Ok(Err(Some(cache_entry)));
         }
@@ -605,6 +616,7 @@ enum CacheProbe {
         stale: Option<CacheEntry<BuildBackendMetadataCache>>,
         project_model_hash: Option<ProjectModelHash>,
         configuration_hash: ConfigurationHash,
+        backend_spec_hash: BackendSpecHash,
         skip_cache: bool,
     },
 }
@@ -743,6 +755,8 @@ impl BuildBackendMetadataInner {
                 .target_configuration
                 .as_ref(),
         );
+        let backend_spec_hash =
+            BackendSpecHash::from(&checkouts.discovered_backend.backend_spec);
 
         if skip_cache {
             let BackendSpec::JsonRpc(spec) = &checkouts.discovered_backend.backend_spec;
@@ -752,6 +766,7 @@ impl BuildBackendMetadataInner {
                 stale: None,
                 project_model_hash,
                 configuration_hash,
+                backend_spec_hash,
                 skip_cache,
             });
         }
@@ -761,6 +776,7 @@ impl BuildBackendMetadataInner {
             &checkouts.build_source_checkout,
             project_model_hash,
             configuration_hash,
+            backend_spec_hash,
             &self.variant_configuration,
         )
         .await?
@@ -779,6 +795,7 @@ impl BuildBackendMetadataInner {
                 stale,
                 project_model_hash,
                 configuration_hash,
+                backend_spec_hash,
                 skip_cache,
             }),
         }
@@ -794,23 +811,31 @@ impl BuildBackendMetadataInner {
     ) -> Result<BuildBackendMetadata, BuildBackendMetadataError> {
         let checkouts = self.resolve_checkouts(ctx).await?;
 
-        let (cache_key, stale, project_model_hash, configuration_hash, skip_cache) =
-            match self.probe_cache(ctx, &checkouts).await? {
-                CacheProbe::Hit(metadata) => return Ok(metadata),
-                CacheProbe::Miss {
-                    cache_key,
-                    stale,
-                    project_model_hash,
-                    configuration_hash,
-                    skip_cache,
-                } => (
-                    cache_key,
-                    stale,
-                    project_model_hash,
-                    configuration_hash,
-                    skip_cache,
-                ),
-            };
+        let (
+            cache_key,
+            stale,
+            project_model_hash,
+            configuration_hash,
+            backend_spec_hash,
+            skip_cache,
+        ) = match self.probe_cache(ctx, &checkouts).await? {
+            CacheProbe::Hit(metadata) => return Ok(metadata),
+            CacheProbe::Miss {
+                cache_key,
+                stale,
+                project_model_hash,
+                configuration_hash,
+                backend_spec_hash,
+                skip_cache,
+            } => (
+                cache_key,
+                stale,
+                project_model_hash,
+                configuration_hash,
+                backend_spec_hash,
+                skip_cache,
+            ),
+        };
 
         // Instantiate the backend. `DiscoveredBackendKey` dedups inside
         // the key, so the re-discovery is free.
@@ -897,6 +922,7 @@ impl BuildBackendMetadataInner {
             source: canonical_source,
             project_model_hash,
             configuration_hash,
+            backend_spec_hash: Some(backend_spec_hash),
             timestamp: raw.timestamp,
         };
 

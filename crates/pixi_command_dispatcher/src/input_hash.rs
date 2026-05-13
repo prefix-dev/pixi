@@ -1,4 +1,5 @@
 use ordermap::OrderMap;
+use pixi_build_discovery::BackendSpec;
 use pixi_build_types::{ProjectModel, TargetSelector};
 use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use serde::{Deserialize, Serialize};
@@ -11,6 +12,25 @@ pub struct ProjectModelHash(u64);
 
 impl From<&'_ ProjectModel> for ProjectModelHash {
     fn from(value: &'_ ProjectModel) -> Self {
+        let mut hasher = Xxh3::new();
+        value.hash(&mut hasher);
+        Self(hasher.finish())
+    }
+}
+
+/// A hash of the backend specification (backend name, version constraints,
+/// channels, etc.) used to instantiate the build backend.
+///
+/// The resolved backend version is not known at cache-probe time (it would
+/// require running the conda solver), so we hash the unresolved spec instead.
+/// Changes to the spec in the manifest will invalidate the cache; changes to
+/// the resolved version that originate purely from channel drift will not.
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct BackendSpecHash(u64);
+
+impl From<&'_ BackendSpec> for BackendSpecHash {
+    fn from(value: &'_ BackendSpec) -> Self {
         let mut hasher = Xxh3::new();
         value.hash(&mut hasher);
         Self(hasher.finish())
