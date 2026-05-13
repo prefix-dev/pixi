@@ -7,7 +7,9 @@ use std::{
 use crate::lock_file::records_by_name::HasNameVersion;
 use itertools::Itertools;
 use pixi_install_pypi::UnresolvedPypiRecord;
-use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
+use pixi_manifest::{
+    FeaturesExt, HasWorkspaceManifest, PixiPlatformName, pypi::pypi_options::NoBuild,
+};
 use pixi_pypi_spec::PixiPypiSource;
 use pypi_modifiers::Tags;
 use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Platform};
@@ -67,11 +69,14 @@ pub fn verify_environment_satisfiability(
     let platforms = environment.platforms();
     let locked_platforms = locked_environment
         .platforms()
-        .map(|p| p.subdir())
+        .map(|p| {
+            PixiPlatformName::try_from(p.name().as_str())
+                .expect("lockfile platform name should be a valid pixi platform name")
+        })
         .collect::<HashSet<_>>();
     let additional_platforms = locked_platforms
         .difference(&platforms)
-        .copied()
+        .cloned()
         .collect::<HashSet<_>>();
     if !additional_platforms.is_empty() {
         return Err(EnvironmentUnsat::AdditionalPlatformsInLockFile(
@@ -171,29 +176,34 @@ impl PypiWheelTagsCheck {
     ) -> Self {
         let platform_wheel_tags = {
             let system_requirements = environment.system_requirements();
+            let workspace = environment.workspace_manifest();
             locked_environment
                 .packages_by_platform()
-                .flat_map(|(lock_platform, packages)| {
-                    let platform = lock_platform.subdir();
-                    packages.map(move |package| (platform, package))
+                .filter_map(|(lock_platform, packages)| {
+                    let name = PixiPlatformName::try_from(lock_platform.name().as_str()).ok()?;
+                    let pixi_platform = workspace.workspace.platform_by_name(&name)?;
+                    Some((pixi_platform, packages))
                 })
-                .filter_map(|(platform, package)| match package {
+                .flat_map(|(pixi_platform, packages)| {
+                    packages.map(move |package| (pixi_platform, package))
+                })
+                .filter_map(|(pixi_platform, package)| match package {
                     LockedPackage::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
-                        Some((platform, package))
+                        Some((pixi_platform, package))
                     }
                     _ => None,
                 })
                 .filter(move |(_, package)| {
                     pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
                 })
-                .filter_map(|(platform, package)| {
+                .filter_map(|(pixi_platform, package)| {
                     pypi_modifiers::pypi_tags::get_pypi_tags(
-                        platform,
+                        pixi_platform,
                         &system_requirements,
                         &package.package_record,
                     )
                     .ok()
-                    .map(|tags| (platform, tags))
+                    .map(|tags| (pixi_platform.subdir(), tags))
                 })
                 .collect::<HashMap<_, _>>()
         };

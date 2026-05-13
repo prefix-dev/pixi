@@ -15,7 +15,6 @@ indexmap = { workspace = true }
 itertools = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_manifest = { workspace = true }
-rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

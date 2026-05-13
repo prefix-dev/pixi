@@ -7,8 +7,7 @@ use ahash::HashMap;
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt};
-use rattler_conda_types::Platform;
+use pixi_manifest::{EnvironmentName, FeaturesExt, PixiPlatformName};
 use rattler_lock::{CondaPackageData, LockFile, LockedPackage};
 use serde::Serialize;
 use serde_json::Value;
@@ -31,7 +30,7 @@ impl PackagesDiff {
 
 /// Contains the changes between two lock files.
 pub struct LockFileDiff {
-    pub environment: IndexMap<String, IndexMap<Platform, PackagesDiff>>,
+    pub environment: IndexMap<String, IndexMap<PixiPlatformName, PackagesDiff>>,
 }
 
 impl LockFileDiff {
@@ -47,7 +46,8 @@ impl LockFileDiff {
             let mut environment_diff = IndexMap::new();
 
             for (lock_platform, packages) in environment.packages_by_platform() {
-                let platform = lock_platform.subdir();
+                let platform = PixiPlatformName::try_from(lock_platform.name().as_str())
+                    .expect("lockfile platform name should be a valid pixi platform name");
                 // Determine the packages that were previously there.
                 let (mut previous_conda_packages, mut previous_pypi_packages): (
                     HashMap<_, _>,
@@ -126,10 +126,15 @@ impl LockFileDiff {
                 .map(|e| e.packages_by_platform())
                 .into_iter()
                 .flatten()
-                .filter(|(p, _)| !environment_diff.contains_key(&p.subdir()))
+                .filter(|(p, _)| {
+                    let name = PixiPlatformName::try_from(p.name().as_str())
+                        .expect("lockfile platform name should be a valid pixi platform name");
+                    !environment_diff.contains_key(&name)
+                })
                 .collect_vec()
             {
-                let platform = lock_platform.subdir();
+                let platform = PixiPlatformName::try_from(lock_platform.name().as_str())
+                    .expect("lockfile platform name should be a valid pixi platform name");
                 let mut diff = PackagesDiff::default();
                 for package in packages {
                     diff.removed.push(package.clone());
@@ -157,7 +162,9 @@ impl LockFileDiff {
                 for package in packages {
                     diff.removed.push(package.clone());
                 }
-                environment_diff.insert(lock_platform.subdir(), diff);
+                let platform = PixiPlatformName::try_from(lock_platform.name().as_str())
+                    .expect("lockfile platform name should be a valid pixi platform name");
+                environment_diff.insert(platform, diff);
             }
             result
                 .environment
@@ -426,7 +433,7 @@ pub enum JsonPackageType {
 #[derive(Serialize, Clone)]
 pub struct LockFileJsonDiff {
     pub version: usize,
-    pub environment: IndexMap<String, IndexMap<Platform, Vec<JsonPackageDiff>>>,
+    pub environment: IndexMap<String, IndexMap<PixiPlatformName, Vec<JsonPackageDiff>>>,
 }
 
 impl LockFileJsonDiff {
@@ -440,21 +447,20 @@ impl LockFileJsonDiff {
             let mut environment_diff_json = IndexMap::new();
 
             for (platform, packages_diff) in environment_diff {
-                let conda_dependencies = environments
+                let env = environments
                     .as_ref()
-                    .and_then(|p| {
-                        p.get(environment_name.as_str()).map(|env| {
-                            env.dependencies(pixi_manifest::SpecType::Run, Some(platform))
-                        })
-                    })
+                    .and_then(|p| p.get(environment_name.as_str()));
+                let pixi_platform = env.and_then(|env| {
+                    env.workspace_manifest()
+                        .workspace
+                        .platform_by_name(&platform)
+                });
+                let conda_dependencies = env
+                    .map(|env| env.dependencies(pixi_manifest::SpecType::Run, pixi_platform))
                     .unwrap_or_default();
 
-                let pypi_dependencies = environments
-                    .as_ref()
-                    .and_then(|p| {
-                        p.get(environment_name.as_str())
-                            .map(|env| env.pypi_dependencies(Some(platform)))
-                    })
+                let pypi_dependencies = env
+                    .map(|env| env.pypi_dependencies(pixi_platform))
                     .unwrap_or_default();
 
                 let add_diffs = packages_diff.added.into_iter().map(|new| match new {

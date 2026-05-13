@@ -8,12 +8,10 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{DevSourceMetadataError, SourceCheckoutError, SourceRecordError};
-use pixi_manifest::pypi::pypi_options::PrereleaseMode;
+use pixi_manifest::{PixiPlatformName, pypi::pypi_options::PrereleaseMode};
 use pixi_record::{ParseLockFileError, SourceMismatchError};
 use pixi_uv_conversions::AsPep508Error;
-use rattler_conda_types::{
-    MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError, Platform,
-};
+use rattler_conda_types::{MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError};
 use rattler_lock::{PackageHashes, PypiIndexes};
 use thiserror::Error;
 use url::Url;
@@ -33,7 +31,7 @@ pub enum EnvironmentUnsat {
 
     #[error("platform(s) '{platforms}' present in the lock file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", ")
     )]
-    AdditionalPlatformsInLockFile(HashSet<Platform>),
+    AdditionalPlatformsInLockFile(HashSet<PixiPlatformName>),
 
     #[error(transparent)]
     IndexesMismatch(#[from] IndexesMismatch),

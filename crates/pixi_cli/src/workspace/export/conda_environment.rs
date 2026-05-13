@@ -5,7 +5,9 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::{ExtraName, PackageName};
 use pixi_core::{WorkspaceLocator, workspace::Environment};
-use pixi_manifest::{FeaturesExt, pypi::pypi_options::FindLinksUrlOrPath};
+use pixi_manifest::{
+    FeaturesExt, HasWorkspaceManifest, PixiPlatform, pypi::pypi_options::FindLinksUrlOrPath,
+};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
@@ -139,7 +141,7 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
 }
 
 fn build_env_yaml(
-    platform: &Platform,
+    platform: &PixiPlatform,
     environment: &Environment,
     config: &ChannelConfig,
     name: String,
@@ -155,7 +157,7 @@ fn build_env_yaml(
     let mut pip_dependencies: Vec<String> = Vec::new();
 
     for (name, pixi_spec) in environment
-        .combined_dependencies(Some(*platform))
+        .combined_dependencies(Some(platform))
         .into_specs()
     {
         if let Some(nameless_spec) = pixi_spec
@@ -176,7 +178,7 @@ fn build_env_yaml(
     }
 
     if environment.has_pypi_dependencies() {
-        for (name, requirement) in environment.pypi_dependencies(Some(*platform)).into_specs() {
+        for (name, requirement) in environment.pypi_dependencies(Some(platform)).into_specs() {
             pip_dependencies.push(format_pip_dependency(&name, &requirement));
         }
     }
@@ -221,7 +223,7 @@ fn build_env_yaml(
     }
 
     // Add environment variables from activation
-    let activation_vars = environment.activation_env(Some(*platform));
+    let activation_vars = environment.activation_env(Some(platform));
     if !activation_vars.is_empty() {
         env_yaml.variables = activation_vars;
     }
@@ -262,7 +264,7 @@ fn format_locked_pypi_dependency(pypi: &PypiPackageData, is_editable: bool) -> S
 }
 
 fn build_env_yaml_from_lock_file(
-    platform: &Platform,
+    platform: &PixiPlatform,
     environment: &Environment,
     lock_file: &LockFile,
     name: String,
@@ -283,21 +285,23 @@ fn build_env_yaml_from_lock_file(
         ..Default::default()
     };
 
-    // Resolve the rattler_conda_types::Platform we were given to the
-    // rattler_lock::Platform<'_> handle that `Environment::packages` expects.
+    // Resolve the PixiPlatform we were given to the rattler_lock::Platform<'_>
+    // handle that `Environment::packages` expects, by matching on the
+    // workspace-side platform name.
+    let platform_name = platform.name();
     let lock_platform = lock_file_env
         .platforms()
-        .find(|p| p.subdir() == *platform)
+        .find(|p| p.name().as_str() == platform_name.as_str())
         .ok_or_else(|| {
             miette::miette!(
                 help = "Run `pixi lock` to update the lock file for this platform.",
-                "platform '{platform}' not found in the lock file for environment '{env_name}'"
+                "platform '{platform_name}' not found in the lock file for environment '{env_name}'"
             )
         })?;
     let packages = lock_file_env.packages(lock_platform).ok_or_else(|| {
         miette::miette!(
             help = "Run `pixi lock` to update the lock file for this platform.",
-            "platform '{platform}' not found in the lock file for environment '{env_name}'"
+            "platform '{platform_name}' not found in the lock file for environment '{env_name}'"
         )
     })?;
 
@@ -307,7 +311,7 @@ fn build_env_yaml_from_lock_file(
     // names from the manifest for this environment + platform up front and
     // look each locked package up.
     let editable_packages: HashSet<PackageName> = environment
-        .pypi_dependencies(Some(*platform))
+        .pypi_dependencies(Some(platform))
         .iter_specs()
         .filter(|(_, spec)| spec.editable() == Some(true))
         .map(|(name, _)| name.as_normalized().clone())
@@ -386,7 +390,7 @@ fn build_env_yaml_from_lock_file(
             ));
     }
 
-    let activation_vars = environment.activation_env(Some(*platform));
+    let activation_vars = environment.activation_env(Some(platform));
     if !activation_vars.is_empty() {
         env_yaml.variables = activation_vars;
     }
@@ -413,7 +417,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
-    let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+    let workspace_platforms = (&workspace)
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .clone();
+    let platform = match args.platform {
+        Some(subdir) => workspace_platforms
+            .iter()
+            .find(|p| p.subdir() == subdir)
+            .cloned()
+            .ok_or_else(|| {
+                miette::miette!("workspace does not define a platform with subdir '{subdir}'")
+            })?,
+        None => environment.best_platform().cloned().ok_or_else(|| {
+            miette::miette!(
+                "no platform supported by environment '{}' matches the current system",
+                environment.name()
+            )
+        })?,
+    };
     let config = workspace.config();
     let name = args
         .name
@@ -459,6 +482,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 mod tests {
     use super::*;
     use pixi_core::Workspace;
+
+    /// Test helper: resolve the platform argument the same way `execute` does.
+    fn resolve_platform(
+        workspace: &Workspace,
+        environment: &Environment<'_>,
+        subdir: Option<Platform>,
+    ) -> PixiPlatform {
+        let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
+        match subdir {
+            Some(s) => workspace_platforms
+                .iter()
+                .find(|p| p.subdir() == s)
+                .cloned()
+                .expect("test workspace must declare the requested platform"),
+            None => environment
+                .best_platform()
+                .cloned()
+                .expect("environment must support the current system"),
+        }
+    }
     use std::path::Path;
 
     #[test]
@@ -478,7 +521,7 @@ mod tests {
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
             .unwrap();
-        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+        let platform = resolve_platform(&workspace, &environment, args.platform);
 
         let env_yaml = build_env_yaml(
             &platform,
@@ -508,7 +551,7 @@ mod tests {
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
             .unwrap();
-        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+        let platform = resolve_platform(&workspace, &environment, args.platform);
 
         let env_yaml = build_env_yaml(
             &platform,
@@ -539,7 +582,7 @@ mod tests {
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
             .unwrap();
-        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+        let platform = resolve_platform(&workspace, &environment, args.platform);
 
         let env_yaml = build_env_yaml(
             &platform,
@@ -575,7 +618,7 @@ mod tests {
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
             .unwrap();
-        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+        let platform = resolve_platform(&workspace, &environment, args.platform);
 
         let env_yaml = build_env_yaml(
             &platform,
@@ -606,7 +649,7 @@ mod tests {
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
             .unwrap();
-        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+        let platform = resolve_platform(&workspace, &environment, args.platform);
 
         let env_yaml = build_env_yaml(
             &platform,
@@ -636,7 +679,7 @@ mod tests {
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
             .unwrap();
-        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+        let platform = resolve_platform(&workspace, &environment, args.platform);
 
         let env_yaml = build_env_yaml(
             &platform,
@@ -674,7 +717,7 @@ mod tests {
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
             .unwrap();
-        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+        let platform = resolve_platform(&workspace, &environment, args.platform);
 
         let env_yaml = build_env_yaml(
             &platform,
@@ -717,8 +760,9 @@ mod tests {
             .unwrap();
 
         for platform in [Platform::Osx64, Platform::Linux64, Platform::OsxArm64] {
+            let pp = pixi_manifest::PixiPlatform::from_subdir(platform);
             let env_yaml = build_env_yaml_from_lock_file(
-                &platform,
+                &pp,
                 &environment,
                 &lock_file,
                 environment.name().as_str().to_string(),
@@ -742,8 +786,9 @@ mod tests {
             .unwrap();
 
         // win-64 is not in the lock file for this project; expect an error.
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
         let result = build_env_yaml_from_lock_file(
-            &Platform::Win64,
+            &win64,
             &environment,
             &lock_file,
             environment.name().as_str().to_string(),
@@ -769,7 +814,7 @@ mod tests {
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
             .unwrap();
-        let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+        let platform = resolve_platform(&workspace, &environment, args.platform);
 
         let env_yaml = build_env_yaml(
             &platform,

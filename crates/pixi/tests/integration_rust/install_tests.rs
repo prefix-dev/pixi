@@ -1442,16 +1442,17 @@ async fn test_multiple_prefix_update() {
 
     let command_dispatcher = project.command_dispatcher_builder().unwrap().finish();
 
+    let current_pixi_platform = pixi_manifest::PixiPlatform::from_subdir(current_platform);
     let variant_config = group
         .workspace()
-        .variants(current_platform)
+        .variants(&current_pixi_platform)
         .expect("variant configuration should load in test");
 
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
         name,
         prefix,
-        current_platform,
+        current_pixi_platform,
         virtual_packages,
         variant_config,
         None,

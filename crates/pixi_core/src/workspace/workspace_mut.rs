@@ -16,12 +16,12 @@ use pixi_config::PinningStrategy;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
-    ManifestDocument, ManifestKind, PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest,
-    WorkspaceManifestMut, toml::TomlDocument, utils::WithSourceCode,
+    ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation, SpecType, TomlError,
+    WorkspaceManifest, WorkspaceManifestMut, toml::TomlDocument, utils::WithSourceCode,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Version};
 use rattler_lock::LockFile;
 use toml_edit::DocumentMut;
 
@@ -247,7 +247,7 @@ impl WorkspaceMut {
         no_install: bool,
         lock_file_update_config: &LockFileUsage,
         feature_name: &FeatureName,
-        platforms: &[Platform],
+        platforms: &[PixiPlatformName],
         editable: bool,
         dry_run: bool,
     ) -> Result<Option<UpdateDeps>, miette::Error> {
@@ -364,7 +364,7 @@ impl WorkspaceMut {
             pypi_packages,
             affect_environment_and_platforms
                 .iter()
-                .map(|(e, p)| (e.as_str(), *p))
+                .map(|(e, p)| (e.as_str(), p.clone()))
                 .collect(),
         );
         let LockFileDerivedData {
@@ -484,7 +484,7 @@ impl WorkspaceMut {
         &mut self,
         conda_deps: Vec<MatchSpec>,
         pypi_deps: Vec<Requirement>,
-        platforms: &[Platform],
+        platforms: &[PixiPlatformName],
         feature_name: &FeatureName,
     ) -> Result<(), miette::Error> {
         for spec in conda_deps {
@@ -527,9 +527,9 @@ impl WorkspaceMut {
         &mut self,
         updated_lock_file: &LockFile,
         conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, NamelessMatchSpec)>,
-        affect_environment_and_platforms: Vec<(String, Platform)>,
+        affect_environment_and_platforms: Vec<(String, PixiPlatformName)>,
         feature_name: &FeatureName,
-        platforms: &[Platform],
+        platforms: &[PixiPlatformName],
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
@@ -608,9 +608,9 @@ impl WorkspaceMut {
                 Option<PypiDependencyLocation>,
             ),
         >,
-        affect_environment_and_platforms: Vec<(String, Platform)>,
+        affect_environment_and_platforms: Vec<(String, PixiPlatformName)>,
         feature_name: &FeatureName,
-        platforms: &[Platform],
+        platforms: &[PixiPlatformName],
         editable: bool,
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
@@ -618,7 +618,9 @@ impl WorkspaceMut {
         let affect_environment_and_platforms = affect_environment_and_platforms
             .iter()
             .filter_map(|(env, platform)| {
-                updated_lock_file.environment(env).map(|e| (e, *platform))
+                updated_lock_file
+                    .environment(env)
+                    .map(|e| (e, platform.clone()))
             })
             .collect_vec();
 

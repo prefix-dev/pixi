@@ -6,6 +6,7 @@ use fancy_display::FancyDisplay;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
+use pixi_manifest::HasWorkspaceManifest;
 use rattler_conda_types::Platform;
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
@@ -74,14 +75,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
     match args.command {
         Command::Add(args) => {
+            // `pixi workspace platform add <subdir>` registers a new
+            // subdir-bound platform in the workspace. This is the one place
+            // where it's legitimate to construct a PixiPlatform from a bare
+            // subdir; everywhere else we look up an existing PixiPlatform.
             let platforms = args
                 .platform
                 .into_iter()
-                .map(|platform_str| Platform::from_str(&platform_str))
+                .map(|platform_str| {
+                    Platform::from_str(&platform_str).map(pixi_manifest::PixiPlatform::from_subdir)
+                })
                 .collect::<Result<Vec<_>, _>>()
                 .into_diagnostic()?;
 
@@ -118,8 +125,31 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Ok(())
         }
         Command::Remove(args) => {
+            // Look up the existing PixiPlatform for each subdir; the workspace
+            // already declares them by name + virtual packages, so we must
+            // preserve that identity rather than synthesize new ones.
+            let workspace_platforms = (&workspace)
+                .workspace_manifest()
+                .workspace
+                .platforms
+                .clone();
+            let platforms = args
+                .platforms
+                .iter()
+                .map(|subdir| {
+                    workspace_platforms
+                        .iter()
+                        .find(|p| p.subdir() == *subdir)
+                        .cloned()
+                        .ok_or_else(|| {
+                            miette::miette!(
+                                "workspace does not define a platform with subdir '{subdir}'"
+                            )
+                        })
+                })
+                .collect::<miette::Result<Vec<_>>>()?;
             workspace_ctx
-                .remove_platforms(args.platforms, args.no_install, args.feature)
+                .remove_platforms(platforms, args.no_install, args.feature)
                 .await
         }
     }

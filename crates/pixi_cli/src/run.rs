@@ -157,13 +157,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Check if the current platform is supported, but only when we're going to
     // install/activate. Without installs we skip environment activation,
     // so platform doesn't matter.
-    if args.lock_and_install_config.allow_installs()
-        && !environment.platforms().contains(&best_platform)
-    {
+    if args.lock_and_install_config.allow_installs() && best_platform.is_none() {
         return Err(UnsupportedPlatformError {
             environments_platforms: environment.platforms().into_iter().collect(),
             environment: environment.name().clone(),
-            platform: best_platform,
+            platform: rattler_conda_types::Platform::current(),
         }
         .into());
     }
@@ -200,7 +198,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // When installs are allowed, filter by platform since we are activating
     // an environment and the platform matters.
     let search_platform = if args.lock_and_install_config.allow_installs() {
-        Some(best_platform)
+        best_platform
     } else {
         None
     };
@@ -424,7 +422,7 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
     if workspace
         .environments()
         .iter()
-        .all(|env| !env.platforms().contains(&env.best_platform()))
+        .all(|env| env.best_platform().is_none())
     {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",

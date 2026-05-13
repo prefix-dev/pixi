@@ -1,6 +1,6 @@
 use miette::Diagnostic;
 use pixi_default_versions::{default_glibc_version, default_mac_os_version};
-use pixi_manifest::{LibCSystemRequirement, SystemRequirements};
+use pixi_manifest::{LibCSystemRequirement, PixiPlatform, SystemRequirements};
 use rattler_conda_types::MatchSpec;
 use rattler_conda_types::{Arch, PackageName, PackageRecord, Platform};
 use rattler_virtual_packages::VirtualPackage;
@@ -59,7 +59,7 @@ pub fn package_name_is_python(record: &rattler_conda_types::PackageName) -> bool
 
 /// Get the python version and implementation name for the specified platform.
 pub fn get_pypi_tags(
-    platform: Platform,
+    platform: &PixiPlatform,
     system_requirements: &SystemRequirements,
     python_record: &PackageRecord,
 ) -> Result<uv_platform_tags::Tags, PyPITagError> {
@@ -72,23 +72,24 @@ pub fn get_pypi_tags(
 
 /// Create a uv platform tag for the specified platform
 fn get_platform_tags(
-    platform: Platform,
+    platform: &PixiPlatform,
     system_requirements: &SystemRequirements,
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
-    if platform.is_linux() {
+    let subdir = platform.subdir();
+    if subdir.is_linux() {
         get_linux_platform_tags(platform, system_requirements)
-    } else if platform.is_windows() {
+    } else if subdir.is_windows() {
         get_windows_platform_tags(platform)
-    } else if platform.is_osx() {
+    } else if subdir.is_osx() {
         get_macos_platform_tags(platform, system_requirements)
     } else {
-        Err(PyPITagError::FailedToDeterminePlatformTags(platform))
+        Err(PyPITagError::FailedToDeterminePlatformTags(subdir))
     }
 }
 
 /// Get linux specific platform tags
 fn get_linux_platform_tags(
-    platform: Platform,
+    platform: &PixiPlatform,
     system_requirements: &SystemRequirements,
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let arch = get_arch_tags(platform)?;
@@ -147,7 +148,7 @@ fn get_linux_platform_tags(
 
 /// Get windows specific platform tags
 fn get_windows_platform_tags(
-    platform: Platform,
+    platform: &PixiPlatform,
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let arch = get_arch_tags(platform)?;
     Ok(uv_platform_tags::Platform::new(
@@ -158,13 +159,13 @@ fn get_windows_platform_tags(
 
 /// Get macos specific platform tags
 fn get_macos_platform_tags(
-    platform: Platform,
+    platform: &PixiPlatform,
     system_requirements: &SystemRequirements,
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let osx_version = system_requirements
         .macos
         .clone()
-        .unwrap_or_else(|| default_mac_os_version(platform));
+        .unwrap_or_else(|| default_mac_os_version(platform.subdir()));
     let Some((major, minor)) = osx_version.as_major_minor() else {
         return Err(PyPITagError::FailedToGetMajorMinorVersion(
             "macos".to_string(),
@@ -184,8 +185,8 @@ fn get_macos_platform_tags(
 }
 
 /// Get the arch tag for the specified platform
-fn get_arch_tags(platform: Platform) -> Result<uv_platform_tags::Arch, PyPITagError> {
-    match platform.arch() {
+fn get_arch_tags(platform: &PixiPlatform) -> Result<uv_platform_tags::Arch, PyPITagError> {
+    match platform.subdir().arch() {
         None => unreachable!("every platform we support has an arch"),
         Some(Arch::X86) => Ok(uv_platform_tags::Arch::X86),
         Some(Arch::X86_64) => Ok(uv_platform_tags::Arch::X86_64),
@@ -274,9 +275,10 @@ fn create_tags(
 /// Used to get the platform for the environment validation in the lock file.
 fn get_pypi_platform_from_virtual_packages(
     virtual_packages: &[VirtualPackage],
-    platform: Platform,
+    platform: &PixiPlatform,
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
-    if platform.is_linux() {
+    let subdir = platform.subdir();
+    if subdir.is_linux() {
         // The linux platform is mostly based on the libc version
         let libc = virtual_packages
             .iter()
@@ -314,14 +316,14 @@ fn get_pypi_platform_from_virtual_packages(
         };
     }
 
-    if platform.is_windows() {
+    if subdir.is_windows() {
         return Ok(uv_platform_tags::Platform::new(
             uv_platform_tags::Os::Windows,
             get_arch_tags(platform)?,
         ));
     }
 
-    if platform.is_osx() {
+    if subdir.is_osx() {
         let osx = virtual_packages
             .iter()
             .find_map(|package| match package {
@@ -346,7 +348,7 @@ fn get_pypi_platform_from_virtual_packages(
 
         return Ok(uv_platform_tags::Platform::new(
             uv_platform_tags::Os::Macos { major, minor },
-            get_arch_tags(platform.to_owned())?,
+            get_arch_tags(platform)?,
         ));
     }
 
@@ -357,7 +359,7 @@ fn get_pypi_platform_from_virtual_packages(
 /// Designed to work for the environment validation in the lock file with the current machine.
 pub fn get_tags_from_machine(
     virtual_packages: &[VirtualPackage],
-    platform: Platform,
+    platform: &PixiPlatform,
     python_record: &PackageRecord,
 ) -> Result<uv_platform_tags::Tags, PyPITagError> {
     let platform = get_pypi_platform_from_virtual_packages(virtual_packages, platform)?;
@@ -384,7 +386,8 @@ mod tests {
             version: "15.1.0".parse().unwrap(),
         })];
         let platform = Platform::OsxArm64;
-        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
+        let res =
+            get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
@@ -399,7 +402,8 @@ mod tests {
             version: "12.1.0".parse().unwrap(),
         })];
         let platform = Platform::Osx64;
-        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
+        let res =
+            get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
@@ -418,7 +422,8 @@ mod tests {
             version: "2.33".parse().unwrap(),
         })];
         let platform = Platform::Linux64;
-        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
+        let res =
+            get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
@@ -434,7 +439,8 @@ mod tests {
             version: "1.2".parse().unwrap(),
         })];
         let platform = Platform::Linux64;
-        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
+        let res =
+            get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
@@ -443,7 +449,8 @@ mod tests {
         assert_eq!(platform.arch(), UvArch::X86_64);
 
         let platform = Platform::LinuxAarch64;
-        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
+        let res =
+            get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
@@ -456,7 +463,8 @@ mod tests {
             version: "1.2".parse().unwrap(),
         })];
         let platform = Platform::LinuxPpc64le;
-        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
+        let res =
+            get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
         assert_eq!(
             platform.os(),
@@ -469,13 +477,15 @@ mod tests {
     fn test_get_platform_from_vpkgs_windows() {
         let vpkgs = vec![];
         let platform = Platform::Win64;
-        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
+        let res =
+            get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
         assert_eq!(platform.os(), &uv_platform_tags::Os::Windows);
         assert_eq!(platform.arch(), UvArch::X86_64);
 
         let platform = Platform::WinArm64;
-        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
+        let res =
+            get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
         assert_eq!(platform.os(), &uv_platform_tags::Os::Windows);
         assert_eq!(platform.arch(), UvArch::Aarch64);
@@ -486,7 +496,8 @@ mod tests {
         // No virtual packages gives an error
         let vpkgs = vec![];
         let platform = Platform::Linux64;
-        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
+        let res =
+            get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         assert!(res.is_err());
 
         // Unknown libc family gives an error
@@ -495,7 +506,8 @@ mod tests {
             version: "1.2".parse().unwrap(),
         })];
         let platform = Platform::Linux64;
-        let res = get_pypi_platform_from_virtual_packages(&vpkgs, platform);
+        let res =
+            get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         assert!(res.is_err());
         assert!(matches!(
             res.unwrap_err(),
@@ -516,7 +528,9 @@ mod tests {
             VersionWithSource::from_str("3.13.3").unwrap(),
             "h2334245_104_cp313".to_string(),
         );
-        let res = get_tags_from_machine(&vpkgs, platform, &python_record).unwrap();
+        let res =
+            get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
+                .unwrap();
 
         let wheel =
             WheelFilename::from_str("numpy-1.21.0-cp313-cp313-manylinux_2_33_x86_64.whl").unwrap();
@@ -542,7 +556,9 @@ mod tests {
             VersionWithSource::from_str("3.13.3").unwrap(),
             "h2334245_104_cp313".to_string(),
         );
-        let res = get_tags_from_machine(&vpkgs, platform, &python_record).unwrap();
+        let res =
+            get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
+                .unwrap();
 
         let wheel =
             WheelFilename::from_str("numpy-1.21.0-cp313-cp313-macosx_15_0_arm64.whl").unwrap();
@@ -566,7 +582,9 @@ mod tests {
             VersionWithSource::from_str("3.13.3").unwrap(),
             "h2334245_104_cp313".to_string(),
         );
-        let res = get_tags_from_machine(&vpkgs, platform, &python_record).unwrap();
+        let res =
+            get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
+                .unwrap();
 
         let wheel = WheelFilename::from_str("numpy-1.21.0-cp313-cp313-win_amd64.whl").unwrap();
         assert!(wheel.is_compatible(&res));

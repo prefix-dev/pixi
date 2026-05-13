@@ -8,10 +8,28 @@ use pixi_core::{
         Environment, WorkspaceMut, virtual_packages::verify_current_platform_can_run_environment,
     },
 };
-use pixi_manifest::{EnvironmentName, FeatureName, Task, TaskName};
-use rattler_conda_types::Platform;
+use pixi_manifest::{
+    EnvironmentName, FeatureName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, Task,
+    TaskName,
+};
 
 use crate::interface::Interface;
+
+/// Look up a [`PixiPlatform`] from the workspace by name. Returns `Ok(None)`
+/// when `name` is `None`, the looked-up platform when known, or an error if
+/// the workspace does not define a platform with that name.
+fn lookup_platform<'p>(
+    workspace: &'p pixi_core::Workspace,
+    name: Option<&PixiPlatformName>,
+) -> miette::Result<Option<&'p PixiPlatform>> {
+    let Some(name) = name else { return Ok(None) };
+    workspace
+        .workspace_manifest()
+        .workspace
+        .platform_by_name(name)
+        .map(Some)
+        .ok_or_else(|| miette::miette!("workspace does not define a platform named '{name}'"))
+}
 
 pub async fn list_tasks(
     workspace: &Workspace,
@@ -60,7 +78,7 @@ pub async fn list_tasks(
             let task_map = task_names
                 .into_iter()
                 .flat_map(|task_name| {
-                    env.task(&task_name, Some(best_platform))
+                    env.task(&task_name, best_platform)
                         .ok()
                         .map(|task| (task_name, task.clone()))
                 })
@@ -76,11 +94,12 @@ pub async fn add_task<I: Interface>(
     name: TaskName,
     task: Task,
     feature: FeatureName,
-    platform: Option<Platform>,
+    platform: Option<PixiPlatformName>,
 ) -> miette::Result<()> {
+    let pixi_platform = lookup_platform(workspace.workspace(), platform.as_ref())?.cloned();
     workspace
         .manifest()
-        .add_task(name.clone(), task.clone(), platform, &feature)?;
+        .add_task(name.clone(), task.clone(), pixi_platform.as_ref(), &feature)?;
     workspace.save().await.into_diagnostic()?;
 
     interface
@@ -99,11 +118,15 @@ pub async fn alias_task<I: Interface>(
     mut workspace: WorkspaceMut,
     name: TaskName,
     task: Task,
-    platform: Option<Platform>,
+    platform: Option<PixiPlatformName>,
 ) -> miette::Result<()> {
-    workspace
-        .manifest()
-        .add_task(name.clone(), task.clone(), platform, &FeatureName::DEFAULT)?;
+    let pixi_platform = lookup_platform(workspace.workspace(), platform.as_ref())?.cloned();
+    workspace.manifest().add_task(
+        name.clone(),
+        task.clone(),
+        pixi_platform.as_ref(),
+        &FeatureName::DEFAULT,
+    )?;
     workspace.save().await.into_diagnostic()?;
 
     interface
@@ -121,25 +144,27 @@ pub async fn remove_tasks<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
     names: Vec<TaskName>,
-    platform: Option<Platform>,
+    platform: Option<PixiPlatformName>,
     feature: FeatureName,
 ) -> miette::Result<()> {
     let mut to_remove = Vec::new();
 
+    let pixi_platform = lookup_platform(workspace.workspace(), platform.as_ref())?.cloned();
+
     for name in names.iter() {
-        if let Some(platform) = platform {
+        if let Some(pixi_platform) = pixi_platform.as_ref() {
             if !workspace
                 .workspace()
                 .workspace
                 .value
-                .tasks(Some(platform), &feature)?
+                .tasks(Some(pixi_platform), &feature)?
                 .contains_key(name)
             {
                 interface
                     .error(&format!(
                         "Task '{}' does not exist on {}",
                         name.fancy_display().bold(),
-                        console::style(platform.as_str()).bold(),
+                        console::style(pixi_platform.name().as_str()).bold(),
                     ))
                     .await;
                 continue;
@@ -162,14 +187,14 @@ pub async fn remove_tasks<I: Interface>(
         }
 
         // Safe to remove
-        to_remove.push((name, platform));
+        to_remove.push(name);
     }
 
     let mut removed = Vec::with_capacity(to_remove.len());
-    for (name, platform) in to_remove {
+    for name in to_remove {
         workspace
             .manifest()
-            .remove_task(name.clone(), platform, &feature)?;
+            .remove_task(name.clone(), pixi_platform.as_ref(), &feature)?;
         removed.push(name);
     }
 

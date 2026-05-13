@@ -7,8 +7,7 @@ use miette::Diagnostic;
 use pixi_default_versions::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
 };
-use pixi_manifest::{FeaturesExt, LibCSystemRequirement, SystemRequirements};
-use rattler_conda_types::Platform;
+use pixi_manifest::{FeaturesExt, LibCSystemRequirement, PixiPlatform, SystemRequirements};
 use rattler_lock::LockFile;
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use thiserror::Error;
@@ -19,18 +18,25 @@ use thiserror::Error;
 ///
 /// The method also takes into account system requirements specified in the
 /// project manifest.
+///
+/// TODO: This needs reworking: How should this actually work!? What do we do
+/// about SystemRequirements in general -- now that [`PixiPlatform`] carries its
+/// own declared virtual packages, the relationship between platform-declared
+/// virtuals and workspace-level SystemRequirements needs a clear policy.
 pub(crate) fn get_minimal_virtual_packages(
-    platform: Platform,
+    platform: &PixiPlatform,
     system_requirements: &SystemRequirements,
 ) -> Vec<VirtualPackage> {
+    let subdir = platform.subdir();
+
     // TODO: How to add a default cuda requirements
     let mut virtual_packages: Vec<VirtualPackage> = vec![];
 
     // Match high level platforms
-    if platform.is_unix() {
+    if subdir.is_unix() {
         virtual_packages.push(VirtualPackage::Unix);
     }
-    if platform.is_linux() {
+    if subdir.is_linux() {
         let version = system_requirements
             .linux
             .clone()
@@ -46,7 +52,7 @@ pub(crate) fn get_minimal_virtual_packages(
         virtual_packages.push(VirtualPackage::LibC(LibC { family, version }));
     }
 
-    if platform.is_windows() {
+    if subdir.is_windows() {
         // todo: add windows to system requirements
         let version = Some(default_windows_version());
         virtual_packages.push(VirtualPackage::Win(rattler_virtual_packages::Windows {
@@ -55,11 +61,11 @@ pub(crate) fn get_minimal_virtual_packages(
     }
 
     // Add platform specific packages
-    if platform.is_osx() {
+    if subdir.is_osx() {
         let version = system_requirements
             .macos
             .clone()
-            .unwrap_or_else(|| default_mac_os_version(platform));
+            .unwrap_or_else(|| default_mac_os_version(subdir));
         virtual_packages.push(VirtualPackage::Osx(Osx { version }));
     }
 
@@ -69,7 +75,7 @@ pub(crate) fn get_minimal_virtual_packages(
     }
 
     // Archspec is only based on the platform for now
-    if let Some(spec) = Archspec::from_platform(platform) {
+    if let Some(spec) = Archspec::from_platform(subdir) {
         virtual_packages.push(VirtualPackage::Archspec(spec));
     }
 
@@ -99,18 +105,15 @@ pub fn verify_current_platform_can_run_environment(
         return Ok(());
     }
 
-    let current_platform = environment.best_platform();
-
-    // Are there dependencies and is the current platform in the list of supported platforms?
-    if !environment.platforms().contains(&current_platform) {
+    let Some(current_platform) = environment.best_platform() else {
         return Err(VerifyCurrentPlatformError::from(Box::new(
             UnsupportedPlatformError {
                 environments_platforms: environment.platforms().into_iter().collect_vec(),
-                platform: current_platform,
+                platform: rattler_conda_types::Platform::current(),
                 environment: environment.name().clone(),
             },
         )));
-    }
+    };
 
     // If this function is given a lock file we can also compute the ability to run in this environment on the current machine.
     if let Some(lock_file) = lock_file {
@@ -127,7 +130,7 @@ pub fn verify_current_platform_can_run_environment(
 impl Environment<'_> {
     /// Returns the set of virtual packages to use for the specified platform. This method
     /// takes into account the system requirements specified in the project manifest.
-    pub fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
+    pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<VirtualPackage> {
         get_minimal_virtual_packages(platform, &self.system_requirements())
     }
 }
@@ -157,7 +160,8 @@ mod tests {
         let system_requirements = SystemRequirements::default();
 
         for platform in platforms {
-            let packages = get_minimal_virtual_packages(platform, &system_requirements)
+            let pp = pixi_manifest::PixiPlatform::from_subdir(platform);
+            let packages = get_minimal_virtual_packages(&pp, &system_requirements)
                 .into_iter()
                 .map(GenericVirtualPackage::from)
                 .collect_vec();

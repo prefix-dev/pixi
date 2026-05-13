@@ -2,7 +2,7 @@ use crate::Workspace;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
-use pixi_manifest::{EnvironmentName, TaskName};
+use pixi_manifest::{EnvironmentName, PixiPlatformName, TaskName};
 use rattler_conda_types::Platform;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
@@ -15,7 +15,7 @@ use thiserror::Error;
 #[derive(Debug, Clone)]
 pub struct UnsupportedPlatformError {
     /// Platforms supported by the environment
-    pub environments_platforms: Vec<Platform>,
+    pub environments_platforms: Vec<PixiPlatformName>,
 
     /// The environment that the platform is not supported for.
     pub environment: EnvironmentName,
@@ -90,7 +90,7 @@ pub struct UnknownTask<'p> {
     pub environment: EnvironmentName,
 
     /// The platform that was requested (if any)
-    pub platform: Option<Platform>,
+    pub platform: Option<PixiPlatformName>,
 
     /// The name of the task
     pub task_name: TaskName,

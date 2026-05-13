@@ -4,7 +4,7 @@ use pixi_core::{
     environment::sanity_check_workspace,
     workspace::{PypiDeps, UpdateDeps, WorkspaceMut},
 };
-use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
+use pixi_manifest::{FeatureName, HasWorkspaceManifest, KnownPreviewFeature, SpecType};
 use pixi_spec::{GitSpec, SourceLocationSpec, Subdirectory};
 use rattler_conda_types::{MatchSpec, PackageName};
 
@@ -21,10 +21,32 @@ pub async fn add_conda_dep(
 ) -> miette::Result<Option<UpdateDeps>> {
     sanity_check_workspace(workspace.workspace()).await?;
 
-    // Add the platform if it is not already present
+    // Add the platform if it is not already present. The workspace must
+    // already know each requested platform name; the API does not invent
+    // PixiPlatforms from bare subdirs because they could carry custom
+    // virtual-package metadata declared in the manifest.
+    let workspace_platforms = workspace
+        .workspace()
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .clone();
+    let pixi_platforms: Vec<_> = dep_options
+        .platforms
+        .iter()
+        .map(|name| {
+            workspace_platforms
+                .iter()
+                .find(|p| p.name() == name)
+                .cloned()
+                .ok_or_else(|| {
+                    miette::miette!("workspace does not define a platform named '{name}'")
+                })
+        })
+        .collect::<miette::Result<Vec<_>>>()?;
     workspace
         .manifest()
-        .add_platforms(dep_options.platforms.iter(), &FeatureName::DEFAULT)?;
+        .add_platforms(pixi_platforms.iter(), &FeatureName::DEFAULT)?;
 
     let mut match_specs = IndexMap::default();
     let mut source_specs = IndexMap::default();
@@ -115,10 +137,30 @@ pub async fn add_pypi_dep(
 ) -> miette::Result<Option<UpdateDeps>> {
     sanity_check_workspace(workspace.workspace()).await?;
 
-    // Add the platform if it is not already present
+    // Add the platform if it is not already present. The workspace must
+    // already know each requested platform name.
+    let workspace_platforms = workspace
+        .workspace()
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .clone();
+    let pixi_platforms: Vec<_> = options
+        .platforms
+        .iter()
+        .map(|name| {
+            workspace_platforms
+                .iter()
+                .find(|p| p.name() == name)
+                .cloned()
+                .ok_or_else(|| {
+                    miette::miette!("workspace does not define a platform named '{name}'")
+                })
+        })
+        .collect::<miette::Result<Vec<_>>>()?;
     workspace
         .manifest()
-        .add_platforms(options.platforms.iter(), &FeatureName::DEFAULT)?;
+        .add_platforms(pixi_platforms.iter(), &FeatureName::DEFAULT)?;
 
     // TODO: add dry_run logic to add
     let dry_run = false;

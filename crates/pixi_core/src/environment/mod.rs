@@ -8,7 +8,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, PixiPlatform, PixiPlatformName};
 use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSource;
 pub use pixi_python_status::PythonStatus;
@@ -133,8 +133,8 @@ impl EnvironmentHash {
         // Hash the packages
         let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str())
-            && let Some(lock_platform) =
-                lock_file.platform(&run_environment.best_platform().to_string())
+            && let Some(best) = run_environment.best_platform()
+            && let Some(lock_platform) = lock_file.platform(best.name().as_str())
             && let Some(packages) = env.packages(lock_platform)
         {
             for package in packages {
@@ -196,13 +196,13 @@ impl EnvironmentHash {
         }
 
         let activation_scripts =
-            run_environment.activation_scripts(Some(run_environment.best_platform()));
+            run_environment.activation_scripts(run_environment.best_platform());
         for script in activation_scripts {
             script.hash(hasher);
         }
 
         let project_activation_env =
-            run_environment.activation_env(Some(run_environment.best_platform()));
+            run_environment.activation_env(run_environment.best_platform());
         let mut env_vars: Vec<_> = project_activation_env.iter().collect();
         env_vars.sort_by_key(|(key, _)| *key);
         for (key, value) in env_vars {
@@ -223,14 +223,15 @@ pub struct LockedEnvironmentHash(String);
 impl LockedEnvironmentHash {
     pub(crate) fn from_environment(
         environment: rattler_lock::Environment,
-        platform: Platform,
+        platform: Option<&PixiPlatform>,
     ) -> Self {
         let mut hasher = Xxh3::new();
 
         // Intentionally ignore `skipped` here: the quick-validate cache is only
         // used during runs, and should not vary based on transient install
         // filters.
-        let lock_platform = environment.lock_file().platform(&platform.to_string());
+        let lock_platform =
+            platform.and_then(|p| environment.lock_file().platform(p.name().as_str()));
         if let Some(packages) = lock_platform.and_then(|p| environment.packages(p)) {
             for package in packages {
                 // Always has the url or path
@@ -397,8 +398,13 @@ pub fn extract_git_requirements_from_workspace(project: &Workspace) -> Vec<GitSp
     for env in project.environments() {
         let env_platforms = env.platforms();
         for platform in env_platforms {
-            let dependencies = env.combined_dependencies(Some(platform));
-            let pypi_dependencies = env.pypi_dependencies(Some(platform));
+            let platform = project
+                .workspace
+                .value
+                .workspace
+                .platform_by_name(&platform);
+            let dependencies = env.combined_dependencies(platform);
+            let pypi_dependencies = env.pypi_dependencies(platform);
             for (_, dep_spec) in dependencies {
                 for spec in dep_spec {
                     if let PixiSpec::Git(spec) = spec {
@@ -427,6 +433,18 @@ pub fn store_credentials_from_requirements(git_requirements: Vec<GitSpec>) {
     }
 }
 
+fn look_up_platform_by_name<'a>(
+    project: &'a Workspace,
+    platform: &'a PixiPlatformName,
+) -> &'a PixiPlatform {
+    project
+        .workspace
+        .value
+        .workspace
+        .platform_by_name(platform)
+        .expect("Internal error: Unknown platform used")
+}
+
 /// Extract any credentials that are defined on the project dependencies
 /// themselves. While we don't store plaintext credentials in the `pixi.lock`,
 /// we do respect credentials that are defined in the `pixi.toml` or
@@ -435,6 +453,7 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
     for env in project.environments() {
         let env_platforms = env.platforms();
         for platform in env_platforms {
+            let platform = look_up_platform_by_name(project, &platform);
             let dependencies = env.combined_dependencies(Some(platform));
             for (_, dep_spec) in dependencies {
                 for spec in dep_spec {
@@ -625,12 +644,11 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
 
     let no_install = update_lock_file_options.no_install;
     for env in environments {
-        let current_platform = env.best_platform();
-        if !no_install && !env.platforms().contains(&current_platform) {
+        if !no_install && env.best_platform().is_none() {
             return Err(UnsupportedPlatformError {
                 environments_platforms: env.platforms().into_iter().collect(),
                 environment: env.name().clone(),
-                platform: current_platform,
+                platform: Platform::current(),
             }
             .into());
         }
@@ -682,5 +700,5 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
 
 pub type PerEnvironment<'p, T> = HashMap<Environment<'p>, T>;
 pub type PerGroup<'p, T> = HashMap<GroupedEnvironment<'p>, T>;
-pub type PerEnvironmentAndPlatform<'p, T> = PerEnvironment<'p, HashMap<Platform, T>>;
-pub type PerGroupAndPlatform<'p, T> = PerGroup<'p, HashMap<Platform, T>>;
+pub type PerEnvironmentAndPlatform<'p, T> = PerEnvironment<'p, HashMap<PixiPlatformName, T>>;
+pub type PerGroupAndPlatform<'p, T> = PerGroup<'p, HashMap<PixiPlatformName, T>>;

@@ -151,6 +151,7 @@ impl TargetSelector for pbt::TargetSelector {
     fn matches(&self, platform: Platform) -> bool {
         match self {
             pbt::TargetSelector::Platform(p) => p == &platform.to_string(),
+            pbt::TargetSelector::Subdir(s) => s == &platform.to_string(),
             pbt::TargetSelector::Linux => platform.is_linux(),
             pbt::TargetSelector::Unix => platform.is_unix(),
             pbt::TargetSelector::Win => platform.is_windows(),

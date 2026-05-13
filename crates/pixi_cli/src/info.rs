@@ -8,7 +8,7 @@ use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_global::{BinDir, EnvRoot};
-use pixi_manifest::{EnvironmentName, FeatureName, SystemRequirements};
+use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName, SystemRequirements};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use pixi_progress::await_in_progress;
 use pixi_task::TaskName;
@@ -60,7 +60,7 @@ pub struct EnvironmentInfo {
     environment_size: Option<String>,
     dependencies: Vec<String>,
     pypi_dependencies: Vec<String>,
-    platforms: Vec<Platform>,
+    platforms: Vec<PixiPlatformName>,
     tasks: Vec<TaskName>,
     channels: Vec<String>,
     prefix: PathBuf,
@@ -425,8 +425,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ws.environments()
                 .iter()
                 .map(|env| {
+                    let best = env.best_platform();
                     let tasks = env
-                        .tasks(Some(env.best_platform()))
+                        .tasks(best)
                         .ok()
                         .map(|t| t.into_keys().cloned().collect())
                         .unwrap_or_default();
@@ -442,12 +443,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .map(|solve_group| solve_group.name().to_string()),
                         environment_size,
                         dependencies: env
-                            .combined_dependencies(Some(env.best_platform()))
+                            .combined_dependencies(best)
                             .names()
                             .map(|p| p.as_source().to_string())
                             .collect(),
                         pypi_dependencies: env
-                            .pypi_dependencies(Some(env.best_platform()))
+                            .pypi_dependencies(best)
                             .into_iter()
                             .map(|(name, _p)| name.as_source().to_string())
                             .collect(),

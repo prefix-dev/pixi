@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, PixiPlatformName};
 use pixi_record::{LockFileResolver, UnresolvedPixiRecord};
-use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockFileBuilder, LockedPackage};
 use tokio::sync::Semaphore;
 
@@ -66,7 +65,7 @@ impl<'a> From<&'a LockedPackage> for LockedPackageKind<'a> {
 pub fn filter_lock_file<
     'p,
     'lock,
-    F: FnMut(&Environment<'p>, Platform, LockedPackageKind<'_>) -> bool,
+    F: FnMut(&Environment<'p>, &PixiPlatformName, LockedPackageKind<'_>) -> bool,
 >(
     workspace: &'p Workspace,
     lock_file: &'lock LockFile,
@@ -109,10 +108,11 @@ pub fn filter_lock_file<
         writer.builder.set_pypi_indexes(environment_name, indexes);
 
         for (lock_platform, packages) in environment.packages_by_platform() {
-            let platform = lock_platform.subdir();
+            let platform = PixiPlatformName::try_from(lock_platform.name().as_str())
+                .expect("lockfile platform name should be a valid pixi platform name");
             let platform_str = platform.to_string();
             for package in packages {
-                if !should_keep(&project_env, platform, package.into()) {
+                if !should_keep(&project_env, &platform, package.into()) {
                     continue;
                 }
                 match package {
@@ -128,14 +128,14 @@ pub fn filter_lock_file<
                             src.build_packages.retain(|p| {
                                 should_keep(
                                     &project_env,
-                                    platform,
+                                    &platform,
                                     LockedPackageKind::Conda(p.name()),
                                 )
                             });
                             src.host_packages.retain(|p| {
                                 should_keep(
                                     &project_env,
-                                    platform,
+                                    &platform,
                                     LockedPackageKind::Conda(p.name()),
                                 )
                             });

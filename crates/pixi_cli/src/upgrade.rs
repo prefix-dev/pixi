@@ -13,10 +13,10 @@ use pixi_core::{
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
-use pixi_manifest::{FeatureName, SpecType};
+use pixi_manifest::{FeatureName, PixiPlatform, SpecType};
 use pixi_pypi_spec::PixiPypiSource;
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{MatchSpec, Platform, StringMatcher};
+use rattler_conda_types::{MatchSpec, StringMatcher};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
@@ -107,14 +107,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     }
 
-    let all_platforms: Vec<Platform> = workspace
+    let all_platforms: Vec<PixiPlatform> = workspace
         .workspace()
         .workspace
         .value
         .workspace
         .platforms
         .iter()
-        .copied()
+        .cloned()
         .collect();
 
     if let Some(package_names) = &args.specs.packages {
@@ -197,7 +197,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     args.no_install_config.no_install,
                     &lock_file_usage,
                     &feature_name,
-                    &[platform],
+                    &[platform.name().clone()],
                     false,
                     args.dry_run,
                 )
@@ -279,7 +279,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 struct SpecsByTarget {
     default_match_specs: MatchSpecs,
     default_pypi_deps: PypiDeps,
-    per_platform: IndexMap<Platform, (MatchSpecs, PypiDeps)>,
+    per_platform: IndexMap<PixiPlatform, (MatchSpecs, PypiDeps)>,
 }
 
 type SpecsByFeature = IndexMap<FeatureName, SpecsByTarget>;
@@ -290,7 +290,7 @@ fn collect_specs_by_target(
     feature: &pixi_manifest::Feature,
     args: &Args,
     workspace: &WorkspaceMut,
-    platforms: &[Platform],
+    platforms: &[PixiPlatform],
 ) -> miette::Result<SpecsByTarget> {
     // Determine default-owned names for partitioning
     let default_deps_names: IndexSet<_> = feature
@@ -307,8 +307,8 @@ fn collect_specs_by_target(
         parse_specs_for_platform(feature, args, workspace, None)?;
 
     // Parse per-platform specs and filter out default-owned names
-    let mut per_platform: IndexMap<Platform, (MatchSpecs, PypiDeps)> = IndexMap::new();
-    for &platform in platforms {
+    let mut per_platform: IndexMap<PixiPlatform, (MatchSpecs, PypiDeps)> = IndexMap::new();
+    for platform in platforms {
         let (all_ms, all_py) = parse_specs_for_platform(feature, args, workspace, Some(platform))?;
 
         let platform_match_specs: MatchSpecs = all_ms
@@ -320,7 +320,7 @@ fn collect_specs_by_target(
             .filter(|(name, _)| !default_pypi_names.contains(name))
             .collect();
 
-        per_platform.insert(platform, (platform_match_specs, platform_pypi_deps));
+        per_platform.insert(platform.clone(), (platform_match_specs, platform_pypi_deps));
     }
 
     Ok(SpecsByTarget {
@@ -334,7 +334,7 @@ fn collect_specs_by_target(
 /// and all platform-specific targets, de-duplicated while preserving order.
 fn collect_available_packages(
     feature: &pixi_manifest::Feature,
-    platforms: &[Platform],
+    platforms: &[PixiPlatform],
 ) -> IndexSet<String> {
     let mut available: IndexSet<String> = IndexSet::new();
 
@@ -351,7 +351,7 @@ fn collect_available_packages(
     }
 
     // Platform-specific targets
-    for &platform in platforms {
+    for platform in platforms {
         if let Some(deps) = feature.dependencies(SpecType::Run, Some(platform)) {
             for name in deps.names() {
                 available.insert(name.as_normalized().to_string());
@@ -377,7 +377,7 @@ pub fn parse_specs_for_platform(
     feature: &pixi_manifest::Feature,
     args: &Args,
     workspace: &WorkspaceMut,
-    platform: Option<Platform>,
+    platform: Option<&PixiPlatform>,
 ) -> miette::Result<(MatchSpecs, PypiDeps)> {
     let spec_type = SpecType::Run;
     let match_spec_iter = feature

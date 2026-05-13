@@ -9,7 +9,7 @@ use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{PackageName, Platform, Version};
+use rattler_conda_types::{PackageName, Version};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -174,17 +174,18 @@ impl TomlManifest {
         }
         .into_workspace_target(None, preview)?;
 
+        let known_platforms = &workspace.value.platforms.value;
+
         let mut workspace_targets = IndexMap::new();
         for (selector, target) in self.target.map(|t| t.value).unwrap_or_default() {
             // Verify that the target selector matches at least one of the platforms of the
             // workspace.
-            let matching_platforms = Platform::all()
-                .filter(|p| selector.value.matches(*p))
-                .collect::<Vec<_>>();
-            if !matching_platforms
+            let matching_platforms = known_platforms
                 .iter()
-                .any(|p| workspace.value.platforms.value.contains(p))
-            {
+                .filter(|p| selector.value.matches(p))
+                .collect::<Vec<_>>();
+
+            if matching_platforms.is_empty() {
                 let warning = create_unsupported_selector_warning(
                     PlatformSpan::Workspace(workspace.value.platforms.span),
                     &selector,
@@ -671,9 +672,10 @@ pub struct ExternalWorkspaceProperties {
 mod test {
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
+    use rattler_conda_types::Platform;
 
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
+    use crate::{PixiPlatform, toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
 
     /// A helper function that generates a snapshot of the error message when
     /// parsing a manifest TOML. The error is returned.
@@ -1399,17 +1401,19 @@ mod test {
         )
         .unwrap();
 
+        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
         let linux_deps = manifest
             .default_feature()
-            .dev_dependencies(Some(Platform::Linux64))
+            .dev_dependencies(Some(&linux64))
             .expect("should have linux dev dependencies");
 
         assert_eq!(linux_deps.iter().count(), 1);
         assert!(linux_deps.contains_key("linux-pkg"));
 
+        let win64 = PixiPlatform::from_subdir(Platform::Win64);
         let windows_deps = manifest
             .default_feature()
-            .dev_dependencies(Some(Platform::Win64))
+            .dev_dependencies(Some(&win64))
             .expect("should have windows dev dependencies");
 
         assert_eq!(windows_deps.iter().count(), 1);

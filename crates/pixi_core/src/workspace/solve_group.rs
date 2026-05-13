@@ -237,8 +237,9 @@ mod tests {
 
         // For win-64, only 'a' should be present because 'b' belongs to a
         // feature that restricts to linux-64/osx-arm64.
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
         let win64_deps: HashSet<_> = solve_group
-            .combined_dependencies(Some(Platform::Win64))
+            .combined_dependencies(Some(&win64))
             .names()
             .cloned()
             .collect();
@@ -252,8 +253,9 @@ mod tests {
         );
 
         // For linux-64, both 'a' and 'b' should be present.
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         let linux64_deps: HashSet<_> = solve_group
-            .combined_dependencies(Some(Platform::Linux64))
+            .combined_dependencies(Some(&linux64))
             .names()
             .cloned()
             .collect();

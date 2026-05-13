@@ -4,14 +4,14 @@ use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::PackageName;
 use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 use crate::{
-    FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
-    SpecType, SystemRequirements, Task, TomlError, manifests::table_name::TableName,
-    toml::TomlDocument, utils::WithSourceCode,
+    FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PixiPlatform,
+    PixiPlatformName, PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task,
+    TomlError, manifests::table_name::TableName, toml::TomlDocument, utils::WithSourceCode,
 };
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
@@ -241,7 +241,7 @@ impl ManifestDocument {
     pub fn remove_pypi_dependency(
         &mut self,
         dep: &PypiPackageName,
-        platform: Option<Platform>,
+        platform: Option<PixiPlatformName>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         // For 'pyproject.toml' manifest, try and remove the dependency from native
@@ -263,7 +263,7 @@ impl ManifestDocument {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_feature_name(Some(feature_name))
-            .with_platform(platform.as_ref())
+            .with_target(platform.map(TargetSelector::Platform))
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
         self.manifest_mut()
@@ -310,13 +310,13 @@ impl ManifestDocument {
         &mut self,
         dep: &PackageName,
         spec_type: SpecType,
-        platform: Option<Platform>,
+        platform: Option<PixiPlatformName>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_feature_name(Some(feature_name))
-            .with_platform(platform.as_ref())
+            .with_target(platform.map(TargetSelector::Platform))
             .with_table(Some(spec_type.name()));
 
         self.manifest_mut()
@@ -333,12 +333,12 @@ impl ManifestDocument {
         name: &PackageName,
         spec: &PixiSpec,
         spec_type: SpecType,
-        platform: Option<Platform>,
+        platform: Option<PixiPlatformName>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         let dependency_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_platform(platform.as_ref())
+            .with_target(platform.map(TargetSelector::Platform))
             .with_feature_name(Some(feature_name))
             .with_table(Some(spec_type.name()));
 
@@ -380,7 +380,7 @@ impl ManifestDocument {
         &mut self,
         requirement: &pep508_rs::Requirement,
         pixi_requirement: Option<&PixiPypiSpec>,
-        platform: Option<Platform>,
+        platform: Option<PixiPlatformName>,
         feature_name: &FeatureName,
         editable: Option<bool>,
         location: Option<PypiDependencyLocation>,
@@ -406,7 +406,7 @@ impl ManifestDocument {
 
             let dependency_table_name = TableName::new()
                 .with_prefix(self.table_prefix())
-                .with_platform(platform.as_ref())
+                .with_target(platform.map(TargetSelector::Platform))
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
@@ -558,7 +558,7 @@ impl ManifestDocument {
     pub fn pypi_dependency_location(
         &self,
         package_name: &PypiPackageName,
-        platform: Option<Platform>,
+        platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Option<PypiDependencyLocation> {
         // For both 'pyproject.toml' and 'pixi.toml' manifest,
@@ -566,7 +566,7 @@ impl ManifestDocument {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_feature_name(Some(feature_name))
-            .with_platform(platform.as_ref())
+            .with_target(platform.map(PixiPlatform::as_target_selector))
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
         let pypi_dependency_table = self.manifest().get_nested_table(&table_name.as_keys()).ok();
@@ -612,7 +612,7 @@ impl ManifestDocument {
     pub fn remove_task(
         &mut self,
         name: &str,
-        platform: Option<Platform>,
+        platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         // Get the task table either from the target platform or the default tasks.
@@ -620,7 +620,7 @@ impl ManifestDocument {
         // anyways
         let task_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_platform(platform.as_ref())
+            .with_target(platform.map(PixiPlatform::as_target_selector))
             .with_feature_name(Some(feature_name))
             .with_table(Some("tasks"));
 
@@ -632,17 +632,17 @@ impl ManifestDocument {
     }
 
     /// Adds a task to the TOML manifest
-    pub fn add_task(
-        &mut self,
-        name: &str,
+    pub fn add_task<'a>(
+        &'a mut self,
+        name: &'a str,
         task: Task,
-        platform: Option<Platform>,
-        feature_name: &FeatureName,
+        platform: Option<&'a PixiPlatform>,
+        feature_name: &'a FeatureName,
     ) -> Result<(), TomlError> {
         // Get the task table either from the target platform or the default tasks.
         let task_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_platform(platform.as_ref())
+            .with_target(platform.map(PixiPlatform::as_target_selector))
             .with_feature_name(Some(feature_name))
             .with_table(Some("tasks"));
 

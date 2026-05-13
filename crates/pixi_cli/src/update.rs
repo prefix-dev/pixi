@@ -12,7 +12,7 @@ use pixi_core::{
     lock_file::{LockedPackageKind, UpdateContext, filter_lock_file},
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
-use pixi_manifest::EnvironmentName;
+use pixi_manifest::{EnvironmentName, PixiPlatformName};
 use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
 
@@ -72,7 +72,7 @@ pub struct UpdateSpecsArgs {
 struct UpdateSpecs {
     packages: Option<HashSet<String>>,
     environments: Option<HashSet<EnvironmentName>>,
-    platforms: Option<HashSet<Platform>>,
+    platforms: Option<HashSet<PixiPlatformName>>,
 }
 
 impl From<UpdateSpecsArgs> for UpdateSpecs {
@@ -80,7 +80,9 @@ impl From<UpdateSpecsArgs> for UpdateSpecs {
         Self {
             packages: args.packages.map(|args| args.into_iter().collect()),
             environments: args.environments.map(|args| args.into_iter().collect()),
-            platforms: args.platforms.map(|args| args.into_iter().collect()),
+            platforms: args
+                .platforms
+                .map(|args| args.into_iter().map(Into::into).collect()),
         }
     }
 }
@@ -91,7 +93,7 @@ impl UpdateSpecs {
     fn should_relax(
         &self,
         environment_name: &EnvironmentName,
-        platform: &Platform,
+        platform: &PixiPlatformName,
         package_name: &str,
     ) -> bool {
         // Check if the platform is in the list of platforms to update.
@@ -236,9 +238,9 @@ fn ensure_package_exists(
         .iter()
         .flat_map(|env| env.packages_by_platform())
         .filter_map(|(lock_p, packages)| {
-            let p = lock_p.subdir();
+            let name = PixiPlatformName::try_from(lock_p.name().as_str()).ok()?;
             if let Some(platforms) = &specs.platforms
-                && !platforms.contains(&p)
+                && !platforms.contains(&name)
             {
                 return None;
             }
@@ -298,6 +300,6 @@ fn unlock_packages(project: &Workspace, lock_file: &LockFile, specs: &UpdateSpec
             LockedPackageKind::Conda(name) => name.as_normalized(),
             LockedPackageKind::Pypi(name) => name.as_ref(),
         };
-        !specs.should_relax(env.name(), &platform, name)
+        !specs.should_relax(env.name(), platform, name)
     })
 }

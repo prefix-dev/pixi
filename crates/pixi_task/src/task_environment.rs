@@ -3,8 +3,7 @@ use pixi_core::{
     Workspace,
     workspace::{Environment, virtual_packages::verify_current_platform_can_run_environment},
 };
-use pixi_manifest::{Task, TaskName};
-use rattler_conda_types::Platform;
+use pixi_manifest::{PixiPlatform, Task, TaskName};
 use thiserror::Error;
 
 use crate::error::{AmbiguousTaskError, MissingTaskError};
@@ -44,7 +43,7 @@ impl<'p, F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>> TaskDisamb
 pub struct SearchEnvironments<'p, D: TaskDisambiguation<'p> = NoDisambiguation> {
     pub project: &'p Workspace,
     pub explicit_environment: Option<Environment<'p>>,
-    pub platform: Option<Platform>,
+    pub platform: Option<&'p PixiPlatform>,
     pub disambiguate: D,
 }
 
@@ -88,7 +87,7 @@ impl<'p> SearchEnvironments<'p, NoDisambiguation> {
     pub fn from_opt_env(
         project: &'p Workspace,
         explicit_environment: Option<Environment<'p>>,
-        platform: Option<Platform>,
+        platform: Option<&'p PixiPlatform>,
     ) -> Self {
         Self {
             project,
@@ -246,7 +245,7 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let env = project.default_environment();
-        let search = SearchEnvironments::from_opt_env(&project, None, Some(env.best_platform()));
+        let search = SearchEnvironments::from_opt_env(&project, None, env.best_platform());
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
         assert!(result.is_ok());
         assert!(result.unwrap().0.name().is_default());

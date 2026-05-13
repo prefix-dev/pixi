@@ -22,7 +22,8 @@ use ordermap::OrderSet;
 use pixi_consts::consts;
 use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
 use pixi_manifest::{
-    EnvironmentName, SolveStrategy, SystemRequirements, pypi::pypi_options::PypiOptions,
+    EnvironmentName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, SolveStrategy,
+    SystemRequirements, pypi::pypi_options::PypiOptions,
 };
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
@@ -80,7 +81,7 @@ use crate::{
 };
 use pixi_command_dispatcher::CommandDispatcher;
 use pixi_uv_context::UvResolutionContext;
-use rattler_conda_types::GenericVirtualPackage;
+use rattler_conda_types::{GenericVirtualPackage, Platform};
 
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid hash: {0} type: {1}")]
@@ -292,7 +293,7 @@ pub async fn resolve_pypi(
     system_requirements: SystemRequirements,
     locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[UnresolvedPypiRecord],
-    platform: rattler_conda_types::Platform,
+    platform: PixiPlatformName,
     pb: &ProgressBar,
     project_root: &Path,
     command_dispatcher: CommandDispatcher,
@@ -413,7 +414,14 @@ pub async fn resolve_pypi(
         })?;
 
     // Construct the marker environment for the target platform
-    let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;
+    let pixi_platform = environment
+        .workspace_manifest()
+        .workspace
+        .platform_by_name(&platform)
+        .ok_or_else(|| {
+            miette::miette!("workspace does not define a platform named '{platform}'")
+        })?;
+    let marker_environment = determine_marker_environment(pixi_platform, python_record.as_ref())?;
 
     let requirements = dependencies
         .into_iter()
@@ -426,7 +434,7 @@ pub async fn resolve_pypi(
         .into_diagnostic()?;
 
     // Determine the tags for this particular solve.
-    let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
+    let tags = get_pypi_tags(pixi_platform, &system_requirements, python_record.as_ref())?;
 
     // We need to setup both an interpreter and a requires_python specifier.
     // The interpreter is used to (potentially) build the wheel, and the
@@ -594,14 +602,24 @@ pub async fn resolve_pypi(
     let conda_prefix_updater = build_cache
         .conda_prefix_updater
         .get_or_try_init(|| {
-            // Create a new conda prefix updater using best_platform (host platform)
-            let prefix_platform = environment.best_platform();
+            // The conda prefix has to run on the current system; cross-platform
+            // pypi resolves still need a local Python to compute wheel tags. Fall
+            // back to a bare current-subdir platform when no declared workspace
+            // platform matches this machine.
+            let fallback;
+            let prefix_platform: &PixiPlatform = match environment.best_platform() {
+                Some(p) => p,
+                None => {
+                    fallback = PixiPlatform::from_subdir(Platform::current());
+                    &fallback
+                }
+            };
             let group = GroupedEnvironment::Environment(environment.clone());
             let virtual_packages = environment.virtual_packages(prefix_platform);
 
             CondaPrefixUpdater::builder(
                 group,
-                prefix_platform,
+                prefix_platform.clone(),
                 virtual_packages
                     .into_iter()
                     .map(GenericVirtualPackage::from)

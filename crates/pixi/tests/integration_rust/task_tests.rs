@@ -170,9 +170,10 @@ pub async fn add_remove_target_specific_task() {
         .unwrap();
 
     let project = pixi.workspace().unwrap();
+    let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
     let task = *project
         .default_environment()
-        .tasks(Some(Platform::Win64))
+        .tasks(Some(&win64))
         .unwrap()
         .get(&<TaskName>::from("test"))
         .unwrap();
@@ -194,7 +195,7 @@ pub async fn add_remove_target_specific_task() {
     assert_eq!(
         project
             .default_environment()
-            .tasks(Some(Platform::Win64))
+            .tasks(Some(&win64))
             .unwrap()
             .len(),
         // The default task is still there

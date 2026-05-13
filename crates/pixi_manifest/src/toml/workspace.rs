@@ -6,17 +6,19 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 use pixi_spec::{ExcludeNewer, TomlSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, Version, VersionSpec};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Version, VersionSpec};
 use std::str::FromStr;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 use url::Url;
 
 use crate::{
-    KnownPreviewFeature, PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError,
-    WithWarnings, Workspace,
+    KnownPreviewFeature, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
+    TomlError, WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
-    toml::{manifest::ExternalWorkspaceProperties, platform::TomlPlatform, preview::TomlPreview},
+    toml::{
+        manifest::ExternalWorkspaceProperties, platform::TomlPixiPlatform, preview::TomlPreview,
+    },
     utils::PixiSpanned,
     workspace::{BuildVariantSource, ChannelPriority, SolveStrategy},
 };
@@ -101,7 +103,7 @@ pub struct TomlWorkspace {
     pub channels: IndexSet<PrioritizedChannel>,
     pub channel_priority: Option<ChannelPriority>,
     pub solve_strategy: Option<SolveStrategy>,
-    pub platforms: Spanned<IndexSet<Platform>>,
+    pub platforms: Spanned<IndexSet<PixiPlatform>>,
     pub license: Option<Spanned<String>>,
     pub license_file: Option<Spanned<PathBuf>>,
     pub readme: Option<Spanned<PathBuf>>,
@@ -307,8 +309,15 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .optional::<TomlWith<_, TomlFromStr<_>>>("solve-strategy")
             .map(TomlWith::into_inner);
         let platforms = th
-            .optional::<TomlWith<_, Spanned<TomlIndexSet<TomlPlatform>>>>("platforms")
-            .map(TomlWith::into_inner);
+            .optional::<Spanned<Vec<TomlPixiPlatform>>>("platforms")
+            .map(|spanned| Spanned {
+                span: spanned.span,
+                value: spanned
+                    .value
+                    .into_iter()
+                    .map(TomlPixiPlatform::into_inner)
+                    .collect::<IndexSet<_>>(),
+            });
         let license = th.optional("license");
         let license_file = th
             .optional::<TomlWith<_, Spanned<TomlFromStr<_>>>>("license-file")
@@ -482,6 +491,60 @@ mod test {
         5 │
           ╰────
         "#);
+    }
+
+    #[test]
+    fn test_workspace_platforms_mixed_string_and_table() {
+        let input = r#"
+        channels = []
+        platforms = [
+          "linux-64",
+          { name = "linux-64-cuda", subdir = "linux-64", virtual-packages = ["__cuda=12.0"] },
+          { name = "osx-arm64" },
+        ]
+        "#;
+        let workspace = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap()
+            .value;
+
+        let names: Vec<&str> = workspace
+            .platforms
+            .iter()
+            .map(|wp| wp.name().as_str())
+            .collect();
+        assert_eq!(names, vec!["linux-64", "linux-64-cuda", "osx-arm64"]);
+
+        let cuda_name = crate::PixiPlatformName::try_from("linux-64-cuda").unwrap();
+        let cuda = workspace.platform_by_name(&cuda_name).unwrap();
+        assert_eq!(
+            cuda.subdir(),
+            rattler_conda_types::Platform::Linux64,
+            "custom name should keep linux-64 as its subdir"
+        );
+        let declared: Vec<String> = cuda
+            .declared_virtual_packages()
+            .iter()
+            .map(|vp| vp.to_string())
+            .collect();
+        assert_eq!(declared, vec!["__cuda=12.0".to_string()]);
+
+        // Projecting workspace platforms to conda subdirs drops the
+        // workspace platform name and virtual-package metadata.
+        let subdirs: Vec<_> = workspace
+            .platforms
+            .iter()
+            .filter(|wp| wp.declared_virtual_packages().is_empty())
+            .map(|wp| wp.subdir())
+            .collect();
+        assert_eq!(
+            subdirs,
+            vec![
+                rattler_conda_types::Platform::Linux64,
+                rattler_conda_types::Platform::OsxArm64
+            ]
+        );
     }
 
     #[test]

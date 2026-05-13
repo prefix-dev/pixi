@@ -199,7 +199,9 @@ pub trait HasDependencyConfig: Sized {
     }
 
     fn set_platforms(mut self, platforms: &[Platform]) -> Self {
-        self.dependency_config().platforms.extend(platforms.iter());
+        self.dependency_config()
+            .platforms
+            .extend(platforms.iter().copied().map(Into::into));
         self
     }
 }
@@ -227,7 +229,7 @@ impl AddBuilder {
     }
 
     pub fn with_platform(mut self, platform: Platform) -> Self {
-        self.args.dependency_config.platforms.push(platform);
+        self.args.dependency_config.platforms.push(platform.into());
         self
     }
 

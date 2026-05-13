@@ -177,11 +177,20 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         }
     };
 
-    // Add the platforms if they are not already present
-    if !platforms.is_empty() {
+    // Add the platforms if they are not already present. Import-derived
+    // platforms come from external env files as bare subdirs, so we construct
+    // subdir-bound PixiPlatforms; the user can promote them to custom-named
+    // platforms with virtual-package overrides later.
+    let pixi_platforms: Vec<pixi_manifest::PixiPlatform> = platforms
+        .iter()
+        .map(|p| pixi_manifest::PixiPlatform::from_subdir(*p))
+        .collect();
+    let platform_names: Vec<pixi_manifest::PixiPlatformName> =
+        pixi_platforms.iter().map(|p| p.name().clone()).collect();
+    if !pixi_platforms.is_empty() {
         workspace
             .manifest()
-            .add_platforms(platforms.iter(), &feature_name)?;
+            .add_platforms(pixi_platforms.iter(), &feature_name)?;
     }
 
     let (conda_deps, pypi_deps) = match processed_input {
@@ -211,7 +220,7 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         }
     };
 
-    workspace.add_specs(conda_deps, pypi_deps, &platforms, &feature_name)?;
+    workspace.add_specs(conda_deps, pypi_deps, &platform_names, &feature_name)?;
 
     match workspace.workspace().environment(&environment_name) {
         None => {

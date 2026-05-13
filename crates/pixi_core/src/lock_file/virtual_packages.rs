@@ -1,11 +1,11 @@
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_manifest::EnvironmentName;
+use pixi_manifest::{EnvironmentName, PixiPlatform, PixiPlatformName};
 use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_record};
+use rattler_conda_types::ParseMatchSpecError;
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageName};
-use rattler_conda_types::{ParseMatchSpecError, Platform};
 use rattler_lock::{CondaPackageData, ConversionError, LockFile, PypiPackageData};
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
@@ -96,7 +96,7 @@ pub enum MachineValidationError {
     #[diagnostic(
         help = "Please make sure that 'python' is added in conda dependencies. Otherwise , please report this issue to the developers."
     )]
-    NoPythonRecordFound(Platform),
+    NoPythonRecordFound(PixiPlatformName),
 }
 
 /// Get the required virtual packages from dependency strings.
@@ -131,7 +131,7 @@ fn get_wheels_from_pypi_package_data(pypi_packages: Vec<PypiPackageData>) -> Vec
 /// Validate that current machine has all the required virtual packages for the given environment
 pub(crate) fn validate_system_meets_environment_requirements(
     lock_file: &LockFile,
-    platform: Platform,
+    platform: &PixiPlatform,
     environment_name: &EnvironmentName,
     virtual_package_overrides: Option<VirtualPackageOverrides>,
 ) -> Result<bool, MachineValidationError> {
@@ -147,7 +147,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
     )?;
 
     // Retrieve all conda packages for the specified platform (both binary and source).
-    let lock_platform = environment.lock_file().platform(&platform.to_string());
+    let lock_platform = environment.lock_file().platform(platform.name().as_str());
     let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
         // Early out if there are no packages, as we don't need to check for virtual packages
         return Ok(true);
@@ -256,8 +256,8 @@ pub(crate) fn validate_system_meets_environment_requirements(
     if lock_platform.is_some_and(|p| environment.has_pypi_packages(p))
         && let Some(pypi_packages) = lock_platform.and_then(|p| environment.pypi_packages(p))
     {
-        let python_record =
-            python_record.ok_or(MachineValidationError::NoPythonRecordFound(platform))?;
+        let python_record = python_record
+            .ok_or_else(|| MachineValidationError::NoPythonRecordFound(platform.name().clone()))?;
 
         // Check if all the wheel tags match the system virtual packages
         let pypi_packages = pypi_packages.cloned().collect_vec();
@@ -286,7 +286,7 @@ mod test {
     use super::*;
     use insta::assert_snapshot;
     use pixi_test_utils::format_diagnostic;
-    use rattler_conda_types::ParseStrictness;
+    use rattler_conda_types::{ParseStrictness, Platform};
     use rattler_virtual_packages::Override;
     use std::path::Path;
 
@@ -325,7 +325,7 @@ mod test {
         let lock_file_path =
             root_dir.join("../../tests/data/lock_files/cuda_virtual_dependency.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let platform = Platform::Linux64;
+        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
 
         // Override the virtual package to a version that is not available on the system
         let overrides = VirtualPackageOverrides {
@@ -335,7 +335,7 @@ mod test {
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
-            platform,
+            &platform,
             &EnvironmentName::default(),
             Some(overrides),
         );
@@ -349,7 +349,7 @@ mod test {
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
-            platform,
+            &platform,
             &EnvironmentName::default(),
             Some(overrides),
         );
@@ -361,7 +361,7 @@ mod test {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let lock_file_path = root_dir.join("../../tests/data/lock_files/pypi-numpy.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let platform = Platform::current();
+        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
 
         let overrides = VirtualPackageOverrides {
             // To high version for the wheel, which is fine as we assume backwards compatibility
@@ -372,7 +372,7 @@ mod test {
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
-            platform,
+            &platform,
             &EnvironmentName::default(),
             Some(overrides),
         );
@@ -387,7 +387,7 @@ mod test {
 
         let result = validate_system_meets_environment_requirements(
             &lock_file,
-            platform,
+            &platform,
             &EnvironmentName::default(),
             Some(overrides),
         );
@@ -462,7 +462,7 @@ mod test {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let lock_file_path = root_dir.join("../../tests/data/lock_files/archspec.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let platform = Platform::Linux64;
+        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
 
         let overrides = VirtualPackageOverrides {
             libc: Some(Override::String("2.17".to_string())),
@@ -472,7 +472,7 @@ mod test {
         // validate that the archspec is skipped
         validate_system_meets_environment_requirements(
             &lock_file,
-            platform,
+            &platform,
             &EnvironmentName::default(),
             Some(overrides),
         )
@@ -485,7 +485,7 @@ mod test {
         let lock_file_path =
             root_dir.join("../../tests/data/lock_files/ignored_virtual_packages.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let platform = Platform::Linux64;
+        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
 
         let overrides = VirtualPackageOverrides {
             libc: Some(Override::String("2.17".to_string())),
@@ -496,7 +496,7 @@ mod test {
         // validate that the ignored virtual packages are skipped
         validate_system_meets_environment_requirements(
             &lock_file,
-            platform,
+            &platform,
             &EnvironmentName::default(),
             Some(overrides),
         )

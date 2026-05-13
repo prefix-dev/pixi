@@ -705,7 +705,7 @@ mod test {
     struct TaskGraphTest<'a> {
         workspace_str: &'a str,
         run_args: Vec<&'a str>,
-        platform: Option<Platform>,
+        platform: Option<pixi_manifest::PixiPlatform>,
         environment_name: Option<EnvironmentName>,
         skip_deps: bool,
         prefer_executable: PreferExecutable,
@@ -726,7 +726,7 @@ mod test {
         }
 
         fn platform(mut self, platform: Platform) -> Self {
-            self.platform = Some(platform);
+            self.platform = Some(pixi_manifest::PixiPlatform::from_subdir(platform));
             self
         }
 
@@ -759,7 +759,7 @@ mod test {
                 .as_ref()
                 .map(|name| project.environment(name).unwrap());
             let search_envs =
-                SearchEnvironments::from_opt_env(&project, environment, self.platform);
+                SearchEnvironments::from_opt_env(&project, environment, self.platform.as_ref());
 
             let graph = TaskGraph::from_cmd_args(
                 &project,

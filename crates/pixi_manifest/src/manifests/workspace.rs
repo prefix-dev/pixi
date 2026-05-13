@@ -1,17 +1,23 @@
-use std::{collections::HashMap, fmt::Display, hash::Hash, path::Path, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Display,
+    hash::Hash,
+    path::Path,
+    str::FromStr,
+};
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, SourceCode, miette};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
+use rattler_conda_types::{ParseStrictness::Strict, Version, VersionSpec};
 use toml_edit::Value;
 
 use crate::{
-    DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,
-    PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskName,
-    TomlError, WorkspaceTarget, consts,
+    DependencyOverwriteBehavior, GetFeatureError, PixiPlatform, PixiPlatformName, Preview,
+    PrioritizedChannel, PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task,
+    TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -126,11 +132,11 @@ impl WorkspaceManifest {
     /// Returns a hashmap of the tasks that should run only the given platform.
     /// If the platform is `None`, only the default targets tasks are
     /// returned.
-    pub fn tasks(
-        &self,
-        platform: Option<Platform>,
+    pub fn tasks<'a>(
+        &'a self,
+        platform: Option<&'a PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> Result<HashMap<TaskName, &Task>, GetFeatureError> {
+    ) -> Result<HashMap<TaskName, &'a Task>, GetFeatureError> {
         Ok(self
             .features
             .get(feature_name)
@@ -148,29 +154,27 @@ impl WorkspaceManifest {
     /// needed.
     pub fn get_or_insert_target_mut(
         &mut self,
-        platform: Option<Platform>,
+        target: Option<&TargetSelector>,
         name: Option<&FeatureName>,
     ) -> &mut WorkspaceTarget {
         let feature = match name {
             Some(feature) => self.get_or_insert_feature_mut(feature),
             None => self.default_feature_mut(),
         };
-        feature
-            .targets
-            .for_opt_target_or_default_mut(platform.map(TargetSelector::from).as_ref())
+        feature.targets.for_opt_target_or_default_mut(target)
     }
 
     /// Returns a mutable reference to a [`WorkspaceTarget`]. Returns `None` if
-    /// the target doesnt exist.
+    /// the target doesn't exist.
     pub fn target_mut(
         &mut self,
-        platform: Option<Platform>,
+        target: Option<&TargetSelector>,
         name: &FeatureName,
     ) -> Option<&mut WorkspaceTarget> {
         self.feature_mut(name)
             .unwrap()
             .targets
-            .for_opt_target_mut(platform.map(TargetSelector::Platform).as_ref())
+            .for_opt_target_mut(target)
     }
 
     /// Returns the feature with the given name or `None` if it does not exist.
@@ -232,7 +236,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         name: TaskName,
         task: Task,
-        platform: Option<Platform>,
+        platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task already exists
@@ -248,7 +252,10 @@ impl WorkspaceManifestMut<'_> {
 
         // Add the task to the manifest
         self.workspace
-            .get_or_insert_target_mut(platform, Some(feature_name))
+            .get_or_insert_target_mut(
+                platform.map(TargetSelector::from).as_ref(),
+                Some(feature_name),
+            )
             .tasks
             .insert(name, task);
 
@@ -262,7 +269,7 @@ impl WorkspaceManifestMut<'_> {
     pub fn remove_task(
         &mut self,
         name: TaskName,
-        platform: Option<Platform>,
+        platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         // Check if the task exists
@@ -430,80 +437,177 @@ impl WorkspaceManifestMut<'_> {
         Ok(modified_environments)
     }
 
-    /// Add a platform to the project
+    fn known_platform_names(&self) -> HashSet<PixiPlatformName> {
+        self.workspace
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().clone())
+            .collect()
+    }
+
+    /// Add new PixiPlatforms to the list of defined platforms in this Workspace
+    pub fn add_workspace_platforms(
+        &mut self,
+        platforms: &IndexSet<PixiPlatform>,
+    ) -> miette::Result<()> {
+        // Update Manifest platforms
+        self.workspace
+            .workspace
+            .platforms
+            .extend(platforms.iter().cloned());
+
+        // Update TOML document platforms
+        let array = self
+            .document
+            .get_array_mut("platforms", &Default::default())?;
+
+        array.clear();
+        array.extend(
+            self.workspace
+                .workspace
+                .platforms
+                .iter()
+                .sorted()
+                .map(|p| p.to_string()),
+        );
+
+        Ok(())
+    }
+
+    /// Add new `PixiPlatform` based on its `name` to a feature.
+    fn add_feature_platforms(
+        &mut self,
+        mut platforms: IndexSet<PixiPlatformName>,
+        feature_name: &FeatureName,
+    ) -> miette::Result<()> {
+        if feature_name.is_default() {
+            return Ok(());
+        }
+
+        let known_platform_names: HashSet<PixiPlatformName> = self.known_platform_names();
+        platforms.retain(|pn| known_platform_names.contains(pn));
+
+        // Update the feature platforms:
+        self.workspace
+            .get_or_insert_feature_mut(feature_name)
+            .platforms_mut()
+            .extend(platforms.iter().cloned());
+
+        // Update TOML document feature platforms
+        self.document
+            .get_array_mut("platforms", feature_name)?
+            .extend(platforms.drain(..).map(|pn| pn.as_str().to_string()));
+
+        Ok(())
+    }
+
+    /// Add platforms to the workspace and, optionally, to a non-default
+    /// feature.
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn add_platforms<'a>(
         &mut self,
-        platforms: impl Iterator<Item = &'a Platform> + Clone,
+        platforms: impl IntoIterator<Item = &'a PixiPlatform>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        // Get current and new platforms for the feature
-        let current = if feature_name.is_default() {
-            &mut self.workspace.workspace.platforms
+        let pixi_platforms: IndexSet<PixiPlatform> = platforms.into_iter().cloned().collect();
+        let platform_names: IndexSet<PixiPlatformName> =
+            pixi_platforms.iter().map(|p| p.name().clone()).collect();
+        self.add_workspace_platforms(&pixi_platforms)?;
+        self.add_feature_platforms(platform_names, feature_name)?;
+        Ok(())
+    }
+
+    /// Remove platforms from the workspace and, optionally, from a non-default
+    /// feature.
+    pub fn remove_platforms<'a>(
+        &mut self,
+        platforms: impl IntoIterator<Item = &'a PixiPlatform>,
+        feature_name: &FeatureName,
+    ) -> miette::Result<()> {
+        let platform_names: IndexSet<PixiPlatformName> =
+            platforms.into_iter().map(|p| p.name().clone()).collect();
+        if feature_name.is_default() {
+            self.remove_workspace_platforms(&platform_names)?;
         } else {
-            self.workspace
-                .get_or_insert_feature_mut(feature_name)
-                .platforms_mut()
-        };
-        let to_add: IndexSet<_> = platforms.cloned().collect();
-        let new: IndexSet<_> = to_add.difference(current).cloned().collect();
-
-        // Add the platforms to the manifest
-        current.extend(new.clone());
-
-        // Then to the TOML document
-        let platforms = self.document.get_array_mut("platforms", feature_name)?;
-        for platform in new.iter() {
-            platforms.push(platform.to_string());
+            self.remove_feature_platforms(platform_names, feature_name)?;
         }
+        Ok(())
+    }
+
+    pub fn remove_workspace_platforms(
+        &mut self,
+        platforms: &IndexSet<PixiPlatformName>,
+    ) -> miette::Result<()> {
+        // Update Manifest platforms. Features keep their own platform lists
+        // even if entries are no longer in the workspace default: a feature
+        // explicitly listing `platforms = [...]` is an opt-in to that exact
+        // set, not a derivation from the workspace.
+        self.workspace
+            .workspace
+            .platforms
+            .retain(|existing| !platforms.contains(existing.name()));
+
+        // Update TOML document platforms
+        self.document
+            .get_array_mut("platforms", &FeatureName::DEFAULT)?
+            .retain(|item| {
+                item.as_str()
+                    .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
+                    .unwrap_or(true)
+            });
 
         Ok(())
     }
 
-    /// Remove the platform(s) from the project
-    ///
-    /// This function modifies both the workspace and the TOML document. Use
-    /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn remove_platforms(
+    pub fn remove_feature_platforms(
         &mut self,
-        platforms: impl IntoIterator<Item = Platform> + Clone,
+        platforms: IndexSet<PixiPlatformName>,
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
-        // Get current platforms and platform to remove for the feature
-        let current = if feature_name.is_default() {
-            &mut self.workspace.workspace.platforms
-        } else {
-            self.workspace.feature_mut(feature_name)?.platforms_mut()
-        };
-
-        // Check if some platforms are not part of current
-        let missing = platforms
-            .clone()
-            .into_iter()
-            .filter(|p| !current.contains(p))
-            .collect_vec();
-        if !missing.is_empty() {
-            return Err(miette::miette!(
-                "The following platform{} are not part of {}: {}",
-                if missing.len() > 1 { "s are" } else { " is" },
-                feature_name,
-                missing.into_iter().join(", ")
-            ));
+        if feature_name.is_default() {
+            return Ok(());
         }
 
-        // Remove platforms from the manifest
-        current.retain(|p| !platforms.clone().into_iter().contains(p));
+        // Error early if the user asked to remove a platform the feature does
+        // not declare. We check against the feature's own platform list rather
+        // than the workspace because features may opt in to platforms that the
+        // workspace default does not include.
+        let feature_platforms: HashSet<PixiPlatformName> = self
+            .workspace
+            .feature(feature_name)
+            .and_then(|f| f.platforms.as_ref())
+            .map(|set| set.iter().cloned().collect())
+            .unwrap_or_default();
+        let missing: Vec<&PixiPlatformName> = platforms
+            .iter()
+            .filter(|pn| !feature_platforms.contains(*pn))
+            .collect();
+        if !missing.is_empty() {
+            miette::bail!(
+                "feature '{feature_name}' does not declare platform(s): {}",
+                missing.iter().map(|pn| pn.as_str()).join(", ")
+            );
+        }
 
-        // And from the TOML document
-        let retained = current.iter().map(|p| p.to_string()).collect_vec();
-        let platforms = self.document.get_array_mut("platforms", feature_name)?;
-        platforms.retain(|p| {
-            p.as_str()
-                .map(|p| retained.contains(&p.to_string()))
-                .unwrap_or(false)
-        });
+        // Update the feature platforms:
+        self.workspace
+            .get_or_insert_feature_mut(feature_name)
+            .platforms_mut()
+            .retain(|p| !platforms.contains(p));
+
+        // TODO: Should features that have their last platform removed get deleted?!
+
+        // Update TOML document feature platforms
+        self.document
+            .get_array_mut("platforms", feature_name)?
+            .retain(|item| {
+                item.as_str()
+                    .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
+                    .unwrap_or(true)
+            });
 
         Ok(())
     }
@@ -517,21 +621,26 @@ impl WorkspaceManifestMut<'_> {
         name: &rattler_conda_types::PackageName,
         spec: &PixiSpec,
         spec_type: SpecType,
-        platforms: &[Platform],
+        platforms: &[PixiPlatformName],
         feature_name: &FeatureName,
         overwrite_behavior: DependencyOverwriteBehavior,
     ) -> miette::Result<bool> {
         let mut any_added = false;
-        for platform in to_options(platforms) {
-            // Add the dependency to the manifest
+        for platform_name in to_options(platforms) {
+            let selector = self.platform_target_selector(platform_name.as_ref());
             match self
                 .workspace
-                .get_or_insert_target_mut(platform, Some(feature_name))
+                .get_or_insert_target_mut(selector.as_ref(), Some(feature_name))
                 .try_add_dependency(name, spec, spec_type, overwrite_behavior)
             {
                 Ok(true) => {
-                    self.document
-                        .add_dependency(name, spec, spec_type, platform, feature_name)?;
+                    self.document.add_dependency(
+                        name,
+                        spec,
+                        spec_type,
+                        platform_name,
+                        feature_name,
+                    )?;
                     any_added = true;
                 }
                 Ok(false) => {}
@@ -539,6 +648,24 @@ impl WorkspaceManifestMut<'_> {
             };
         }
         Ok(any_added)
+    }
+
+    /// Convert a (possibly absent) workspace platform name into the
+    /// [`TargetSelector`] used to key target tables. For platforms whose name
+    /// matches the conda subdir and that declare no virtual packages we use
+    /// `Subdir(...)` so the in-memory key matches the natural `target.linux-64`
+    /// TOML form; richer platforms key under `Platform(name)`.
+    fn platform_target_selector(
+        &self,
+        platform_name: Option<&PixiPlatformName>,
+    ) -> Option<TargetSelector> {
+        platform_name.map(|name| {
+            self.workspace
+                .workspace
+                .platform_by_name(name)
+                .map(PixiPlatform::as_target_selector)
+                .unwrap_or_else(|| TargetSelector::Platform(name.clone()))
+        })
     }
 
     /// Removes a dependency based on `SpecType`.
@@ -553,17 +680,21 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         dep: &rattler_conda_types::PackageName,
         spec_type: SpecType,
-        platforms: &[Platform],
+        platforms: &[PixiPlatformName],
         feature_name: &FeatureName,
     ) -> Result<(), RemoveDependencyError> {
         let mut any_removed = false;
-        for platform in crate::to_options(platforms) {
-            // Remove the dependency from the manifest
+        for platform_name in to_options(platforms) {
+            let selector = self.platform_target_selector(platform_name.as_ref());
             match self
                 .workspace
-                .target_mut(platform, feature_name)
+                .target_mut(selector.as_ref(), feature_name)
                 .ok_or_else(|| {
-                    MissingTargetError::new(platform.as_ref(), feature_name, consts::DEPENDENCIES)
+                    MissingTargetError::new(
+                        platform_name.as_ref(),
+                        feature_name,
+                        consts::DEPENDENCIES,
+                    )
                 })?
                 .remove_dependency(dep, spec_type)
             {
@@ -576,9 +707,8 @@ impl WorkspaceManifestMut<'_> {
                 }
                 Err(e) => return Err(e.into()),
             };
-            // Remove the dependency from the TOML document
             self.document
-                .remove_dependency(dep, spec_type, platform, feature_name)?;
+                .remove_dependency(dep, spec_type, platform_name, feature_name)?;
         }
         if !any_removed {
             return Err(DependencyError::NoDependency(dep.as_normalized().into()).into());
@@ -593,25 +723,25 @@ impl WorkspaceManifestMut<'_> {
     pub fn add_pep508_dependency(
         &mut self,
         (requirement, pixi_req): (&pep508_rs::Requirement, Option<&PixiPypiSpec>),
-        platforms: &[Platform],
+        platforms: &[PixiPlatformName],
         feature_name: &FeatureName,
         editable: Option<bool>,
         overwrite_behavior: DependencyOverwriteBehavior,
         location: Option<PypiDependencyLocation>,
     ) -> miette::Result<bool> {
         let mut any_added = false;
-        for platform in to_options(platforms) {
-            // Add the pypi dependency to the manifest
+        for platform_name in to_options(platforms) {
+            let selector = self.platform_target_selector(platform_name.as_ref());
             match self
                 .workspace
-                .get_or_insert_target_mut(platform, Some(feature_name))
+                .get_or_insert_target_mut(selector.as_ref(), Some(feature_name))
                 .try_add_pep508_dependency(requirement, pixi_req, editable, overwrite_behavior)
             {
                 Ok(true) => {
                     self.document.add_pypi_dependency(
                         requirement,
                         pixi_req,
-                        platform,
+                        platform_name,
                         feature_name,
                         editable,
                         location,
@@ -636,18 +766,18 @@ impl WorkspaceManifestMut<'_> {
     pub fn remove_pypi_dependency(
         &mut self,
         dep: &PypiPackageName,
-        platforms: &[Platform],
+        platforms: &[PixiPlatformName],
         feature_name: &FeatureName,
     ) -> Result<(), RemoveDependencyError> {
         let mut any_removed = false;
-        for platform in crate::to_options(platforms) {
-            // Remove the dependency from the manifest
+        for platform_name in to_options(platforms) {
+            let selector = self.platform_target_selector(platform_name.as_ref());
             match self
                 .workspace
-                .target_mut(platform, feature_name)
+                .target_mut(selector.as_ref(), feature_name)
                 .ok_or_else(|| {
                     MissingTargetError::new(
-                        platform.as_ref(),
+                        platform_name.as_ref(),
                         feature_name,
                         consts::PYPI_DEPENDENCIES,
                     )
@@ -663,9 +793,8 @@ impl WorkspaceManifestMut<'_> {
                 }
                 Err(e) => return Err(e.into()),
             };
-            // Remove the dependency from the TOML document
             self.document
-                .remove_pypi_dependency(dep, platform, feature_name)?;
+                .remove_pypi_dependency(dep, platform_name, feature_name)?;
         }
         if !any_removed {
             return Err(DependencyError::NoDependency(dep.as_source().into()).into());
@@ -902,36 +1031,60 @@ impl WorkspaceManifestMut<'_> {
 /// Raised when [`WorkspaceManifestMut::remove_dependency`] or
 /// [`WorkspaceManifestMut::remove_pypi_dependency`] cannot find the
 /// `[<feature>.target.<platform>.<section>]` table they need to mutate.
-#[derive(Debug, thiserror::Error)]
-#[error("No target for feature `{feature_name}` found on platform `{platform}`")]
+#[derive(Debug)]
 pub struct MissingTargetError {
-    pub platform: Platform,
+    /// The platform whose target table is missing, or `None` for the default
+    /// (no target selector) entry.
+    pub platform: Option<PixiPlatformName>,
     pub feature_name: FeatureName,
     pub section: &'static str,
 }
 
 impl MissingTargetError {
-    fn new(platform: Option<&Platform>, feature_name: &FeatureName, section: &'static str) -> Self {
+    fn new(
+        platform: Option<&PixiPlatformName>,
+        feature_name: &FeatureName,
+        section: &'static str,
+    ) -> Self {
         Self {
-            platform: platform.copied().unwrap_or_else(Platform::current),
+            platform: platform.cloned(),
             feature_name: feature_name.clone(),
             section,
         }
     }
 }
 
+impl std::fmt::Display for MissingTargetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.platform {
+            Some(platform) => write!(
+                f,
+                "No target for feature `{}` found on platform `{platform}`",
+                self.feature_name
+            ),
+            None => write!(f, "No default target for feature `{}`", self.feature_name),
+        }
+    }
+}
+
+impl std::error::Error for MissingTargetError {}
+
 impl miette::Diagnostic for MissingTargetError {
     fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        let target_path = match &self.platform {
+            Some(platform) => format!("target.{platform}."),
+            None => String::new(),
+        };
         let help = if self.feature_name.is_default() {
             format!(
-                "Expected target for `{}`, e.g.: `[target.{}.{}]`",
-                self.feature_name, self.platform, self.section
+                "Expected target for `{name}`, e.g.: `[{target_path}{section}]`",
+                name = self.feature_name,
+                section = self.section,
             )
         } else {
             format!(
-                "Expected target for `{name}`, e.g.: `[feature.{name}.target.{platform}.{section}]`",
+                "Expected target for `{name}`, e.g.: `[feature.{name}.{target_path}{section}]`",
                 name = self.feature_name,
-                platform = self.platform,
                 section = self.section,
             )
         };
@@ -989,9 +1142,11 @@ mod tests {
         manifests::document::ManifestDocument,
         pyproject::PyProjectManifest,
         task::TaskRenderContext,
-        to_options,
         toml::{FromTomlStr, TomlDocument},
-        utils::{WithSourceCode, test_utils::expect_parse_failure},
+        utils::{
+            WithSourceCode,
+            test_utils::{expect_parse_failure, expect_parse_warnings},
+        },
         workspace::BuildVariantSource,
     };
 
@@ -1188,16 +1343,16 @@ start = "python -m flask run --port=5050"
         assert_eq!(
             targets.user_defined_selectors().cloned().collect_vec(),
             vec![
-                TargetSelector::Platform(Platform::Win64),
-                TargetSelector::Platform(Platform::Osx64),
+                TargetSelector::Subdir(Platform::Win64),
+                TargetSelector::Subdir(Platform::Osx64),
             ]
         );
 
         let win64_target = targets
-            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .for_target(&TargetSelector::Subdir(Platform::Win64))
             .unwrap();
         let osx64_target = targets
-            .for_target(&TargetSelector::Platform(Platform::Osx64))
+            .for_target(&TargetSelector::Subdir(Platform::Osx64))
             .unwrap();
         assert_eq!(
             win64_target
@@ -1386,10 +1541,13 @@ start = "python -m flask run --port=5050"
 
     #[test]
     fn test_invalid_target_specific() {
+        // Unknown platform names parse with a warning rather than an error so
+        // workspaces can roll forward through manifest tweaks. The test pins
+        // both the structural shape (parse succeeds) and the warning text.
         let examples = [r#"[target.foobar.dependencies]
             invalid_platform = "henk""#];
 
-        assert_snapshot!(expect_parse_failure(&format!(
+        assert_snapshot!(expect_parse_warnings(&format!(
             "{PROJECT_BOILERPLATE}\n{}",
             examples[0]
         )));
@@ -1572,17 +1730,19 @@ start = "python -m flask run --port=5050"
         "#;
         let manifest = parse_pixi_toml(contents).manifest;
         println!("{:?}", manifest.workspace.build_variants);
+        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        let win64 = PixiPlatform::from_subdir(Platform::Win64);
         let resolved_linux = manifest
             .workspace
             .build_variants
-            .resolve(Some(Platform::Linux64))
+            .resolve(Some(&linux64))
             .collect::<Vec<_>>();
         assert_debug_snapshot!(resolved_linux);
 
         let resolved_win = manifest
             .workspace
             .build_variants
-            .resolve(Some(Platform::Win64))
+            .resolve(Some(&win64))
             .collect::<Vec<_>>();
         assert_debug_snapshot!(resolved_win);
     }
@@ -1666,13 +1826,13 @@ start = "python -m flask run --port=5050"
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let win64_activation_env = default_targets
-            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .for_target(&TargetSelector::Subdir(Platform::Win64))
             .unwrap()
             .activation
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let linux64_activation_env = default_targets
-            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .for_target(&TargetSelector::Subdir(Platform::Linux64))
             .unwrap()
             .activation
             .as_ref()
@@ -1708,13 +1868,13 @@ start = "python -m flask run --port=5050"
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let feature_win64_activation_env = feature_targets
-            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .for_target(&TargetSelector::Subdir(Platform::Win64))
             .unwrap()
             .activation
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let feature_linux64_activation_env = feature_targets
-            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .for_target(&TargetSelector::Subdir(Platform::Linux64))
             .unwrap()
             .activation
             .as_ref()
@@ -1752,16 +1912,26 @@ start = "python -m flask run --port=5050"
     ) {
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
+        let platform_names: Vec<PixiPlatformName> = platforms
+            .iter()
+            .copied()
+            .map(PixiPlatformName::from)
+            .collect();
+        let subdir_options: Vec<Option<Platform>> = if platforms.is_empty() {
+            vec![None]
+        } else {
+            platforms.iter().copied().map(Some).collect()
+        };
 
         // Initially the dependency should exist
-        for platform in to_options(platforms) {
+        for platform in &subdir_options {
             assert!(
                 manifest
                     .workspace
                     .feature_mut(feature_name)
                     .unwrap()
                     .targets
-                    .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                    .for_opt_target(platform.map(TargetSelector::Subdir).as_ref())
                     .unwrap()
                     .dependencies
                     .get(&kind)
@@ -1776,20 +1946,20 @@ start = "python -m flask run --port=5050"
             .remove_dependency(
                 &PackageName::new_unchecked(name),
                 kind,
-                platforms,
+                &platform_names,
                 feature_name,
             )
             .unwrap();
 
         // The dependency should no longer exist
-        for platform in to_options(platforms) {
+        for platform in &subdir_options {
             assert!(
                 manifest
                     .workspace
                     .feature_mut(feature_name)
                     .unwrap()
                     .targets
-                    .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                    .for_opt_target(platform.map(TargetSelector::Subdir).as_ref())
                     .unwrap()
                     .dependencies
                     .get(&kind)
@@ -1905,7 +2075,7 @@ start = "python -m flask run --port=5050"
                     .workspace
                     .default_feature()
                     .targets
-                    .for_target(&TargetSelector::Platform(platform))
+                    .for_target(&TargetSelector::Subdir(platform))
                     .unwrap()
                     .dependencies
                     .get(&kind)
@@ -1926,16 +2096,26 @@ start = "python -m flask run --port=5050"
         let mut manifest = manifest.editable();
 
         let package_name = PypiPackageName::from_str(name).unwrap();
+        let platform_names: Vec<PixiPlatformName> = platforms
+            .iter()
+            .copied()
+            .map(PixiPlatformName::from)
+            .collect();
+        let subdir_options: Vec<Option<Platform>> = if platforms.is_empty() {
+            vec![None]
+        } else {
+            platforms.iter().copied().map(Some).collect()
+        };
 
         // Initially the dependency should exist
-        for platform in to_options(platforms) {
+        for platform in &subdir_options {
             assert!(
                 manifest
                     .workspace
                     .feature_mut(feature_name)
                     .unwrap()
                     .targets
-                    .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                    .for_opt_target(platform.map(TargetSelector::Subdir).as_ref())
                     .unwrap()
                     .pypi_dependencies
                     .as_ref()
@@ -1947,18 +2127,18 @@ start = "python -m flask run --port=5050"
 
         // Remove the dependency from the manifest
         manifest
-            .remove_pypi_dependency(&package_name, platforms, feature_name)
+            .remove_pypi_dependency(&package_name, &platform_names, feature_name)
             .unwrap();
 
         // The dependency should no longer exist
-        for platform in to_options(platforms) {
+        for platform in &subdir_options {
             assert!(
                 manifest
                     .workspace
                     .feature_mut(feature_name)
                     .unwrap()
                     .targets
-                    .for_opt_target(platform.map(TargetSelector::Platform).as_ref())
+                    .for_opt_target(platform.map(TargetSelector::Subdir).as_ref())
                     .unwrap()
                     .pypi_dependencies
                     .as_ref()
@@ -2114,27 +2294,38 @@ feature_target_dep = "*"
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
+        fn pp(p: Platform) -> PixiPlatform {
+            PixiPlatform::from_subdir(p)
+        }
+        fn pn(p: Platform) -> PixiPlatformName {
+            p.into()
+        }
+
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            vec![Platform::Linux64, Platform::Win64]
+            [pp(Platform::Linux64), pp(Platform::Win64)]
                 .into_iter()
                 .collect::<IndexSet<_>>()
         );
 
         manifest
-            .add_platforms([Platform::OsxArm64].iter(), &FeatureName::DEFAULT)
+            .add_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::DEFAULT)
             .unwrap();
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            vec![Platform::Linux64, Platform::Win64, Platform::OsxArm64]
-                .into_iter()
-                .collect::<IndexSet<_>>()
+            [
+                pp(Platform::Linux64),
+                pp(Platform::Win64),
+                pp(Platform::OsxArm64),
+            ]
+            .into_iter()
+            .collect::<IndexSet<_>>()
         );
 
         manifest
             .add_platforms(
-                [Platform::LinuxAarch64, Platform::Osx64].iter(),
+                [pp(Platform::LinuxAarch64), pp(Platform::Osx64)].iter(),
                 &FeatureName::from("test"),
             )
             .unwrap();
@@ -2147,14 +2338,14 @@ feature_target_dep = "*"
                 .platforms
                 .clone()
                 .unwrap(),
-            vec![Platform::LinuxAarch64, Platform::Osx64]
+            [pn(Platform::LinuxAarch64), pn(Platform::Osx64)]
                 .into_iter()
                 .collect::<IndexSet<_>>()
         );
 
         manifest
             .add_platforms(
-                [Platform::LinuxAarch64, Platform::Win64].iter(),
+                [pp(Platform::LinuxAarch64), pp(Platform::Win64)].iter(),
                 &FeatureName::from("test"),
             )
             .unwrap();
@@ -2167,9 +2358,13 @@ feature_target_dep = "*"
                 .platforms
                 .clone()
                 .unwrap(),
-            vec![Platform::LinuxAarch64, Platform::Osx64, Platform::Win64]
-                .into_iter()
-                .collect::<IndexSet<_>>()
+            [
+                pn(Platform::LinuxAarch64),
+                pn(Platform::Osx64),
+                pn(Platform::Win64),
+            ]
+            .into_iter()
+            .collect::<IndexSet<_>>()
         );
     }
 
@@ -2195,20 +2390,27 @@ feature_target_dep = "*"
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
+        fn pp(p: Platform) -> PixiPlatform {
+            PixiPlatform::from_subdir(p)
+        }
+        fn pn(p: Platform) -> PixiPlatformName {
+            p.into()
+        }
+
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            vec![Platform::Linux64, Platform::Win64]
+            [pp(Platform::Linux64), pp(Platform::Win64)]
                 .into_iter()
                 .collect::<IndexSet<_>>()
         );
 
         manifest
-            .remove_platforms(vec![Platform::Linux64], &FeatureName::DEFAULT)
+            .remove_platforms([pp(Platform::Linux64)].iter(), &FeatureName::DEFAULT)
             .unwrap();
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            vec![Platform::Win64].into_iter().collect::<IndexSet<_>>()
+            [pp(Platform::Win64)].into_iter().collect::<IndexSet<_>>()
         );
 
         assert_eq!(
@@ -2219,14 +2421,18 @@ feature_target_dep = "*"
                 .platforms
                 .clone()
                 .unwrap(),
-            vec![Platform::Linux64, Platform::Win64, Platform::Osx64]
-                .into_iter()
-                .collect::<IndexSet<_>>()
+            [
+                pn(Platform::Linux64),
+                pn(Platform::Win64),
+                pn(Platform::Osx64),
+            ]
+            .into_iter()
+            .collect::<IndexSet<_>>()
         );
 
         manifest
             .remove_platforms(
-                vec![Platform::Linux64, Platform::Osx64],
+                [pp(Platform::Linux64), pp(Platform::Osx64)].iter(),
                 &FeatureName::from("test"),
             )
             .unwrap();
@@ -2239,14 +2445,14 @@ feature_target_dep = "*"
                 .platforms
                 .clone()
                 .unwrap(),
-            vec![Platform::Win64].into_iter().collect::<IndexSet<_>>()
+            [pn(Platform::Win64)].into_iter().collect::<IndexSet<_>>()
         );
 
         // Test removing non-existing platforms
         assert!(
             manifest
                 .remove_platforms(
-                    vec![Platform::Linux64, Platform::Osx64],
+                    [pp(Platform::Linux64), pp(Platform::Osx64)].iter(),
                     &FeatureName::from("test"),
                 )
                 .is_err()
@@ -2713,7 +2919,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             cuda_feature
                 .targets
-                .for_target(&TargetSelector::Platform(Platform::OsxArm64))
+                .for_target(&TargetSelector::Subdir(Platform::OsxArm64))
                 .unwrap()
                 .dependencies
                 .get(&SpecType::Run)
@@ -2783,11 +2989,12 @@ test = "test initial"
                 &FeatureName::DEFAULT,
             )
             .unwrap();
+        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
         manifest
             .add_task(
                 "target_linux".into(),
                 Task::Plain("echo target_linux".into()),
-                Some(Platform::Linux64),
+                Some(&linux64),
                 &FeatureName::DEFAULT,
             )
             .unwrap();
@@ -2803,7 +3010,7 @@ test = "test initial"
             .add_task(
                 "feature_test_target_linux".into(),
                 Task::Plain("echo feature_test_target_linux".into()),
-                Some(Platform::Linux64),
+                Some(&linux64),
                 &FeatureName::from("test"),
             )
             .unwrap();
@@ -2907,7 +3114,7 @@ bar = "*"
                 package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
-                &[Platform::Linux64],
+                &[Platform::Linux64.into()],
                 &FeatureName::from("extra"),
                 DependencyOverwriteBehavior::Overwrite,
             )
@@ -2919,7 +3126,7 @@ bar = "*"
                 .feature(&FeatureName::from("extra"))
                 .unwrap()
                 .targets
-                .for_target(&TargetSelector::Platform(Platform::Linux64))
+                .for_target(&TargetSelector::Subdir(Platform::Linux64))
                 .unwrap()
                 .dependencies
                 .get(&SpecType::Run)
@@ -2943,7 +3150,7 @@ bar = "*"
                 package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Build,
-                &[Platform::Linux64],
+                &[Platform::Linux64.into()],
                 &FeatureName::from("build"),
                 DependencyOverwriteBehavior::Overwrite,
             )
@@ -2954,7 +3161,7 @@ bar = "*"
                 .workspace
                 .feature(&FeatureName::from("build"))
                 .map(|f| &f.targets)
-                .and_then(|t| t.for_target(&TargetSelector::Platform(Platform::Linux64)))
+                .and_then(|t| t.for_target(&TargetSelector::Subdir(Platform::Linux64)))
                 .and_then(|t| t.dependencies.get(&SpecType::Build))
                 .and_then(|deps| deps.get(&PackageName::from_str("cmake").unwrap()))
                 .and_then(|specs| specs.iter().next())
@@ -3376,7 +3583,10 @@ channels = ["nvidia", "pytorch"]
         let mut manifest = manifest.editable();
 
         manifest
-            .remove_platforms([Platform::Linux64], &FeatureName::DEFAULT)
+            .remove_platforms(
+                [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
+                &FeatureName::DEFAULT,
+            )
             .unwrap();
 
         assert_snapshot!(manifest.document.to_string(), @r###"
@@ -3526,7 +3736,8 @@ openssl = "<2"
         assert_eq!(base_spec, "<3");
 
         // Platform-specific constraint overrides
-        let linux_constraints = default_feature.constraints(Some(Platform::Linux64));
+        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux_constraints = default_feature.constraints(Some(&linux64));
         assert!(linux_constraints.is_some());
         let linux_spec = linux_constraints
             .unwrap()

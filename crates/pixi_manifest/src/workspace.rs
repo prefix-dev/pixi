@@ -4,13 +4,17 @@ use indexmap::{IndexMap, IndexSet};
 use pixi_pypi_spec::PypiPackageName;
 use pixi_spec::{ExcludeNewer, TomlSpec};
 use pixi_toml::TomlEnum;
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, Version, VersionSpec};
+use rattler_conda_types::{
+    Arch, GenericVirtualPackage, NamedChannelOrUrl, PackageName, Platform, Version, VersionSpec,
+};
 use serde::Deserialize;
 use toml_span::{DeserError, Value};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
-use crate::{PrioritizedChannel, S3Options, Targets, preview::Preview};
+use crate::{
+    PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, Targets, preview::Preview,
+};
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
 use once_cell::sync::Lazy;
 
@@ -46,7 +50,7 @@ pub struct Workspace {
     pub solve_strategy: Option<SolveStrategy>,
 
     /// The platforms this project supports
-    pub platforms: IndexSet<Platform>,
+    pub platforms: IndexSet<PixiPlatform>,
 
     /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
     pub license: Option<String>,
@@ -103,6 +107,79 @@ pub struct Workspace {
     /// Absolute directory of the workspace manifest. Used to re-base relative
     /// path specs in `dependencies` for members in other directories.
     pub root_directory: PathBuf,
+}
+
+impl Workspace {
+    /// Look up a configured [`PixiPlatform`] by its name.
+    pub fn platform_by_name(&self, name: &PixiPlatformName) -> Option<&PixiPlatform> {
+        self.platforms.iter().find(|p| p.name() == name)
+    }
+
+    /// Return every workspace [`PixiPlatform`] whose subdir matches `current`
+    /// or one of the fallback subdirs used by
+    /// `Environment::best_platform_with_current`, ordered from most to least
+    /// appropriate. Within each subdir bucket, platforms are returned in
+    /// workspace declaration order (so a custom-named variant declared after
+    /// the bare subdir-bound platform comes second).
+    ///
+    /// Platforms whose declared virtual packages are not satisfied by
+    /// `system_virtual_packages` are filtered out -- e.g. a `__cuda`-requiring
+    /// platform is dropped on a system that does not provide CUDA.
+    pub fn possible_pixi_platforms(
+        &self,
+        current: Platform,
+        system_virtual_packages: &[GenericVirtualPackage],
+    ) -> Vec<&PixiPlatform> {
+        let mut candidate_subdirs: Vec<Platform> = vec![current];
+        if current.is_osx() && current != Platform::Osx64 {
+            candidate_subdirs.push(Platform::Osx64);
+        }
+        if current.is_windows() && current != Platform::Win64 {
+            candidate_subdirs.push(Platform::Win64);
+        }
+        if current == Platform::Win64 {
+            candidate_subdirs.push(Platform::Win32);
+        }
+
+        let satisfies_system = |p: &&PixiPlatform| {
+            p.declared_virtual_packages()
+                .iter()
+                .all(|declared| satisfied_by_system(declared, system_virtual_packages))
+        };
+
+        let mut result: Vec<&PixiPlatform> = Vec::new();
+        for subdir in &candidate_subdirs {
+            result.extend(
+                self.platforms
+                    .iter()
+                    .filter(|p| p.subdir() == *subdir)
+                    .filter(satisfies_system),
+            );
+        }
+
+        // Single-workspace-platform WASM fallback, mirroring
+        // `best_platform_with_current`.
+        if self.platforms.len() == 1
+            && let Some(p) = self.platforms.iter().next()
+            && p.subdir().arch() == Some(Arch::Wasm32)
+            && !candidate_subdirs.contains(&p.subdir())
+            && satisfies_system(&p)
+        {
+            result.push(p);
+        }
+
+        result
+    }
+}
+
+/// Returns true if `declared` is provided by the system: the system must list
+/// a virtual package of the same name with a version at least as high as the
+/// declared one.
+fn satisfied_by_system(declared: &GenericVirtualPackage, system: &[GenericVirtualPackage]) -> bool {
+    system
+        .iter()
+        .find(|s| s.name == declared.name)
+        .is_some_and(|s| s.version >= declared.version)
 }
 
 /// A source that contributes additional build variant definitions.

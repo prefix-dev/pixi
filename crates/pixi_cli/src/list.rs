@@ -206,7 +206,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
     let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
-    let platform = args.platform.unwrap_or_else(|| environment.best_platform());
+    let platform_display: String = match args.platform {
+        Some(p) => p.to_string(),
+        None => environment
+            .best_platform()
+            .map(|p| p.name().to_string())
+            .unwrap_or_else(|| Platform::current().to_string()),
+    };
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
     let mut packages_to_output = workspace_ctx
@@ -237,7 +243,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!(
             "No packages found in '{}' environment for '{}' platform.",
             environment.name().fancy_display(),
-            consts::ENVIRONMENT_STYLE.apply_to(platform),
+            consts::ENVIRONMENT_STYLE.apply_to(&platform_display),
         );
     }
 

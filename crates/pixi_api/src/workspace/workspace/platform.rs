@@ -1,6 +1,5 @@
 use miette::IntoDiagnostic;
-use pixi_manifest::{EnvironmentName, FeatureName};
-use rattler_conda_types::Platform;
+use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatform, PixiPlatformName};
 use std::collections::HashMap;
 
 use pixi_core::{Workspace, workspace::WorkspaceMut};
@@ -14,7 +13,7 @@ use pixi_core::{
 
 use crate::Interface;
 
-pub async fn list(workspace: &Workspace) -> HashMap<EnvironmentName, Vec<Platform>> {
+pub async fn list(workspace: &Workspace) -> HashMap<EnvironmentName, Vec<PixiPlatformName>> {
     workspace
         .environments()
         .iter()
@@ -25,7 +24,7 @@ pub async fn list(workspace: &Workspace) -> HashMap<EnvironmentName, Vec<Platfor
 pub async fn add<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
-    platforms: Vec<Platform>,
+    platforms: Vec<PixiPlatform>,
     no_install: bool,
     feature: Option<String>,
 ) -> miette::Result<()> {
@@ -72,7 +71,7 @@ pub async fn add<I: Interface>(
 pub async fn remove<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
-    platforms: Vec<Platform>,
+    platforms: Vec<PixiPlatform>,
     no_install: bool,
     feature: Option<String>,
 ) -> miette::Result<()> {
@@ -81,7 +80,7 @@ pub async fn remove<I: Interface>(
     // Remove the platform(s) from the manifest
     workspace
         .manifest()
-        .remove_platforms(platforms.clone(), &feature_name)?;
+        .remove_platforms(platforms.iter(), &feature_name)?;
 
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),

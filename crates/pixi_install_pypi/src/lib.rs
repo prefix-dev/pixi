@@ -12,7 +12,7 @@ use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, SystemRequirements,
+    EnvironmentName, PixiPlatform, SystemRequirements,
     pypi::ResolvedPypiExcludeNewer,
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
 };
@@ -31,7 +31,6 @@ use pypi_modifiers::{
     Tags,
     pypi_tags::{get_pypi_tags, is_python_record},
 };
-use rattler_conda_types::Platform;
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
@@ -281,7 +280,7 @@ pub async fn on_python_interpreter_change<'a>(
 pub struct PyPIUpdateConfig<'a> {
     pub environment_name: &'a EnvironmentName,
     pub prefix: &'a Prefix,
-    pub platform: Platform,
+    pub platform: &'a PixiPlatform,
     pub lock_file_dir: &'a Path,
     pub system_requirements: &'a SystemRequirements,
 }

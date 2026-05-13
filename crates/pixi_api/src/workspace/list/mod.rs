@@ -5,7 +5,7 @@ use miette::IntoDiagnostic;
 use pixi_core::{
     UpdateLockFileOptions, Workspace, environment::LockFileUsage, lock_file::UvResolutionContext,
 };
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest};
 use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_package_name};
 use rattler_conda_types::Platform;
@@ -45,9 +45,25 @@ pub async fn list(
         .0
         .into_lock_file();
 
-    // Load the platform
-    let platform = platform.unwrap_or_else(|| environment.best_platform());
-    let locked_platform = lock_file.platform(platform.as_str());
+    // Load the platform. If the caller passed an explicit subdir, look it up
+    // in the workspace by matching subdir; otherwise fall back to the
+    // environment's best platform.
+    let workspace_platforms = &workspace.workspace_manifest().workspace.platforms;
+    let platform = match platform {
+        Some(subdir) => workspace_platforms
+            .iter()
+            .find(|p| p.subdir() == subdir)
+            .ok_or_else(|| {
+                miette::miette!("workspace does not define a platform with subdir '{subdir}'")
+            })?,
+        None => environment.best_platform().ok_or_else(|| {
+            miette::miette!(
+                "no platform supported by environment '{}' matches the current system",
+                environment.name()
+            )
+        })?,
+    };
+    let locked_platform = lock_file.platform(platform.name().as_str());
     let locked_environment = lock_file.environment(environment.name().as_str());
 
     // Get all the packages in the environment.

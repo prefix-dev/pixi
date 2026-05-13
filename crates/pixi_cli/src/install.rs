@@ -7,7 +7,6 @@ use pixi_core::{
     environment::{InstallFilter, get_update_lock_file_and_prefixes},
     lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
 };
-use pixi_manifest::FeaturesExt;
 use std::fmt::Write;
 
 use crate::cli_config::WorkspaceConfig;
@@ -114,7 +113,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.all {
         let (supported, skipped): (Vec<_>, Vec<_>) = environments
             .into_iter()
-            .partition(|env| env.platforms().contains(&env.best_platform()));
+            .partition(|env| env.best_platform().is_some());
 
         if !skipped.is_empty() {
             tracing::warn!(
@@ -167,7 +166,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .expect("failed to write into message buffer");
 
         if skip_opts {
-            let platform = environment.best_platform();
+            let platform = environment
+                .best_platform()
+                .expect("environment supported on this system");
             let locked_env = lock_file
                 .environment(environment.name().as_str())
                 .expect("lock file is missing installed environment");

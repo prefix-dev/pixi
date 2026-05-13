@@ -13,10 +13,9 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_manifest::{
-    EnvironmentName, FeatureName,
+    EnvironmentName, FeatureName, PixiPlatformName,
     task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, TemplateString, quote},
 };
-use rattler_conda_types::Platform;
 use serde::Serialize;
 use serde_with::serde_as;
 
@@ -52,7 +51,7 @@ pub struct RemoveArgs {
 
     /// The platform for which the task should be removed.
     #[arg(long, short)]
-    pub platform: Option<Platform>,
+    pub platform: Option<PixiPlatformName>,
 
     /// The feature for which the task should be removed.
     #[arg(long, short)]
@@ -76,7 +75,7 @@ pub struct AddArgs {
 
     /// The platform for which the task should be added.
     #[arg(long, short)]
-    pub platform: Option<Platform>,
+    pub platform: Option<PixiPlatformName>,
 
     /// The feature for which the task should be added.
     #[arg(long, short)]
@@ -131,7 +130,7 @@ pub struct AliasArgs {
 
     /// The platform for which the alias should be added
     #[arg(long, short)]
-    pub platform: Option<Platform>,
+    pub platform: Option<PixiPlatformName>,
 
     /// The description of the alias task
     #[arg(long)]

@@ -101,12 +101,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         );
         let mut workspace =
             WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
-        workspace.add_specs(
-            conda_deps,
-            pypi_deps,
-            &[] as &[Platform],
-            &FeatureName::default(),
-        )?;
+        workspace.add_specs(conda_deps, pypi_deps, &[], &FeatureName::default())?;
         let workspace = workspace.save().await.into_diagnostic()?;
 
         interface

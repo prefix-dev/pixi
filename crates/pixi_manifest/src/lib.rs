@@ -12,6 +12,7 @@ mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
 mod package;
+mod platform;
 mod preview;
 pub mod pypi;
 pub mod pyproject;
@@ -48,8 +49,8 @@ pub use manifests::{
 };
 use miette::Diagnostic;
 pub use package::Package;
+pub use platform::{PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError};
 pub use preview::{KnownPreviewFeature, Preview};
-use rattler_conda_types::Platform;
 pub use s3::S3Options;
 pub use spec_type::SpecType;
 pub use system_requirements::{
@@ -134,18 +135,22 @@ pub enum PypiDependencyLocation {
     DependencyGroups,
 }
 
-/// Converts an array of `Platform`s to a non-empty `Vec` of `Option<Platform>`.
-fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
-    match platforms.is_empty() {
-        true => vec![None],
-        false => platforms.iter().map(|p| Some(*p)).collect_vec(),
-    }
-}
-
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 pub use manifests::ManifestDocument;
 use pixi_consts::consts;
+
+/// Converts a slice of `PixiPlatformName`s to a non-empty `Vec` of
+/// `Option<PixiPlatformName>`. An empty input yields `vec![None]` so callers
+/// always iterate at least once (the `None` arm meaning "no target selector"
+/// i.e. the default target).
+pub(crate) fn to_options(platforms: &[PixiPlatformName]) -> Vec<Option<PixiPlatformName>> {
+    if platforms.is_empty() {
+        vec![None]
+    } else {
+        platforms.iter().cloned().map(Some).collect_vec()
+    }
+}
 
 impl FancyDisplay for EnvironmentName {
     fn fancy_display(&self) -> StyledObject<&str> {

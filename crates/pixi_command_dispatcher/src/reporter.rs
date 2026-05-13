@@ -61,7 +61,7 @@ pub trait PixiInstallReporter: Send + Sync {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct PixiSolveEnvironmentSpec {
     pub name: String,
-    pub platform: rattler_conda_types::Platform,
+    pub platform: String,
     /// True if the environment has direct binary URL/path conda deps,
     /// which trigger package-cache validation during the solve.
     pub has_direct_conda_dependency: bool,

@@ -9,7 +9,7 @@ use miette::{IntoDiagnostic, Report};
 use pixi_api::{DefaultContext, WorkspaceContext};
 use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{
     MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, Platform,
@@ -116,10 +116,13 @@ pub async fn execute_impl<W: Write>(
     let platforms = if let Some(platform) = args.platform {
         vec![platform, Platform::NoArch]
     } else if let Some(ref workspace) = workspace {
+        let workspace_platforms = &workspace.workspace_manifest().workspace.platforms;
         let mut platforms: Vec<Platform> = workspace
             .default_environment()
             .platforms()
             .into_iter()
+            .filter_map(|name| workspace_platforms.iter().find(|p| p.name() == &name))
+            .map(|p| p.subdir())
             .collect();
         if !platforms.contains(&Platform::NoArch) {
             platforms.push(Platform::NoArch);
