@@ -3416,6 +3416,38 @@ UNUSED = "unused"
         config.set("repodata-config.disable-jlap", None).unwrap();
     }
 
+    #[test]
+    fn test_unset_unknown_key_rewrites_config_without_stale_key() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let config_path = std::env::temp_dir().join(format!(
+            "pixi-config-unset-unknown-{}-{nonce}.toml",
+            std::process::id()
+        ));
+
+        fs_err::write(
+            &config_path,
+            r#"
+            [repodata-config]
+            disable-jlap = true
+            disable-bzip2 = true
+        "#,
+        )
+        .unwrap();
+
+        let mut config = Config::from_path(&config_path).unwrap();
+        config.set("repodata-config.disable-jlap", None).unwrap();
+        config.save(&config_path).unwrap();
+
+        let saved = fs_err::read_to_string(&config_path).unwrap();
+        fs_err::remove_file(&config_path).unwrap();
+
+        assert!(!saved.contains("disable-jlap"));
+        assert!(saved.contains("disable-bzip2"));
+    }
+
     #[rstest]
     #[case("pinning-strategy", None, None)]
     #[case("pinning-strategy", Some("semver".to_string()), Some(PinningStrategy::Semver))]
