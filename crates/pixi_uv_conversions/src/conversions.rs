@@ -839,4 +839,37 @@ mod tests {
             other => panic!("expected a VersionOrUrl::Url, got {other:?}"),
         }
     }
+
+    /// Index-bearing registry sources must serialize without uv's
+    /// `(index: <url>)` `Display` suffix; `pep508_rs` rejects it (#6049).
+    #[test]
+    fn to_requirements_strips_index_suffix_from_registry_source() {
+        use std::sync::Arc;
+        use uv_distribution_types::{
+            IndexFormat, IndexMetadata, IndexUrl, Requirement as UvRequirement, RequirementSource,
+        };
+        use uv_pep508::MarkerTree;
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("isaaclab").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Registry {
+                specifier: uv_pep440::VersionSpecifiers::empty(),
+                index: Some(IndexMetadata {
+                    url: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(
+                        DisplaySafeUrl::parse("https://pypi.nvidia.com/simple/").unwrap(),
+                    ))),
+                    format: IndexFormat::Simple,
+                }),
+                conflict: None,
+            },
+            origin: None,
+        };
+        assert!(uv_req.to_string().contains("(index:"));
+
+        let converted = to_requirements(std::iter::once(&uv_req)).unwrap();
+        assert_eq!(converted[0].to_string(), "isaaclab");
+    }
 }

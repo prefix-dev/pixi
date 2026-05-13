@@ -20,7 +20,7 @@ use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_options_to_build_options,
-    pypi_options_to_index_locations, to_index_strategy,
+    pypi_options_to_index_locations, to_index_strategy, to_requirements,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
@@ -752,22 +752,16 @@ async fn read_local_package_metadata(
         }
     };
 
-    // A round-trip failure here would be a uv bug, not "static doesn't
-    // apply", so propagate rather than swallow as `Ok(None)`.
-    let requires_dist_vec: Vec<pep508_rs::Requirement> = requires_dist
-        .requires_dist
-        .iter()
-        .map(|req| {
-            req.to_string()
-                .parse::<pep508_rs::Requirement>()
-                .map_err(|e| {
-                    PlatformUnsat::FailedToReadLocalMetadata(
-                        package_name.clone(),
-                        format!("Invalid requirement: {e}"),
-                    )
-                })
-        })
-        .collect::<Result<_, _>>()?;
+    // Match the lockfile-write serializer so both sides of
+    // `compare_metadata` agree on `[tool.uv.sources]` requirements
+    // (#6049 follow-up).
+    let requires_dist_vec: Vec<pep508_rs::Requirement> =
+        to_requirements(requires_dist.requires_dist.iter()).map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Invalid requirement: {e}"),
+            )
+        })?;
 
     let metadata = pypi_metadata::LocalPackageMetadata {
         version,
