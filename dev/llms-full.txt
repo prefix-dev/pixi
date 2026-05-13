@@ -16024,6 +16024,7 @@ The build system specifies how the package can be built. The build system is a t
 - `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
   - Each target can have its own `config` table to override or extend the base configuration for specific platforms.
+- `secrets`: a list of environment variable names whose values are exposed to the build script. The names are read from the manifest; the values are looked up in the host environment at build time and forwarded to the build backend through the recipe (`build.script.secrets`), matching rattler-build's behavior. Useful for passing credentials such as `GH_TOKEN` or registry tokens into the build without recording them in the manifest.
 
 More documentation on the backends can be found in the [build backend documentation](../../build/backends/).
 

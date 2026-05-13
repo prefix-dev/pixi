@@ -6320,6 +6320,7 @@ The build system is a table that can contain the following fields:</p>
 <li>Each target can have its own <code>config</code> table to override or extend the base configuration for specific platforms.</li>
 </ul>
 </li>
+<li><code>secrets</code>: a list of environment variable names whose values are exposed to the build script. The names are read from the manifest; the values are looked up in the host environment at build time and forwarded to the build backend through the recipe (<code>build.script.secrets</code>), matching rattler-build's behavior. Useful for passing credentials such as <code>GH_TOKEN</code> or registry tokens into the build without recording them in the manifest.</li>
 </ul>
 <p>More documentation on the backends can be found in the <a href="../../build/backends/">build backend documentation</a>.</p>
 <h4 id="basic-build-configuration-example">Basic build configuration example<a class="headerlink" href="#basic-build-configuration-example" title="Permanent link">#</a></h4>
