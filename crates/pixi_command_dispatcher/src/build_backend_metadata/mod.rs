@@ -755,8 +755,7 @@ impl BuildBackendMetadataInner {
                 .target_configuration
                 .as_ref(),
         );
-        let backend_spec_hash =
-            BackendSpecHash::from(&checkouts.discovered_backend.backend_spec);
+        let backend_spec_hash = BackendSpecHash::from(&checkouts.discovered_backend.backend_spec);
 
         if skip_cache {
             let BackendSpec::JsonRpc(spec) = &checkouts.discovered_backend.backend_spec;
