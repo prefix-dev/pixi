@@ -12,6 +12,7 @@ use std::sync::Arc;
 use config::RosBackendConfig;
 use fs_err as fs;
 use miette::IntoDiagnostic;
+use pixi_build_backend::compilers::default_compiler_variants;
 use pixi_build_backend::generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams};
 use pixi_build_backend::intermediate_backend::IntermediateBackendInstantiator;
 use pixi_build_backend::tools::BackendIdentifier;
@@ -268,12 +269,7 @@ impl GenerateRecipe for RosGenerator {
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        let mut variants = BTreeMap::new();
-        if host_platform.is_windows() {
-            variants.insert(NormalizedKey::from("c_compiler"), vec!["vs2022".into()]);
-            variants.insert(NormalizedKey::from("cxx_compiler"), vec!["vs2022".into()]);
-        }
-        Ok(variants)
+        Ok(default_compiler_variants(host_platform))
     }
 }
 

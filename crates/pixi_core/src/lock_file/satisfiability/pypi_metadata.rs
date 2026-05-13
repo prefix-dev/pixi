@@ -250,7 +250,7 @@ dependencies = ["numpy"]
 test = ["pytest"]
 dev  = ["foo[test]"]
 "#;
-        let pyproject = uv_pypi_types::PyProjectToml::from_toml(toml).unwrap();
+        let pyproject = uv_pypi_types::PyProjectToml::from_toml(toml, "").unwrap();
         let requires_dist = uv_pypi_types::RequiresDist::from_pyproject_toml(pyproject).unwrap();
         let rendered: Vec<String> = requires_dist
             .requires_dist

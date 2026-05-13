@@ -95,16 +95,19 @@ impl LifecycleKind for GitReporterLifecycle {
     }
 }
 
-/// Dedup key for a git checkout. Keyed on [`RepositoryReference`]
-/// (normalized URL + reference, no `precise`) so callers that differ
-/// only in whether they pre-resolved the commit still dedup.
+/// Dedup key for a git checkout. Keyed on the full [`GitUrl`]: URL,
+/// reference, AND `precise` commit, so a caller asking for a specific
+/// commit doesn't collide with one asking only for the branch.
+/// Stripping `precise` from the key let `checkout_pinned_source(A)`
+/// silently return the branch's HEAD instead of commit `A`
+/// (prefix-dev/pixi#6073).
 #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
-#[display("{}@{}", _0.url.as_url(), _0.reference)]
-pub struct CheckoutGit(RepositoryReference);
+#[display("{}@{}", _0.repository(), _0.reference())]
+pub struct CheckoutGit(GitUrl);
 
 impl CheckoutGit {
     pub fn new(git_url: &GitUrl) -> Self {
-        Self(RepositoryReference::from(git_url))
+        Self(git_url.clone())
     }
 }
 
@@ -119,8 +122,9 @@ impl Key for CheckoutGit {
         let semaphore = data.git_checkout_semaphore().cloned();
         let reporter = data.git_checkout_reporter().cloned();
 
+        let reporter_env = RepositoryReference::from(&self.0);
         let lifecycle =
-            ReporterLifecycle::<GitReporterLifecycle>::queued(reporter.as_deref(), &self.0);
+            ReporterLifecycle::<GitReporterLifecycle>::queued(reporter.as_deref(), &reporter_env);
 
         let _permit = match semaphore.as_ref() {
             Some(s) => Some(
@@ -132,14 +136,12 @@ impl Key for CheckoutGit {
         };
         let _lifecycle = lifecycle.start();
 
-        // `from_reference` auto-fills `precise` from a full-commit
-        // reference, so the resolver skips ref-resolution when it can.
-        let git_url =
-            GitUrl::from_reference(self.0.url.clone().into_url(), self.0.reference.clone());
-
+        // Pass the original `GitUrl` straight through so the resolver
+        // honours `precise` when set (pinned checkout) and advances to
+        // the branch HEAD when not (fresh resolve).
         Arc::new(
             resolver
-                .fetch(git_url, client, cache_dir.into_std_path_buf(), None)
+                .fetch(self.0.clone(), client, cache_dir.into_std_path_buf(), None)
                 .await,
         )
     }
