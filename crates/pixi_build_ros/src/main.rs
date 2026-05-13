@@ -215,8 +215,9 @@ impl GenerateRecipe for RosGenerator {
             }
         }
 
-        generated_recipe.recipe.build.script =
-            Script::from_content(build_script_content).with_env(script_env);
+        generated_recipe.recipe.build.script = Script::from_content(build_script_content)
+            .with_env(script_env)
+            .with_secrets(model.secrets.iter().cloned().collect());
 
         Ok(generated_recipe)
     }

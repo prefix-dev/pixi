@@ -41,8 +41,9 @@ pub struct PackageBuild {
 
     /// Names of environment variables to expose as secrets to the build
     /// script. Values are looked up at build time from the host environment by
-    /// the build backend; only the names live in the manifest.
-    pub secrets: Vec<String>,
+    /// the build backend; only the names live in the manifest. Stored as a
+    /// set since order is not observable.
+    pub secrets: std::collections::BTreeSet<String>,
 }
 
 impl PackageBuild {
@@ -57,7 +58,7 @@ impl PackageBuild {
             target_config: None,
             build_string_prefix: None,
             build_number: None,
-            secrets: Vec::new(),
+            secrets: std::collections::BTreeSet::new(),
         }
     }
 }

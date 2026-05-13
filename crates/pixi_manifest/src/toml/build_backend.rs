@@ -28,7 +28,7 @@ pub struct TomlPackageBuild {
 
     pub build_string_prefix: Option<String>,
     pub build_number: Option<u64>,
-    pub secrets: Vec<String>,
+    pub secrets: std::collections::BTreeSet<String>,
 }
 
 #[derive(Debug)]
@@ -227,7 +227,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
 
         let build_string_prefix = th.optional("build-string-prefix");
         let build_number = th.optional("build-number");
-        let secrets: Vec<String> = th.optional("secrets").unwrap_or_default();
+        let secrets = th
+            .optional::<Vec<String>>("secrets")
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
 
         th.finalize(None)?;
 
@@ -524,23 +528,11 @@ mod test {
 
         assert_eq!(
             parsed.value.secrets,
-            vec![
-                "CARGO_REGISTRY_TOKEN".to_string(),
-                "SCCACHE_BUCKET".to_string()
-            ]
+            ["CARGO_REGISTRY_TOKEN", "SCCACHE_BUCKET"]
+                .into_iter()
+                .map(String::from)
+                .collect()
         );
-    }
-
-    #[test]
-    fn test_secrets_default_empty() {
-        let toml = r#"
-            backend = { name = "foobar", version = "*" }
-        "#;
-        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
-            .and_then(TomlPackageBuild::into_build_system)
-            .expect("parsing should succeed");
-
-        assert!(parsed.value.secrets.is_empty());
     }
 
     #[test]

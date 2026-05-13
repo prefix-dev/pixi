@@ -184,6 +184,13 @@ impl GenerateRecipe for RustGenerator {
         }
         .render();
 
+        let secrets = sccache_secrets
+            .into_iter()
+            .chain(model.secrets.iter().cloned())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
         generated_recipe.recipe.build.script = Script::from_content(build_script)
             .with_env(
                 config_env
@@ -191,7 +198,7 @@ impl GenerateRecipe for RustGenerator {
                     .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
                     .collect(),
             )
-            .with_secrets(sccache_secrets);
+            .with_secrets(secrets);
 
         // Add the input globs from the Cargo metadata provider
         generated_recipe
