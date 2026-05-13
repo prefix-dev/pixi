@@ -315,10 +315,7 @@ impl PypiOptions {
                 .index_strategy
                 .clone()
                 .or_else(|| self.index_strategy.clone()),
-            prerelease_mode: other
-                .prerelease_mode
-                .clone()
-                .or_else(|| self.prerelease_mode.clone()),
+            prerelease_mode: other.prerelease_mode.or(self.prerelease_mode),
             skip_wheel_filename_check: other
                 .skip_wheel_filename_check
                 .or(self.skip_wheel_filename_check),
