@@ -524,7 +524,10 @@ mod test {
 
         assert_eq!(
             parsed.value.secrets,
-            vec!["CARGO_REGISTRY_TOKEN".to_string(), "SCCACHE_BUCKET".to_string()]
+            vec![
+                "CARGO_REGISTRY_TOKEN".to_string(),
+                "SCCACHE_BUCKET".to_string()
+            ]
         );
     }
 
