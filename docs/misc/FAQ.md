@@ -25,10 +25,3 @@ We think the name sparks curiosity and fun, if you don't agree, I'm sorry, but y
     ```powershell
     New-Alias -Name not_pixi -Value pixi
     ```
-
-## Where is `pixi build`
-
-**TL;DR**: It's coming we promise!
-
-`pixi build` is going to be the subcommand that can generate a conda package out of a Pixi workspace.
-This requires a solid build tool which we're creating with [`rattler-build`](https://github.com/prefix-dev/rattler-build) which will be used as a library in pixi.
