@@ -1170,7 +1170,6 @@ mod tests {
             [project.pypi-options]
             extra-index-urls = ["https://pypi.org/simple2"]
 
-            # These are added to the default feature
             [feature.foo.pypi-options]
             extra-index-urls = ["https://pypi.org/simple"]
 
@@ -1180,6 +1179,7 @@ mod tests {
             "##;
 
         let manifest = Workspace::from_str(Path::new("pixi.toml"), contents).unwrap();
+        // The default environment only sees the workspace-level pypi-options.
         assert_eq!(
             manifest
                 .default_environment()
@@ -1191,10 +1191,132 @@ mod tests {
         );
         let foo_opts = manifest.environment("foo").unwrap().pypi_options();
         let bar_opts = manifest.environment("bar").unwrap().pypi_options();
-        // Includes default pypl options, inherited from project
-        // and the one from the feature
+        // Both `foo` and `bar` see the workspace-level extra-index-url merged
+        // with the one from feature `foo`. `bar` uses `no-default-feature` but
+        // the workspace-level options still apply as the always-on base.
         assert_eq!(foo_opts.extra_index_urls.unwrap().len(), 2);
-        assert_eq!(bar_opts.extra_index_urls.unwrap().len(), 1);
+        assert_eq!(bar_opts.extra_index_urls.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_pypi_options_workspace_index_url_no_default_feature() {
+        // Regression test for https://github.com/prefix-dev/pixi/issues/4086:
+        // a workspace-level `index-url` should still apply to environments that
+        // set `no-default-feature = true`.
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [project.pypi-options]
+        index-url = "https://private.example.com/simple/"
+
+        [feature.build]
+
+        [environments]
+        build = { features = ["build"], no-default-feature = true }
+        "#,
+        )
+        .unwrap();
+
+        let build_opts = manifest.environment("build").unwrap().pypi_options();
+        assert_eq!(
+            build_opts.index_url.unwrap().to_string(),
+            "https://private.example.com/simple/"
+        );
+    }
+
+    #[test]
+    fn test_pypi_options_feature_overrides_workspace_index_url() {
+        // A feature-level `index-url` should override the workspace value.
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [project.pypi-options]
+        index-url = "https://workspace.example.com/simple/"
+
+        [feature.custom.pypi-options]
+        index-url = "https://feature.example.com/simple/"
+
+        [environments]
+        custom = ["custom"]
+        "#,
+        )
+        .unwrap();
+
+        let opts = manifest.environment("custom").unwrap().pypi_options();
+        assert_eq!(
+            opts.index_url.unwrap().to_string(),
+            "https://feature.example.com/simple/"
+        );
+    }
+
+    #[test]
+    fn test_pypi_options_two_features_same_index_url_ok() {
+        // Two features in the same environment may set the same `index-url`.
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [feature.a.pypi-options]
+        index-url = "https://shared.example.com/simple/"
+
+        [feature.b.pypi-options]
+        index-url = "https://shared.example.com/simple/"
+
+        [environments]
+        ab = ["a", "b"]
+        "#,
+        )
+        .unwrap();
+
+        let opts = manifest.environment("ab").unwrap().pypi_options();
+        assert_eq!(
+            opts.index_url.unwrap().to_string(),
+            "https://shared.example.com/simple/"
+        );
+    }
+
+    #[test]
+    fn test_pypi_options_two_features_conflicting_index_url_errors() {
+        // Two features in the same environment with different `index-url`s
+        // is a parse-time error.
+        let err = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [feature.a.pypi-options]
+        index-url = "https://a.example.com/simple/"
+
+        [feature.b.pypi-options]
+        index-url = "https://b.example.com/simple/"
+
+        [environments]
+        ab = ["a", "b"]
+        "#,
+        )
+        .unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("a.example.com") || msg.contains("multiple"),
+            "unexpected error message: {msg}",
+        );
     }
 
     #[test]
