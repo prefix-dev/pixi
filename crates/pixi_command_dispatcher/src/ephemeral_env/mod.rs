@@ -41,10 +41,10 @@ use crate::compute_data::{HasGateway, HasGatewayReporter, HasInstantiateBackendR
 use crate::injected_config::{ChannelConfigKey, ToolBuildEnvironmentKey};
 use crate::install_binary::install_binary_records;
 use crate::reporter::{InstantiateBackendReporter, WrappingGatewayReporter};
-use pixi_compute_reporters::OperationId;
 use crate::solve_binary::SolveCondaExt;
 use crate::solve_conda::SolveCondaEnvironmentError;
 use pixi_compute_cache_dirs::CacheDirsExt;
+use pixi_compute_reporters::OperationId;
 
 /// Specification for an ephemeral, binary-only conda environment.
 ///

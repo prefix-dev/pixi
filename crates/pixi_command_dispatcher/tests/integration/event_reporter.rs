@@ -7,9 +7,9 @@ use futures::{Stream, StreamExt};
 use pixi_build_discovery::JsonRpcBackendSpec;
 use pixi_command_dispatcher::{
     BackendSourceBuildSpec, BuildBackendMetadataInner, CondaSolveReporter, GatewayReporter,
-    GitCheckoutReporter, InstallPixiEnvironmentSpec, PixiInstallReporter,
-    PixiSolveEnvironmentSpec, PixiSolveReporter, SolveCondaEnvironmentSpec,
-    SourceMetadataReporterSpec, SourceRecordReporterSpec, UrlCheckoutReporter,
+    GitCheckoutReporter, InstallPixiEnvironmentSpec, PixiInstallReporter, PixiSolveEnvironmentSpec,
+    PixiSolveReporter, SolveCondaEnvironmentSpec, SourceMetadataReporterSpec,
+    SourceRecordReporterSpec, UrlCheckoutReporter,
     reporter::{
         BackendSourceBuildReporter, BuildBackendMetadataReporter, InstantiateBackendReporter,
         SourceMetadataReporter, SourceRecordReporter,
