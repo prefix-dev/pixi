@@ -29,8 +29,11 @@ use thiserror::Error;
 use tracing::instrument;
 
 use crate::{
-    SolveCondaEnvironmentSpec, SourceMetadata, compute_data::HasGateway,
-    solve_binary::SolveCondaExt, solve_conda::SolveCondaEnvironmentError,
+    SolveCondaEnvironmentSpec, SourceMetadata,
+    compute_data::{HasCondaSolveReporter, HasGateway},
+    reporter::WrappingGatewayReporter,
+    solve_binary::SolveCondaExt,
+    solve_conda::SolveCondaEnvironmentError,
 };
 
 /// Input to [`SolveCondaKey`]. All fields participate in the Key's
@@ -234,7 +237,11 @@ impl Key for SolveCondaKey {
         // Clone the gateway handle so we don't hold an immutable
         // borrow on `ctx` across the subsequent mutable-borrow solve.
         let gateway = ctx.global_data().gateway().clone();
-        let binary_repodata = gateway
+        let gateway_reporter = ctx
+            .global_data()
+            .conda_solve_reporter()
+            .and_then(|r| r.create_gateway_reporter());
+        let mut query = gateway
             .query(
                 spec.channels.iter().cloned().map(Channel::from_url),
                 [spec.platform, Platform::NoArch],
@@ -244,8 +251,11 @@ impl Key for SolveCondaKey {
                     .chain(source_repodata_fetch_specs)
                     .chain(dev_source_fetch_specs),
             )
-            .recursive(true)
-            .await?;
+            .recursive(true);
+        if let Some(reporter) = gateway_reporter {
+            query = query.with_reporter(WrappingGatewayReporter(reporter));
+        }
+        let binary_repodata = query.await?;
 
         // Build the full solve spec and hand off to ctx.solve_conda
         // (semaphore + reporter lifecycle).

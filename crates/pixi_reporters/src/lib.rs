@@ -37,9 +37,6 @@ pub struct TopLevelProgress {
     /// `OperationId` → bar slot in `conda_solve_reporter`. Lets
     /// `on_started` / `on_finished` find the bar created at `on_queued`.
     solve_bars: Mutex<HashMap<OperationId, usize>>,
-    // Held so on_clear can wipe it; the gateway integration that would
-    // populate it currently goes through a different code path, so the
-    // bar is effectively a placeholder for future wiring.
     repodata_reporter: RepodataReporter,
     sync_reporter: SyncReporter,
 }
@@ -217,5 +214,9 @@ impl pixi_command_dispatcher::CondaSolveReporter for TopLevelProgress {
         if let Some(bar) = self.solve_bars.lock().remove(&solve_id) {
             self.conda_solve_reporter.finish(bar);
         }
+    }
+
+    fn create_gateway_reporter(&self) -> Option<Box<dyn rattler_repodata_gateway::Reporter>> {
+        Some(Box::new(self.repodata_reporter.clone()))
     }
 }

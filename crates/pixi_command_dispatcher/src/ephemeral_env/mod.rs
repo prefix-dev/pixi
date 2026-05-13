@@ -37,10 +37,10 @@ use xxhash_rust::xxh3::Xxh3;
 
 use crate::SolveCondaEnvironmentSpec;
 use crate::cache::markers::BuildBackendsDir;
-use crate::compute_data::{HasGateway, HasInstantiateBackendReporter};
+use crate::compute_data::{HasCondaSolveReporter, HasGateway, HasInstantiateBackendReporter};
 use crate::injected_config::{ChannelConfigKey, ToolBuildEnvironmentKey};
 use crate::install_binary::install_binary_records;
-use crate::reporter::InstantiateBackendReporter;
+use crate::reporter::{InstantiateBackendReporter, WrappingGatewayReporter};
 use crate::solve_binary::SolveCondaExt;
 use crate::solve_conda::SolveCondaEnvironmentError;
 use pixi_compute_cache_dirs::CacheDirsExt;
@@ -414,6 +414,10 @@ async fn fetch_binary_repodata(
 
     let channel_config = ctx.compute(&ChannelConfigKey).await;
     let gateway = ctx.global_data().gateway().clone();
+    let gateway_reporter = ctx
+        .global_data()
+        .conda_solve_reporter()
+        .and_then(|r| r.create_gateway_reporter());
 
     let match_specs = binary_specs
         .clone()
@@ -425,13 +429,17 @@ async fn fetch_binary_repodata(
         .into_match_specs(&channel_config)
         .map_err(|e| EphemeralEnvError::SpecConversion(Arc::new(e)))?;
 
-    gateway
+    let mut query = gateway
         .query(
             spec.channels.iter().cloned().map(Channel::from_url),
             [build_env.host_platform, Platform::NoArch],
             match_specs.into_iter().chain(constraint_specs),
         )
-        .recursive(true)
+        .recursive(true);
+    if let Some(reporter) = gateway_reporter {
+        query = query.with_reporter(WrappingGatewayReporter(reporter));
+    }
+    query
         .await
         .map_err(|e| EphemeralEnvError::Gateway(Arc::new(e)))
 }

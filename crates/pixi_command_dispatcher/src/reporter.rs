@@ -77,6 +77,25 @@ pub trait CondaSolveReporter: Send + Sync {
     fn on_queued(&self, env: &SolveCondaEnvironmentSpec) -> OperationId;
     fn on_started(&self, solve_id: OperationId);
     fn on_finished(&self, solve_id: OperationId);
+
+    /// Build a per-call rattler gateway reporter that reports repodata
+    /// fetch progress for the gateway query performed as part of this
+    /// solve. `None` skips repodata-fetch progress reporting.
+    fn create_gateway_reporter(&self) -> Option<Box<dyn rattler_repodata_gateway::Reporter>> {
+        None
+    }
+}
+
+/// Adapts a `Box<dyn rattler_repodata_gateway::Reporter>` returned by
+/// [`CondaSolveReporter::create_gateway_reporter`] into the
+/// `impl Reporter + 'static` value expected by
+/// `rattler_repodata_gateway::Query::with_reporter`.
+pub struct WrappingGatewayReporter(pub Box<dyn rattler_repodata_gateway::Reporter>);
+
+impl rattler_repodata_gateway::Reporter for WrappingGatewayReporter {
+    fn download_reporter(&self) -> Option<&dyn rattler_repodata_gateway::DownloadReporter> {
+        self.0.download_reporter()
+    }
 }
 
 /// Reporter for the compute-engine [`InstantiateBackendKey`](crate::InstantiateBackendKey).
