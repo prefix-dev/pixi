@@ -149,7 +149,14 @@ pub(crate) fn parse_variant(
     if key.is_empty() {
         return Err(format!("invalid KEY=VALUE: empty key in `{s}`").into());
     }
-    let values: Vec<String> = s[pos + 1..]
+    let raw_value = &s[pos + 1..];
+    if raw_value.contains('=') {
+        return Err(format!(
+            "invalid KEY=VALUE: value in `{s}` contains an `=`; values cannot contain `=`",
+        )
+        .into());
+    }
+    let values: Vec<String> = raw_value
         .split(',')
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
@@ -160,13 +167,9 @@ pub(crate) fn parse_variant(
     Ok((key, values))
 }
 
-/// Overlay CLI `--variant` overrides on top of the workspace variants.
-/// Multiple `--variant` flags with the same key accumulate values, but as a
-/// group they replace the matching key from the workspace.
-fn overlay_cli_variants(
-    workspace: &mut BTreeMap<String, Vec<VariantValue>>,
-    cli: &[(String, Vec<String>)],
-) {
+/// Build a `BTreeMap` from CLI `--variant` overrides. Repeated flags with the
+/// same key accumulate values.
+fn cli_variants_map(cli: &[(String, Vec<String>)]) -> BTreeMap<String, Vec<VariantValue>> {
     let mut grouped: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
     for (key, values) in cli {
         grouped
@@ -174,7 +177,21 @@ fn overlay_cli_variants(
             .or_default()
             .extend(values.iter().cloned().map(VariantValue::from));
     }
-    workspace.extend(grouped);
+    grouped
+}
+
+/// Resolve CLI `--variant-config` paths against the given working directory.
+fn resolve_variant_config_paths(paths: &[PathBuf], cwd: &Path) -> Vec<PathBuf> {
+    paths
+        .iter()
+        .map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                cwd.join(path)
+            }
+        })
+        .collect()
 }
 
 /// Validate that the full path of package manifest exists and is a supported
@@ -352,21 +369,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         mut variant_files,
     } = workspace.variants(args.target_platform)?;
 
-    overlay_cli_variants(&mut variant_configuration, &args.variant);
+    // Overlay CLI `--variant KEY=VAL[,VAL...]` overrides on top of the workspace
+    // variants. Multiple `--variant` flags with the same key accumulate values,
+    // but as a group they replace any matching key from the workspace.
+    variant_configuration.extend(cli_variants_map(&args.variant));
 
     // Append CLI-provided variant config files. Relative paths are resolved
     // against the current working directory so callers can pass `-m variants.yaml`
     // from wherever they invoke pixi.
     if !args.variant_config.is_empty() {
         let cwd = std::env::current_dir().into_diagnostic()?;
-        for path in &args.variant_config {
-            let resolved = if path.is_absolute() {
-                path.clone()
-            } else {
-                cwd.join(path)
-            };
-            variant_files.push(resolved);
-        }
+        variant_files.extend(resolve_variant_config_paths(&args.variant_config, &cwd));
     }
 
     let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
@@ -1047,7 +1060,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_variant_accepts_comma_list_and_first_equals_splits() {
+    fn parse_variant_accepts_single_and_comma_list() {
         assert_eq!(
             parse_variant("python=3.12").unwrap(),
             ("python".into(), vec!["3.12".into()]),
@@ -1056,21 +1069,17 @@ mod tests {
             parse_variant("cuda-version=12.8,13.0").unwrap(),
             ("cuda-version".into(), vec!["12.8".into(), "13.0".into()]),
         );
-        assert_eq!(
-            parse_variant("expr=a=b").unwrap(),
-            ("expr".into(), vec!["a=b".into()]),
-        );
     }
 
     #[test]
     fn parse_variant_rejects_malformed_input() {
-        for s in ["python", "=3.12", "python=", "python=,,"] {
+        for s in ["python", "=3.12", "python=", "python=,,", "expr=a=b"] {
             assert!(parse_variant(s).is_err(), "expected error for {s:?}");
         }
     }
 
     #[test]
-    fn overlay_cli_variants_replaces_workspace_key_and_accumulates_repeats() {
+    fn cli_variants_map_replaces_workspace_key_and_accumulates_repeats() {
         let mut variants = BTreeMap::from([
             (
                 "python".into(),
@@ -1078,13 +1087,10 @@ mod tests {
             ),
             ("cuda-version".into(), vec!["12.8".into(), "13.0".into()]),
         ]);
-        overlay_cli_variants(
-            &mut variants,
-            &[
-                ("python".into(), vec!["3.11".into()]),
-                ("python".into(), vec!["3.12".into()]),
-            ],
-        );
+        variants.extend(cli_variants_map(&[
+            ("python".into(), vec!["3.11".into()]),
+            ("python".into(), vec!["3.12".into()]),
+        ]));
 
         assert_eq!(
             variants.get("python").unwrap(),
@@ -1094,6 +1100,27 @@ mod tests {
         assert_eq!(
             variants.get("cuda-version").unwrap(),
             &vec![VariantValue::from("12.8"), VariantValue::from("13.0")],
+        );
+    }
+
+    #[test]
+    fn resolve_variant_config_paths_anchors_relatives_to_cwd() {
+        let cwd = Path::new("/work/repo");
+        let resolved = resolve_variant_config_paths(
+            &[
+                PathBuf::from("variants.yaml"),
+                PathBuf::from("ci/variants.yaml"),
+                PathBuf::from("/abs/variants.yaml"),
+            ],
+            cwd,
+        );
+        assert_eq!(
+            resolved,
+            vec![
+                PathBuf::from("/work/repo/variants.yaml"),
+                PathBuf::from("/work/repo/ci/variants.yaml"),
+                PathBuf::from("/abs/variants.yaml"),
+            ],
         );
     }
 }
