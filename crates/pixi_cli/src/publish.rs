@@ -30,7 +30,7 @@ use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::SourceLocationSpec;
-use pixi_utils::variants::VariantConfig;
+use pixi_utils::variants::{VariantConfig, VariantValue};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::AuthenticationStorage;
 use rattler_package_streaming::seek::read_package_file;
@@ -116,6 +116,48 @@ pub struct Args {
     /// Generate sigstore attestation (prefix.dev only)
     #[arg(long)]
     pub generate_attestation: bool,
+
+    /// Override a build variant key with one or more values.
+    ///
+    /// Use `--variant KEY=VALUE` to build only that variant, or
+    /// `--variant KEY=VAL1,VAL2,...` to constrain a variant to a subset of
+    /// values. Repeat the flag for multiple keys. Values supplied here
+    /// replace any matching key from the workspace `build-variants` and
+    /// any `--variant-config` files.
+    ///
+    /// Example: `pixi publish --variant python=3.12 --variant cuda-version=12.8,13.0`.
+    #[arg(long = "variant", value_parser = parse_variant, value_name = "KEY=VALUES")]
+    pub variant: Vec<(String, Vec<String>)>,
+
+    /// Path to an additional variant configuration YAML file.
+    ///
+    /// Mirrors rattler-build's `--variant-config/-m`. Repeat to add
+    /// multiple files. Paths are appended after the workspace-level
+    /// `build-variants-files`.
+    #[arg(long = "variant-config", short = 'm', value_name = "FILE")]
+    pub variant_config: Vec<PathBuf>,
+}
+
+/// Parse a `KEY=VAL[,VAL...]` variant override.
+pub(crate) fn parse_variant(
+    s: &str,
+) -> Result<(String, Vec<String>), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("invalid KEY=VALUE: no `=` found in `{s}`"))?;
+    let key = s[..pos].trim().to_string();
+    if key.is_empty() {
+        return Err(format!("invalid KEY=VALUE: empty key in `{s}`").into());
+    }
+    let values: Vec<String> = s[pos + 1..]
+        .split(',')
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .collect();
+    if values.is_empty() {
+        return Err(format!("invalid KEY=VALUE: empty value in `{s}`").into());
+    }
+    Ok((key, values))
 }
 
 /// Validate that the full path of package manifest exists and is a supported
@@ -289,9 +331,38 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .finish();
 
     let VariantConfig {
-        variant_configuration,
-        variant_files,
+        mut variant_configuration,
+        mut variant_files,
     } = workspace.variants(args.target_platform)?;
+
+    // Overlay CLI `--variant KEY=VAL[,VAL...]` overrides on top of the workspace
+    // variants. Multiple `--variant` flags with the same key accumulate values,
+    // but as a group they replace any matching key from the workspace.
+    let mut cli_variants: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
+    for (key, values) in &args.variant {
+        cli_variants
+            .entry(key.clone())
+            .or_default()
+            .extend(values.iter().cloned().map(VariantValue::from));
+    }
+    for (key, values) in cli_variants {
+        variant_configuration.insert(key, values);
+    }
+
+    // Append CLI-provided variant config files. Relative paths are resolved
+    // against the current working directory so callers can pass `-m variants.yaml`
+    // from wherever they invoke pixi.
+    if !args.variant_config.is_empty() {
+        let cwd = std::env::current_dir().into_diagnostic()?;
+        for path in &args.variant_config {
+            let resolved = if path.is_absolute() {
+                path.clone()
+            } else {
+                cwd.join(path)
+            };
+            variant_files.push(resolved);
+        }
+    }
 
     let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
@@ -964,4 +1035,127 @@ async fn upload_to_local_filesystem_channel(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_variant_single_value() {
+        let (key, values) = parse_variant("python=3.12").unwrap();
+        assert_eq!(key, "python");
+        assert_eq!(values, vec!["3.12"]);
+    }
+
+    #[test]
+    fn parse_variant_comma_separated() {
+        let (key, values) = parse_variant("cuda-version=12.8,13.0").unwrap();
+        assert_eq!(key, "cuda-version");
+        assert_eq!(values, vec!["12.8", "13.0"]);
+    }
+
+    #[test]
+    fn parse_variant_trims_whitespace() {
+        let (key, values) = parse_variant("python = 3.11 , 3.12 ").unwrap();
+        assert_eq!(key, "python");
+        assert_eq!(values, vec!["3.11", "3.12"]);
+    }
+
+    #[test]
+    fn parse_variant_value_with_equals() {
+        // Only the first `=` splits key from value.
+        let (key, values) = parse_variant("expr=a=b").unwrap();
+        assert_eq!(key, "expr");
+        assert_eq!(values, vec!["a=b"]);
+    }
+
+    #[test]
+    fn parse_variant_missing_equals_errors() {
+        assert!(parse_variant("python").is_err());
+    }
+
+    #[test]
+    fn parse_variant_empty_key_errors() {
+        assert!(parse_variant("=3.12").is_err());
+    }
+
+    #[test]
+    fn parse_variant_empty_value_errors() {
+        assert!(parse_variant("python=").is_err());
+        assert!(parse_variant("python=,,").is_err());
+    }
+
+    /// Mirrors the merge logic in `execute()` so changes to the precedence
+    /// rules stay covered by a unit test.
+    fn overlay_cli_variants(
+        mut workspace: BTreeMap<String, Vec<VariantValue>>,
+        cli: &[(String, Vec<String>)],
+    ) -> BTreeMap<String, Vec<VariantValue>> {
+        let mut cli_variants: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
+        for (key, values) in cli {
+            cli_variants
+                .entry(key.clone())
+                .or_default()
+                .extend(values.iter().cloned().map(VariantValue::from));
+        }
+        for (key, values) in cli_variants {
+            workspace.insert(key, values);
+        }
+        workspace
+    }
+
+    #[test]
+    fn cli_variant_replaces_workspace_key() {
+        let workspace = BTreeMap::from([(
+            "python".to_string(),
+            vec![
+                VariantValue::from("3.10"),
+                VariantValue::from("3.11"),
+                VariantValue::from("3.12"),
+            ],
+        )]);
+        let cli = vec![("python".to_string(), vec!["3.12".to_string()])];
+        let merged = overlay_cli_variants(workspace, &cli);
+        assert_eq!(
+            merged.get("python").unwrap(),
+            &vec![VariantValue::from("3.12")]
+        );
+    }
+
+    #[test]
+    fn cli_variant_leaves_other_keys_alone() {
+        let workspace = BTreeMap::from([
+            ("python".to_string(), vec![VariantValue::from("3.12")]),
+            (
+                "cuda-version".to_string(),
+                vec![VariantValue::from("12.8"), VariantValue::from("13.0")],
+            ),
+        ]);
+        let cli = vec![("python".to_string(), vec!["3.11".to_string()])];
+        let merged = overlay_cli_variants(workspace, &cli);
+        assert_eq!(
+            merged.get("python").unwrap(),
+            &vec![VariantValue::from("3.11")]
+        );
+        assert_eq!(
+            merged.get("cuda-version").unwrap(),
+            &vec![VariantValue::from("12.8"), VariantValue::from("13.0")]
+        );
+    }
+
+    #[test]
+    fn repeated_cli_variant_accumulates_values_for_same_key() {
+        let workspace =
+            BTreeMap::from([("python".to_string(), vec![VariantValue::from("3.10")])]);
+        let cli = vec![
+            ("python".to_string(), vec!["3.11".to_string()]),
+            ("python".to_string(), vec!["3.12".to_string()]),
+        ];
+        let merged = overlay_cli_variants(workspace, &cli);
+        assert_eq!(
+            merged.get("python").unwrap(),
+            &vec![VariantValue::from("3.11"), VariantValue::from("3.12")]
+        );
+    }
 }
