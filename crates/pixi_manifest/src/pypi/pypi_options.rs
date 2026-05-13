@@ -307,7 +307,7 @@ impl PypiOptions {
     /// - `dependency_overrides`: `other` keys override `self` keys.
     ///
     /// Unlike [`Self::union`], this never errors on conflicting single-value
-    /// fields — `other` simply overrides `self`.
+    /// fields; `other` simply overrides `self`.
     pub fn overlay(&self, other: &PypiOptions) -> PypiOptions {
         PypiOptions {
             index_url: other.index_url.clone().or_else(|| self.index_url.clone()),

@@ -1312,10 +1312,9 @@ mod tests {
         "#,
         )
         .unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("a.example.com") || msg.contains("multiple"),
-            "unexpected error message: {msg}",
+        assert_snapshot!(
+            err,
+            @"multiple primary pypi indexes are not supported, found both https://a.example.com/simple/ and https://b.example.com/simple/ across multiple pypi options"
         );
     }
 
