@@ -231,8 +231,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
         let build_string_prefix = th.optional("build-string-prefix");
         let build_number = th.optional("build-number");
         let secrets = th
-            .optional::<BTreeSet<String>>("secrets")
-            .unwrap_or_default();
+            .optional::<Vec<String>>("secrets")
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
 
         th.finalize(None)?;
 
