@@ -5,7 +5,7 @@ use std::{
 
 use indexmap::IndexMap;
 use pixi_spec::{SourceLocationSpec, TomlLocationSpec, TomlSpec};
-use pixi_toml::{Same, TomlFromStr, TomlIndexMap, TomlWith};
+use pixi_toml::{Same, TomlBTreeSet, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
 use std::borrow::Cow;
 use toml_span::{DeserError, Error, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
@@ -231,10 +231,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
         let build_string_prefix = th.optional("build-string-prefix");
         let build_number = th.optional("build-number");
         let secrets = th
-            .optional::<Vec<String>>("secrets")
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+            .optional::<TomlBTreeSet<String>>("secrets")
+            .map(TomlBTreeSet::into_inner)
+            .unwrap_or_default();
 
         th.finalize(None)?;
 
