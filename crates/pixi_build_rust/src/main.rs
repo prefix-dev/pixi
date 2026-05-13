@@ -124,7 +124,7 @@ impl GenerateRecipe for RustGenerator {
             .chain(system_env_vars.clone())
             .collect();
 
-        let mut sccache_secrets = Vec::default();
+        let mut sccache_secrets: BTreeSet<String> = BTreeSet::new();
 
         // Verify if user has set any sccache environment variables
         if sccache_envs(&all_env_vars).is_some() {
@@ -185,12 +185,8 @@ impl GenerateRecipe for RustGenerator {
         }
         .render();
 
-        let secrets = sccache_secrets
-            .into_iter()
-            .chain(model.secrets.iter().cloned())
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .collect();
+        sccache_secrets.extend(model.secrets.iter().cloned());
+        let secrets = sccache_secrets.into_iter().collect();
 
         generated_recipe.recipe.build.script = Script::from_content(build_script)
             .with_env(

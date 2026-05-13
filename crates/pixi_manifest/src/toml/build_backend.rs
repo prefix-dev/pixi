@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, sync::Once};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Once,
+};
 
 use indexmap::IndexMap;
 use pixi_spec::{SourceLocationSpec, TomlLocationSpec, TomlSpec};
@@ -28,7 +31,7 @@ pub struct TomlPackageBuild {
 
     pub build_string_prefix: Option<String>,
     pub build_number: Option<u64>,
-    pub secrets: std::collections::BTreeSet<String>,
+    pub secrets: BTreeSet<String>,
 }
 
 #[derive(Debug)]
@@ -228,10 +231,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
         let build_string_prefix = th.optional("build-string-prefix");
         let build_number = th.optional("build-number");
         let secrets = th
-            .optional::<Vec<String>>("secrets")
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+            .optional::<BTreeSet<String>>("secrets")
+            .unwrap_or_default();
 
         th.finalize(None)?;
 
