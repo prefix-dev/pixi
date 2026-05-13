@@ -160,6 +160,23 @@ pub(crate) fn parse_variant(
     Ok((key, values))
 }
 
+/// Overlay CLI `--variant` overrides on top of the workspace variants.
+/// Multiple `--variant` flags with the same key accumulate values, but as a
+/// group they replace the matching key from the workspace.
+fn overlay_cli_variants(
+    workspace: &mut BTreeMap<String, Vec<VariantValue>>,
+    cli: &[(String, Vec<String>)],
+) {
+    let mut grouped: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
+    for (key, values) in cli {
+        grouped
+            .entry(key.clone())
+            .or_default()
+            .extend(values.iter().cloned().map(VariantValue::from));
+    }
+    workspace.extend(grouped);
+}
+
 /// Validate that the full path of package manifest exists and is a supported
 /// format. Directories are allowed (for discovery), and specific manifest files
 /// must be supported formats.
@@ -335,19 +352,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         mut variant_files,
     } = workspace.variants(args.target_platform)?;
 
-    // Overlay CLI `--variant KEY=VAL[,VAL...]` overrides on top of the workspace
-    // variants. Multiple `--variant` flags with the same key accumulate values,
-    // but as a group they replace any matching key from the workspace.
-    let mut cli_variants: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
-    for (key, values) in &args.variant {
-        cli_variants
-            .entry(key.clone())
-            .or_default()
-            .extend(values.iter().cloned().map(VariantValue::from));
-    }
-    for (key, values) in cli_variants {
-        variant_configuration.insert(key, values);
-    }
+    overlay_cli_variants(&mut variant_configuration, &args.variant);
 
     // Append CLI-provided variant config files. Relative paths are resolved
     // against the current working directory so callers can pass `-m variants.yaml`
@@ -1042,120 +1047,53 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_variant_single_value() {
-        let (key, values) = parse_variant("python=3.12").unwrap();
-        assert_eq!(key, "python");
-        assert_eq!(values, vec!["3.12"]);
-    }
-
-    #[test]
-    fn parse_variant_comma_separated() {
-        let (key, values) = parse_variant("cuda-version=12.8,13.0").unwrap();
-        assert_eq!(key, "cuda-version");
-        assert_eq!(values, vec!["12.8", "13.0"]);
-    }
-
-    #[test]
-    fn parse_variant_trims_whitespace() {
-        let (key, values) = parse_variant("python = 3.11 , 3.12 ").unwrap();
-        assert_eq!(key, "python");
-        assert_eq!(values, vec!["3.11", "3.12"]);
-    }
-
-    #[test]
-    fn parse_variant_value_with_equals() {
-        // Only the first `=` splits key from value.
-        let (key, values) = parse_variant("expr=a=b").unwrap();
-        assert_eq!(key, "expr");
-        assert_eq!(values, vec!["a=b"]);
-    }
-
-    #[test]
-    fn parse_variant_missing_equals_errors() {
-        assert!(parse_variant("python").is_err());
-    }
-
-    #[test]
-    fn parse_variant_empty_key_errors() {
-        assert!(parse_variant("=3.12").is_err());
-    }
-
-    #[test]
-    fn parse_variant_empty_value_errors() {
-        assert!(parse_variant("python=").is_err());
-        assert!(parse_variant("python=,,").is_err());
-    }
-
-    /// Mirrors the merge logic in `execute()` so changes to the precedence
-    /// rules stay covered by a unit test.
-    fn overlay_cli_variants(
-        mut workspace: BTreeMap<String, Vec<VariantValue>>,
-        cli: &[(String, Vec<String>)],
-    ) -> BTreeMap<String, Vec<VariantValue>> {
-        let mut cli_variants: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
-        for (key, values) in cli {
-            cli_variants
-                .entry(key.clone())
-                .or_default()
-                .extend(values.iter().cloned().map(VariantValue::from));
-        }
-        for (key, values) in cli_variants {
-            workspace.insert(key, values);
-        }
-        workspace
-    }
-
-    #[test]
-    fn cli_variant_replaces_workspace_key() {
-        let workspace = BTreeMap::from([(
-            "python".to_string(),
-            vec![
-                VariantValue::from("3.10"),
-                VariantValue::from("3.11"),
-                VariantValue::from("3.12"),
-            ],
-        )]);
-        let cli = vec![("python".to_string(), vec!["3.12".to_string()])];
-        let merged = overlay_cli_variants(workspace, &cli);
+    fn parse_variant_accepts_comma_list_and_first_equals_splits() {
         assert_eq!(
-            merged.get("python").unwrap(),
-            &vec![VariantValue::from("3.12")]
+            parse_variant("python=3.12").unwrap(),
+            ("python".into(), vec!["3.12".into()]),
+        );
+        assert_eq!(
+            parse_variant("cuda-version=12.8,13.0").unwrap(),
+            ("cuda-version".into(), vec!["12.8".into(), "13.0".into()]),
+        );
+        assert_eq!(
+            parse_variant("expr=a=b").unwrap(),
+            ("expr".into(), vec!["a=b".into()]),
         );
     }
 
     #[test]
-    fn cli_variant_leaves_other_keys_alone() {
-        let workspace = BTreeMap::from([
-            ("python".to_string(), vec![VariantValue::from("3.12")]),
+    fn parse_variant_rejects_malformed_input() {
+        for s in ["python", "=3.12", "python=", "python=,,"] {
+            assert!(parse_variant(s).is_err(), "expected error for {s:?}");
+        }
+    }
+
+    #[test]
+    fn overlay_cli_variants_replaces_workspace_key_and_accumulates_repeats() {
+        let mut variants = BTreeMap::from([
             (
-                "cuda-version".to_string(),
-                vec![VariantValue::from("12.8"), VariantValue::from("13.0")],
+                "python".into(),
+                vec!["3.10".into(), "3.11".into(), "3.12".into()],
             ),
+            ("cuda-version".into(), vec!["12.8".into(), "13.0".into()]),
         ]);
-        let cli = vec![("python".to_string(), vec!["3.11".to_string()])];
-        let merged = overlay_cli_variants(workspace, &cli);
-        assert_eq!(
-            merged.get("python").unwrap(),
-            &vec![VariantValue::from("3.11")]
+        overlay_cli_variants(
+            &mut variants,
+            &[
+                ("python".into(), vec!["3.11".into()]),
+                ("python".into(), vec!["3.12".into()]),
+            ],
         );
-        assert_eq!(
-            merged.get("cuda-version").unwrap(),
-            &vec![VariantValue::from("12.8"), VariantValue::from("13.0")]
-        );
-    }
 
-    #[test]
-    fn repeated_cli_variant_accumulates_values_for_same_key() {
-        let workspace =
-            BTreeMap::from([("python".to_string(), vec![VariantValue::from("3.10")])]);
-        let cli = vec![
-            ("python".to_string(), vec!["3.11".to_string()]),
-            ("python".to_string(), vec!["3.12".to_string()]),
-        ];
-        let merged = overlay_cli_variants(workspace, &cli);
         assert_eq!(
-            merged.get("python").unwrap(),
-            &vec![VariantValue::from("3.11"), VariantValue::from("3.12")]
+            variants.get("python").unwrap(),
+            &vec![VariantValue::from("3.11"), VariantValue::from("3.12")],
+        );
+        // Workspace keys not mentioned by the CLI must be left untouched.
+        assert_eq!(
+            variants.get("cuda-version").unwrap(),
+            &vec![VariantValue::from("12.8"), VariantValue::from("13.0")],
         );
     }
 }
