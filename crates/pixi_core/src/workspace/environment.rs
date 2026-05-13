@@ -1160,14 +1160,14 @@ mod tests {
     }
 
     #[test]
-    fn test_pypi_options_project_and_default_feature() {
+    fn test_pypi_options_workspace_and_default_feature() {
         let contents = r##"
-            [project]
+            [workspace]
             name = "foobar"
             channels = ["conda-forge"]
             platforms = ["osx-64", "linux-64", "win-64"]
 
-            [project.pypi-options]
+            [workspace.pypi-options]
             extra-index-urls = ["https://pypi.org/simple2"]
 
             [feature.foo.pypi-options]
@@ -1206,12 +1206,12 @@ mod tests {
         let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
-        [project]
+        [workspace]
         name = "foobar"
         channels = ["conda-forge"]
         platforms = ["linux-64"]
 
-        [project.pypi-options]
+        [workspace.pypi-options]
         index-url = "https://private.example.com/simple/"
 
         [feature.build]
@@ -1235,12 +1235,12 @@ mod tests {
         let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
-        [project]
+        [workspace]
         name = "foobar"
         channels = ["conda-forge"]
         platforms = ["linux-64"]
 
-        [project.pypi-options]
+        [workspace.pypi-options]
         index-url = "https://workspace.example.com/simple/"
 
         [feature.custom.pypi-options]
@@ -1265,7 +1265,7 @@ mod tests {
         let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
-        [project]
+        [workspace]
         name = "foobar"
         channels = ["conda-forge"]
         platforms = ["linux-64"]
@@ -1296,7 +1296,7 @@ mod tests {
         let err = Workspace::from_str(
             Path::new("pixi.toml"),
             r#"
-        [project]
+        [workspace]
         name = "foobar"
         channels = ["conda-forge"]
         platforms = ["linux-64"]
