@@ -30,11 +30,12 @@ use tracing::instrument;
 
 use crate::{
     SolveCondaEnvironmentSpec, SourceMetadata,
-    compute_data::{HasCondaSolveReporter, HasGateway},
+    compute_data::{HasGateway, HasGatewayReporter},
     reporter::WrappingGatewayReporter,
     solve_binary::SolveCondaExt,
     solve_conda::SolveCondaEnvironmentError,
 };
+use pixi_compute_reporters::OperationId;
 
 /// Input to [`SolveCondaKey`]. All fields participate in the Key's
 /// identity so two callers with equal specs share one compute.
@@ -237,10 +238,15 @@ impl Key for SolveCondaKey {
         // Clone the gateway handle so we don't hold an immutable
         // borrow on `ctx` across the subsequent mutable-borrow solve.
         let gateway = ctx.global_data().gateway().clone();
-        let gateway_reporter = ctx
-            .global_data()
-            .conda_solve_reporter()
-            .and_then(|r| r.create_gateway_reporter());
+        // `solve-conda` runs inside the parent operation's
+        // `scope_active` (e.g. the pixi-solve or backend-instantiate
+        // op that triggered it), so `OperationId::current()` gives
+        // the already-started op the gateway query belongs to.
+        let gateway_reporter = OperationId::current().and_then(|op_id| {
+            ctx.global_data()
+                .gateway_reporter()
+                .and_then(|r| r.create_gateway_reporter(op_id))
+        });
         let mut query = gateway
             .query(
                 spec.channels.iter().cloned().map(Channel::from_url),

@@ -37,10 +37,11 @@ use xxhash_rust::xxh3::Xxh3;
 
 use crate::SolveCondaEnvironmentSpec;
 use crate::cache::markers::BuildBackendsDir;
-use crate::compute_data::{HasCondaSolveReporter, HasGateway, HasInstantiateBackendReporter};
+use crate::compute_data::{HasGateway, HasGatewayReporter, HasInstantiateBackendReporter};
 use crate::injected_config::{ChannelConfigKey, ToolBuildEnvironmentKey};
 use crate::install_binary::install_binary_records;
 use crate::reporter::{InstantiateBackendReporter, WrappingGatewayReporter};
+use pixi_compute_reporters::OperationId;
 use crate::solve_binary::SolveCondaExt;
 use crate::solve_conda::SolveCondaEnvironmentError;
 use pixi_compute_cache_dirs::CacheDirsExt;
@@ -414,10 +415,13 @@ async fn fetch_binary_repodata(
 
     let channel_config = ctx.compute(&ChannelConfigKey).await;
     let gateway = ctx.global_data().gateway().clone();
-    let gateway_reporter = ctx
-        .global_data()
-        .conda_solve_reporter()
-        .and_then(|r| r.create_gateway_reporter());
+    // `fetch_binary_repodata` is invoked from `EphemeralEnvKey::compute`,
+    // which runs inside the backend-instantiate op's `scope_active`.
+    let gateway_reporter = OperationId::current().and_then(|op_id| {
+        ctx.global_data()
+            .gateway_reporter()
+            .and_then(|r| r.create_gateway_reporter(op_id))
+    });
 
     let match_specs = binary_specs
         .clone()

@@ -114,6 +114,7 @@ impl TopLevelProgress {
             .with_instantiate_backend_reporter(self.clone())
             .with_git_checkout_reporter(self.source_checkout_reporter.clone())
             .with_backend_source_build_reporter(backend_source_build_reporter)
+            .with_gateway_reporter(self.clone())
     }
 
     /// Clear the current progress bars without tearing down the reporter.
@@ -215,8 +216,13 @@ impl pixi_command_dispatcher::CondaSolveReporter for TopLevelProgress {
             self.conda_solve_reporter.finish(bar);
         }
     }
+}
 
-    fn create_gateway_reporter(&self) -> Option<Box<dyn rattler_repodata_gateway::Reporter>> {
+impl pixi_command_dispatcher::GatewayReporter for TopLevelProgress {
+    fn create_gateway_reporter(
+        &self,
+        _op_id: OperationId,
+    ) -> Option<Box<dyn rattler_repodata_gateway::Reporter>> {
         Some(Box::new(self.repodata_reporter.clone()))
     }
 }
