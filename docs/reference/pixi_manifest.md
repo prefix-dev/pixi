@@ -6,6 +6,25 @@ those environments. It can also specify tasks which can run in those environment
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
 
+!!! note "TOML 1.1 support"
+    Pixi supports the [TOML 1.1 specification](https://toml.io/en/v1.1.0), which introduces multiline inline tables and trailing commas.
+    This means you can write inline tables across multiple lines for better readability:
+
+    ```toml
+    [dependencies]
+    python = {
+        version = ">=3.12",
+        channel = "conda-forge",
+    }
+    ```
+
+    This is equivalent to the single-line form:
+
+    ```toml
+    [dependencies]
+    python = { version = ">=3.12", channel = "conda-forge" }
+    ```
+
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
     For example, the `[workspace]` table becomes `[tool.pixi.workspace]`.
