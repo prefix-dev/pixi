@@ -319,9 +319,9 @@ fn alter_config(
         }
         AlterMode::Set => config.set(key, value)?,
         AlterMode::Unset => {
-            config.set(key, None)?;
-
-            if !config.get_keys().contains(&key) {
+            if config.get_keys().contains(&key) {
+                config.set(key, None)?;
+            } else {
                 if let Ok(contents) = fs_err::read_to_string(&to)
                     && let Some(contents) = pixi_config::remove_key_from_toml(&contents, key)?
                 {
