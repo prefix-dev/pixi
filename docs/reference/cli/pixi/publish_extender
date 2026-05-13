@@ -129,13 +129,13 @@ pixi publish https://prefix.dev/my-channel --path ./my-project/
 pixi publish https://prefix.dev/my-channel --clean
 ```
 
-### Building a single variant (parallelizing CI)
+### Overriding build variants
 
-By default `pixi publish` builds every entry in the [`[workspace.build-variants]`](../../pixi_manifest.md#build-variants-optional) matrix. Use `--variant KEY=VALUE` to narrow the matrix so each job in a CI fan-out builds a single variant.
+By default `pixi publish` builds every entry in the [`[workspace.build-variants]`](../../pixi_manifest.md#build-variants-optional) matrix. Use `--variant KEY=VALUE` to override individual variant keys at the command line — for iterating locally on a single variant, parallelizing CI jobs across the matrix, or anything else where you don't want the full cross-product.
 
 ```shell
-# Build just the Python 3.12 variant
-pixi publish https://prefix.dev/my-channel --variant python=3.12
+# Build just one entry of the matrix
+pixi publish --variant python=3.12
 
 # Constrain a variant to a subset of values (cross-product with the
 # remaining workspace variants)
@@ -144,16 +144,14 @@ pixi publish --variant python=3.12 --variant cuda-version=12.8,13.0
 
 CLI overrides replace the matching key from the workspace `build-variants`; workspace keys that aren't named on the command line keep their full value list.
 
-### Providing additional variant config files
-
 `--variant-config` / `-m` adds extra variant YAML files on top of the workspace-level `build-variants-files`. Files are loaded in order, so values from a CLI-supplied file override any earlier (workspace) file with the same key. Mirrors `rattler-build --variant-config`.
 
 ```shell
 # Use an extra variant file for this build only
-pixi publish -m ci/variants.yaml
+pixi publish -m variants.yaml
 
 # Combine with a key override
-pixi publish -m ci/variants.yaml --variant python=3.12
+pixi publish -m variants.yaml --variant python=3.12
 ```
 
 ## Authentication
