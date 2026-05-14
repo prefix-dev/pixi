@@ -37,7 +37,7 @@ pub fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io
         header_style.apply_to("Build"),
         header_style.apply_to("Size"),
     );
-    writeln!(writer, "{}", &header)?;
+    writeln!(writer, "{}", header)?;
 
     for package in packages {
         // Convert size to human-readable format
@@ -49,7 +49,7 @@ pub fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io
         let package_info = format!(
             "{}\t{}\t{}\t{}",
             package.name.as_normalized(),
-            &package.version,
+            package.version,
             package.build.as_deref().unwrap_or(""),
             size_human
         );

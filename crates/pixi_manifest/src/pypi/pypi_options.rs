@@ -296,6 +296,40 @@ impl PypiOptions {
             skip_wheel_filename_check,
         })
     }
+
+    /// Overlay `other` on top of `self`. Used when applying feature-level pypi
+    /// options on top of a workspace-level base.
+    ///
+    /// - Single-assignment fields: `other` wins when it is set, otherwise `self`.
+    /// - List fields: concatenated and de-duplicated.
+    /// - Union-like fields (`no_build`, `no_binary`, `no_build_isolation`):
+    ///   union of both sides.
+    /// - `dependency_overrides`: `other` keys override `self` keys.
+    ///
+    /// Unlike [`Self::union`], this never errors on conflicting single-value
+    /// fields; `other` simply overrides `self`.
+    pub fn overlay(&self, other: &PypiOptions) -> PypiOptions {
+        PypiOptions {
+            index_url: other.index_url.clone().or_else(|| self.index_url.clone()),
+            index_strategy: other
+                .index_strategy
+                .clone()
+                .or_else(|| self.index_strategy.clone()),
+            prerelease_mode: other.prerelease_mode.or(self.prerelease_mode),
+            skip_wheel_filename_check: other
+                .skip_wheel_filename_check
+                .or(self.skip_wheel_filename_check),
+            extra_index_urls: merge_list_dedup(&self.extra_index_urls, &other.extra_index_urls),
+            find_links: merge_list_dedup(&self.find_links, &other.find_links),
+            no_build_isolation: self.no_build_isolation.union(&other.no_build_isolation),
+            no_build: self.no_build.union(&other.no_build),
+            no_binary: self.no_binary.union(&other.no_binary),
+            dependency_overrides: merge_map_override_left(
+                &other.dependency_overrides,
+                &self.dependency_overrides,
+            ),
+        }
+    }
 }
 
 // Implement the generic `MergeUnion` trait for our union-able types so they can be

@@ -10,7 +10,7 @@ Build a conda package and publish it to a channel.
 
 ## Usage
 ```
-pixi publish [OPTIONS] --to <TO>
+pixi publish [OPTIONS]
 ```
 
 ## Options
@@ -20,15 +20,21 @@ pixi publish [OPTIONS] --to <TO>
 - <a id="arg---build-platform" href="#arg---build-platform">`--build-platform <BUILD_PLATFORM>`</a>
 :  The build platform to use for building (defaults to the current platform)
 <br>**default**: `current_platform`
+- <a id="arg---build-string-prefix" href="#arg---build-string-prefix">`--build-string-prefix <BUILD_STRING_PREFIX>`</a>
+:  An optional prefix prepended to the auto-generated build string
+- <a id="arg---build-number" href="#arg---build-number">`--build-number <BUILD_NUMBER>`</a>
+:  An optional override for the package's build number
 - <a id="arg---build-dir" href="#arg---build-dir">`--build-dir (-b) <BUILD_DIR>`</a>
 :  The directory to use for incremental builds artifacts
 - <a id="arg---clean" href="#arg---clean">`--clean (-c)`</a>
 :  Whether to clean the build directory before building
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
 :  The path to a directory containing a package manifest, or to a specific manifest file
-- <a id="arg---to" href="#arg---to">`--to <TO>`</a>
+- <a id="arg---target-channel" href="#arg---target-channel">`--target-channel <TARGET_CHANNEL>`</a>
 :  The target channel URL to publish packages to
-<br>**required**: `true`
+<br>**aliases**: to
+- <a id="arg---target-dir" href="#arg---target-dir">`--target-dir <TARGET_DIR>`</a>
+:  The target local directory to copy packages into (no channel indexing)
 - <a id="arg---force" href="#arg---force">`--force`</a>
 :  Force overwrite existing packages
 - <a id="arg---skip-existing" href="#arg---skip-existing">`--skip-existing <SKIP_EXISTING>`</a>
@@ -53,6 +59,15 @@ pixi publish [OPTIONS] --to <TO>
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts">`--run-post-link-scripts`</a>
 :  Run post-link scripts (insecure)
+- <a id="arg---no-symbolic-links" href="#arg---no-symbolic-links">`--no-symbolic-links`</a>
+:  Disallow symbolic links during package installation
+<br>**env**: `PIXI_NO_SYMBOLIC_LINKS`
+- <a id="arg---no-hard-links" href="#arg---no-hard-links">`--no-hard-links`</a>
+:  Disallow hard links during package installation
+<br>**env**: `PIXI_NO_HARD_LINKS`
+- <a id="arg---no-ref-links" href="#arg---no-ref-links">`--no-ref-links`</a>
+:  Disallow ref links (copy-on-write) during package installation
+<br>**env**: `PIXI_NO_REF_LINKS`
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
@@ -61,29 +76,17 @@ pixi publish [OPTIONS] --to <TO>
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
 
-## Update Options
-- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock-file
-<br>**env**: `PIXI_NO_INSTALL`
-- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
-:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-<br>**env**: `PIXI_FROZEN`
-- <a id="arg---locked" href="#arg---locked">`--locked`</a>
-:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-<br>**env**: `PIXI_LOCKED`
-- <a id="arg---as-is" href="#arg---as-is">`--as-is`</a>
-:  Shorthand for the combination of --no-install and --frozen
-
 ## Description
 Build a conda package and publish it to a channel.
 
 This is a convenience command that combines `pixi build` and `pixi upload`.
 
-Supported target channel URLs:
+Supported target URLs (--target-channel / --to):
   - prefix.dev: `https://prefix.dev/<channel-name>`
   - anaconda.org: `https://anaconda.org/<owner>/<label>`
   - S3: `s3://bucket-name`
-  - Filesystem: `file:///path/to/channel`
+  - Local channel (with indexing): `channel:///path/to/channel`
+  - Local path (copy only): `file:///path/to/output`
   - Quetz: `quetz://server/<channel>`
   - Artifactory: `artifactory://server/<channel>`
 

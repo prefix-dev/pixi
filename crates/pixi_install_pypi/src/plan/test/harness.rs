@@ -68,7 +68,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url: directory_url.into(),
+            url: DisplaySafeUrl::from_url(directory_url),
             editable,
             path: install_path.into(),
             cache_info: None,
@@ -104,7 +104,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url: url.into(),
+            url: DisplaySafeUrl::from_url(url),
             editable: false,
             path: install_path.into(),
             cache_info: None,
@@ -132,7 +132,7 @@ impl InstalledDistBuilder {
         let url = git_url.without_git_prefix().clone();
 
         // Parse git url and extract git commit, use this as the commit_id
-        let parsed_git_url = ParsedGitUrl::try_from(DisplaySafeUrl::from(url.clone()))
+        let parsed_git_url = ParsedGitUrl::try_from(DisplaySafeUrl::from_url(url.clone()))
             .expect("should parse git url");
 
         let direct_url = VcsUrl {
@@ -146,6 +146,7 @@ impl InstalledDistBuilder {
                     .reference()
                     .as_str()
                     .map(ToString::to_string),
+                git_lfs: None,
             },
         };
 
@@ -153,7 +154,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url: url.into(),
+            url: DisplaySafeUrl::from_url(url),
             path: install_path.into(),
             editable: false,
             cache_info: None,

@@ -263,6 +263,7 @@ fn create_tags(
         python_version,
         true,
         gil_disabled,
+        false,
     )
     .map_err(PyPITagError::FailedToDetermineWheelTags)
 }

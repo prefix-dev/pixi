@@ -44,10 +44,12 @@ mod build_backend_metadata;
 pub mod cache;
 mod command_dispatcher;
 pub mod compute_data;
+mod cycle;
 mod dev_source_metadata;
 mod discovered_backend;
 pub mod environment;
 mod ephemeral_env;
+mod errors;
 mod injected_config;
 mod input_hash;
 mod install_binary;
@@ -57,16 +59,9 @@ mod instantiate_backend_key;
 mod instantiate_tool_env;
 pub mod keys;
 pub mod reporter;
-mod reporter_context;
-mod reporter_lifecycle;
 mod resolved_backend_command;
 mod solve_binary;
 mod solve_conda;
-mod solve_pixi;
-mod source_build;
-pub mod source_checkout;
-mod source_metadata;
-mod source_record;
 mod util;
 
 pub use backend_source_build::{
@@ -81,11 +76,16 @@ pub use build_backend_metadata::{
 pub use cache::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, CacheDirs, CacheEntry,
     CacheRevision, MetadataCache,
+    markers::{
+        BackendMetadataDir, BuildBackendsDir, LegacySourceEnvDir, PackagesDir,
+        SourceBuildArtifactsDir, SourceBuildWorkspacesDir,
+    },
 };
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, ComputeResultExt, ReporterContextSpawnHook,
+    CommandDispatcherErrorResultExt, ComputeResultExt,
 };
+pub use cycle::{Cycle, CycleEnvironment};
 pub use dev_source_metadata::{
     DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataKey, DevSourceMetadataSpec,
     PackageNotProvidedError,
@@ -99,6 +99,10 @@ pub use environment::{
 pub use ephemeral_env::{
     EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec, InstalledEphemeralEnv,
 };
+pub use errors::{
+    MissingChannelError, SolvePixiEnvironmentError, SourceBuildError, SourceMetadataError,
+    SourceRecordError,
+};
 pub use injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
@@ -108,21 +112,28 @@ pub use install_pixi::{
 };
 pub use installed_source_hints::{InstalledSourceHint, InstalledSourceHints};
 pub use instantiate_backend_key::{
-    BackendHandle, InstantiateBackendError, InstantiateBackendKey, resolve_backend_identifier,
+    BackendHandle, InstantiateBackendError, InstantiateBackendKey, ProjectModelOverrides,
+    resolve_backend_identifier,
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
+pub use keys::SourceMetadata;
+pub use pixi_compute_cache_dirs::{
+    CacheBase, CacheDirKey, CacheDirsExt, CacheDirsKey, CacheLocation,
+};
+pub use pixi_compute_env_vars::{EnvVar, EnvVarsKey};
+pub use pixi_compute_sources::{
+    GitCheckoutReporter, GitDir, InvalidPathError, SourceCheckout, SourceCheckoutError,
+    SourceCheckoutExt, UrlCheckoutReporter, UrlDir,
+};
 pub use reporter::{
-    CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveEnvironmentSpec,
-    PixiSolveReporter, Reporter, ReporterContext,
+    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
+    InstantiateBackendReporter, PixiInstallReporter, PixiSolveEnvironmentSpec, PixiSolveReporter,
+    SourceMetadataReporter, SourceMetadataReporterSpec, SourceRecordReporter,
+    SourceRecordReporterSpec,
 };
 pub use resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use serde::Serialize;
 pub use solve_conda::SolveCondaEnvironmentSpec;
-pub use solve_pixi::{MissingChannelError, SolvePixiEnvironmentError};
-pub use source_build::SourceBuildError;
-pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
-pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
-pub use source_record::{ResolvedSourceRecord, SourceRecordError, SourceRecordSpec};
 pub use util::executor;
 pub use util::{Executor, Limit, Limits, PtrArc};
 

@@ -266,7 +266,7 @@
       "description": "The workspace's metadata information"
     }
   },
-  "$comment": "Generated from `pixi` v0.67.2",
+  "$comment": "Generated from `pixi` v0.68.1",
   "$defs": {
     "Activation": {
       "title": "Activation",
@@ -340,6 +340,18 @@
           "$ref": "#/$defs/BuildBackend",
           "description": "The build backend to instantiate"
         },
+        "build-number": {
+          "title": "Build-Number",
+          "description": "The build number to record in the produced package",
+          "type": "integer",
+          "minimum": 0
+        },
+        "build-string-prefix": {
+          "title": "Build-String-Prefix",
+          "description": "An optional prefix to prepend to the auto-generated build string",
+          "type": "string",
+          "minLength": 1
+        },
         "channels": {
           "title": "Channels",
           "description": "The `conda` channels that are used to fetch the build backend from",
@@ -366,6 +378,15 @@
           "description": "The configuration of the build backend",
           "type": "object",
           "additionalProperties": true
+        },
+        "secrets": {
+          "title": "Secrets",
+          "description": "Names of environment variables to expose as secrets to the build script. Values are read from the host environment at build time; only the names live in the manifest. Forwarded to rattler-build's `build.script.secrets`.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "source": {
           "$ref": "#/$defs/SourceLocation",
@@ -1405,6 +1426,25 @@
             }
           ]
         },
+        "run-constraints": {
+          "title": "Run-Constraints",
+          "description": "The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "run-dependencies": {
           "title": "Run-Dependencies",
           "description": "The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
@@ -1512,6 +1552,25 @@
               "python": ">=3.8"
             }
           ]
+        },
+        "run-constraints": {
+          "title": "Run-Constraints",
+          "description": "The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
         },
         "run-dependencies": {
           "title": "Run-Dependencies",

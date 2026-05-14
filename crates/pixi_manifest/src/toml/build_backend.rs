@@ -1,8 +1,11 @@
-use std::{collections::BTreeMap, sync::Once};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Once,
+};
 
 use indexmap::IndexMap;
 use pixi_spec::{SourceLocationSpec, TomlLocationSpec, TomlSpec};
-use pixi_toml::{Same, TomlFromStr, TomlIndexMap, TomlWith};
+use pixi_toml::{Same, TomlBTreeSet, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
 use std::borrow::Cow;
 use toml_span::{DeserError, Error, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
@@ -25,6 +28,10 @@ pub struct TomlPackageBuild {
     pub configuration: Option<serde_value::Value>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
     pub warnings: Vec<crate::Warning>,
+
+    pub build_string_prefix: Option<String>,
+    pub build_number: Option<u64>,
+    pub secrets: BTreeSet<String>,
 }
 
 #[derive(Debug)]
@@ -101,6 +108,9 @@ impl TomlPackageBuild {
                 } else {
                     Some(target_config)
                 },
+                build_string_prefix: self.build_string_prefix,
+                build_number: self.build_number,
+                secrets: self.secrets,
             },
             warnings: self.warnings,
         })
@@ -218,6 +228,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .map(TomlWith::into_inner)
             .unwrap_or_default();
 
+        let build_string_prefix = th.optional("build-string-prefix");
+        let build_number = th.optional("build-number");
+        let secrets = th
+            .optional::<TomlBTreeSet<String>>("secrets")
+            .map(TomlBTreeSet::into_inner)
+            .unwrap_or_default();
+
         th.finalize(None)?;
 
         // Issue a warning if both legacy channels and backend.channels are present
@@ -268,6 +285,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             configuration,
             target,
             warnings,
+            build_string_prefix,
+            build_number,
+            secrets,
         })
     }
 }
@@ -496,5 +516,42 @@ mod test {
                 .additional_dependencies
                 .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
         );
+    }
+
+    #[test]
+    fn test_secrets() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            secrets = ["CARGO_REGISTRY_TOKEN", "SCCACHE_BUCKET"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert_eq!(
+            parsed.value.secrets,
+            ["CARGO_REGISTRY_TOKEN", "SCCACHE_BUCKET"]
+                .into_iter()
+                .map(String::from)
+                .collect()
+        );
+    }
+
+    #[test]
+    fn test_build_string_prefix_and_build_number() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            build-string-prefix = "myprefix"
+            build-number = 42
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert_eq!(
+            parsed.value.build_string_prefix.as_deref(),
+            Some("myprefix")
+        );
+        assert_eq!(parsed.value.build_number, Some(42));
     }
 }

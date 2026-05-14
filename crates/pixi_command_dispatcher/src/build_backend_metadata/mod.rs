@@ -17,24 +17,24 @@ use std::{
 use thiserror::Error;
 
 use crate::build::CanonicalSourceCodeLocation;
+use crate::cache::markers::BackendMetadataDir;
 use crate::cache::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, BuildBackendMetadataCacheError,
     BuildBackendMetadataCacheKey, CacheEntry, CacheKey, CacheKeyString, CacheRevision,
     MetadataCache, MetadataCacheKey, WriteResult,
 };
-use crate::compute_data::{HasBuildBackendMetadataCache, HasCacheDirs, HasReporter};
+use crate::compute_data::{HasBuildBackendMetadataCache, HasBuildBackendMetadataReporter};
 use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
 use crate::input_hash::{ConfigurationHash, ProjectModelHash};
-use crate::reporter::{Reporter, ReporterContext};
-use crate::reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context};
 use crate::{
     BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
-    InstantiateBackendKey, SourceCheckout, SourceCheckoutError,
+    InstantiateBackendKey, ProjectModelOverrides, SourceCheckout, SourceCheckoutError,
+    SourceCheckoutExt,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
-    source_checkout::SourceCheckoutExt,
 };
 use pixi_build_discovery::BackendSpec;
 use pixi_build_frontend::BackendOverride;
+use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_path::normalize::normalize_typed;
 
@@ -75,13 +75,25 @@ pub struct BuildBackendMetadataSpec {
     /// at compute time.
     #[serde(skip)]
     pub env_ref: EnvironmentRef,
+
+    /// User-supplied build string prefix forwarded to the backend's
+    /// project model. Overrides any value declared in the manifest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_string_prefix: Option<String>,
+
+    /// User-supplied build number forwarded to the backend's project
+    /// model. Overrides any value declared in the manifest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_number: Option<u64>,
 }
 
 /// Compute-engine [`Key`] for the public-facing backend-metadata
 /// request. Thin orchestrator that reads projections off `env_ref` to
 /// build a [`BuildBackendMetadataInner`], then delegates to it via
-/// `ctx.compute`. All actual work (and the reporter lifecycle) lives
-/// on the inner Key.
+/// `ctx.compute`. All actual work (and the
+/// [`BuildBackendMetadataReporter`](crate::BuildBackendMetadataReporter)
+/// lifecycle, read from the engine `DataStore`) lives on the inner
+/// Key.
 #[derive(Clone, Debug, Hash, Eq, PartialEq, derive_more::Display)]
 #[display("{}", _0.manifest_source)]
 pub struct BuildBackendMetadataKey(pub Arc<BuildBackendMetadataSpec>);
@@ -119,6 +131,8 @@ impl Key for BuildBackendMetadataKey {
             variant_configuration: variants.variant_configuration.clone(),
             variant_files: variants.variant_files.clone(),
             exclude_newer: (*exclude_newer).clone(),
+            build_string_prefix: self.0.build_string_prefix.clone(),
+            build_number: self.0.build_number,
         };
 
         ctx.compute(&BuildBackendMetadataInnerKey::new(inner)).await
@@ -159,6 +173,17 @@ pub struct BuildBackendMetadataInner {
 
     /// Variant file paths provided by the workspace.
     pub variant_files: Vec<PathBuf>,
+
+    /// User-supplied build string prefix; overrides the manifest's
+    /// project model when set. Part of the cache key so different
+    /// overrides produce distinct backend invocations.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_string_prefix: Option<String>,
+
+    /// User-supplied build number; overrides the manifest's project
+    /// model when set. Part of the cache key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_number: Option<u64>,
 }
 
 /// The metadata of a source checkout.
@@ -389,7 +414,7 @@ impl BuildBackendMetadataInner {
     /// checkout.
     async fn call_conda_outputs(
         &self,
-        cache_dirs: &crate::CacheDirs,
+        metadata_dir: &pixi_path::AbsPresumedDirPath,
         build_source_checkout: &SourceCheckout,
         source_unique_key: &str,
         backend: BackendHandle,
@@ -420,8 +445,10 @@ impl BuildBackendMetadataInner {
             // cache, so cache entries for this source and the backend's
             // scratch for the same source live side by side (single
             // `rm -rf` cleans both).
-            work_directory: cache_dirs
-                .backend_metadata_work_dir(source_unique_key)
+            work_directory: metadata_dir
+                .join(source_unique_key)
+                .join(pixi_consts::consts::BACKEND_METADATA_WORK_SUBDIR)
+                .into_assume_dir()
                 .join(
                     WorkDirKey {
                         source: SourceRecordOrCheckout::Checkout {
@@ -507,36 +534,25 @@ impl Key for BuildBackendMetadataInnerKey {
 
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         // Reporter lifecycle: queue up-front so the reporter can count
-        // us against the parent context before any real work starts.
-        // The `on_started` event carries the log-output receiver so the
-        // reporter can stream backend output as it arrives.
-        let reporter_arc = ctx.global_data().reporter().cloned();
-        let parent_reporter_ctx = current_reporter_context();
-        let reporter_fn = || {
-            reporter_arc
-                .as_deref()
-                .and_then(Reporter::as_build_backend_metadata_reporter)
-        };
-        let reporter_id = reporter_fn().map(|r| r.on_queued(parent_reporter_ctx, &self.0));
+        // us before any real work starts. The `on_started` event carries
+        // the log-output receiver so the reporter can stream backend
+        // output as it arrives.
+        let reporter_arc = ctx.global_data().build_backend_metadata_reporter().cloned();
+        let reporter_id = reporter_arc.as_deref().map(|r| r.on_queued(&self.0));
 
         let (log_sink, log_rx) = futures::channel::mpsc::unbounded::<String>();
-        if let (Some(r), Some(id)) = (reporter_fn(), reporter_id) {
+        if let (Some(r), Some(id)) = (reporter_arc.as_deref(), reporter_id) {
             r.on_started(id, Box::new(log_rx));
         }
 
-        // Scope nested Keys under our reporter context so they attribute
-        // their progress to this backend-metadata request (falling back
-        // to the parent when no reporter is attached).
-        let scope_ctx = reporter_id
-            .map(ReporterContext::BuildBackendMetadata)
-            .or(parent_reporter_ctx);
+        // Scope nested Keys under this metadata request's id.
         let work = self.0.clone().compute_inner(ctx, log_sink);
-        let result = match scope_ctx {
-            Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+        let result = match reporter_id {
+            Some(id) => id.scope_active(work).await,
             None => work.await,
         };
 
-        if let (Some(r), Some(id)) = (reporter_fn(), reporter_id) {
+        if let (Some(r), Some(id)) = (reporter_arc.as_deref(), reporter_id) {
             r.on_finished(id, result.is_err());
         }
 
@@ -594,6 +610,17 @@ enum CacheProbe {
 }
 
 impl BuildBackendMetadataInner {
+    /// Bundle the user-supplied project-model overrides into the shape
+    /// expected by [`InstantiateBackendKey`]. Backend instantiation is
+    /// content-addressed on these overrides, so callers with the same
+    /// values share a single backend handle.
+    fn project_model_overrides(&self) -> ProjectModelOverrides {
+        ProjectModelOverrides {
+            build_string_prefix: self.build_string_prefix.clone(),
+            build_number: self.build_number,
+        }
+    }
+
     /// Resolve the manifest and build-source checkouts and the backend
     /// that owns them.
     async fn resolve_checkouts(
@@ -691,10 +718,17 @@ impl BuildBackendMetadataInner {
             .await
             .map_err(BuildBackendMetadataError::Cache)?;
 
-        let project_model_hash = checkouts
-            .discovered_backend
-            .init_params
-            .project_model
+        // Apply CLI overrides before hashing the project model so the
+        // cache distinguishes builds invoked with different overrides.
+        let overrides = self.project_model_overrides();
+        let overridden_project_model = overrides.apply(
+            checkouts
+                .discovered_backend
+                .init_params
+                .project_model
+                .clone(),
+        );
+        let project_model_hash = overridden_project_model
             .as_ref()
             .map(ProjectModelHash::from);
         let configuration_hash = ConfigurationHash::compute(
@@ -781,16 +815,19 @@ impl BuildBackendMetadataInner {
         // Instantiate the backend. `DiscoveredBackendKey` dedups inside
         // the key, so the re-discovery is free.
         let backend = ctx
-            .compute(&InstantiateBackendKey::new(
-                checkouts.manifest_source_checkout.path.as_std_path(),
-                checkouts.manifest_source_anchor.clone(),
-                checkouts
-                    .build_source_checkout
-                    .path
-                    .as_dir_or_file_parent()
-                    .to_path_buf(),
-                self.exclude_newer.clone(),
-            ))
+            .compute(
+                &InstantiateBackendKey::new(
+                    checkouts.manifest_source_checkout.path.as_std_path(),
+                    checkouts.manifest_source_anchor.clone(),
+                    checkouts
+                        .build_source_checkout
+                        .path
+                        .as_dir_or_file_parent()
+                        .to_path_buf(),
+                    self.exclude_newer.clone(),
+                )
+                .with_project_model_overrides(self.project_model_overrides()),
+            )
             .await
             .map_err(|e: Arc<InstantiateBackendError>| {
                 BuildBackendMetadataError::Initialize((*e).clone())
@@ -810,9 +847,10 @@ impl BuildBackendMetadataInner {
             pixi_build_types::procedures::conda_outputs::METHOD_NAME
         );
 
-        // Snapshot cache dirs for the conda_outputs call (work-dir path
-        // derivation). Cheap clone: `CacheDirs` is a handful of paths.
-        let cache_dirs = ctx.global_data().cache_dirs().clone();
+        // Resolve the metadata cache root once for the conda_outputs
+        // call below so the work-dir path derivation does not duplicate
+        // the dependency edge to `BackendMetadataDir`.
+        let metadata_dir = ctx.cache_dir::<BackendMetadataDir>().await;
 
         // Compute the source's cache_unique_key up front: the work dir
         // is nested under the same `<source>/` slot the metadata cache
@@ -832,7 +870,7 @@ impl BuildBackendMetadataInner {
 
         let raw = self
             .call_conda_outputs(
-                &cache_dirs,
+                &metadata_dir,
                 &checkouts.build_source_checkout,
                 &source_unique_key,
                 backend,

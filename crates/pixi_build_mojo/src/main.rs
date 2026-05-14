@@ -6,6 +6,7 @@ use config::{MojoBackendConfig, clean_project_name};
 use miette::{Error, IntoDiagnostic};
 use pixi_build_backend::generated_recipe::DefaultMetadataProvider;
 use pixi_build_backend::{
+    compilers::default_compiler_variants,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
@@ -72,7 +73,8 @@ impl GenerateRecipe for MojoGenerator {
         );
 
         // Auto-derive bins and pkg fields/configs if needed
-        let (bins, pkg) = config.auto_derive(&manifest_root, &cleaned_project_name)?;
+        let (mut bins, mut pkg) = config.auto_derive(&manifest_root, &cleaned_project_name)?;
+        Self::make_paths_absolute(&manifest_root, &mut bins, &mut pkg)?;
 
         // Add compiler
         let requirements = &mut generated_recipe.recipe.requirements;
@@ -97,20 +99,17 @@ impl GenerateRecipe for MojoGenerator {
             variants,
         );
 
-        let build_script = BuildScriptContext {
-            source_dir: manifest_root.display().to_string(),
-            bins,
-            pkg,
-        }
-        .render();
+        let build_script = BuildScriptContext { bins, pkg }.render();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script).with_env(
-            config
-                .env
-                .iter()
-                .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
-                .collect(),
-        );
+        generated_recipe.recipe.build.script = Script::from_content(build_script)
+            .with_env(
+                config
+                    .env
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                    .collect(),
+            )
+            .with_secrets(model.secrets.iter().cloned().collect());
 
         generated_recipe.build_input_globs = Self::globs().collect::<BTreeSet<_>>();
 
@@ -132,22 +131,46 @@ impl GenerateRecipe for MojoGenerator {
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        let mut variants = BTreeMap::new();
-
-        if host_platform.is_windows() {
-            // Default to the Visual Studio 2022 compiler on Windows
-            // Not 2019 due to Conda-forge switching and the mainstream support dropping in 2024.
-            // rattler-build will default to vs2017 which for most github runners is too
-            // old.
-            variants.insert(NormalizedKey::from("c_compiler"), vec!["vs2022".into()]);
-            variants.insert(NormalizedKey::from("cxx_compiler"), vec!["vs2022".into()]);
-        }
-
-        Ok(variants)
+        Ok(default_compiler_variants(host_platform))
     }
 }
 
 impl MojoGenerator {
+    fn make_paths_absolute(
+        manifest_root: &Path,
+        bins: &mut Option<Vec<config::MojoBinConfig>>,
+        pkg: &mut Option<config::MojoPkgConfig>,
+    ) -> miette::Result<()> {
+        if let Some(bins) = bins {
+            for bin in bins {
+                if let Some(path) = &mut bin.path {
+                    *path = Self::absolute_path(manifest_root, path)?;
+                }
+            }
+        }
+        if let Some(pkg) = pkg
+            && let Some(path) = &mut pkg.path
+        {
+            *path = Self::absolute_path(manifest_root, path)?;
+        }
+        Ok(())
+    }
+
+    fn absolute_path(manifest_root: &Path, path: &str) -> miette::Result<String> {
+        let path = Path::new(path);
+        if path.is_absolute() {
+            return Ok(path.display().to_string());
+        }
+        let manifest_root = if manifest_root.is_absolute() {
+            manifest_root.to_path_buf()
+        } else {
+            std::env::current_dir()
+                .into_diagnostic()?
+                .join(manifest_root)
+        };
+        Ok(manifest_root.join(path).display().to_string())
+    }
+
     fn globs() -> impl Iterator<Item = String> {
         [
             // Source files
@@ -249,6 +272,7 @@ mod tests {
 
         insta::assert_yaml_snapshot!(generated_recipe.recipe, {
         ".source[0].path" => "[ ... path ... ]",
+        ".build.script" => "[ ... script ... ]",
         });
     }
 
@@ -298,7 +322,71 @@ mod tests {
 
         insta::assert_yaml_snapshot!(generated_recipe.recipe, {
         ".source[0].path" => "[ ... path ... ]",
+        ".build.script" => "[ ... script ... ]",
         });
+    }
+
+    #[tokio::test]
+    async fn test_relative_paths_are_made_absolute() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+        let temp = tempfile::TempDir::new().unwrap();
+        let source_dir = temp.path().to_path_buf();
+
+        let generated_recipe = MojoGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &MojoBackendConfig {
+                    bins: Some(vec![MojoBinConfig {
+                        name: Some(String::from("example")),
+                        path: Some(String::from("src/main.mojo")),
+                        extra_args: None,
+                    }]),
+                    pkg: Some(MojoPkgConfig {
+                        name: Some(String::from("lib")),
+                        path: Some(String::from("src/foobar")),
+                        extra_args: None,
+                    }),
+                    ..Default::default()
+                },
+                source_dir.clone(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let content = generated_recipe.recipe.build.script.content.unwrap();
+        let script = content
+            .iter()
+            .next()
+            .unwrap()
+            .as_value()
+            .unwrap()
+            .as_concrete()
+            .unwrap();
+        let bin_path = source_dir.join("src/main.mojo").display().to_string();
+        let pkg_path = source_dir.join("src/foobar").display().to_string();
+
+        assert!(
+            !script
+                .lines()
+                .any(|line| line.trim_start().starts_with("cd ")),
+            "script should not change directory:\n{script}"
+        );
+        assert!(
+            script.contains(&format!("\"{bin_path}\"")),
+            "script should use absolute bin path:\n{script}"
+        );
+        assert!(
+            script.contains(&format!("\"{pkg_path}\"")),
+            "script should use absolute pkg path:\n{script}"
+        );
     }
 
     #[tokio::test]

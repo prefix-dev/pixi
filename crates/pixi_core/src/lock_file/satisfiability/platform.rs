@@ -13,7 +13,7 @@ use once_cell::sync::OnceCell;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, ComputeResultExt, DevSourceMetadataSpec, EnvironmentRef,
-    WorkspaceEnvRef, executor::CancellationAwareFutures, source_checkout::SourceCheckoutExt,
+    SourceCheckoutExt, WorkspaceEnvRef, executor::CancellationAwareFutures,
 };
 use pixi_config::Config;
 use pixi_install_pypi::UnresolvedPypiRecord;
@@ -304,11 +304,27 @@ pub async fn verify_platform_satisfiability(
             &pixi_records_by_name,
             &pypi_records_by_name,
             building_pixi_records,
+            locked_environment.pypi_indexes(),
         )
         .await
     };
 
     package_verification_future.await
+}
+
+/// Where a pypi requirement came from. The `index` semantics of a
+/// [`uv_distribution_types::Requirement`] depend on this: a `None` index from
+/// the manifest means the user did not pin a per-package index, while a
+/// `None` index from a parent's `requires_dist` simply means pep508 cannot
+/// encode an index at all.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum RequirementOrigin {
+    /// A direct pypi-dependency declared in the workspace manifest.
+    Manifest,
+    /// A transitive requirement parsed from another package's
+    /// `requires_dist`. The originating pep508 syntax carries no `index`
+    /// information.
+    RequiresDist,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -317,7 +333,11 @@ pub enum Dependency {
     Input(PackageName, PixiSpec, Cow<'static, str>),
     Conda(MatchSpec, Cow<'static, str>),
     CondaSource(PackageName, SourceSpec, Cow<'static, str>),
-    PyPi(uv_distribution_types::Requirement, Cow<'static, str>),
+    PyPi(
+        uv_distribution_types::Requirement,
+        Cow<'static, str>,
+        RequirementOrigin,
+    ),
 }
 
 impl Dependency {
@@ -328,7 +348,7 @@ impl Dependency {
             Dependency::Input(name, _, _) => Some(name.clone()),
             Dependency::Conda(spec, _) => spec.name.as_exact().cloned(),
             Dependency::CondaSource(name, _, _) => Some(name.clone()),
-            Dependency::PyPi(_, _) => None,
+            Dependency::PyPi(_, _, _) => None,
         }
     }
 }
@@ -413,6 +433,8 @@ async fn resolve_single_dev_dependency(
             manifest_source: pinned_source.pinned,
             preferred_build_source: None,
             env_ref: EnvironmentRef::Workspace(workspace_env_ref),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
@@ -474,6 +496,7 @@ async fn verify_package_platform_satisfiability(
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
+    locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
 ) -> Result<
     (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
     CommandDispatcherError<Box<PlatformUnsat>>,
@@ -492,6 +515,14 @@ async fn verify_package_platform_satisfiability(
         .combined_dev_dependencies(Some(ctx.platform))
         .into_specs()
         .collect_vec();
+
+    // Indexes the lock-file was resolved against. Authoritative because
+    // `verify_pypi_indexes` already confirmed they match the manifest. A
+    // locked package URL must be one of these to satisfy a requirement
+    // with no per-package `index`. None for pre-v7 lockfiles.
+    let locked_indexes: &[url::Url] = locked_pypi_indexes
+        .map(|i| i.indexes.as_slice())
+        .unwrap_or(&[]);
 
     // retrieve dependency-overrides
     // map it to (name => requirement) for later matching
@@ -562,6 +593,7 @@ async fn verify_package_platform_satisfiability(
                             ))
                         })?,
                         "<environment>".into(),
+                        RequirementOrigin::Manifest,
                     ))
                 })
         })
@@ -663,7 +695,7 @@ async fn verify_package_platform_satisfiability(
     let mut pypi_requirements_visited = pypi_requirements
         .iter()
         .filter_map(|r| match r {
-            Dependency::PyPi(req, _) => Some(req.clone()),
+            Dependency::PyPi(req, _, _) => Some(req.clone()),
             _ => None,
         })
         .collect::<HashSet<_>>();
@@ -737,7 +769,7 @@ async fn verify_package_platform_satisfiability(
                         .map_err(CommandDispatcherError::Failed)?,
                 )
             }
-            Dependency::PyPi(requirement, source) => {
+            Dependency::PyPi(requirement, source, origin) => {
                 // Check if there is a pypi identifier that matches our requirement.
                 if let Some((identifier, repodata_idx, _)) =
                     locked_conda_pypi_packages.get(&requirement.name)
@@ -815,6 +847,8 @@ async fn verify_package_platform_satisfiability(
                                     &requirement,
                                     record,
                                     ctx.project_root,
+                                    origin,
+                                    locked_indexes,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -876,7 +910,7 @@ async fn verify_package_platform_satisfiability(
                             Cow::Owned(format!(
                                 "{} @ {}",
                                 record.name().as_source(),
-                                &record.manifest_source
+                                record.manifest_source
                             )),
                             SourceLocationSpec::from(record.manifest_source.clone()).into(),
                         ),
@@ -929,8 +963,11 @@ async fn verify_package_platform_satisfiability(
                         };
                         if let Some(current_metadata) =
                             ctx.static_metadata_cache.get(&absolute_path)
-                            && let Some(mismatch) =
-                                pypi_metadata::compare_metadata(record, &current_metadata)
+                            && let Some(mismatch) = pypi_metadata::compare_metadata(
+                                record,
+                                pkg.name(),
+                                &current_metadata,
+                            )
                         {
                             let local_mismatch = match mismatch {
                                 pypi_metadata::MetadataMismatch::RequiresDist(diff) => {
@@ -1010,6 +1047,7 @@ async fn verify_package_platform_satisfiability(
                     pypi_queue.push(Dependency::PyPi(
                         requirement.clone(),
                         pkg.name().as_ref().to_string().into(),
+                        RequirementOrigin::RequiresDist,
                     ));
                 }
             }

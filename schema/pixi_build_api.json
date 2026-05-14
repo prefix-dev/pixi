@@ -10,8 +10,8 @@
         "null"
       ]
     },
-    "buildString": {
-      "description": "A build string configured by the user.",
+    "buildStringPrefix": {
+      "description": "An optional prefix to prepend to the auto-generated build string.",
       "type": [
         "string",
         "null"
@@ -105,6 +105,14 @@
           "type": "null"
         }
       ]
+    },
+    "secrets": {
+      "description": "Names of environment variables that should be exposed as secrets to\nthe build script. Backends forward these into the generated\n`build.script.secrets` so rattler-build performs the host-env\npassthrough at build time. Stored as a set: order is not observable\nand changing it should not invalidate caches.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
     }
   },
   "$defs": {
@@ -159,6 +167,16 @@
         },
         "runDependencies": {
           "description": "Run dependencies of the project",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/PackageSpec"
+          }
+        },
+        "runConstraints": {
+          "description": "Run constraints of the project",
           "type": [
             "object",
             "null"

@@ -1,16 +1,20 @@
 
 --8<-- [start:description]
 
-`pixi publish` is a convenience command that **builds** a conda package from your workspace and **uploads** it to a channel in a single step. It combines the functionality of [`pixi build`](build.md) and [`pixi upload`](upload.md).
+`pixi publish` **builds** a conda package from your workspace and **uploads** it to a channel.
 
-The `--to` flag determines the target channel. The upload backend is automatically detected from the URL:
+- With a target URL: builds and uploads to the specified destination.
+- Without a target URL: builds and copies the package to the current working directory.
+
+The target URL determines the upload backend:
 
 | URL pattern | Backend |
 |-------------|---------|
 | `https://prefix.dev/<channel>` | [prefix.dev](https://prefix.dev) |
 | `https://anaconda.org/<owner>` | [Anaconda.org](https://anaconda.org) |
 | `s3://bucket-name/channel` | S3-compatible storage |
-| `file:///path/to/channel` | Local filesystem |
+| `channel:///path/to/channel` | Local filesystem channel |
+| `file:///path/to/dir` | Copy to local directory |
 | `quetz://server/<channel>` | [Quetz](https://github.com/mamba-org/quetz) |
 | `artifactory://server/<channel>` | [JFrog Artifactory](https://jfrog.com/artifactory/) |
 
@@ -20,22 +24,31 @@ The `--to` flag determines the target channel. The upload backend is automatical
 
 ## Examples
 
+### Build and copy to current directory
+
+Omit the target URL to build and copy the resulting package to the current working directory.
+
+```shell
+# Build the package and copy it to the current directory
+pixi publish
+```
+
 ### Publishing to prefix.dev
 
 The most common use case is publishing packages to a channel on [prefix.dev](https://prefix.dev).
 
 ```shell
 # Build and publish to your prefix.dev channel
-pixi publish --to https://prefix.dev/my-channel
+pixi publish https://prefix.dev/my-channel
 
 # Build for a specific target platform and publish
-pixi publish --to https://prefix.dev/my-channel --target-platform linux-64
+pixi publish https://prefix.dev/my-channel --target-platform linux-64
 
 # Publish with sigstore attestation for supply chain security
-pixi publish --to https://prefix.dev/my-channel --generate-attestation
+pixi publish https://prefix.dev/my-channel --generate-attestation
 
 # Force overwrite existing packages
-pixi publish --to https://prefix.dev/my-channel --force
+pixi publish https://prefix.dev/my-channel --force
 ```
 
 For authentication, either log in first with `pixi auth login`, or set the `PREFIX_API_KEY` environment variable:
@@ -43,10 +56,10 @@ For authentication, either log in first with `pixi auth login`, or set the `PREF
 ```shell
 # Option 1: Log in (credentials are stored in the keychain)
 pixi auth login --token $MY_TOKEN https://prefix.dev
-pixi publish --to https://prefix.dev/my-channel
+pixi publish https://prefix.dev/my-channel
 
 # Option 2: Use trusted publishing in CI (no credentials needed)
-pixi publish --to https://prefix.dev/my-channel
+pixi publish https://prefix.dev/my-channel
 ```
 
 See the [prefix.dev deployment guide](../../../deployment/prefix.md) for more details on setting up channels and trusted publishing.
@@ -55,10 +68,10 @@ See the [prefix.dev deployment guide](../../../deployment/prefix.md) for more de
 
 ```shell
 # Build and publish to your Anaconda.org account
-pixi publish --to https://anaconda.org/my-username
+pixi publish https://anaconda.org/my-username
 
 # Publish to a specific label/channel
-pixi publish --to https://anaconda.org/my-username/dev
+pixi publish https://anaconda.org/my-username/dev
 ```
 
 ### Publishing to S3
@@ -67,7 +80,7 @@ When publishing to S3, the channel is automatically initialized (if new) and ind
 
 ```shell
 # Build and publish to an S3 bucket (using AWS credentials from environment)
-pixi publish --to s3://my-bucket/my-channel
+pixi publish s3://my-bucket/my-channel
 ```
 
 S3 credentials are resolved from the standard AWS credential chain (environment variables, shared credentials file, instance profiles, etc.).
@@ -78,27 +91,42 @@ Local channels are useful for development and testing. The channel directory is 
 
 ```shell
 # Build and publish to a local channel
-pixi publish --to file:///path/to/my-channel
+pixi publish channel:///path/to/my-channel
 
 # Force overwrite if the package already exists
-pixi publish --to file:///path/to/my-channel --force
+pixi publish channel:///path/to/my-channel --force
 ```
+
+### Copying to a local path
+
+Use `file://` or a bare path to copy the built `.conda` artifact directly to a directory, without creating a channel structure.
+
+```shell
+# Copy the built package to a directory (file:// URL)
+pixi publish file:///path/to/output/dir
+
+# Bare paths also work -- relative or absolute
+pixi publish /tmp/my-packages
+pixi publish ../my-packages
+```
+
+If the directory looks like a conda channel (contains `repodata.json`), pixi warns that you may have meant to use `channel://` instead.
 
 ### Publishing from a specific manifest
 
 ```shell
 # Publish a package from a specific recipe
-pixi publish --to https://prefix.dev/my-channel --path ./my-recipe/recipe.yaml
+pixi publish https://prefix.dev/my-channel --path ./my-recipe/recipe.yaml
 
 # Publish from a different workspace
-pixi publish --to https://prefix.dev/my-channel --path ./my-project/
+pixi publish https://prefix.dev/my-channel --path ./my-project/
 ```
 
 ### Clean rebuild and publish
 
 ```shell
 # Clean the build directory before building and publishing
-pixi publish --to https://prefix.dev/my-channel --clean
+pixi publish https://prefix.dev/my-channel --clean
 ```
 
 ## Authentication
@@ -118,9 +146,5 @@ pixi publish --to https://prefix.dev/my-channel --clean
    - `QUETZ_API_KEY` for Quetz
    - `ARTIFACTORY_TOKEN` for Artifactory
    - Standard AWS environment variables for S3
-
-## Comparison with `pixi build` + `pixi upload`
-
-`pixi publish` is a shorthand for running `pixi build` followed by `pixi upload`. Use it when you want a single command to build and deploy. If you need more control over the build output before uploading (e.g., testing the package locally), use `pixi build` and `pixi upload` separately.
 
 --8<-- [end:example]

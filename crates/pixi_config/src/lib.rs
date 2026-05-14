@@ -186,16 +186,28 @@ fn detect_network_filesystem(path: &Path) -> Option<bool> {
     use nix::sys::statfs::{
         AUTOFS_SUPER_MAGIC, FUSE_SUPER_MAGIC, FsType, NFS_SUPER_MAGIC, SMB_SUPER_MAGIC,
     };
-    // CIFS magic isn't re-exported by `nix`
-    // so define it inline (fs/smb/client/cifsfs.h).
+    // Magics not re-exported by `nix` are defined inline below.
+    // CIFS: fs/smb/client/cifsfs.h
     let cifs_magic = FsType(0xff53_4d42_u32 as _);
+    // BeeGFS (a.k.a. fhgfs): client_module/source/common/Common.h
+    let beegfs_magic = FsType(0x1983_0326_u32 as _);
+    // Lustre: include/uapi/linux/lustre/lustre_user.h (LL_SUPER_MAGIC)
+    let lustre_magic = FsType(0x0bd0_0bd0_u32 as _);
+    // GPFS / IBM Spectrum Scale ("GPFS" in ASCII)
+    let gpfs_magic = FsType(0x4750_4653_u32 as _);
+    // CephFS: include/linux/magic.h (CEPH_SUPER_MAGIC)
+    let ceph_magic = FsType(0x00c3_6400_u32 as _);
     let fs = statfs_nearest_existing(path)?.filesystem_type();
     Some(
         fs == NFS_SUPER_MAGIC
             || fs == SMB_SUPER_MAGIC
             || fs == cifs_magic
             || fs == FUSE_SUPER_MAGIC
-            || fs == AUTOFS_SUPER_MAGIC,
+            || fs == AUTOFS_SUPER_MAGIC
+            || fs == beegfs_magic
+            || fs == lustre_magic
+            || fs == gpfs_magic
+            || fs == ceph_magic,
     )
 }
 
@@ -556,7 +568,8 @@ fn resolve_cache_kind_dir(cache_cfg: &CacheConfig, kind: CacheKind) -> miette::R
     let mut warned = NETFS_REDIRECT_WARNED.lock().unwrap();
     if warned.insert(kind) {
         tracing::warn!(
-            "cache for {:?} at {} is on a network filesystem (NFS/SMB/FUSE), \
+            "cache for {:?} at {} is on a network/parallel filesystem \
+             (NFS/SMB/FUSE/BeeGFS/Lustre/GPFS/CephFS), \
              redirected to {} for this run. Set [cache.{}] in config.toml or \
              PIXI_CACHE_DIR to override, or [cache.netfs-redirect] = \"never\" \
              to keep the original path.",
@@ -617,6 +630,18 @@ pub struct ConfigCli {
     /// Run post-link scripts (insecure)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     run_post_link_scripts: bool,
+
+    /// Disallow symbolic links during package installation
+    #[arg(long, env = "PIXI_NO_SYMBOLIC_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    no_symbolic_links: bool,
+
+    /// Disallow hard links during package installation
+    #[arg(long, env = "PIXI_NO_HARD_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    no_hard_links: bool,
+
+    /// Disallow ref links (copy-on-write) during package installation
+    #[arg(long, env = "PIXI_NO_REF_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    no_ref_links: bool,
 
     /// Do not verify the TLS certificate of the server.
     #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
@@ -1272,6 +1297,21 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_post_link_scripts: Option<RunPostLinkScripts>,
 
+    /// If set to false, symbolic links will not be used during package installation.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_symbolic_links: Option<bool>,
+
+    /// If set to false, hard links will not be used during package installation.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_hard_links: Option<bool>,
+
+    /// If set to false, ref links (copy-on-write) will not be used during package installation.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_ref_links: Option<bool>,
+
     /// Https/Http proxy configuration for pixi
     #[serde(default)]
     #[serde(skip_serializing_if = "ProxyConfig::is_default")]
@@ -1332,6 +1372,9 @@ impl Default for Config {
             experimental: ExperimentalConfig::default(),
             concurrency: ConcurrencyConfig::default(),
             run_post_link_scripts: None,
+            allow_symbolic_links: None,
+            allow_hard_links: None,
+            allow_ref_links: None,
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
             tool_platform: None,
@@ -1377,6 +1420,9 @@ impl From<ConfigCli> for Config {
                 },
             },
             pinning_strategy: cli.pinning_strategy,
+            allow_symbolic_links: cli.no_symbolic_links.then_some(false),
+            allow_hard_links: cli.no_hard_links.then_some(false),
+            allow_ref_links: cli.no_ref_links.then_some(false),
             ..Default::default()
         }
     }
@@ -1903,6 +1949,9 @@ impl Config {
             "repodata-config.disable-sharded",
             "repodata-config.disable-zstd",
             "run-post-link-scripts",
+            "allow-symbolic-links",
+            "allow-hard-links",
+            "allow-ref-links",
             "s3-options",
             "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
@@ -1959,6 +2008,9 @@ impl Config {
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
             run_post_link_scripts: other.run_post_link_scripts.or(self.run_post_link_scripts),
+            allow_symbolic_links: other.allow_symbolic_links.or(self.allow_symbolic_links),
+            allow_hard_links: other.allow_hard_links.or(self.allow_hard_links),
+            allow_ref_links: other.allow_ref_links.or(self.allow_ref_links),
 
             proxy_config: self.proxy_config.merge(other.proxy_config),
             build: self.build.merge(other.build),
@@ -2386,6 +2438,16 @@ impl Config {
                 }
                 return Ok(());
             }
+            "allow-symbolic-links" => {
+                self.allow_symbolic_links =
+                    value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "allow-hard-links" => {
+                self.allow_hard_links = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "allow-ref-links" => {
+                self.allow_ref_links = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
             key if key.starts_with("proxy-config") => {
                 if key == "proxy-config" {
                     if let Some(value) = value {
@@ -2683,6 +2745,9 @@ UNUSED = "unused"
             concurrent_solves: Some(8),
             concurrent_downloads: Some(100),
             run_post_link_scripts: true,
+            no_symbolic_links: false,
+            no_hard_links: false,
+            no_ref_links: false,
             use_environment_activation_cache: true,
             pinning_strategy: Some(PinningStrategy::Semver),
         };
@@ -2713,6 +2778,9 @@ UNUSED = "unused"
             concurrent_solves: None,
             concurrent_downloads: None,
             run_post_link_scripts: false,
+            no_symbolic_links: false,
+            no_hard_links: false,
+            no_ref_links: false,
             use_environment_activation_cache: false,
             pinning_strategy: None,
         };
@@ -2867,6 +2935,9 @@ UNUSED = "unused"
                 )]),
             },
             run_post_link_scripts: Some(RunPostLinkScripts::Insecure),
+            allow_symbolic_links: Some(true),
+            allow_hard_links: Some(true),
+            allow_ref_links: Some(false),
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
             tool_platform: None,

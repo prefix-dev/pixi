@@ -5,6 +5,7 @@ pub mod activation;
 pub mod environment;
 pub mod lock_file;
 pub mod prompt;
+pub mod rayon_primer;
 pub mod repodata;
 pub mod workspace;
 

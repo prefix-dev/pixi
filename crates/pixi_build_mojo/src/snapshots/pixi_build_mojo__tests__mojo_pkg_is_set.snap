@@ -7,9 +7,7 @@ package:
   name: foobar
   version: 0.1.0
 build:
-  script:
-    content:
-      - "mojo --version\n\nmojo build -i . \"./main.mojo\" -o $PREFIX/bin/example\n\n\nmojo package -i . \"mylib\" -o $PREFIX/lib/mojo/lib.mojopkg"
+  script: "[ ... script ... ]"
   python:
     entry_points: []
     skip_pyc_compilation: []

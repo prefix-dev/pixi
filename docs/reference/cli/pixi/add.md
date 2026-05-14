@@ -46,6 +46,15 @@ pixi add [OPTIONS] <SPEC>...
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts">`--run-post-link-scripts`</a>
 :  Run post-link scripts (insecure)
+- <a id="arg---no-symbolic-links" href="#arg---no-symbolic-links">`--no-symbolic-links`</a>
+:  Disallow symbolic links during package installation
+<br>**env**: `PIXI_NO_SYMBOLIC_LINKS`
+- <a id="arg---no-hard-links" href="#arg---no-hard-links">`--no-hard-links`</a>
+:  Disallow hard links during package installation
+<br>**env**: `PIXI_NO_HARD_LINKS`
+- <a id="arg---no-ref-links" href="#arg---no-ref-links">`--no-ref-links`</a>
+:  Disallow ref links (copy-on-write) during package installation
+<br>**env**: `PIXI_NO_REF_LINKS`
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
@@ -86,9 +95,10 @@ pixi add [OPTIONS] <SPEC>...
 ## Description
 Adds dependencies to the workspace
 
-The dependencies should be defined as MatchSpec for conda package, or a PyPI
-requirement for the `--pypi` dependencies. If no specific version is
-provided, the latest version compatible with your workspace will be chosen
+The dependencies should be defined as MatchSpec for conda package, a PyPI
+requirement for the `--pypi` dependencies, or an absolute path to a local
+`.conda` or `.tar.bz2` package file. If no specific version is provided,
+the latest version compatible with your workspace will be chosen
 automatically or a * will be used.
 
 Example usage:

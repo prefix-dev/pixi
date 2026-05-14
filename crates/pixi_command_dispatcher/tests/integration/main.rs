@@ -9,43 +9,46 @@ use std::{
 
 use pixi_path::AbsPathBuf;
 
-use event_reporter::EventReporter;
+use event_reporter::{EventReporter, WithEventReporter};
 use fs_err as fs;
 use itertools::Itertools;
 use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError, EnvironmentRef,
-    EnvironmentSpec, EphemeralEnv, Executor, InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec,
-    InstantiateToolEnvironmentSpec, SolvePixiEnvironmentError, SourceCheckoutError,
-    keys::SolvePixiEnvironmentSpec, source_checkout::UrlSourceCheckoutExt,
+    BuildBackendsDir, BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError,
+    EnvironmentRef, EnvironmentSpec, EphemeralEnv, Executor, InstallPixiEnvironmentExt,
+    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, SolvePixiEnvironmentError,
+    keys::SolvePixiEnvironmentSpec,
 };
 use pixi_record::PinnedSourceSpec;
-use pixi_spec::{
-    GitReference, GitSpec, PathSpec, PixiSpec, ResolvedExcludeNewer, Subdirectory, UrlSpec,
-};
+use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec, ResolvedExcludeNewer, Subdirectory};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
-use pixi_url::UrlError;
 use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
 };
-use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
-use tempfile::TempDir;
 use url::Url;
 
 use crate::{event_reporter::Event, event_tree::EventTree};
-use pixi_command_dispatcher::{ReporterContextSpawnHook, source_checkout::UrlCheckoutSemaphore};
-use pixi_compute_engine::ComputeEngine;
-use tokio::sync::Semaphore;
 
 /// Converts a PathBuf to AbsPresumedDirPathBuf for tests.
 fn to_abs_dir(path: impl Into<PathBuf>) -> pixi_path::AbsPresumedDirPathBuf {
     AbsPathBuf::new(path)
         .expect("path is not absolute")
         .into_assume_dir()
+}
+
+/// Returns a fresh tempdir under `CARGO_TARGET_TMPDIR` so per-test
+/// workspaces land on the same drive as the cargo target dir. The
+/// short prefix keeps the deeply nested backend build paths under
+/// Windows' `MAX_PATH = 260` limit.
+fn test_tempdir() -> tempfile::TempDir {
+    tempfile::Builder::new()
+        .prefix("p-")
+        .tempdir_in(env!("CARGO_TARGET_TMPDIR"))
+        .expect("create test tempdir")
 }
 
 /// Empty `SolvePixiEnvironmentSpec` for tests that only care about a
@@ -183,55 +186,6 @@ fn default_build_environment() -> BuildEnvironment {
     BuildEnvironment::simple(tool_platform, tool_virtual_packages)
 }
 
-fn dummy_sha() -> Sha256Hash {
-    Sha256::digest(b"pixi-url-cache-test")
-}
-
-fn prepare_cached_checkout(cache_root: &Path, sha: Sha256Hash) -> PathBuf {
-    let checkout_dir = cache_root.join("checkouts").join(format!("{sha:x}"));
-    fs::create_dir_all(&checkout_dir).unwrap();
-    fs::write(checkout_dir.join("payload.txt"), "cached contents").unwrap();
-    fs::write(checkout_dir.join(".pixi-url-ready"), "ready").unwrap();
-    checkout_dir
-}
-
-fn hello_world_archive() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/url/hello_world.zip")
-}
-
-fn file_url_for_test(tempdir: &TempDir, name: &str) -> Url {
-    let path = tempdir.path().join(name);
-    fs::copy(hello_world_archive(), &path).unwrap();
-    Url::from_file_path(&path).unwrap()
-}
-
-/// Build a minimal [`ComputeEngine`] sufficient for URL-checkout tests.
-///
-/// Populates the data store with only the entries the `CheckoutUrl` Key
-/// reads (url resolver, download client, cache dirs, url-checkout
-/// semaphore, optional reporter), and installs the reporter-context
-/// spawn hook so lifecycle events carry context across task spawns.
-fn url_test_engine(
-    cache_dirs: CacheDirs,
-    reporter: Option<Arc<dyn pixi_command_dispatcher::Reporter>>,
-    sequential: bool,
-    max_concurrent: Option<usize>,
-) -> pixi_compute_engine::ComputeEngine {
-    let mut builder = ComputeEngine::builder()
-        .sequential_branches(sequential)
-        .with_data(pixi_url::UrlResolver::default())
-        .with_data(rattler_networking::LazyClient::default())
-        .with_data(cache_dirs)
-        .with_spawn_hook(Arc::new(ReporterContextSpawnHook));
-    if let Some(reporter) = reporter {
-        builder = builder.with_data(reporter);
-    }
-    if let Some(n) = max_concurrent {
-        builder = builder.with_data(UrlCheckoutSemaphore(Arc::new(Semaphore::new(n))));
-    }
-    builder.build()
-}
-
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn simple_test() {
@@ -244,13 +198,22 @@ pub async fn simple_test() {
     let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/backend_channel_1");
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, registry) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let prefix_dir = tempdir.path().join("prefix");
+    // Use a fresh build-backends dir so the EphemeralEnvKey disk cache never
+    // fires and the snapshot always captures the full cold-cache event tree
+    // (ephemeral-env solve + main solve), regardless of prior test runs.
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
-        .with_reporter(reporter)
+        .with_cache_dirs(
+            default_cache_dirs()
+                .with_workspace(to_abs_dir(tempdir.path()))
+                .with_override::<BuildBackendsDir>(to_abs_dir(
+                    tempdir.path().join("build-backends"),
+                )),
+        )
+        .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
         .finish();
@@ -298,7 +261,7 @@ pub async fn simple_test() {
         prefix_dir.display()
     );
 
-    let event_tree = EventTree::from(events);
+    let event_tree = EventTree::from_store(&events, &registry);
 
     // Redact temp paths and git hashes for stable snapshots.
     //
@@ -333,8 +296,9 @@ pub async fn instantiate_backend_with_compatible_api_version() {
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
@@ -357,8 +321,9 @@ pub async fn instantiate_backend_without_compatible_api_version() {
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
@@ -383,8 +348,9 @@ pub async fn instantiate_backend_with_compatible_api_version_respects_exclude_ne
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
@@ -428,8 +394,9 @@ pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newe
     let channel_url = Url::from_directory_path(channel_dir).unwrap().into();
     let allowed_cutoff = "2026-12-31T00:00:00Z".parse().unwrap();
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
@@ -467,8 +434,9 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
         .finish();
 
@@ -517,7 +485,7 @@ pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicat
 #[tokio::test]
 pub async fn dropping_future_cancels_background_task() {
     // Arrange a dispatcher with an event reporter for synchronization.
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let root_dir = cargo_workspace_dir();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
@@ -530,12 +498,12 @@ pub async fn dropping_future_cancels_background_task() {
     // a solve that never happens. A fresh tempdir guarantees a clean
     // prefix and forces the slow path the test actually wants to
     // observe.
-    let cache_tempdir = TempDir::new().unwrap();
+    let cache_tempdir = tempfile::TempDir::new().unwrap();
     let cache_dirs = CacheDirs::new(to_abs_dir(cache_tempdir.path().to_path_buf()));
 
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(cache_dirs)
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
         .finish();
 
@@ -550,8 +518,7 @@ pub async fn dropping_future_cancels_background_task() {
     // Hold the write lock for the target tool prefix so installation cannot
     // progress even if solve completes; this makes the test deterministic.
     let prefix_dir = dispatcher
-        .cache_dirs()
-        .build_backends()
+        .cache_dir::<BuildBackendsDir>()
         .join(spec.cache_key());
     let mut write_guard = pixi_utils::AsyncPrefixGuard::new(prefix_dir.as_std_path())
         .await
@@ -602,7 +569,7 @@ pub async fn dropping_future_cancels_background_task() {
 pub async fn test_cycle() {
     // Setup a reporter that allows us to trace the steps taken by the command
     // dispatcher.
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, registry) = EventReporter::new();
 
     // Use a fixed solve platform so the snapshot is stable across
     // host platforms. The tool platform still reflects the current
@@ -610,11 +577,11 @@ pub async fn test_cycle() {
     // solve uses a deterministic BuildEnvironment.
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("cycle");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages)
         .with_backend_overrides(BackendOverride::from_memory(
@@ -642,7 +609,7 @@ pub async fn test_cycle() {
     .expect_err("expected a cycle error");
 
     // Output the error and the event tree to a snapshot for debugging.
-    let event_tree = EventTree::from(events);
+    let event_tree = EventTree::from_store(&events, &registry);
     insta::assert_snapshot!(format!(
         "ERROR:\n{}\n\nTRACE:\n{}",
         format_diagnostic(&error),
@@ -656,16 +623,16 @@ pub async fn test_cycle() {
 /// a three-frame ring mixing host and run edges.
 #[tokio::test]
 pub async fn test_cycle_three_packages() {
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, registry) = EventReporter::new();
 
     // Use a fixed solve platform so the snapshot is stable across hosts.
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("cycle_three");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages)
         .with_backend_overrides(BackendOverride::from_memory(
@@ -692,7 +659,7 @@ pub async fn test_cycle_three_packages() {
     .await
     .expect_err("expected a cycle error");
 
-    let event_tree = EventTree::from(events);
+    let event_tree = EventTree::from_store(&events, &registry);
     insta::assert_snapshot!(format!(
         "ERROR:\n{}\n\nTRACE:\n{}",
         format_diagnostic(&error),
@@ -706,7 +673,7 @@ pub async fn test_cycle_three_packages() {
 pub async fn test_stale_host_dependency_triggers_rebuild() {
     // Copy workspace to temp directory so we can modify files without affecting other tests
     let source_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let root_dir = tempdir.path().join("workspace");
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -722,8 +689,10 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
             ))
     };
 
-    let (reporter, first_events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, first_events, registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     // Solve an environment with package-a which will have a host dependency on
     // package-b, and package-c which has a run dependency on package-b.
@@ -785,8 +754,12 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
         .unwrap();
 
     // Construct a new command dispatcher (as if the program is restarted).
-    let (reporter, second_events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    // Reuse the same registry so the merged event tree can resolve
+    // parents from both runs.
+    let (reporter, second_events) = EventReporter::with_registry(registry.clone());
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     // Rerun the installation of the environment.
     let _ = dispatcher
@@ -800,7 +773,8 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 
     // Get all the events that happened.
     let second_events = second_events.take();
-    let event_tree = EventTree::new(first_events.iter().chain(second_events.iter())).to_string();
+    let event_tree =
+        EventTree::new(first_events.iter().chain(second_events.iter()), &registry).to_string();
     eprintln!("{event_tree}");
 
     // Ensure that both package-a and package-b were rebuilt.
@@ -832,7 +806,7 @@ pub async fn instantiate_backend_with_from_source() {
 
     // Copy source-backends workspace to temp directory so we can modify the channel
     let source_dir = workspaces_dir().join("source-backends");
-    let tmp_dir = tempfile::tempdir().unwrap();
+    let tmp_dir = test_tempdir();
     let root_dir = tmp_dir.path().to_path_buf();
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
 
@@ -877,7 +851,7 @@ pub async fn test_dev_source_metadata() {
 
     // Setup: Create a dispatcher with the in-memory backend
     let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let dispatcher = CommandDispatcher::builder()
@@ -906,6 +880,8 @@ pub async fn test_dev_source_metadata() {
                 vec![],
                 BuildEnvironment::simple(tool_platform, tool_virtual_packages),
             ),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
@@ -966,7 +942,7 @@ pub async fn test_dev_source_metadata_package_not_provided() {
 
     // Setup: Create a dispatcher with the in-memory backend
     let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let dispatcher = CommandDispatcher::builder()
@@ -995,6 +971,8 @@ pub async fn test_dev_source_metadata_package_not_provided() {
                 vec![],
                 BuildEnvironment::simple(tool_platform, tool_virtual_packages),
             ),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
@@ -1028,7 +1006,7 @@ pub async fn test_dev_source_metadata_with_variants() {
 
     // Setup: Create a dispatcher with the in-memory backend
     let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let dispatcher = CommandDispatcher::builder()
@@ -1080,6 +1058,8 @@ pub async fn test_dev_source_metadata_with_variants() {
                     channel_priority: Default::default(),
                 },
             )),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
@@ -1170,7 +1150,9 @@ pub async fn test_dev_source_metadata_with_variants() {
 #[tokio::test]
 pub async fn test_force_rebuild() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    // The shared registry threads through both dispatcher runs in this
+    // test so the merged event tree can resolve parents from either run.
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
     let build_command_dispatcher = || {
@@ -1184,8 +1166,10 @@ pub async fn test_force_rebuild() {
             ))
     };
 
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     // Made a source build of package-b CacheStatus::UpToDate by installing the environment once.
     let records = run_pixi_solve(
@@ -1223,8 +1207,6 @@ pub async fn test_force_rebuild() {
 
     let first_events = events.take();
 
-    dispatcher.clear_reporter().await;
-
     // Now we want to rebuild package-b by forcing a rebuild. The
     // artifact-cache invalidation is the caller's responsibility:
     // install_pixi_environment's `force_reinstall` only drives the
@@ -1248,7 +1230,8 @@ pub async fn test_force_rebuild() {
 
     // Get all the events that happened.
     let second_events = events.take();
-    let event_tree = EventTree::new(first_events.iter().chain(second_events.iter())).to_string();
+    let event_tree =
+        EventTree::new(first_events.iter().chain(second_events.iter()), &registry).to_string();
     eprintln!("{event_tree}");
 
     // Ensure that package-b was not queued for rebuild since it is a fresh build already.
@@ -1269,8 +1252,11 @@ pub async fn test_force_rebuild() {
     drop(dispatcher);
 
     // Construct a new command dispatcher (as if the program is restarted).
-    let (reporter, second_events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    // Reuse the registry so the merged event tree resolves parents.
+    let (reporter, second_events) = EventReporter::with_registry(registry.clone());
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     // Same story across process restarts: the caller clears the cache
     // explicitly when forcing a rebuild.
@@ -1302,7 +1288,7 @@ pub async fn test_force_rebuild() {
         .collect::<Vec<_>>();
 
     eprintln!("Events after restart:\n");
-    let event_tree = EventTree::new(second_events.iter()).to_string();
+    let event_tree = EventTree::new(second_events.iter(), &registry).to_string();
     eprintln!("{event_tree}");
 
     assert_eq!(
@@ -1312,7 +1298,6 @@ pub async fn test_force_rebuild() {
     );
 
     // now queue again without force rebuild and ensure no builds are queued
-    dispatcher.clear_reporter().await;
     spec.force_reinstall = HashSet::new();
 
     let last_events = events.take();
@@ -1348,7 +1333,7 @@ pub async fn test_force_rebuild() {
 #[tokio::test]
 pub async fn test_compute_ctx_install_force_reinstall_rebuilds_source_package() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -1429,118 +1414,6 @@ pub async fn test_compute_ctx_install_force_reinstall_rebuilds_source_package() 
     );
 }
 
-#[tokio::test]
-pub async fn pin_and_checkout_url_reuses_cached_checkout() {
-    let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let url_cache_root = cache_dirs.url();
-
-    let sha = dummy_sha();
-    let checkout_dir = prepare_cached_checkout(url_cache_root.as_std_path(), sha);
-
-    let engine = url_test_engine(cache_dirs, None, true, None);
-
-    // Since we have the same expected hash we expect to return existing archive.
-    let spec = UrlSpec {
-        url: "https://example.com/archive.tar.gz".parse().unwrap(),
-        md5: None,
-        sha256: Some(sha),
-        subdirectory: Subdirectory::default(),
-    };
-
-    let spec_for_engine = spec.clone();
-    let checkout = engine
-        .with_ctx(async |ctx| ctx.pin_and_checkout_url(spec_for_engine).await)
-        .await
-        .expect("engine scope should succeed")
-        .expect("url checkout should succeed");
-
-    assert_eq!(checkout.path.as_std_path(), checkout_dir);
-    match checkout.pinned {
-        PinnedSourceSpec::Url(pinned) => {
-            assert_eq!(pinned.url, spec.url);
-            assert_eq!(pinned.sha256, sha);
-        }
-        other => panic!("expected url pinned spec, got {other:?}"),
-    }
-}
-
-#[tokio::test]
-pub async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
-    let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let archive = tempfile::tempdir().unwrap();
-    let url = file_url_for_test(&archive, "archive.zip");
-
-    let engine = url_test_engine(cache_dirs, None, false, None);
-
-    let good_spec = UrlSpec {
-        url: url.clone(),
-        md5: None,
-        sha256: None,
-        subdirectory: Subdirectory::default(),
-    };
-    let bad_spec = UrlSpec {
-        url,
-        md5: None,
-        sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
-        subdirectory: Subdirectory::default(),
-    };
-
-    let (good, bad) = tokio::join!(
-        engine.with_ctx(async |ctx| ctx.pin_and_checkout_url(good_spec).await),
-        engine.with_ctx(async |ctx| ctx.pin_and_checkout_url(bad_spec).await),
-    );
-
-    assert!(good.expect("engine scope").is_ok());
-    assert!(matches!(
-        bad.expect("engine scope"),
-        Err(SourceCheckoutError::UrlError(
-            UrlError::Sha256Mismatch { .. }
-        )),
-    ));
-}
-
-#[tokio::test]
-pub async fn pin_and_checkout_url_validates_cached_results() {
-    let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let archive = tempfile::tempdir().unwrap();
-    let url = file_url_for_test(&archive, "archive.zip");
-
-    let engine = url_test_engine(cache_dirs, None, true, None);
-
-    let spec = UrlSpec {
-        url: url.clone(),
-        md5: None,
-        sha256: None,
-        subdirectory: Subdirectory::default(),
-    };
-
-    engine
-        .with_ctx(async |ctx| ctx.pin_and_checkout_url(spec).await)
-        .await
-        .expect("engine scope")
-        .expect("initial download succeeds");
-
-    let bad_spec = UrlSpec {
-        url: url.clone(),
-        md5: None,
-        sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
-        subdirectory: Subdirectory::default(),
-    };
-
-    let err = engine
-        .with_ctx(async |ctx| ctx.pin_and_checkout_url(bad_spec).await)
-        .await
-        .expect("engine scope")
-        .unwrap_err();
-    assert!(matches!(
-        err,
-        SourceCheckoutError::UrlError(UrlError::Sha256Mismatch { .. })
-    ));
-}
-
 /// Tests that a package is NOT rebuilt across sessions when no source files have changed.
 ///
 /// This test simulates a program restart by dropping and recreating the dispatcher,
@@ -1548,7 +1421,7 @@ pub async fn pin_and_checkout_url_validates_cached_results() {
 #[tokio::test]
 pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
@@ -1601,8 +1474,10 @@ pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
     drop(dispatcher);
 
     // Second session: reinstall WITHOUT modifying any files
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
@@ -1638,7 +1513,7 @@ pub async fn test_package_not_rebuilt_across_sessions_when_no_files_changed() {
 pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
     // Copy workspace to temp directory so we can modify files without affecting other tests
     let source_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let root_dir = tempdir.path().join("workspace");
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
 
@@ -1697,8 +1572,10 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
     fs_err::write(root_dir.join("package-b/TOUCH_FILE"), "trigger rebuild").unwrap();
 
     // Second session: reinstall after file modification
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
@@ -1735,7 +1612,7 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
 pub async fn test_package_rebuilt_when_source_file_modified() {
     // Copy workspace to temp directory so we can modify files without affecting other tests
     let source_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let root_dir = tempdir.path().join("workspace");
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -1790,8 +1667,10 @@ pub async fn test_package_rebuilt_when_source_file_modified() {
         .unwrap();
 
     // Second pass: reinstall with new dispatcher, expect rebuild
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
@@ -1827,11 +1706,11 @@ pub async fn test_package_rebuilt_when_source_file_modified() {
 #[tokio::test]
 pub async fn test_package_not_rebuilt_when_no_files_changed() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -1840,7 +1719,7 @@ pub async fn test_package_not_rebuilt_when_no_files_changed() {
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .finish();
 
     // First pass: build and install package-b
@@ -1922,7 +1801,7 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
     use pixi_record::PinnedPathSpec;
 
     let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
     let build_command_dispatcher = || {
@@ -1950,12 +1829,16 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
                 vec![],
                 BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone()),
             ),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
     // First metadata request
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     dispatcher
         .dev_source_metadata(spec.clone())
@@ -1980,8 +1863,6 @@ pub async fn test_metadata_not_refetched_when_no_files_changed() {
     );
 
     // Second metadata request (same dispatcher, no file changes)
-    dispatcher.clear_reporter().await;
-
     dispatcher
         .dev_source_metadata(spec)
         .await
@@ -2015,7 +1896,7 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
 
     // Copy workspace to temp directory so we can modify files without affecting other tests
     let source_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let root_dir = tempdir.path().join("workspace");
     copy_dir_recursive(&source_dir, &root_dir).unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -2045,6 +1926,8 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
                 vec![],
                 BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone()),
             ),
+            build_string_prefix: None,
+            build_number: None,
         },
     };
 
@@ -2067,8 +1950,10 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
         .unwrap();
 
     // Second metadata request after file modification
-    let (reporter, events) = EventReporter::new();
-    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
 
     dispatcher
         .dev_source_metadata(spec)
@@ -2097,10 +1982,10 @@ pub async fn test_metadata_refetched_when_source_file_modified() {
 /// that extension traits on DataStore provide access to shared resources.
 #[tokio::test]
 pub async fn compute_engine_wired_into_dispatcher() {
-    use pixi_command_dispatcher::compute_data::{
-        HasCacheDirs, HasDownloadClient, HasGateway, HasGitResolver, HasUrlResolver,
-    };
+    use pixi_command_dispatcher::compute_data::HasGateway;
     use pixi_compute_engine::{ComputeCtx, Key};
+    use pixi_compute_network::HasDownloadClient;
+    use pixi_compute_sources::{HasGitResolver, HasUrlResolver};
     use std::fmt;
 
     // A trivial Key that reads Gateway from global_data to prove the wiring works.
@@ -2122,193 +2007,22 @@ pub async fn compute_engine_wired_into_dispatcher() {
             let _ = data.git_resolver();
             let _ = data.url_resolver();
             let _ = data.download_client();
-            let _ = data.cache_dirs();
+            // CacheDirs lives in the engine via `CacheDirsKey`; reading
+            // through the injected key proves the wiring without going
+            // back through the DataStore.
+            let _ = ctx.compute(&pixi_command_dispatcher::CacheDirsKey).await;
             true
         }
     }
 
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .finish();
 
     // Run a Key through the engine; if global data is missing this panics.
     let result = dispatcher.engine().compute(&ProbeKey).await.unwrap();
     assert!(result, "ProbeKey should return true after reading all data");
-}
-
-/// Verifies that a compute-engine-backed URL checkout emits the full
-/// reporter lifecycle in order. The reporter is discovered through
-/// `DataStore`; the `CheckoutUrl` Key fires `on_queued`, then acquires
-/// the semaphore, then fires `on_started`, then fetches, then
-/// `on_finished` via a drop-guard.
-#[tokio::test]
-pub async fn reporter_url_checkout_lifecycle() {
-    let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let archive = tempfile::tempdir().unwrap();
-    let url = file_url_for_test(&archive, "archive.zip");
-
-    let (reporter, events) = EventReporter::new();
-    let engine = url_test_engine(cache_dirs, Some(Arc::new(reporter)), true, None);
-
-    let spec = UrlSpec {
-        url: url.clone(),
-        md5: None,
-        sha256: None,
-        subdirectory: Subdirectory::default(),
-    };
-
-    engine
-        .with_ctx(async |ctx| ctx.pin_and_checkout_url(spec).await)
-        .await
-        .expect("engine scope")
-        .expect("url checkout should succeed");
-
-    let events = events.take();
-    let url_events: Vec<_> = events
-        .iter()
-        .filter(|e| {
-            matches!(
-                e,
-                event_reporter::Event::UrlCheckoutQueued { .. }
-                    | event_reporter::Event::UrlCheckoutStarted { .. }
-                    | event_reporter::Event::UrlCheckoutFinished { .. }
-            )
-        })
-        .collect();
-
-    assert_eq!(
-        url_events.len(),
-        3,
-        "expected 3 url lifecycle events, got: {url_events:#?}"
-    );
-    assert!(matches!(
-        url_events[0],
-        event_reporter::Event::UrlCheckoutQueued { context: None, .. }
-    ));
-    assert!(matches!(
-        url_events[1],
-        event_reporter::Event::UrlCheckoutStarted { .. }
-    ));
-    assert!(matches!(
-        url_events[2],
-        event_reporter::Event::UrlCheckoutFinished { .. }
-    ));
-}
-
-/// Two concurrent `checkout_url` calls for the same URL dedup to a
-/// single compute, so the reporter lifecycle fires exactly once.
-#[tokio::test]
-pub async fn reporter_url_checkout_dedup() {
-    let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let archive = tempfile::tempdir().unwrap();
-    let url = file_url_for_test(&archive, "archive.zip");
-
-    let (reporter, events) = EventReporter::new();
-    let engine = url_test_engine(cache_dirs, Some(Arc::new(reporter)), false, None);
-
-    let spec = UrlSpec {
-        url: url.clone(),
-        md5: None,
-        sha256: None,
-        subdirectory: Subdirectory::default(),
-    };
-
-    let spec_a = spec.clone();
-    let spec_b = spec.clone();
-    let (a, b) = tokio::join!(
-        engine.with_ctx(async |ctx| ctx.pin_and_checkout_url(spec_a).await),
-        engine.with_ctx(async |ctx| ctx.pin_and_checkout_url(spec_b).await),
-    );
-    a.expect("engine scope")
-        .expect("first checkout should succeed");
-    b.expect("engine scope")
-        .expect("second checkout should succeed");
-
-    let events = events.take();
-    let queued = events
-        .iter()
-        .filter(|e| matches!(e, event_reporter::Event::UrlCheckoutQueued { .. }))
-        .count();
-    let started = events
-        .iter()
-        .filter(|e| matches!(e, event_reporter::Event::UrlCheckoutStarted { .. }))
-        .count();
-    let finished = events
-        .iter()
-        .filter(|e| matches!(e, event_reporter::Event::UrlCheckoutFinished { .. }))
-        .count();
-    assert_eq!(
-        (queued, started, finished),
-        (1, 1, 1),
-        "deduped URL checkout should fire the lifecycle exactly once, \
-         got queued={queued} started={started} finished={finished}"
-    );
-}
-
-/// With `max_concurrent_url_checkouts = 1`, `on_started` for each
-/// distinct URL is serialized behind the previous URL's `on_finished`.
-/// The semaphore lives in `DataStore` and is acquired between
-/// `on_queued` and `on_started` inside the `CheckoutUrl` Key.
-#[tokio::test]
-pub async fn semaphore_serializes_concurrent_url_checkouts() {
-    let tempdir = tempfile::tempdir().unwrap();
-    let cache_dirs = CacheDirs::new(to_abs_dir(tempdir.path().join("pixi-cache")));
-    let archive = tempfile::tempdir().unwrap();
-    let url_a = file_url_for_test(&archive, "a.zip");
-    let url_b = file_url_for_test(&archive, "b.zip");
-    let url_c = file_url_for_test(&archive, "c.zip");
-
-    let (reporter, events) = EventReporter::new();
-    let engine = url_test_engine(cache_dirs, Some(Arc::new(reporter)), false, Some(1));
-
-    let mk = |url: Url| UrlSpec {
-        url,
-        md5: None,
-        sha256: None,
-        subdirectory: Subdirectory::default(),
-    };
-
-    let spec_a = mk(url_a);
-    let spec_b = mk(url_b);
-    let spec_c = mk(url_c);
-    let (a, b, c) = tokio::join!(
-        engine.with_ctx(async |ctx| ctx.pin_and_checkout_url(spec_a).await),
-        engine.with_ctx(async |ctx| ctx.pin_and_checkout_url(spec_b).await),
-        engine.with_ctx(async |ctx| ctx.pin_and_checkout_url(spec_c).await),
-    );
-    a.expect("a engine scope").expect("a should succeed");
-    b.expect("b engine scope").expect("b should succeed");
-    c.expect("c engine scope").expect("c should succeed");
-
-    // Serialization invariant: across the entire recorded event stream,
-    // between any `UrlCheckoutStarted(id)` and its matching
-    // `UrlCheckoutFinished(id)`, no other `UrlCheckoutStarted` appears.
-    let events = events.take();
-    let mut in_flight: Option<pixi_command_dispatcher::reporter::UrlCheckoutId> = None;
-    for ev in &events {
-        match ev {
-            event_reporter::Event::UrlCheckoutStarted { id } => {
-                assert!(
-                    in_flight.is_none(),
-                    "on_started for {id:?} fired while {in_flight:?} was still in flight; \
-                     semaphore did not serialize"
-                );
-                in_flight = Some(*id);
-            }
-            event_reporter::Event::UrlCheckoutFinished { id } => {
-                assert_eq!(
-                    in_flight,
-                    Some(*id),
-                    "on_finished for {id:?} without a matching on_started"
-                );
-                in_flight = None;
-            }
-            _ => {}
-        }
-    }
-    assert!(in_flight.is_none(), "a checkout was still in flight at end");
 }
 
 /// `SolvePixiEnvironmentSpec::installed` is handed to the solver as a
@@ -2329,7 +2043,7 @@ pub async fn test_installed_pins_binary_version() {
         cargo_workspace_dir().join("tests/data/channels/channels/multiple_versions_channel_1");
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let (tool_platform, tool_virtual_packages) = tool_platform();
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
         .with_executor(Executor::Serial)
@@ -2407,7 +2121,7 @@ pub async fn test_installed_host_packages_pin_nested_solve() {
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("host-dep-binary");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -2536,7 +2250,7 @@ pub async fn test_installed_hint_reused_across_variants() {
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("host-dep-binary");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -2681,7 +2395,7 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspaces_dir().join("host-dep-binary");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -2818,7 +2532,7 @@ pub async fn test_top_level_and_nested_source_hints_for_same_package_are_normali
         cargo_workspace_dir().join("tests/data/channels/channels/multiple_versions_channel_1");
     let channel_url: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let (tool_platform, tool_virtual_packages) = tool_platform();
-    let root_dir = tempfile::tempdir().unwrap();
+    let root_dir = test_tempdir();
     fs::write(
         root_dir.path().join("pixi.toml"),
         r#"
@@ -2862,7 +2576,7 @@ foo = { path = "../foo" }
     )
     .unwrap();
 
-    let scratch = tempfile::tempdir().unwrap();
+    let scratch = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.path()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(scratch.path())))
@@ -3003,17 +2717,17 @@ foo = { path = "../foo" }
 ///
 /// Exercises the cross-env deduplication guarantee that the compute
 /// engine gives us when two callers request equivalent
-/// `SourceBuildSpecV2` inputs. If `Hash` or `Eq` on the spec starts
+/// `SourceBuildSpec` inputs. If `Hash` or `Eq` on the spec starts
 /// discriminating between equivalent callers, or the engine stops
 /// deduping Keys, this test fails.
 #[tokio::test]
 pub async fn test_source_build_key_dedups_across_parallel_installs() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -3022,7 +2736,7 @@ pub async fn test_source_build_key_dedups_across_parallel_installs() {
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .finish();
 
     let records = run_pixi_solve(
@@ -3078,11 +2792,11 @@ pub async fn test_source_build_key_dedups_across_parallel_installs() {
 #[tokio::test]
 pub async fn test_instantiate_backend_key_dedups_across_parallel_installs() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -3091,7 +2805,7 @@ pub async fn test_instantiate_backend_key_dedups_across_parallel_installs() {
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .finish();
 
     let records = run_pixi_solve(
@@ -3148,11 +2862,11 @@ pub async fn test_instantiate_backend_key_dedups_across_parallel_installs() {
 #[tokio::test]
 pub async fn test_solve_pixi_environment_key_dedups_parallel_identical_solves() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -3161,7 +2875,7 @@ pub async fn test_solve_pixi_environment_key_dedups_parallel_identical_solves() 
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .finish();
 
     let make_spec = || SolvePixiEnvironmentSpec {
@@ -3214,11 +2928,11 @@ pub async fn test_solve_pixi_environment_key_dedups_parallel_identical_solves() 
 #[tokio::test]
 pub async fn test_solve_pixi_environment_key_dedups_across_ephemeral_env_names() {
     let root_dir = workspaces_dir().join("host-dependency");
-    let tempdir = tempfile::tempdir().unwrap();
+    let tempdir = test_tempdir();
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
 
-    let (reporter, events) = EventReporter::new();
+    let (reporter, events, _registry) = EventReporter::new();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(to_abs_dir(root_dir.clone()))
         .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
@@ -3227,7 +2941,7 @@ pub async fn test_solve_pixi_environment_key_dedups_across_ephemeral_env_names()
         .with_backend_overrides(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ))
-        .with_reporter(reporter)
+        .with_event_reporter(reporter)
         .finish();
 
     let make_env_ref = |name: &str| {

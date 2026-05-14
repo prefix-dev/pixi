@@ -1,0 +1,52 @@
+---
+source: crates/pixi_cli/src/workspace/export/conda_environment.rs
+expression: env_yaml.to_yaml_string()
+---
+name: default
+channels:
+- conda-forge
+- nodefaults
+dependencies:
+- _libgcc_mutex ==0.1 conda_forge
+- _openmp_mutex ==4.5 2_gnu
+- brotli-python ==1.1.0 py313h7033f15_4
+- bzip2 ==1.0.8 hda65f42_8
+- ca-certificates ==2024.8.30 hbcca054_0
+- cffi ==2.0.0 py313hf01b4d8_0
+- ld_impl_linux-64 ==2.44 ha97dd6f_2
+- libexpat ==2.7.1 hecca717_0
+- libffi ==3.4.6 h2dba641_1
+- libgcc ==15.1.0 h767d61c_5
+- libgomp ==15.1.0 h767d61c_5
+- liblzma ==5.8.1 hb9d3cd8_2
+- libmpdec ==4.0.0 hb9d3cd8_0
+- libsqlite ==3.50.4 h0c1763c_0
+- libstdcxx ==15.1.0 h8f9b012_5
+- libuuid ==2.41.2 he9a06e4_0
+- libzlib ==1.3.1 hb9d3cd8_2
+- ncurses ==6.5 h2d0b736_3
+- openssl ==3.5.3 h26f9b46_1
+- python ==3.13.7 h2b335a9_100_cp313
+- readline ==8.2 h8c095d6_2
+- tk ==8.6.13 noxft_hd72426e_102
+- zstandard ==0.25.0 py313h54dd161_0
+- zstd ==1.5.7 hb8e6e7a_2
+- certifi ==2025.8.3 pyhd8ed1ab_0
+- charset-normalizer ==3.4.3 pyhd8ed1ab_0
+- h2 ==4.3.0 pyhcf101f3_0
+- hpack ==4.1.0 pyhd8ed1ab_0
+- hyperframe ==6.1.0 pyhd8ed1ab_0
+- idna ==3.10 pyhd8ed1ab_1
+- pycparser ==2.22 pyh29332c3_1
+- pysocks ==1.7.1 pyha55dd90_7
+- python_abi ==3.13 8_cp313
+- requests ==2.32.5 pyhd8ed1ab_0
+- tzdata ==2025b h78e105d_0
+- urllib3 ==2.5.0 pyhd8ed1ab_0
+- pip
+- pip:
+  - test-git-subdir-roundtrip @ git+https://github.com/ihnorton/pixi.git?subdirectory=tests%2Fdata%2Fmock-projects%2Ftest-project-export%2Ftest-git-subdir-roundtrip&rev=ihn%2Ffix-pypi-git-subdir-roundtrip#86fd30aa3baa9bde1491fb1468f767b93f3d5009
+  - rich==13.9.4
+  - markdown-it-py==4.0.0
+  - mdurl==0.1.2
+  - pygments==2.19.2

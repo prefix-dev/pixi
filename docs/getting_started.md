@@ -5,12 +5,14 @@ Let's go through the basic usage of Pixi.
 
 ## Managing workspaces
 
-- [`pixi init`](./reference/cli/pixi/init.md) - create a new Pixi manifest in the current directory
-- [`pixi add`](./reference/cli/pixi/add.md) - add a dependency to your manifest
-- [`pixi remove`](./reference/cli/pixi/remove.md) - remove a dependency from your manifest
-- [`pixi update`](./reference/cli/pixi/update.md) - update dependencies in your manifest
-- [`pixi upgrade`](./reference/cli/pixi/upgrade.md) - upgrade the dependencies in your manifest to the latest versions, even if you pinned them to a specific version
-- [`pixi lock`](./reference/cli/pixi/lock.md) - create or update the lockfile for your manifest
+A workspace is a self-contained project that defines its dependencies, tasks, and one or more environments.
+
+- [`pixi init`](./reference/cli/pixi/init.md) - create a new Pixi workspace
+- [`pixi add`](./reference/cli/pixi/add.md) - add a dependency to the workspace
+- [`pixi remove`](./reference/cli/pixi/remove.md) - remove a dependency from the workspace
+- [`pixi update`](./reference/cli/pixi/update.md) - update dependencies in the workspace
+- [`pixi upgrade`](./reference/cli/pixi/upgrade.md) - upgrade the dependencies in workspace to the latest versions, even if you pinned them to a specific version
+- [`pixi lock`](./reference/cli/pixi/lock.md) - create or update the lockfile for your workspace
 - [`pixi info`](./reference/cli/pixi/info.md) - show information about your workspace
 - [`pixi run`](./reference/cli/pixi/run.md) - run a task defined in your manifest or any command in the current environment
 - [`pixi shell`](./reference/cli/pixi/shell.md) - start a shell in the current environment

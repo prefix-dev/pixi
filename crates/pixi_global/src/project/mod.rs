@@ -13,7 +13,6 @@ use fs::tokio as tokio_fs;
 use fs_err as fs;
 use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
-use indicatif::ProgressBar;
 use is_executable::IsExecutable;
 use itertools::{Either, Itertools};
 pub use manifest::{ExposedType, Manifest, Mapping};
@@ -24,15 +23,14 @@ use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, ComputeResultExt,
     EnvironmentRef, EnvironmentSpec, EphemeralEnv, InstallPixiEnvironmentSpec, Limits,
+    SourceCheckoutExt,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
-    source_checkout::SourceCheckoutExt,
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_path::AbsPathBuf;
-use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec};
 use pixi_spec_containers::DependencyMap;
@@ -142,6 +140,10 @@ pub struct Project {
     /// The command dispatcher for solving environments
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     command_dispatcher: OnceCell<CommandDispatcher>,
+    /// Top-level progress reporter, paired with `command_dispatcher` so
+    /// callers can wipe progress between phases without reaching back
+    /// through the dispatcher.
+    top_level_progress: OnceCell<Arc<pixi_reporters::TopLevelProgress>>,
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
 }
@@ -326,6 +328,7 @@ impl Project {
             repodata_gateway,
             concurrent_downloads_semaphore: OnceCell::new(),
             command_dispatcher: OnceCell::new(),
+            top_level_progress: OnceCell::new(),
             backend_override: None,
         }
     }
@@ -498,6 +501,7 @@ impl Project {
         self.backend_override = Some(backend_override);
         // Clear the command dispatcher so it will be re-initialized with the new backend override
         self.command_dispatcher = OnceCell::new();
+        self.top_level_progress = OnceCell::new();
         self
     }
 
@@ -686,7 +690,7 @@ impl Project {
             })
             .await?;
 
-        command_dispatcher.clear_reporter().await;
+        self.top_level_progress().on_clear();
 
         let install_changes = get_install_changes(result.transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
@@ -1378,13 +1382,17 @@ impl Project {
             .clone()
     }
 
+    /// Returns the top-level progress reporter for this project.
+    fn top_level_progress(&self) -> &Arc<TopLevelProgress> {
+        self.top_level_progress
+            .get_or_init(TopLevelProgress::from_global)
+    }
+
     /// Returns the command dispatcher for this project.
     fn command_dispatcher(&self) -> Result<&CommandDispatcher, CommandDispatcherError> {
         const BUILD_DIR: &str = "bld";
 
         self.command_dispatcher.get_or_try_init(|| {
-            let multi_progress = global_multi_progress();
-            let anchor_pb = multi_progress.add(ProgressBar::hidden());
             let cache_dir_path = pixi_config::get_cache_dir()
                 .map(|cache_dir| cache_dir.join(BUILD_DIR))
                 .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?;
@@ -1397,36 +1405,45 @@ impl Project {
                 .expect("root dir is not absolute")
                 .into_assume_dir();
 
-            Ok(pixi_command_dispatcher::CommandDispatcher::builder()
-                .with_gateway(
-                    self.repodata_gateway()
-                        .map_err(|e| CommandDispatcherError::RepodataGateway(e.into()))?
-                        .clone(),
+            Ok(self
+                .top_level_progress()
+                .clone()
+                .register_with(
+                    pixi_command_dispatcher::CommandDispatcher::builder()
+                        .with_gateway(
+                            self.repodata_gateway()
+                                .map_err(|e| CommandDispatcherError::RepodataGateway(e.into()))?
+                                .clone(),
+                        )
+                        .with_cache_dirs(cache_dirs)
+                        .with_root_dir(root_dir)
+                        .with_download_client(
+                            self.authenticated_client()
+                                .map_err(|e| CommandDispatcherError::AuthenticatedClient(e.into()))?
+                                .clone(),
+                        )
+                        .with_max_download_concurrency(self.concurrent_downloads_semaphore())
+                        .with_limits(Limits {
+                            max_concurrent_solves: self.config().max_concurrent_solves().into(),
+                            ..Limits::default()
+                        })
+                        .with_backend_overrides(self.backend_override.clone().unwrap_or_else(
+                            || {
+                                BackendOverride::from_env()
+                                    .ok()
+                                    .flatten()
+                                    .unwrap_or_default()
+                            },
+                        ))
+                        .with_channel_config(self.global_channel_config().clone())
+                        .with_allow_symbolic_links(self.config.allow_symbolic_links)
+                        .with_allow_hard_links(self.config.allow_hard_links)
+                        .with_allow_ref_links(self.config.allow_ref_links)
+                        .execute_link_scripts(match self.config.run_post_link_scripts() {
+                            RunPostLinkScripts::Insecure => true,
+                            RunPostLinkScripts::False => false,
+                        }),
                 )
-                .with_cache_dirs(cache_dirs)
-                .with_root_dir(root_dir)
-                .with_download_client(
-                    self.authenticated_client()
-                        .map_err(|e| CommandDispatcherError::AuthenticatedClient(e.into()))?
-                        .clone(),
-                )
-                .with_max_download_concurrency(self.concurrent_downloads_semaphore())
-                .with_limits(Limits {
-                    max_concurrent_solves: self.config().max_concurrent_solves().into(),
-                    ..Limits::default()
-                })
-                .with_backend_overrides(self.backend_override.clone().unwrap_or_else(|| {
-                    BackendOverride::from_env()
-                        .ok()
-                        .flatten()
-                        .unwrap_or_default()
-                }))
-                .with_channel_config(self.global_channel_config().clone())
-                .execute_link_scripts(match self.config.run_post_link_scripts() {
-                    RunPostLinkScripts::Insecure => true,
-                    RunPostLinkScripts::False => false,
-                })
-                .with_reporter(TopLevelProgress::new(multi_progress, anchor_pb))
                 .finish())
         })
     }
@@ -1466,6 +1483,8 @@ impl Project {
                     channel_priority: Default::default(),
                 },
             )),
+            build_string_prefix: None,
+            build_number: None,
         };
 
         // Get the metadata using the command dispatcher

@@ -31,20 +31,26 @@ def test_workspace_variants_separate_work_directories(
     # Copy to workspace
     shutil.copytree(workspace_variants_project, tmp_pixi_workspace, dirs_exist_ok=True)
 
-    # Build the packages for all variants
+    # Build all variants and copy them into the workspace directory (no channel indexing).
     verify_cli_command(
-        [pixi, "build", "--path", tmp_pixi_workspace, "--output-dir", str(tmp_pixi_workspace)],
+        [
+            pixi,
+            "publish",
+            "--path",
+            tmp_pixi_workspace,
+            "--target-dir",
+            str(tmp_pixi_workspace),
+        ],
     )
 
-    # Check that work directories exist and are separate for each variant
-    work_dir = tmp_pixi_workspace / ".pixi" / "build" / "work"
-    assert work_dir.exists(), "Work directory should exist"
+    # Check that the package's bld root exists.
+    # Layout: .pixi/bld/<pkg>/<workspace_key>/ (one workspace_key per variant).
+    package_bld_dir = tmp_pixi_workspace / ".pixi" / "bld" / "python_rich"
+    assert package_bld_dir.exists(), "Package build directory should exist"
 
-    # Get all work directories (should be different for py311 and py312)
-    work_dirs = list(work_dir.glob("python_rich-*"))
-
-    # Should have at least 2 work directories (one per Python variant)
-    assert len(work_dirs) >= 2, (
-        f"Expected at least 2 work directories for different Python variants, "
-        f"found {len(work_dirs)}: {[d.name for d in work_dirs]}"
+    # Should have at least 2 workspace directories (one per Python variant).
+    workspace_dirs = [d for d in package_bld_dir.iterdir() if d.is_dir()]
+    assert len(workspace_dirs) >= 2, (
+        f"Expected at least 2 workspace directories for different Python variants, "
+        f"found {len(workspace_dirs)}: {[d.name for d in workspace_dirs]}"
     )

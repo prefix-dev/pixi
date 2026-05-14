@@ -182,7 +182,7 @@ pub trait HasDependencyConfig: Sized {
                     self.dependency_config().host = false;
                     self.dependency_config().build = true;
                 }
-                SpecType::Run => {
+                SpecType::Run | SpecType::RunConstraints => {
                     self.dependency_config().host = false;
                     self.dependency_config().build = false;
                 }

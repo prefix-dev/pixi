@@ -743,7 +743,7 @@ mod test {
                         &mut snapshot,
                         "Discovered workspace at: {}\n- Name: {}",
                         rel_path.display().to_string().replace("\\", "/"),
-                        &discovered
+                        discovered
                             .workspace
                             .value
                             .workspace
@@ -757,8 +757,8 @@ mod test {
                         writeln!(
                             &mut snapshot,
                             "Package: {} @ {}",
-                            &package.clone().value.package.name.unwrap_or("None".into()),
-                            &package
+                            package.clone().value.package.name.unwrap_or("None".into()),
+                            package
                                 .value
                                 .package
                                 .version
@@ -815,7 +815,7 @@ mod test {
                     &mut snapshot,
                     "Discovered workspace at: {}\n- Name: {}",
                     rel_path.display().to_string().replace("\\", "/"),
-                    &discovered
+                    discovered
                         .workspace
                         .value
                         .workspace
@@ -829,8 +829,8 @@ mod test {
                     writeln!(
                         &mut snapshot,
                         "Package: {} @ {}",
-                        &package.clone().value.package.name.unwrap_or("None".into()),
-                        &package
+                        package.clone().value.package.name.unwrap_or("None".into()),
+                        package
                             .value
                             .package
                             .version

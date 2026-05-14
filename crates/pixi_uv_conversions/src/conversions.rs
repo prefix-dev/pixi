@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::GitUrlWithPrefix;
+use crate::git_url::decode_windows_drive_letter;
 use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
@@ -79,7 +80,7 @@ pub fn pypi_options_to_index_locations(
     let index = options
         .index_url
         .clone()
-        .map(DisplaySafeUrl::from)
+        .map(DisplaySafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
@@ -92,7 +93,7 @@ pub fn pypi_options_to_index_locations(
         .into_iter()
         .flat_map(|urls| {
             urls.into_iter()
-                .map(DisplaySafeUrl::from)
+                .map(DisplaySafeUrl::from_url)
                 .map(VerbatimUrl::from_url)
                 .map(IndexUrl::from)
                 .map(Index::from_extra_index_url)
@@ -105,7 +106,9 @@ pub fn pypi_options_to_index_locations(
             .map(|url| match url {
                 FindLinksUrlOrPath::Path(relative) => VerbatimUrl::from_path(&relative, base_path)
                     .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative)),
-                FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone().into())),
+                FindLinksUrlOrPath::Url(url) => {
+                    Ok(VerbatimUrl::from_url(DisplaySafeUrl::from_url(url.clone())))
+                }
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -141,7 +144,7 @@ pub fn locked_indexes_to_index_locations(
         .indexes
         .first()
         .cloned()
-        .map(DisplaySafeUrl::from)
+        .map(DisplaySafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
@@ -151,7 +154,7 @@ pub fn locked_indexes_to_index_locations(
         .iter()
         .skip(1)
         .cloned()
-        .map(DisplaySafeUrl::from)
+        .map(DisplaySafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_extra_index_url);
@@ -165,7 +168,7 @@ pub fn locked_indexes_to_index_locations(
                 })
             }
             rattler_lock::FindLinksUrlOrPath::Url(url) => {
-                Ok(VerbatimUrl::from_url(url.clone().into()))
+                Ok(VerbatimUrl::from_url(DisplaySafeUrl::from_url(url.clone())))
             }
         })
         .collect::<Result<Vec<_>, _>>()?
@@ -302,10 +305,13 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 /// branch information. If provided, this original reference will be used instead
 /// of the one from uv's resolution.
 ///
-/// If no original reference is provided (user didn't specify branch/tag/rev),
-/// we store the resolved commit as `Rev(commit)` rather than `DefaultBranch`.
-/// This ensures the lock file has a precise reference that doesn't require
-/// cache lookups when re-resolving (similar to how uv's lockfile works).
+/// If no original reference is provided, which happens for git deps that
+/// aren't top-level workspace deps (e.g. transitive deps coming in through an
+/// editable self-package's `requires_dist`, issue #5661), fall back to
+/// whatever reference uv resolved. That keeps the lock-file
+/// `?branch=/?tag=/?rev=` in sync with what the manifest's PEP 508 string
+/// actually says, so the satisfiability check matches without relying on the
+/// no-ref fallback.
 pub fn into_pinned_git_spec(
     dist: GitSourceDist,
     original_reference: Option<PixiReference>,
@@ -320,11 +326,8 @@ pub fn into_pinned_git_spec(
     )
     .expect("we expect it to be a valid sha");
 
-    // Use the original reference from the manifest if provided.
-    // If no explicit reference was specified, use DefaultBranch.
-    // The precise commit is already captured in the fragment (`#commit`),
-    // so we don't need to duplicate it in the query string as `?rev=commit`.
-    let reference = original_reference.unwrap_or(PixiReference::DefaultBranch);
+    let reference =
+        original_reference.unwrap_or_else(|| into_pixi_reference(dist.git.reference().clone()));
 
     let pinned_checkout = PinnedGitCheckout::new(
         git_sha,
@@ -334,7 +337,11 @@ pub fn into_pinned_git_spec(
         reference,
     );
 
-    PinnedGitSpec::new(dist.git.repository().clone().into(), pinned_checkout)
+    // uv stores the percent-encoded drive-letter form internally (see
+    // `encode_windows_drive_letter`). Decode it back here so the lock file
+    // shows `file:///D:/...` rather than `file:///D%3A/...`.
+    let repository: url::Url = dist.git.repository().clone().into();
+    PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
 }
 
 /// Convert a locked git url into a parsed git url
@@ -365,6 +372,7 @@ pub fn to_parsed_git_url(
             },
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),
+            uv_git_types::GitLfs::Disabled,
         )
         .into_diagnostic()?,
         if git_source.subdirectory.is_empty() {
@@ -482,21 +490,33 @@ pub fn to_requirements<'req>(
     requirements
 }
 
-/// Convert back to PEP508 without the VerbatimParsedUrl
-/// We need this function because we need to convert to the introduced
-/// `VerbatimParsedUrl` back to crates.io `VerbatimUrl`, for the locking
+/// Convert uv `Requirement<VerbatimParsedUrl>` to `pep508_rs::Requirement`.
+///
+/// Carries `verbatim.given()` over because `pep508_rs::VerbatimUrl`'s
+/// `Display`/`Serialize` ignore it, so a string round-trip would drop the
+/// original spelling and bake absolute paths into `pixi.lock` (#4680).
 pub fn convert_uv_requirements_to_pep508<'req>(
     requires_dist: impl Iterator<Item = &'req uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl>>,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
-    // Convert back top PEP508 Requirement<VerbatimUrl>
-    let requirements: Result<Vec<pep508_rs::Requirement>, _> = requires_dist
+    requires_dist
         .map(|r| {
             let requirement = r.to_string();
-            pep508_rs::Requirement::from_str(&requirement).map_err(crate::Pep508Error::Pep508Error)
-        })
-        .collect();
+            let mut converted = pep508_rs::Requirement::from_str(&requirement)
+                .map_err(crate::Pep508Error::Pep508Error)?;
 
-    Ok(requirements?)
+            if let (
+                Some(uv_pep508::VersionOrUrl::Url(uv_url)),
+                Some(pep508_rs::VersionOrUrl::Url(pep_url)),
+            ) = (&r.version_or_url, &mut converted.version_or_url)
+                && let Some(given) = uv_url.verbatim.given()
+            {
+                *pep_url =
+                    pep508_rs::VerbatimUrl::from_url(pep_url.raw().clone()).with_given(given);
+            }
+
+            Ok(converted)
+        })
+        .collect()
 }
 
 /// Converts `uv_normalize::PackageName` to `pep508_rs::PackageName`
@@ -658,7 +678,7 @@ pub fn configure_insecure_hosts_for_tls_bypass(
 
 fn to_exclude_newer_timestamp(
     exclude_newer: chrono::DateTime<chrono::Utc>,
-) -> uv_resolver::ExcludeNewerTimestamp {
+) -> uv_resolver::ExcludeNewerValue {
     let seconds_since_epoch = exclude_newer.timestamp();
     let nanoseconds = exclude_newer.timestamp_subsec_nanos();
     let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
@@ -695,19 +715,16 @@ pub fn to_exclude_newer(exclude_newer: &ResolvedPypiExcludeNewer) -> uv_resolver
 #[cfg(test)]
 mod tests {
     use super::*;
-    use url::Url;
     use uv_distribution_types::{Index, IndexUrl};
 
     #[test]
     fn test_configure_insecure_hosts_for_tls_bypass_enabled() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://pypi.org/simple/").unwrap().into(),
+            DisplaySafeUrl::parse("https://pypi.org/simple/").unwrap(),
         ));
         let extra_index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://test-index.example.com/simple/")
-                .unwrap()
-                .into(),
+            DisplaySafeUrl::parse("https://test-index.example.com/simple/").unwrap(),
         ));
 
         let indexes = vec![
@@ -736,7 +753,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_tls_bypass_disabled() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://pypi.org/simple/").unwrap().into(),
+            DisplaySafeUrl::parse("https://pypi.org/simple/").unwrap(),
         ));
         let indexes = vec![Index::from_index_url(index_url)];
         let index_locations = IndexLocations::new(indexes, vec![], false);
@@ -757,7 +774,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_tls_bypass_preserves_existing() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://pypi.org/simple/").unwrap().into(),
+            DisplaySafeUrl::parse("https://pypi.org/simple/").unwrap(),
         ));
         let indexes = vec![Index::from_index_url(index_url)];
         let index_locations = IndexLocations::new(indexes, vec![], false);
@@ -784,9 +801,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_flat_index_hosts() {
         // Flat index hosted on a custom domain should be added when tls_no_verify is enabled
         let flat_index = Index::from_find_links(IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://packages.example.org/simple/")
-                .unwrap()
-                .into(),
+            DisplaySafeUrl::parse("https://packages.example.org/simple/").unwrap(),
         )));
         let index_locations = IndexLocations::new(vec![], vec![flat_index], true);
 
@@ -794,5 +809,67 @@ mod tests {
 
         let host_names: Vec<String> = result.iter().map(|h| h.to_string()).collect();
         assert!(host_names.contains(&"packages.example.org".to_string()));
+    }
+
+    /// #4680: relative paths must survive the uv -> pep508_rs conversion.
+    #[test]
+    fn relative_path_requirement_round_trip_keeps_given() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project_root = tmp.path();
+        fs_err::create_dir_all(project_root.join("my_subdir")).unwrap();
+
+        let uv_req: uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl> =
+            uv_pep508::Requirement::parse("my-subdir @ ./my_subdir", project_root).unwrap();
+
+        let Some(uv_pep508::VersionOrUrl::Url(url)) = &uv_req.version_or_url else {
+            panic!("expected uv requirement to carry a Url");
+        };
+        assert_eq!(url.verbatim.given(), Some("./my_subdir"));
+
+        let converted = convert_uv_requirements_to_pep508(std::iter::once(&uv_req))
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
+
+        match converted.version_or_url {
+            Some(pep508_rs::VersionOrUrl::Url(url)) => {
+                assert_eq!(url.given(), Some("./my_subdir"));
+            }
+            other => panic!("expected a VersionOrUrl::Url, got {other:?}"),
+        }
+    }
+
+    /// Index-bearing registry sources must serialize without uv's
+    /// `(index: <url>)` `Display` suffix; `pep508_rs` rejects it (#6049).
+    #[test]
+    fn to_requirements_strips_index_suffix_from_registry_source() {
+        use std::sync::Arc;
+        use uv_distribution_types::{
+            IndexFormat, IndexMetadata, IndexUrl, Requirement as UvRequirement, RequirementSource,
+        };
+        use uv_pep508::MarkerTree;
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("isaaclab").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Registry {
+                specifier: uv_pep440::VersionSpecifiers::empty(),
+                index: Some(IndexMetadata {
+                    url: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(
+                        DisplaySafeUrl::parse("https://pypi.nvidia.com/simple/").unwrap(),
+                    ))),
+                    format: IndexFormat::Simple,
+                }),
+                conflict: None,
+            },
+            origin: None,
+        };
+        assert!(uv_req.to_string().contains("(index:"));
+
+        let converted = to_requirements(std::iter::once(&uv_req)).unwrap();
+        assert_eq!(converted[0].to_string(), "isaaclab");
     }
 }

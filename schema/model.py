@@ -439,6 +439,10 @@ RunDependenciesField = Field(
     None,
     description="The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
 )
+RunConstraintsField = Field(
+    None,
+    description="The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+)
 Dependencies = dict[CondaPackageName, MatchSpec] | None
 
 
@@ -877,6 +881,7 @@ class Package(StrictBaseModel):
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
     run_dependencies: Dependencies = RunDependenciesField
+    run_constraints: Dependencies = RunConstraintsField
 
     target: dict[TargetName, PackageTarget] | None = Field(
         None,
@@ -938,6 +943,20 @@ class Build(StrictBaseModel):
             },
         ],
     )
+    build_string_prefix: NonEmptyStr | None = Field(
+        None, description="An optional prefix to prepend to the auto-generated build string"
+    )
+    build_number: UnsignedInt | None = Field(
+        None, description="The build number to record in the produced package"
+    )
+    secrets: list[NonEmptyStr] | None = Field(
+        None,
+        description=(
+            "Names of environment variables to expose as secrets to the build script. "
+            "Values are read from the host environment at build time; only the names "
+            "live in the manifest. Forwarded to rattler-build's `build.script.secrets`."
+        ),
+    )
 
 
 class BuildBackend(MatchspecTable):
@@ -952,6 +971,7 @@ class BuildBackend(MatchspecTable):
 
 class PackageTarget(StrictBaseModel):
     run_dependencies: Dependencies = RunDependenciesField
+    run_constraints: Dependencies = RunConstraintsField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
 

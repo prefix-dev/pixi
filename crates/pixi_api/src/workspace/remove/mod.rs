@@ -55,6 +55,7 @@ pub async fn remove_conda_deps(
     if options.lock_file_usage == LockFileUsage::Update {
         get_update_lock_file_and_prefix(
             &workspace.default_environment(),
+            None,
             UpdateMode::Revalidate,
             UpdateLockFileOptions {
                 lock_file_usage: options.lock_file_usage,
@@ -93,6 +94,7 @@ pub async fn remove_pypi_deps(
     if options.lock_file_usage == LockFileUsage::Update {
         get_update_lock_file_and_prefix(
             &workspace.default_environment(),
+            None,
             UpdateMode::Revalidate,
             UpdateLockFileOptions {
                 lock_file_usage: options.lock_file_usage,

@@ -249,6 +249,16 @@ This is rarely needed but useful for:
 file-name = "pytorch-2.0.0-cuda.tar.bz2"
 ```
 
+## Local Package Files
+
+You can install a pre-built `.conda` or `.tar.bz2` package directly from the local filesystem by passing an absolute path:
+
+```shell
+pixi add /path/to/package-1.0-hb0f4dca_0.conda
+```
+
+The package name is extracted from the archive filename, and the path is stored as a `file://` URL in the dependency specification.
+
 ## Source Packages
 
 !!! warning

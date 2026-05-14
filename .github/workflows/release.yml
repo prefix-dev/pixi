@@ -201,7 +201,9 @@ jobs:
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
       - name: Azure login (OIDC)
-        if: runner.os == 'Windows'
+        # Skip in dry-run: the Azure federated identity is configured to trust
+        # only release tags / main, so login fails on feature branches.
+        if: runner.os == 'Windows' && needs.plan.outputs.publishing == 'true'
         uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -213,14 +215,19 @@ jobs:
         run: |
           $signDir = Join-Path $env:RUNNER_TEMP "to-sign"
           New-Item -ItemType Directory -Path $signDir -Force
+          # Stage each archive's exe in its own subfolder so binaries with the
+          # same name (e.g. pixi.exe for both x86_64 and aarch64 windows zips)
+          # do not overwrite each other in the signing directory.
           foreach ($zip in (Get-ChildItem target/distrib -Filter "*.zip")) {
             $extractDir = Join-Path $env:RUNNER_TEMP $zip.BaseName
             Expand-Archive -Path $zip.FullName -DestinationPath $extractDir -Force
-            Get-ChildItem $extractDir -Filter "*.exe" -Recurse | Copy-Item -Destination $signDir
+            $zipSignDir = Join-Path $signDir $zip.BaseName
+            New-Item -ItemType Directory -Path $zipSignDir -Force
+            Get-ChildItem $extractDir -Filter "*.exe" -Recurse | Copy-Item -Destination $zipSignDir
           }
           Get-ChildItem target/distrib -Filter "*.msi" | Copy-Item -Destination $signDir
       - name: Sign Windows binaries
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && needs.plan.outputs.publishing == 'true'
         uses: azure/trusted-signing-action@b443cf8ea4124818d2ea9f043cba29fc3ec47b16 # v1.2.0
         with:
           endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
@@ -228,6 +235,7 @@ jobs:
           certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
           files-folder: ${{ runner.temp }}/to-sign
           files-folder-filter: exe,msi
+          files-folder-recurse: true
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
@@ -238,16 +246,18 @@ jobs:
           $signDir = Join-Path $env:RUNNER_TEMP "to-sign"
           foreach ($zip in (Get-ChildItem target/distrib -Filter "*.zip")) {
             $extractDir = Join-Path $env:RUNNER_TEMP $zip.BaseName
-            # Overwrite extracted exe with signed version
+            $zipSignDir = Join-Path $signDir $zip.BaseName
+            # Overwrite extracted exe with signed version from this zip's subfolder
             Get-ChildItem $extractDir -Filter "*.exe" -Recurse | ForEach-Object {
-              $signed = Join-Path $signDir $_.Name
+              $signed = Join-Path $zipSignDir $_.Name
               if (Test-Path $signed) { Copy-Item $signed $_.FullName -Force }
             }
             # Recreate zip
             Remove-Item $zip.FullName
             Compress-Archive -Path (Join-Path $extractDir "*") -DestinationPath $zip.FullName
           }
-          # Overwrite MSI with signed version
+          # Overwrite MSI with signed version (MSI filenames are unique per target,
+          # so they stay at the root of the signing directory)
           Get-ChildItem $signDir -Filter "*.msi" | ForEach-Object {
             $orig = Get-ChildItem target/distrib -Filter $_.Name
             if ($orig) { Copy-Item $_.FullName $orig.FullName -Force }

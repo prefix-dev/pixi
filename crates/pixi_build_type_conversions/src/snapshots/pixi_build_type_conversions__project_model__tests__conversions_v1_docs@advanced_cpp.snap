@@ -4,7 +4,7 @@ expression: project_model
 ---
 {
   "name": "cpp_math",
-  "buildString": null,
+  "buildStringPrefix": null,
   "buildNumber": null,
   "version": "0.1.0",
   "description": null,
@@ -19,7 +19,8 @@ expression: project_model
     "defaultTarget": {
       "hostDependencies": {},
       "buildDependencies": {},
-      "runDependencies": {}
+      "runDependencies": {},
+      "runConstraints": {}
     },
     "targets": {}
   }

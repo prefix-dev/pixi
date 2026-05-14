@@ -1,47 +1,34 @@
 //! `ctx.solve_conda` extension trait. Runs a conda solve on the
 //! blocking-task pool, subject to the `max_concurrent_solves` limit
-//! enforced by the command dispatcher's semaphore, and drives the
-//! [`CondaSolveReporter`] lifecycle (`on_queued` → `on_started` →
-//! `on_finished`).
-//!
-//! The ext method takes an existing [`SolveCondaEnvironmentSpec`] so
-//! it slots into the current reporter contract without any translation
-//! layer. It does **not** fetch repodata; callers pre-fetch and pass
-//! it via `spec.binary_repodata`, matching the existing
-//! `SolveCondaEnvironmentSpec` solver contract.
-
-use std::sync::Arc;
+//! enforced by the command dispatcher's semaphore. Callers pre-fetch
+//! repodata and pass it via `spec.binary_repodata`.
 
 use pixi_compute_engine::{ComputeCtx, DataStore};
 use pixi_record::PixiRecord;
 
 use crate::SolveCondaEnvironmentSpec;
-use crate::compute_data::{HasCondaSolveSemaphore, HasReporter};
+use crate::compute_data::{HasCondaSolveReporter, HasCondaSolveSemaphore};
 use crate::injected_config::ChannelConfigKey;
-use crate::reporter::{CondaSolveId, CondaSolveReporter, Reporter, ReporterContext};
-use crate::reporter_context::current_reporter_context;
-use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
+use crate::reporter::CondaSolveReporter;
 use crate::solve_conda::{SolveCondaBlockingError, SolveCondaEnvironmentError};
+use pixi_compute_reporters::{Active, LifecycleKind, OperationId, ReporterLifecycle};
 
 /// `LifecycleKind` for conda solves.
 struct CondaSolveReporterLifecycle;
 
 impl LifecycleKind for CondaSolveReporterLifecycle {
     type Reporter<'r> = dyn CondaSolveReporter + 'r;
-    type Id = CondaSolveId;
+    type Id = OperationId;
     type Env = SolveCondaEnvironmentSpec;
 
     fn queue<'r>(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
+        reporter: Option<&'r Self::Reporter<'r>>,
         env: &Self::Env,
     ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>> {
-        reporter
-            .and_then(|r| r.as_conda_solve_reporter())
-            .map(|r| Active {
-                reporter: r,
-                id: r.on_queued(parent, env),
-            })
+        reporter.map(|r| Active {
+            reporter: r,
+            id: r.on_queued(env),
+        })
     }
 
     fn on_started<'r>(active: &Active<'r, Self::Reporter<'r>, Self::Id>) {
@@ -56,6 +43,7 @@ impl LifecycleKind for CondaSolveReporterLifecycle {
 /// Extension trait on [`ComputeCtx`] that runs a conda solve with
 /// concurrency limiting and progress reporting.
 pub trait SolveCondaExt {
+    /// Reports progress via `Arc<dyn CondaSolveReporter>` set on the engine `DataStore`, if any.
     fn solve_conda(
         &mut self,
         spec: SolveCondaEnvironmentSpec,
@@ -70,13 +58,10 @@ impl SolveCondaExt for ComputeCtx {
         let channel_config = self.compute(&ChannelConfigKey).await;
         let data: &DataStore = self.global_data();
         let semaphore = data.conda_solve_semaphore().cloned();
-        let reporter = data.reporter().map(Arc::as_ref);
+        let reporter = data.conda_solve_reporter().cloned();
 
-        let lifecycle = ReporterLifecycle::<CondaSolveReporterLifecycle>::queued(
-            reporter,
-            current_reporter_context(),
-            &spec,
-        );
+        let lifecycle =
+            ReporterLifecycle::<CondaSolveReporterLifecycle>::queued(reporter.as_deref(), &spec);
 
         let _permit = match semaphore.as_ref() {
             Some(s) => Some(

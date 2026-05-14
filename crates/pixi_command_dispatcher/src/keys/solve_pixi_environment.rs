@@ -20,6 +20,7 @@ use derive_more::Display;
 use futures::stream::{FuturesUnordered, StreamExt};
 use ordermap::OrderMap;
 use pixi_compute_engine::{ComputeCtx, Demand, Key, ParallelBuilder};
+use pixi_compute_reporters::OperationId;
 use pixi_record::{DevSourceRecord, PinnedSourceSpec, PixiRecord, UnresolvedPixiRecord};
 use pixi_spec::{
     BinarySpec, DevSourceSpec, PixiSpec, ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec,
@@ -28,30 +29,61 @@ use pixi_spec::{
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
 use rattler_conda_types::{
-    MatchSpec, PackageName, PackageNameMatcher, ParseMatchSpecOptions, RepodataRevision,
+    ChannelConfig, ChannelUrl, MatchSpec, PackageName, PackageNameMatcher, ParseMatchSpecOptions,
+    RepodataRevision,
 };
 use rattler_solve::SolveStrategy;
 use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, DevSourceMetadataKey, DevSourceMetadataSpec,
-    EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, PixiSolveEnvironmentSpec,
-    PixiSolveReporter, PtrArc, Reporter, ReporterContext, SolvePixiEnvironmentError,
-    SourceMetadata,
+    EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, MissingChannelError,
+    PixiSolveEnvironmentSpec, PixiSolveReporter, PtrArc, SolvePixiEnvironmentError, SourceMetadata,
     build::PinnedSourceCodeLocation,
-    compute_data::HasReporter,
+    compute_data::HasPixiSolveReporter,
+    cycle::CycleEnvironment,
     injected_config::ChannelConfigKey,
     keys::{
         resolve_source_package::{ResolveSourcePackageKey, ResolveSourcePackageSpec},
         resolve_source_record::{SourceCycleFrame, render_cycle},
         solve_conda::{SolveCondaKey, SolveCondaKeyError, SolveCondaSpec},
     },
-    reporter::{PixiSolveId, has_direct_conda_dependency},
-    reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context},
-    reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle},
-    source_checkout::SourceCheckoutExt,
-    source_metadata::CycleEnvironment,
+    reporter::has_direct_conda_dependency,
 };
+use pixi_compute_reporters::{Active, LifecycleKind, ReporterLifecycle};
+use pixi_compute_sources::SourceCheckoutExt;
+
+/// Returns an error if any binary spec requests a channel that is not
+/// present in the environment's channel list.
+fn check_missing_channels(
+    binary_specs: DependencyMap<PackageName, BinarySpec>,
+    channels: &[ChannelUrl],
+    channel_config: &ChannelConfig,
+) -> Result<(), Box<SolvePixiEnvironmentError>> {
+    for (pkg, spec) in binary_specs.iter_specs() {
+        if let BinarySpec::DetailedVersion(v) = spec
+            && let Some(channel) = &v.channel
+        {
+            let base_url = channel
+                .clone()
+                .into_base_url(channel_config)
+                .map_err(|err| {
+                    Box::new(SolvePixiEnvironmentError::ParseChannelError(Arc::new(err)))
+                })?;
+
+            if !channels.iter().any(|c| c == &base_url) {
+                return Err(Box::new(SolvePixiEnvironmentError::MissingChannel(
+                    MissingChannelError {
+                        package: pkg.as_normalized().to_string(),
+                        channel: base_url,
+                        advice: None,
+                    },
+                )));
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Input to [`SolvePixiEnvironmentKey`]. The env display label comes
 /// from `env_ref`'s `Display` impl.
@@ -134,6 +166,9 @@ impl PartialEq for SolvePixiEnvironmentSpec {
 
 impl Eq for SolvePixiEnvironmentSpec {}
 
+/// Compute-engine Key that solves a pixi environment.
+///
+/// Reports progress via `Arc<dyn PixiSolveReporter>` set on the engine `DataStore`, if any.
 #[derive(Clone, Debug, Display)]
 #[display("{}", _0.env_ref)]
 pub struct SolvePixiEnvironmentKey(pub Arc<SolvePixiEnvironmentSpec>);
@@ -184,31 +219,21 @@ impl Key for SolvePixiEnvironmentKey {
         // `ctx` alive across later mutable-borrow calls in this
         // function.
         let reporter_spec = reporter_view_spec(spec.env_ref.to_string(), &spec);
-        let reporter_arc: Option<Arc<dyn Reporter>> = ctx.global_data().reporter().cloned();
-        let parent_reporter_ctx = current_reporter_context();
+        let reporter_arc: Option<Arc<dyn PixiSolveReporter>> =
+            ctx.global_data().pixi_solve_reporter().cloned();
         let lifecycle = ReporterLifecycle::<PixiSolveReporterLifecycle>::queued(
             reporter_arc.as_deref(),
-            parent_reporter_ctx,
             &reporter_spec,
         );
-        // Scope nested Keys under our reporter context so downstream
-        // computes (source metadata, build backend metadata, nested
-        // solves, etc.) attribute to this solve rather than the caller,
-        // producing a nested trace. Falls back to the parent's context
-        // when no reporter is attached.
-        let scope_ctx = lifecycle
-            .id()
-            .map(ReporterContext::SolvePixi)
-            .or(parent_reporter_ctx);
+        let active_id = lifecycle.id();
         let _lifecycle = lifecycle.start();
 
-        // Scope nested Keys under our reporter context so downstream
-        // computes (dev-source metadata, source metadata, build
-        // backend metadata, nested SPEK solves, top-level conda solve)
-        // attribute to this solve and render a nested event tree.
+        // Scope nested Keys under this solve's id so downstream computes
+        // attribute to it; falls through to the parent context unchanged
+        // when no reporter is attached.
         let work = compute_inner(ctx, spec, env_spec, channel_config);
-        match scope_ctx {
-            Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+        match active_id {
+            Some(id) => id.scope_active(work).await,
             None => work.await,
         }
     }
@@ -238,8 +263,7 @@ impl Key for SolvePixiEnvironmentKey {
 }
 
 /// Core body of [`SolvePixiEnvironmentKey::compute`], separated so
-/// the caller can run it inside a [`CURRENT_REPORTER_CONTEXT`] scope
-/// keyed on this solve's reporter id.
+/// the caller can wrap it in `OperationId::scope_active`.
 async fn compute_inner(
     ctx: &mut ComputeCtx,
     spec: Arc<SolvePixiEnvironmentSpec>,
@@ -265,12 +289,8 @@ async fn compute_inner(
         spec.dependencies.clone().into_specs(),
     );
 
-    crate::solve_pixi::check_missing_channels(
-        binary_specs.clone(),
-        &env_spec.channels,
-        &channel_config,
-    )
-    .map_err(|b| *b)?;
+    check_missing_channels(binary_specs.clone(), &env_spec.channels, &channel_config)
+        .map_err(|b| *b)?;
 
     // BFS over (package, source_location) pairs. Driving the walk off
     // assembled records (not raw `CondaOutput.run_dependencies`) is
@@ -576,6 +596,8 @@ async fn process_dev_sources(
                 manifest_source: pinned,
                 preferred_build_source,
                 env_ref,
+                build_string_prefix: None,
+                build_number: None,
             },
         });
         metadata_futs.push(ctx.compute(&key));
@@ -616,20 +638,17 @@ struct PixiSolveReporterLifecycle;
 
 impl LifecycleKind for PixiSolveReporterLifecycle {
     type Reporter<'r> = dyn PixiSolveReporter + 'r;
-    type Id = PixiSolveId;
+    type Id = OperationId;
     type Env = PixiSolveEnvironmentSpec;
 
     fn queue<'r>(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
+        reporter: Option<&'r Self::Reporter<'r>>,
         env: &Self::Env,
     ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>> {
-        reporter
-            .and_then(|r| r.as_pixi_solve_reporter())
-            .map(|r| Active {
-                reporter: r,
-                id: r.on_queued(parent, env),
-            })
+        reporter.map(|r| Active {
+            reporter: r,
+            id: r.on_queued(env),
+        })
     }
 
     fn on_started<'r>(active: &Active<'r, Self::Reporter<'r>, Self::Id>) {

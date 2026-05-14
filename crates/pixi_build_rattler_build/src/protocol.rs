@@ -86,12 +86,18 @@ impl Protocol for RattlerBuildBackend {
         let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(params.host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(params.host_platform)
             .with_experimental(self.config.experimental.unwrap_or(false))
             .with_recipe_path(&self.recipe_source.path);
+        if let Some(prefix) = &self.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -337,12 +343,18 @@ impl Protocol for RattlerBuildBackend {
         let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(host_platform)
             .with_experimental(self.config.experimental.unwrap_or(false))
             .with_recipe_path(&self.recipe_source.path);
+        if let Some(prefix) = &self.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -433,6 +445,7 @@ impl Protocol for RattlerBuildBackend {
                 sandbox_config: None,
                 exclude_newer: None,
                 env_isolation: Default::default(),
+                v3: false,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,
@@ -594,6 +607,12 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
 
         let mut workspace_dependencies = HashMap::new();
 
+        let build_string_prefix = params
+            .project_model
+            .as_ref()
+            .and_then(|m| m.build_string_prefix.clone());
+        let build_number = params.project_model.as_ref().and_then(|m| m.build_number);
+
         if let Some(target) = params.project_model.and_then(|m| m.targets) {
             fn extract_workspace_deps(
                 target: Target,
@@ -653,8 +672,9 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
             config,
         )?;
 
-        // Set the workspace dependencies
         instance.workspace_dependencies = workspace_dependencies;
+        instance.build_string_prefix = build_string_prefix;
+        instance.build_number = build_number;
 
         Ok((Box::new(instance), InitializeResult {}))
     }

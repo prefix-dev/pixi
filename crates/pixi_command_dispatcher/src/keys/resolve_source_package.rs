@@ -10,26 +10,25 @@ use std::{collections::BTreeMap, hash::Hash, sync::Arc};
 use derive_more::Display;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_compute_engine::{ComputeCtx, Key};
+use pixi_compute_reporters::OperationId;
 use pixi_record::{PinnedSourceSpec, SourceRecord};
 use pixi_spec::SourceLocationSpec;
 use rattler_conda_types::PackageName;
 use tracing::instrument;
 
 use crate::{
-    BuildBackendMetadataSpec, EnvironmentRef, InstalledSourceHints, PtrArc, Reporter,
-    ReporterContext, SourceMetadataError, SourceMetadataSpec,
+    BuildBackendMetadataSpec, EnvironmentRef, InstalledSourceHints, PtrArc, SourceMetadataError,
+    SourceMetadataReporterSpec, SourceRecordError,
     build::PinnedSourceCodeLocation,
-    compute_data::HasReporter,
+    compute_data::HasSourceMetadataReporter,
     keys::{
         resolve_source_record::assemble_source_record,
-        source_metadata::{SourceMetadataKey, SourceMetadataSpecV2},
+        source_metadata::{SourceMetadataKey, SourceMetadataSpec},
     },
-    reporter::{SourceMetadataId, SourceMetadataReporter},
-    reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context},
-    reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle},
-    source_checkout::SourceCheckoutExt,
-    source_record::SourceRecordError,
+    reporter::SourceMetadataReporter,
 };
+use pixi_compute_reporters::{Active, LifecycleKind, ReporterLifecycle};
+use pixi_compute_sources::SourceCheckoutExt;
 
 /// Input to [`ResolveSourcePackageKey`]. `preferred_build_source` is the
 /// full pin map inherited from the enclosing
@@ -55,6 +54,8 @@ pub struct ResolveSourcePackageSpec {
 
 /// Compute-engine Key returning every variant's assembled
 /// `SourceRecord` for one source package.
+///
+/// Reports progress via `Arc<dyn SourceMetadataReporter>` set on the engine `DataStore`, if any.
 #[derive(Clone, Debug, Display, Eq, Hash, PartialEq)]
 #[display("{}@{} in {}", _0.package.as_source(), _0.source_location, _0.env_ref)]
 pub struct ResolveSourcePackageKey(pub Arc<ResolveSourcePackageSpec>);
@@ -114,41 +115,38 @@ impl Key for ResolveSourcePackageKey {
         // `assemble_source_record` fires `Source record`; scoping
         // both under this lifecycle nests them as children of
         // `Source metadata` in the event tree.
-        let reporter_spec = SourceMetadataSpec {
+        let reporter_spec = SourceMetadataReporterSpec {
             package: spec.package.clone(),
             backend_metadata: BuildBackendMetadataSpec {
                 manifest_source: checkout.pinned.clone(),
                 preferred_build_source: own_pin.clone(),
                 env_ref: spec.env_ref.clone(),
+                build_string_prefix: None,
+                build_number: None,
             },
             exclude_newer: None,
         };
-        let reporter_arc: Option<Arc<dyn Reporter>> = ctx.global_data().reporter().cloned();
-        let parent_reporter_ctx = current_reporter_context();
+        let reporter_arc: Option<Arc<dyn SourceMetadataReporter>> =
+            ctx.global_data().source_metadata_reporter().cloned();
         let lifecycle = ReporterLifecycle::<SourceMetadataReporterLifecycle>::queued(
             reporter_arc.as_deref(),
-            parent_reporter_ctx,
             &reporter_spec,
         );
-        let scope_ctx = lifecycle
-            .id()
-            .map(ReporterContext::SourceMetadata)
-            .or(parent_reporter_ctx);
+        let active_id = lifecycle.id();
         let _lifecycle = lifecycle.start();
 
         let work = resolve_source_package_inner(ctx, spec, own_pin, manifest_pin_override);
-        match scope_ctx {
-            Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+        match active_id {
+            Some(id) => id.scope_active(work).await,
             None => work.await,
         }
     }
 }
 
 /// Core of [`ResolveSourcePackageKey::compute`], separated so the
-/// wrapper can run it inside a [`CURRENT_REPORTER_CONTEXT`] scope
-/// keyed on this package's source-metadata reporter id. The caller
-/// has already fired `on_queued` / `on_started`; this just runs the
-/// metadata fetch + per-variant assembly.
+/// wrapper can run it under `OperationId::scope_active`. The
+/// caller has already fired `on_queued` / `on_started`; this just
+/// runs the metadata fetch + per-variant assembly.
 async fn resolve_source_package_inner(
     ctx: &mut ComputeCtx,
     spec: Arc<ResolveSourcePackageSpec>,
@@ -158,7 +156,7 @@ async fn resolve_source_package_inner(
     // SMK only needs this package's pin as a checkout override;
     // the full pin map flows through assembly for recursion.
     let outputs = ctx
-        .compute(&SourceMetadataKey::new(SourceMetadataSpecV2 {
+        .compute(&SourceMetadataKey::new(SourceMetadataSpec {
             package: spec.package.clone(),
             source_location: spec.source_location.clone(),
             preferred_build_source: own_pin,
@@ -198,26 +196,22 @@ fn map_source_metadata_error(err: SourceMetadataError) -> SourceRecordError {
     }
 }
 
-/// [`LifecycleKind`] wiring [`SourceMetadataReporter`] events for a
-/// [`ResolveSourcePackageKey`] compute.
+/// `LifecycleKind` for [`ResolveSourcePackageKey`].
 struct SourceMetadataReporterLifecycle;
 
 impl LifecycleKind for SourceMetadataReporterLifecycle {
     type Reporter<'r> = dyn SourceMetadataReporter + 'r;
-    type Id = SourceMetadataId;
-    type Env = SourceMetadataSpec;
+    type Id = OperationId;
+    type Env = SourceMetadataReporterSpec;
 
     fn queue<'r>(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
+        reporter: Option<&'r Self::Reporter<'r>>,
         env: &Self::Env,
     ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>> {
-        reporter
-            .and_then(|r| r.as_source_metadata_reporter())
-            .map(|r| Active {
-                reporter: r,
-                id: r.on_queued(parent, env),
-            })
+        reporter.map(|r| Active {
+            reporter: r,
+            id: r.on_queued(env),
+        })
     }
 
     fn on_started<'r>(active: &Active<'r, Self::Reporter<'r>, Self::Id>) {

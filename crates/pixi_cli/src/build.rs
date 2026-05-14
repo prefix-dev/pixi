@@ -1,36 +1,12 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ffi::OsStr,
-    path::PathBuf,
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use fs_err::tokio as tokio_fs;
-use indicatif::ProgressBar;
-use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::BackendOverride;
-use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv,
-    keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpecV2},
-};
 use pixi_config::ConfigCli;
-use pixi_consts::consts::{
-    MOJOPROJECT_MANIFEST, PYPROJECT_MANIFEST, RATTLER_BUILD_FILE_NAMES, ROS_BACKEND_FILE_NAMES,
-    WORKSPACE_MANIFEST,
-};
-use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart};
-use pixi_manifest::FeaturesExt;
-use pixi_path::AbsPathBuf;
-use pixi_progress::global_multi_progress;
-use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
-use pixi_reporters::TopLevelProgress;
-use pixi_spec::SourceLocationSpec;
-use pixi_utils::variants::VariantConfig;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::Platform;
 
 use crate::cli_config::LockAndInstallConfig;
+use crate::publish;
 
 /// Build a conda package from a Pixi package.
 #[derive(Parser, Debug)]
@@ -80,346 +56,54 @@ pub struct Args {
     pub path: Option<PathBuf>,
 }
 
-/// Validate that the full path of package manifest exists and is a supported
-/// format. Directories are allowed (for discovery), and specific manifest files
-/// must be supported formats.
-pub(crate) async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
-    let supported_file_names: Vec<&str> = [
-        // backend-specific build files
-        // that will be autodiscovered
-        &ROS_BACKEND_FILE_NAMES[..],
-        &RATTLER_BUILD_FILE_NAMES[..],
-        // manifests that can contain a package section in it
-        &[WORKSPACE_MANIFEST],
-        &[PYPROJECT_MANIFEST],
-        &[MOJOPROJECT_MANIFEST],
-    ]
-    .concat();
-
-    // we dont allow for now passing directories without a manifest file
-    // from the list below
-    let unsupported_implicit_file_names: Vec<&str> = [&ROS_BACKEND_FILE_NAMES[..]].concat();
-
-    // Iterate over the files in the directory to provide a more helpful error
-    // of what manifests were found.
-    if path.is_dir() {
-        let mut entries = tokio_fs::read_dir(&path).await.into_diagnostic()?;
-
-        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
-            let path = entry.path();
-            if let Some(filename) = path.file_name().and_then(|f| f.to_str()) {
-                if unsupported_implicit_file_names.contains(&filename) {
-                    return Err(miette::diagnostic!(
-                        help = format!("did you mean {filename}?"),
-                        "the build manifest path '{}' is a directory, please provide the path to the manifest file",
-                        path.display(),
-                    ).into());
-                }
-
-                // we found a supported manifest file
-                // which means that we will let our backend discovery handle it
-                if supported_file_names.contains(&filename) {
-                    return Ok(());
-                }
-            }
-        }
-    } else {
-        let filename = path
-            .file_name()
-            .and_then(OsStr::to_str)
-            .ok_or_else(|| miette::miette!("Failed to extract file name from {:?}", path))?;
-
-        if !supported_file_names
-            .iter()
-            .any(|names| names.contains(filename))
-        {
-            let supported_names = supported_file_names
-                .iter()
-                .map(|name| name.to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            return Err(miette::diagnostic!(
-                help = format!("Supported formats are: {supported_names}"),
-                "the build manifest file '{}' is not a supported format.",
-                path.display(),
-            )
-            .into());
-        }
-    }
-
-    Ok(())
-}
-
-pub(crate) async fn determine_discovery_start(
-    path: &Option<PathBuf>,
-) -> miette::Result<DiscoveryStart> {
-    match path {
-        Some(path) => {
-            // We need to solve the path to an absolute path
-            // because we can point to specific package manifest file
-            // but still want to discover the workspace from the package location.
-            // For this, we need to take the parent directory of the package manifest file
-            // which `WorkspaceLocator` will use to discover the workspace.
-            let resolved_path = if path.is_relative() {
-                std::env::current_dir().into_diagnostic()?.join(path)
-            } else {
-                path.to_path_buf()
-            };
-
-            // If it's a directory, use it as the search root
-            if resolved_path.is_dir() {
-                Ok(DiscoveryStart::SearchRoot(resolved_path))
-            } else {
-                // If it's a file, use its parent directory as the search root
-                let package_dir = resolved_path.parent().ok_or_else(|| {
-                    miette::miette!("Failed to get parent directory of package manifest")
-                })?;
-                Ok(DiscoveryStart::SearchRoot(package_dir.to_path_buf()))
-            }
-        }
-        // If no path is provided, use the current directory
-        None => Ok(DiscoveryStart::CurrentDir),
-    }
-}
-
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // Locate the workspace based on the provided configuration.
-    // When --path is specified, we should find the workspace manifest relative
-    // to the path's directory, not the current working directory.
-    let workspace_locator = determine_discovery_start(&args.path).await?;
+    let mut cmd_parts = vec!["pixi publish".to_string()];
 
-    let mut workspace = WorkspaceLocator::for_cli()
-        .with_search_start(workspace_locator.clone())
-        .with_closest_package(false)
-        .locate()?
-        .with_cli_config(args.config_cli);
-    if let Some(backend_override) = args.backend_override.clone() {
-        workspace = workspace.with_backend_override(backend_override);
+    if args.target_platform != Platform::current() {
+        cmd_parts.push(format!("--target-platform {}", args.target_platform));
     }
-
-    // Sanity check of workspace, ensuring .pixi directory and .gitignore exist
-    sanity_check_workspace(&workspace).await?;
-
-    // Construct a command dispatcher based on the workspace.
-    let multi_progress = global_multi_progress();
-    let anchor_pb = multi_progress.add(ProgressBar::hidden());
-    let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
-        .expect("cache dir is not absolute")
-        .into_assume_dir();
-    let workspace_dir = AbsPathBuf::new(workspace.pixi_dir())
-        .expect("pixi dir is not absolute")
-        .into_assume_dir();
-    let mut cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
-    if let Some(build_dir) = args.build_dir {
-        let build_dir = AbsPathBuf::new(build_dir)
-            .expect("build dir is not absolute")
-            .into_assume_dir();
-        cache_dirs.set_backend_metadata(build_dir);
+    if args.build_platform != Platform::current() {
+        cmd_parts.push(format!("--build-platform {}", args.build_platform));
     }
-    let command_dispatcher = workspace
-        .command_dispatcher_builder()?
-        .with_cache_dirs(cache_dirs)
-        .with_reporter(TopLevelProgress::new(multi_progress, anchor_pb))
-        .finish();
-
-    // Determine the variant configuration for the build.
-    let VariantConfig {
-        variant_configuration,
-        variant_files,
-    } = workspace.variants(args.target_platform)?;
-
-    // Build platform virtual packages
-    let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
-        .default_environment()
-        .virtual_packages(args.build_platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
-        .collect();
-
-    // Host platform virtual packages
-    let host_virtual_packages: Vec<GenericVirtualPackage> = workspace
-        .default_environment()
-        .virtual_packages(args.target_platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
-        .collect();
-
-    let build_environment = BuildEnvironment {
-        host_platform: args.target_platform,
-        build_platform: args.build_platform,
-        build_virtual_packages,
-        host_virtual_packages,
-    };
-
-    // Query any and all information we can acquire about the package we're
-    // attempting to build.
-    let Ok(manifest_path) = workspace_locator.path() else {
-        miette::bail!("could not determine the current working directory to locate the workspace");
-    };
-
-    let package_manifest_path = match args.path {
-        Some(path) => {
-            validate_package_manifest(&path).await?;
-            path
-        }
-        None => manifest_path.clone(),
-    };
-
-    let package_manifest_path_canonical = dunce::canonicalize(&package_manifest_path)
-        .into_diagnostic()
-        .with_context(|| {
-            format!(
-                "failed to canonicalize manifest path '{}'",
-                package_manifest_path.display()
-            )
-        })?;
-
-    // Store the manifest directory relative to the workspace root when possible to
-    // keep the pinned path relocatable and avoid double-prefixing during
-    // resolution.
-    let manifest_path_spec =
-        pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
-            .unwrap_or_else(|| package_manifest_path_canonical.to_path_buf());
-
-    let channel_config = workspace.channel_config();
-    let channels = workspace
-        .default_environment()
-        .channel_urls(&channel_config)
-        .into_diagnostic()?;
-
-    let manifest_source: PinnedSourceSpec = PinnedPathSpec {
-        path: manifest_path_spec.to_string_lossy().into_owned().into(),
+    if let Some(ref build_dir) = args.build_dir {
+        cmd_parts.push(format!("--build-dir {}", build_dir.display()));
     }
-    .into();
-
-    // Create the build backend metadata specification.
-    // When running `pixi build`, the exclude_newer config is ignored; it
-    // only matters when using the package as a source dependency.
-    let env_ref = EnvironmentRef::Ephemeral(EphemeralEnv::new(
-        manifest_source.to_string(),
-        EnvironmentSpec {
-            channels: channels.clone(),
-            build_environment: build_environment.clone(),
-            variants: pixi_utils::variants::VariantConfig {
-                variant_configuration: variant_configuration.clone(),
-                variant_files: variant_files.clone(),
-            },
-            exclude_newer: None,
-            channel_priority: Default::default(),
-        },
-    ));
-    let backend_metadata_spec = BuildBackendMetadataSpec {
-        manifest_source: manifest_source.clone(),
-        preferred_build_source: None,
-        env_ref: env_ref.clone(),
-    };
-    let backend_metadata = command_dispatcher
-        .build_backend_metadata(backend_metadata_spec.clone())
-        .await?;
-
-    // Ensure the final output directory exists
-    fs_err::create_dir_all(&args.output_dir)
-        .into_diagnostic()
-        .with_context(|| {
-            format!(
-                "failed to create output directory '{0}'",
-                args.output_dir.display()
-            )
-        })?;
-
-    // Resolve a fully-assembled SourceRecord per output. Unique package
-    // names dedupe via the compute engine; each RSP call returns every
-    // variant the backend declares for that package.
-    let unique_names: BTreeSet<_> = backend_metadata
-        .metadata
-        .outputs
-        .iter()
-        .map(|o| o.metadata.name.clone())
-        .collect();
-    let source_location: SourceLocationSpec = manifest_source.clone().into();
-    let mut resolved_records = Vec::new();
-    for name in unique_names {
-        let rsp = ResolveSourcePackageSpec {
-            package: name,
-            source_location: source_location.clone(),
-            preferred_build_source: Arc::new(BTreeMap::new()),
-            env_ref: env_ref.clone(),
-            installed_source_hints: Default::default(),
-        };
-        let records = command_dispatcher
-            .engine()
-            .compute(&ResolveSourcePackageKey::new(rsp))
-            .await
-            .map_err_into_dispatcher(std::convert::identity)
-            .into_diagnostic()?;
-        resolved_records.extend(records.iter().cloned());
-    }
-
-    // `--clean` nukes the per-package artifact + workspace caches so
-    // the upcoming SourceBuildKey calls see an empty cache and rebuild
-    // from scratch.
     if args.clean {
-        for record in &resolved_records {
-            command_dispatcher
-                .clear_source_build_cache(&record.data.package_record.name)
-                .into_diagnostic()?;
-        }
+        cmd_parts.push("--clean".to_string());
     }
-    for record in resolved_records {
-        let record = Arc::unwrap_or_clone(record);
-        let build_spec = SourceBuildSpecV2 {
-            record: Arc::new(record.into()),
-            channels: channels.clone(),
-            // `pixi build` ignores exclude_newer (it's only meaningful
-            // when the package is consumed as a source dependency).
-            exclude_newer: None,
-            build_environment: build_environment.clone(),
-            build_profile: BuildProfile::Release,
-            variant_configuration: Some(variant_configuration.clone()),
-            variant_files: Some(variant_files.clone()),
-        };
-        let built = command_dispatcher
-            .engine()
-            .compute(&SourceBuildKey::new(build_spec))
-            .await
-            .map_err_into_dispatcher(std::convert::identity)
-            .into_diagnostic()?;
-
-        // Clear the top level progress
-        command_dispatcher.clear_reporter().await;
-
-        let package_path = dunce::canonicalize(&built.artifact)
-            .expect("failed to canonicalize output file which must now exist");
-
-        // Destination inside the user-requested output directory
-        let file_name = package_path
-            .file_name()
-            .expect("built package should have a file name");
-        let dest_path = args.output_dir.join(file_name);
-
-        // Copy the .conda artifact into the requested directory.
-        // We use copy instead of move to preserve the cache for subsequent builds.
-        fs_err::copy(&package_path, &dest_path).into_diagnostic()?;
-
-        // Print success relative to the user-requested output directory
-        let output_dir = dunce::canonicalize(&args.output_dir)
-            .expect("failed to canonicalize output directory which must now exist");
-        let dest_canon = dunce::canonicalize(&dest_path)
-            .expect("failed to canonicalize moved output file which must now exist");
-        let output_file = pathdiff::diff_paths(&dest_canon, &output_dir)
-            .map(|p| args.output_dir.join(p))
-            .unwrap_or_else(|| dunce::simplified(&dest_path).to_path_buf());
-        let stripped_output_file = output_file
-            .strip_prefix(&args.output_dir)
-            .unwrap_or(&output_file);
-
-        pixi_progress::println!(
-            "{}Successfully built '{}'",
-            console::style(console::Emoji("✔ ", "")).green(),
-            stripped_output_file.display()
-        );
+    if let Some(ref path) = args.path {
+        cmd_parts.push(format!("--path {}", path.display()));
+    }
+    if args.output_dir != Path::new(".") {
+        cmd_parts.push(format!("--target-dir {}", args.output_dir.display()));
     }
 
-    Ok(())
+    let equivalent_cmd = cmd_parts.join(" ");
+
+    eprintln!(
+        "\n{} `pixi build` is deprecated and will be removed in a future release.",
+        console::style("WARNING:").yellow().bold()
+    );
+    eprintln!(
+        "Use `pixi publish` instead. Equivalent command:\n\n  {}\n",
+        console::style(&equivalent_cmd).cyan()
+    );
+
+    publish::execute(publish::Args {
+        config_cli: args.config_cli,
+        backend_override: args.backend_override,
+        target_platform: args.target_platform,
+        build_platform: args.build_platform,
+        build_string_prefix: None,
+        build_number: None,
+        build_dir: args.build_dir,
+        clean: args.clean,
+        path: args.path,
+        target_channel: None,
+        target_dir: Some(args.output_dir),
+        force: false,
+        skip_existing: true,
+        generate_attestation: false,
+    })
+    .await
 }

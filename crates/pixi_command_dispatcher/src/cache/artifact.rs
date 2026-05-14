@@ -63,6 +63,10 @@ impl std::fmt::Display for ArtifactCacheKey {
 /// - url + sha256 of every binary dep in `build_packages` / `host_packages`,
 ///   tagged by bucket so a dep moving build ↔ host invalidates
 /// - sha256 of every source dep artifact, also tagged by bucket
+/// - any user-supplied project-model overrides (build_string_prefix,
+///   build_number) -- these flow into the resulting `.conda`'s build
+///   string and number, so different overrides must not share a cache
+///   entry
 ///
 /// Source *files* are not hashed here: the sidecar captures their mtimes
 /// separately so a content change still invalidates the entry on lookup.
@@ -76,6 +80,7 @@ pub fn compute_artifact_cache_key(
     backend_identifier: &str,
     build_source_dep_sha256s: &[Sha256Hash],
     host_source_dep_sha256s: &[Sha256Hash],
+    project_model_overrides: &crate::ProjectModelOverrides,
 ) -> ArtifactCacheKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);
@@ -85,6 +90,7 @@ pub fn compute_artifact_cache_key(
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
+    project_model_overrides.hash(&mut hasher);
 
     // Bucket-tagged streams: the same (url, sha256) behaves differently
     // when installed into the build prefix vs. the host prefix because
@@ -834,6 +840,7 @@ mod cache_key_tests {
             backend_id,
             extra_build_sha,
             &[],
+            &Default::default(),
         )
         .to_string()
     }
@@ -894,24 +901,52 @@ mod cache_key_tests {
     #[test]
     fn build_platform_matters() {
         let r = record("foo");
-        let k1 =
-            compute_artifact_cache_key(&r, Platform::Linux64, Platform::Linux64, "b", &[], &[])
-                .to_string();
-        let k2 =
-            compute_artifact_cache_key(&r, Platform::OsxArm64, Platform::Linux64, "b", &[], &[])
-                .to_string();
+        let k1 = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+        )
+        .to_string();
+        let k2 = compute_artifact_cache_key(
+            &r,
+            Platform::OsxArm64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+        )
+        .to_string();
         assert_ne!(k1, k2);
     }
 
     #[test]
     fn host_platform_matters() {
         let r = record("foo");
-        let k1 =
-            compute_artifact_cache_key(&r, Platform::Linux64, Platform::Linux64, "b", &[], &[])
-                .to_string();
-        let k2 =
-            compute_artifact_cache_key(&r, Platform::Linux64, Platform::OsxArm64, "b", &[], &[])
-                .to_string();
+        let k1 = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+        )
+        .to_string();
+        let k2 = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::OsxArm64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+        )
+        .to_string();
         assert_ne!(k1, k2);
     }
 
@@ -989,6 +1024,7 @@ mod cache_key_tests {
             "b",
             &[],
             &[sha(0xaa)],
+            &Default::default(),
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -998,6 +1034,7 @@ mod cache_key_tests {
             "b",
             &[],
             &[sha(0xbb)],
+            &Default::default(),
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -1017,6 +1054,7 @@ mod cache_key_tests {
             "b",
             &[sha(0xaa)],
             &[],
+            &Default::default(),
         )
         .to_string();
         let host_only = compute_artifact_cache_key(
@@ -1026,6 +1064,7 @@ mod cache_key_tests {
             "b",
             &[],
             &[sha(0xaa)],
+            &Default::default(),
         )
         .to_string();
         assert_ne!(build_only, host_only);
@@ -1080,10 +1119,78 @@ mod cache_key_tests {
         // it (short-path policy). Two keys that differ only by host
         // platform must therefore be distinct.
         let r = record("foo");
-        let linux =
-            compute_artifact_cache_key(&r, Platform::Linux64, Platform::Linux64, "b", &[], &[]);
-        let osx_arm =
-            compute_artifact_cache_key(&r, Platform::Linux64, Platform::OsxArm64, "b", &[], &[]);
+        let linux = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+        );
+        let osx_arm = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::OsxArm64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+        );
         assert_ne!(linux, osx_arm);
+    }
+
+    #[test]
+    fn build_string_prefix_matters() {
+        let r = record("foo");
+        let bare = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+        );
+        let prefixed = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &crate::ProjectModelOverrides {
+                build_string_prefix: Some("foobar".to_string()),
+                build_number: None,
+            },
+        );
+        assert_ne!(bare, prefixed);
+    }
+
+    #[test]
+    fn build_number_matters() {
+        let r = record("foo");
+        let bare = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+        );
+        let numbered = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &crate::ProjectModelOverrides {
+                build_string_prefix: None,
+                build_number: Some(42),
+            },
+        );
+        assert_ne!(bare, numbered);
     }
 }

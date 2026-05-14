@@ -20,7 +20,7 @@ init-params:
   manifest-path: "file://<ROOT>/nested/nested/pixi.toml"
   project-model:
     name: simple
-    buildString: ~
+    buildStringPrefix: ~
     buildNumber: ~
     version: 0.1.0
     description: ~
@@ -36,6 +36,7 @@ init-params:
         hostDependencies: {}
         buildDependencies: {}
         runDependencies: {}
+        runConstraints: {}
       targets: {}
   configuration: ~
   target-configuration: ~

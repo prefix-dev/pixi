@@ -37,7 +37,7 @@ use uv_build_frontend::SourceBuild;
 use uv_cache::Cache;
 use uv_client::RegistryClient;
 use uv_configuration::{
-    BuildKind, BuildOptions, BuildOutput, Concurrency, Constraints, IndexStrategy, SourceStrategy,
+    BuildKind, BuildOptions, BuildOutput, Concurrency, Constraints, IndexStrategy, NoSources,
 };
 use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
@@ -70,7 +70,7 @@ pub struct UvBuildDispatchParams<'a> {
     shared_state: SharedState,
     link_mode: uv_install_wheel::LinkMode,
     exclude_newer: Option<ExcludeNewer>,
-    sources: SourceStrategy,
+    sources: NoSources,
     concurrency: Concurrency,
     preview: uv_preview::Preview,
     workspace_cache: WorkspaceCache,
@@ -105,7 +105,7 @@ impl<'a> UvBuildDispatchParams<'a> {
             link_mode: LinkMode::default(),
             constraints: Constraints::default(),
             exclude_newer: None,
-            sources: SourceStrategy::default(),
+            sources: NoSources::default(),
             concurrency: Concurrency::default(),
             preview: uv_preview::Preview::default(),
             workspace_cache: WorkspaceCache::default(),
@@ -125,7 +125,7 @@ impl<'a> UvBuildDispatchParams<'a> {
     }
 
     /// Set the source strategy for the build dispatch
-    pub fn with_source_strategy(mut self, sources: SourceStrategy) -> Self {
+    pub fn with_no_sources(mut self, sources: NoSources) -> Self {
         self.sources = sources;
         self
     }
@@ -136,8 +136,7 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    /// Set the link mode for the build dispatch
-    #[expect(unused)]
+    /// Set the link mode for the build dispatch.
     pub fn with_link_mode(mut self, link_mode: LinkMode) -> Self {
         self.link_mode = link_mode;
         self
@@ -425,9 +424,9 @@ impl<'a> LazyBuildDispatch<'a> {
                     self.params.build_options,
                     self.params.hasher,
                     self.params.exclude_newer.clone().unwrap_or_default(),
-                    self.params.sources,
+                    self.params.sources.clone(),
                     self.params.workspace_cache.clone(),
-                    self.params.concurrency,
+                    self.params.concurrency.clone(),
                     self.params.preview,
                 )
                 .with_build_extra_env_vars(env_vars);
@@ -479,8 +478,8 @@ impl BuildContext for LazyBuildDispatch<'_> {
         self.params.config_settings
     }
 
-    fn sources(&self) -> uv_configuration::SourceStrategy {
-        self.params.sources
+    fn sources(&self) -> &uv_configuration::NoSources {
+        &self.params.sources
     }
 
     fn locations(&self) -> &uv_distribution_types::IndexLocations {
@@ -519,7 +518,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
         install_path: &'a Path,
         version_id: Option<&'a str>,
         dist: Option<&'a SourceDist>,
-        sources: SourceStrategy,
+        sources: &'a NoSources,
         build_kind: BuildKind,
         build_output: BuildOutput,
         build_stack: BuildStack,
@@ -546,12 +545,20 @@ impl BuildContext for LazyBuildDispatch<'_> {
         source: &'a Path,
         subdirectory: Option<&'a Path>,
         output_dir: &'a Path,
+        sources: uv_configuration::NoSources,
         build_kind: BuildKind,
         version_id: Option<&'a str>,
     ) -> Result<Option<DistFilename>, impl IsBuildBackendError> {
         let dispatch = self.get_or_try_init().await?;
         dispatch
-            .direct_build(source, subdirectory, output_dir, build_kind, version_id)
+            .direct_build(
+                source,
+                subdirectory,
+                output_dir,
+                sources,
+                build_kind,
+                version_id,
+            )
             .await
             .map_err(LazyBuildDispatchError::from)
     }

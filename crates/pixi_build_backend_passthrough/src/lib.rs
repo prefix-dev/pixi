@@ -154,7 +154,7 @@ impl InMemoryBackend for PassthroughBackend {
                     "{}-{}-{}.conda",
                     self.index_json.name.as_normalized(),
                     self.index_json.version,
-                    &build_string
+                    build_string
                 );
                 let output_path = output_dir.join(&file_name);
 
@@ -472,7 +472,7 @@ fn compute_build_string(
         if base_build.is_empty() {
             variant_hash
         } else {
-            format!("{}_{}", base_build, variant_hash)
+            format!("{base_build}_{variant_hash}")
         }
     }
 }

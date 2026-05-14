@@ -20,7 +20,7 @@ use pixi_build_frontend::{
     tool::{IsolatedTool, SystemTool, Tool},
 };
 use pixi_build_types::{
-    PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion,
+    PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion, ProjectModel,
     procedures::initialize::InitializeParams,
 };
 use pixi_compute_engine::{ComputeCtx, Key};
@@ -36,18 +36,45 @@ use rattler_shell::{
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::compute_data::{HasCacheDirs, HasReporter};
+use crate::compute_data::HasInstantiateBackendReporter;
 use crate::discovered_backend::DiscoveredBackendKey;
 use crate::ephemeral_env::{EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec};
 use crate::injected_config::ToolBuildEnvironmentKey;
-use crate::reporter::{
-    InstantiateBackendId, InstantiateBackendReporter, Reporter, ReporterContext,
-};
-use crate::reporter_context::{CURRENT_REPORTER_CONTEXT, current_reporter_context};
-use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
+use crate::reporter::InstantiateBackendReporter;
 use crate::resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
+use pixi_compute_cache_dirs::CacheDirsKey;
+use pixi_compute_reporters::{Active, LifecycleKind, OperationId, ReporterLifecycle};
+
+/// CLI-driven overrides applied to the discovered project model before
+/// the backend is initialized. Each field is content-addressed into
+/// [`InstantiateBackendKey`] so different overrides spawn distinct
+/// backend handles.
+#[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
+pub struct ProjectModelOverrides {
+    /// When set, replaces the project model's `build_string_prefix`.
+    pub build_string_prefix: Option<String>,
+    /// When set, replaces the project model's `build_number`.
+    pub build_number: Option<u64>,
+}
+
+impl ProjectModelOverrides {
+    /// Returns a project model with the requested overrides applied.
+    /// Fields the user did not set are left untouched.
+    pub fn apply(&self, project_model: Option<ProjectModel>) -> Option<ProjectModel> {
+        let mut model = project_model?;
+        if self.build_string_prefix.is_some() {
+            model.build_string_prefix = self.build_string_prefix.clone();
+        }
+        if self.build_number.is_some() {
+            model.build_number = self.build_number;
+        }
+        Some(model)
+    }
+}
 
 /// Dedup key for spawning a build backend.
+///
+/// Reports progress via `Arc<dyn InstantiateBackendReporter>` set on the engine `DataStore`, if any.
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct InstantiateBackendKey {
     /// Path to the directory containing the manifest. Canonicalized at
@@ -64,6 +91,10 @@ pub struct InstantiateBackendKey {
 
     /// Exclude-newer cutoff applied when solving the backend's tool env.
     pub exclude_newer: Option<ResolvedExcludeNewer>,
+
+    /// User-supplied overrides applied to the discovered project model
+    /// before backend initialization.
+    pub project_model_overrides: ProjectModelOverrides,
 }
 
 impl InstantiateBackendKey {
@@ -81,7 +112,15 @@ impl InstantiateBackendKey {
             manifest_source_anchor,
             build_source_dir,
             exclude_newer,
+            project_model_overrides: ProjectModelOverrides::default(),
         }
+    }
+
+    /// Override the project model with CLI-driven values before the
+    /// backend's `initialize` call.
+    pub fn with_project_model_overrides(mut self, overrides: ProjectModelOverrides) -> Self {
+        self.project_model_overrides = overrides;
+        self
     }
 }
 
@@ -150,22 +189,21 @@ impl Key for InstantiateBackendKey {
             .clone()
             .resolve(self.manifest_source_anchor.clone());
 
-        // Fire the InstantiateBackendReporter lifecycle and scope
-        // CURRENT_REPORTER_CONTEXT so nested tasks (override resolve,
+        // Fire the InstantiateBackendReporter lifecycle and scope this
+        // id over the inner work so nested tasks (override resolve,
         // ephemeral env solve/install, JSON-RPC setup) attribute their
         // progress to this backend instantiation.
-        let reporter_arc = ctx.global_data().reporter().cloned();
+        let reporter_arc = ctx.global_data().instantiate_backend_reporter().cloned();
         let lifecycle = ReporterLifecycle::<InstantiateBackendLifecycle>::queued(
             reporter_arc.as_deref(),
-            current_reporter_context(),
             &resolved_spec,
         );
-        let reporter_ctx = lifecycle.id().map(ReporterContext::InstantiateBackend);
+        let active_id = lifecycle.id();
         let _started = lifecycle.start();
 
         let work = self.compute_inner(ctx, discovered, resolved_spec);
-        match reporter_ctx {
-            Some(rc) => CURRENT_REPORTER_CONTEXT.scope(Some(rc), work).await,
+        match active_id {
+            Some(id) => id.scope_active(work).await,
             None => work.await,
         }
     }
@@ -177,20 +215,17 @@ struct InstantiateBackendLifecycle;
 
 impl LifecycleKind for InstantiateBackendLifecycle {
     type Reporter<'r> = dyn InstantiateBackendReporter + 'r;
-    type Id = InstantiateBackendId;
+    type Id = OperationId;
     type Env = pixi_build_discovery::JsonRpcBackendSpec;
 
     fn queue<'r>(
-        reporter: Option<&'r dyn Reporter>,
-        parent: Option<ReporterContext>,
+        reporter: Option<&'r Self::Reporter<'r>>,
         env: &Self::Env,
     ) -> Option<Active<'r, Self::Reporter<'r>, Self::Id>> {
-        reporter
-            .and_then(|r| r.as_instantiate_backend_reporter())
-            .map(|r| Active {
-                reporter: r,
-                id: r.on_queued(parent, env),
-            })
+        reporter.map(|r| Active {
+            reporter: r,
+            id: r.on_queued(env),
+        })
     }
 
     fn on_started<'r>(active: &Active<'r, Self::Reporter<'r>, Self::Id>) {
@@ -214,6 +249,15 @@ impl InstantiateBackendKey {
     ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
         let source_dir = self.canonical_build_source_dir()?;
 
+        // Cache root is needed by both branches below; fetch once so
+        // the dependency edge to `CacheDirsKey` is recorded once.
+        let cache_dir_root: PathBuf = ctx
+            .compute(&CacheDirsKey)
+            .await
+            .root()
+            .to_owned()
+            .into_std_path_buf();
+
         // Apply the engine's backend override to the resolved spec.
         let resolved_command = ctx
             .compute(&ResolvedBackendCommandKey::new(resolved_spec.clone()))
@@ -224,10 +268,10 @@ impl InstantiateBackendKey {
         let (tool, api_version) = match resolved_command.as_ref() {
             ResolvedBackendCommand::InMemory(in_mem) => {
                 return self.instantiate_in_memory(
-                    ctx,
                     in_mem,
                     &source_dir,
                     &discovered.init_params,
+                    cache_dir_root,
                 );
             }
             ResolvedBackendCommand::Spec(CommandSpec::System(system_spec)) => (
@@ -254,7 +298,15 @@ impl InstantiateBackendKey {
 
         check_project_model_invariant(api_version, &discovered.init_params)?;
 
-        spawn_json_rpc(ctx, source_dir, &discovered.init_params, tool, api_version).await
+        spawn_json_rpc(
+            source_dir,
+            &discovered.init_params,
+            &self.project_model_overrides,
+            tool,
+            api_version,
+            cache_dir_root,
+        )
+        .await
     }
 
     /// Canonicalize the build source directory.
@@ -271,18 +323,21 @@ impl InstantiateBackendKey {
     /// per-request init params and wrap the resulting [`Backend`].
     fn instantiate_in_memory(
         &self,
-        ctx: &ComputeCtx,
         in_mem: &BoxedInMemoryBackend,
         source_dir: &std::path::Path,
         init_params: &BackendInitializationParams,
+        cache_dir_root: PathBuf,
     ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
+        let project_model = self
+            .project_model_overrides
+            .apply(init_params.project_model.clone());
         let memory = in_mem
             .initialize(InitializeParams {
                 manifest_path: init_params.manifest_path.clone(),
                 source_directory: Some(source_dir.to_path_buf()),
                 workspace_directory: Some(init_params.workspace_root.clone()),
-                cache_directory: Some(ctx.global_data().cache_dirs().root().to_owned().into()),
-                project_model: init_params.project_model.clone(),
+                cache_directory: Some(cache_dir_root),
+                project_model,
                 configuration: init_params.configuration.clone(),
                 target_configuration: init_params.target_configuration.clone(),
             })
@@ -507,21 +562,22 @@ fn check_project_model_invariant(
 /// Spawn a JSON-RPC backend for `tool` and wrap it in the standard
 /// [`BackendHandle`] mutex.
 async fn spawn_json_rpc(
-    ctx: &ComputeCtx,
     source_dir: PathBuf,
     init_params: &BackendInitializationParams,
+    project_model_overrides: &ProjectModelOverrides,
     tool: Tool,
     api_version: PixiBuildApiVersion,
+    cache_dir_root: PathBuf,
 ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
-    let cache_dir = ctx.global_data().cache_dirs().root().to_owned().into();
+    let project_model = project_model_overrides.apply(init_params.project_model.clone());
     let backend = JsonRpcBackend::setup(
         source_dir,
         init_params.manifest_path.clone(),
         init_params.workspace_root.clone(),
-        init_params.project_model.clone(),
+        project_model,
         init_params.configuration.clone(),
         init_params.target_configuration.clone(),
-        Some(cache_dir),
+        Some(cache_dir_root),
         tool,
     )
     .await
@@ -530,4 +586,70 @@ async fn spawn_json_rpc(
         backend.into(),
         api_version,
     ))))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn model_with(prefix: Option<&str>, number: Option<u64>) -> ProjectModel {
+        ProjectModel {
+            build_string_prefix: prefix.map(str::to_string),
+            build_number: number,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn apply_returns_none_when_no_project_model() {
+        let overrides = ProjectModelOverrides {
+            build_string_prefix: Some("foo".into()),
+            build_number: Some(42),
+        };
+        assert!(overrides.apply(None).is_none());
+    }
+
+    #[test]
+    fn apply_leaves_manifest_values_when_no_overrides_set() {
+        // Without this guarantee a `pixi publish` call without the CLI
+        // flags would silently wipe values declared in the manifest.
+        let manifest = model_with(Some("manifest_prefix"), Some(7));
+        let result = ProjectModelOverrides::default()
+            .apply(Some(manifest))
+            .unwrap();
+        assert_eq!(
+            result.build_string_prefix.as_deref(),
+            Some("manifest_prefix")
+        );
+        assert_eq!(result.build_number, Some(7));
+    }
+
+    #[test]
+    fn apply_replaces_manifest_values_when_overrides_set() {
+        let manifest = model_with(Some("manifest_prefix"), Some(7));
+        let overrides = ProjectModelOverrides {
+            build_string_prefix: Some("cli_prefix".into()),
+            build_number: Some(99),
+        };
+        let result = overrides.apply(Some(manifest)).unwrap();
+        assert_eq!(result.build_string_prefix.as_deref(), Some("cli_prefix"));
+        assert_eq!(result.build_number, Some(99));
+    }
+
+    #[test]
+    fn apply_only_overrides_set_fields() {
+        // Mixed Some/None overrides: only the Some side replaces the
+        // manifest, the other field stays as declared.
+        let manifest = model_with(Some("manifest_prefix"), Some(7));
+        let overrides = ProjectModelOverrides {
+            build_string_prefix: None,
+            build_number: Some(99),
+        };
+        let result = overrides.apply(Some(manifest)).unwrap();
+        assert_eq!(
+            result.build_string_prefix.as_deref(),
+            Some("manifest_prefix")
+        );
+        assert_eq!(result.build_number, Some(99));
+    }
 }

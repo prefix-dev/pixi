@@ -1,24 +1,25 @@
 [build-system]
-requires = ["maturin>=1.7,<2.0"]
 build-backend = "maturin"
+requires = ["maturin>=1.7,<2.0"]
 
 [project]
-name = "particle_rs"
-version = "0.1.0"
 description = "Rust implementations of particle emitters and modifiers, exposed to Python via PyO3"
+name = "particle_rs"
 requires-python = ">=3.11"
+version = "0.1.0"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
 
 [tool.pixi.package.build.backend]
+channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-python"
 version = "0.4.*"
-channels = ["https://prefix.dev/conda-forge"]
 
 [tool.pixi.package.host-dependencies]
-python = ">=3.11"
 maturin = ">=1.7,<2.0"
+python = ">=3.11"
+uv = "*"
 
 [tool.pixi.package.run-dependencies]
 python = ">=3.11"

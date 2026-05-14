@@ -5,6 +5,103 @@
 format-command = "pixi run -e lint ruff format --stdin-filename {filename}"
 test-dir = "tests/integration_python"
 
+[tool.pytest.ini_options]
+# basetemp is set in tests/integration_python/conftest.py to pytest-temp-<pid>
+# so it stays on the same filesystem as the cache (faster than /tmp on a
+# different FS) while still being unique per invocation. A static path
+# would race two concurrent `pixi run test`s on xdist.setup_node's
+# basetemp.mkdir(mode=0o700) call.
+addopts = "--timeout=600 --durations=0"
+markers = ["slow: marks tests as slow", "extra_slow: marks tests as extra slow"]
+testpaths = ["tests/integration_python"]
+tmp_path_retention_policy = "failed"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.format]
+indent-style = "space"
+quote-style = "double"
+
+[tool.tbump]
+github_url = "https://github.com/prefix-dev/pixi"
+
+[tool.tbump.version]
+current = "0.68.1"
+
+# Example of a semver regexp.
+# Make sure this matches current_version before
+# using tbump
+regex = '''
+  (?P<major>\d+)
+  \.
+  (?P<minor>\d+)
+  \.
+  (?P<patch>\d+)
+  (rc
+    (?P<candidate>\d+)
+  )?
+  '''
+
+[tool.tbump.git]
+# The current version will get updated when tbump is run
+message_template = "Bump version: {new_version}"
+tag_template = "v{new_version}"
+
+[[tool.tbump.file]]
+src = "CITATION.cff"
+
+[[tool.tbump.file]]
+search = '^version = "{current_version}"'
+src = "crates/pixi/Cargo.toml"
+
+[[tool.tbump.file]]
+search = "pixi-version: v{current_version}"
+src = "docs/integration/ci/github_actions.md"
+
+[[tool.tbump.file]]
+search = "ARG PIXI_VERSION=v{current_version}"
+src = "docs/integration/editor/vscode.md"
+
+[[tool.tbump.file]]
+search = "/pixi.sh/v{current_version}/"
+src = "schema/schema.json"
+
+[[tool.tbump.file]]
+search = "/pixi.sh/v{current_version}/"
+src = "schema/pyproject/schema.json"
+
+[[tool.tbump.file]]
+search = "Generated from `pixi` v{current_version}"
+src = "schema/pyproject/partial-pixi.json"
+
+[[tool.tbump.file]]
+search = "Version: v{current_version}"
+src = "install/install.sh"
+
+[[tool.tbump.file]]
+search = "Version: v{current_version}"
+src = "install/install.ps1"
+
+[[tool.tbump.file]]
+search = "PIXI_VERSION = \"{current_version}\""
+src = "tests/integration_python/common.py"
+
+[[tool.tbump.file]]
+search = "None => \"{current_version}\","
+src = "crates/pixi_consts/src/consts.rs"
+
+[[tool.tbump.file]]
+search = "ghcr.io/prefix-dev/pixi:{current_version}"
+src = "docs/deployment/container.md"
+
+[[tool.tbump.field]]
+# the name of the field
+name = "candidate"
+# the default value to use, if there is no match
+default = ""
+
 [tool.basedpyright]
 ignore = [
   "**/*.ipynb",

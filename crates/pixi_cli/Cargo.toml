@@ -33,6 +33,7 @@ fancy_display = { workspace = true }
 flate2 = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
+human_bytes = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
@@ -45,6 +46,7 @@ pixi_api = { workspace = true }
 pixi_auth = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
+pixi_compute_reporters = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
@@ -61,6 +63,7 @@ pixi_spec = { workspace = true }
 pixi_task = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
+pypi_modifiers = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_index = { workspace = true }
@@ -95,7 +98,6 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 typed-path = { workspace = true }
 url = { workspace = true }
-uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
@@ -104,7 +106,7 @@ which = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["filters"] }
+insta = { workspace = true, features = ["filters", "glob"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }

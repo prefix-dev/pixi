@@ -605,10 +605,13 @@ impl PixiControl {
 
         // Ensure the lock-file is up-to-date
         let lock_file = project
-            .update_lock_file(UpdateLockFileOptions {
-                lock_file_usage: args.lock_and_install_config.lock_file_usage().unwrap(),
-                ..UpdateLockFileOptions::default()
-            })
+            .update_lock_file(
+                None,
+                UpdateLockFileOptions {
+                    lock_file_usage: args.lock_and_install_config.lock_file_usage().unwrap(),
+                    ..UpdateLockFileOptions::default()
+                },
+            )
             .await?
             .0;
 
@@ -742,7 +745,7 @@ impl PixiControl {
     pub async fn update_lock_file(&self) -> miette::Result<LockFile> {
         let project = self.workspace()?;
         Ok(project
-            .update_lock_file(UpdateLockFileOptions::default())
+            .update_lock_file(None, UpdateLockFileOptions::default())
             .await?
             .0
             .into_lock_file())

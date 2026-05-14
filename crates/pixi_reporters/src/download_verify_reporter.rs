@@ -331,7 +331,7 @@ impl BuildDownloadVerifyReporter {
             (None, _) => Cow::Borrowed(""),
             (Some(first), 1) => Cow::Borrowed(first.name.as_str()),
             (Some(first), running_count) => {
-                Cow::Owned(format!("{} (+{})", &first.name, running_count - 1,))
+                Cow::Owned(format!("{} (+{})", first.name, running_count - 1,))
             }
         };
         let has_pending_entries = running_count > 0;

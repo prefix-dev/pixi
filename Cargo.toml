@@ -15,9 +15,6 @@ exclude = [
 members = ["crates/*"]
 resolver = "3"
 
-[workspace.metadata.cargo-shear]
-ignored = ["pixi_compute_engine"]
-
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
 edition = "2024"
@@ -39,10 +36,10 @@ barrier_cell = { path = "crates/barrier_cell" }
 base64 = "0.22.1"
 cargo_toml = "0.22.3"
 chrono = "0.4.40"
-clap = { version = "4.5.31", default-features = false }
+clap = { version = "4.6.1", default-features = false }
 clap-verbosity-flag = "3.0.2"
-clap_complete = "4.5.46"
-clap_complete_nushell = "4.5.5"
+clap_complete = "4.6.3"
+clap_complete_nushell = "4.6.0"
 cmp_any = "0.8.1"
 comfy-table = "7.2.1"
 console = "0.16.1"
@@ -51,7 +48,7 @@ crossbeam-channel = "0.5.14"
 csv = "1.3.1"
 ctrlc = "3.4.5"
 dashmap = "6.1.0"
-deno_task_shell = "0.29.0"
+deno_task_shell = "0.30.0"
 derive_more = "2.0.1"
 dialoguer = "0.12.0"
 digest = "0.10"
@@ -102,7 +99,12 @@ pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
 pixi_build_types = { path = "crates/pixi_build_types" }
 pixi_cli = { path = "crates/pixi_cli" }
 pixi_command_dispatcher = { path = "crates/pixi_command_dispatcher" }
+pixi_compute_cache_dirs = { path = "crates/pixi_compute_cache_dirs" }
 pixi_compute_engine = { path = "crates/pixi_compute_engine" }
+pixi_compute_env_vars = { path = "crates/pixi_compute_env_vars" }
+pixi_compute_network = { path = "crates/pixi_compute_network" }
+pixi_compute_reporters = { path = "crates/pixi_compute_reporters" }
+pixi_compute_sources = { path = "crates/pixi_compute_sources" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_core = { path = "crates/pixi_core" }
@@ -137,13 +139,11 @@ pyproject-toml = "0.13.7"
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
-retry-policies = "0.4"
+retry-policies = "0.5"
 roxmltree = "0.21.0"
-# reqwest-middleware = "0.4"
-# reqwest-retry = "0.7.0"
 bzip2 = "0.6.1"
-reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
-reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
+reqwest-middleware = { package = "astral-reqwest-middleware", version = "0.4.2", features = ["multipart"] }
+reqwest-retry = { package = "astral-reqwest-retry", version = "0.8.0" }
 rlimit = "0.11.0"
 rstest = "0.26.0"
 same-file = "1.0.6"
@@ -184,35 +184,34 @@ tracing-test = "0.2"
 typed-path = "0.12.0"
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
-uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-cache-key = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-flags = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-preview = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-redacted = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
-uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.9.5" }
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-cache-key = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-flags = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-preview = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-redacted = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
+uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.10.12" }
 which = "8.0.0"
 xxhash-rust = "0.8.15"
 zip = { version = "8.0.0", default-features = false }
@@ -220,7 +219,7 @@ zstd = { version = "0.13.3", default-features = false }
 
 # Rattler crates
 file_url = "0.3.0"
-rattler = { version = "0.41.0", default-features = false }
+rattler = { version = "0.42.0", default-features = false }
 rattler_cache = { version = "0.7.0", default-features = false }
 rattler_conda_types = { version = "0.46.0", default-features = false, features = [
   "rayon",
@@ -229,7 +228,7 @@ rattler_digest = { version = "1.2.3", default-features = false }
 rattler_index = { version = "0.28.0", default-features = false, features = [
   "s3",
 ] }
-rattler_lock = { version = "0.29.0", default-features = false }
+rattler_lock = { version = "0.30.0", default-features = false }
 rattler_menuinst = { version = "0.2.53", default-features = false }
 rattler_networking = { version = "0.26.6", default-features = false, features = [
   "dirs",
@@ -257,10 +256,14 @@ rattler_build_types = { version = "0.1.3" }
 rattler_build_variant_config = { version = "0.1.3" }
 
 [patch.crates-io]
-# This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
-reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
-reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "7650ed76215a962a96d94a79be71c27bffde7ab2" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
+
+# Redirect crates.io's `reqwest-middleware` to a local shim that re-exports
+# `astral-reqwest-middleware`. This unifies the `Middleware` trait identity
+# between consumers that depend on the original crate name (e.g.
+# `http-cache-reqwest`) and consumers that depend on the renamed
+# `astral-reqwest-middleware` (rattler, rattler-build, uv >= 0.9.10).
+reqwest-middleware = { path = "patches/reqwest_middleware_shim" }
 
 # Temporary patch: rattler-build main has been updated to use the new rattler
 # versions but no release has been published yet. Remove once rattler-build

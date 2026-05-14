@@ -10,6 +10,7 @@ use pixi_build_backend::variants::NormalizedKey;
 use pixi_build_backend::{
     Variable,
     cache::{sccache_envs, sccache_tools},
+    compilers::default_compiler_variants,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
@@ -123,7 +124,7 @@ impl GenerateRecipe for RustGenerator {
             .chain(system_env_vars.clone())
             .collect();
 
-        let mut sccache_secrets = Vec::default();
+        let mut sccache_secrets: BTreeSet<String> = BTreeSet::new();
 
         // Verify if user has set any sccache environment variables
         if sccache_envs(&all_env_vars).is_some() {
@@ -184,6 +185,9 @@ impl GenerateRecipe for RustGenerator {
         }
         .render();
 
+        sccache_secrets.extend(model.secrets.iter().cloned());
+        let secrets = sccache_secrets.into_iter().collect();
+
         generated_recipe.recipe.build.script = Script::from_content(build_script)
             .with_env(
                 config_env
@@ -191,7 +195,7 @@ impl GenerateRecipe for RustGenerator {
                     .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
                     .collect(),
             )
-            .with_secrets(sccache_secrets);
+            .with_secrets(secrets);
 
         // Add the input globs from the Cargo metadata provider
         generated_recipe
@@ -226,18 +230,7 @@ impl GenerateRecipe for RustGenerator {
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        let mut variants = BTreeMap::new();
-
-        if host_platform.is_windows() {
-            // Default to the Visual Studio 2022 compiler on Windows
-            // Not 2019 due to Conda-forge switching and the mainstream support dropping in 2024.
-            // rattler-build will default to vs2017 which for most github runners is too
-            // old.
-            variants.insert(NormalizedKey::from("c_compiler"), vec!["vs2022".into()]);
-            variants.insert(NormalizedKey::from("cxx_compiler"), vec!["vs2022".into()]);
-        }
-
-        Ok(variants)
+        Ok(default_compiler_variants(host_platform))
     }
 }
 
