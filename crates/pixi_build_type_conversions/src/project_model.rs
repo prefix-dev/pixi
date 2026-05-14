@@ -106,7 +106,7 @@ fn to_pixi_spec_v1(
                 // These are currently explicitly ignored in the conversion
                 namespace: _,
                 extras: _,
-                condition: _,
+                condition,
                 track_features: _,
                 flags: _,
                 license_family: _,
@@ -122,6 +122,7 @@ fn to_pixi_spec_v1(
                 sha256,
                 url,
                 license,
+                condition,
             })
         }
     };

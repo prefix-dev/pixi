@@ -10,7 +10,9 @@
 //! older pixi TOMLs keep loading, we can send them to the backend.
 use ordermap::OrderMap;
 use pixi_stable_hash::{IsDefault, StableHashBuilder};
-use rattler_conda_types::{BuildNumber, BuildNumberSpec, StringMatcher, Version, VersionSpec};
+use rattler_conda_types::{
+    BuildNumber, BuildNumberSpec, MatchSpecCondition, StringMatcher, Version, VersionSpec,
+};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
@@ -469,6 +471,9 @@ pub struct BinaryPackageSpec {
     pub url: Option<Url>,
     /// The license of the package
     pub license: Option<String>,
+    /// The condition under which this match spec applies.
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<serde_json::Value>"))]
+    pub condition: Option<MatchSpecCondition>,
 }
 
 impl From<VersionSpec> for BinaryPackageSpec {
@@ -516,6 +521,9 @@ impl std::fmt::Debug for BinaryPackageSpec {
         }
         if let Some(sha256) = &self.sha256 {
             debug_struct.field("sha256", &format!("{sha256:x}"));
+        }
+        if let Some(condition) = &self.condition {
+            debug_struct.field("condition", condition);
         }
 
         debug_struct.finish()
@@ -817,12 +825,14 @@ impl Hash for BinaryPackageSpec {
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let condition = self.condition.as_ref().map(ToString::to_string);
         StableHashBuilder::<H>::new()
             .field("build", &self.build)
             .field("build_number", &self.build_number)
             .field("channel", &self.channel)
             .field("file_name", &self.file_name)
             .field("license", &self.license)
+            .field("condition", &condition)
             .field("md5", &self.md5)
             .field("sha256", &self.sha256)
             .field("subdir", &self.subdir)

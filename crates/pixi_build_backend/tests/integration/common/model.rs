@@ -205,6 +205,7 @@ fn convert_package_spec_to_v1(spec: &PackageSpec) -> PbtPackageSpec {
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             })
         }
         PackageSpec::Source(source_spec) => {

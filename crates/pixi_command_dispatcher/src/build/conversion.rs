@@ -96,6 +96,7 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpec) -> pixi_spec::BinarySpec {
             md5: None,
             sha256: None,
             license: None,
+            condition: None,
             url: _,
         } => BinarySpec::Version(version),
         BinaryPackageSpec {
@@ -108,6 +109,7 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpec) -> pixi_spec::BinarySpec {
             md5,
             sha256,
             license,
+            condition,
             url: _,
         } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
             version,
@@ -120,7 +122,7 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpec) -> pixi_spec::BinarySpec {
             subdir,
             license,
             license_family: None,
-            condition: None,
+            condition,
             track_features: None,
             md5,
             sha256,

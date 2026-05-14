@@ -501,11 +501,29 @@
             ]
           }
         },
+        "extras": {
+          "title": "Extras",
+          "description": "Optional extra dependencies to select for the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "file-name": {
           "title": "File-Name",
           "description": "The file name of the package",
           "type": "string",
           "minLength": 1
+        },
+        "flags": {
+          "title": "Flags",
+          "description": "Plain string flags used to select package variants",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "git": {
           "title": "Git",
@@ -516,6 +534,12 @@
         "license": {
           "title": "License",
           "description": "The license of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "license-family": {
+          "title": "License-Family",
+          "description": "The license family of the package",
           "type": "string",
           "minLength": 1
         },
@@ -567,6 +591,15 @@
           "type": "string",
           "minLength": 1
         },
+        "track-features": {
+          "title": "Track-Features",
+          "description": "The track features of the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "url": {
           "title": "Url",
           "description": "The URL to the package",
@@ -578,6 +611,25 @@
           "description": "The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
           "type": "string",
           "minLength": 1
+        },
+        "when": {
+          "title": "When",
+          "description": "The condition under which this match spec applies. Use a package string, `{ all = [...] }`, `{ any = [...] }`, or `{ package = ..., version = ..., build = ... }`.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WhenAll"
+            },
+            {
+              "$ref": "#/$defs/WhenAny"
+            },
+            {
+              "$ref": "#/$defs/WhenPackage"
+            }
+          ]
         }
       }
     },
@@ -1064,11 +1116,29 @@
             "https://prefix.dev/conda-forge"
           ]
         },
+        "extras": {
+          "title": "Extras",
+          "description": "Optional extra dependencies to select for the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "file-name": {
           "title": "File-Name",
           "description": "The file name of the package",
           "type": "string",
           "minLength": 1
+        },
+        "flags": {
+          "title": "Flags",
+          "description": "Plain string flags used to select package variants",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "git": {
           "title": "Git",
@@ -1079,6 +1149,12 @@
         "license": {
           "title": "License",
           "description": "The license of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "license-family": {
+          "title": "License-Family",
+          "description": "The license family of the package",
           "type": "string",
           "minLength": 1
         },
@@ -1124,6 +1200,15 @@
           "type": "string",
           "minLength": 1
         },
+        "track-features": {
+          "title": "Track-Features",
+          "description": "The track features of the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "url": {
           "title": "Url",
           "description": "The URL to the package",
@@ -1135,6 +1220,25 @@
           "description": "The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
           "type": "string",
           "minLength": 1
+        },
+        "when": {
+          "title": "When",
+          "description": "The condition under which this match spec applies. Use a package string, `{ all = [...] }`, `{ any = [...] }`, or `{ package = ..., version = ..., build = ... }`.",
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/$defs/WhenAll"
+            },
+            {
+              "$ref": "#/$defs/WhenAny"
+            },
+            {
+              "$ref": "#/$defs/WhenPackage"
+            }
+          ]
         }
       }
     },
@@ -2506,6 +2610,103 @@
             "type": "string",
             "minLength": 1
           }
+        }
+      }
+    },
+    "WhenAll": {
+      "title": "WhenAll",
+      "description": "All conditions must apply.",
+      "type": "object",
+      "required": [
+        "all"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "all": {
+          "title": "All",
+          "description": "Conditions to combine with a logical AND",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/WhenAll"
+              },
+              {
+                "$ref": "#/$defs/WhenAny"
+              },
+              {
+                "$ref": "#/$defs/WhenPackage"
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "WhenAny": {
+      "title": "WhenAny",
+      "description": "Any condition may apply.",
+      "type": "object",
+      "required": [
+        "any"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "any": {
+          "title": "Any",
+          "description": "Conditions to combine with a logical OR",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/WhenAll"
+              },
+              {
+                "$ref": "#/$defs/WhenAny"
+              },
+              {
+                "$ref": "#/$defs/WhenPackage"
+              }
+            ]
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "WhenPackage": {
+      "title": "WhenPackage",
+      "description": "Expanded package condition syntax.",
+      "type": "object",
+      "required": [
+        "package"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "build": {
+          "title": "Build",
+          "description": "Optional build string matcher",
+          "type": "string",
+          "minLength": 1
+        },
+        "package": {
+          "title": "Package",
+          "description": "The package name to match",
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "title": "Version",
+          "description": "Optional version constraint",
+          "type": "string",
+          "minLength": 1
         }
       }
     },

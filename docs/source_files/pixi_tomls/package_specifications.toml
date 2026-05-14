@@ -24,6 +24,10 @@ version = "2.0.*"
 build = "cuda*"
 # Build number constraint
 build-number = ">=1"
+# Optional dependency groups exposed by package metadata
+extras = ["test"]
+# Variant-selection flags exposed by package metadata
+flags = ["cuda", "blas:*"]
 # Specific channel
 channel = "https://prefix.dev/my-channel"
 # Checksums 

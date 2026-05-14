@@ -291,6 +291,9 @@
             "string",
             "null"
           ]
+        },
+        "condition": {
+          "description": "The condition under which this match spec applies."
         }
       }
     },

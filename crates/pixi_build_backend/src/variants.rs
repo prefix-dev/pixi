@@ -21,6 +21,7 @@ pub fn can_be_used_as_variant(spec: &pbt::PackageSpec) -> bool {
                 sha256,
                 url,
                 license,
+                condition,
             } = spec;
 
             version == &Some(VersionSpec::Any)
@@ -33,6 +34,7 @@ pub fn can_be_used_as_variant(spec: &pbt::PackageSpec) -> bool {
                 && sha256.is_none()
                 && url.is_none()
                 && license.is_none()
+                && condition.is_none()
         }
         _ => false,
     }

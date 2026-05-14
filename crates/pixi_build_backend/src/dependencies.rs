@@ -175,6 +175,7 @@ fn convert_nameless_matchspec(spec: NamelessMatchSpec) -> pbt::BinaryPackageSpec
         sha256: spec.sha256,
         url: spec.url,
         license: spec.license,
+        condition: spec.condition,
     }
 }
 
