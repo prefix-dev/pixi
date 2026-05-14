@@ -330,7 +330,7 @@ fn alter_config(
                         .wrap_err(format!("failed to write config to '{}'", to.display()))?;
                 }
 
-                eprintln!("鉁?Updated config at {}", to.display());
+                eprintln!("✅ Updated config at {}", to.display());
                 return Ok(());
             }
         }
