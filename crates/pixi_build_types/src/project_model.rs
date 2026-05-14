@@ -1008,6 +1008,7 @@ mod tests {
             sha256: None,
             url: None,
             license: None,
+            condition: None,
         };
         let hash2 = calculate_hash(&spec2);
 

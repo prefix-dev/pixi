@@ -1062,6 +1062,28 @@ mod test {
 
     use super::*;
 
+    fn condition_string(spec: PixiSpec) -> String {
+        spec.as_detailed()
+            .expect("when is only accepted on detailed specs")
+            .condition
+            .as_ref()
+            .expect("expected parsed when condition")
+            .to_string()
+    }
+
+    fn parse_json_condition(input: Value) -> Result<String, String> {
+        serde_json::from_value::<PixiSpec>(input)
+            .map(condition_string)
+            .map_err(|err| err.to_string())
+    }
+
+    fn parse_toml_condition(input: &str) -> Result<String, String> {
+        let mut value = toml_span::parse(input).map_err(|err| err.to_string())?;
+        <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
+            .map(condition_string)
+            .map_err(|err| err.to_string())
+    }
+
     #[test]
     fn test_round_trip() {
         let examples = [
@@ -1261,6 +1283,71 @@ mod test {
     }
 
     #[test]
+    fn test_when_condition_parsing_snapshot() {
+        #[derive(Serialize)]
+        struct Snapshot {
+            label: &'static str,
+            input: String,
+            condition: String,
+        }
+
+        let json_cases = [
+            (
+                "json_string_matchspec",
+                json!({ "version": "*", "when": "__unix" }),
+            ),
+            (
+                "json_all",
+                json!({ "version": "*", "when": { "all": ["__unix", "python >=3.10"] } }),
+            ),
+            (
+                "json_any",
+                json!({ "version": "*", "when": { "any": ["__linux", "__osx"] } }),
+            ),
+            (
+                "json_nested_all_any",
+                json!({ "version": "*", "when": { "all": ["__unix", { "any": ["__linux", "__osx"] }] } }),
+            ),
+            (
+                "json_expanded_build_match",
+                json!({ "version": "*", "when": { "package": "python", "version": ">=3.10", "build": "*cuda" } }),
+            ),
+        ];
+
+        let toml_cases = [
+            (
+                "toml_all_with_expanded_build_match",
+                r#"version = "*"
+when = { all = ["__unix", { package = "python", version = ">=3.10", build = "*cuda" }] }"#,
+            ),
+            (
+                "toml_any",
+                r#"version = "*"
+when = { any = ["__linux", "__osx"] }"#,
+            ),
+        ];
+
+        let mut snapshot = Vec::new();
+        for (label, input) in json_cases {
+            snapshot.push(Snapshot {
+                label,
+                input: serde_json::to_string_pretty(&input).unwrap(),
+                condition: parse_json_condition(input).unwrap(),
+            });
+        }
+
+        for (label, input) in toml_cases {
+            snapshot.push(Snapshot {
+                label,
+                input: input.trim().to_string(),
+                condition: parse_toml_condition(input).unwrap(),
+            });
+        }
+
+        insta::assert_yaml_snapshot!(snapshot);
+    }
+
+    #[test]
     fn test_when_rejects_unsupported_shorthand() {
         serde_json::from_value::<PixiSpec>(
             json!({ "version": "*", "when": ["__unix", "python >=3.10"] }),
@@ -1292,5 +1379,73 @@ mod test {
                 .to_string();
             assert!(err.contains("when"), "expected `when` error, got: {err}");
         }
+    }
+
+    #[test]
+    fn test_when_rejection_snapshot() {
+        #[derive(Serialize)]
+        struct Snapshot {
+            label: &'static str,
+            input: String,
+            error: String,
+        }
+
+        let json_cases = [
+            (
+                "json_top_level_array",
+                json!({ "version": "*", "when": ["__unix", "python >=3.10"] }),
+            ),
+            (
+                "json_bracket_matchspec",
+                json!({ "version": "*", "when": "python[version='>=3.10']" }),
+            ),
+            (
+                "json_build_shorthand",
+                json!({ "version": "*", "when": "python >=3.10 *cuda" }),
+            ),
+        ];
+
+        let toml_cases = [
+            (
+                "toml_top_level_array",
+                r#"version = "*"
+when = ["__unix"]"#,
+            ),
+            (
+                "toml_all_and_any",
+                r#"version = "*"
+when = { all = ["__unix"], any = ["__linux"] }"#,
+            ),
+            (
+                "toml_empty_all",
+                r#"version = "*"
+when = { all = [] }"#,
+            ),
+            (
+                "toml_empty_any",
+                r#"version = "*"
+when = { any = [] }"#,
+            ),
+        ];
+
+        let mut snapshot = Vec::new();
+        for (label, input) in json_cases {
+            let error = parse_json_condition(input.clone()).unwrap_err();
+            snapshot.push(Snapshot {
+                label,
+                input: serde_json::to_string_pretty(&input).unwrap(),
+                error,
+            });
+        }
+
+        for (label, input) in toml_cases {
+            snapshot.push(Snapshot {
+                label,
+                input: input.trim().to_string(),
+                error: parse_toml_condition(input).unwrap_err(),
+            });
+        }
+
+        insta::assert_yaml_snapshot!(snapshot);
     }
 }

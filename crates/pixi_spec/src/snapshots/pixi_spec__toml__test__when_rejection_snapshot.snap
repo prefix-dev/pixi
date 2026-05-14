@@ -1,0 +1,25 @@
+---
+source: crates/pixi_spec/src/toml.rs
+expression: snapshot
+---
+- label: json_top_level_array
+  input: "{\n  \"version\": \"*\",\n  \"when\": [\n    \"__unix\",\n    \"python >=3.10\"\n  ]\n}"
+  error: data did not match any variant of untagged enum TomlWhen
+- label: json_bracket_matchspec
+  input: "{\n  \"version\": \"*\",\n  \"when\": \"python[version='>=3.10']\"\n}"
+  error: "`when` strings do not support bracket matchspec syntax; use the expanded `{ package = ..., version = ..., build = ... }` form"
+- label: json_build_shorthand
+  input: "{\n  \"version\": \"*\",\n  \"when\": \"python >=3.10 *cuda\"\n}"
+  error: "`when` strings do not support build-string shorthand; use `{ package = ..., version = ..., build = ... }`"
+- label: toml_top_level_array
+  input: "version = \"*\"\nwhen = [\"__unix\"]"
+  error: "`when` must be a string or a table with `all`, `any`, or `package`; top-level arrays are not allowed\n"
+- label: toml_all_and_any
+  input: "version = \"*\"\nwhen = { all = [\"__unix\"], any = [\"__linux\"] }"
+  error: "`when` tables must contain exactly one of `all`, `any`, or `package`\n"
+- label: toml_empty_all
+  input: "version = \"*\"\nwhen = { all = [] }"
+  error: "`when.all` must contain at least one condition\n"
+- label: toml_empty_any
+  input: "version = \"*\"\nwhen = { any = [] }"
+  error: "`when.any` must contain at least one condition\n"
