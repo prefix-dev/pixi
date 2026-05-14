@@ -5,7 +5,6 @@ expression: result
 Ok(
     {
         "**/*.py",
-        "**/*.pyx",
         "**/*.{c,h}",
         "Pipfile",
         "Pipfile.lock",
