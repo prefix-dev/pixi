@@ -1,0 +1,15 @@
+---
+source: crates/pixi_manifest/src/manifests/document.rs
+expression: document.to_string()
+---
+[workspace]
+name = "test"
+channels = []
+platforms = []
+
+[feature.ml]
+pypi-dependencies = {
+    numpy = ">=1.20.0",
+    scipy = ">=1.0",
+    pandas = ">=2.0",
+}

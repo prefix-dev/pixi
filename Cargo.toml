@@ -175,7 +175,7 @@ tokio-test = "0.4.5"
 tokio-util = "0.7.13"
 toml = "1.0.0"
 toml-span = "0.7.0"
-toml_edit = "0.23.0"
+toml_edit = "0.25.0"
 tracing = "0.1.41"
 xz2 = "0.1.7"
 # Forcing the version due to this PR https://github.com/tokio-rs/tracing/pull/3368

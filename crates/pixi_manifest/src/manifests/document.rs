@@ -342,12 +342,14 @@ impl ManifestDocument {
             .with_feature_name(Some(feature_name))
             .with_table(Some(spec_type.name()));
 
-        self.manifest_mut()
-            .get_or_insert_nested_table(&dependency_table.as_keys())
-            .map(|t| {
-                let mut new_value = spec.to_toml_value();
+        let keys = dependency_table.as_keys();
+        let new_value = spec.to_toml_value();
 
-                // Check if there is an existing entry that is represented by an inline value.
+        // Try to find and update an existing entry, preserving its decoration.
+        let updated = self
+            .manifest_mut()
+            .get_or_insert_nested_table(&keys)
+            .map(|t| {
                 let existing_value = t.iter_mut().find_map(|(key, value)| {
                     let package_key_name = PackageName::from_str(key.get()).ok()?;
                     if package_key_name == *name {
@@ -357,17 +359,22 @@ impl ManifestDocument {
                     }
                 });
 
-                // If there exists an existing value, we update it with the new value, but we
-                // keep the decoration.
                 if let Some(existing_value) = existing_value {
-                    *new_value.decor_mut() = existing_value.decor().clone();
-                    *existing_value = new_value;
+                    let mut cloned = new_value.clone();
+                    *cloned.decor_mut() = existing_value.decor().clone();
+                    *existing_value = cloned;
+                    true
                 } else {
-                    // Otherwise, just reinsert the value. This might overwrite an existing
-                    // decorations.
-                    t.insert(name.as_normalized(), Item::Value(new_value));
+                    false
                 }
             })?;
+
+        if !updated {
+            // Insert via the format-preserving path so multiline inline tables
+            // keep their layout.
+            self.manifest_mut()
+                .insert_into_inline_table(&keys, name.as_normalized(), new_value)?;
+        }
 
         Ok(())
     }
@@ -410,29 +417,39 @@ impl ManifestDocument {
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-            let table = self
+            let keys = dependency_table_name.as_keys();
+            let new_value = Value::from(pypi_requirement);
+
+            // Try to find and update an existing entry, preserving its decoration.
+            let updated = self
                 .manifest_mut()
-                .get_or_insert_nested_table(&dependency_table_name.as_keys())?;
+                .get_or_insert_nested_table(&keys)
+                .map(|table| {
+                    let existing_value = table.iter_mut().find_map(|(key, value)| {
+                        let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
+                        if existing_name == requirement.name {
+                            value.as_value_mut()
+                        } else {
+                            None
+                        }
+                    });
 
-            let mut new_value = Value::from(pypi_requirement);
+                    if let Some(existing_value) = existing_value {
+                        let mut cloned = new_value.clone();
+                        *cloned.decor_mut() = existing_value.decor().clone();
+                        *existing_value = cloned;
+                        true
+                    } else {
+                        false
+                    }
+                })?;
 
-            // Check if there exists an existing entry in the table that we should overwrite
-            // instead.
-            let existing_value = table.iter_mut().find_map(|(key, value)| {
-                let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
-                if existing_name == requirement.name {
-                    value.as_value_mut()
-                } else {
-                    None
-                }
-            });
-
-            // If there exists an existing entry, we overwrite it but keep the decoration.
-            if let Some(existing_value) = existing_value {
-                *new_value.decor_mut() = existing_value.decor().clone();
-                *existing_value = new_value;
-            } else {
-                table.insert(requirement.name.as_ref(), Item::Value(new_value));
+            if !updated {
+                self.manifest_mut().insert_into_inline_table(
+                    &keys,
+                    requirement.name.as_ref(),
+                    new_value,
+                )?;
             }
 
             // Remove the entry from the project native array.
@@ -498,26 +515,38 @@ impl ManifestDocument {
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-            let table = self
+            let keys = dependency_table_name.as_keys();
+            let new_value = Value::from(pypi_requirement);
+
+            let updated = self
                 .manifest_mut()
-                .get_or_insert_nested_table(&dependency_table_name.as_keys())?;
+                .get_or_insert_nested_table(&keys)
+                .map(|table| {
+                    let existing_value = table.iter_mut().find_map(|(key, value)| {
+                        let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
+                        if existing_name == requirement.name {
+                            value.as_value_mut()
+                        } else {
+                            None
+                        }
+                    });
 
-            let mut new_value = Value::from(pypi_requirement);
+                    if let Some(existing_value) = existing_value {
+                        let mut cloned = new_value.clone();
+                        *cloned.decor_mut() = existing_value.decor().clone();
+                        *existing_value = cloned;
+                        true
+                    } else {
+                        false
+                    }
+                })?;
 
-            let existing_value = table.iter_mut().find_map(|(key, value)| {
-                let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
-                if existing_name == requirement.name {
-                    value.as_value_mut()
-                } else {
-                    None
-                }
-            });
-
-            if let Some(existing_value) = existing_value {
-                *new_value.decor_mut() = existing_value.decor().clone();
-                *existing_value = new_value;
-            } else {
-                table.insert(requirement.name.as_ref(), Item::Value(new_value));
+            if !updated {
+                self.manifest_mut().insert_into_inline_table(
+                    &keys,
+                    requirement.name.as_ref(),
+                    new_value,
+                )?;
             }
         } else if feature_name.is_default()
             || matches!(location, Some(PypiDependencyLocation::Dependencies))
@@ -1209,5 +1238,176 @@ platforms = []
         assert!(result.contains("numpy"));
 
         insta::assert_snapshot!(result);
+    }
+
+    /// Adding a new dependency to a multiline inline table should preserve
+    /// the multiline layout and trailing comma style.
+    #[test]
+    pub fn add_dependency_preserves_multiline_inline_table() {
+        let manifest_content = r#"[workspace]
+name = "test"
+channels = []
+platforms = []
+
+[feature.test]
+dependencies = {
+    numpy = "*",
+    scipy = ">=1.0",
+}
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .add_dependency(
+                &PackageName::from_str("pandas").unwrap(),
+                &PixiSpec::Version(">=2.0".parse().unwrap()),
+                SpecType::Run,
+                None,
+                &FeatureName::from_str("test").unwrap(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Same as above, but the table has no trailing comma — the new entry
+    /// should also omit the trailing comma.
+    #[test]
+    pub fn add_dependency_preserves_multiline_inline_table_no_trailing_comma() {
+        let manifest_content = r#"[workspace]
+name = "test"
+channels = []
+platforms = []
+
+[feature.test]
+dependencies = {
+    numpy = "*",
+    scipy = ">=1.0"
+}
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .add_dependency(
+                &PackageName::from_str("pandas").unwrap(),
+                &PixiSpec::Version(">=2.0".parse().unwrap()),
+                SpecType::Run,
+                None,
+                &FeatureName::from_str("test").unwrap(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Updating an existing dependency inside a multiline inline table should
+    /// preserve the table's layout and the entry's decoration.
+    #[test]
+    pub fn add_dependency_update_in_multiline_inline_table() {
+        let manifest_content = r#"[workspace]
+name = "test"
+channels = []
+platforms = []
+
+[feature.test]
+dependencies = {
+    numpy = "*",
+    scipy = ">=1.0",
+}
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        document
+            .add_dependency(
+                &PackageName::from_str("numpy").unwrap(),
+                &PixiSpec::Version(">=2.0".parse().unwrap()),
+                SpecType::Run,
+                None,
+                &FeatureName::from_str("test").unwrap(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Adding a new pypi dependency to a multiline inline table should
+    /// preserve the multiline layout.
+    #[test]
+    pub fn add_pypi_dependency_preserves_multiline_inline_table() {
+        let manifest_content = r#"[workspace]
+name = "test"
+channels = []
+platforms = []
+
+[feature.ml]
+pypi-dependencies = {
+    numpy = ">=1.20.0",
+    scipy = ">=1.0",
+}
+"#;
+
+        let mut document = ManifestDocument::PixiToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let req = pep508_rs::Requirement::from_str("pandas>=2.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &req,
+                None,
+                None,
+                &FeatureName::from_str("ml").unwrap(),
+                None,
+                None,
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// Adding a pypi dependency via the reuse-existing-feature-table path
+    /// in pyproject.toml should also preserve multiline inline table format.
+    #[test]
+    pub fn add_pypi_dependency_reuse_feature_preserves_multiline() {
+        let manifest_content = r#"[project]
+name = "test"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+
+[tool.pixi.feature.cuda]
+pypi-dependencies = {
+    torch = ">=2.0.0",
+    jax = ">=0.4",
+}
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let numpy_req = pep508_rs::Requirement::from_str("numpy>=1.20.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &numpy_req,
+                None,
+                None,
+                &FeatureName::from_str("cuda").unwrap(),
+                None,
+                None,
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
     }
 }
