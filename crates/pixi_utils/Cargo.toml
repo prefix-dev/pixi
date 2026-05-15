@@ -27,6 +27,7 @@ rustls-tls = [
 
 [dependencies]
 async-fd-lock = { workspace = true }
+filetime = { workspace = true }
 fs-err = { workspace = true }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
@@ -64,3 +65,4 @@ uv-configuration = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true }
 rstest = { workspace = true }
+temp-env = { workspace = true }
