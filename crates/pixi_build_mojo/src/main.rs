@@ -174,7 +174,7 @@ impl MojoGenerator {
     fn globs() -> impl Iterator<Item = String> {
         [
             // Source files
-            "**/*.{mojo,🔥}",
+            "**/*.mojo",
         ]
         .iter()
         .map(|s: &&str| s.to_string())
