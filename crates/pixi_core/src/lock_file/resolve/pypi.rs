@@ -489,7 +489,7 @@ pub async fn resolve_pypi(
             uv_client_builder = uv_client_builder.proxy(p.clone())
         }
 
-        Arc::new(uv_client_builder.build())
+        Arc::new(uv_client_builder.build().into_diagnostic()?)
     };
     let dependency_overrides =
         pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
@@ -771,6 +771,7 @@ pub async fn resolve_pypi(
             AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
             &hash_strategy,
             options.exclude_newer.clone(),
+            &index_locations,
             &build_options,
             &context.capabilities,
         );

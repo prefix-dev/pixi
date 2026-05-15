@@ -582,7 +582,11 @@ async fn read_local_package_metadata(
             uv_client_builder = uv_client_builder.proxy(p.clone())
         }
 
-        Arc::new(uv_client_builder.build())
+        Arc::new(
+            uv_client_builder
+                .build()
+                .expect("failed to build uv registry client"),
+        )
     };
 
     // Get tags for this platform (needed for FlatIndex)
