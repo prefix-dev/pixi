@@ -272,7 +272,11 @@ jobs:
         id: attest
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
         with:
-          subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}"
+          subject-path: |
+            target/distrib/*${{ join(matrix.targets, ', ') }}
+            target/distrib/*${{ join(matrix.targets, ', ') }}.tar.gz
+            target/distrib/*${{ join(matrix.targets, ', ') }}.zip
+            target/distrib/*${{ join(matrix.targets, ', ') }}.msi
       - run: cp ${{ steps.attest.outputs.bundle-path }} target/distrib/attestations-${{ join(matrix.targets, ', ') }}.intoto.jsonl
       - id: cargo-dist
         name: Post-build
