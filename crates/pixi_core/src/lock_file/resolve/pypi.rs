@@ -721,7 +721,11 @@ pub async fn resolve_pypi(
 
     let resolution_future = panic::AssertUnwindSafe(async {
         let lookahead_index = InMemoryIndex::default();
-        let lookaheads = LookaheadResolver::new(
+        // uv 0.11.4 changed `LookaheadResolver::resolve` to return both the
+        // lookaheads and a hash strategy refined by what it discovered along
+        // the way. We adopt the refined strategy for the downstream resolver
+        // matching uv's own `pip` flow.
+        let (lookaheads, hash_strategy) = LookaheadResolver::new(
             &requirements,
             &constraints,
             &overrides,
@@ -765,7 +769,7 @@ pub async fn resolve_pypi(
             Some(&provider_tags),
             &requires_python,
             AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
-            &context.hash_strategy,
+            &hash_strategy,
             options.exclude_newer.clone(),
             &build_options,
             &context.capabilities,
@@ -783,7 +787,7 @@ pub async fn resolve_pypi(
         let resolver = Resolver::new_custom_io(
             manifest,
             options,
-            &context.hash_strategy,
+            &hash_strategy,
             resolver_env,
             &marker_environment,
             Some(tags),
