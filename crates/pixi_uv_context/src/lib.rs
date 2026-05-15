@@ -290,7 +290,7 @@ impl UvResolutionContext {
         index_strategy: IndexStrategy,
         markers: Option<&MarkerEnvironment>,
         connectivity: Connectivity,
-    ) -> Arc<RegistryClient> {
+    ) -> miette::Result<Arc<RegistryClient>> {
         let base_client_builder =
             self.base_client_builder(allow_insecure_hosts, markers, connectivity);
 
@@ -303,7 +303,7 @@ impl UvResolutionContext {
             uv_client_builder = uv_client_builder.proxy(p.clone());
         }
 
-        Arc::new(uv_client_builder.build())
+        Ok(Arc::new(uv_client_builder.build().into_diagnostic()?))
     }
 }
 
