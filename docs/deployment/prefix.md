@@ -37,14 +37,14 @@ The easiest way is to use `pixi publish`, which builds the package and uploads i
 
 ```bash
 # Build and publish in one step
-pixi publish https://prefix.dev/<channel-name>
+pixi publish --target-channel https://prefix.dev/<channel-name>
 ```
 
-You can also build and upload separately for more control:
+You can also build and upload separately for more control. Use `pixi publish --target-dir <PATH>` to build the package into a local directory (no channel indexing), then upload the artifact with `pixi upload`:
 
 ```bash
-# Build first, then upload the artifact
-pixi build --output-dir ./output
+# Build into a local directory first, then upload the artifact
+pixi publish --target-dir ./output
 pixi upload prefix --channel <channel-name> ./output/my-package-1.0.0-h123_0.conda
 ```
 
@@ -92,10 +92,10 @@ Prefix.dev supports trusted publishing from **GitHub Actions**, **GitLab CI/CD**
 
 Navigate to **Trusted Publishers** in your channel settings sidebar and fill in the required fields:
 
-- **GitHub Username or Organization Name** — the owner of the repository
-- **Repository Name** — the repository that will publish packages
-- **Name of the Workflow File** — the workflow file that triggers the upload (e.g. `release-workflow.yml`)
-- **Environment Name** (optional) — restrict publishing to a specific GitHub environment (e.g. `production`)
+- **GitHub Username or Organization Name** -- the owner of the repository
+- **Repository Name** -- the repository that will publish packages
+- **Name of the Workflow File** -- the workflow file that triggers the upload (e.g. `release-workflow.yml`)
+- **Environment Name** (optional) -- restrict publishing to a specific GitHub environment (e.g. `production`)
 
 ![Trusted Publishing](../assets/prefix_trusted_publishing.png)
 
@@ -114,11 +114,11 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@v0.8.0
 
-      # Build and publish in one step — no stored secrets needed!
-      - run: pixi publish https://prefix.dev/<channel-name>
+      # Build and publish in one step -- no stored secrets needed!
+      - run: pixi publish --target-channel https://prefix.dev/<channel-name>
 
       # Or with sigstore attestation for supply chain security:
-      # - run: pixi publish https://prefix.dev/<channel-name> --generate-attestation
+      # - run: pixi publish --target-channel https://prefix.dev/<channel-name> --generate-attestation
 ```
 
-With trusted publishing configured, pixi automatically handles the OIDC token exchange with prefix.dev — no stored API keys required.
+With trusted publishing configured, pixi automatically handles the OIDC token exchange with prefix.dev -- no stored API keys required.

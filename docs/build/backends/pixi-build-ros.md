@@ -56,9 +56,9 @@ distro = "jazzy"  # or "humble", "noetic", etc.
             └── pixi.toml  # Package configuration
     ```
 
-Then you can run `pixi build` to create conda packages for your ROS packages.
+Then you can run `pixi publish` to create conda packages for your ROS packages.
 ```shell
-pixi build
+pixi publish --target-dir ./output
 ```
 
 When you want to install it into your environment, you can do so by adding the following to your workspace `pixi.toml`:
