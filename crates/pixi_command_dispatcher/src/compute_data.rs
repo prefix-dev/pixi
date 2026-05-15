@@ -17,7 +17,7 @@ use tokio::sync::Semaphore;
 
 use crate::cache::BuildBackendMetadataCache;
 use crate::reporter::{
-    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
+    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter, GatewayReporter,
     InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter, SourceMetadataReporter,
     SourceRecordReporter,
 };
@@ -52,6 +52,18 @@ pub trait HasCondaSolveReporter {
 impl HasCondaSolveReporter for DataStore {
     fn conda_solve_reporter(&self) -> Option<&Arc<dyn CondaSolveReporter>> {
         self.try_get::<Arc<dyn CondaSolveReporter>>()
+    }
+}
+
+/// Access the gateway-fetch reporter shared by every repodata-query
+/// site.
+pub trait HasGatewayReporter {
+    fn gateway_reporter(&self) -> Option<&Arc<dyn GatewayReporter>>;
+}
+
+impl HasGatewayReporter for DataStore {
+    fn gateway_reporter(&self) -> Option<&Arc<dyn GatewayReporter>> {
+        self.try_get::<Arc<dyn GatewayReporter>>()
     }
 }
 

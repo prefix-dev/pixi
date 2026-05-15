@@ -126,7 +126,7 @@ pub use pixi_compute_sources::{
     SourceCheckoutExt, UrlCheckoutReporter, UrlDir,
 };
 pub use reporter::{
-    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
+    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter, GatewayReporter,
     InstantiateBackendReporter, PixiInstallReporter, PixiSolveEnvironmentSpec, PixiSolveReporter,
     SourceMetadataReporter, SourceMetadataReporterSpec, SourceRecordReporter,
     SourceRecordReporterSpec,
