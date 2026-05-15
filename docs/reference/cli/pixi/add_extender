@@ -7,6 +7,7 @@
 pixi add numpy # (1)!
 pixi add numpy pandas "pytorch>=1.8" # (2)!
 pixi add "numpy>=1.22,<1.24" # (3)!
+pixi add https://repo.prefix.dev/bioconda::htslib # (3a)!
 pixi add --manifest-path ~/myworkspace/pixi.toml numpy # (4)!
 pixi add --host "python>=3.9.0" # (5)!
 pixi add --build cmake # (6)!
@@ -38,6 +39,7 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 1. This will add the `numpy` package to the project with the latest available for the solved environment.
 2. This will add multiple packages to the project solving them all together.
 3. This will add the `numpy` package with the version constraint.
+3a. This will add the `htslib` package from the specified channel without permanently adding the channel to the workspace. Other dependencies will continue to be resolved from the default channels.
 4. This will add the `numpy` package to the project of the manifest file at the given path.
 5. This will add the `python` package as a host dependency. There is currently no different behavior for host dependencies.
 6. This will add the `cmake` package as a build dependency. There is currently no different behavior for build dependencies.
