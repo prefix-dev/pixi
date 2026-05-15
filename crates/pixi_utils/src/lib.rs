@@ -6,6 +6,7 @@ pub mod prefix;
 mod prefix_guard;
 pub mod reqwest;
 pub mod rlimit;
+pub mod tls;
 pub mod variants;
 
 mod executable_utils;

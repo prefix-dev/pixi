@@ -8,9 +8,9 @@ version = "0.1.12"
 dist = false
 
 [features]
-default = ["rustls-tls"]
+default = ["rustls"]
 native-tls = ["pixi_build_backend/native-tls"]
-rustls-tls = ["pixi_build_backend/rustls-tls"]
+rustls = ["pixi_build_backend/rustls"]
 
 [dependencies]
 async-trait = { workspace = true }

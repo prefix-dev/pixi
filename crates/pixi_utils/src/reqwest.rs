@@ -18,6 +18,8 @@ use reqwest_middleware::{ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
 use retry_policies::policies::ExponentialBackoff;
 
+use crate::tls::Certificates;
+
 /// The default retry policy employed by pixi.
 /// TODO: At some point we might want to make this configurable.
 pub fn default_retry_policy() -> ExponentialBackoff {
@@ -65,18 +67,49 @@ static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
 static DEFAULT_REQWEST_TIMEOUT_SEC: Duration = Duration::from_secs(5 * 60);
 static DEFAULT_REQWEST_IDLE_PER_HOST: usize = 20;
 
-/// Returns whether UV should use native TLS (system certificates).
+/// The default `TlsRootCerts` mode for the active TLS backend.
 ///
-/// For `native-tls` builds, this always returns `true` since the system TLS library is used.
-/// For `rustls-tls` builds, this returns `true` if the config is set to `Native` or `All`.
-pub fn should_use_native_tls_for_uv() -> bool {
-    tls_backend() == "native-tls"
+/// On `native-tls` builds pixi's own client always talks to the OS trust store,
+/// so the default mirrors that with `System`. On `rustls` builds the
+/// bundled Mozilla roots are portable and work without any platform integration,
+/// so the default is `Webpki`. Users can still override explicitly via
+/// `tls-root-certs` in their config.
+pub const fn default_tls_root_certs() -> pixi_config::TlsRootCerts {
+    #[cfg(feature = "native-tls")]
+    {
+        pixi_config::TlsRootCerts::System
+    }
+    #[cfg(not(feature = "native-tls"))]
+    {
+        pixi_config::TlsRootCerts::Webpki
+    }
 }
 
-/// Determines whether we should load all builtin certificates
-/// for uv
-pub fn should_use_builtin_certs_uv(config: &Config) -> bool {
-    matches!(config.tls_root_certs(), pixi_config::TlsRootCerts::All)
+/// Resolve the effective `TlsRootCerts` mode for a given config.
+///
+/// Falls back to [`default_tls_root_certs`] when the user has not set the field.
+fn resolve_tls_root_certs(config: Option<&Config>) -> pixi_config::TlsRootCerts {
+    config
+        .and_then(Config::tls_root_certs)
+        .unwrap_or_else(default_tls_root_certs)
+}
+
+/// Whether uv's reqwest client should load the platform's system root certificates.
+///
+/// uv 0.11 only supports rustls and exposes a single `with_system_certs(bool)` knob:
+/// `true` -> let rustls-platform-verifier / `SSL_CERT_FILE`/`SSL_CERT_DIR` provide trust,
+/// `false` -> fall back to the bundled Mozilla webpki roots.
+///
+/// Mirrors pixi's resolved [`pixi_config::TlsRootCerts`]: only `System`
+/// (and the deprecated `LegacyNative` alias) maps to `true`. The deprecated
+/// `All` mode falls through to `false`; see `load_root_certificates` for the
+/// runtime warning.
+#[allow(deprecated)]
+pub fn should_use_system_certs_for_uv(config: &Config) -> bool {
+    matches!(
+        resolve_tls_root_certs(Some(config)),
+        pixi_config::TlsRootCerts::System | pixi_config::TlsRootCerts::LegacyNative
+    )
 }
 
 /// Returns the name of the TLS backend used by this build.
@@ -100,41 +133,23 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
         .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC);
 
+    // Pick the TLS backend at compile time.
     #[cfg(feature = "native-tls")]
     {
-        // With native-tls, the system's TLS library handles certificates.
-        // The tls-root-certs setting has no effect - warn if it's explicitly set.
-        if let Some(tls_root_certs) = config.and_then(|c| c.tls_root_certs) {
-            tracing::warn!(
-                "tls-root-certs is set to '{}' but has no effect with native-tls builds. \
-                 System certificates are always used.",
-                tls_root_certs
-            );
-        }
         builder = builder.use_native_tls();
     }
-
-    #[cfg(feature = "rustls-tls")]
+    #[cfg(feature = "rustls")]
     {
-        use pixi_config::TlsRootCerts;
-        let tls_root_certs = config.map(|c| c.tls_root_certs()).unwrap_or_default();
-
-        builder = builder.use_rustls_tls().tls_built_in_root_certs(false); // Disable auto-loading to choose explicitly
-
-        match tls_root_certs {
-            TlsRootCerts::Webpki => {
-                builder = builder.tls_built_in_webpki_certs(true);
-            }
-            TlsRootCerts::Native => {
-                builder = builder.tls_built_in_native_certs(true);
-            }
-            TlsRootCerts::All => {
-                builder = builder
-                    .tls_built_in_webpki_certs(true)
-                    .tls_built_in_native_certs(true);
-            }
-        }
+        builder = builder.use_rustls_tls();
     }
+
+    // Then load the trust store honoring `SSL_CERT_FILE` / `SSL_CERT_DIR` and
+    // the configured `tls-root-certs` mode. Both TLS backends accept
+    // `tls_certs_only`; this is what lets pixi keep one source of truth for
+    // root certificates regardless of which backend the binary was compiled
+    // against.
+    let tls_root_certs = resolve_tls_root_certs(config);
+    builder = builder.tls_certs_only(Certificates::for_mode(tls_root_certs).to_reqwest_certs());
 
     let proxies = config
         .map(|c| c.get_proxies())

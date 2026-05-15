@@ -4,9 +4,7 @@ use std::time::Duration;
 use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, CacheKind, Config};
-use pixi_utils::reqwest::{
-    LazyReqwestClient, should_use_builtin_certs_uv, should_use_native_tls_for_uv, uv_middlewares,
-};
+use pixi_utils::reqwest::{LazyReqwestClient, should_use_system_certs_for_uv, uv_middlewares};
 use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 use uv_cache::Cache;
 use uv_client::{
@@ -38,10 +36,16 @@ pub struct UvResolutionContext {
     pub extra_middleware: ExtraMiddleware,
     pub proxies: Vec<reqwest::Proxy>,
     pub tls_no_verify: bool,
-    /// Whether UV should use native TLS (system certificates).
-    /// This is computed based on the `tls-root-certs` config and the TLS feature used.
-    pub use_native_tls: bool,
-    pub use_builtin_certs: bool,
+    /// The shared reqwest client passed to uv via
+    /// [`uv_client::BaseClientBuilder::custom_client`] when
+    /// `allow_insecure_host` is empty. Lets uv reuse pixi's TLS configuration,
+    /// proxies, mirrors, and connection pool instead of building its own.
+    pub client: reqwest::Client,
+    /// Fallback for the per-host TLS-bypass case: when `allow_insecure_host`
+    /// is non-empty we let uv build its own dual (secure + dangerous) clients
+    /// via [`uv_client::BaseClientBuilder::with_system_certs`], since reqwest
+    /// 0.13 doesn't expose per-host TLS opt-in on a single `Client`.
+    pub use_system_certs: bool,
     pub package_config_settings: PackageConfigSettings,
     pub extra_build_requires: ExtraBuildRequires,
     pub extra_build_variables: ExtraBuildVariables,
@@ -197,11 +201,11 @@ impl UvResolutionContext {
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
-            extra_middleware: ExtraMiddleware(uv_middlewares(config, client)),
+            extra_middleware: ExtraMiddleware(uv_middlewares(config, client.clone())),
             proxies: config.get_proxies().into_diagnostic()?,
             tls_no_verify: config.tls_no_verify(),
-            use_native_tls: should_use_native_tls_for_uv(),
-            use_builtin_certs: should_use_builtin_certs_uv(config),
+            client: client.into_client(),
+            use_system_certs: should_use_system_certs_for_uv(config),
             package_config_settings: PackageConfigSettings::default(),
             extra_build_requires: ExtraBuildRequires::default(),
             extra_build_variables: ExtraBuildVariables::default(),
@@ -223,6 +227,53 @@ impl UvResolutionContext {
         self
     }
 
+    /// Build the [`BaseClientBuilder`] used by every uv flow in pixi.
+    ///
+    /// All registry-client and resolver-satisfaction code paths construct
+    /// their `BaseClientBuilder` here so TLS, proxy, middleware, and timeout
+    /// configuration is set in one place.
+    ///
+    /// The HTTP client itself is selected based on `allow_insecure_hosts`:
+    ///
+    /// - **Empty (default):** uv reuses pixi's `reqwest::Client` via
+    ///   `custom_client`, sharing pixi's TLS roots, proxies, mirror
+    ///   middleware, and connection pool.
+    /// - **Non-empty:** uv builds its own pair of clients via
+    ///   `with_system_certs`, because it needs a separate
+    ///   `tls_danger_accept_invalid_certs(true)` client for the flagged
+    ///   hosts and reqwest 0.13 has no per-host TLS opt-in on a single
+    ///   `Client`.
+    pub fn base_client_builder<'a>(
+        &self,
+        allow_insecure_hosts: Vec<TrustedHost>,
+        markers: Option<&'a MarkerEnvironment>,
+        connectivity: Connectivity,
+    ) -> BaseClientBuilder<'a> {
+        let mut builder = BaseClientBuilder::default()
+            .keyring(self.keyring_provider)
+            .connectivity(connectivity)
+            .extra_middleware(self.extra_middleware.clone());
+        builder = if allow_insecure_hosts.is_empty() {
+            builder
+                .allow_insecure_host(allow_insecure_hosts)
+                .custom_client(self.client.clone())
+        } else {
+            builder
+                .allow_insecure_host(allow_insecure_hosts)
+                .with_system_certs(self.use_system_certs)
+        };
+        if let Some(timeout) = self.http_timeout {
+            builder = builder.read_timeout(timeout);
+        }
+        if let Some(retries) = self.http_retries {
+            builder = builder.retries(retries);
+        }
+        if let Some(markers) = markers {
+            builder = builder.markers(markers);
+        }
+        builder
+    }
+
     /// Build a registry client configured with the context settings.
     ///
     /// Parameters:
@@ -240,25 +291,8 @@ impl UvResolutionContext {
         markers: Option<&MarkerEnvironment>,
         connectivity: Connectivity,
     ) -> Arc<RegistryClient> {
-        let mut base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts)
-            .keyring(self.keyring_provider)
-            .connectivity(connectivity)
-            .native_tls(self.use_native_tls)
-            .built_in_root_certs(self.use_builtin_certs)
-            .extra_middleware(self.extra_middleware.clone());
-
-        if let Some(timeout) = self.http_timeout {
-            base_client_builder = base_client_builder.read_timeout(timeout);
-        }
-
-        if let Some(retries) = self.http_retries {
-            base_client_builder = base_client_builder.retries(retries);
-        }
-
-        if let Some(markers) = markers {
-            base_client_builder = base_client_builder.markers(markers);
-        }
+        let base_client_builder =
+            self.base_client_builder(allow_insecure_hosts, markers, connectivity);
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, self.cache.clone())

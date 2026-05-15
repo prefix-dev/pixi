@@ -131,7 +131,7 @@ impl SolveCondaEnvironmentSpec {
                 .collect::<HashSet<_>>();
 
             // Filter all installed packages
-            let installed = self
+            let installed: Vec<rattler_conda_types::RepoDataRecord> = self
                 .installed
                 .into_iter()
                 // Only lock binary records
@@ -298,7 +298,7 @@ impl SolveCondaEnvironmentSpec {
                     .chain(binary_match_specs)
                     .chain(dev_source_match_specs)
                     .collect(),
-                locked_packages: installed,
+                locked_packages: installed.iter().collect(),
                 virtual_packages: self.virtual_packages,
                 channel_priority: self.channel_priority,
                 exclude_newer,

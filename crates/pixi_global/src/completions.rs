@@ -126,12 +126,15 @@ pub fn contained_completions(
     let zsh_name = format!("_{name}");
     let fish_name = format!("{name}.fish");
 
-    let bash_path =
-        prefix_root
-            .join(Bash.completion_script_location().wrap_err_with(|| {
-                miette::miette!("Bash needs to have a completion script location")
-            })?)
-            .join(name);
+    let bash_path = prefix_root
+        .join(
+            Bash::default()
+                .completion_script_location()
+                .wrap_err_with(|| {
+                    miette::miette!("Bash needs to have a completion script location")
+                })?,
+        )
+        .join(name);
     let zsh_path =
         prefix_root
             .join(Zsh.completion_script_location().wrap_err_with(|| {

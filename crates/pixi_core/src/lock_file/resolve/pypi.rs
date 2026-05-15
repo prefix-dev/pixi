@@ -46,9 +46,7 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{
-    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
-};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
@@ -476,13 +474,11 @@ pub async fn resolve_pypi(
     );
 
     let registry_client = {
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts)
-            .markers(&marker_environment)
-            .keyring(context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(context.use_native_tls)
-            .extra_middleware(context.extra_middleware.clone());
+        let base_client_builder = context.base_client_builder(
+            allow_insecure_hosts,
+            Some(&marker_environment),
+            Connectivity::Online,
+        );
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, context.cache.clone())

@@ -10,11 +10,11 @@ repository.workspace = true
 version = "0.68.1"
 
 [features]
-default = ["rustls-tls"]
+default = ["rustls"]
 native-tls = ["pixi_cli/native-tls"]
 # run tests connecting to remote Internet services
 online_tests = ["pixi_cli/online_tests"]
-rustls-tls = ["pixi_cli/rustls-tls"]
+rustls = ["pixi_cli/rustls"]
 self_update = ["pixi_cli/self_update"]
 slow_integration_tests = ["pixi_cli/slow_integration_tests"]
 tokio-console = ["pixi_cli/tokio-console", "tokio/tracing"]

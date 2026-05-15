@@ -10,18 +10,16 @@ repository.workspace = true
 version = "0.1.0"
 
 [features]
-default = ["rustls-tls"]
+default = ["rustls"]
 native-tls = [
   "pixi_auth/native-tls",
   "rattler_networking/native-tls",
   "reqwest/native-tls",
-  "reqwest/native-tls-alpn",
 ]
-rustls-tls = [
-  "pixi_auth/rustls-tls",
-  "rattler_networking/rustls-tls",
-  "reqwest/rustls-tls",
-  "reqwest/rustls-tls-native-roots",
+rustls = [
+  "pixi_auth/rustls",
+  "rattler_networking/rustls",
+  "reqwest/rustls",
 ]
 
 
@@ -50,6 +48,8 @@ reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
 retry-policies = { workspace = true }
 rlimit = { workspace = true }
+rustls-native-certs = { workspace = true }
+rustls-pki-types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
@@ -60,6 +60,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
 uv-configuration = { workspace = true }
+webpki-root-certs = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
