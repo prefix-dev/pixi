@@ -4331,11 +4331,11 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <h3 id="auto-derive-of-pkg-and-bin">Auto-derive of pkg and bin<a class="headerlink" href="#auto-derive-of-pkg-and-bin" title="Permanent link">#</a></h3>
 <p>The Mojo backend includes auto-discovery of your project structure and will derive the following:</p>
 <ul>
-<li><strong>Binaries</strong>: Automatically searches for <code>main.mojo</code> or <code>main.🔥</code> in:<ul>
+<li><strong>Binaries</strong>: Automatically searches for <code>main.mojo</code> in:<ul>
 <li><code>&lt;project_root&gt;/main.mojo</code></li>
 </ul>
 </li>
-<li><strong>Packages</strong>: Automatically searches for directories with <code>__init__.mojo</code> or <code>__init__.🔥</code> in:<ul>
+<li><strong>Packages</strong>: Automatically searches for directories with <code>__init__.mojo</code> in:<ul>
 <li><code>&lt;project_root&gt;/&lt;project_name&gt;/</code></li>
 <li><code>&lt;project_root&gt;/src/</code></li>
 </ul>
@@ -4485,7 +4485,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 </ul>
 <p>List of binary configurations to build. The created binary will be placed in the <code>$PREFIX/bin</code> dir and will be in the path after running <code>pixi install</code> assuming the package is listed as a dependency as in the example above. <code>pixi build</code> will create a conda package that includes the binary.</p>
 <p><strong>Auto-derive behavior:</strong>
-- If <code>bins</code> is not specified, pixi-build-mojo will search for a <code>main.mojo</code> or <code>main.🔥</code> file in the project root
+- If <code>bins</code> is not specified, pixi-build-mojo will search for a <code>main.mojo</code> file in the project root
 - If found, it creates a binary with the name set to the project name
 - If a pkg has been manually configured, a bin will not be auto-derived and must be manually configured.</p>
 <h4 id="binsname"><code>bins[].name</code><a class="headerlink" href="#binsname" title="Permanent link">#</a></h4>
@@ -4505,7 +4505,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Default</strong>: Auto-derived for the first binary</li>
 </ul>
 <p>The path to the Mojo file that contains a <code>main</code> function. If not specified:
-- For the first binary, searches for <code>main.mojo</code> or <code>main.🔥</code> in the project root
+- For the first binary, searches for <code>main.mojo</code> in the project root
 - For additional binaries, this field is required</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[[package.build.config.bins]]</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># path = &quot;./main.mojo&quot;  # Optional if main.mojo exists in project root</span>
@@ -4526,7 +4526,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 </ul>
 <p>Package configuration for creating Mojo package. The created Mojo package will be placed in the <code>$PREFIX/lib/mojo</code> dir, which will make it discoverable to anything that depends on the package.</p>
 <p><strong>Auto-derive behavior:</strong>
-- If <code>pkg</code> is not specified, pixi-build-mojo will search for a directory containing <code>__init__.mojo</code> or <code>__init__.🔥</code> in the following order:
+- If <code>pkg</code> is not specified, pixi-build-mojo will search for a directory containing <code>__init__.mojo</code> in the following order:
   1. <code>&lt;project_root&gt;/&lt;project_name&gt;/</code>
   2. <code>&lt;project_root&gt;/src/</code>
 - If found, it creates a package with the name set to the project name
@@ -4547,7 +4547,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Type</strong>: <code>String</code> (path)</li>
 <li><strong>Default</strong>: Auto-derive</li>
 </ul>
-<p>The path to the directory that constitutes the package. If not specified, searches for a directory with <code>__init__.mojo</code> or <code>__init__.🔥</code> as described above.</p>
+<p>The path to the directory that constitutes the package. If not specified, searches for a directory with <code>__init__.mojo</code> as described above.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[package.build.config.pkg]</span>
 </span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">path</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;greetings&quot;</span>
 </span></code></pre></div>
