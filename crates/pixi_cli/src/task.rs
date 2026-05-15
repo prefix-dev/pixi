@@ -337,12 +337,18 @@ async fn list_tasks(
         return print_tasks_json(workspace_ctx.workspace());
     }
 
-    let tasks_per_env = workspace_ctx
+    let mut tasks_per_env = workspace_ctx
         .list_tasks(
             args.environment
                 .and_then(|e| EnvironmentName::from_str(&e.to_string()).ok()),
         )
         .await?;
+
+    // Hierarchical-tasks: inject member tasks into the default environment
+    // listing with their fully-qualified `a::b::task` names. These tasks do
+    // not belong to any single environment — they live on member nodes — so
+    // we surface them under the default environment for display purposes.
+    inject_member_tasks_for_display(&mut tasks_per_env, workspace_ctx.workspace());
 
     if tasks_per_env.is_empty() {
         eprintln!("No tasks found",);
@@ -533,6 +539,37 @@ impl From<&Task> for TaskInfo {
                     .map(|output| output.source().to_string())
                     .collect()
             }),
+        }
+    }
+}
+
+/// Walks the workspace's member tree and appends every reachable member task
+/// to `tasks_per_env` under the default environment, using the fully
+/// qualified `a::b::task` name. Does nothing when the tree is empty (the
+/// usual case when `hierarchical-tasks` is disabled).
+fn inject_member_tasks_for_display(
+    tasks_per_env: &mut HashMap<EnvironmentName, HashMap<TaskName, Task>>,
+    workspace: &Workspace,
+) {
+    if workspace.members().is_empty() {
+        return;
+    }
+
+    let default_env_name = workspace.default_environment().name().clone();
+    let bucket = tasks_per_env.entry(default_env_name).or_default();
+
+    // Each member is its own standalone Workspace (Model 2). Its tasks
+    // live on the member's default environment — we surface them here
+    // under the root's default-env listing with fully-qualified names so
+    // `pixi task list` shows the entire reachable set without a caller
+    // needing to enter each member.
+    for (path, member_ws) in workspace.walk_members() {
+        let prefix = path.join("::");
+        if let Ok(member_tasks) = member_ws.default_environment().tasks(None) {
+            for (task_name, task) in member_tasks {
+                let qualified = format!("{prefix}::{}", task_name.as_str());
+                bucket.insert(TaskName::from(qualified), task.clone());
+            }
         }
     }
 }

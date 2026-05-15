@@ -89,6 +89,11 @@ pub enum CanSkip {
 /// A task that contains enough information to be able to execute it. The
 /// lifetime `'p` refers to the lifetime of the project that contains the
 /// tasks.
+///
+/// For hierarchical-tasks member tasks, `workspace` is the **member's**
+/// workspace (sourced from `run_environment.workspace()`), not the root
+/// aggregator's. That means activation, lockfile access, env install dir,
+/// and the default `cwd` all correctly target the member.
 #[derive(Clone, Debug)]
 pub struct ExecutableTask<'p> {
     pub workspace: &'p Workspace,
@@ -101,6 +106,11 @@ pub struct ExecutableTask<'p> {
 
 impl<'p> ExecutableTask<'p> {
     /// Constructs a new executable task from a task graph node.
+    ///
+    /// The resulting task's `workspace` is taken from the node's
+    /// `run_environment` — not from the graph's root project — so that
+    /// member tasks execute against their own member workspace instead of
+    /// the aggregator root.
     pub fn from_task_graph(
         task_graph: &TaskGraph<'p>,
         task_id: TaskId,
@@ -109,7 +119,7 @@ impl<'p> ExecutableTask<'p> {
         let node = &task_graph[task_id];
 
         Self {
-            workspace: task_graph.project(),
+            workspace: node.run_environment.workspace(),
             name: node.name.clone(),
             task: node.task.clone(),
             run_environment: node.run_environment.clone(),
@@ -287,6 +297,11 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the working directory for this task.
+    ///
+    /// For member tasks under the `hierarchical-tasks` preview feature,
+    /// `self.workspace` is already the member's workspace (see
+    /// [`Self::from_task_graph`]), so `workspace.root()` naturally yields
+    /// the member's directory — no extra plumbing required.
     pub fn working_directory(&self) -> Result<PathBuf, InvalidWorkingDirectory> {
         Ok(match self.task.working_directory() {
             Some(cwd) if cwd.is_absolute() => cwd.to_path_buf(),
