@@ -425,6 +425,7 @@ impl<'a> LazyBuildDispatch<'a> {
                     self.params.hasher,
                     self.params.exclude_newer.clone().unwrap_or_default(),
                     self.params.sources.clone(),
+                    uv_types::SourceTreeEditablePolicy::default(),
                     self.params.workspace_cache.clone(),
                     self.params.concurrency.clone(),
                     self.params.preview,
