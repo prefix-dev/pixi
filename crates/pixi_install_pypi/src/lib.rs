@@ -151,7 +151,14 @@ pub enum ContinuePyPIPrefixUpdate<'a> {
 
 /// Remove site-packages installed for an outdated interpreter so the next run
 /// starts from a clean slate.
-async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Result<()> {
+///
+/// `layout` describes the old interpreter's install scheme — uv needs it to
+/// resolve and validate the paths recorded in each wheel's `RECORD`. The
+/// caller builds it from the old [`PythonInfo`] plus the env prefix.
+async fn uninstall_outdated_site_packages(
+    layout: &uv_install_wheel::Layout,
+    site_packages: &Path,
+) -> miette::Result<()> {
     let mut dist_dirs = Vec::new();
     for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
         let entry = entry.into_diagnostic()?;
@@ -195,12 +202,34 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
         .collect::<Vec<_>>();
 
     for dist_info in installed {
-        uv_installer::uninstall(&dist_info)
+        uv_installer::uninstall(&dist_info, layout)
             .await
             .expect("uninstallation of old site-packages failed");
     }
 
     Ok(())
+}
+
+/// Build a [`uv_install_wheel::Layout`] from a conda-side [`PythonInfo`] plus
+/// the env prefix root. Used to drive uv's uninstall flow for an interpreter
+/// that's about to be replaced (we cannot ask the interpreter itself).
+fn layout_from_python_info(
+    prefix: &Prefix,
+    info: &rattler::install::PythonInfo,
+) -> uv_install_wheel::Layout {
+    let root = prefix.root();
+    uv_install_wheel::Layout {
+        sys_executable: root.join(&info.path),
+        python_version: (info.short_version.0 as u8, info.short_version.1 as u8),
+        os_name: std::env::consts::OS.to_string(),
+        scheme: uv_pypi_types::Scheme {
+            purelib: root.join(&info.site_packages_path),
+            platlib: root.join(&info.site_packages_path),
+            scripts: root.join(&info.bin_dir),
+            data: root.to_path_buf(),
+            include: root.join("include"),
+        },
+    }
 }
 
 /// React on interpreter changes before running the PyPI updater. This may
@@ -214,7 +243,8 @@ pub async fn on_python_interpreter_change<'a>(
         PythonStatus::Removed { old } => {
             let site_packages_path = prefix.root().join(&old.site_packages_path);
             if site_packages_path.exists() {
-                uninstall_outdated_site_packages(&site_packages_path).await?;
+                let layout = layout_from_python_info(prefix, old);
+                uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
             }
             Ok(ContinuePyPIPrefixUpdate::Skip)
         }
@@ -222,7 +252,8 @@ pub async fn on_python_interpreter_change<'a>(
             if old.site_packages_path != new.site_packages_path {
                 let site_packages_path = prefix.root().join(&old.site_packages_path);
                 if site_packages_path.exists() {
-                    uninstall_outdated_site_packages(&site_packages_path).await?;
+                    let layout = layout_from_python_info(prefix, old);
+                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
                 }
             }
             Ok(ContinuePyPIPrefixUpdate::Continue(new))
@@ -231,7 +262,8 @@ pub async fn on_python_interpreter_change<'a>(
             if pypi_records.is_empty() {
                 let site_packages_path = prefix.root().join(&info.site_packages_path);
                 if site_packages_path.exists() {
-                    uninstall_outdated_site_packages(&site_packages_path).await?;
+                    let layout = layout_from_python_info(prefix, info);
+                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
                 }
                 return Ok(ContinuePyPIPrefixUpdate::Skip);
             }
@@ -729,7 +761,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         self.remove_duplicate_metadata(duplicates)
             .into_diagnostic()
             .wrap_err("while removing duplicate metadata")?;
-        self.remove_packages(extraneous, reinstalls).await?;
+        self.remove_packages(setup, extraneous, reinstalls).await?;
 
         // Install regular PyPI packages (with build isolation) as a batch
         let regular_dists = if regular_dists.is_empty() {
@@ -1008,6 +1040,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     /// reinstallation (reinstalls)
     async fn remove_packages(
         &self,
+        setup: &UvInstallerConfig,
         extraneous: &[InstalledDist],
         reinstalls: &[(InstalledDist, NeedReinstall)],
     ) -> miette::Result<()> {
@@ -1015,8 +1048,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             return Ok(());
         }
         let start = std::time::Instant::now();
+        let layout = setup.venv.interpreter().layout();
         for dist_info in extraneous.iter().chain(reinstalls.iter().map(|(d, _)| d)) {
-            let summary = match uv_installer::uninstall(dist_info).await {
+            let summary = match uv_installer::uninstall(dist_info, &layout).await {
                 Ok(sum) => sum,
                 // Get error types from uv_installer
                 Err(UninstallError::Uninstall(e))
