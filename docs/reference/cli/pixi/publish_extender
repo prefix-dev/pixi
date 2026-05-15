@@ -129,6 +129,31 @@ pixi publish https://prefix.dev/my-channel --path ./my-project/
 pixi publish https://prefix.dev/my-channel --clean
 ```
 
+### Overriding build variants
+
+By default `pixi publish` builds every entry in the [`[workspace.build-variants]`](../../pixi_manifest.md#build-variants-optional) matrix. Use `--variant KEY=VALUE` to override individual variant keys at the command line — for iterating locally on a single variant, parallelizing CI jobs across the matrix, or anything else where you don't want the full cross-product.
+
+```shell
+# Build just one entry of the matrix
+pixi publish --variant python=3.12
+
+# Constrain a variant to a subset of values (cross-product with the
+# remaining workspace variants)
+pixi publish --variant python=3.12 --variant cuda-version=12.8,13.0
+```
+
+CLI overrides replace the matching key from the workspace `build-variants`; workspace keys that aren't named on the command line keep their full value list.
+
+For shared variant configuration, prefer listing the YAML files in [`[workspace.build-variants-files]`](../../pixi_manifest.md#build-variants-files-optional) in `pixi.toml` so every contributor and CI run picks them up automatically. The `--variant-config` / `-m` flag is meant for one-off overrides — for example, an extra file you don't want to commit. CLI-supplied files are appended after the workspace files, so values from `-m` override any matching key from the workspace files (`rattler-build --variant-config` semantics).
+
+```shell
+# Use an extra variant file for this build only
+pixi publish -m variants.yaml
+
+# Combine with a key override
+pixi publish -m variants.yaml --variant python=3.12
+```
+
 ## Authentication
 
 `pixi publish` uses the same authentication system as other pixi commands. Credentials can be configured in three ways:

@@ -30,7 +30,7 @@ use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::SourceLocationSpec;
-use pixi_utils::variants::VariantConfig;
+use pixi_utils::variants::{VariantConfig, VariantValue};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::AuthenticationStorage;
 use rattler_package_streaming::seek::read_package_file;
@@ -116,6 +116,82 @@ pub struct Args {
     /// Generate sigstore attestation (prefix.dev only)
     #[arg(long)]
     pub generate_attestation: bool,
+
+    /// Override a build variant key with one or more values.
+    ///
+    /// Use `--variant KEY=VALUE` to build only that variant, or
+    /// `--variant KEY=VAL1,VAL2,...` to constrain a variant to a subset of
+    /// values. Repeat the flag for multiple keys. Values supplied here
+    /// replace any matching key from the workspace `build-variants` and
+    /// any `--variant-config` files.
+    ///
+    /// Example: `pixi publish --variant python=3.12 --variant cuda-version=12.8,13.0`.
+    #[arg(long = "variant", value_parser = parse_variant, value_name = "KEY=VALUES")]
+    pub variant: Vec<(String, Vec<String>)>,
+
+    /// Path to an additional variant configuration YAML file.
+    ///
+    /// Mirrors rattler-build's `--variant-config/-m`. Repeat to add
+    /// multiple files. Paths are appended after the workspace-level
+    /// `build-variants-files`.
+    #[arg(long = "variant-config", short = 'm', value_name = "FILE")]
+    pub variant_config: Vec<PathBuf>,
+}
+
+/// Parse a `KEY=VAL[,VAL...]` variant override.
+pub(crate) fn parse_variant(
+    s: &str,
+) -> Result<(String, Vec<String>), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let pos = s
+        .find('=')
+        .ok_or_else(|| format!("invalid KEY=VALUE: no `=` found in `{s}`"))?;
+    let key = s[..pos].trim().to_string();
+    if key.is_empty() {
+        return Err(format!("invalid KEY=VALUE: empty key in `{s}`").into());
+    }
+    let raw_value = &s[pos + 1..];
+    if raw_value.contains('=') {
+        return Err(format!(
+            "invalid KEY=VALUE: value in `{s}` contains an `=`; values cannot contain `=`",
+        )
+        .into());
+    }
+    let values: Vec<String> = raw_value
+        .split(',')
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty())
+        .collect();
+    if values.is_empty() {
+        return Err(format!("invalid KEY=VALUE: empty value in `{s}`").into());
+    }
+    Ok((key, values))
+}
+
+/// Build a `BTreeMap` from CLI `--variant` overrides. Repeated flags with the
+/// same key accumulate values.
+fn cli_variants_map(cli: &[(String, Vec<String>)]) -> BTreeMap<String, Vec<VariantValue>> {
+    let mut grouped: BTreeMap<String, Vec<VariantValue>> = BTreeMap::new();
+    for (key, values) in cli {
+        grouped
+            .entry(key.clone())
+            .or_default()
+            .extend(values.iter().cloned().map(VariantValue::from));
+    }
+    grouped
+}
+
+/// Resolve CLI `--variant-config` paths against the given working directory.
+fn resolve_variant_config_paths(paths: &[PathBuf], cwd: &Path) -> Vec<PathBuf> {
+    paths
+        .iter()
+        .map(|path| {
+            if path.is_absolute() {
+                path.clone()
+            } else {
+                cwd.join(path)
+            }
+        })
+        .collect()
 }
 
 /// Validate that the full path of package manifest exists and is a supported
@@ -289,9 +365,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .finish();
 
     let VariantConfig {
-        variant_configuration,
-        variant_files,
+        mut variant_configuration,
+        mut variant_files,
     } = workspace.variants(args.target_platform)?;
+
+    // Overlay CLI `--variant KEY=VAL[,VAL...]` overrides on top of the workspace
+    // variants. Multiple `--variant` flags with the same key accumulate values,
+    // but as a group they replace any matching key from the workspace.
+    variant_configuration.extend(cli_variants_map(&args.variant));
+
+    // Append CLI-provided variant config files. Relative paths are resolved
+    // against the current working directory so callers can pass `-m variants.yaml`
+    // from wherever they invoke pixi.
+    if !args.variant_config.is_empty() {
+        let cwd = std::env::current_dir().into_diagnostic()?;
+        variant_files.extend(resolve_variant_config_paths(&args.variant_config, &cwd));
+    }
 
     let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
@@ -964,4 +1053,74 @@ async fn upload_to_local_filesystem_channel(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_variant_accepts_single_and_comma_list() {
+        assert_eq!(
+            parse_variant("python=3.12").unwrap(),
+            ("python".into(), vec!["3.12".into()]),
+        );
+        assert_eq!(
+            parse_variant("cuda-version=12.8,13.0").unwrap(),
+            ("cuda-version".into(), vec!["12.8".into(), "13.0".into()]),
+        );
+    }
+
+    #[test]
+    fn parse_variant_rejects_malformed_input() {
+        for s in ["python", "=3.12", "python=", "python=,,", "expr=a=b"] {
+            assert!(parse_variant(s).is_err(), "expected error for {s:?}");
+        }
+    }
+
+    #[test]
+    fn cli_variants_map_replaces_workspace_key_and_accumulates_repeats() {
+        let mut variants = BTreeMap::from([
+            (
+                "python".into(),
+                vec!["3.10".into(), "3.11".into(), "3.12".into()],
+            ),
+            ("cuda-version".into(), vec!["12.8".into(), "13.0".into()]),
+        ]);
+        variants.extend(cli_variants_map(&[
+            ("python".into(), vec!["3.11".into()]),
+            ("python".into(), vec!["3.12".into()]),
+        ]));
+
+        assert_eq!(
+            variants.get("python").unwrap(),
+            &vec![VariantValue::from("3.11"), VariantValue::from("3.12")],
+        );
+        // Workspace keys not mentioned by the CLI must be left untouched.
+        assert_eq!(
+            variants.get("cuda-version").unwrap(),
+            &vec![VariantValue::from("12.8"), VariantValue::from("13.0")],
+        );
+    }
+
+    #[test]
+    fn resolve_variant_config_paths_anchors_relatives_to_cwd() {
+        let cwd = Path::new("/work/repo");
+        let resolved = resolve_variant_config_paths(
+            &[
+                PathBuf::from("variants.yaml"),
+                PathBuf::from("ci/variants.yaml"),
+                PathBuf::from("/abs/variants.yaml"),
+            ],
+            cwd,
+        );
+        assert_eq!(
+            resolved,
+            vec![
+                PathBuf::from("/work/repo/variants.yaml"),
+                PathBuf::from("/work/repo/ci/variants.yaml"),
+                PathBuf::from("/abs/variants.yaml"),
+            ],
+        );
+    }
 }
