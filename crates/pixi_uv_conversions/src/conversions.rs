@@ -340,7 +340,7 @@ pub fn into_pinned_git_spec(
     // uv stores the percent-encoded drive-letter form internally (see
     // `encode_windows_drive_letter`). Decode it back here so the lock file
     // shows `file:///D:/...` rather than `file:///D%3A/...`.
-    let repository: url::Url = dist.git.repository().clone().into();
+    let repository: url::Url = (*dist.git.repository()).clone().into();
     PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
 }
 

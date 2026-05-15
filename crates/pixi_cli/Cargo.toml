@@ -78,7 +78,7 @@ rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
   "http2",
-  "macos-system-configuration",
+  "system-proxy",
 ] }
 reqwest-middleware = { workspace = true }
 self-replace = { workspace = true }
@@ -119,16 +119,14 @@ native-tls = [
   "pixi_utils/native-tls",
   "rattler/native-tls",
   "reqwest/native-tls",
-  "reqwest/native-tls-alpn",
 ]
 # run tests connecting to remote Internet services
 online_tests = []
-rustls-tls = [
-  "pixi_auth/rustls-tls",
-  "pixi_utils/rustls-tls",
-  "rattler/rustls-tls",
-  "reqwest/rustls-tls",
-  "reqwest/rustls-tls-native-roots",
+rustls = [
+  "pixi_auth/rustls",
+  "pixi_utils/rustls",
+  "rattler/rustls",
+  "reqwest/rustls",
 ]
 self_update = ["pixi_core/self_update"]
 slow_integration_tests = []

@@ -28,7 +28,7 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
@@ -567,13 +567,11 @@ async fn read_local_package_metadata(
     );
 
     let registry_client = {
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts.clone())
-            .markers(&marker_environment)
-            .keyring(ctx.uv_context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(ctx.uv_context.use_native_tls)
-            .extra_middleware(ctx.uv_context.extra_middleware.clone());
+        let base_client_builder = ctx.uv_context.base_client_builder(
+            allow_insecure_hosts.clone(),
+            Some(&marker_environment),
+            Connectivity::Online,
+        );
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())

@@ -29,21 +29,38 @@ const EXPERIMENTAL: &str = "experimental";
 
 /// Controls which root certificates to use for TLS connections.
 ///
-/// - `Webpki`: Use bundled Mozilla root certificates (portable, works everywhere)
-/// - `Native`: Use the system's certificate store (includes corporate CAs)
-/// - `All`: Use both webpki and native certificates (union of both sources)
-///
-/// Note: This setting only has an effect when pixi is built with the `rustls-tls` feature.
+/// Note: This setting only has an effect when pixi is built with the `rustls` feature.
 /// When built with `native-tls`, system certificates are always used regardless of this setting.
+///
+/// `SSL_CERT_FILE` / `SSL_CERT_DIR` (when set and valid) always take precedence over this setting.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
 pub enum TlsRootCerts {
-    /// Use bundled Mozilla root certificates
+    /// Use bundled Mozilla root certificates (portable, works everywhere).
+    #[serde(rename = "webpki")]
     Webpki,
-    /// Use the system's native certificate store
-    Native,
-    /// Use both webpki and native certificates
+    /// Use the system's native certificate store (includes corporate CAs).
     #[default]
+    #[serde(rename = "system")]
+    System,
+    /// Deprecated spelling of [`Self::System`].
+    ///
+    /// Configs that still set `tls-root-certs = "native"` deserialize into this
+    /// variant so we can emit a runtime warning pointing users at the new
+    /// spelling. Behaves identically to `System` at use sites.
+    #[deprecated(note = "use `tls-root-certs = \"system\"`")]
+    #[serde(rename = "native")]
+    LegacyNative,
+    /// Use both webpki and native certificates.
+    ///
+    /// Deprecated: uv 0.11 no longer supports merging the two trust stores via
+    /// its public API, so pixi can no longer plumb this through for uv's
+    /// reqwest clients. This variant now falls through to `System` at
+    /// runtime and emits a warning. Use `webpki` or `system` explicitly,
+    /// or set `SSL_CERT_FILE` / `SSL_CERT_DIR`.
+    #[deprecated(
+        note = "merging webpki + native roots is no longer supported: use `system`, `webpki`, or set SSL_CERT_FILE/DIR"
+    )]
+    #[serde(rename = "all")]
     All,
 }
 
@@ -59,7 +76,10 @@ impl std::fmt::Display for TlsRootCerts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TlsRootCerts::Webpki => write!(f, "webpki"),
-            TlsRootCerts::Native => write!(f, "native"),
+            TlsRootCerts::System => write!(f, "system"),
+            #[allow(deprecated)]
+            TlsRootCerts::LegacyNative => write!(f, "native"),
+            #[allow(deprecated)]
             TlsRootCerts::All => write!(f, "all"),
         }
     }
@@ -647,7 +667,7 @@ pub struct ConfigCli {
     #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     tls_no_verify: bool,
 
-    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both).
+    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store).
     #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
     tls_root_certs: Option<TlsRootCerts>,
 
@@ -1387,8 +1407,45 @@ impl Default for Config {
     }
 }
 
+/// Emit a deprecation warning when a config layer (file, CLI flag, or env var)
+/// sets `tls-root-certs` to one of the deprecated spellings.
+///
+/// `source` is included in the message so users can find where the bad value
+/// came from. Pass `None` for non-file sources (CLI / env).
+fn warn_deprecated_tls_root_certs(value: Option<TlsRootCerts>, source: Option<&str>) {
+    #[allow(deprecated)]
+    let (old, advice): (&str, String) = match value {
+        Some(TlsRootCerts::LegacyNative) => (
+            "tls-root-certs = \"native\"",
+            format!(
+                "rename to '{}'",
+                console::style("tls-root-certs = \"system\"").green()
+            ),
+        ),
+        Some(TlsRootCerts::All) => (
+            "tls-root-certs = \"all\"",
+            format!(
+                "merging webpki and system roots is no longer supported. \
+                 Pick one of '{}' or '{}', or set {} / {}. \
+                 The value falls back to 'system' for now.",
+                console::style("webpki").green(),
+                console::style("system").green(),
+                console::style("SSL_CERT_FILE").green(),
+                console::style("SSL_CERT_DIR").green(),
+            ),
+        ),
+        _ => return,
+    };
+    let msg = format!("'{}' is deprecated: {advice}", console::style(old).red(),);
+    match source {
+        Some(src) => tracing::warn!("In '{}': {msg}", console::style(src).bold()),
+        None => tracing::warn!("{msg}"),
+    }
+}
+
 impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
+        warn_deprecated_tls_root_certs(cli.tls_root_certs, None);
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
             tls_root_certs: cli.tls_root_certs,
@@ -1736,6 +1793,11 @@ impl Config {
             config.shell.force_activate = config.force_activate;
         }
 
+        warn_deprecated_tls_root_certs(
+            config.tls_root_certs,
+            source_path.map(|p| p.display().to_string()).as_deref(),
+        );
+
         // Expand `~` in every [cache] path, matching how the top-level
         // `detached-environments` field is handled. Validation that the
         // expanded paths are absolute happens in `Config::validate`.
@@ -1860,27 +1922,39 @@ impl Config {
     /// # Returns
     ///
     /// The loaded global config
+    ///
+    /// # Caching
+    ///
+    /// The system + global file layers are env-independent, so we cache them
+    /// on the first call. The cached value is cloned and the env-derived CLI
+    /// defaults are layered on each call, so per-process env changes still
+    /// take effect. Without this cache pixi would re-parse the same files (and
+    /// re-emit any deprecation warnings) once for [`Config::with_cli_config`]
+    /// and again when the workspace creates its own [`Config::load`].
     pub fn load_global() -> Config {
-        let mut config = Self::load_system();
-
-        for p in config_path_global() {
-            match Self::from_path(&p) {
-                Ok(c) => config = config.merge_config(c),
-                Err(ConfigError::FileNotFound(_)) => (),
-                Err(e) => tracing::error!(
-                    "Failed to load global config '{}' with error: {}",
-                    p.display(),
-                    e
-                ),
+        static FILE_LAYERS: LazyLock<Config> = LazyLock::new(|| {
+            let mut config = Config::load_system();
+            for p in config_path_global() {
+                match Config::from_path(&p) {
+                    Ok(c) => config = config.merge_config(c),
+                    Err(ConfigError::FileNotFound(_)) => (),
+                    Err(e) => tracing::error!(
+                        "Failed to load global config '{}' with error: {}",
+                        p.display(),
+                        e
+                    ),
+                }
             }
-        }
+            config
+        });
 
-        // Load the default CLI config and layer it on top of the global config
-        // This will add any environment variables defined in the `clap` attributes to
-        // the config
+        // Layer the env-derived defaults on each call so changes to the
+        // process environment within a single pixi invocation still apply.
+        // This will add any environment variables defined in the `clap`
+        // attributes to the config.
         let mut default_cli = ConfigCli::default();
         default_cli.update_from(std::env::args().take(0));
-        config.merge_config(default_cli.into())
+        FILE_LAYERS.clone().merge_config(default_cli.into())
     }
 
     /// Load the global config and layer the given cli config on top of it.
@@ -2038,9 +2112,14 @@ impl Config {
         self.tls_no_verify.unwrap_or(false)
     }
 
-    /// Retrieve the value for the tls_root_certs field (defaults to Webpki).
-    pub fn tls_root_certs(&self) -> TlsRootCerts {
-        self.tls_root_certs.unwrap_or_default()
+    /// The user-set `tls-root-certs` value, if any.
+    ///
+    /// Returns `None` when the field was not set in any config layer. The
+    /// backend-aware fallback lives in `pixi_utils::reqwest::default_tls_root_certs`,
+    /// since the choice depends on whether pixi is built against `native-tls`
+    /// or `rustls` and this crate is feature-agnostic.
+    pub fn tls_root_certs(&self) -> Option<TlsRootCerts> {
+        self.tls_root_certs
     }
 
     /// Retrieve the value for the change_ps1 field (defaults to true).
@@ -2648,7 +2727,9 @@ UNUSED = "unused"
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
         assert_eq!(config.tls_no_verify, Some(true));
-        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
+        #[allow(deprecated)]
+        let expected_legacy = TlsRootCerts::LegacyNative;
+        assert_eq!(config.tls_root_certs, Some(expected_legacy));
         assert_eq!(
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
@@ -2739,7 +2820,7 @@ UNUSED = "unused"
         // Test with all CLI options enabled
         let cli = ConfigCli {
             tls_no_verify: true,
-            tls_root_certs: Some(TlsRootCerts::Native),
+            tls_root_certs: Some(TlsRootCerts::System),
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
             concurrent_solves: Some(8),
@@ -2753,7 +2834,7 @@ UNUSED = "unused"
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
-        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::System));
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
@@ -2886,7 +2967,7 @@ UNUSED = "unused"
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
-            tls_root_certs: Some(TlsRootCerts::Native),
+            tls_root_certs: Some(TlsRootCerts::System),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             concurrency: ConcurrencyConfig {
                 solves: 5,
@@ -3389,9 +3470,17 @@ UNUSED = "unused"
 
         // Test tls-root-certs
         config
+            .set("tls-root-certs", Some("system".to_string()))
+            .unwrap();
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::System));
+
+        // The deprecated `native` spelling still deserializes.
+        config
             .set("tls-root-certs", Some("native".to_string()))
             .unwrap();
-        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
+        #[allow(deprecated)]
+        let expected_legacy = TlsRootCerts::LegacyNative;
+        assert_eq!(config.tls_root_certs, Some(expected_legacy));
 
         // Test mirrors
         config
