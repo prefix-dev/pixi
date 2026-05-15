@@ -188,6 +188,7 @@ nav:
           - Pixi Pack: deployment/pixi_pack.md
           - Pixi Skills: integration/extensions/pixi_skills.md
       - Third Party:
+          - Git Hooks: integration/third_party/git_hooks.md
           - Conda Deny: integration/third_party/conda_deny.md
           - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md
