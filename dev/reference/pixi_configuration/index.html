@@ -4775,24 +4775,34 @@ In these cases, you <em>must</em> manually add the download host to <a href="#py
 <p>Controls which TLS root certificates are used for HTTPS connections. This affects both conda channels and PyPI registries.</p>
 <p>Available options:</p>
 <ul>
-<li><code>webpki</code> (default): Uses bundled Mozilla root certificates. This is the most portable option.</li>
-<li><code>native</code>: Uses the system certificate store. Required for corporate environments with custom CA certificates.</li>
-<li><code>all</code>: Uses both bundled Mozilla certificates and the system certificate store.</li>
+<li><code>webpki</code>: Uses bundled Mozilla root certificates. The most portable option.</li>
+<li><code>system</code>: Uses the system certificate store. Required for corporate environments with custom CA certificates.</li>
 </ul>
+<p>The default is backend-dependent: <code>rustls</code> builds default to <code>webpki</code>, <code>native-tls</code> builds default to <code>system</code>.</p>
+<p>If <code>SSL_CERT_FILE</code> or <code>SSL_CERT_DIR</code> is set, those certificates take precedence over this setting.</p>
 <p>You can override this from the CLI with <code>--tls-root-certs</code>.</p>
 <div class="admonition note">
 <p class="admonition-title">Build-dependent behavior</p>
-<p>This setting only has an effect with <code>rustls-tls</code> builds (standalone pixi binaries from GitHub releases).
+<p>This setting only has an effect with <code>rustls</code> builds (standalone pixi binaries from GitHub releases).
 For <code>native-tls</code> builds (conda-forge packages), the system's TLS library is used, which always uses system certificates.
 In this case, the setting is accepted but has no effect.</p>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Deprecated values</p>
+<p>The values <code>native</code> and <code>all</code> are deprecated:</p>
+<ul>
+<li><code>native</code> is the old spelling of <code>system</code> and still works, but emits a deprecation warning.</li>
+<li><code>all</code> (combined webpki + system) is no longer supported because the underlying HTTP client can't merge the two trust stores. It still parses, but falls back to <code>system</code> at runtime with a warning.</li>
+</ul>
+</div>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Which TLS root certificates to use for HTTPS connections.</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Options: &quot;webpki&quot; (bundled Mozilla roots), &quot;native&quot; (system store), &quot;all&quot; (both)</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># Default is &quot;webpki&quot; for portability. Use &quot;native&quot; or &quot;all&quot; for corporate environments</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># with custom CA certificates.</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Note: This setting only has an effect with rustls-tls builds (standalone pixi).</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># For native-tls builds (conda-forge), system certificates are always used.</span>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">tls-root-certs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;native&quot;</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># Options: &quot;webpki&quot; (bundled Mozilla roots) or &quot;system&quot; (system store).</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># `rustls` builds default to &quot;webpki&quot; for portability; `native-tls` builds default</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># to &quot;system&quot;. Use &quot;system&quot; for corporate environments with custom CA certificates.</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># SSL_CERT_FILE / SSL_CERT_DIR, when set, take precedence over this setting.</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># Note: This setting only has an effect with rustls builds (standalone pixi).</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># For native-tls builds (conda-forge), system certificates are always used.</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="n">tls-root-certs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;system&quot;</span>
 </span></code></pre></div>
 <h3 id="authentication-override-file"><code>authentication-override-file</code><a class="headerlink" href="#authentication-override-file" title="Permanent link">#</a></h3>
 <p>Override from where the authentication information is loaded.

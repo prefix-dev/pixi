@@ -111,26 +111,37 @@ Controls which TLS root certificates are used for HTTPS connections. This affect
 
 Available options:
 
-- `webpki` (default): Uses bundled Mozilla root certificates. This is the most portable option.
-- `native`: Uses the system certificate store. Required for corporate environments with custom CA certificates.
-- `all`: Uses both bundled Mozilla certificates and the system certificate store.
+- `webpki`: Uses bundled Mozilla root certificates. The most portable option.
+- `system`: Uses the system certificate store. Required for corporate environments with custom CA certificates.
+
+The default is backend-dependent: `rustls` builds default to `webpki`, `native-tls` builds default to `system`.
+
+If `SSL_CERT_FILE` or `SSL_CERT_DIR` is set, those certificates take precedence over this setting.
 
 You can override this from the CLI with `--tls-root-certs`.
 
 Build-dependent behavior
 
-This setting only has an effect with `rustls-tls` builds (standalone pixi binaries from GitHub releases). For `native-tls` builds (conda-forge packages), the system's TLS library is used, which always uses system certificates. In this case, the setting is accepted but has no effect.
+This setting only has an effect with `rustls` builds (standalone pixi binaries from GitHub releases). For `native-tls` builds (conda-forge packages), the system's TLS library is used, which always uses system certificates. In this case, the setting is accepted but has no effect.
+
+Deprecated values
+
+The values `native` and `all` are deprecated:
+
+- `native` is the old spelling of `system` and still works, but emits a deprecation warning.
+- `all` (combined webpki + system) is no longer supported because the underlying HTTP client can't merge the two trust stores. It still parses, but falls back to `system` at runtime with a warning.
 
 config.toml
 
 ```toml
 # Which TLS root certificates to use for HTTPS connections.
-# Options: "webpki" (bundled Mozilla roots), "native" (system store), "all" (both)
-# Default is "webpki" for portability. Use "native" or "all" for corporate environments
-# with custom CA certificates.
-# Note: This setting only has an effect with rustls-tls builds (standalone pixi).
+# Options: "webpki" (bundled Mozilla roots) or "system" (system store).
+# `rustls` builds default to "webpki" for portability; `native-tls` builds default
+# to "system". Use "system" for corporate environments with custom CA certificates.
+# SSL_CERT_FILE / SSL_CERT_DIR, when set, take precedence over this setting.
+# Note: This setting only has an effect with rustls builds (standalone pixi).
 # For native-tls builds (conda-forge), system certificates are always used.
-tls-root-certs = "native"
+tls-root-certs = "system"
 ```
 
 ### `authentication-override-file`
