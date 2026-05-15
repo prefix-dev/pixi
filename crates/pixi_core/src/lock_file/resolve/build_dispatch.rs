@@ -43,13 +43,13 @@ use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
 use uv_distribution_types::{
     CachedDist, ConfigSettings, DependencyMetadata, ExtraBuildRequires, IndexLocations,
-    IsBuildBackendError, PackageConfigSettings, Resolution, SourceDist,
+    IsBuildBackendError, PackageConfigSettings, SourceDist,
 };
 use uv_distribution_types::{ExtraBuildVariables, Requirement};
 use uv_install_wheel::LinkMode;
 use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
-use uv_types::{BuildArena, BuildContext, BuildStack, HashStrategy};
+use uv_types::{BuildArena, BuildContext, BuildStack, HashStrategy, ResolvedRequirements};
 use uv_workspace::WorkspaceCache;
 
 /// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
@@ -491,7 +491,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
         &'a self,
         requirements: &'a [Requirement],
         build_stack: &'a BuildStack,
-    ) -> Result<Resolution, impl IsBuildBackendError> {
+    ) -> Result<ResolvedRequirements, impl IsBuildBackendError> {
         let dispatch = self.get_or_try_init().await?;
         dispatch
             .resolve(requirements, build_stack)
@@ -501,7 +501,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
 
     async fn install<'a>(
         &'a self,
-        resolution: &'a Resolution,
+        resolution: &'a ResolvedRequirements,
         venv: &'a PythonEnvironment,
         build_stack: &'a BuildStack,
     ) -> Result<Vec<CachedDist>, impl IsBuildBackendError> {
