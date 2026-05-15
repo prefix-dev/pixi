@@ -1215,3 +1215,56 @@ preview = ['pixi-build']
         insta::assert_snapshot!(workspace.workspace.provenance.read().unwrap().into_inner());
     });
 }
+
+#[tokio::test]
+async fn add_pypi_with_index() {
+    use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
+
+    setup_tracing();
+    let pypi_demo_package = PyPIPackage::new("black", "24.8.0");
+
+    let pypi_index = PyPIDatabase::new()
+        .with(pypi_demo_package.clone())
+        .into_simple_index()
+        .unwrap();
+
+    // Create conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+
+    pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .await
+        .unwrap();
+
+    pixi.add("python~=3.12.0")
+        .set_type(DependencyType::CondaDependency(SpecType::Run))
+        .await
+        .unwrap();
+
+    pixi.add("black==24.8.0")
+        .set_pypi(true)
+        .with_index(Some(pypi_index.index_url()))
+        .await
+        .unwrap();
+
+    let project = pixi.workspace().unwrap();
+
+    // Searching our demo_package
+    let (_, spec) = project
+        .default_environment()
+        .pypi_dependencies(None)
+        .into_specs()
+        .find(|(dep_name, _)| dep_name.as_source() == pypi_demo_package.name)
+        .expect("The package 'black' should have been added to the manifest");
+
+    // asserting index flag
+    assert_eq!(spec.source.index(), Some(&pypi_index.index_url()));
+}
