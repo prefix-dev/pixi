@@ -72,7 +72,7 @@ async fn verify_lockfile_satisfiability(
     // that might trigger implicit rayon initialization (e.g. uv's
     // DistributionDatabase). Without this, concurrent tests can race
     // and trigger a GlobalPoolAlreadyInitialized panic.
-    std::sync::LazyLock::force(&uv_configuration::RAYON_INITIALIZE);
+    uv_configuration::initialize_rayon_once();
 
     let mut individual_verified_envs = HashMap::new();
 

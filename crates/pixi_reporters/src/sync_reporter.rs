@@ -10,10 +10,9 @@ use pixi_compute_reporters::{OperationId, OperationRegistry};
 use pixi_progress::ProgressBarPlacement;
 use rattler::install::Transaction;
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
-use std::sync::LazyLock;
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 use tokio::sync::mpsc::UnboundedReceiver;
-use uv_configuration::RAYON_INITIALIZE;
+use uv_configuration::initialize_rayon_once;
 
 #[derive(Clone)]
 pub struct SyncReporter {
@@ -60,7 +59,7 @@ impl SyncReporter {
 
         // Installing a pixi environment uses rayon. We only want to initialize the
         // rayon thread pool when we absolutely need it.
-        LazyLock::force(&RAYON_INITIALIZE);
+        initialize_rayon_once();
 
         InstallReporter {
             id: TransactionId::new(id),

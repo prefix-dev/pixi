@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, collections::HashMap, path::Path, str::FromStr, sync::LazyLock};
+use std::{collections::BTreeSet, collections::HashMap, path::Path, str::FromStr};
 
 use clap::{Parser, ValueHint};
 use itertools::Itertools;
@@ -16,7 +16,7 @@ use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platfor
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
-use uv_configuration::RAYON_INITIALIZE;
+use uv_configuration::initialize_rayon_once;
 
 use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath};
 
@@ -295,7 +295,7 @@ pub async fn create_exec_prefix(
 
     // Force the initialization of the rayon thread pool to avoid implicit creation
     // by the Installer.
-    LazyLock::force(&RAYON_INITIALIZE);
+    initialize_rayon_once();
 
     // Install the environment
     Installer::new()

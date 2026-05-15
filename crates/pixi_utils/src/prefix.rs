@@ -10,10 +10,9 @@ use std::{
     collections::HashMap,
     ffi::OsStr,
     path::{Path, PathBuf},
-    sync::LazyLock,
 };
 use thiserror::Error;
-use uv_configuration::RAYON_INITIALIZE;
+use uv_configuration::initialize_rayon_once;
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum PrefixError {
@@ -65,7 +64,7 @@ impl Prefix {
     /// [`PrefixRecord`]s found in there.
     pub fn find_installed_packages(&self) -> Result<Vec<PrefixRecord>, PrefixError> {
         // Initialize rayon explicitly to avoid implicit initialization.
-        LazyLock::force(&RAYON_INITIALIZE);
+        initialize_rayon_once();
 
         PrefixRecord::collect_from_prefix(&self.root)
             .map_err(|err| PrefixError::PrefixRecordCollectionError(err, self.root.clone()))

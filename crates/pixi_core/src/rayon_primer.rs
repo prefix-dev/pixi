@@ -2,10 +2,7 @@
 //! would race for it. Registered by default; UI reporters override the
 //! slot and carry their own priming.
 
-use std::sync::{
-    LazyLock,
-    atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use pixi_build_discovery::JsonRpcBackendSpec;
 use pixi_command_dispatcher::{
@@ -13,7 +10,7 @@ use pixi_command_dispatcher::{
     PixiSolveEnvironmentSpec, PixiSolveReporter,
 };
 use pixi_compute_reporters::OperationId;
-use uv_configuration::RAYON_INITIALIZE;
+use uv_configuration::initialize_rayon_once;
 
 #[derive(Default)]
 pub struct RayonPrimer {
@@ -26,7 +23,7 @@ impl RayonPrimer {
     }
 
     fn prime() {
-        LazyLock::force(&RAYON_INITIALIZE);
+        initialize_rayon_once();
     }
 }
 

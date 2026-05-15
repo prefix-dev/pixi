@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::{Arc, LazyLock},
+    sync::Arc,
 };
 use uv_redacted::DisplaySafeUrl;
 
@@ -29,7 +29,7 @@ use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::RAYON_INITIALIZE;
+use uv_configuration::initialize_rayon_once;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
 use uv_git_types::GitReference;
@@ -582,7 +582,11 @@ async fn read_local_package_metadata(
             uv_client_builder = uv_client_builder.proxy(p.clone())
         }
 
-        Arc::new(uv_client_builder.build())
+        Arc::new(
+            uv_client_builder
+                .build()
+                .expect("failed to build uv registry client"),
+        )
     };
 
     // Get tags for this platform (needed for FlatIndex)
@@ -651,7 +655,7 @@ async fn read_local_package_metadata(
 
             // Force the initialization of the rayon thread pool to avoid implicit creation
             // by the uv.
-            LazyLock::force(&RAYON_INITIALIZE);
+            initialize_rayon_once();
 
             CondaPrefixUpdater::builder(
                 group,
