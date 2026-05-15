@@ -156,6 +156,7 @@ pub enum Command {
     #[clap(visible_alias = "a")]
     Add(add::Args),
     Auth(rattler::cli::auth::Args),
+    #[clap(hide = true)]
     Build(build::Args),
     Clean(clean::Args),
     Completion(completion::Args),
