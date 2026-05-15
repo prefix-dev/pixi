@@ -1015,6 +1015,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &self.context_config.uv_context.hash_strategy,
             setup.exclude_newer.clone(),
             self.context_config.uv_context.no_sources.clone(),
+            uv_types::SourceTreeEditablePolicy::default(),
             self.context_config.uv_context.workspace_cache.clone(),
             self.context_config.uv_context.concurrency.clone(),
             self.context_config.uv_context.preview,
