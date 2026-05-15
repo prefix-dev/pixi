@@ -173,12 +173,11 @@ pub fn as_uv_req(
             if canonicalized.is_dir() {
                 RequirementSource::Directory {
                     install_path: canonicalized.into_boxed_path(),
-                    // Always set editable to false during resolution.
-                    // Editability doesn't affect resolution and is looked up from the
-                    // manifest at install time. This allows different environments in a
-                    // solve-group to have different editability settings without causing
-                    // "conflicting URLs" errors from the uv resolver.
-                    editable: Some(false),
+                    // Editability is applied at install time from the manifest
+                    // (`is_editable_from_manifest`). Leaving it unspecified
+                    // avoids uv "conflicting URLs" errors across solve-group
+                    // environments and transitive `[tool.uv.sources]` (#6121).
+                    editable: None,
                     url: verbatim,
                     // TODO: we could see if we ever need this
                     // AFAICS it would be useful for constraining dependencies
