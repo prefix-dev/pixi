@@ -168,6 +168,10 @@ pub struct Args {
     #[arg(long, alias = "json-pretty")]
     pub json: bool,
 
+    /// Whether to output only local packages
+    #[arg(long)]
+    pub local: bool,
+
     /// Sorting strategy
     #[arg(long, default_value = "name", value_enum, conflicts_with = "json")]
     pub sort_by: SortBy,
@@ -211,6 +215,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             args.platform,
             args.environment,
             args.explicit,
+            args.local,
             args.no_install_config.no_install,
             lock_file_usage,
         )
@@ -230,8 +235,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     if packages_to_output.is_empty() && !args.json {
+        let local_message = if args.local { "local " } else { "" };
         miette::bail!(
-            "No packages found in '{}' environment for '{}' platform.",
+            "No {}packages found in '{}' environment for '{}' platform.",
+            local_message,
             environment.name().fancy_display(),
             consts::ENVIRONMENT_STYLE.apply_to(platform),
         );
