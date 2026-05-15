@@ -1,0 +1,25 @@
+---
+source: crates/pixi_spec/src/toml.rs
+expression: snapshot
+---
+- label: json_string_matchspec
+  input: "{\n  \"version\": \"*\",\n  \"when\": \"__unix\"\n}"
+  condition: __unix
+- label: json_all
+  input: "{\n  \"version\": \"*\",\n  \"when\": {\n    \"all\": [\n      \"__unix\",\n      \"python >=3.10\"\n    ]\n  }\n}"
+  condition: (__unix and python >=3.10)
+- label: json_any
+  input: "{\n  \"version\": \"*\",\n  \"when\": {\n    \"any\": [\n      \"__linux\",\n      \"__osx\"\n    ]\n  }\n}"
+  condition: (__linux or __osx)
+- label: json_nested_all_any
+  input: "{\n  \"version\": \"*\",\n  \"when\": {\n    \"all\": [\n      \"__unix\",\n      {\n        \"any\": [\n          \"__linux\",\n          \"__osx\"\n        ]\n      }\n    ]\n  }\n}"
+  condition: (__unix and (__linux or __osx))
+- label: json_expanded_build_match
+  input: "{\n  \"version\": \"*\",\n  \"when\": {\n    \"package\": \"python\",\n    \"version\": \">=3.10\",\n    \"build\": \"*cuda\"\n  }\n}"
+  condition: python >=3.10 *cuda
+- label: toml_all_with_expanded_build_match
+  input: "version = \"*\"\nwhen = { all = [\"__unix\", { package = \"python\", version = \">=3.10\", build = \"*cuda\" }] }"
+  condition: (__unix and python >=3.10 *cuda)
+- label: toml_any
+  input: "version = \"*\"\nwhen = { any = [\"__linux\", \"__osx\"] }"
+  condition: (__linux or __osx)

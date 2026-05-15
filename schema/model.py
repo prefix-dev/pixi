@@ -269,7 +269,25 @@ class MatchspecTable(StrictBaseModel):
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
     )
+    extras: list[NonEmptyStr] | None = Field(
+        None,
+        description="Optional extra dependencies to select for the package",
+    )
+    flags: list[NonEmptyStr] | None = Field(
+        None,
+        description="Plain string flags used to select package variants",
+    )
     license: NonEmptyStr | None = Field(None, description="The license of the package")
+    license_family: NonEmptyStr | None = Field(
+        None, description="The license family of the package"
+    )
+    when: When | None = Field(
+        None,
+        description="The condition under which this match spec applies. Use a package string, `{ all = [...] }`, `{ any = [...] }`, or `{ package = ..., version = ..., build = ... }`.",
+    )
+    track_features: list[NonEmptyStr] | None = Field(
+        None, description="The track features of the package"
+    )
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
@@ -300,6 +318,31 @@ class SourceSpecTable(StrictBaseModel):
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
 
+class WhenAll(StrictBaseModel):
+    """All conditions must apply."""
+
+    all: list[When] = Field(
+        ..., min_length=1, description="Conditions to combine with a logical AND"
+    )
+
+
+class WhenAny(StrictBaseModel):
+    """Any condition may apply."""
+
+    any: list[When] = Field(
+        ..., min_length=1, description="Conditions to combine with a logical OR"
+    )
+
+
+class WhenPackage(StrictBaseModel):
+    """Expanded package condition syntax."""
+
+    package: NonEmptyStr = Field(description="The package name to match")
+    version: NonEmptyStr | None = Field(None, description="Optional version constraint")
+    build: NonEmptyStr | None = Field(None, description="Optional build string matcher")
+
+
+When = NonEmptyStr | WhenAll | WhenAny | WhenPackage
 MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
 

@@ -1,8 +1,8 @@
 use std::{fmt::Display, sync::Arc};
 
 use rattler_conda_types::{
-    BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, StringMatcher,
-    VersionSpec,
+    BuildNumberSpec, ChannelConfig, MatchSpecCondition, NamedChannelOrUrl, NamelessMatchSpec,
+    StringMatcher, VersionSpec,
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::{serde_as, skip_serializing_none};
@@ -34,6 +34,13 @@ pub struct DetailedSpec {
     /// Match the specific filename of the package
     pub file_name: Option<String>,
 
+    /// Optional extra dependencies to select for the package.
+    pub extras: Option<Vec<String>>,
+
+    /// Plain string flags used to select package variants.
+    #[serde_as(as = "Option<Vec<serde_with::DisplayFromStr>>")]
+    pub flags: Option<Vec<StringMatcher>>,
+
     /// The channel of the package
     pub channel: Option<NamedChannelOrUrl>,
 
@@ -42,6 +49,15 @@ pub struct DetailedSpec {
 
     /// The license
     pub license: Option<String>,
+
+    /// The license family
+    pub license_family: Option<String>,
+
+    /// The condition under which this match spec applies.
+    pub condition: Option<MatchSpecCondition>,
+
+    /// The track features of the package
+    pub track_features: Option<Vec<String>>,
 
     /// The md5 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
@@ -63,6 +79,8 @@ impl DetailedSpec {
             build: self.build,
             build_number: self.build_number,
             file_name: self.file_name,
+            extras: self.extras,
+            flags: self.flags,
             channel: self
                 .channel
                 .map(|c| {
@@ -77,12 +95,10 @@ impl DetailedSpec {
             md5: self.md5,
             sha256: self.sha256,
             license: self.license,
+            license_family: self.license_family,
             url: None,
-            extras: Default::default(),
-            condition: None,
-            track_features: None,
-            flags: None,
-            license_family: None,
+            condition: self.condition,
+            track_features: self.track_features,
         })
     }
 }
@@ -113,6 +129,21 @@ impl Display for DetailedSpec {
             parts.push(format!("file_name={file_name}"));
         }
 
+        if let Some(extras) = &self.extras {
+            parts.push(format!("extras=[{}]", extras.join(", ")));
+        }
+
+        if let Some(flags) = &self.flags {
+            parts.push(format!(
+                "flags=[{}]",
+                flags
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+
         if let Some(channel) = &self.channel {
             parts.push(format!("channel={channel}"));
         }
@@ -123,6 +154,18 @@ impl Display for DetailedSpec {
 
         if let Some(license) = &self.license {
             parts.push(format!("license={license}"));
+        }
+
+        if let Some(license_family) = &self.license_family {
+            parts.push(format!("license_family={license_family}"));
+        }
+
+        if let Some(condition) = &self.condition {
+            parts.push(format!("condition={condition}"));
+        }
+
+        if let Some(track_features) = &self.track_features {
+            parts.push(format!("track_features=[{}]", track_features.join(", ")));
         }
 
         if let Some(md5) = &self.md5 {

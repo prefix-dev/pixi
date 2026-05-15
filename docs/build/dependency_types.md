@@ -12,6 +12,45 @@ Each dependency is used at a different step of the package building process.
 
 Let's delve deeper into the various types of package dependencies and their specific roles in the build process.
 
+### Dependency Metadata
+
+Package dependency tables accept the same package specification fields as regular conda dependencies, including `version`, `build`, `build-number`, `channel`, `extras`, and `flags`.
+The `extras` field selects optional dependencies exposed by package metadata, while `flags` selects metadata-backed variants.
+
+```toml
+[package.host-dependencies]
+v3-package = { version = ">=1.0", extras = ["test"], flags = ["cuda"] }
+```
+
+Pixi build package dependencies also support `when`, which makes a dependency conditional on one or more package conditions.
+Use a string for a simple package condition:
+
+```toml
+[package.run-dependencies]
+unix-helper = { version = "*", when = "__unix" }
+```
+
+Use `all` for logical AND and `any` for logical OR:
+
+```toml
+[package.run-dependencies]
+openssl = { version = "*", when = { all = ["__unix", "python >=3.10"] } }
+fallback = { version = "*", when = { any = ["__linux", "__osx"] } }
+```
+
+When the condition needs a build string, use the expanded form:
+
+```toml
+[package.run-dependencies]
+cuda-helper = { version = "*", when = { all = [
+  "__unix",
+  { package = "python", version = ">=3.10", build = "*cuda" },
+] } }
+```
+
+Top-level arrays are not valid for `when`, and string conditions only accept package names with optional version constraints.
+Use the expanded `{ package = ..., version = ..., build = ... }` form whenever a condition needs to match a build string.
+
 ### [Build Dependencies](../reference/pixi_manifest.md#build-dependencies)
 !!! note "pixi-build-cmake"
     When using the `pixi-build-cmake` backend you do not need to specify `cmake` or the compiler as a dependency.

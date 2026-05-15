@@ -226,6 +226,7 @@ fn binary_package_spec_to_package_dependency(
         sha256,
         url,
         license,
+        condition,
     } = binary_spec;
 
     // If the version is "*" and no other constraints are present, treat it as None
@@ -247,8 +248,9 @@ fn binary_package_spec_to_package_dependency(
         &sha256,
         &url,
         &license,
+        &condition,
     ) {
-        (None, None, None, None, None, None, None, None, None) => {
+        (None, None, None, None, None, None, None, None, None, None) => {
             version.filter(|v| v != &rattler_conda_types::VersionSpec::Any)
         }
         _ => Some(version.unwrap_or(rattler_conda_types::VersionSpec::Any)),
@@ -268,7 +270,7 @@ fn binary_package_spec_to_package_dependency(
         sha256,
         url,
         license,
-        condition: None,
+        condition,
         track_features: None,
         flags: None,
         license_family: None,
@@ -490,6 +492,30 @@ mod test {
         };
         let match_spec = binary_package_spec_to_package_dependency(name, spec);
         assert_eq!(match_spec.to_string(), "python");
+    }
+
+    #[test]
+    fn test_binary_package_conversion_preserves_condition() {
+        use rattler_conda_types::{MatchSpecCondition, ParseMatchSpecOptions, RepodataRevision};
+
+        let name = PackageName::new_unchecked("numpy");
+        let condition = MatchSpecCondition::MatchSpec(Box::new(
+            MatchSpec::from_str(
+                "python >=3.10",
+                ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+            )
+            .unwrap(),
+        ));
+        let spec = BinaryPackageSpec {
+            version: Some("*".parse().unwrap()),
+            condition: Some(condition.clone()),
+            ..BinaryPackageSpec::default()
+        };
+        let match_spec = binary_package_spec_to_package_dependency(name, spec);
+        let PackageDependency::Binary(match_spec) = match_spec else {
+            panic!("expected binary dependency");
+        };
+        assert_eq!(match_spec.condition, Some(condition));
     }
 
     /// Regression test for <https://github.com/prefix-dev/pixi/issues/4526>:

@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fmt::Write,
     sync::Arc,
     time::{Duration, Instant},
@@ -7,7 +8,7 @@ use std::{
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
 use parking_lot::RwLock;
 use pixi_progress::ProgressBarPlacement;
-use rattler_repodata_gateway::DownloadReporter;
+use rattler_repodata_gateway::{DownloadReporter, UnsupportedRepodataRevision};
 use url::Url;
 
 #[derive(Clone)]
@@ -18,6 +19,11 @@ pub struct RepodataReporter {
 impl rattler_repodata_gateway::Reporter for RepodataReporter {
     fn download_reporter(&self) -> Option<&dyn DownloadReporter> {
         Some(self)
+    }
+
+    fn on_unsupported_repodata_revision(&self, message: &UnsupportedRepodataRevision) {
+        let mut inner = self.inner.write();
+        inner.on_unsupported_repodata_revision(message);
     }
 }
 
@@ -31,6 +37,7 @@ struct RepodataReporterInner {
     pb: ProgressBar,
     title: Option<String>,
     downloads: Arc<RwLock<Vec<TrackedDownload>>>,
+    unsupported_revision_warnings: HashSet<String>,
 }
 
 struct TrackedDownload {
@@ -52,6 +59,7 @@ impl RepodataReporter {
                 pb,
                 title: Some(title),
                 downloads: Arc::new(RwLock::new(Vec::new())),
+                unsupported_revision_warnings: HashSet::new(),
             })),
         }
     }
@@ -61,6 +69,19 @@ impl RepodataReporterInner {
     pub fn clear(&mut self) {
         self.pb.finish_and_clear();
         self.downloads.write().clear();
+    }
+
+    fn on_unsupported_repodata_revision(&mut self, message: &UnsupportedRepodataRevision) {
+        let message = message.to_string();
+        if self.unsupported_revision_warnings.insert(message.clone()) {
+            pixi_progress::println!(
+                "{}",
+                console::style(format!(
+                    "warning: {message}. Update pixi to read those records."
+                ))
+                .yellow()
+            );
+        }
     }
 
     pub fn update(&mut self) {

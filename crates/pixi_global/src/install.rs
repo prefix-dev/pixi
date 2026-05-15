@@ -11,7 +11,8 @@ use pixi_utils::{
     prefix::{Executable, Prefix},
 };
 use rattler_conda_types::{
-    MatchSpec, Matches, PackageName, PackageRecord, ParseStrictness, Platform,
+    MatchSpec, Matches, PackageName, PackageRecord, ParseMatchSpecOptions, Platform,
+    RepodataRevision,
 };
 use rattler_shell::activation::prefix_path_entries;
 use std::collections::HashSet;
@@ -277,8 +278,10 @@ pub(crate) fn local_environment_matches_spec(
         while let Some(current_record) = work_queue.pop() {
             let dependencies = &current_record.depends;
             for dependency in dependencies {
-                let Ok(match_spec) = MatchSpec::from_str(dependency, ParseStrictness::Lenient)
-                else {
+                let Ok(match_spec) = MatchSpec::from_str(
+                    dependency,
+                    ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+                ) else {
                     continue;
                 };
                 let Some(index) = remaining_prefix_records
