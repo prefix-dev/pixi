@@ -317,7 +317,43 @@ fn alter_config(
                 }
             }
         }
-        AlterMode::Set | AlterMode::Unset => config.set(key, value)?,
+        AlterMode::Set => config.set(key, value)?,
+        AlterMode::Unset => {
+            // Try the typed config path first for known keys
+            match config.set(key, value) {
+                Ok(()) => {}
+                Err(_) => {
+                    // For unknown keys, edit the TOML file directly so users
+                    // can remove deprecated or unrecognized config entries.
+                    let contents = if to.exists() {
+                        fs_err::read_to_string(&to).into_diagnostic()?
+                    } else {
+                        return Err(miette::miette!(
+                            "Config file does not exist: {}",
+                            to.display()
+                        ));
+                    };
+                    let mut doc: toml_edit::DocumentMut =
+                        contents.parse().into_diagnostic()?;
+
+                    // Walk dotted key path (e.g. "repodata-config.disable-jlap")
+                    let parts: Vec<&str> = key.split('.').collect();
+                    let removed = remove_toml_key(&mut doc, &parts);
+
+                    if !removed {
+                        return Err(miette::miette!(
+                            "Key '{}' not found in {}",
+                            key,
+                            to.display()
+                        ));
+                    }
+
+                    fs_err::write(&to, doc.to_string()).into_diagnostic()?;
+                    eprintln!("✅ Updated config at {}", to.display());
+                    return Ok(());
+                }
+            }
+        }
     }
 
     config.save(&to)?;
@@ -363,4 +399,25 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
     *config = new;
 
     Ok(())
+}
+
+/// Remove a dotted key path from a TOML document.
+fn remove_toml_key(doc: &mut toml_edit::DocumentMut, parts: &[&str]) -> bool {
+    if parts.len() == 1 {
+        return doc.remove(parts[0]).is_some();
+    }
+
+    // Navigate to the parent table, then remove the leaf key
+    let leaf = parts[parts.len() - 1];
+    let mut current = doc.as_item_mut();
+    for &segment in &parts[..parts.len() - 1] {
+        match current.get_mut(segment) {
+            Some(item) => current = item,
+            None => return false,
+        }
+    }
+    match current.as_table_like_mut() {
+        Some(table) => table.remove(leaf).is_some(),
+        None => false,
+    }
 }
