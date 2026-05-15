@@ -2,6 +2,7 @@ use clap::Parser;
 use pixi_api::{WorkspaceContext, workspace::DependencyOptions};
 use pixi_config::ConfigCli;
 use pixi_core::{DependencyType, WorkspaceLocator};
+use pixi_manifest::{FeaturesExt, SpecType};
 
 use crate::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
@@ -58,7 +59,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
-    match args.dependency_config.dependency_type() {
+    let mut dep_type = args.dependency_config.dependency_type();
+
+    // Fall back to pypi removal if deps aren't found in conda.
+    // Only when no explicit type flag (--host, --build) was passed.
+    if matches!(dep_type, DependencyType::CondaDependency(SpecType::Run)) {
+        let spec_type = SpecType::Run;
+        let specs = args.dependency_config.specs()?;
+        let env = workspace.default_environment();
+        let conda_deps = env.dependencies(spec_type, None);
+
+        let all_missing_from_conda = specs.keys().all(|name| !conda_deps.contains_key(name));
+
+        if all_missing_from_conda {
+            let pypi_deps = env.pypi_dependencies(None);
+            let any_in_pypi = specs.keys().any(|name| {
+                pypi_deps
+                    .names()
+                    .any(|pypi_name| pypi_name.as_source() == name.as_source())
+            });
+
+            if any_in_pypi {
+                dep_type = DependencyType::PypiDependency;
+            }
+        }
+    }
+
+    match dep_type {
         DependencyType::CondaDependency(spec_type) => {
             workspace_ctx
                 .remove_conda_deps(
@@ -82,7 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     args.dependency_config
-        .display_success("Removed", Default::default());
+        .display_success_with_type("Removed", Default::default(), dep_type);
 
     Ok(())
 }
