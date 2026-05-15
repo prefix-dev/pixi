@@ -13,7 +13,7 @@ use super::common::{
     VersionedCacheEntry, WriteResult as CommonWriteResult,
 };
 use crate::build::CanonicalSourceCodeLocation;
-use crate::input_hash::{ConfigurationHash, ProjectModelHash};
+use crate::input_hash::{BackendSpecHash, ConfigurationHash, ProjectModelHash};
 use rattler_conda_types::PackageName;
 
 use crate::BuildEnvironment;
@@ -160,6 +160,13 @@ pub struct BuildBackendMetadataCacheEntry {
     /// cache even if the project model hasn't changed.
     #[serde(default)]
     pub configuration_hash: ConfigurationHash,
+
+    /// The hash of the backend specification (name + version constraints +
+    /// channels). The backend spec is not part of the `ProjectModel`, so
+    /// without this field, changes like bumping a backend version constraint
+    /// in the manifest would not invalidate the cache.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_spec_hash: Option<BackendSpecHash>,
 
     /// The pinned location of the source code. Although the specification of
     /// where to find the source is part of the `project_model_hash`, the
