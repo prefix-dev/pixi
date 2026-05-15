@@ -38,7 +38,7 @@ pixi publish [OPTIONS]
 - <a id="arg---force" href="#arg---force">`--force`</a>
 :  Force overwrite existing packages
 - <a id="arg---skip-existing" href="#arg---skip-existing">`--skip-existing <SKIP_EXISTING>`</a>
-:  Skip uploading packages that already exist on the target channel. This is enabled by default. Use `--no-skip-existing` to disable
+:  Skip uploading packages that already exist at the target. This is enabled by default. Use `--no-skip-existing` to disable
 <br>**default**: `true`
 <br>**options**: `true`, `false`
 - <a id="arg---generate-attestation" href="#arg---generate-attestation">`--generate-attestation`</a>
