@@ -31,10 +31,10 @@ pixi publish [OPTIONS]
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
 :  The path to a directory containing a package manifest, or to a specific manifest file
 - <a id="arg---target-channel" href="#arg---target-channel">`--target-channel <TARGET_CHANNEL>`</a>
-:  The target channel URL to publish packages to
+:  The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
 <br>**aliases**: to
 - <a id="arg---target-dir" href="#arg---target-dir">`--target-dir <TARGET_DIR>`</a>
-:  The target local directory to copy packages into (no channel indexing)
+:  The local filesystem path to copy the built package(s) into (no channel indexing)
 - <a id="arg---force" href="#arg---force">`--force`</a>
 :  Force overwrite existing packages
 - <a id="arg---skip-existing" href="#arg---skip-existing">`--skip-existing <SKIP_EXISTING>`</a>
@@ -79,16 +79,21 @@ pixi publish [OPTIONS]
 ## Description
 Build a conda package and publish it to a channel.
 
-This is a convenience command that combines `pixi build` and `pixi upload`.
+Builds the package from your workspace and either uploads it to a channel
+(`--target-channel`) or copies the artifact into a local directory
+(`--target-dir`).
 
-Supported target URLs (--target-channel / --to):
+Supported destinations for `--target-channel` (alias `--to`):
   - prefix.dev: `https://prefix.dev/<channel-name>`
   - anaconda.org: `https://anaconda.org/<owner>/<label>`
   - S3: `s3://bucket-name`
-  - Local channel (with indexing): `channel:///path/to/channel`
-  - Local path (copy only): `file:///path/to/output`
   - Quetz: `quetz://server/<channel>`
   - Artifactory: `artifactory://server/<channel>`
+  - Local filesystem channel (with indexing):
+    `file:///path/to/channel` or a bare path
+
+Use `--target-dir <PATH>` instead to copy the built package(s) into a
+directory without creating a channel structure.
 
 
 --8<-- "docs/reference/cli/pixi/publish_extender:example"
