@@ -275,6 +275,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "asn1-rs"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56624a96882bb8c26d61312ae18cb45868e5a9992ea73c58e45c3101e56a1e60"
+dependencies = [
+ "asn1-rs-derive",
+ "asn1-rs-impl",
+ "displaydoc",
+ "nom 7.1.3",
+ "num-traits",
+ "rusticata-macros",
+ "thiserror 2.0.18",
+ "time",
+]
+
+[[package]]
+name = "asn1-rs-derive"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3109e49b1e4909e9db6515a30c633684d68cdeaa252f215214cb4fa1a5bfee2c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
+name = "asn1-rs-impl"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b18050c2cd6fe86c3a76584ef5e0baf286d038cda203eb6223df2cc413565f7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "assert_matches"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -362,26 +401,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "31979bc305610246d78ac01d63467a12d8454c6e3b8b22b5811d343a1198dfbb"
 dependencies = [
  "smallvec",
-]
-
-[[package]]
-name = "astral_async_http_range_reader"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ab9a05148c7b3e85c17806fef4b2889c44f1a60575c5da9e9be80ce13227185"
-dependencies = [
- "astral-reqwest-middleware",
- "bisection",
- "futures",
- "http-content-range",
- "itertools 0.14.0",
- "memmap2 0.9.10",
- "reqwest",
- "thiserror 2.0.18",
- "tokio",
- "tokio-stream",
- "tokio-util 0.7.18",
- "tracing",
 ]
 
 [[package]]
@@ -1235,12 +1254,6 @@ name = "base64ct"
 version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
-
-[[package]]
-name = "bisection"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "021e079a1bab0ecce6cf4b4b74c0c37afa4a697136eb3b127875c84a8f04a8c3"
 
 [[package]]
 name = "bit-set"
@@ -2397,6 +2410,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "der-parser"
+version = "10.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07da5016415d5a3c4dd39b11ed26f915f52fc4e0dc197d87908bc916e51bc1a6"
+dependencies = [
+ "asn1-rs",
+ "displaydoc",
+ "nom 7.1.3",
+ "num-bigint",
+ "num-traits",
+ "rusticata-macros",
+]
+
+[[package]]
 name = "der_derive"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3472,6 +3499,11 @@ name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
+]
 
 [[package]]
 name = "hashlink"
@@ -5026,15 +5058,6 @@ dependencies = [
 
 [[package]]
 name = "nanoid"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ffa00dec017b5b1a8b7cf5e2c008bfda1aa7e0697ac1508b491fdf2622fb4d8"
-dependencies = [
- "rand 0.8.6",
-]
-
-[[package]]
-name = "nanoid"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8628de41fe064cc3f0cf07f3d299ee3e73521adaff72278731d5c8cae3797873"
@@ -5345,6 +5368,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff76201f031d8863c38aa7f905eca4f53abbfa15f609db4277d44cd8938f33fe"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "oid-registry"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12f40cff3dde1b6087cc5d5f5d4d65712f34016a03ed60e9c08dcc392736b5b7"
+dependencies = [
+ "asn1-rs",
 ]
 
 [[package]]
@@ -6436,7 +6468,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
- "nanoid 0.5.0",
+ "nanoid",
  "once_cell",
  "ordermap",
  "parking_lot 0.12.5",
@@ -8485,7 +8517,7 @@ checksum = "8ee65f748ab93c2c022224824f8e75424a721dfc0e90f305675f735a97b465d0"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-tokio-tar",
- "astral_async_http_range_reader 0.11.0",
+ "astral_async_http_range_reader",
  "astral_async_zip",
  "async-compression",
  "async-spooled-tempfile",
@@ -9264,6 +9296,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
 dependencies = [
  "semver",
+]
+
+[[package]]
+name = "rusticata-macros"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "faf0c4a6ece9950b9abdb62b1cfcf2a68b3b67a10ba445b3bb85be2a293d0632"
+dependencies = [
+ "nom 7.1.3",
 ]
 
 [[package]]
@@ -11505,8 +11546,8 @@ dependencies = [
 
 [[package]]
 name = "uv-auth"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anyhow",
  "arcstr",
@@ -11545,8 +11586,8 @@ dependencies = [
 
 [[package]]
 name = "uv-build-backend"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "astral-version-ranges",
  "base64 0.22.1",
@@ -11578,6 +11619,7 @@ dependencies = [
  "uv-platform-tags",
  "uv-preview",
  "uv-pypi-types",
+ "uv-version",
  "uv-warnings",
  "walkdir",
  "zip",
@@ -11585,8 +11627,8 @@ dependencies = [
 
 [[package]]
 name = "uv-build-frontend"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anstream",
  "fs-err",
@@ -11622,11 +11664,10 @@ dependencies = [
 
 [[package]]
 name = "uv-cache"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "fs-err",
- "nanoid 0.4.0",
  "rmp-serde",
  "rustc-hash",
  "same-file",
@@ -11638,6 +11679,7 @@ dependencies = [
  "uv-cache-key",
  "uv-dirs",
  "uv-distribution-types",
+ "uv-fastid",
  "uv-fs",
  "uv-normalize",
  "uv-pypi-types",
@@ -11648,8 +11690,8 @@ dependencies = [
 
 [[package]]
 name = "uv-cache-info"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "fs-err",
  "globwalk",
@@ -11664,8 +11706,8 @@ dependencies = [
 
 [[package]]
 name = "uv-cache-key"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "hex",
  "memchr",
@@ -11677,14 +11719,14 @@ dependencies = [
 
 [[package]]
 name = "uv-client"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anyhow",
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
  "astral-tl",
- "astral_async_http_range_reader 0.10.0",
+ "astral_async_http_range_reader",
  "astral_async_zip",
  "async-trait",
  "bytecheck",
@@ -11702,6 +11744,7 @@ dependencies = [
  "rustc-hash",
  "rustls-native-certs",
  "rustls-pki-types",
+ "rustls-webpki",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -11731,12 +11774,13 @@ dependencies = [
  "uv-version",
  "uv-warnings",
  "webpki-root-certs 1.0.7",
+ "x509-parser",
 ]
 
 [[package]]
 name = "uv-configuration"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "clap",
  "either",
@@ -11767,16 +11811,16 @@ dependencies = [
 
 [[package]]
 name = "uv-console"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "console",
 ]
 
 [[package]]
 name = "uv-dirs"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "etcetera",
  "fs-err",
@@ -11786,8 +11830,8 @@ dependencies = [
 
 [[package]]
 name = "uv-dispatch"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anyhow",
  "futures",
@@ -11811,6 +11855,7 @@ dependencies = [
  "uv-preview",
  "uv-pypi-types",
  "uv-python",
+ "uv-requirements",
  "uv-resolver",
  "uv-types",
  "uv-version",
@@ -11819,15 +11864,14 @@ dependencies = [
 
 [[package]]
 name = "uv-distribution"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anyhow",
  "astral-reqwest-middleware",
  "either",
  "fs-err",
  "futures",
- "nanoid 0.4.0",
  "owo-colors",
  "reqwest",
  "rmp-serde",
@@ -11848,16 +11892,19 @@ dependencies = [
  "uv-distribution-filename",
  "uv-distribution-types",
  "uv-extract",
+ "uv-fastid",
  "uv-flags",
  "uv-fs",
  "uv-git",
  "uv-git-types",
+ "uv-install-wheel",
  "uv-metadata",
  "uv-normalize",
  "uv-pep440",
  "uv-pep508",
  "uv-platform-tags",
  "uv-pypi-types",
+ "uv-python",
  "uv-redacted",
  "uv-types",
  "uv-warnings",
@@ -11868,8 +11915,8 @@ dependencies = [
 
 [[package]]
 name = "uv-distribution-filename"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "memchr",
  "rkyv",
@@ -11885,8 +11932,8 @@ dependencies = [
 
 [[package]]
 name = "uv-distribution-types"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "arcstr",
  "astral-version-ranges",
@@ -11925,8 +11972,8 @@ dependencies = [
 
 [[package]]
 name = "uv-extract"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "astral-tokio-tar",
  "astral_async_zip",
@@ -11940,7 +11987,6 @@ dependencies = [
  "reqwest",
  "rustc-hash",
  "sha2 0.10.9",
- "tar",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util 0.7.18",
@@ -11952,21 +11998,30 @@ dependencies = [
  "uv-warnings",
  "xz2",
  "zip",
- "zstd",
+]
+
+[[package]]
+name = "uv-fastid"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
+dependencies = [
+ "fastrand",
+ "rand 0.9.4",
+ "serde",
 ]
 
 [[package]]
 name = "uv-flags"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "bitflags 2.11.1",
 ]
 
 [[package]]
 name = "uv-fs"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "backon",
  "clap",
@@ -11989,14 +12044,15 @@ dependencies = [
  "tracing",
  "uv-static",
  "uv-warnings",
+ "uv-windows",
  "walkdir",
  "windows 0.61.3",
 ]
 
 [[package]]
 name = "uv-git"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anyhow",
  "astral-reqwest-middleware",
@@ -12021,21 +12077,23 @@ dependencies = [
 
 [[package]]
 name = "uv-git-types"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
+ "percent-encoding",
  "serde",
  "thiserror 2.0.18",
  "tracing",
  "url",
+ "uv-cache-key",
  "uv-redacted",
  "uv-static",
 ]
 
 [[package]]
 name = "uv-globfilter"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "globset",
  "owo-colors",
@@ -12048,8 +12106,8 @@ dependencies = [
 
 [[package]]
 name = "uv-install-wheel"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "configparser",
  "csv",
@@ -12083,8 +12141,8 @@ dependencies = [
 
 [[package]]
 name = "uv-installer"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -12125,8 +12183,8 @@ dependencies = [
 
 [[package]]
 name = "uv-keyring"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "async-trait",
  "byteorder",
@@ -12140,8 +12198,8 @@ dependencies = [
 
 [[package]]
 name = "uv-macros"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12151,8 +12209,8 @@ dependencies = [
 
 [[package]]
 name = "uv-metadata"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "astral_async_zip",
  "fs-err",
@@ -12169,8 +12227,8 @@ dependencies = [
 
 [[package]]
 name = "uv-normalize"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "rkyv",
  "schemars 1.2.1",
@@ -12180,8 +12238,8 @@ dependencies = [
 
 [[package]]
 name = "uv-once-map"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "dashmap",
  "futures",
@@ -12190,16 +12248,16 @@ dependencies = [
 
 [[package]]
 name = "uv-options-metadata"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "uv-pep440"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "astral-version-ranges",
  "rkyv",
@@ -12212,8 +12270,8 @@ dependencies = [
 
 [[package]]
 name = "uv-pep508"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "arcstr",
  "astral-version-ranges",
@@ -12239,8 +12297,8 @@ dependencies = [
 
 [[package]]
 name = "uv-platform"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "fs-err",
  "goblin",
@@ -12258,8 +12316,8 @@ dependencies = [
 
 [[package]]
 name = "uv-platform-tags"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "bitflags 2.11.1",
  "memchr",
@@ -12272,8 +12330,8 @@ dependencies = [
 
 [[package]]
 name = "uv-preview"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "enumflags2",
  "itertools 0.14.0",
@@ -12283,10 +12341,10 @@ dependencies = [
 
 [[package]]
 name = "uv-pypi-types"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "indexmap 2.14.0",
  "itertools 0.14.0",
  "jiff",
@@ -12314,8 +12372,8 @@ dependencies = [
 
 [[package]]
 name = "uv-python"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anyhow",
  "astral-reqwest-middleware",
@@ -12327,7 +12385,6 @@ dependencies = [
  "futures",
  "indexmap 2.14.0",
  "itertools 0.14.0",
- "junction",
  "owo-colors",
  "ref-cast",
  "regex",
@@ -12373,8 +12430,8 @@ dependencies = [
 
 [[package]]
 name = "uv-redacted"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "ref-cast",
  "schemars 1.2.1",
@@ -12385,8 +12442,8 @@ dependencies = [
 
 [[package]]
 name = "uv-requirements"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anyhow",
  "configparser",
@@ -12420,8 +12477,8 @@ dependencies = [
 
 [[package]]
 name = "uv-requirements-txt"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "astral-reqwest-middleware",
  "fs-err",
@@ -12445,8 +12502,8 @@ dependencies = [
 
 [[package]]
 name = "uv-resolver"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "arcstr",
  "astral-pubgrub",
@@ -12456,7 +12513,7 @@ dependencies = [
  "either",
  "fs-err",
  "futures",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "indexmap 2.14.0",
  "itertools 0.14.0",
  "jiff",
@@ -12468,6 +12525,7 @@ dependencies = [
  "same-file",
  "schemars 1.2.1",
  "serde",
+ "serde_json",
  "smallvec",
  "textwrap",
  "thiserror 2.0.18",
@@ -12510,8 +12568,8 @@ dependencies = [
 
 [[package]]
 name = "uv-scripts"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "fs-err",
  "indoc",
@@ -12536,8 +12594,8 @@ dependencies = [
 
 [[package]]
 name = "uv-settings"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "clap",
  "fs-err",
@@ -12558,6 +12616,7 @@ dependencies = [
  "uv-macros",
  "uv-normalize",
  "uv-options-metadata",
+ "uv-pep440",
  "uv-pep508",
  "uv-pypi-types",
  "uv-python",
@@ -12565,14 +12624,15 @@ dependencies = [
  "uv-resolver",
  "uv-static",
  "uv-torch",
+ "uv-version",
  "uv-warnings",
  "uv-workspace",
 ]
 
 [[package]]
 name = "uv-shell"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anyhow",
  "fs-err",
@@ -12587,8 +12647,8 @@ dependencies = [
 
 [[package]]
 name = "uv-small-str"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "arcstr",
  "rkyv",
@@ -12598,8 +12658,8 @@ dependencies = [
 
 [[package]]
 name = "uv-state"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "fs-err",
  "tempfile",
@@ -12608,8 +12668,8 @@ dependencies = [
 
 [[package]]
 name = "uv-static"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "thiserror 2.0.18",
  "uv-macros",
@@ -12617,8 +12677,8 @@ dependencies = [
 
 [[package]]
 name = "uv-torch"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "clap",
  "either",
@@ -12638,10 +12698,12 @@ dependencies = [
 
 [[package]]
 name = "uv-trampoline-builder"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
+ "anyhow",
  "fs-err",
+ "goblin",
  "tempfile",
  "thiserror 2.0.18",
  "uv-fs",
@@ -12651,8 +12713,8 @@ dependencies = [
 
 [[package]]
 name = "uv-types"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -12674,13 +12736,13 @@ dependencies = [
 
 [[package]]
 name = "uv-version"
-version = "0.11.0"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.11.12"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 
 [[package]]
 name = "uv-virtualenv"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "console",
  "fs-err",
@@ -12701,8 +12763,8 @@ dependencies = [
 
 [[package]]
 name = "uv-warnings"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "anstream",
  "owo-colors",
@@ -12710,9 +12772,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "uv-windows"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
+dependencies = [
+ "arrayvec",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "uv-workspace"
-version = "0.0.33"
-source = "git+https://github.com/astral-sh/uv?tag=0.11.0#1f31f0e9fbcfcf95aed89b44a376596e14b40e06"
+version = "0.0.45"
+source = "git+https://github.com/astral-sh/uv?tag=0.11.12#63c5f57d36c03835b9840149c76f20c5bdb982a7"
 dependencies = [
  "clap",
  "fs-err",
@@ -13756,6 +13827,23 @@ dependencies = [
  "signature 2.2.0",
  "spki 0.7.3",
  "tls_codec",
+]
+
+[[package]]
+name = "x509-parser"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d43b0f71ce057da06bc0851b23ee24f3f86190b07203dd8f567d0b706a185202"
+dependencies = [
+ "asn1-rs",
+ "data-encoding",
+ "der-parser",
+ "lazy_static",
+ "nom 7.1.3",
+ "oid-registry",
+ "rusticata-macros",
+ "thiserror 2.0.18",
+ "time",
 ]
 
 [[package]]
