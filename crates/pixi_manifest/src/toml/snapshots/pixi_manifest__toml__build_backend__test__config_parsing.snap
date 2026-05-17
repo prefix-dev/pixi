@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_manifest/src/toml/build_backend.rs
-assertion_line: 313
 expression: parsed.value
 ---
 PackageBuild {
@@ -68,4 +67,7 @@ PackageBuild {
         ),
     ),
     target_config: None,
+    build_string_prefix: None,
+    build_number: None,
+    secrets: {},
 }

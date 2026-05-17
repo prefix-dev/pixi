@@ -10,10 +10,10 @@ name = "pixi-build-cmake"
 version = "0.3.*"
 
 [package.host-dependencies]
-python = ">=3.11"
-pybind11 = ">=2.13"
-sdl2 = ">=2.26.5,<3.0"
 particle_core = { path = "../particle_core" }
+pybind11 = ">=2.13"
+python = ">=3.11"
+sdl2 = ">=2.26.5,<3.0"
 
 [package.run-dependencies]
 python = ">=3.11"

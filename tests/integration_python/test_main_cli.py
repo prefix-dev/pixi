@@ -411,11 +411,135 @@ def test_cli_config_options(
         [pixi, "install", "--pypi-keyring-provider=subprocess", "--manifest-path", manifest_path]
     )
 
+    # Test --no-*-links flags
+    verify_cli_command([pixi, "install", "--no-ref-links", "--manifest-path", manifest_path])
+    verify_cli_command([pixi, "install", "--no-hard-links", "--manifest-path", manifest_path])
+    verify_cli_command([pixi, "install", "--no-symbolic-links", "--manifest-path", manifest_path])
+
     # Test --auth-file flag
     auth_file = tmp_pixi_workspace / "auth.json"
     auth_file.write_text("{}")
     verify_cli_command(
         [pixi, "install", f"--auth-file={auth_file}", "--manifest-path", manifest_path]
+    )
+
+
+def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    """Test that allow-*-links config keys can be set, read, and unset via the CLI."""
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+
+    # Set allow-ref-links to false via config set (local)
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest_path,
+            "--local",
+            "allow-ref-links",
+            "false",
+        ]
+    )
+
+    # Verify the value is present in config list output
+    verify_cli_command(
+        [pixi, "config", "list", "--manifest-path", manifest_path],
+        stdout_contains="allow-ref-links = false",
+    )
+
+    # Set allow-hard-links to false
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest_path,
+            "--local",
+            "allow-hard-links",
+            "false",
+        ]
+    )
+
+    # Set allow-symbolic-links to false
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest_path,
+            "--local",
+            "allow-symbolic-links",
+            "false",
+        ]
+    )
+
+    # Verify all three appear in config list
+    verify_cli_command(
+        [pixi, "config", "list", "--manifest-path", manifest_path],
+        stdout_contains=[
+            "allow-ref-links = false",
+            "allow-hard-links = false",
+            "allow-symbolic-links = false",
+        ],
+    )
+
+    # Verify individual key listing works
+    verify_cli_command(
+        [pixi, "config", "list", "--manifest-path", manifest_path, "allow-ref-links"],
+        stdout_contains="allow-ref-links = false",
+    )
+
+    # Verify the local config file was written correctly
+    local_config = tmp_pixi_workspace / ".pixi" / "config.toml"
+    config_content = tomllib.loads(local_config.read_text())
+    assert config_content["allow-ref-links"] is False
+    assert config_content["allow-hard-links"] is False
+    assert config_content["allow-symbolic-links"] is False
+
+    # Unset allow-ref-links
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "unset",
+            "--manifest-path",
+            manifest_path,
+            "--local",
+            "allow-ref-links",
+        ]
+    )
+
+    # Verify allow-ref-links is gone but others remain
+    verify_cli_command(
+        [pixi, "config", "list", "--manifest-path", manifest_path],
+        stdout_contains=[
+            "allow-hard-links = false",
+            "allow-symbolic-links = false",
+        ],
+        stdout_excludes="allow-ref-links",
+    )
+
+    # Test that setting to true also works
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest_path,
+            "--local",
+            "allow-ref-links",
+            "true",
+        ]
+    )
+
+    verify_cli_command(
+        [pixi, "config", "list", "--manifest-path", manifest_path],
+        stdout_contains="allow-ref-links = true",
     )
 
 
@@ -1304,10 +1428,10 @@ dependencies:
         ),
         # Upgrade commands
         (["upgrade"], [], "pixi upgrade"),
-        # Pixi build (can lock its source)
-        (["build"], [], "pixi build"),
         # Pixi publish (builds and uploads)
-        (["publish", "--to", "https://prefix.dev/test-channel"], [], "pixi publish"),
+        (["publish", "--target-channel", "https://prefix.dev/test-channel"], [], "pixi publish"),
+        # pixi build has been removed; the stub still accepts --frozen/--no-install
+        (["build"], [], "pixi build"),
     ]
     # This command needs to stay last so we always have something that requires a re-solve
     # Dont move this!
@@ -1328,9 +1452,12 @@ dependencies:
                 expected_exit_code=ExitCode.FAILURE,
             )
         elif command_name == "pixi build":
-            # Special case: build uses --path instead of --manifest-path
+            # pixi build is a deprecation shim that delegates to pixi publish
+            # with target_dir=".". It builds into the workspace directory and
+            # uses ephemeral environments, so it does not touch the workspace
+            # lockfile or conda-meta -- the invariants still hold.
             verify_cli_command(
-                [pixi, "build", "--path", manifest_path, "--locked", "--no-install"],
+                [pixi, "build", "--path", manifest_path, "--frozen", "--no-install"],
             )
         elif command_name == "pixi publish":
             # Special case: publish uses --path instead of --manifest-path
@@ -1338,12 +1465,10 @@ dependencies:
                 [
                     pixi,
                     "publish",
-                    "--to",
-                    "https://prefix.dev/test-channel",
                     "--path",
                     manifest_path,
-                    "--frozen",
-                    "--no-install",
+                    "--target-channel",
+                    "https://prefix.dev/test-channel",
                 ],
                 expected_exit_code=ExitCode.FAILURE,
             )

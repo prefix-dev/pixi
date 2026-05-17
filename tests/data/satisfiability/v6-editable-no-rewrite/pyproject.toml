@@ -1,12 +1,12 @@
 [project]
-name = "yohane"
-version = "0.1.0"
-requires-python = ">=3.10"
 dependencies = ["sniffio"]
+name = "yohane"
+requires-python = ">=3.10"
+version = "0.1.0"
 
 [tool.uv.sources]
 sniffio = { git = "https://github.com/python-trio/sniffio.git", tag = "v1.3.1" }
 
 [build-system]
-requires = ["hatchling"]
 build-backend = "hatchling.build"
+requires = ["hatchling"]

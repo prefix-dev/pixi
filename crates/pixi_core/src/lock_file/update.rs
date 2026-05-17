@@ -34,7 +34,7 @@ use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
-    PyPIUpdateConfig,
+    PyPIUpdateConfig, derive_link_mode,
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
@@ -54,6 +54,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
+use uv_install_wheel::LinkMode;
 use uv_normalize::ExtraName;
 
 use super::{
@@ -225,6 +226,7 @@ impl Workspace {
     /// prefixes as soon as possible.
     pub async fn update_lock_file(
         &self,
+        progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
         options: UpdateLockFileOptions,
     ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
         let lock_file_result = self.load_lock_file().await?;
@@ -270,16 +272,12 @@ impl Workspace {
 
         let glob_hash_cache = GlobHashCache::default();
 
-        // Construct a command dispatcher that will be used to run the tasks.
-        let multi_progress = global_multi_progress();
-        let anchor_pb = multi_progress.add(ProgressBar::hidden());
-        let command_dispatcher = self
-            .command_dispatcher_builder()?
-            .with_reporter(pixi_reporters::TopLevelProgress::new(
-                global_multi_progress(),
-                anchor_pb,
-            ))
-            .finish();
+        // Construct a command dispatcher to run the tasks.
+        let mut builder = self.command_dispatcher_builder()?;
+        if let Some(progress) = progress {
+            builder = progress.register_with(builder);
+        }
+        let command_dispatcher = builder.finish();
 
         // Get the package cache from the dispatcher.
         let package_cache = command_dispatcher.package_cache().clone();
@@ -374,7 +372,7 @@ impl Workspace {
         } = derived;
 
         // Construct an update context and perform the actual update.
-        let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))?
+        let lock_file_derived_data = UpdateContext::builder(self, command_dispatcher)?
             .with_package_cache(package_cache)
             .with_no_install(options.no_install)
             .with_outdated_environments(outdated)
@@ -970,7 +968,7 @@ impl<'p> LockFileDerivedData<'p> {
                     let skip_wheel_filename_check =
                         environment.pypi_options().skip_wheel_filename_check;
 
-                    let config = PyPIUpdateConfig {
+                    let pypi_update_config = PyPIUpdateConfig {
                         environment_name: environment.name(),
                         prefix: &prefix,
                         platform: environment.best_platform(),
@@ -978,6 +976,7 @@ impl<'p> LockFileDerivedData<'p> {
                         system_requirements: &environment.system_requirements(),
                     };
 
+                    let workspace_config = self.workspace.config();
                     let build_config = PyPIBuildConfig {
                         no_build_isolation: &non_isolated_packages,
                         no_build: &no_build,
@@ -985,6 +984,11 @@ impl<'p> LockFileDerivedData<'p> {
                         index_strategy: index_strategy.as_ref(),
                         exclude_newer: &pypi_exclude_newer,
                         skip_wheel_filename_check,
+                        link_mode: Some(derive_link_mode(
+                            workspace_config.allow_symbolic_links,
+                            workspace_config.allow_hard_links,
+                            workspace_config.allow_ref_links,
+                        )),
                     };
 
                     let lazy_env_vars = LazyPixiEnvironmentVars {
@@ -1002,7 +1006,7 @@ impl<'p> LockFileDerivedData<'p> {
                         .map(to_uv_normalize)
                         .collect::<Result<Vec<_>, _>>()
                         .into_diagnostic()?;
-                    PyPIEnvironmentUpdater::new(config, build_config, context_config)
+                    PyPIEnvironmentUpdater::new(pypi_update_config, build_config, context_config)
                         .with_ignored_extraneous(names)
                         .update(&python_status, &resolved_pixi_records, &pypi_records)
                         .await
@@ -1856,22 +1860,8 @@ impl<'p> UpdateContext<'p> {
     /// Construct a new builder for the update context.
     pub fn builder(
         project: &'p Workspace,
-        command_dispatcher: Option<CommandDispatcher>,
+        command_dispatcher: CommandDispatcher,
     ) -> miette::Result<UpdateContextBuilder<'p>> {
-        let multi_progress = pixi_progress::global_multi_progress();
-        let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
-
-        let command_dispatcher = match command_dispatcher {
-            Some(cd) => cd,
-            None => project
-                .command_dispatcher_builder()?
-                .with_reporter(pixi_reporters::TopLevelProgress::new(
-                    multi_progress,
-                    anchor_pb,
-                ))
-                .finish(),
-        };
-
         Ok(UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),
@@ -2018,6 +2008,14 @@ impl<'p> UpdateContext<'p> {
         }
 
         // Spawn tasks to update the pypi packages.
+        let project_link_mode = {
+            let config = project.config();
+            derive_link_mode(
+                config.allow_symbolic_links,
+                config.allow_hard_links,
+                config.allow_ref_links,
+            )
+        };
         for (environment, platform) in
             self.outdated_envs
                 .pypi
@@ -2101,6 +2099,7 @@ impl<'p> UpdateContext<'p> {
                 locked_group_records,
                 self.no_install,
                 build_cache,
+                project_link_mode,
             );
 
             pending_futures.push(
@@ -2995,6 +2994,7 @@ async fn spawn_solve_pypi_task<'p>(
     locked_pypi_packages: Arc<PypiRecordsByName>,
     disallow_install_conda_prefix: bool,
     build_cache: Arc<lock_file::outdated::PypiEnvironmentBuildCache>,
+    link_mode: LinkMode,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = grouped_environment.pypi_dependencies(Some(platform));
@@ -3073,6 +3073,7 @@ async fn spawn_solve_pypi_task<'p>(
             exclude_newer,
             solve_strategy,
             build_cache,
+            link_mode,
         )
         .await
         .with_context(|| {

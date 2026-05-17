@@ -151,6 +151,14 @@ impl<T> IsDefault for Vec<T> {
     }
 }
 
+impl<T> IsDefault for std::collections::BTreeSet<T> {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
+    }
+}
+
 impl<T: IsDefault> IsDefault for Option<T> {
     type Item = T::Item;
 

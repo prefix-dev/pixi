@@ -35,7 +35,6 @@ use rattler_conda_types::Platform;
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
-use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
 use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
@@ -260,6 +259,39 @@ pub struct PyPIBuildConfig<'a> {
     pub index_strategy: Option<&'a pixi_manifest::pypi::pypi_options::IndexStrategy>,
     pub exclude_newer: &'a ResolvedPypiExcludeNewer,
     pub skip_wheel_filename_check: Option<bool>,
+    /// The link mode to use when installing packages.
+    /// If `None`, uses the default for the platform (Clone on macOS, Hardlink on Linux).
+    pub link_mode: Option<LinkMode>,
+}
+
+/// Picks a `LinkMode` honoring the configured restrictions, preferring the
+/// platform default when it is allowed and otherwise falling through
+/// `Clone` → `Hardlink` → `Symlink` → `Copy`.
+pub fn derive_link_mode(
+    allow_symbolic_links: Option<bool>,
+    allow_hard_links: Option<bool>,
+    allow_ref_links: Option<bool>,
+) -> LinkMode {
+    let is_allowed = |mode: LinkMode| match mode {
+        LinkMode::Clone => allow_ref_links.unwrap_or(true),
+        LinkMode::Hardlink => allow_hard_links.unwrap_or(true),
+        LinkMode::Symlink => allow_symbolic_links.unwrap_or(true),
+        LinkMode::Copy => true,
+    };
+
+    let default = LinkMode::default();
+    if is_allowed(default) {
+        return default;
+    }
+    [
+        LinkMode::Clone,
+        LinkMode::Hardlink,
+        LinkMode::Symlink,
+        LinkMode::Copy,
+    ]
+    .into_iter()
+    .find(|&mode| is_allowed(mode))
+    .unwrap_or(LinkMode::Copy)
 }
 
 /// Configuration for PyPI context, grouping uv and environment settings
@@ -871,13 +903,22 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let distribution_database = DistributionDatabase::new(
             setup.registry_client.as_ref(),
             &build_dispatch,
-            self.context_config.uv_context.concurrency.downloads,
+            self.context_config
+                .uv_context
+                .concurrency
+                .downloads_semaphore
+                .clone(),
         );
 
         // Before hitting the network let's make sure the credentials are available to
-        // uv
+        // uv. As of uv 0.9.16, the global credentials cache moved to a per-client
+        // `CredentialsCache` reachable via the `BaseClient` underneath
+        // `RegistryClient`'s `CachedClient`.
+        let base_client = setup.registry_client.cached_client().uncached();
         for url in setup.index_locations.indexes().map(|index| index.url()) {
-            let success = store_credentials_from_url(url.url());
+            let success = base_client
+                .credentials_cache()
+                .store_credentials_from_url(url.url());
             tracing::debug!("Stored credentials for {}: {}", url, success);
         }
 
@@ -937,13 +978,13 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             setup.build_isolation.to_uv(&setup.venv),
             &self.context_config.uv_context.extra_build_requires,
             &self.context_config.uv_context.extra_build_variables,
-            LinkMode::default(),
+            self.build_config.link_mode.unwrap_or_default(),
             &setup.build_options,
             &self.context_config.uv_context.hash_strategy,
             setup.exclude_newer.clone(),
-            self.context_config.uv_context.source_strategy,
+            self.context_config.uv_context.no_sources.clone(),
             self.context_config.uv_context.workspace_cache.clone(),
-            self.context_config.uv_context.concurrency,
+            self.context_config.uv_context.concurrency.clone(),
             self.context_config.uv_context.preview,
         )
         // Important: this passes any CONDA activation to the uv build process
@@ -1116,7 +1157,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let start = std::time::Instant::now();
 
         uv_installer::Installer::new(&setup.venv, uv_preview::Preview::default())
-            .with_link_mode(LinkMode::default())
+            .with_link_mode(self.build_config.link_mode.unwrap_or_default())
             .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
             .with_reporter(UvReporter::new_arc(options))
             .install(all_dists.clone())

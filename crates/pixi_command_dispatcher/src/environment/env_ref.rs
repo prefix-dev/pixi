@@ -197,7 +197,7 @@ impl fmt::Display for EnvironmentRef {
             EnvironmentRef::Ephemeral(eph) => write!(
                 f,
                 "{}@{}",
-                &eph.name, eph.spec.build_environment.host_platform
+                eph.name, eph.spec.build_environment.host_platform
             ),
         }
     }
@@ -210,7 +210,7 @@ impl fmt::Display for DerivedParent {
             DerivedParent::Ephemeral(eph) => write!(
                 f,
                 "{}@{}",
-                &eph.name, eph.spec.build_environment.host_platform
+                eph.name, eph.spec.build_environment.host_platform
             ),
         }
     }

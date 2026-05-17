@@ -1,0 +1,32 @@
+#
+# This lock-file should not satisfy the accompanying pixi.toml file.
+#
+# The user added an explicit `index = "https://custom..."` to the
+# `my-dep` requirement, but the lock-file has `my-dep` resolved from
+# the default PyPI index. The satisfiability check should detect this
+# drift and force a re-resolve.
+
+version: 7
+platforms:
+  - name: win-64
+environments:
+  default:
+    channels:
+      - url: https://conda.anaconda.org/conda-forge/
+    indexes:
+      - https://pypi.org/simple
+    packages:
+      win-64:
+        - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
+        - pypi: https://pypi.org/simple/packages/my_dep-1.0.0-py3-none-any.whl
+packages:
+  - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
+    sha256: 1a95494abe572a8819c933f978df89f00bde72ea9432d46a70632599e8029ea4
+    md5: f07c8c5dd98767f9a652de5d039b284e
+    # Faked to be empty to reduce the size of the example
+    depends: []
+  - pypi: https://pypi.org/simple/packages/my_dep-1.0.0-py3-none-any.whl
+    name: my-dep
+    version: 1.0.0
+    sha256: 0000000000000000000000000000000000000000000000000000000000000000
+    index: https://pypi.org/simple

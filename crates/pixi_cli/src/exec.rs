@@ -153,7 +153,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let status = cmd
         .status()
         .into_diagnostic()
-        .with_context(|| format!("failed to execute '{}'", &command))?;
+        .with_context(|| format!("failed to execute '{}'", command))?;
 
     // Return the exit code of the command
     std::process::exit(status.code().unwrap_or(1));
@@ -168,7 +168,6 @@ pub async fn create_exec_prefix(
     client: &ClientWithMiddleware,
     has_guessed_package: bool,
 ) -> miette::Result<Prefix> {
-    let command = args.command.first().expect("missing required command");
     let specs = specs.to_vec();
 
     let channels = args
@@ -178,13 +177,18 @@ pub async fn create_exec_prefix(
         .map(|c| c.base_url.to_string())
         .collect();
 
-    let environment_hash =
-        EnvironmentHash::new(command.clone(), specs.clone(), channels, args.platform);
+    let environment_hash = EnvironmentHash::new(specs.clone(), channels, args.platform);
+
+    let dir_prefix = exec_dir_prefix(
+        &specs,
+        args.command.first().map(String::as_str),
+        has_guessed_package,
+    );
 
     let prefix = Prefix::new(
         cache_dir
             .join(pixi_consts::consts::CACHED_ENVS_DIR)
-            .join(environment_hash.name()),
+            .join(environment_hash.name(dir_prefix.as_deref())),
     );
 
     let guard = AsyncPrefixGuard::new(prefix.root())
@@ -363,6 +367,31 @@ fn list_exec_environment(
     Ok(())
 }
 
+/// Picks the human-readable prefix for the cached env directory:
+/// the single spec's name when there is exactly one, otherwise the guessed
+/// package (when pixi guessed one), otherwise nothing.
+fn exec_dir_prefix(
+    specs: &[MatchSpec],
+    command: Option<&str>,
+    has_guessed_package: bool,
+) -> Option<String> {
+    if let [single] = specs {
+        return single
+            .name
+            .as_exact()
+            .map(|name| name.as_normalized().to_string());
+    }
+    if has_guessed_package {
+        return command.and_then(|c| {
+            guess_package_spec(c)
+                .name
+                .as_exact()
+                .map(|name| name.as_normalized().to_string())
+        });
+    }
+    None
+}
+
 /// This function is used to guess the package name from the command.
 fn guess_package_spec(command: &str) -> MatchSpec {
     // Replace any illegal character with a dash.
@@ -397,4 +426,43 @@ fn to_exec_match_specs(specs: &[MatchSpecOrPath]) -> miette::Result<Vec<MatchSpe
                 .map_err(|err| miette::miette!(err))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use rattler_conda_types::{MatchSpec, ParseStrictness};
+
+    use super::exec_dir_prefix;
+
+    fn spec(s: &str) -> MatchSpec {
+        MatchSpec::from_str(s, ParseStrictness::Lenient).unwrap()
+    }
+
+    // `pixi exec --spec foo cmd`: single spec → use the spec name.
+    #[test]
+    fn single_explicit_spec_wins() {
+        let prefix = exec_dir_prefix(&[spec("rucio-mcp")], Some("sh"), false);
+        assert_eq!(prefix.as_deref(), Some("rucio-mcp"));
+    }
+
+    // `pixi exec cmd`: no spec, package guessed from cmd → use cmd.
+    #[test]
+    fn guessed_only_uses_command() {
+        let prefix = exec_dir_prefix(&[spec("voms-proxy-init")], Some("voms-proxy-init"), true);
+        assert_eq!(prefix.as_deref(), Some("voms-proxy-init"));
+    }
+
+    // `pixi exec --with extra cmd`: guess + extra → use cmd, not "extra".
+    #[test]
+    fn with_uses_command_not_extra_spec() {
+        let prefix = exec_dir_prefix(&[spec("extra"), spec("cmd")], Some("cmd"), true);
+        assert_eq!(prefix.as_deref(), Some("cmd"));
+    }
+
+    // `pixi exec --spec a --spec b cmd`: multiple explicit specs, no guess → no prefix.
+    #[test]
+    fn multiple_explicit_specs_have_no_prefix() {
+        let prefix = exec_dir_prefix(&[spec("foo"), spec("bar")], Some("cmd"), false);
+        assert_eq!(prefix, None);
+    }
 }

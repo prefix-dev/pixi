@@ -19,7 +19,7 @@ init-params:
   manifest-path: "file://<ROOT>/ros-package"
   project-model:
     name: ~
-    buildString: ~
+    buildStringPrefix: ~
     buildNumber: ~
     version: ~
     description: ~

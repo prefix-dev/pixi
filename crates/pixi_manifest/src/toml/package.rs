@@ -135,6 +135,7 @@ pub struct TomlPackage {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub run_constraints: Option<PixiSpanned<UniquePackageMap>>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
 
     pub span: Span,
@@ -173,6 +174,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
         let run_dependencies = th.optional("run-dependencies");
+        let run_constraints = th.optional("run-constraints");
         let build = th.required("build")?;
         let target = th
             .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
@@ -194,6 +196,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             host_dependencies,
             build_dependencies,
             run_dependencies,
+            run_constraints,
             build,
             target,
             span: value.span,
@@ -335,6 +338,7 @@ impl TomlPackage {
 
         let default_package_target = TomlPackageTarget {
             run_dependencies: self.run_dependencies,
+            run_constraints: self.run_constraints,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
         }
@@ -491,14 +495,64 @@ fn workspace_cannot_be_false() -> GenericError {
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use assert_matches::assert_matches;
     use fs_err as fs;
     use insta::assert_snapshot;
+    use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
+    use rattler_conda_types::{PackageName, Platform};
     use tempfile::TempDir;
 
     use super::*;
-    use crate::toml::FromTomlStr;
+    use crate::{KnownPreviewFeature, SpecType, TargetSelector, toml::FromTomlStr};
+
+    /// Parses a manifest using only `Preview::default()` and asserts it succeeds.
+    fn parse_package(input: &str) -> PackageManifest {
+        TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect("expected manifest to parse")
+            .value
+    }
+
+    /// Asserts that the dependency map for `spec_type` contains exactly one
+    /// entry for `name` whose version spec stringifies to `expected`.
+    #[track_caller]
+    fn assert_single_version(
+        deps: &std::collections::HashMap<
+            SpecType,
+            pixi_spec_containers::DependencyMap<PackageName, PixiSpec>,
+        >,
+        spec_type: SpecType,
+        name: &str,
+        expected: &str,
+    ) {
+        let entry = deps
+            .get(&spec_type)
+            .unwrap_or_else(|| panic!("missing {spec_type:?} bucket"));
+        let specs = entry
+            .get(&PackageName::from_str(name).unwrap())
+            .unwrap_or_else(|| panic!("missing {name} in {spec_type:?}"));
+        assert_eq!(specs.len(), 1, "expected exactly one spec for {name}");
+        assert_eq!(
+            specs
+                .iter()
+                .next()
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            expected,
+        );
+    }
 
     #[must_use]
     fn expect_parse_failure(pixi_toml: &str) -> String {
@@ -1095,6 +1149,130 @@ mod test {
         // Verify the license_file path is set correctly
         let manifest = result.unwrap().value;
         assert!(manifest.package.license_file.is_some());
+    }
+
+    #[test]
+    fn test_package_dependencies_all_types() {
+        // Each of run-, host-, build-dependencies and run-constraints at the
+        // package level must land in its own SpecType bucket of the default target.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [run-dependencies]
+        run-dep = "==1.0"
+
+        [host-dependencies]
+        host-dep = "==2.0"
+
+        [build-dependencies]
+        build-dep = "==3.0"
+
+        [run-constraints]
+        constrained = ">=4.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let manifest = parse_package(input);
+        let deps = &manifest.targets.default().dependencies;
+
+        assert_single_version(deps, SpecType::Run, "run-dep", "==1.0");
+        assert_single_version(deps, SpecType::Host, "host-dep", "==2.0");
+        assert_single_version(deps, SpecType::Build, "build-dep", "==3.0");
+        assert_single_version(deps, SpecType::RunConstraints, "constrained", ">=4.0");
+    }
+
+    #[test]
+    fn test_package_target_specific_dependencies() {
+        // Target-specific package dependencies (including run-constraints) must
+        // land in the per-target bucket, not the default target.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [run-dependencies]
+        shared = "==1.0"
+
+        [target.linux-64.run-dependencies]
+        only-linux = "==2.0"
+
+        [target.linux-64.run-constraints]
+        only-linux-constrained = ">=3.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let manifest = parse_package(input);
+
+        // Default target only has the shared run dep.
+        let default_deps = &manifest.targets.default().dependencies;
+        assert_single_version(default_deps, SpecType::Run, "shared", "==1.0");
+        assert!(
+            !default_deps.contains_key(&SpecType::RunConstraints),
+            "run-constraints should not leak into default target",
+        );
+
+        // linux-64 target has its own deps and constraints.
+        let linux = manifest
+            .targets
+            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .expect("linux-64 target should exist");
+        assert_single_version(&linux.dependencies, SpecType::Run, "only-linux", "==2.0");
+        assert_single_version(
+            &linux.dependencies,
+            SpecType::RunConstraints,
+            "only-linux-constrained",
+            ">=3.0",
+        );
+    }
+
+    #[test]
+    fn test_run_constraints_source_spec_requires_pixi_build() {
+        // Source specs in [package.run-constraints] must be rejected unless the
+        // pixi-build preview is enabled — same gate as the other dependency
+        // tables.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [run-constraints]
+        local-pkg = { path = "./local" }
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        let rendered = format_parse_error(input, err);
+        assert!(
+            rendered.contains("pixi-build"),
+            "expected pixi-build gating error, got: {rendered}"
+        );
+
+        // With pixi-build enabled the same input parses.
+        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &preview,
+                    Path::new(""),
+                )
+            })
+            .expect("source specs in run-constraints must be allowed when pixi-build is enabled");
     }
 
     #[test]

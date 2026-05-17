@@ -4,7 +4,7 @@ expression: result
 ---
 Ok(
     {
-        "**/*.{mojo,🔥}",
+        "**/*.mojo",
         "**/.c",
     },
 )

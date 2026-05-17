@@ -257,7 +257,7 @@ fn wheel_filename(pkg: &PyPIPackage) -> String {
     format!(
         "{}-{}-{}-{}-{}.whl",
         normalize_dist_name(&pkg.name),
-        &pkg.version,
+        pkg.version,
         pkg.tag.py,
         pkg.tag.abi,
         pkg.tag.plat
@@ -269,7 +269,7 @@ fn dist_info_dir(pkg: &PyPIPackage) -> String {
     format!(
         "{}-{}.dist-info",
         normalize_dist_name(&pkg.name),
-        &pkg.version
+        pkg.version
     )
 }
 

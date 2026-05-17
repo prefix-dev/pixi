@@ -1,26 +1,35 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::BuildEnvironment;
-use crate::cache::BuildBackendMetadataCache;
+use crate::cache::{
+    BuildBackendMetadataCache,
+    markers::{BackendMetadataDir, PackagesDir},
+};
 use crate::compute_data::{
-    AllowExecuteLinkScripts, BackendSourceBuildSemaphore, CondaSolveSemaphore,
+    AllowExecuteLinkScripts, AllowLinkOptions, BackendSourceBuildSemaphore, CondaSolveSemaphore,
 };
 use crate::environment::WorkspaceEnvRegistry;
 use crate::injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
-use crate::reporter_context::CURRENT_REPORTER_CONTEXT;
-use crate::util::limits::ResolvedLimits;
-use crate::util::path::RootDir;
-use crate::{
-    CacheDirs, CommandDispatcher, Executor, Limits, Reporter,
-    command_dispatcher::{CommandDispatcherData, DepGraphDumpGuard},
-    source_checkout::{GitCheckoutSemaphore, UrlCheckoutSemaphore},
+use crate::reporter::{
+    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
+    InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter, SourceMetadataReporter,
+    SourceRecordReporter,
 };
-use futures::future::BoxFuture;
+use crate::util::limits::ResolvedLimits;
+use crate::{
+    CacheDirs, CommandDispatcher, Executor, Limits,
+    command_dispatcher::{CommandDispatcherData, DepGraphDumpGuard},
+};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::BackendOverride;
-use pixi_compute_engine::{ComputeEngine, DataStore, SpawnHook};
+use pixi_compute_cache_dirs::CacheDirsKey;
+use pixi_compute_engine::ComputeEngine;
+use pixi_compute_env_vars::EnvVarsKey;
+use pixi_compute_sources::{
+    GitCheckoutReporter, GitCheckoutSemaphore, RootDir, UrlCheckoutReporter, UrlCheckoutSemaphore,
+};
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
@@ -36,7 +45,6 @@ use tokio::sync::Semaphore;
 pub struct CommandDispatcherBuilder {
     gateway: Option<Gateway>,
     root_dir: Option<AbsPresumedDirPathBuf>,
-    reporter: Option<Arc<dyn Reporter>>,
     git_resolver: Option<GitResolver>,
     url_resolver: Option<UrlResolver>,
     download_client: Option<LazyClient>,
@@ -49,6 +57,27 @@ pub struct CommandDispatcherBuilder {
     execute_link_scripts: bool,
     channel_config: Option<ChannelConfig>,
     enabled_protocols: Option<EnabledProtocols>,
+    /// Allow symbolic links during package installation.
+    allow_symbolic_links: Option<bool>,
+    /// Allow hard links during package installation.
+    allow_hard_links: Option<bool>,
+    /// Allow ref links (copy-on-write) during package installation.
+    allow_ref_links: Option<bool>,
+
+    // Per-key reporters; each registered separately into the engine
+    // `DataStore` at `finish()` so per-key compute bodies can read just
+    // the reporter they need without depending on a single umbrella
+    // trait.
+    pixi_install_reporter: Option<Arc<dyn PixiInstallReporter>>,
+    pixi_solve_reporter: Option<Arc<dyn PixiSolveReporter>>,
+    conda_solve_reporter: Option<Arc<dyn CondaSolveReporter>>,
+    git_checkout_reporter: Option<Arc<dyn GitCheckoutReporter>>,
+    url_checkout_reporter: Option<Arc<dyn UrlCheckoutReporter>>,
+    instantiate_backend_reporter: Option<Arc<dyn InstantiateBackendReporter>>,
+    build_backend_metadata_reporter: Option<Arc<dyn BuildBackendMetadataReporter>>,
+    source_metadata_reporter: Option<Arc<dyn SourceMetadataReporter>>,
+    source_record_reporter: Option<Arc<dyn SourceRecordReporter>>,
+    backend_source_build_reporter: Option<Arc<dyn BackendSourceBuildReporter>>,
 }
 
 impl CommandDispatcherBuilder {
@@ -68,10 +97,114 @@ impl CommandDispatcherBuilder {
         }
     }
 
-    /// Sets the reporter used by the [`CommandDispatcher`] to report progress.
-    pub fn with_reporter<F: Reporter + 'static>(self, reporter: F) -> Self {
+    /// Register the per-key
+    /// [`PixiInstallReporter`](crate::PixiInstallReporter) used by the
+    /// install-pixi-environment path.
+    pub fn with_pixi_install_reporter(self, reporter: Arc<dyn PixiInstallReporter>) -> Self {
         Self {
-            reporter: Some(Arc::new(reporter)),
+            pixi_install_reporter: Some(reporter),
+            ..self
+        }
+    }
+
+    /// Register the per-key
+    /// [`PixiSolveReporter`](crate::PixiSolveReporter) used by
+    /// [`SolvePixiEnvironmentKey`](crate::keys::SolvePixiEnvironmentKey).
+    pub fn with_pixi_solve_reporter(self, reporter: Arc<dyn PixiSolveReporter>) -> Self {
+        Self {
+            pixi_solve_reporter: Some(reporter),
+            ..self
+        }
+    }
+
+    /// Register the per-key
+    /// [`CondaSolveReporter`](crate::CondaSolveReporter) used by the
+    /// conda-solve path.
+    pub fn with_conda_solve_reporter(self, reporter: Arc<dyn CondaSolveReporter>) -> Self {
+        Self {
+            conda_solve_reporter: Some(reporter),
+            ..self
+        }
+    }
+
+    /// Register the per-key
+    /// [`GitCheckoutReporter`](crate::GitCheckoutReporter) used by the
+    /// git-checkout key.
+    pub fn with_git_checkout_reporter(self, reporter: Arc<dyn GitCheckoutReporter>) -> Self {
+        Self {
+            git_checkout_reporter: Some(reporter),
+            ..self
+        }
+    }
+
+    /// Register the per-key
+    /// [`UrlCheckoutReporter`](crate::UrlCheckoutReporter) used
+    /// by the url-checkout key.
+    pub fn with_url_checkout_reporter(self, reporter: Arc<dyn UrlCheckoutReporter>) -> Self {
+        Self {
+            url_checkout_reporter: Some(reporter),
+            ..self
+        }
+    }
+
+    /// Register the per-key
+    /// [`InstantiateBackendReporter`](crate::InstantiateBackendReporter)
+    /// used by [`InstantiateBackendKey`](crate::InstantiateBackendKey).
+    pub fn with_instantiate_backend_reporter(
+        self,
+        reporter: Arc<dyn InstantiateBackendReporter>,
+    ) -> Self {
+        Self {
+            instantiate_backend_reporter: Some(reporter),
+            ..self
+        }
+    }
+
+    /// Register the per-key
+    /// [`BuildBackendMetadataReporter`](crate::BuildBackendMetadataReporter)
+    /// used by
+    /// [`BuildBackendMetadataKey`](crate::BuildBackendMetadataKey).
+    pub fn with_build_backend_metadata_reporter(
+        self,
+        reporter: Arc<dyn BuildBackendMetadataReporter>,
+    ) -> Self {
+        Self {
+            build_backend_metadata_reporter: Some(reporter),
+            ..self
+        }
+    }
+
+    /// Register the per-key
+    /// [`SourceMetadataReporter`](crate::SourceMetadataReporter) used by
+    /// [`ResolveSourcePackageKey`](crate::keys::ResolveSourcePackageKey).
+    pub fn with_source_metadata_reporter(self, reporter: Arc<dyn SourceMetadataReporter>) -> Self {
+        Self {
+            source_metadata_reporter: Some(reporter),
+            ..self
+        }
+    }
+
+    /// Register the per-key
+    /// [`SourceRecordReporter`](crate::SourceRecordReporter) used by
+    /// `assemble_source_record` (the per-variant fan-out under
+    /// [`ResolveSourcePackageKey`](crate::keys::ResolveSourcePackageKey)).
+    pub fn with_source_record_reporter(self, reporter: Arc<dyn SourceRecordReporter>) -> Self {
+        Self {
+            source_record_reporter: Some(reporter),
+            ..self
+        }
+    }
+
+    /// Register the per-key
+    /// [`BackendSourceBuildReporter`](crate::BackendSourceBuildReporter)
+    /// used by the backend-source-build path inside
+    /// [`SourceBuildKey`](crate::keys::SourceBuildKey).
+    pub fn with_backend_source_build_reporter(
+        self,
+        reporter: Arc<dyn BackendSourceBuildReporter>,
+    ) -> Self {
+        Self {
+            backend_source_build_reporter: Some(reporter),
             ..self
         }
     }
@@ -174,6 +307,30 @@ impl CommandDispatcherBuilder {
         }
     }
 
+    /// Sets whether symbolic links are allowed during package installation.
+    pub fn with_allow_symbolic_links(self, allow: Option<bool>) -> Self {
+        Self {
+            allow_symbolic_links: allow,
+            ..self
+        }
+    }
+
+    /// Sets whether hard links are allowed during package installation.
+    pub fn with_allow_hard_links(self, allow: Option<bool>) -> Self {
+        Self {
+            allow_hard_links: allow,
+            ..self
+        }
+    }
+
+    /// Sets whether ref links (copy-on-write) are allowed during package installation.
+    pub fn with_allow_ref_links(self, allow: Option<bool>) -> Self {
+        Self {
+            allow_ref_links: allow,
+            ..self
+        }
+    }
+
     /// Completes the builder and returns a new [`CommandDispatcher`].
     pub fn finish(self) -> CommandDispatcher {
         let root_dir = self.root_dir.unwrap_or_else(|| {
@@ -184,11 +341,18 @@ impl CommandDispatcherBuilder {
                 .into_assume_dir()
         });
 
-        let cache_dirs = self
-            .cache_dirs
-            .unwrap_or_else(|| CacheDirs::new(root_dir.join(".cache").into_assume_dir()));
+        let cache_dirs = Arc::new(
+            self.cache_dirs
+                .unwrap_or_else(|| CacheDirs::new(root_dir.join(".cache").into_assume_dir())),
+        );
+        // Snapshot env vars once. Reused for the sync resolves below
+        // and injected via `EnvVarsKey` so compute bodies see the same
+        // map.
+        let env_snapshot: Arc<HashMap<String, String>> = Arc::new(std::env::vars().collect());
+
         let download_client = self.download_client.unwrap_or_default();
-        let package_cache = PackageCache::new(cache_dirs.packages());
+        let package_cache =
+            PackageCache::new(cache_dirs.resolve_with_env::<PackagesDir>(&env_snapshot));
         let gateway = self.gateway.unwrap_or_else(|| {
             Gateway::builder()
                 .with_client(download_client.clone())
@@ -199,8 +363,11 @@ impl CommandDispatcherBuilder {
         });
 
         let git_resolver = self.git_resolver.unwrap_or_default();
-        let build_backend_metadata_cache =
-            BuildBackendMetadataCache::new(cache_dirs.backend_metadata().into());
+        let build_backend_metadata_cache = BuildBackendMetadataCache::new(
+            cache_dirs
+                .resolve_with_env::<BackendMetadataDir>(&env_snapshot)
+                .into(),
+        );
 
         let url_resolver = self.url_resolver.unwrap_or_default();
 
@@ -228,8 +395,6 @@ impl CommandDispatcherBuilder {
             .max_concurrent_builds
             .map(|n| Arc::new(Semaphore::new(n)));
 
-        let reporter = self.reporter;
-
         let channel_config = self.channel_config.unwrap_or_else(|| {
             let path: &std::path::Path = root_dir.as_ref();
             ChannelConfig::default_with_root_dir(path.to_path_buf())
@@ -250,6 +415,9 @@ impl CommandDispatcherBuilder {
             package_cache,
             tool_platform,
             execute_link_scripts: self.execute_link_scripts,
+            allow_symbolic_links: self.allow_symbolic_links,
+            allow_hard_links: self.allow_hard_links,
+            allow_ref_links: self.allow_ref_links,
             executor: self.executor,
             git_checkout_semaphore,
             url_checkout_semaphore,
@@ -261,28 +429,60 @@ impl CommandDispatcherBuilder {
         // Build the compute engine, populating its global data store with
         // the individual shared resources that pixi-specific Keys read
         // through the extension traits on DataStore (HasGateway,
-        // HasGitResolver, HasUrlResolver, HasCacheDirs, ...). Values are
-        // stored by `TypeId`, so tests can populate only the subset their
-        // Keys actually touch without constructing a full dispatcher. The
-        // spawn hook captures the calling task's
-        // `CURRENT_REPORTER_CONTEXT` task-local and scopes the spawned
-        // compute with it, so Keys can read their caller's reporter
-        // context even though the compute runs on a fresh tokio task.
+        // HasGitResolver, HasUrlResolver, ...). Values are stored by
+        // `TypeId`, so tests can populate only the subset their Keys
+        // actually touch without constructing a full dispatcher.
+        // CacheDirs and the env-var snapshot are injected separately
+        // via `CacheDirsKey` and `EnvVarsKey` so consumers depend on
+        // them through the engine graph.
         let mut engine_builder = ComputeEngine::builder()
             .sequential_branches(matches!(self.executor, Executor::Serial))
             .with_data(data.gateway.clone())
             .with_data(data.git_resolver.clone())
             .with_data(data.url_resolver.clone())
             .with_data(data.download_client.clone())
-            .with_data(data.cache_dirs.clone())
             .with_data(data.build_backend_metadata_cache.clone())
             .with_data(data.package_cache.clone())
             .with_data(data.workspace_env_registry.clone())
             .with_data(AllowExecuteLinkScripts(data.execute_link_scripts))
+            .with_data(AllowLinkOptions {
+                allow_symbolic_links: data.allow_symbolic_links,
+                allow_hard_links: data.allow_hard_links,
+                allow_ref_links: data.allow_ref_links,
+            })
             .with_data(RootDir(root_dir))
-            .with_spawn_hook(Arc::new(ReporterContextSpawnHook));
-        if let Some(reporter) = reporter.clone() {
-            engine_builder = engine_builder.with_data(reporter);
+            .with_spawn_hook(Arc::new(pixi_compute_reporters::OperationIdSpawnHook));
+        // Register each per-key reporter the caller supplied; a missing
+        // reporter is treated as "no progress UI for this kind of work."
+        if let Some(r) = self.pixi_install_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
+        }
+        if let Some(r) = self.pixi_solve_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
+        }
+        if let Some(r) = self.conda_solve_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
+        }
+        if let Some(r) = self.git_checkout_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
+        }
+        if let Some(r) = self.url_checkout_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
+        }
+        if let Some(r) = self.instantiate_backend_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
+        }
+        if let Some(r) = self.build_backend_metadata_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
+        }
+        if let Some(r) = self.source_metadata_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
+        }
+        if let Some(r) = self.source_record_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
+        }
+        if let Some(r) = self.backend_source_build_reporter.clone() {
+            engine_builder = engine_builder.with_data(r);
         }
         if let Some(sem) = data.git_checkout_semaphore.clone() {
             engine_builder = engine_builder.with_data(GitCheckoutSemaphore(sem));
@@ -300,6 +500,8 @@ impl CommandDispatcherBuilder {
 
         // Inject engine-wide configuration values that Keys read through
         // `ctx.compute(&ChannelConfigKey)` etc.
+        engine.inject(CacheDirsKey, data.cache_dirs.clone());
+        engine.inject(EnvVarsKey, env_snapshot);
         engine.inject(ChannelConfigKey, Arc::new(channel_config));
         engine.inject(EnabledProtocolsKey, Arc::new(enabled_protocols));
         let tool_build_environment = BuildEnvironment {
@@ -320,21 +522,6 @@ impl CommandDispatcherBuilder {
             }),
             data,
             engine,
-            reporter,
         }
-    }
-}
-
-/// Snapshots the current reporter-context task-local on the calling
-/// task and re-installs it via `scope` on the spawned compute task.
-/// Lets compute-engine Keys read the caller's reporter context even
-/// though the compute runs on a fresh tokio task that would not
-/// otherwise inherit task-locals.
-pub struct ReporterContextSpawnHook;
-
-impl SpawnHook for ReporterContextSpawnHook {
-    fn wrap(&self, _data: &DataStore, fut: BoxFuture<'static, ()>) -> BoxFuture<'static, ()> {
-        let captured = CURRENT_REPORTER_CONTEXT.try_get().ok().flatten();
-        Box::pin(CURRENT_REPORTER_CONTEXT.scope(captured, fut))
     }
 }

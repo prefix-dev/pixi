@@ -320,9 +320,9 @@ impl PackageBuilder {
                 // Calculate a random wrong hash for snapshot tests
                 let hash = format!(
                     "{}-{}-{}{}",
-                    &self.name,
-                    &self.version,
-                    &build,
+                    self.name,
+                    self.version,
+                    build,
                     self.archive_type.extension()
                 );
                 let md5 = rattler_digest::compute_bytes_digest::<rattler_digest::Md5>(&hash);

@@ -190,6 +190,10 @@ pub struct PartialSourceRecordData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub purls: Option<BTreeSet<PackageUrl>>,
 
+    /// License of the package (SPDX expression or free-form string).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+
     /// Run-exports declared by the recipe.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_exports: Option<RunExportsJson>,
@@ -385,6 +389,7 @@ impl SourceRecord<FullSourceRecordData> {
                     experimental_extra_depends: full.package_record.experimental_extra_depends,
                     flags: full.package_record.flags,
                     purls: full.package_record.purls,
+                    license: full.package_record.license,
                     run_exports: full.package_record.run_exports,
                     sources: full.sources,
                 });
@@ -523,6 +528,7 @@ impl SourceRecord<SourceRecordData> {
                         experimental_extra_depends: full.package_record.experimental_extra_depends,
                         flags: full.package_record.flags,
                         purls: full.package_record.purls,
+                        license: full.package_record.license,
                         run_exports: full.package_record.run_exports,
                         sources: full.sources,
                     })
@@ -545,6 +551,7 @@ impl SourceRecord<SourceRecordData> {
                     constrains: partial.constrains,
                     experimental_extra_depends: partial.experimental_extra_depends,
                     flags: partial.flags,
+                    license: partial.license,
                     purls: partial.purls,
                     run_exports: partial.run_exports,
                 })),
@@ -602,6 +609,7 @@ impl SourceRecord<SourceRecordData> {
                     experimental_extra_depends: partial.experimental_extra_depends,
                     flags: partial.flags,
                     purls: partial.purls,
+                    license: partial.license,
                     run_exports: partial.run_exports,
                     sources,
                 })
@@ -1006,6 +1014,7 @@ mod tests {
                 experimental_extra_depends: BTreeMap::new(),
                 flags: vec![],
                 purls: None,
+                license: None,
                 run_exports: None,
                 sources: BTreeMap::new(),
             }),
@@ -1091,6 +1100,7 @@ mod tests {
                     experimental_extra_depends: BTreeMap::new(),
                     flags: vec![],
                     purls: None,
+                    license: None,
                     run_exports: None,
                     sources: BTreeMap::new(),
                 }),

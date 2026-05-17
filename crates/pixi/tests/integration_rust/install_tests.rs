@@ -736,6 +736,7 @@ async fn test_old_lock_install() {
     .unwrap();
     pixi_core::environment::get_update_lock_file_and_prefix(
         &project.default_environment(),
+        None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
@@ -791,6 +792,7 @@ async fn test_v6_local_archive_path_upgrade() {
     let project = Workspace::from_path(&test_dir.join("pixi.toml")).unwrap();
     pixi_core::environment::get_update_lock_file_and_prefix(
         &project.default_environment(),
+        None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
@@ -820,6 +822,7 @@ async fn test_v6_local_archive_path_upgrade() {
     let lock_str = fs_err::read_to_string(test_dir.join("pixi.lock")).unwrap();
     pixi_core::environment::get_update_lock_file_and_prefix(
         &project.default_environment(),
+        None,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,

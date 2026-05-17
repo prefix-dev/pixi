@@ -332,7 +332,7 @@ impl TomlManifest {
 
                 if let Some(previous_span) = features_seen_where.insert(feature_name, *span) {
                     return Err(TomlError::from(
-                        GenericError::new(format!("The feature '{}' is included more than once.", &feature.name))
+                        GenericError::new(format!("The feature '{}' is included more than once.", feature.name))
                             .with_span((*span).into())
                             .with_span_label("the feature is included here")
                             .with_help("Since the order of the features matters, a duplicate feature is ambiguous")
@@ -367,17 +367,15 @@ impl TomlManifest {
                 ));
             }
 
-            // Check if there are no conflicts in pypi options between features
+            // Check that there are no conflicts in pypi options between features.
+            // The workspace-level pypi-options act as an always-applied base
+            // and are intentionally allowed to be overridden by feature-level
+            // options, so they are not part of this conflict check; we only
+            // verify that the features included in this environment do not
+            // disagree with each other on any single-assignment field.
             if let Err(err) = used_features
                 .iter()
-                .filter_map(|feature| {
-                    if feature.pypi_options().is_none() {
-                        // Use the project default features
-                        workspace.value.pypi_options.as_ref()
-                    } else {
-                        feature.pypi_options()
-                    }
-                })
+                .filter_map(|feature| feature.pypi_options())
                 .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))
             {
                 return Err(TomlError::from(

@@ -11,8 +11,9 @@ use pixi_compute_engine::DataStore;
 use rattler::install::{Installer, InstallerError};
 use rattler_conda_types::{Platform, RepoDataRecord, prefix::Prefix};
 
-use crate::compute_data::{HasAllowExecuteLinkScripts, HasDownloadClient, HasPackageCache};
+use crate::compute_data::{HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasPackageCache};
 use crate::install_pixi::reporter::WrappingInstallReporter;
+use pixi_compute_network::HasDownloadClient;
 
 /// Install the given binary records into `prefix`.
 ///
@@ -37,7 +38,8 @@ pub async fn install_binary_records(
         .with_target_platform(target_platform)
         .with_download_client(data.download_client().clone())
         .with_package_cache(data.package_cache().clone())
-        .with_execute_link_scripts(data.allow_execute_link_scripts());
+        .with_execute_link_scripts(data.allow_execute_link_scripts())
+        .with_link_options(data.allow_link_options());
 
     if let Some(reporter) = reporter {
         installer = installer.with_reporter(WrappingInstallReporter(reporter));

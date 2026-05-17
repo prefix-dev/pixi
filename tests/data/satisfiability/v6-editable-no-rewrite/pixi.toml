@@ -1,6 +1,6 @@
 [workspace]
-name = "yohane"
 channels = ["conda-forge"]
+name = "yohane"
 platforms = ["linux-64"]
 
 [dependencies]

@@ -2,6 +2,12 @@
 //! environments. Source specs are rejected up-front. The prefix path is
 //! derived from the spec hash and locked with [`AsyncPrefixGuard`] for
 //! cross-process safety.
+//!
+//! This key has no per-key reporter trait of its own. The ephemeral
+//! prefix is populated as part of backend instantiation, so it reads
+//! [`InstantiateBackendReporter`](crate::reporter::InstantiateBackendReporter)
+//! from the engine `DataStore` to build the rattler installer's
+//! per-call reporter.
 
 use std::{
     collections::BTreeMap,
@@ -30,12 +36,14 @@ use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::SolveCondaEnvironmentSpec;
-use crate::compute_data::{HasCacheDirs, HasGateway, HasReporter};
+use crate::cache::markers::BuildBackendsDir;
+use crate::compute_data::{HasGateway, HasInstantiateBackendReporter};
 use crate::injected_config::{ChannelConfigKey, ToolBuildEnvironmentKey};
 use crate::install_binary::install_binary_records;
-use crate::reporter_context::current_reporter_context;
+use crate::reporter::InstantiateBackendReporter;
 use crate::solve_binary::SolveCondaExt;
 use crate::solve_conda::SolveCondaEnvironmentError;
+use pixi_compute_cache_dirs::CacheDirsExt;
 
 /// Specification for an ephemeral, binary-only conda environment.
 ///
@@ -209,14 +217,8 @@ impl Key for EphemeralEnvKey {
         // pixi-build-cmake / pixi-build-python — even when the
         // prefix on disk was already provisioned by a previous run.
         //
-        // The borrow of `ctx.global_data()` is scoped here so the
-        // subsequent mutable `ctx.compute(...)` calls below can take
-        // their own borrow without conflict.
         let cache_key = spec.cache_key();
-        let prefix_path = {
-            let data: &DataStore = ctx.global_data();
-            data.cache_dirs().build_backends().join(&cache_key)
-        };
+        let prefix_path = ctx.cache_dir::<BuildBackendsDir>().await.join(&cache_key);
         if let Some(cached) = read_cached_marker(prefix_path.as_std_path()).await {
             return Ok(Arc::new(cached));
         }
@@ -295,8 +297,8 @@ impl Key for EphemeralEnvKey {
             .collect::<Vec<_>>();
         let data: &DataStore = ctx.global_data();
         let install_reporter = data
-            .reporter()
-            .and_then(|r| r.create_install_reporter(current_reporter_context()));
+            .instantiate_backend_reporter()
+            .and_then(|r| InstantiateBackendReporter::create_install_reporter(r.as_ref()));
         install_binary_records(
             data,
             &prefix,

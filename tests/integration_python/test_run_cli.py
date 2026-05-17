@@ -1694,7 +1694,21 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
         [pixi, "run", "--manifest-path", manifest, "start"], cwd=tmp_data_path
     )
 
-    time.sleep(1)  # wait for the process to start
+    # Wait for the child to install its SIGINT handler. Sleeping a fixed
+    # interval here is flaky on slower runners (notably macOS-aarch64): if the
+    # signal arrives before Python registers the handler, the default action
+    # kills the process with exit code 130 (128 + SIGINT).
+    ready_file = tmp_data_path.joinpath("ready.txt")
+    deadline = time.monotonic() + 30
+    while not ready_file.exists():
+        if process.poll() is not None:
+            raise AssertionError(
+                f"pixi exited before the task became ready (code {process.returncode})"
+            )
+        if time.monotonic() > deadline:
+            process.kill()
+            raise AssertionError("Timed out waiting for the task to install its SIGINT handler")
+        time.sleep(0.1)
 
     # send a SIGINT to the process
     process.send_signal(signal.SIGINT)

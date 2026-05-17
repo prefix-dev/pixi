@@ -583,6 +583,7 @@ impl InstallFilter {
 /// To updated multiple prefixes at once, use [`get_update_lock_file_and_prefixes`].
 pub async fn get_update_lock_file_and_prefix<'env>(
     environment: &Environment<'env>,
+    progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
@@ -590,6 +591,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let (lock_file, prefixes) = get_update_lock_file_and_prefixes(
         std::slice::from_ref(environment),
+        progress.clone(),
         update_mode,
         update_lock_file_options,
         reinstall_packages,
@@ -609,6 +611,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
 /// up-to-date.
 pub async fn get_update_lock_file_and_prefixes<'env>(
     environments: &[Environment<'env>],
+    progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
@@ -645,12 +648,15 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
 
     // Ensure that the lock-file is up-to-date
     let lock_file = workspace
-        .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: update_lock_file_options.lock_file_usage,
-            no_install,
-            max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
-            ..Default::default()
-        })
+        .update_lock_file(
+            progress.clone(),
+            UpdateLockFileOptions {
+                lock_file_usage: update_lock_file_options.lock_file_usage,
+                no_install,
+                max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
+                ..Default::default()
+            },
+        )
         .await?
         .0;
 

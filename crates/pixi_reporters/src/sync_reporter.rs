@@ -5,12 +5,10 @@ use crate::{
 use futures::{Stream, StreamExt};
 use indicatif::MultiProgress;
 use parking_lot::Mutex;
-use pixi_command_dispatcher::{
-    BackendSourceBuildSpec, ReporterContext,
-    reporter::{BackendSourceBuildId, BackendSourceBuildReporter},
-};
+use pixi_command_dispatcher::{BackendSourceBuildSpec, reporter::BackendSourceBuildReporter};
+use pixi_compute_reporters::{OperationId, OperationRegistry};
 use pixi_progress::ProgressBarPlacement;
-use rattler::{install::Transaction, package_cache::CacheReporter};
+use rattler::install::Transaction;
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use std::sync::LazyLock;
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
@@ -19,12 +17,17 @@ use uv_configuration::RAYON_INITIALIZE;
 
 #[derive(Clone)]
 pub struct SyncReporter {
+    registry: Arc<OperationRegistry>,
     multi_progress: MultiProgress,
     combined_inner: Arc<Mutex<CombinedInstallReporterInner>>,
+    /// `OperationId` → bar slot in `preparing_progress_bar`. Lets
+    /// `on_started` / `on_finished` find the bar created at `on_queued`.
+    build_bars: Arc<Mutex<HashMap<OperationId, usize>>>,
 }
 
 impl SyncReporter {
     pub fn new(
+        registry: Arc<OperationRegistry>,
         multi_progress: MultiProgress,
         progress_bar_placement: ProgressBarPlacement,
     ) -> Self {
@@ -33,8 +36,10 @@ impl SyncReporter {
             progress_bar_placement,
         )));
         Self {
+            registry,
             multi_progress,
             combined_inner,
+            build_bars: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -62,42 +67,32 @@ impl SyncReporter {
             combined: Arc::clone(&self.combined_inner),
         }
     }
-
-    /// Creates a new reporter instance that can used to report the progress of
-    /// fetching a single `RepoDataRecord` to the cache.
-    pub fn create_cache_reporter(
-        &self,
-        repo_data_record: &RepoDataRecord,
-    ) -> Box<dyn CacheReporter> {
-        Box::new(SyncCacheReporter::new(
-            repo_data_record,
-            Arc::clone(&self.combined_inner),
-        ))
-    }
 }
 
 impl BackendSourceBuildReporter for SyncReporter {
-    fn on_queued(
-        &self,
-        _reason: Option<ReporterContext>,
-        env: &BackendSourceBuildSpec,
-    ) -> BackendSourceBuildId {
+    fn on_queued(&self, env: &BackendSourceBuildSpec) -> OperationId {
         // Drive the "building <pkg>" progress entry directly from the
-        // backend-build event. The legacy SourceBuildSpec reporter that
-        // used to own this bar has been retired alongside the Key-based
-        // migration.
-        let mut inner = self.combined_inner.lock();
-        let id = inner
+        // backend-build event.
+        let id = self.registry.allocate();
+        let bar = self
+            .combined_inner
+            .lock()
             .preparing_progress_bar
             .on_build_queued(env.name.as_source());
-        BackendSourceBuildId(id)
+        self.build_bars.lock().insert(id, bar);
+        id
     }
 
     fn on_started(
         &self,
-        id: BackendSourceBuildId,
+        id: OperationId,
         mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     ) {
+        let bar = match self.build_bars.lock().get(&id).copied() {
+            Some(bar) => bar,
+            None => return,
+        };
+
         // Enable streaming of the logs from the backend
         let print_backend_output = tracing::event_enabled!(tracing::Level::WARN);
         // Stream the progress of the output to the screen.
@@ -108,7 +103,7 @@ impl BackendSourceBuildReporter for SyncReporter {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         {
             let mut inner = self.combined_inner.lock();
-            inner.preparing_progress_bar.on_build_start(id.0);
+            inner.preparing_progress_bar.on_build_start(bar);
             if !print_backend_output {
                 inner.build_output_receiver = Some(rx);
             }
@@ -130,12 +125,16 @@ impl BackendSourceBuildReporter for SyncReporter {
         });
     }
 
-    fn on_finished(&self, id: BackendSourceBuildId, failed: bool) {
+    fn on_finished(&self, id: OperationId, failed: bool) {
+        let bar = match self.build_bars.lock().remove(&id) {
+            Some(bar) => bar,
+            None => return,
+        };
         // Take the stream that receives the output from the backend so we can drop the
         // memory.
         let build_output_receiver = {
             let mut inner = self.combined_inner.lock();
-            inner.preparing_progress_bar.on_build_finished(id.0);
+            inner.preparing_progress_bar.on_build_finished(bar);
             inner.build_output_receiver.take()
         };
 
@@ -244,23 +243,6 @@ impl CombinedInstallReporterInner {
                 );
             }
         }
-    }
-
-    /// Called to start progress on populating the cache for a single
-    /// `RepoDataRecord`.
-    fn start_populate_single_cache_entry(
-        &mut self,
-        record: &RepoDataRecord,
-    ) -> (TransactionId, usize) {
-        let transaction_id = TransactionId(
-            self.next_id
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-        );
-        let operation_id = 0;
-        let cache_entry_id = self.preparing_progress_bar.on_entry_start(record);
-        self.cache_entry_id
-            .insert((transaction_id, operation_id), cache_entry_id);
-        (transaction_id, cache_entry_id)
     }
 
     fn on_transaction_operation_start(&mut self, _id: TransactionId, _operation: usize) {}
@@ -461,55 +443,5 @@ pub struct TransactionId(pub usize);
 impl TransactionId {
     pub fn new(id: usize) -> Self {
         TransactionId(id)
-    }
-}
-
-struct SyncCacheReporter {
-    combined_inner: Arc<Mutex<CombinedInstallReporterInner>>,
-    transaction_id: TransactionId,
-    cache_entry_id: usize,
-}
-
-impl SyncCacheReporter {
-    pub fn new(
-        record: &RepoDataRecord,
-        combined_inner: Arc<Mutex<CombinedInstallReporterInner>>,
-    ) -> Self {
-        let (transaction_id, cache_entry_id) = {
-            let mut inner = combined_inner.lock();
-            inner.start_populate_single_cache_entry(record)
-        };
-        Self {
-            combined_inner,
-            transaction_id,
-            cache_entry_id,
-        }
-    }
-}
-
-impl CacheReporter for SyncCacheReporter {
-    fn on_validate_start(&self) -> usize {
-        let mut inner = self.combined_inner.lock();
-        inner.on_validate_start(self.transaction_id, self.cache_entry_id)
-    }
-
-    fn on_validate_complete(&self, index: usize) {
-        let mut inner = self.combined_inner.lock();
-        inner.on_validate_complete(self.transaction_id, index);
-    }
-
-    fn on_download_start(&self) -> usize {
-        let mut inner = self.combined_inner.lock();
-        inner.on_download_start(self.transaction_id, self.cache_entry_id)
-    }
-
-    fn on_download_progress(&self, index: usize, progress: u64, total: Option<u64>) {
-        let mut inner = self.combined_inner.lock();
-        inner.on_download_progress(self.transaction_id, index, progress, total);
-    }
-
-    fn on_download_completed(&self, index: usize) {
-        let mut inner = self.combined_inner.lock();
-        inner.on_download_completed(self.transaction_id, index);
     }
 }

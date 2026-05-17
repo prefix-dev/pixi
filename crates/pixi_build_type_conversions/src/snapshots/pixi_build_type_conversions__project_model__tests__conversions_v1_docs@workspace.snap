@@ -4,7 +4,7 @@ expression: project_model
 ---
 {
   "name": "python_rich",
-  "buildString": null,
+  "buildStringPrefix": null,
   "buildNumber": null,
   "version": "0.1.0",
   "description": null,
@@ -61,7 +61,8 @@ expression: project_model
             "license": null
           }
         }
-      }
+      },
+      "runConstraints": {}
     },
     "targets": {}
   }

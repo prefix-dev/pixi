@@ -11,15 +11,16 @@
 use std::sync::Arc;
 
 use pixi_compute_engine::DataStore;
-use pixi_git::resolver::GitResolver;
-use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
-use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
 
-use crate::cache::{BuildBackendMetadataCache, CacheDirs};
-use crate::reporter::Reporter;
+use crate::cache::BuildBackendMetadataCache;
+use crate::reporter::{
+    BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
+    InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter, SourceMetadataReporter,
+    SourceRecordReporter,
+};
 
 /// Access the conda repodata gateway from global data.
 pub trait HasGateway {
@@ -29,50 +30,6 @@ pub trait HasGateway {
 impl HasGateway for DataStore {
     fn gateway(&self) -> &Gateway {
         self.get::<Gateway>()
-    }
-}
-
-/// Access the git resolver from global data.
-pub trait HasGitResolver {
-    fn git_resolver(&self) -> &GitResolver;
-}
-
-impl HasGitResolver for DataStore {
-    fn git_resolver(&self) -> &GitResolver {
-        self.get::<GitResolver>()
-    }
-}
-
-/// Access the URL resolver from global data.
-pub trait HasUrlResolver {
-    fn url_resolver(&self) -> &UrlResolver;
-}
-
-impl HasUrlResolver for DataStore {
-    fn url_resolver(&self) -> &UrlResolver {
-        self.get::<UrlResolver>()
-    }
-}
-
-/// Access the download client from global data.
-pub trait HasDownloadClient {
-    fn download_client(&self) -> &LazyClient;
-}
-
-impl HasDownloadClient for DataStore {
-    fn download_client(&self) -> &LazyClient {
-        self.get::<LazyClient>()
-    }
-}
-
-/// Access the cache directories from global data.
-pub trait HasCacheDirs {
-    fn cache_dirs(&self) -> &CacheDirs;
-}
-
-impl HasCacheDirs for DataStore {
-    fn cache_dirs(&self) -> &CacheDirs {
-        self.get::<CacheDirs>()
     }
 }
 
@@ -87,14 +44,91 @@ impl HasBuildBackendMetadataCache for DataStore {
     }
 }
 
-/// Access the optional dispatcher reporter from global data.
-pub trait HasReporter {
-    fn reporter(&self) -> Option<&Arc<dyn Reporter>>;
+/// Access the per-key conda-solve reporter.
+pub trait HasCondaSolveReporter {
+    fn conda_solve_reporter(&self) -> Option<&Arc<dyn CondaSolveReporter>>;
 }
 
-impl HasReporter for DataStore {
-    fn reporter(&self) -> Option<&Arc<dyn Reporter>> {
-        self.try_get::<Arc<dyn Reporter>>()
+impl HasCondaSolveReporter for DataStore {
+    fn conda_solve_reporter(&self) -> Option<&Arc<dyn CondaSolveReporter>> {
+        self.try_get::<Arc<dyn CondaSolveReporter>>()
+    }
+}
+
+/// Access the per-key pixi-solve reporter.
+pub trait HasPixiSolveReporter {
+    fn pixi_solve_reporter(&self) -> Option<&Arc<dyn PixiSolveReporter>>;
+}
+
+impl HasPixiSolveReporter for DataStore {
+    fn pixi_solve_reporter(&self) -> Option<&Arc<dyn PixiSolveReporter>> {
+        self.try_get::<Arc<dyn PixiSolveReporter>>()
+    }
+}
+
+/// Access the per-key pixi-install reporter.
+pub trait HasPixiInstallReporter {
+    fn pixi_install_reporter(&self) -> Option<&Arc<dyn PixiInstallReporter>>;
+}
+
+impl HasPixiInstallReporter for DataStore {
+    fn pixi_install_reporter(&self) -> Option<&Arc<dyn PixiInstallReporter>> {
+        self.try_get::<Arc<dyn PixiInstallReporter>>()
+    }
+}
+
+/// Access the per-key instantiate-backend reporter.
+pub trait HasInstantiateBackendReporter {
+    fn instantiate_backend_reporter(&self) -> Option<&Arc<dyn InstantiateBackendReporter>>;
+}
+
+impl HasInstantiateBackendReporter for DataStore {
+    fn instantiate_backend_reporter(&self) -> Option<&Arc<dyn InstantiateBackendReporter>> {
+        self.try_get::<Arc<dyn InstantiateBackendReporter>>()
+    }
+}
+
+/// Access the per-key build-backend-metadata reporter.
+pub trait HasBuildBackendMetadataReporter {
+    fn build_backend_metadata_reporter(&self) -> Option<&Arc<dyn BuildBackendMetadataReporter>>;
+}
+
+impl HasBuildBackendMetadataReporter for DataStore {
+    fn build_backend_metadata_reporter(&self) -> Option<&Arc<dyn BuildBackendMetadataReporter>> {
+        self.try_get::<Arc<dyn BuildBackendMetadataReporter>>()
+    }
+}
+
+/// Access the per-key source-metadata reporter.
+pub trait HasSourceMetadataReporter {
+    fn source_metadata_reporter(&self) -> Option<&Arc<dyn SourceMetadataReporter>>;
+}
+
+impl HasSourceMetadataReporter for DataStore {
+    fn source_metadata_reporter(&self) -> Option<&Arc<dyn SourceMetadataReporter>> {
+        self.try_get::<Arc<dyn SourceMetadataReporter>>()
+    }
+}
+
+/// Access the per-key source-record reporter.
+pub trait HasSourceRecordReporter {
+    fn source_record_reporter(&self) -> Option<&Arc<dyn SourceRecordReporter>>;
+}
+
+impl HasSourceRecordReporter for DataStore {
+    fn source_record_reporter(&self) -> Option<&Arc<dyn SourceRecordReporter>> {
+        self.try_get::<Arc<dyn SourceRecordReporter>>()
+    }
+}
+
+/// Access the per-key backend-source-build reporter.
+pub trait HasBackendSourceBuildReporter {
+    fn backend_source_build_reporter(&self) -> Option<&Arc<dyn BackendSourceBuildReporter>>;
+}
+
+impl HasBackendSourceBuildReporter for DataStore {
+    fn backend_source_build_reporter(&self) -> Option<&Arc<dyn BackendSourceBuildReporter>> {
+        self.try_get::<Arc<dyn BackendSourceBuildReporter>>()
     }
 }
 
@@ -124,6 +158,41 @@ impl HasAllowExecuteLinkScripts for DataStore {
         self.try_get::<AllowExecuteLinkScripts>()
             .map(|v| v.0)
             .unwrap_or(false)
+    }
+}
+
+/// Configured allow/disallow preferences for installation link methods,
+/// stored in the [`DataStore`] keyed by `TypeId`. Mirrors the fields on
+/// [`rattler::install::LinkOptions`] but is `Copy`/`Clone`/`Debug` so it
+/// can live in the data store.
+#[derive(Copy, Clone, Debug, Default)]
+pub struct AllowLinkOptions {
+    pub allow_symbolic_links: Option<bool>,
+    pub allow_hard_links: Option<bool>,
+    pub allow_ref_links: Option<bool>,
+}
+
+impl From<AllowLinkOptions> for rattler::install::LinkOptions {
+    fn from(opts: AllowLinkOptions) -> Self {
+        rattler::install::LinkOptions {
+            allow_symbolic_links: opts.allow_symbolic_links,
+            allow_hard_links: opts.allow_hard_links,
+            allow_ref_links: opts.allow_ref_links,
+        }
+    }
+}
+
+/// Access the configured link-method preferences.
+pub trait HasAllowLinkOptions {
+    fn allow_link_options(&self) -> rattler::install::LinkOptions;
+}
+
+impl HasAllowLinkOptions for DataStore {
+    fn allow_link_options(&self) -> rattler::install::LinkOptions {
+        self.try_get::<AllowLinkOptions>()
+            .copied()
+            .unwrap_or_default()
+            .into()
     }
 }
 

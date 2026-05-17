@@ -10,10 +10,10 @@ name = "pixi-build-cmake"
 version = "0.3.*"
 
 [package.host-dependencies]
-python = ">=3.11"
-pybind11 = ">=2.13"
 particle_core = { path = "../particle_core" }
 particle_cpp = { path = "../particle_cpp" }
+pybind11 = ">=2.13"
+python = ">=3.11"
 
 [package.run-dependencies]
 # TODO: drop once pixi-build emits run-exports for source packages; for now we

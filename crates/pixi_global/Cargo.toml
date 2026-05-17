@@ -17,7 +17,6 @@ fancy_display = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
-indicatif = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }

@@ -109,6 +109,10 @@ You can import `environment.yml` files into a Pixi workspace — see our [import
     ```shell
     pixi workspace export conda-environment
     ```
+    Pass `--from-lockfile` to render a frozen environment file using the exact versions from your `pixi.lock`:
+    ```shell
+    pixi workspace export conda-environment --from-lockfile
+    ```
     Additionally you can export a [conda explicit specification](../reference/cli/pixi/workspace/export.md).
 
 ## Troubleshooting

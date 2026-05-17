@@ -261,11 +261,11 @@ impl LockFileDiff {
                     format!(
                         "{} {}",
                         b.package_record.version.as_str(),
-                        &b.package_record.build
+                        b.package_record.build
                     )
                 }
                 CondaPackageData::Source(s) => {
-                    format!("@ {}", &s.location)
+                    format!("@ {}", s.location)
                 }
             }
         }

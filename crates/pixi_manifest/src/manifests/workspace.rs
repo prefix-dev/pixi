@@ -1377,7 +1377,7 @@ start = "python -m flask run --port=5050"
                     target.tasks.iter().map(move |(name, task)| {
                         format!(
                             "{}/{} = {:?}",
-                            &selector_name,
+                            selector_name,
                             name.as_str(),
                             task.as_single_command(&TaskRenderContext::default())
                                 .ok()
