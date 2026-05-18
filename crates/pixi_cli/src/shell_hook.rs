@@ -220,10 +220,13 @@ mod tests {
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 
-        let script =
-            generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)
-                .await
-                .unwrap();
+        let script = generate_activation_script(
+            Some(ShellEnum::Bash(Bash::default())),
+            &environment,
+            &project,
+        )
+        .await
+        .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
 

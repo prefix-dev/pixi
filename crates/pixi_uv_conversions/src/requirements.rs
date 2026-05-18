@@ -132,6 +132,7 @@ pub fn as_uv_req(
                         .and_then(|s| s.map(uv_git_types::GitOid::from_str))
                         .transpose()
                         .expect("could not parse sha"),
+                    uv_git_types::GitLfs::Disabled,
                 )?,
                 subdirectory: if subdirectory.is_empty() {
                     None
@@ -172,12 +173,11 @@ pub fn as_uv_req(
             if canonicalized.is_dir() {
                 RequirementSource::Directory {
                     install_path: canonicalized.into_boxed_path(),
-                    // Always set editable to false during resolution.
-                    // Editability doesn't affect resolution and is looked up from the
-                    // manifest at install time. This allows different environments in a
-                    // solve-group to have different editability settings without causing
-                    // "conflicting URLs" errors from the uv resolver.
-                    editable: Some(false),
+                    // Editability is applied at install time from the manifest
+                    // (`is_editable_from_manifest`). Leaving it unspecified
+                    // avoids uv "conflicting URLs" errors across solve-group
+                    // environments and transitive `[tool.uv.sources]` (#6121).
+                    editable: None,
                     url: verbatim,
                     // TODO: we could see if we ever need this
                     // AFAICS it would be useful for constraining dependencies
@@ -371,7 +371,8 @@ mod tests {
             git: uv_git_types::GitUrl::from_fields(
                 DisplaySafeUrl::parse("ssh://git@github.com/user/test.git").unwrap(),
                 uv_git_types::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
-                Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap())).unwrap(),
+                Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
+                uv_git_types::GitLfs::Disabled).unwrap(),
             subdirectory: Default::default(),
             url: VerbatimUrl::from_url(DisplaySafeUrl::parse("git+ssh://git@github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
         };
@@ -403,6 +404,7 @@ mod tests {
                     uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b")
                         .unwrap(),
                 ),
+                uv_git_types::GitLfs::Disabled,
             )
             .unwrap(),
             subdirectory: Default::default(),

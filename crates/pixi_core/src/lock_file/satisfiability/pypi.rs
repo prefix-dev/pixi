@@ -20,7 +20,7 @@ use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_options_to_build_options,
-    pypi_options_to_index_locations, to_index_strategy,
+    pypi_options_to_index_locations, to_index_strategy, to_requirements,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
@@ -28,7 +28,7 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
@@ -557,13 +557,11 @@ async fn read_local_package_metadata(
     );
 
     let registry_client = {
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts.clone())
-            .markers(&marker_environment)
-            .keyring(ctx.uv_context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(ctx.uv_context.use_native_tls)
-            .extra_middleware(ctx.uv_context.extra_middleware.clone());
+        let base_client_builder = ctx.uv_context.base_client_builder(
+            allow_insecure_hosts.clone(),
+            Some(&marker_environment),
+            Connectivity::Online,
+        );
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
@@ -629,8 +627,8 @@ async fn read_local_package_metadata(
     .with_index_strategy(index_strategy)
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
     .with_shared_state(ctx.uv_context.shared_state.fork())
-    .with_source_strategy(ctx.uv_context.source_strategy)
-    .with_concurrency(ctx.uv_context.concurrency);
+    .with_no_sources(ctx.uv_context.no_sources.clone())
+    .with_concurrency(ctx.uv_context.concurrency.clone());
 
     // Get or create conda prefix updater for the environment
     // Use best_platform() because we can only install/run Python on the host platform
@@ -690,7 +688,7 @@ async fn read_local_package_metadata(
     let database = DistributionDatabase::new(
         &registry_client,
         &lazy_build_dispatch,
-        ctx.uv_context.concurrency.downloads,
+        ctx.uv_context.concurrency.downloads_semaphore.clone(),
     );
 
     // Missing or unparsable pyproject -> trust the lock.
@@ -699,7 +697,7 @@ async fn read_local_package_metadata(
         tracing::debug!(package = %package_name, "no readable pyproject.toml");
         return Ok(None);
     };
-    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) else {
+    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents, pyproject_path.display()) else {
         tracing::debug!(package = %package_name, "pyproject.toml could not be parsed");
         return Ok(None);
     };
@@ -742,22 +740,16 @@ async fn read_local_package_metadata(
         }
     };
 
-    // A round-trip failure here would be a uv bug, not "static doesn't
-    // apply", so propagate rather than swallow as `Ok(None)`.
-    let requires_dist_vec: Vec<pep508_rs::Requirement> = requires_dist
-        .requires_dist
-        .iter()
-        .map(|req| {
-            req.to_string()
-                .parse::<pep508_rs::Requirement>()
-                .map_err(|e| {
-                    PlatformUnsat::FailedToReadLocalMetadata(
-                        package_name.clone(),
-                        format!("Invalid requirement: {e}"),
-                    )
-                })
-        })
-        .collect::<Result<_, _>>()?;
+    // Match the lockfile-write serializer so both sides of
+    // `compare_metadata` agree on `[tool.uv.sources]` requirements
+    // (#6049 follow-up).
+    let requires_dist_vec: Vec<pep508_rs::Requirement> =
+        to_requirements(requires_dist.requires_dist.iter()).map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Invalid requirement: {e}"),
+            )
+        })?;
 
     let metadata = pypi_metadata::LocalPackageMetadata {
         version,

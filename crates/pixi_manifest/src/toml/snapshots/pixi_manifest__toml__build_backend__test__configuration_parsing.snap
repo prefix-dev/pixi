@@ -120,4 +120,5 @@ TomlPackageBuild {
     ],
     build_string_prefix: None,
     build_number: None,
+    secrets: {},
 }

@@ -906,6 +906,14 @@ class Build(StrictBaseModel):
     build_number: UnsignedInt | None = Field(
         None, description="The build number to record in the produced package"
     )
+    secrets: list[NonEmptyStr] | None = Field(
+        None,
+        description=(
+            "Names of environment variables to expose as secrets to the build script. "
+            "Values are read from the host environment at build time; only the names "
+            "live in the manifest. Forwarded to rattler-build's `build.script.secrets`."
+        ),
+    )
 
 
 class BuildBackend(MatchspecTable):

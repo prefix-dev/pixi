@@ -146,6 +146,7 @@ impl InstalledDistBuilder {
                     .reference()
                     .as_str()
                     .map(ToString::to_string),
+                git_lfs: None,
             },
         };
 

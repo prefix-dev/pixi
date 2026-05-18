@@ -6,11 +6,11 @@ use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
 };
-use std::sync::LazyLock;
 use std::{
     collections::HashMap,
     ffi::OsStr,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 use thiserror::Error;
 use uv_configuration::RAYON_INITIALIZE;

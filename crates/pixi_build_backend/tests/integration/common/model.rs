@@ -134,6 +134,7 @@ pub(crate) fn convert_test_model_to_project_model_v1(test_model: TestProjectMode
         targets: Some(targets_v1),
         build_number: None,
         build_string_prefix: None,
+        secrets: std::collections::BTreeSet::new(),
     }
 }
 

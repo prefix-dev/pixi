@@ -340,7 +340,7 @@ pub fn into_pinned_git_spec(
     // uv stores the percent-encoded drive-letter form internally (see
     // `encode_windows_drive_letter`). Decode it back here so the lock file
     // shows `file:///D:/...` rather than `file:///D%3A/...`.
-    let repository: url::Url = dist.git.repository().clone().into();
+    let repository: url::Url = (*dist.git.repository()).clone().into();
     PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
 }
 
@@ -372,6 +372,7 @@ pub fn to_parsed_git_url(
             },
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),
+            uv_git_types::GitLfs::Disabled,
         )
         .into_diagnostic()?,
         if git_source.subdirectory.is_empty() {
@@ -677,7 +678,7 @@ pub fn configure_insecure_hosts_for_tls_bypass(
 
 fn to_exclude_newer_timestamp(
     exclude_newer: chrono::DateTime<chrono::Utc>,
-) -> uv_resolver::ExcludeNewerTimestamp {
+) -> uv_resolver::ExcludeNewerValue {
     let seconds_since_epoch = exclude_newer.timestamp();
     let nanoseconds = exclude_newer.timestamp_subsec_nanos();
     let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
@@ -837,5 +838,38 @@ mod tests {
             }
             other => panic!("expected a VersionOrUrl::Url, got {other:?}"),
         }
+    }
+
+    /// Index-bearing registry sources must serialize without uv's
+    /// `(index: <url>)` `Display` suffix; `pep508_rs` rejects it (#6049).
+    #[test]
+    fn to_requirements_strips_index_suffix_from_registry_source() {
+        use std::sync::Arc;
+        use uv_distribution_types::{
+            IndexFormat, IndexMetadata, IndexUrl, Requirement as UvRequirement, RequirementSource,
+        };
+        use uv_pep508::MarkerTree;
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("isaaclab").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Registry {
+                specifier: uv_pep440::VersionSpecifiers::empty(),
+                index: Some(IndexMetadata {
+                    url: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(
+                        DisplaySafeUrl::parse("https://pypi.nvidia.com/simple/").unwrap(),
+                    ))),
+                    format: IndexFormat::Simple,
+                }),
+                conflict: None,
+            },
+            origin: None,
+        };
+        assert!(uv_req.to_string().contains("(index:"));
+
+        let converted = to_requirements(std::iter::once(&uv_req)).unwrap();
+        assert_eq!(converted[0].to_string(), "isaaclab");
     }
 }

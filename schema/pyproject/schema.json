@@ -122,6 +122,15 @@
           "type": "object",
           "additionalProperties": true
         },
+        "secrets": {
+          "title": "Secrets",
+          "description": "Names of environment variables to expose as secrets to the build script. Values are read from the host environment at build time; only the names live in the manifest. Forwarded to rattler-build's `build.script.secrets`.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
         "source": {
           "$ref": "#/$defs/SourceLocation",
           "description": "The source from which to build the package",

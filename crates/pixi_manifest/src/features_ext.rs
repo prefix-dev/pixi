@@ -297,31 +297,39 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
 
     /// Returns the pypi options for this collection.
     ///
-    /// The pypi options of all features are combined. They will be combined in
-    /// the order that they are defined in the manifest.
-    /// The index-url is a special case and can only be defined once. This
-    /// should have been verified beforehand.
+    /// The workspace-level pypi-options act as a base that always applies,
+    /// regardless of which features the environment includes (notably it still
+    /// applies when `no-default-feature = true`). Feature-level pypi-options
+    /// are unioned together and then overlaid on top of the workspace base:
+    /// single-assignment fields set by a feature override the workspace value,
+    /// while list-valued and union-like fields are merged.
+    ///
+    /// Multiple features may set the same single-assignment value (e.g. the
+    /// same `index-url`); conflicting feature-level values for the same
+    /// single-assignment field should have been rejected at parse time.
     fn pypi_options(&self) -> PypiOptions {
-        // Collect all the pypi-options from the features in one set,
-        // deduplicate them and sort them on feature index, default feature comes last.
-        let pypi_options: Vec<_> = self
-            .features()
-            .filter_map(|feature| {
-                if feature.pypi_options().is_none() {
-                    self.workspace_manifest().workspace.pypi_options.as_ref()
-                } else {
-                    feature.pypi_options()
-                }
-            })
-            .collect();
+        // The workspace-level pypi-options form the base that always applies.
+        let base = self
+            .workspace_manifest()
+            .workspace
+            .pypi_options
+            .clone()
+            .unwrap_or_default();
 
-        // Merge all the pypi options into one.
-        pypi_options
-            .into_iter()
+        // Union the feature-level pypi-options together. Equal single-value
+        // fields are permitted; conflicts are caught at parse time, so the
+        // `expect` is safe here.
+        let feature_opts = self
+            .features()
+            .filter_map(|feature| feature.pypi_options())
             .fold(PypiOptions::default(), |acc, opts| {
                 acc.union(opts)
                     .expect("merging of pypi-options should already have been checked")
-            })
+            });
+
+        // Overlay features on top of the workspace base: features win on
+        // single-assignment fields, lists and union-like fields are merged.
+        base.overlay(&feature_opts)
     }
 }
 

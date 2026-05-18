@@ -35,7 +35,6 @@ use rattler_conda_types::Platform;
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
-use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient};
 use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
@@ -904,13 +903,22 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let distribution_database = DistributionDatabase::new(
             setup.registry_client.as_ref(),
             &build_dispatch,
-            self.context_config.uv_context.concurrency.downloads,
+            self.context_config
+                .uv_context
+                .concurrency
+                .downloads_semaphore
+                .clone(),
         );
 
         // Before hitting the network let's make sure the credentials are available to
-        // uv
+        // uv. As of uv 0.9.16, the global credentials cache moved to a per-client
+        // `CredentialsCache` reachable via the `BaseClient` underneath
+        // `RegistryClient`'s `CachedClient`.
+        let base_client = setup.registry_client.cached_client().uncached();
         for url in setup.index_locations.indexes().map(|index| index.url()) {
-            let success = store_credentials_from_url(url.url());
+            let success = base_client
+                .credentials_cache()
+                .store_credentials_from_url(url.url());
             tracing::debug!("Stored credentials for {}: {}", url, success);
         }
 
@@ -974,9 +982,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &setup.build_options,
             &self.context_config.uv_context.hash_strategy,
             setup.exclude_newer.clone(),
-            self.context_config.uv_context.source_strategy,
+            self.context_config.uv_context.no_sources.clone(),
             self.context_config.uv_context.workspace_cache.clone(),
-            self.context_config.uv_context.concurrency,
+            self.context_config.uv_context.concurrency.clone(),
             self.context_config.uv_context.preview,
         )
         // Important: this passes any CONDA activation to the uv build process

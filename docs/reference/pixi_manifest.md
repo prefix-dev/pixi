@@ -490,9 +490,15 @@ More information in the [system requirements documentation](../workspace/system_
 ## The `pypi-options` table
 
 The `pypi-options` table is used to define options that are specific to PyPI registries.
-These options can be specified either at the root level, which will add it to the default options feature,
-or on feature level, which will create a union of these options when the features are included in the
-environment.
+It can appear in three scopes:
+
+- `[workspace.pypi-options]`: the workspace base. Always applied to every environment, including those that set `no-default-feature = true`.
+- `[pypi-options]` at the root of the manifest: shorthand for the default feature's options. Only applied to environments that include the default feature.
+- `[feature.<name>.pypi-options]`: per-feature options, applied to environments that include that feature.
+
+When an environment is resolved, the workspace base is used as the starting point and the options of all included features are overlaid on top. For single-assignment fields (`index-url`, `index-strategy`, `prerelease-mode`, `skip-wheel-filename-check`) a feature value overrides the workspace value; list-valued fields (`extra-index-urls`, `find-links`) and union-like fields (`no-build`, `no-binary`, `no-build-isolation`) are merged.
+
+Two features in the same environment may set the same single-assignment value, but conflicting values across features produce a parse-time error.
 
 The options that can be defined are:
 
@@ -1330,6 +1336,7 @@ The build system is a table that can contain the following fields:
 - `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
   - Each target can have its own `config` table to override or extend the base configuration for specific platforms.
+- `secrets`: a list of environment variable names whose values are exposed to the build script. The names are read from the manifest; the values are looked up in the host environment at build time and forwarded to the build backend through the recipe (`build.script.secrets`), matching rattler-build's behavior. Useful for passing credentials such as `GH_TOKEN` or registry tokens into the build without recording them in the manifest.
 
 More documentation on the backends can be found in the [build backend documentation](../build/backends.md).
 
