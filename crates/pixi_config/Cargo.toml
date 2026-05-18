@@ -14,11 +14,13 @@ clap = { workspace = true, features = ["std", "derive", "env"] }
 console = { workspace = true }
 dirs = { workspace = true }
 fs-err = { workspace = true }
+indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pixi_consts = { workspace = true }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_config = { workspace = true }
 rattler_networking = { workspace = true, features = ["s3"] }
 rattler_repodata_gateway = { workspace = true, features = ["gateway"] }
 reqwest = { workspace = true }

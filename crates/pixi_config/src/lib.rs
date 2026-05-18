@@ -12,17 +12,12 @@ use miette::{Context, IntoDiagnostic, miette};
 use pixi_consts::consts;
 use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, Platform, Version, VersionBumpType, VersionSpec,
-    compression_level::CompressionLevel,
-    package::CondaArchiveType,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
 use reqwest::{NoProxy, Proxy};
-use serde::{
-    Deserialize, Serialize,
-    de::{Error, IntoDeserializer},
-};
+use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
@@ -703,98 +698,12 @@ impl ConfigCliPrompt {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, PartialEq, Eq)]
-pub struct RepodataConfig {
-    #[serde(flatten)]
-    pub default: RepodataChannelConfig,
-
-    #[serde(flatten)]
-    pub per_channel: HashMap<Url, RepodataChannelConfig>,
-}
-
-impl<'de> Deserialize<'de> for RepodataConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct RepodataConfigVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for RepodataConfigVisitor {
-            type Value = RepodataConfig;
-
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str("a repodata config map")
-            }
-
-            fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
-            where
-                M: serde::de::MapAccess<'de>,
-            {
-                let mut default = RepodataChannelConfig::default();
-                let mut per_channel = HashMap::new();
-
-                while let Some(key) = access.next_key::<String>()? {
-                    match key.as_str() {
-                        "disable-bzip2" | "disable_bzip2" => {
-                            default.disable_bzip2 = Some(access.next_value()?);
-                        }
-                        "disable-zstd" | "disable_zstd" => {
-                            default.disable_zstd = Some(access.next_value()?);
-                        }
-                        "disable-sharded" | "disable_sharded" => {
-                            default.disable_sharded = Some(access.next_value()?);
-                        }
-                        other => {
-                            if let Ok(url) = Url::parse(other) {
-                                per_channel.insert(url, access.next_value()?);
-                            } else {
-                                // Unknown/deprecated keys (e.g. `disable-jlap`) are
-                                // silently ignored. `serde_ignored` will report them
-                                // as unused so the "Ignoring '…'" warning fires.
-                                let _: serde::de::IgnoredAny = access.next_value()?;
-                            }
-                        }
-                    }
-                }
-
-                Ok(RepodataConfig {
-                    default,
-                    per_channel,
-                })
-            }
-        }
-
-        deserializer.deserialize_map(RepodataConfigVisitor)
-    }
-}
-
-impl RepodataConfig {
-    pub fn is_empty(&self) -> bool {
-        self.default.is_empty() && self.per_channel.is_empty()
-    }
-
-    /// Merge the given RepodataConfig into the current one.
-    /// `other` is mutable to allow for moving the values out of it.
-    /// The given config will have higher priority
-    pub fn merge(&self, mut other: Self) -> Self {
-        let mut per_channel: HashMap<_, _> = self
-            .per_channel
-            .clone()
-            .into_iter()
-            .map(|(url, config)| {
-                let other_config = other.per_channel.remove(&url).unwrap_or_default();
-                (url, config.merge(other_config))
-            })
-            .collect();
-
-        per_channel.extend(other.per_channel);
-
-        Self {
-            default: self.default.merge(other.default),
-            per_channel,
-        }
-    }
-}
+// `RepodataConfig` and `RepodataChannelConfig` now live in
+// `rattler_config`. The upstream `RepodataConfig` already includes the
+// tolerant `Deserialize` impl that pixi used to maintain locally —
+// unknown/deprecated keys (e.g. `disable-jlap`) are silently consumed
+// and surface as `serde_ignored` warnings.
+pub use rattler_config::config::repodata_config::{RepodataChannelConfig, RepodataConfig};
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCliActivation {
@@ -819,46 +728,15 @@ impl ConfigCliActivation {
     }
 }
 
-#[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub struct RepodataChannelConfig {
-    /// Disable bzip2 compression for repodata.
-    #[serde(alias = "disable_bzip2")] // BREAK: remove to stop supporting snake_case alias
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub disable_bzip2: Option<bool>,
-    /// Disable zstd compression for repodata.
-    #[serde(alias = "disable_zstd")] // BREAK: remove to stop supporting snake_case alias
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub disable_zstd: Option<bool>,
-    /// Disable the use of sharded repodata
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub disable_sharded: Option<bool>,
-}
-
-impl RepodataChannelConfig {
-    pub fn is_empty(&self) -> bool {
-        self.disable_bzip2.is_none()
-            && self.disable_zstd.is_none()
-            && self.disable_sharded.is_none()
-    }
-
-    pub fn merge(&self, other: Self) -> Self {
-        Self {
-            disable_zstd: self.disable_zstd.or(other.disable_zstd),
-            disable_bzip2: self.disable_bzip2.or(other.disable_bzip2),
-            disable_sharded: self.disable_sharded.or(other.disable_sharded),
-        }
-    }
-}
-
-impl From<RepodataChannelConfig> for SourceConfig {
-    fn from(value: RepodataChannelConfig) -> Self {
-        SourceConfig {
-            zstd_enabled: !value.disable_zstd.unwrap_or(false),
-            bz2_enabled: !value.disable_bzip2.unwrap_or(false),
-            sharded_enabled: !value.disable_sharded.unwrap_or(false),
-            cache_action: Default::default(),
-        }
+// Convert a `RepodataChannelConfig` into rattler's `SourceConfig`.
+// Used to be a `From` impl, but both types are now foreign — orphan
+// rule means we need a free function. Call sites use it explicitly.
+fn repodata_channel_to_source(value: RepodataChannelConfig) -> SourceConfig {
+    SourceConfig {
+        zstd_enabled: !value.disable_zstd.unwrap_or(false),
+        bz2_enabled: !value.disable_bzip2.unwrap_or(false),
+        sharded_enabled: !value.disable_sharded.unwrap_or(false),
+        cache_action: Default::default(),
     }
 }
 
@@ -890,18 +768,10 @@ pub struct PyPIConfig {
     pub allow_insecure_host: Vec<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub struct S3Options {
-    /// S3 endpoint URL
-    pub endpoint_url: Url,
-
-    /// The name of the S3 region
-    pub region: String,
-
-    /// Force path style URLs instead of subdomain style
-    pub force_path_style: bool,
-}
+// `S3Options` and the `S3OptionsMap` newtype now live in `rattler_config`.
+// Re-exported so external crates that referenced `pixi_config::S3Options`
+// keep compiling.
+pub use rattler_config::config::s3::{S3Options, S3OptionsMap};
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
@@ -1005,66 +875,11 @@ impl ExperimentalConfig {
     }
 }
 
-/// The default maximum number of concurrent solves that can be run at once.
-/// Defaulting to the number of CPUs available.
-fn default_max_concurrent_solves() -> usize {
-    std::thread::available_parallelism().map_or(1, |n| n.get())
-}
-
-/// The default maximum number of concurrent downloads that can be run at once.
-/// 50 is a reasonable default for the number of concurrent downloads.
-/// More verification is needed to determine the optimal number.
-fn default_max_concurrent_downloads() -> usize {
-    50
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub struct ConcurrencyConfig {
-    /// The maximum number of concurrent solves that can be run at once.
-    // Needing to set this default next to the default of the full struct to avoid serde defaulting
-    // to 0 of partial struct was omitted.
-    #[serde(default = "default_max_concurrent_solves")]
-    pub solves: usize,
-
-    /// The maximum number of concurrent HTTP requests to make.
-    // Needing to set this default next to the default of the full struct to avoid serde defaulting
-    // to 0 of partial struct was omitted.
-    #[serde(default = "default_max_concurrent_downloads")]
-    pub downloads: usize,
-}
-
-impl Default for ConcurrencyConfig {
-    fn default() -> Self {
-        Self {
-            solves: default_max_concurrent_solves(),
-            downloads: default_max_concurrent_downloads(),
-        }
-    }
-}
-
-impl ConcurrencyConfig {
-    /// Merge the given ConcurrencyConfig into the current one.
-    pub fn merge(self, other: Self) -> Self {
-        // Merging means using the other value if they are none default.
-        Self {
-            solves: if other.solves != ConcurrencyConfig::default().solves {
-                other.solves
-            } else {
-                self.solves
-            },
-            downloads: if other.downloads != ConcurrencyConfig::default().downloads {
-                other.downloads
-            } else {
-                self.downloads
-            },
-        }
-    }
-
-    pub fn is_default(&self) -> bool {
-        ConcurrencyConfig::default() == *self
-    }
-}
+// `ConcurrencyConfig` and its default helpers now live in `rattler_config`.
+// Re-exported so external code keeps compiling against `pixi_config::…`.
+pub use rattler_config::config::concurrency::{
+    ConcurrencyConfig, default_max_concurrent_downloads, default_max_concurrent_solves,
+};
 
 impl PyPIConfig {
     /// Merge the given PyPIConfig into the current one.
@@ -1216,22 +1031,10 @@ impl PinningStrategy {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
-#[serde(rename_all = "kebab-case")]
-pub enum RunPostLinkScripts {
-    /// Run the post link scripts, we call this insecure as it may run arbitrary
-    /// code.
-    Insecure,
-    /// Do not run the post link scripts
-    #[default]
-    False,
-}
-impl FromStr for RunPostLinkScripts {
-    type Err = serde::de::value::Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::deserialize(s.into_deserializer())
-    }
-}
+// `RunPostLinkScripts` now lives in `rattler_config`. Re-exported so
+// `pixi_config::RunPostLinkScripts` remains a valid path for external
+// crates (pixi_core, pixi_global).
+pub use rattler_config::config::run_post_link_scripts::RunPostLinkScripts;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -1254,6 +1057,8 @@ pub struct Config {
     pub tls_no_verify: Option<bool>,
 
     /// Which TLS root certificates to use for HTTPS connections.
+    // TODO(rattler-config): promote — TLS root cert selection is a
+    // generic HTTPS knob, not pixi-specific. See RATTLER_MIGRATION.md.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tls_root_certs: Option<TlsRootCerts>,
@@ -1264,6 +1069,9 @@ pub struct Config {
 
     /// Dependency Pinning strategy used for dependency modification through
     /// automated logic like `pixi add`
+    // TODO(rattler-config): promote — useful for any tool that
+    // adds/updates conda deps. rattler_config already lists this as
+    // missing. See RATTLER_MIGRATION.md.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pinning_strategy: Option<PinningStrategy>,
 
@@ -1286,8 +1094,8 @@ pub struct Config {
 
     /// Configuration for S3.
     #[serde(default)]
-    #[serde(skip_serializing_if = "HashMap::is_empty")]
-    pub s3_options: HashMap<String, S3Options>,
+    #[serde(skip_serializing_if = "S3OptionsMap::is_empty")]
+    pub s3_options: S3OptionsMap,
 
     /// The option to specify the directory where detached environments are
     /// stored. When using 'true', it defaults to the cache directory.
@@ -1318,16 +1126,22 @@ pub struct Config {
     pub run_post_link_scripts: Option<RunPostLinkScripts>,
 
     /// If set to false, symbolic links will not be used during package installation.
+    // TODO(rattler-config): promote — package-install link strategy is
+    // not pixi-specific. See RATTLER_MIGRATION.md.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow_symbolic_links: Option<bool>,
 
     /// If set to false, hard links will not be used during package installation.
+    // TODO(rattler-config): promote — package-install link strategy is
+    // not pixi-specific. See RATTLER_MIGRATION.md.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow_hard_links: Option<bool>,
 
     /// If set to false, ref links (copy-on-write) will not be used during package installation.
+    // TODO(rattler-config): promote — package-install link strategy is
+    // not pixi-specific. See RATTLER_MIGRATION.md.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allow_ref_links: Option<bool>,
@@ -1385,7 +1199,7 @@ impl Default for Config {
             channel_config: default_channel_config(),
             repodata_config: RepodataConfig::default(),
             pypi_config: PyPIConfig::default(),
-            s3_options: HashMap::new(),
+            s3_options: S3OptionsMap::default(),
             detached_environments: None,
             pinning_strategy: None,
             shell: ShellConfig::default(),
@@ -1494,7 +1308,7 @@ impl From<Config> for rattler_repodata_gateway::ChannelConfig {
 impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
     fn from(config: &Config) -> Self {
         let repodata_config = &config.repodata_config;
-        let default = repodata_config.default.clone().into();
+        let default = repodata_channel_to_source(repodata_config.default.clone());
 
         let per_channel = repodata_config
             .per_channel
@@ -1502,7 +1316,7 @@ impl From<&Config> for rattler_repodata_gateway::ChannelConfig {
             .map(|(url, config)| {
                 (
                     url.clone(),
-                    config.merge(repodata_config.default.clone()).into(),
+                    repodata_channel_to_source(config.merge(repodata_config.default.clone())),
                 )
             })
             .collect();
@@ -1556,158 +1370,19 @@ impl ShellConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub struct ProxyConfig {
-    /// https proxy.
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub https: Option<Url>,
-    /// http proxy.
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub http: Option<Url>,
-    /// A list of no proxy pattern
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub non_proxy_hosts: Vec<String>,
-}
+// `ProxyConfig` now lives in `rattler_config`. Re-exported for
+// back-compat. Note: rattler's `Default::default()` reads `HTTP_PROXY`
+// / `HTTPS_PROXY` / `NO_PROXY` env vars into the struct, whereas
+// pixi's old `Default` was empty. The local `ENV_*_PROXY` / `USE_PROXY_FROM_ENV`
+// statics below are kept because `get_proxies()` and the load-time
+// warning still consult env vars directly to decide whether to defer
+// to reqwest's own env-var handling. We end up reading the env twice
+// per process (once cached in rattler, once cached here) — acceptable.
+pub use rattler_config::config::proxy::ProxyConfig;
 
-impl ProxyConfig {
-    pub fn is_default(&self) -> bool {
-        self.https.is_none() && self.https.is_none() && self.non_proxy_hosts.is_empty()
-    }
-    pub fn merge(&self, other: Self) -> Self {
-        Self {
-            https: other.https.as_ref().or(self.https.as_ref()).cloned(),
-            http: other.http.as_ref().or(self.http.as_ref()).cloned(),
-            non_proxy_hosts: if other.is_default() {
-                self.non_proxy_hosts.clone()
-            } else {
-                other.non_proxy_hosts.clone()
-            },
-        }
-    }
-}
-
-/// Container for the package format and compression level
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct PackageFormatAndCompression {
-    /// The archive type that is selected
-    pub archive_type: CondaArchiveType,
-    /// The compression level that is selected
-    pub compression_level: CompressionLevel,
-}
-
-// deserializer for the package format and compression level
-impl<'de> Deserialize<'de> for PackageFormatAndCompression {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        let s = s.as_str();
-        PackageFormatAndCompression::from_str(s).map_err(D::Error::custom)
-    }
-}
-
-impl FromStr for PackageFormatAndCompression {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut split = s.split(':');
-        let package_format = split.next().ok_or("invalid")?;
-
-        let compression = split.next().unwrap_or("default");
-
-        // remove all non-alphanumeric characters
-        let package_format = package_format
-            .chars()
-            .filter(|c| c.is_alphanumeric())
-            .collect::<String>();
-
-        let archive_type = match package_format.to_lowercase().as_str() {
-            "tarbz2" => CondaArchiveType::TarBz2,
-            "conda" => CondaArchiveType::Conda,
-            _ => return Err(format!("Unknown package format: {package_format}")),
-        };
-
-        let compression_level = match compression {
-            "max" | "highest" => CompressionLevel::Highest,
-            "default" | "normal" => CompressionLevel::Default,
-            "fast" | "lowest" | "min" => CompressionLevel::Lowest,
-            number if number.parse::<i32>().is_ok() => {
-                let number = number.parse::<i32>().unwrap_or_default();
-                match archive_type {
-                    CondaArchiveType::TarBz2 => {
-                        if !(1..=9).contains(&number) {
-                            return Err("Compression level for .tar.bz2 must be between 1 and 9"
-                                .to_string());
-                        }
-                    }
-                    CondaArchiveType::Conda => {
-                        if !(-7..=22).contains(&number) {
-                            return Err(
-                                "Compression level for conda packages (zstd) must be between -7 and 22".to_string()
-                            );
-                        }
-                    }
-                }
-                CompressionLevel::Numeric(number)
-            }
-            _ => return Err(format!("Unknown compression level: {compression}")),
-        };
-
-        Ok(PackageFormatAndCompression {
-            archive_type,
-            compression_level,
-        })
-    }
-}
-
-impl Serialize for PackageFormatAndCompression {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let package_format = match self.archive_type {
-            CondaArchiveType::TarBz2 => "tarbz2",
-            CondaArchiveType::Conda => "conda",
-        };
-        let compression_level = match self.compression_level {
-            CompressionLevel::Default => "default",
-            CompressionLevel::Highest => "max",
-            CompressionLevel::Lowest => "min",
-            CompressionLevel::Numeric(level) => &level.to_string(),
-        };
-
-        serializer.serialize_str(format!("{package_format}:{compression_level}").as_str())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub struct BuildConfig {
-    /// package format and compression level
-    #[serde(default)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub package_format: Option<PackageFormatAndCompression>,
-}
-
-impl BuildConfig {
-    pub fn is_default(&self) -> bool {
-        self.package_format.is_none()
-    }
-    pub fn merge(&self, other: Self) -> Self {
-        Self {
-            package_format: other
-                .package_format
-                .as_ref()
-                .or(self.package_format.as_ref())
-                .cloned(),
-        }
-    }
-}
+// `BuildConfig` and `PackageFormatAndCompression` now live in
+// `rattler_config`. Re-exported so external paths keep compiling.
+pub use rattler_config::config::build::{BuildConfig, PackageFormatAndCompression};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConfigError {
@@ -2045,6 +1720,10 @@ impl Config {
     /// The `other` config will have higher priority
     #[must_use]
     pub fn merge_config(mut self, mut other: Config) -> Self {
+        // Brought in for the trait methods on rattler_config types
+        // (e.g. ConcurrencyConfig::merge_config).
+        use rattler_config::config::Config as _;
+
         self.mirrors.extend(other.mirrors);
         other.loaded_from.extend(self.loaded_from);
 
@@ -2067,27 +1746,40 @@ impl Config {
             } else {
                 other.channel_config
             },
-            repodata_config: self.repodata_config.merge(other.repodata_config),
+            repodata_config: self
+                .repodata_config
+                .merge_config(&other.repodata_config)
+                .expect("RepodataConfig::merge_config is infallible"),
             pypi_config: self.pypi_config.merge(other.pypi_config),
-            s3_options: {
-                let mut merged = HashMap::new();
-                merged.extend(self.s3_options);
-                merged.extend(other.s3_options);
-                merged
-            },
+            s3_options: S3OptionsMap(
+                self.s3_options
+                    .0
+                    .into_iter()
+                    .chain(other.s3_options.0)
+                    .collect(),
+            ),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             shell: self.shell.merge(other.shell),
             experimental: self.experimental.merge(other.experimental),
             // Make other take precedence over self to allow for setting the value through the CLI
-            concurrency: self.concurrency.merge(other.concurrency),
+            concurrency: self
+                .concurrency
+                .merge_config(&other.concurrency)
+                .expect("ConcurrencyConfig::merge_config is infallible"),
             run_post_link_scripts: other.run_post_link_scripts.or(self.run_post_link_scripts),
             allow_symbolic_links: other.allow_symbolic_links.or(self.allow_symbolic_links),
             allow_hard_links: other.allow_hard_links.or(self.allow_hard_links),
             allow_ref_links: other.allow_ref_links.or(self.allow_ref_links),
 
-            proxy_config: self.proxy_config.merge(other.proxy_config),
-            build: self.build.merge(other.build),
+            proxy_config: self
+                .proxy_config
+                .merge_config(&other.proxy_config)
+                .expect("ProxyConfig::merge_config is infallible"),
+            build: self
+                .build
+                .merge_config(&other.build)
+                .expect("BuildConfig::merge_config is infallible"),
             tool_platform: self.tool_platform.or(other.tool_platform),
             cache: self.cache.merge(other.cache),
 
@@ -2381,7 +2073,7 @@ impl Config {
                     return Err(err);
                 };
                 if let Some((bucket, rest)) = subkey.split_once('.') {
-                    if let Some(bucket_config) = self.s3_options.get_mut(bucket) {
+                    if let Some(bucket_config) = self.s3_options.0.get_mut(bucket) {
                         match rest {
                             "endpoint-url" => {
                                 if let Some(value) = value {
@@ -2422,7 +2114,7 @@ impl Config {
                     let value = value.ok_or_else(|| miette!("s3-options requires a value"))?;
                     let s3_options: S3Options =
                         serde_json::de::from_str(&value).into_diagnostic()?;
-                    self.s3_options.insert(subkey.to_string(), s3_options);
+                    self.s3_options.0.insert(subkey.to_string(), s3_options);
                 }
             }
             key if key.starts_with(EXPERIMENTAL) => {
@@ -2646,7 +2338,7 @@ impl Config {
 
     pub fn compute_s3_config(&self) -> HashMap<String, s3_middleware::S3Config> {
         self.s3_options
-            .clone()
+            .0
             .iter()
             .map(|(k, v)| {
                 (
@@ -2701,6 +2393,7 @@ pub fn config_path_global() -> Vec<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use indexmap::IndexMap;
     use rstest::rstest;
 
     use super::*;
@@ -2923,7 +2616,7 @@ UNUSED = "unused"
             force-path-style = false
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
-        let s3_options = config.s3_options;
+        let s3_options = config.s3_options.0;
         assert_eq!(
             s3_options["bucket1"].endpoint_url,
             Url::parse("https://my-s3-host").unwrap()
@@ -2996,14 +2689,14 @@ UNUSED = "unused"
                 index_url: Some(Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
                 keyring_provider: Some(KeyringProvider::Subprocess),
             },
-            s3_options: HashMap::from([(
+            s3_options: S3OptionsMap(IndexMap::from([(
                 "bucket1".into(),
                 S3Options {
                     endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                     region: "us-east-1".to_string(),
                     force_path_style: false,
                 },
-            )]),
+            )])),
             repodata_config: RepodataConfig {
                 default: RepodataChannelConfig {
                     disable_bzip2: Some(true),
@@ -3049,7 +2742,7 @@ UNUSED = "unused"
                 solves: 5,
                 ..ConcurrencyConfig::default()
             },
-            s3_options: HashMap::from([
+            s3_options: S3OptionsMap(IndexMap::from([
                 (
                     "bucket1".into(),
                     S3Options {
@@ -3066,7 +2759,7 @@ UNUSED = "unused"
                         force_path_style: false,
                     },
                 ),
-            ]),
+            ])),
             ..Default::default()
         };
         config = config.merge_config(other);
@@ -3079,7 +2772,7 @@ UNUSED = "unused"
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
-        assert!(config.s3_options.contains_key("bucket1"));
+        assert!(config.s3_options.0.contains_key("bucket1"));
 
         let other2 = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("channel").unwrap()],
@@ -3088,14 +2781,14 @@ UNUSED = "unused"
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from(
                 "/path/to/envs2",
             ))),
-            s3_options: HashMap::from([(
+            s3_options: S3OptionsMap(IndexMap::from([(
                 "bucket2".into(),
                 S3Options {
                     endpoint_url: Url::parse("https://my-new-s3-host").unwrap(),
                     region: "us-east-1".to_string(),
                     force_path_style: false,
                 },
-            )]),
+            )])),
             ..Default::default()
         };
 
@@ -3110,10 +2803,10 @@ UNUSED = "unused"
             Some(PathBuf::from("/path/to/envs2"))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
-        assert!(config.s3_options.contains_key("bucket1"));
-        assert!(config.s3_options.contains_key("bucket2"));
+        assert!(config.s3_options.0.contains_key("bucket1"));
+        assert!(config.s3_options.0.contains_key("bucket2"));
         assert!(
-            config.s3_options["bucket2"]
+            config.s3_options.0["bucket2"]
                 .endpoint_url
                 .to_string()
                 .contains("my-new-s3-host")
@@ -3133,7 +2826,7 @@ UNUSED = "unused"
 
         let mut merged = config_1.clone();
         merged = merged.merge_config(config_2);
-        assert!(merged.s3_options.contains_key("bucket1"));
+        assert!(merged.s3_options.0.contains_key("bucket1"));
 
         let debug = format!("{merged:#?}");
         let debug = debug.replace("\\\\", "/");
@@ -3312,7 +3005,7 @@ UNUSED = "unused"
         assert_eq!(config.max_concurrent_downloads(), 1);
 
         config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}"#.to_string())).unwrap();
-        let s3_options = config.s3_options.get("my-bucket").unwrap();
+        let s3_options = config.s3_options.0.get("my-bucket").unwrap();
         assert!(
             s3_options
                 .endpoint_url
@@ -3650,92 +3343,30 @@ UNUSED = "unused"
 
     use std::str::FromStr;
 
-    use rattler_conda_types::{compression_level::CompressionLevel, package::CondaArchiveType};
-
     use super::PackageFormatAndCompression;
+
+    // We compare via the canonical `archive:level` string emitted by the
+    // type's `Serialize` impl. Directly constructing the struct would
+    // mix `rattler_conda_types` types from the path-patched rattler_config
+    // workspace with the ones pixi pulls from crates.io — they don't
+    // unify even at the same version. See the patch note in the root
+    // Cargo.toml.
+    fn parsed_as(input: &str) -> String {
+        let p = PackageFormatAndCompression::from_str(input).unwrap();
+        serde_json::to_string(&p).unwrap()
+    }
 
     #[test]
     fn test_parse_packaging() {
-        let package_format = PackageFormatAndCompression::from_str("tar-bz2").unwrap();
-        assert_eq!(
-            package_format,
-            PackageFormatAndCompression {
-                archive_type: CondaArchiveType::TarBz2,
-                compression_level: CompressionLevel::Default
-            }
-        );
-
-        let package_format = PackageFormatAndCompression::from_str("conda").unwrap();
-        assert_eq!(
-            package_format,
-            PackageFormatAndCompression {
-                archive_type: CondaArchiveType::Conda,
-                compression_level: CompressionLevel::Default
-            }
-        );
-
-        let package_format = PackageFormatAndCompression::from_str("tar-bz2:1").unwrap();
-        assert_eq!(
-            package_format,
-            PackageFormatAndCompression {
-                archive_type: CondaArchiveType::TarBz2,
-                compression_level: CompressionLevel::Numeric(1)
-            }
-        );
-
-        let package_format = PackageFormatAndCompression::from_str(".tar.bz2:max").unwrap();
-        assert_eq!(
-            package_format,
-            PackageFormatAndCompression {
-                archive_type: CondaArchiveType::TarBz2,
-                compression_level: CompressionLevel::Highest
-            }
-        );
-
-        let package_format = PackageFormatAndCompression::from_str("tarbz2:5").unwrap();
-        assert_eq!(
-            package_format,
-            PackageFormatAndCompression {
-                archive_type: CondaArchiveType::TarBz2,
-                compression_level: CompressionLevel::Numeric(5)
-            }
-        );
-
-        let package_format = PackageFormatAndCompression::from_str("conda:1").unwrap();
-        assert_eq!(
-            package_format,
-            PackageFormatAndCompression {
-                archive_type: CondaArchiveType::Conda,
-                compression_level: CompressionLevel::Numeric(1)
-            }
-        );
-
-        let package_format = PackageFormatAndCompression::from_str("conda:max").unwrap();
-        assert_eq!(
-            package_format,
-            PackageFormatAndCompression {
-                archive_type: CondaArchiveType::Conda,
-                compression_level: CompressionLevel::Highest
-            }
-        );
-
-        let package_format = PackageFormatAndCompression::from_str("conda:-5").unwrap();
-        assert_eq!(
-            package_format,
-            PackageFormatAndCompression {
-                archive_type: CondaArchiveType::Conda,
-                compression_level: CompressionLevel::Numeric(-5)
-            }
-        );
-
-        let package_format = PackageFormatAndCompression::from_str("conda:fast").unwrap();
-        assert_eq!(
-            package_format,
-            PackageFormatAndCompression {
-                archive_type: CondaArchiveType::Conda,
-                compression_level: CompressionLevel::Lowest
-            }
-        );
+        assert_eq!(parsed_as("tar-bz2"), "\"tarbz2:default\"");
+        assert_eq!(parsed_as("conda"), "\"conda:default\"");
+        assert_eq!(parsed_as("tar-bz2:1"), "\"tarbz2:1\"");
+        assert_eq!(parsed_as(".tar.bz2:max"), "\"tarbz2:max\"");
+        assert_eq!(parsed_as("tarbz2:5"), "\"tarbz2:5\"");
+        assert_eq!(parsed_as("conda:1"), "\"conda:1\"");
+        assert_eq!(parsed_as("conda:max"), "\"conda:max\"");
+        assert_eq!(parsed_as("conda:-5"), "\"conda:-5\"");
+        assert_eq!(parsed_as("conda:fast"), "\"conda:min\"");
     }
 
     // Serialize env-var-sensitive tests so they don't race against each other.

@@ -8,7 +8,7 @@ use std::{
 
 use miette::{Context, IntoDiagnostic};
 use minijinja::{Environment, context};
-use pixi_config::{Config, get_default_author, pixi_home};
+use pixi_config::{Config, S3OptionsMap, get_default_author, pixi_home};
 use pixi_consts::consts;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::{FeatureName, pyproject::PyProjectManifest};
@@ -341,7 +341,7 @@ fn render_workspace(
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
-    s3_options: HashMap<String, pixi_config::S3Options>,
+    s3_options: S3OptionsMap,
     env_vars: Option<&HashMap<String, String>>,
     pypi_mapping: Option<&HashMap<NamedChannelOrUrl, String>>,
 ) -> String {
@@ -375,7 +375,7 @@ fn render_workspace(
 }
 
 fn relevant_s3_options(
-    s3_options: HashMap<String, pixi_config::S3Options>,
+    s3_options: S3OptionsMap,
     channels: Vec<NamedChannelOrUrl>,
 ) -> HashMap<String, pixi_config::S3Options> {
     // only take s3 options in manifest if they are used in the default channels
@@ -395,6 +395,7 @@ fn relevant_s3_options(
         .collect::<Vec<_>>();
 
     s3_options
+        .0
         .into_iter()
         .filter(|(key, _)| s3_buckets.contains(key))
         .collect()

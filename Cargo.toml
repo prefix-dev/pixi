@@ -226,6 +226,7 @@ rattler_cache = { version = "0.8", default-features = false }
 rattler_conda_types = { version = "0.46", default-features = false, features = [
   "rayon",
 ] }
+rattler_config = { version = "0.3", default-features = false }
 rattler_digest = { version = "1.2", default-features = false }
 rattler_index = { version = "0.29", default-features = false, features = [
   "s3",
@@ -266,6 +267,22 @@ version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd776
 # `http-cache-reqwest`) and consumers that depend on the renamed
 # `astral-reqwest-middleware` (rattler, rattler-build, uv).
 reqwest-middleware = { path = "patches/reqwest_middleware_shim" }
+
+# Temporary patch: iterate on rattler_config locally while migrating
+# pixi_config to ConfigBase<PixiConfigExt>. Remove once the next rattler
+# release ships with everything pixi needs. See
+# crates/pixi_config/RATTLER_MIGRATION.md.
+#
+# NOTE: rattler_config pulls in rattler_conda_types from rattler's local
+# workspace, so the dep graph has two copies of rattler_conda_types
+# (one from crates.io that pixi uses directly, one from path that
+# rattler_config uses internally). Types from `PackageFormatAndCompression`
+# therefore don't unify across the boundary — direct field construction
+# of that struct in pixi code is currently impossible. Use `FromStr` to
+# build values instead. Path-patching rattler_conda_types is not viable
+# because the local copy has API drift that breaks other crates.io
+# rattler crates (e.g. rattler_repodata_gateway).
+rattler_config = { path = "../rattler/crates/rattler_config" }
 
 # Temporary patch: rattler-build main has been updated to use the new rattler
 # versions but no release has been published yet. Remove once rattler-build

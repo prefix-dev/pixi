@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_config/src/lib.rs
-assertion_line: 2831
+assertion_line: 3147
 expression: debug
 ---
 Config {
@@ -92,27 +92,29 @@ Config {
         keyring_provider: None,
         allow_insecure_host: [],
     },
-    s3_options: {
-        "bucket1": S3Options {
-            endpoint_url: Url {
-                scheme: "https",
-                cannot_be_a_base: false,
-                username: "",
-                password: None,
-                host: Some(
-                    Domain(
-                        "my-s3-host",
+    s3_options: S3OptionsMap(
+        {
+            "bucket1": S3Options {
+                endpoint_url: Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "my-s3-host",
+                        ),
                     ),
-                ),
-                port: None,
-                path: "/",
-                query: None,
-                fragment: None,
+                    port: None,
+                    path: "/",
+                    query: None,
+                    fragment: None,
+                },
+                region: "us-east-1",
+                force_path_style: false,
             },
-            region: "us-east-1",
-            force_path_style: false,
         },
-    },
+    ),
     detached_environments: Some(
         Boolean(
             true,
