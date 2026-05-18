@@ -75,6 +75,9 @@ pub struct RosBackendConfig {
     /// the name through its metadata provider. Defaults to false so that
     /// `pixi.toml` `name` is used verbatim.
     pub prefix_with_distro: Option<bool>,
+
+    /// Build number for the resulting package. When unset, defaults to 0.
+    pub build_number: Option<u64>,
 }
 
 impl RosBackendConfig {
@@ -124,6 +127,7 @@ impl BackendConfig for RosBackendConfig {
             prefix_with_distro: target_config
                 .prefix_with_distro
                 .or(self.prefix_with_distro),
+            build_number: target_config.build_number.or(self.build_number),
         })
     }
 }

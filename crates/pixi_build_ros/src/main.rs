@@ -235,6 +235,10 @@ async fn generate_recipe_package_xml(
         .with_env(script_env)
         .with_secrets(model.secrets.iter().cloned().collect());
 
+    if let Some(n) = config.build_number {
+        generated_recipe.recipe.build.number = Some(Value::new_concrete(n, None));
+    }
+
     Ok(generated_recipe)
 }
 

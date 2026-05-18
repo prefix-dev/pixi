@@ -273,6 +273,10 @@ pub async fn generate(
         .with_env(script_env)
         .with_secrets(model.secrets.iter().cloned().collect());
 
+    if let Some(n) = config.build_number {
+        generated.recipe.build.number = Some(Value::new_concrete(n, None));
+    }
+
     // Add input globs the cache invalidator should watch. Pixi-native mode
     // doesn't distinguish editable installs, so include the python globs too.
     for glob in crate::globs::ROS_SOURCE_GLOBS
@@ -683,6 +687,31 @@ mod tests {
             .expect("concrete name")
             .to_string();
         assert_eq!(name, "ros-kilted-test-pkg");
+    }
+
+    #[tokio::test]
+    async fn build_number_applied_from_config() {
+        let mut cfg = cfg_pixi_native(RosBuildType::AmentCmake);
+        cfg.build_number = Some(7);
+        let model = model_with_deps(&["ros-kilted-rclcpp"], &[]);
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            recipe
+                .recipe
+                .build
+                .number
+                .as_ref()
+                .and_then(|v| v.as_concrete().copied()),
+            Some(7)
+        );
     }
 
     #[tokio::test]
