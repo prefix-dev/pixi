@@ -47,7 +47,12 @@ __wrap__() {
 
     case "${ARCH-}" in
     arm64 | aarch64) ARCH="aarch64" ;;
-    riscv64) ARCH="riscv64gc" ;;
+    riscv64)
+        ARCH="riscv64gc"
+        if [ "${PLATFORM-}" = "unknown-linux-musl" ]; then
+            PLATFORM="unknown-linux-gnu"
+        fi
+        ;;
     esac
 
     BINARY="pixi-${ARCH}-${PLATFORM}"
