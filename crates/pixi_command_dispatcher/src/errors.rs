@@ -15,8 +15,8 @@ use crate::{
     build::{DependenciesError, pin_compatible::PinCompatibleError},
     cycle::Cycle,
     solve_conda::SolveCondaEnvironmentError,
-    source_checkout::SourceCheckoutError,
 };
+use pixi_compute_sources::SourceCheckoutError;
 
 #[derive(Debug, Clone, Error, Diagnostic)]
 pub enum SourceBuildError {

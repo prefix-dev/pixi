@@ -13,7 +13,7 @@ use once_cell::sync::OnceCell;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, ComputeResultExt, DevSourceMetadataSpec, EnvironmentRef,
-    WorkspaceEnvRef, executor::CancellationAwareFutures, source_checkout::SourceCheckoutExt,
+    SourceCheckoutExt, WorkspaceEnvRef, executor::CancellationAwareFutures,
 };
 use pixi_config::Config;
 use pixi_install_pypi::UnresolvedPypiRecord;
@@ -304,6 +304,7 @@ pub async fn verify_platform_satisfiability(
             &pixi_records_by_name,
             &pypi_records_by_name,
             building_pixi_records,
+            locked_environment.pypi_indexes(),
         )
         .await
     };
@@ -495,6 +496,7 @@ async fn verify_package_platform_satisfiability(
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
     building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
+    locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
 ) -> Result<
     (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
     CommandDispatcherError<Box<PlatformUnsat>>,
@@ -513,6 +515,14 @@ async fn verify_package_platform_satisfiability(
         .combined_dev_dependencies(Some(ctx.platform))
         .into_specs()
         .collect_vec();
+
+    // Indexes the lock-file was resolved against. Authoritative because
+    // `verify_pypi_indexes` already confirmed they match the manifest. A
+    // locked package URL must be one of these to satisfy a requirement
+    // with no per-package `index`. None for pre-v7 lockfiles.
+    let locked_indexes: &[url::Url] = locked_pypi_indexes
+        .map(|i| i.indexes.as_slice())
+        .unwrap_or(&[]);
 
     // retrieve dependency-overrides
     // map it to (name => requirement) for later matching
@@ -838,6 +848,7 @@ async fn verify_package_platform_satisfiability(
                                     record,
                                     ctx.project_root,
                                     origin,
+                                    locked_indexes,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -947,8 +958,11 @@ async fn verify_package_platform_satisfiability(
                         };
                         if let Some(current_metadata) =
                             ctx.static_metadata_cache.get(&absolute_path)
-                            && let Some(mismatch) =
-                                pypi_metadata::compare_metadata(record, &current_metadata)
+                            && let Some(mismatch) = pypi_metadata::compare_metadata(
+                                record,
+                                pkg.name(),
+                                &current_metadata,
+                            )
                         {
                             let local_mismatch = match mismatch {
                                 pypi_metadata::MetadataMismatch::RequiresDist(diff) => {

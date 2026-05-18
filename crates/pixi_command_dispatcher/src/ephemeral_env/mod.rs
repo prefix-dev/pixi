@@ -36,12 +36,14 @@ use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::SolveCondaEnvironmentSpec;
-use crate::compute_data::{HasCacheDirs, HasGateway, HasInstantiateBackendReporter};
+use crate::cache::markers::BuildBackendsDir;
+use crate::compute_data::{HasGateway, HasInstantiateBackendReporter};
 use crate::injected_config::{ChannelConfigKey, ToolBuildEnvironmentKey};
 use crate::install_binary::install_binary_records;
 use crate::reporter::InstantiateBackendReporter;
 use crate::solve_binary::SolveCondaExt;
 use crate::solve_conda::SolveCondaEnvironmentError;
+use pixi_compute_cache_dirs::CacheDirsExt;
 
 /// Specification for an ephemeral, binary-only conda environment.
 ///
@@ -215,14 +217,8 @@ impl Key for EphemeralEnvKey {
         // pixi-build-cmake / pixi-build-python — even when the
         // prefix on disk was already provisioned by a previous run.
         //
-        // The borrow of `ctx.global_data()` is scoped here so the
-        // subsequent mutable `ctx.compute(...)` calls below can take
-        // their own borrow without conflict.
         let cache_key = spec.cache_key();
-        let prefix_path = {
-            let data: &DataStore = ctx.global_data();
-            data.cache_dirs().build_backends().join(&cache_key)
-        };
+        let prefix_path = ctx.cache_dir::<BuildBackendsDir>().await.join(&cache_key);
         if let Some(cached) = read_cached_marker(prefix_path.as_std_path()).await {
             return Ok(Arc::new(cached));
         }

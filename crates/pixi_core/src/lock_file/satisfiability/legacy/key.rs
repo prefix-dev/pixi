@@ -7,9 +7,8 @@ use std::{
 
 use miette::Diagnostic;
 use pixi_command_dispatcher::{
-    ComputeCtx, EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, Key, PtrArc,
-    SourceRecordError, WorkspaceEnvRegistry,
-    compute_data::HasCacheDirs,
+    CacheDirsExt, ComputeCtx, EnvironmentRef, HasWorkspaceEnvRegistry, InstalledSourceHints, Key,
+    LegacySourceEnvDir, PtrArc, SourceRecordError, WorkspaceEnvRegistry,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec},
 };
 use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, UnresolvedPixiRecord, VariantValue};
@@ -146,8 +145,8 @@ impl Key for LegacySourceEnvKey {
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         // Try the on-disk cache first. A miss here (file absent, schema
         // bump, parse error) just falls through to recompute.
+        let cache_dir = ctx.cache_dir::<LegacySourceEnvDir>().await;
         let registry = ctx.global_data().workspace_env_registry().clone();
-        let cache_dir = ctx.global_data().cache_dirs().legacy_source_env();
         let cache_hash = self.cache_key_hash(&registry);
         let cache_path = cache::cache_file_path(cache_dir.as_std_path(), cache_hash);
         if let Some(env) = cache::load(&cache_path) {

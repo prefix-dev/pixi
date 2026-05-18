@@ -66,7 +66,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 upload_time_utc_ms: None,
                 url: match repodata_record {
                     PixiRecord::Binary(repodata_record) => FileLocation::AbsoluteUrl(
-                        UrlString::from(DisplaySafeUrl::from(repodata_record.url.clone())),
+                        UrlString::from(DisplaySafeUrl::from_url(repodata_record.url.clone())),
                     ),
                     PixiRecord::Source(_source) => {
                         // TODO(baszalmstra): Does this matter??
@@ -83,7 +83,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 version: version.parse().expect("could not convert to pypi version"),
                 file: Box::new(file),
                 index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                    DisplaySafeUrl::from(consts::DEFAULT_PYPI_INDEX_URL.clone()),
+                    DisplaySafeUrl::from_url(consts::DEFAULT_PYPI_INDEX_URL.clone()),
                 ))),
                 wheels: vec![],
                 ext: SourceDistExtension::TarGz,

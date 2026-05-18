@@ -19,6 +19,7 @@ version = "0.4.*"
 [tool.pixi.package.host-dependencies]
 maturin = ">=1.7,<2.0"
 python = ">=3.11"
+uv = "*"
 
 [tool.pixi.package.run-dependencies]
 python = ">=3.11"

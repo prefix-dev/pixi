@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.68.0/schema/manifest/pyproject/schema.json",
+  "$id": "https://pixi.sh/v0.68.1/schema/manifest/pyproject/schema.json",
   "title": "`pyproject.toml` manifest file for `pixi`",
   "description": "A `pyproject.toml` with `[tool.pixi]`.",
   "type": "object",
@@ -83,6 +83,18 @@
           "$ref": "#/$defs/BuildBackend",
           "description": "The build backend to instantiate"
         },
+        "build-number": {
+          "title": "Build-Number",
+          "description": "The build number to record in the produced package",
+          "type": "integer",
+          "minimum": 0
+        },
+        "build-string-prefix": {
+          "title": "Build-String-Prefix",
+          "description": "An optional prefix to prepend to the auto-generated build string",
+          "type": "string",
+          "minLength": 1
+        },
         "channels": {
           "title": "Channels",
           "description": "The `conda` channels that are used to fetch the build backend from",
@@ -109,6 +121,15 @@
           "description": "The configuration of the build backend",
           "type": "object",
           "additionalProperties": true
+        },
+        "secrets": {
+          "title": "Secrets",
+          "description": "Names of environment variables to expose as secrets to the build script. Values are read from the host environment at build time; only the names live in the manifest. Forwarded to rattler-build's `build.script.secrets`.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "source": {
           "$ref": "#/$defs/SourceLocation",

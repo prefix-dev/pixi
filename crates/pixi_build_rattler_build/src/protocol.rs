@@ -445,6 +445,7 @@ impl Protocol for RattlerBuildBackend {
                 sandbox_config: None,
                 exclude_newer: None,
                 env_isolation: Default::default(),
+                v3: false,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,

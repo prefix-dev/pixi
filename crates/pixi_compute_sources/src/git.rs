@@ -1,31 +1,63 @@
-use crate::compute_data::{
-    HasCacheDirs, HasDownloadClient, HasGitCheckoutReporter, HasGitResolver,
-};
-use crate::reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle};
-use crate::{GitCheckoutReporter, SourceCheckout, SourceCheckoutError};
+//! Git checkout Key plus its reporter trait, semaphore, and cache
+//! marker.
+
+use std::sync::Arc;
+
 use derive_more::Display;
 use futures::future::Either;
+use pixi_compute_cache_dirs::{CacheBase, CacheDirsExt, CacheLocation};
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
-use pixi_compute_reporters::OperationId;
+use pixi_compute_network::HasDownloadClient;
+use pixi_compute_reporters::{Active, LifecycleKind, OperationId, ReporterLifecycle};
+use pixi_consts::consts;
 use pixi_git::git::GitReference;
 use pixi_git::resolver::RepositoryReference;
 use pixi_git::source::Fetch as GitFetch;
 use pixi_git::{GitError, GitUrl};
 use pixi_record::{PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitSpec;
-use std::sync::Arc;
 use tokio::sync::Semaphore;
 
+use crate::data::HasGitResolver;
+use crate::{SourceCheckout, SourceCheckoutError};
+
+/// [`CacheLocation`] marker for the cached git checkouts directory.
+pub struct GitDir;
+impl CacheLocation for GitDir {
+    fn name() -> &'static str {
+        consts::CACHED_GIT_DIR
+    }
+    fn base() -> CacheBase {
+        CacheBase::Root
+    }
+}
+
+/// Per-key reporter for git checkouts.
+pub trait GitCheckoutReporter: Send + Sync {
+    fn on_queued(&self, env: &RepositoryReference) -> OperationId;
+    fn on_started(&self, checkout_id: OperationId);
+    fn on_finished(&self, checkout_id: OperationId);
+}
+
+/// Access the per-key git-checkout reporter from global data.
+pub trait HasGitCheckoutReporter {
+    fn git_checkout_reporter(&self) -> Option<&Arc<dyn GitCheckoutReporter>>;
+}
+
+impl HasGitCheckoutReporter for DataStore {
+    fn git_checkout_reporter(&self) -> Option<&Arc<dyn GitCheckoutReporter>> {
+        self.try_get::<Arc<dyn GitCheckoutReporter>>()
+    }
+}
+
 /// Newtype around the semaphore that bounds concurrent git checkouts.
-/// Having a distinct type lets [`DataStore`] store it keyed by its own
-/// `TypeId`, independent of any other `Arc<Semaphore>` on the store.
+/// A distinct type lets [`DataStore`] key it independently from any
+/// other `Arc<Semaphore>` registered alongside.
 #[derive(Clone)]
 pub struct GitCheckoutSemaphore(pub Arc<Semaphore>);
 
-/// Access the semaphore bounding concurrent git checkouts.
-///
-/// Returns `None` when no semaphore was registered, which is treated as
-/// "unlimited concurrency": the Key skips permit acquisition entirely.
+/// Access the semaphore bounding concurrent git checkouts. `None` means
+/// "unlimited concurrency": the Key skips permit acquisition.
 pub trait HasGitCheckoutSemaphore {
     fn git_checkout_semaphore(&self) -> Option<&Arc<Semaphore>>;
 }
@@ -63,16 +95,19 @@ impl LifecycleKind for GitReporterLifecycle {
     }
 }
 
-/// Dedup key for a git checkout. Keyed on [`RepositoryReference`]
-/// (normalized URL + reference, no `precise`) so callers that differ
-/// only in whether they pre-resolved the commit still dedup.
+/// Dedup key for a git checkout. Keyed on the full [`GitUrl`]: URL,
+/// reference, AND `precise` commit, so a caller asking for a specific
+/// commit doesn't collide with one asking only for the branch.
+/// Stripping `precise` from the key let `checkout_pinned_source(A)`
+/// silently return the branch's HEAD instead of commit `A`
+/// (prefix-dev/pixi#6073).
 #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
-#[display("{}@{}", _0.url.as_url(), _0.reference)]
-pub(crate) struct CheckoutGit(RepositoryReference);
+#[display("{}@{}", _0.repository(), _0.reference())]
+pub struct CheckoutGit(GitUrl);
 
 impl CheckoutGit {
-    pub(crate) fn new(git_url: &GitUrl) -> Self {
-        Self(RepositoryReference::from(git_url))
+    pub fn new(git_url: &GitUrl) -> Self {
+        Self(git_url.clone())
     }
 }
 
@@ -80,15 +115,16 @@ impl Key for CheckoutGit {
     type Value = Arc<Result<GitFetch, GitError>>;
 
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
+        let cache_dir = ctx.cache_dir::<GitDir>().await;
         let data: &DataStore = ctx.global_data();
         let resolver = data.git_resolver().clone();
         let client = data.download_client().clone();
-        let cache_dir = data.cache_dirs().git();
         let semaphore = data.git_checkout_semaphore().cloned();
         let reporter = data.git_checkout_reporter().cloned();
 
+        let reporter_env = RepositoryReference::from(&self.0);
         let lifecycle =
-            ReporterLifecycle::<GitReporterLifecycle>::queued(reporter.as_deref(), &self.0);
+            ReporterLifecycle::<GitReporterLifecycle>::queued(reporter.as_deref(), &reporter_env);
 
         let _permit = match semaphore.as_ref() {
             Some(s) => Some(
@@ -100,19 +136,18 @@ impl Key for CheckoutGit {
         };
         let _lifecycle = lifecycle.start();
 
-        // `from_reference` auto-fills `precise` from a full-commit
-        // reference, so the resolver skips ref-resolution when it can.
-        let git_url =
-            GitUrl::from_reference(self.0.url.clone().into_url(), self.0.reference.clone());
-
+        // Pass the original `GitUrl` straight through so the resolver
+        // honours `precise` when set (pinned checkout) and advances to
+        // the branch HEAD when not (fresh resolve).
         Arc::new(
             resolver
-                .fetch(git_url, client, cache_dir.into_std_path_buf(), None)
+                .fetch(self.0.clone(), client, cache_dir.into_std_path_buf(), None)
                 .await,
         )
     }
 }
 
+/// Per-spec git checkout entry points on [`ComputeCtx`].
 pub trait GitSourceCheckoutExt {
     /// Check out the git repository associated with the given spec.
     fn pin_and_checkout_git(
@@ -120,7 +155,7 @@ pub trait GitSourceCheckoutExt {
         git_spec: GitSpec,
     ) -> impl Future<Output = Result<SourceCheckout, SourceCheckoutError>> + Send + use<Self>;
 
-    /// Checkout a pinned git repository.
+    /// Check out a pinned git repository at the given commit.
     fn checkout_pinned_git(
         &mut self,
         git_spec: PinnedGitSpec,

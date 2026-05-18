@@ -20,8 +20,9 @@ use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataKey, BuildBackendMetadataSpec, EnvironmentRef, PackageNotProvidedError,
-    SourceMetadataError, build::PinnedSourceCodeLocation, source_checkout::SourceCheckoutExt,
+    SourceMetadataError, build::PinnedSourceCodeLocation,
 };
+use pixi_compute_sources::SourceCheckoutExt;
 
 /// The result of resolving source metadata for all variants of a package.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -50,7 +51,7 @@ pub struct SourceMetadataSpec {
     /// Optional caller-supplied pin for the manifest source. When set
     /// and compatible with `source_location` (see
     /// [`PinnedSourceSpec::matches_source_spec`]), the compute body
-    /// uses [`checkout_pinned_source`](crate::source_checkout::SourceCheckoutExt::checkout_pinned_source)
+    /// uses [`checkout_pinned_source`](crate::SourceCheckoutExt::checkout_pinned_source)
     /// at this exact pin instead of resolving `source_location` afresh.
     /// Used to thread a previously-locked git/url commit through a
     /// re-lock so commits don't drift when the manifest still points

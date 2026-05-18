@@ -46,9 +46,7 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{
-    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
-};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
@@ -387,7 +385,8 @@ pub async fn resolve_pypi(
                 let uv_reference = into_uv_git_reference(pixi_git_ref);
                 let uv_sha = into_uv_git_sha(pinned_git_spec.source.commit);
 
-                let display_safe_url = pinned_git_spec.git.clone().into();
+                let display_safe_url =
+                    uv_redacted::DisplaySafeUrl::from_url(pinned_git_spec.git.clone());
 
                 let repository_url = RepositoryUrl::new(&display_safe_url);
                 let reference = RepositoryReference {
@@ -475,13 +474,11 @@ pub async fn resolve_pypi(
     );
 
     let registry_client = {
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts)
-            .markers(&marker_environment)
-            .keyring(context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(context.use_native_tls)
-            .extra_middleware(context.extra_middleware.clone());
+        let base_client_builder = context.base_client_builder(
+            allow_insecure_hosts,
+            Some(&marker_environment),
+            Connectivity::Online,
+        );
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, context.cache.clone())
@@ -580,8 +577,8 @@ pub async fn resolve_pypi(
     // mostly with build isolation. In that case we want to use fresh
     // non-tampered requests.
     .with_shared_state(context.shared_state.fork())
-    .with_source_strategy(context.source_strategy)
-    .with_concurrency(context.concurrency)
+    .with_no_sources(context.no_sources.clone())
+    .with_concurrency(context.concurrency.clone())
     .with_link_mode(link_mode);
 
     // Use cached build dispatch dependencies
@@ -733,7 +730,7 @@ pub async fn resolve_pypi(
             DistributionDatabase::new(
                 &registry_client,
                 &lazy_build_dispatch,
-                context.concurrency.downloads,
+                context.concurrency.downloads_semaphore.clone(),
             ),
         )
         .with_reporter(UvReporter::new_arc(
@@ -749,6 +746,7 @@ pub async fn resolve_pypi(
             requirements,
             constraints,
             overrides,
+            uv_configuration::Excludes::default(),
             Preferences::from_iter(preferences, &resolver_env),
             None,
             Default::default(),
@@ -761,7 +759,7 @@ pub async fn resolve_pypi(
             DistributionDatabase::new(
                 &registry_client,
                 &lazy_build_dispatch,
-                context.concurrency.downloads,
+                context.concurrency.downloads_semaphore.clone(),
             ),
             &flat_index,
             Some(&provider_tags),
@@ -831,7 +829,7 @@ pub async fn resolve_pypi(
             &registry_client,
             resolution,
             &context.capabilities,
-            context.concurrency.downloads,
+            context.concurrency.downloads_semaphore.clone(),
             project_root,
             &original_git_references,
         )
@@ -995,13 +993,13 @@ async fn lock_pypi_packages(
     registry_client: &Arc<RegistryClient>,
     resolution: Resolution,
     index_capabilities: &IndexCapabilities,
-    concurrent_downloads: usize,
+    downloads_semaphore: Arc<tokio::sync::Semaphore>,
     abs_project_root: &Path,
     original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
 ) -> miette::Result<LockedPypiRecords> {
     let mut locked_packages = Vec::with_capacity(resolution.len());
     let database =
-        DistributionDatabase::new(registry_client, pixi_build_dispatch, concurrent_downloads);
+        DistributionDatabase::new(registry_client, pixi_build_dispatch, downloads_semaphore);
     for dist in resolution.distributions() {
         // If this refers to a conda package we can skip it
         if conda_python_packages.contains_key(dist.name()) {

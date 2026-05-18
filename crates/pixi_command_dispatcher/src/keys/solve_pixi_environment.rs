@@ -48,9 +48,9 @@ use crate::{
         solve_conda::{SolveCondaKey, SolveCondaKeyError, SolveCondaSpec},
     },
     reporter::has_direct_conda_dependency,
-    reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle},
-    source_checkout::SourceCheckoutExt,
 };
+use pixi_compute_reporters::{Active, LifecycleKind, ReporterLifecycle};
+use pixi_compute_sources::SourceCheckoutExt;
 
 /// Returns an error if any binary spec requests a channel that is not
 /// present in the environment's channel list.

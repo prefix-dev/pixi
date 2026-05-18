@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.68.1] - 2026-05-12
+
+#### Added
+
+- Report size of removed files by @baszalmstra in [#6053](https://github.com/prefix-dev/pixi/pull/6053)
+
+#### Fixed
+
+- V0.68.0 `pixi-aarch64-pc-windows-msvc.zip` contains an x86_64 binary by @baszalmstra in [#6064](https://github.com/prefix-dev/pixi/pull/6064)
+- Normalize self-ref extras on both sides of compare by @baszalmstra in [#6052](https://github.com/prefix-dev/pixi/pull/6052)
+- Satisfy lock-file when feature-level index-url is set by @baszalmstra in [#6065](https://github.com/prefix-dev/pixi/pull/6065)
+- Evaluate PyPI extras when walking lockfile dependencies by @baszalmstra in [#6068](https://github.com/prefix-dev/pixi/pull/6068)
+- To alias on target_channel by @ruben-arts in [#6070](https://github.com/prefix-dev/pixi/pull/6070)
+- Fallback behaviour added to atomic writes by @suleman1412 in [#5748](https://github.com/prefix-dev/pixi/pull/5748)
+- Serialize PEP 508 deps as filesystem paths by @aldbr in [#6072](https://github.com/prefix-dev/pixi/pull/6072)
+
+#### New Contributors
+
+* @aldbr made their first contribution in [#6072](https://github.com/prefix-dev/pixi/pull/6072)
+* @sstadick made their first contribution in [#6055](https://github.com/prefix-dev/pixi/pull/6055)
+
 ### [0.68.0] - 2026-05-07
 #### ✨ Highlights
 

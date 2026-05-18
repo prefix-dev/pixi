@@ -32,6 +32,7 @@ pixi publish [OPTIONS]
 :  The path to a directory containing a package manifest, or to a specific manifest file
 - <a id="arg---target-channel" href="#arg---target-channel">`--target-channel <TARGET_CHANNEL>`</a>
 :  The target channel URL to publish packages to
+<br>**aliases**: to
 - <a id="arg---target-dir" href="#arg---target-dir">`--target-dir <TARGET_DIR>`</a>
 :  The target local directory to copy packages into (no channel indexing)
 - <a id="arg---force" href="#arg---force">`--force`</a>
@@ -70,7 +71,7 @@ pixi publish [OPTIONS]
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
-:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 <br>**env**: `PIXI_TLS_ROOT_CERTS`
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)

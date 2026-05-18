@@ -37,7 +37,7 @@ pub fn locked_data_to_file(
     requires_python: Option<pep440_rs::VersionSpecifiers>,
 ) -> Result<uv_distribution_types::File, ConversionError> {
     let url = uv_distribution_types::FileLocation::AbsoluteUrl(UrlString::from(
-        uv_redacted::DisplaySafeUrl::from(url.clone()),
+        uv_redacted::DisplaySafeUrl::from_url(url.clone()),
     ));
 
     // Convert PackageHashes to uv hashes
@@ -133,7 +133,7 @@ pub fn convert_to_dist(
                 Dist::from_url(
                     pkg_name,
                     VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(uv_redacted::DisplaySafeUrl::from(
+                        parsed_url: ParsedUrl::try_from(uv_redacted::DisplaySafeUrl::from_url(
                             url_without_direct.clone().into_owned(),
                         ))
                         .map_err(Box::new)?,

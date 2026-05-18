@@ -32,8 +32,8 @@ use crate::{
     injected_config::ChannelConfigKey,
     keys::solve_pixi_environment::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
     reporter::SourceRecordReporter,
-    reporter_lifecycle::{Active, LifecycleKind, ReporterLifecycle},
 };
+use pixi_compute_reporters::{Active, LifecycleKind, ReporterLifecycle};
 
 /// Resolve one variant's [`SourceRecord`] from an assembled
 /// [`CondaOutput`] + pinned source location.

@@ -220,7 +220,7 @@ pub(crate) fn need_reinstall(
                     // Check if the installed git url is the same as the locked git url
                     // if this fails, it should be an error, because then installed url is not a git url
                     let installed_git_url = ParsedGitUrl::try_from(
-                        uv_redacted::DisplaySafeUrl::from(Url::parse(url.as_str())?),
+                        uv_redacted::DisplaySafeUrl::from_url(Url::parse(url.as_str())?),
                     )?;
 
                     // Try to parse the locked git url, this can be any url, so this may fail
@@ -235,7 +235,7 @@ pub(crate) fn need_reinstall(
                                     .map_err(|e| NeedsReinstallError::PixiGitUrl(e.to_string()))
                             } else {
                                 // it is not a git url, so we fallback to use the url as is
-                                ParsedGitUrl::try_from(uv_redacted::DisplaySafeUrl::from(
+                                ParsedGitUrl::try_from(uv_redacted::DisplaySafeUrl::from_url(
                                     url.clone(),
                                 ))
                                 .map_err(|e: uv_pypi_types::ParsedUrlError| e.into())

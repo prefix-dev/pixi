@@ -5,9 +5,10 @@ use std::{
     str::FromStr,
     sync::{Arc, LazyLock},
 };
+use uv_redacted::DisplaySafeUrl;
 
 use dashmap::DashMap;
-use indexmap::IndexMap;
+use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
@@ -19,7 +20,7 @@ use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_options_to_build_options,
-    pypi_options_to_index_locations, to_index_strategy,
+    pypi_options_to_index_locations, to_index_strategy, to_requirements,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
@@ -27,7 +28,7 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
@@ -50,15 +51,9 @@ use crate::{
     },
 };
 
-/// Returns `true` if the given URL is the default PyPI index
-/// (`https://pypi.org/simple`). The lock file always stores this
-/// explicitly, but manifests omit it, so we treat it as equivalent to
-/// "no index specified".
-fn is_default_pypi_index(url: &Url) -> bool {
-    url.as_str().trim_end_matches('/')
-        == pixi_consts::consts::DEFAULT_PYPI_INDEX_URL
-            .as_str()
-            .trim_end_matches('/')
+/// Compare two PyPI index URLs ignoring trailing slashes.
+fn pypi_index_urls_match(a: &Url, b: &Url) -> bool {
+    a.as_str().trim_end_matches('/') == b.as_str().trim_end_matches('/')
 }
 
 /// Check satisfiability of a pypi requirement against a locked pypi package
@@ -118,21 +113,23 @@ pub(crate) fn pypi_satisfies_editable(
     }
 }
 
-/// Check satisfiability of a pypi requirement against a locked pypi package
-/// This also does an additional check for git urls when using direct url
-/// references
+/// Check satisfiability of a pypi requirement against a locked pypi package.
+/// Also does an additional check for git urls when using direct url references.
 ///
-/// `origin` disambiguates the meaning of an absent `index` on the
-/// requirement. For [`RequirementOrigin::Manifest`] a missing index means
-/// the user did not pin one and the strict "removed the index" check
-/// applies. For [`RequirementOrigin::RequiresDist`] the missing index just
-/// reflects that pep508 cannot encode one, so the lock-file's recorded
-/// index is taken as authoritative.
+/// `origin` disambiguates an absent `index`: `Manifest` triggers the strict
+/// "removed the index" check; `RequiresDist` trusts the lock-file (pep508
+/// carries no index info).
+///
+/// `locked_indexes` are the env-level indexes recorded in the lock-file
+/// (already verified against the manifest); a requirement with no
+/// per-package `index` is satisfied by any of them. Empty slice falls back
+/// to the default PyPI URL (pre-v7 lockfiles).
 pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
     locked_record: &LockedPypiRecord,
     project_root: &Path,
     origin: RequirementOrigin,
+    locked_indexes: &[Url],
 ) -> Result<(), Box<PlatformUnsat>> {
     let locked_data = &locked_record.data;
     if spec.name.to_string() != locked_data.name().to_string() {
@@ -177,16 +174,25 @@ pub(crate) fn pypi_satisfies_requirement(
                         .into());
                     }
                 }
-                (None, Some(locked_url))
-                    if origin == RequirementOrigin::Manifest
-                        && !is_default_pypi_index(locked_url) =>
-                {
-                    return Err(PlatformUnsat::LockedPyPIIndexMismatch {
-                        name: spec.name.to_string(),
-                        expected_index: "<default>".to_string(),
-                        locked_index: locked_url.to_string(),
+                (None, Some(locked_url)) if origin == RequirementOrigin::Manifest => {
+                    // Issue #6060: accept the locked URL if it matches any
+                    // env-level configured index; fall back to PyPI default.
+                    let effective_indexes: &[Url] = if locked_indexes.is_empty() {
+                        std::slice::from_ref(&*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL)
+                    } else {
+                        locked_indexes
+                    };
+                    let acceptable = effective_indexes
+                        .iter()
+                        .any(|configured| pypi_index_urls_match(configured, locked_url));
+                    if !acceptable {
+                        return Err(PlatformUnsat::LockedPyPIIndexMismatch {
+                            name: spec.name.to_string(),
+                            expected_index: effective_indexes.iter().format(", ").to_string(),
+                            locked_index: locked_url.to_string(),
+                        }
+                        .into());
                     }
-                    .into());
                 }
                 // Either the locked index is missing (pre-v7 lockfile) or the
                 // requirement comes from a parent's `requires_dist` (pep508
@@ -211,7 +217,7 @@ pub(crate) fn pypi_satisfies_requirement(
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
 
-                if *spec_url.raw() == locked_url.clone().into() {
+                if *spec_url.raw() == DisplaySafeUrl::from_url(locked_url.clone()) {
                     return Ok(());
                 } else {
                     return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
@@ -561,13 +567,11 @@ async fn read_local_package_metadata(
     );
 
     let registry_client = {
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts.clone())
-            .markers(&marker_environment)
-            .keyring(ctx.uv_context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(ctx.uv_context.use_native_tls)
-            .extra_middleware(ctx.uv_context.extra_middleware.clone());
+        let base_client_builder = ctx.uv_context.base_client_builder(
+            allow_insecure_hosts.clone(),
+            Some(&marker_environment),
+            Connectivity::Online,
+        );
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
@@ -633,8 +637,8 @@ async fn read_local_package_metadata(
     .with_index_strategy(index_strategy)
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
     .with_shared_state(ctx.uv_context.shared_state.fork())
-    .with_source_strategy(ctx.uv_context.source_strategy)
-    .with_concurrency(ctx.uv_context.concurrency);
+    .with_no_sources(ctx.uv_context.no_sources.clone())
+    .with_concurrency(ctx.uv_context.concurrency.clone());
 
     // Get or create conda prefix updater for the environment
     // Use best_platform() because we can only install/run Python on the host platform
@@ -694,7 +698,7 @@ async fn read_local_package_metadata(
     let database = DistributionDatabase::new(
         &registry_client,
         &lazy_build_dispatch,
-        ctx.uv_context.concurrency.downloads,
+        ctx.uv_context.concurrency.downloads_semaphore.clone(),
     );
 
     // Missing or unparsable pyproject -> trust the lock.
@@ -703,7 +707,7 @@ async fn read_local_package_metadata(
         tracing::debug!(package = %package_name, "no readable pyproject.toml");
         return Ok(None);
     };
-    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents) else {
+    let Ok(pyproject_toml) = PyProjectToml::from_toml(&contents, pyproject_path.display()) else {
         tracing::debug!(package = %package_name, "pyproject.toml could not be parsed");
         return Ok(None);
     };
@@ -746,33 +750,20 @@ async fn read_local_package_metadata(
         }
     };
 
-    // A round-trip failure here would be a uv bug, not "static doesn't
-    // apply", so propagate rather than swallow as `Ok(None)`.
-    let requires_dist_vec: Vec<pep508_rs::Requirement> = requires_dist
-        .requires_dist
-        .iter()
-        .map(|req| {
-            req.to_string()
-                .parse::<pep508_rs::Requirement>()
-                .map_err(|e| {
-                    PlatformUnsat::FailedToReadLocalMetadata(
-                        package_name.clone(),
-                        format!("Invalid requirement: {e}"),
-                    )
-                })
-        })
-        .collect::<Result<_, _>>()?;
+    // Match the lockfile-write serializer so both sides of
+    // `compare_metadata` agree on `[tool.uv.sources]` requirements
+    // (#6049 follow-up).
+    let requires_dist_vec: Vec<pep508_rs::Requirement> =
+        to_requirements(requires_dist.requires_dist.iter()).map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Invalid requirement: {e}"),
+            )
+        })?;
 
-    // Match the wheel METADATA shape used at lock time.
-    let empty_optional_deps = IndexMap::new();
-    let optional_deps = project
-        .and_then(|p| p.optional_dependencies.as_ref())
-        .unwrap_or(&empty_optional_deps);
-    let expanded =
-        pypi_metadata::expand_self_extras(requires_dist_vec, package_name, optional_deps);
     let metadata = pypi_metadata::LocalPackageMetadata {
         version,
-        requires_dist: expanded,
+        requires_dist: requires_dist_vec,
         requires_python,
     };
 
@@ -798,6 +789,7 @@ mod tests {
     use rattler_lock::{PypiPackageData, UrlOrPath, Verbatim};
     use url::Url;
     use uv_distribution_types::RequirementSource;
+    use uv_redacted::DisplaySafeUrl;
 
     use super::super::PypiNoBuildCheck;
     use super::super::platform::RequirementOrigin;
@@ -840,6 +832,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap_err();
 
@@ -868,6 +861,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap();
         let non_matching_spec = pep508_requirement_to_uv_requirement(
@@ -879,6 +873,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap_err();
 
@@ -894,6 +889,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap_err();
 
@@ -916,6 +912,7 @@ mod tests {
             &locked_data_default_branch,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap();
     }
@@ -964,6 +961,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap();
     }
@@ -995,6 +993,7 @@ mod tests {
             &locked_data,
             Path::new(""),
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap();
     }
@@ -1022,6 +1021,7 @@ mod tests {
             &locked_data,
             Path::new(""),
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap();
     }
@@ -1073,6 +1073,7 @@ mod tests {
             &locked_data,
             Path::new(""),
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap();
     }
@@ -1105,6 +1106,7 @@ mod tests {
             &locked_data,
             Path::new(""),
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap();
     }
@@ -1133,6 +1135,7 @@ mod tests {
             &locked_data,
             Path::new(""),
             RequirementOrigin::Manifest,
+            &[],
         )
         .unwrap();
     }
@@ -1171,6 +1174,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         );
         assert!(
             result.is_err(),
@@ -1220,6 +1224,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         )
         .expect_err("direct requirement without index must not satisfy custom-index lock");
 
@@ -1229,6 +1234,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::RequiresDist,
+            &[],
         )
         .expect("transitive requirement with no pep508 index must satisfy a custom-index lock");
     }
@@ -1244,7 +1250,7 @@ mod tests {
 
         let index =
             uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
-                uv_pep508::VerbatimUrl::from_url(Url::parse(index_url).unwrap().into()),
+                uv_pep508::VerbatimUrl::from_url(DisplaySafeUrl::parse(index_url).unwrap()),
             ));
         uv_distribution_types::Requirement {
             name: UvPackageName::from_str(name).unwrap(),
@@ -1288,6 +1294,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         );
         assert!(
             result.is_err(),
@@ -1319,6 +1326,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         );
         assert!(
             result.is_ok(),
@@ -1352,11 +1360,105 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         );
         assert!(
             result.is_err(),
             "expected adding an index to invalidate satisfiability"
         );
+    }
+
+    /// Regression for #6060: a feature-level `index-url` plus a manifest
+    /// requirement with no per-package `index` must satisfy a lock-file
+    /// recorded against that custom URL.
+    #[test]
+    fn test_pypi_feature_level_index_should_satisfy() {
+        let custom_index = "https://custom.example.com/simple";
+
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://custom.example.com/simple/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            Some(Url::parse(custom_index).unwrap()),
+            vec![],
+            None,
+        ));
+
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("my-dep>=1.0").unwrap(),
+        )
+        .unwrap();
+
+        let project_root = PathBuf::from_str("/").unwrap();
+
+        let result = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[Url::parse(custom_index).unwrap()],
+        );
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        // Trailing slash on the manifest-side URL must still match.
+        let result_with_trailing_slash = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[Url::parse(&format!("{custom_index}/")).unwrap()],
+        );
+        assert!(result_with_trailing_slash.is_ok());
+
+        // An unrelated configured index must still invalidate.
+        let result_unrelated = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[Url::parse("https://unrelated.example.com/simple").unwrap()],
+        );
+        assert!(result_unrelated.is_err());
+    }
+
+    /// A package locked from an `extra-index-urls` entry must satisfy a
+    /// manifest requirement with no per-package `index`.
+    #[test]
+    fn test_pypi_extra_index_should_satisfy() {
+        let extra_index = "https://extra.example.com/simple";
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://extra.example.com/simple/packages/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            Some(Url::parse(extra_index).unwrap()),
+            vec![],
+            None,
+        ));
+
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("my-dep>=1.0").unwrap(),
+        )
+        .unwrap();
+
+        let project_root = PathBuf::from_str("/").unwrap();
+
+        let result = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[
+                pixi_consts::consts::DEFAULT_PYPI_INDEX_URL.clone(),
+                Url::parse(extra_index).unwrap(),
+            ],
+        );
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
     }
 
     /// V6 lockfiles don't store per-package PyPI index URLs, so
@@ -1393,6 +1495,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
         );
         assert!(
             result.is_ok(),

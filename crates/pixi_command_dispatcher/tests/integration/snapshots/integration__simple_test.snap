@@ -6,12 +6,13 @@ Pixi solve (test@[PLATFORM])
 ├── Git Checkout (file://[LOCAL_GIT_REPO]#[GIT_HASH])
 ├── Source metadata (foobar-desktop @ git+file://[LOCAL_GIT_REPO]?subdirectory=recipe&rev=[GIT_REF]#[GIT_HASH])
 │   ├── Build backend metadata (git+file://[LOCAL_GIT_REPO]?subdirectory=recipe&rev=[GIT_REF]#[GIT_HASH])
+│   │   ├── Git Checkout (file://[LOCAL_GIT_REPO]#[GIT_HASH])
 │   │   └── Instantiate backend (pixi-build-rattler-build)
-│   │       └── Conda solve #5
+│   │       └── Conda solve #6
 │   └── Source record (foobar-desktop @ git+file://[LOCAL_GIT_REPO]?subdirectory=recipe&rev=[GIT_REF]#[GIT_HASH])
 ├── Source metadata (foobar @ git+file://[LOCAL_GIT_REPO]?subdirectory=recipe&rev=[GIT_REF]#[GIT_HASH])
 │   └── Source record (foobar @ git+file://[LOCAL_GIT_REPO]?subdirectory=recipe&rev=[GIT_REF]#[GIT_HASH])
-└── Conda solve #9
+└── Conda solve #10
 Pixi install (test-env)
 ├── Backend source build (foobar-desktop)
 └── Backend source build (foobar)

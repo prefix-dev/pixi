@@ -11,18 +11,15 @@
 use std::sync::Arc;
 
 use pixi_compute_engine::DataStore;
-use pixi_git::resolver::GitResolver;
-use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
-use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
 
-use crate::cache::{BuildBackendMetadataCache, CacheDirs};
+use crate::cache::BuildBackendMetadataCache;
 use crate::reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter,
-    GitCheckoutReporter, InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter,
-    SourceMetadataReporter, SourceRecordReporter, UrlCheckoutReporter,
+    InstantiateBackendReporter, PixiInstallReporter, PixiSolveReporter, SourceMetadataReporter,
+    SourceRecordReporter,
 };
 
 /// Access the conda repodata gateway from global data.
@@ -36,50 +33,6 @@ impl HasGateway for DataStore {
     }
 }
 
-/// Access the git resolver from global data.
-pub trait HasGitResolver {
-    fn git_resolver(&self) -> &GitResolver;
-}
-
-impl HasGitResolver for DataStore {
-    fn git_resolver(&self) -> &GitResolver {
-        self.get::<GitResolver>()
-    }
-}
-
-/// Access the URL resolver from global data.
-pub trait HasUrlResolver {
-    fn url_resolver(&self) -> &UrlResolver;
-}
-
-impl HasUrlResolver for DataStore {
-    fn url_resolver(&self) -> &UrlResolver {
-        self.get::<UrlResolver>()
-    }
-}
-
-/// Access the download client from global data.
-pub trait HasDownloadClient {
-    fn download_client(&self) -> &LazyClient;
-}
-
-impl HasDownloadClient for DataStore {
-    fn download_client(&self) -> &LazyClient {
-        self.get::<LazyClient>()
-    }
-}
-
-/// Access the cache directories from global data.
-pub trait HasCacheDirs {
-    fn cache_dirs(&self) -> &CacheDirs;
-}
-
-impl HasCacheDirs for DataStore {
-    fn cache_dirs(&self) -> &CacheDirs {
-        self.get::<CacheDirs>()
-    }
-}
-
 /// Access the on-disk build-backend metadata cache from global data.
 pub trait HasBuildBackendMetadataCache {
     fn build_backend_metadata_cache(&self) -> &BuildBackendMetadataCache;
@@ -88,28 +41,6 @@ pub trait HasBuildBackendMetadataCache {
 impl HasBuildBackendMetadataCache for DataStore {
     fn build_backend_metadata_cache(&self) -> &BuildBackendMetadataCache {
         self.get::<BuildBackendMetadataCache>()
-    }
-}
-
-/// Access the per-key git-checkout reporter.
-pub trait HasGitCheckoutReporter {
-    fn git_checkout_reporter(&self) -> Option<&Arc<dyn GitCheckoutReporter>>;
-}
-
-impl HasGitCheckoutReporter for DataStore {
-    fn git_checkout_reporter(&self) -> Option<&Arc<dyn GitCheckoutReporter>> {
-        self.try_get::<Arc<dyn GitCheckoutReporter>>()
-    }
-}
-
-/// Access the per-key url-checkout reporter.
-pub trait HasUrlCheckoutReporter {
-    fn url_checkout_reporter(&self) -> Option<&Arc<dyn UrlCheckoutReporter>>;
-}
-
-impl HasUrlCheckoutReporter for DataStore {
-    fn url_checkout_reporter(&self) -> Option<&Arc<dyn UrlCheckoutReporter>> {
-        self.try_get::<Arc<dyn UrlCheckoutReporter>>()
     }
 }
 

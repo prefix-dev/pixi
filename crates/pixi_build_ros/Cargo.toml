@@ -4,7 +4,7 @@ edition.workspace = true
 license.workspace = true
 name = "pixi-build-ros"
 repository.workspace = true
-version = "0.4.0"
+version = "0.4.1"
 
 [package.metadata.dist]
 dist = false
@@ -20,9 +20,9 @@ name = "pixi-build-ros-gr"
 path = "src/main.rs"
 
 [features]
-default = ["rustls-tls"]
+default = ["rustls"]
 native-tls = ["pixi_build_backend/native-tls"]
-rustls-tls = ["pixi_build_backend/rustls-tls"]
+rustls = ["pixi_build_backend/rustls"]
 slow_integration_tests = []
 
 [dependencies]

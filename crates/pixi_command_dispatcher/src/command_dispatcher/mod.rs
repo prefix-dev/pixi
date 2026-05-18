@@ -28,7 +28,10 @@ use crate::{
     BackendHandle, BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
     DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec, Executor,
     InstantiateBackendError, InstantiateBackendKey,
-    cache::{BuildBackendMetadataCache, CacheDirs},
+    cache::{
+        BuildBackendMetadataCache, CacheDirs,
+        markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
+    },
     environment::WorkspaceEnvRegistry,
     install_pixi::{
         InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
@@ -38,6 +41,9 @@ use crate::{
         InstantiateToolEnvironmentSpec,
     },
 };
+use pixi_compute_cache_dirs::CacheLocation;
+use pixi_compute_env_vars::EnvVarsKey;
+use pixi_path::AbsPresumedDirPathBuf;
 
 mod builder;
 mod error;
@@ -99,8 +105,9 @@ pub(crate) struct CommandDispatcherData {
     /// The resolver of url archives.
     pub url_resolver: UrlResolver,
 
-    /// The location to store caches.
-    pub cache_dirs: CacheDirs,
+    /// Anchors and overrides for on-disk caches. Shared with the
+    /// engine via [`CacheDirsKey`](pixi_compute_cache_dirs::CacheDirsKey).
+    pub cache_dirs: Arc<CacheDirs>,
 
     /// The reqwest client to use for network requests.
     pub download_client: LazyClient,
@@ -194,22 +201,17 @@ impl CommandDispatcher {
         &self.data.build_backend_metadata_cache
     }
 
-    /// Returns the source-build artifact cache rooted at
-    /// `cache_dirs.source_build_artifacts()`. Use this to invalidate
-    /// cached build outputs for a package (e.g. when implementing
-    /// `--force-reinstall` or `--clean` at the CLI layer).
-    pub fn source_build_artifact_cache(&self) -> crate::keys::ArtifactCache {
-        crate::keys::ArtifactCache::new(self.data.cache_dirs.source_build_artifacts().as_std_path())
-    }
-
-    /// Returns the source-build workspace cache rooted at
-    /// `cache_dirs.source_build_workspaces()`. Use this to wipe
-    /// per-package workspace state so the next build starts from a
-    /// clean backend-managed tree.
-    pub fn source_build_workspace_cache(&self) -> crate::keys::WorkspaceCache {
-        crate::keys::WorkspaceCache::new(
-            self.data.cache_dirs.source_build_workspaces().as_std_path(),
-        )
+    /// Synchronously resolve a typed cache directory through the
+    /// engine's [`CacheDirsKey`](pixi_compute_cache_dirs::CacheDirsKey)
+    /// and [`EnvVarsKey`] snapshots. Inside Key compute bodies use
+    /// `ctx.cache_dir::<L>().await` so the resolution dependencies are
+    /// recorded in the graph.
+    pub fn cache_dir<L: CacheLocation>(&self) -> AbsPresumedDirPathBuf {
+        let env = self
+            .engine
+            .read(&EnvVarsKey)
+            .expect("EnvVarsKey is injected at construction");
+        self.data.cache_dirs.resolve_with_env::<L>(&env)
     }
 
     /// Clear all source-build caches (artifacts + workspaces) for the
@@ -220,8 +222,10 @@ impl CommandDispatcher {
         &self,
         package: &rattler_conda_types::PackageName,
     ) -> std::io::Result<()> {
-        self.source_build_artifact_cache().clear_package(package)?;
-        self.source_build_workspace_cache().clear_package(package)?;
+        let artifacts_dir = self.cache_dir::<SourceBuildArtifactsDir>();
+        let workspaces_dir = self.cache_dir::<SourceBuildWorkspacesDir>();
+        crate::keys::ArtifactCache::new(artifacts_dir.as_std_path()).clear_package(package)?;
+        crate::keys::WorkspaceCache::new(workspaces_dir.as_std_path()).clear_package(package)?;
         Ok(())
     }
 

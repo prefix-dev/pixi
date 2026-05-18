@@ -269,7 +269,9 @@ pub async fn generate(
         }
     }
 
-    generated.recipe.build.script = Script::from_content(script_content).with_env(script_env);
+    generated.recipe.build.script = Script::from_content(script_content)
+        .with_env(script_env)
+        .with_secrets(model.secrets.iter().cloned().collect());
 
     // Add input globs the cache invalidator should watch. Pixi-native mode
     // doesn't distinguish editable installs, so include the python globs too.

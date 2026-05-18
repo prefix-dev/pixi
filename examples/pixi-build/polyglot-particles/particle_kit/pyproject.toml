@@ -11,11 +11,12 @@ version = "0.1.0"
 [tool.pixi.package.build.backend]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-python"
-version = "0.4.*"
+version = "*"
 
 [tool.pixi.package.host-dependencies]
 hatchling = ">=1.27,<2.0"
 python = ">=3.11"
+uv = "*"
 
 [tool.pixi.package.run-dependencies]
 particle_cpp_py = { path = "../particle_cpp_py" }

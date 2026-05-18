@@ -18,8 +18,8 @@ use miette::{Context, IntoDiagnostic};
 use pixi_auth::get_auth_store;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv,
+    BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs,
+    ComputeResultExt, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
 use pixi_config::{Config, ConfigCli};
@@ -95,13 +95,13 @@ pub struct Args {
     ///   s3://my-bucket/my-channel
     ///   channel:///path/to/local/channel
     ///   file:///path/to/local/channel
-    #[arg(long, conflicts_with = "target_dir")]
+    #[arg(long, visible_alias = "to", conflicts_with = "target_dir")]
     pub target_channel: Option<String>,
 
     /// The target local directory to copy packages into (no channel indexing).
     ///
     /// Accepts a local filesystem path.  Mutually exclusive with `--target-channel`.
-    #[arg(long, alias = "to", conflicts_with = "target_channel")]
+    #[arg(long, conflicts_with = "target_channel")]
     pub target_dir: Option<PathBuf>,
 
     /// Force overwrite existing packages
@@ -272,7 +272,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let build_dir = AbsPathBuf::new(build_dir)
             .expect("build dir is not absolute")
             .into_assume_dir();
-        cache_dirs.set_backend_metadata(build_dir);
+        cache_dirs.set_override::<BackendMetadataDir>(build_dir);
     }
     let progress = std::sync::Arc::new(TopLevelProgress::new(
         pixi_compute_reporters::OperationRegistry::new(),
@@ -573,7 +573,7 @@ async fn upload_packages_to_channel(
     let scheme = url.scheme();
 
     match scheme {
-        "s3" => upload_to_s3(url, package_paths, auth_storage, force).await,
+        "s3" => upload_to_s3(url, package_paths, force).await,
         "quetz" => upload_to_quetz(url, package_paths, auth_storage).await,
         "artifactory" => upload_to_artifactory(url, package_paths, auth_storage).await,
         "prefix" => {
@@ -808,12 +808,7 @@ async fn upload_to_artifactory(
 }
 
 /// Upload packages to S3 and run indexing.
-async fn upload_to_s3(
-    url: &Url,
-    package_paths: &[PathBuf],
-    auth_storage: &AuthenticationStorage,
-    force: bool,
-) -> miette::Result<()> {
+async fn upload_to_s3(url: &Url, package_paths: &[PathBuf], force: bool) -> miette::Result<()> {
     use rattler_index::{IndexS3Config, ensure_channel_initialized_s3, index_s3};
     use rattler_upload::upload::upload_package_to_s3;
     use std::collections::HashSet;
@@ -836,9 +831,8 @@ async fn upload_to_s3(
     }
 
     upload_package_to_s3(
-        auth_storage,
         url.clone(),
-        None,
+        resolved_credentials.clone(),
         &package_paths.to_vec(),
         force,
     )
