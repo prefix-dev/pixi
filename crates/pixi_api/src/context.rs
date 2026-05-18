@@ -288,7 +288,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
         git_options: GitOptions,
-    ) -> miette::Result<Option<UpdateDeps>> {
+    ) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
         Box::pin(crate::workspace::add::add_conda_dep(
             self.workspace_mut()?,
             specs,
@@ -304,7 +304,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         editable: bool,
         options: DependencyOptions,
-    ) -> miette::Result<Option<UpdateDeps>> {
+    ) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
         Box::pin(crate::workspace::add::add_pypi_dep(
             self.workspace_mut()?,
             pypi_deps,

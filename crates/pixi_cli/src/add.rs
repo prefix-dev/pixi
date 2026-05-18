@@ -136,7 +136,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
-    let update_deps = match args.dependency_config.dependency_type() {
+    let (update_deps, skipped) = match args.dependency_config.dependency_type() {
         DependencyType::CondaDependency(spec_type) => {
             let git_options = GitOptions {
                 git: args.dependency_config.git.clone(),
@@ -182,10 +182,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
+    for package in &skipped {
+        eprintln!(
+            "{}{} is already a dependency",
+            console::style(console::Emoji("✔ ", "")).green(),
+            console::style(package).bold(),
+        );
+        eprintln!(
+            "  Run {} to get the newest compatible version",
+            console::style(format!("pixi upgrade {package}")).bold(),
+        );
+    }
+
     if let Some(update_deps) = update_deps {
-        // Notify the user we succeeded
+        // Notify the user we succeeded, excluding packages that were skipped
         args.dependency_config
-            .display_success("Added", update_deps.implicit_constraints);
+            .display_success("Added", update_deps.implicit_constraints, &skipped);
     }
 
     Ok(())

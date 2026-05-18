@@ -708,6 +708,47 @@ async fn pinning_dependency() {
 }
 
 #[tokio::test]
+async fn add_existing_dependency_without_version_is_noop() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("foobar", "1").finish());
+    package_database.add_package(Package::build("foobar", "2").finish());
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().with_channel(local_channel.url()).await.unwrap();
+
+    // Add with an explicit version
+    pixi.add("foobar==1").await.unwrap();
+
+    let get_spec = |pixi: &PixiControl| -> String {
+        pixi.workspace()
+            .unwrap()
+            .workspace
+            .value
+            .default_feature()
+            .dependencies(SpecType::Run, None)
+            .unwrap_or_default()
+            .get_single("foobar")
+            .unwrap()
+            .unwrap()
+            .clone()
+            .to_toml_value()
+            .to_string()
+    };
+    assert_eq!(get_spec(&pixi), r#""==1""#);
+
+    // Re-add without a version — should be a noop, spec should remain ==1
+    pixi.add("foobar").await.unwrap();
+    assert_eq!(get_spec(&pixi), r#""==1""#);
+
+    // Re-add with an explicit version — should overwrite
+    pixi.add("foobar==2").await.unwrap();
+    assert_eq!(get_spec(&pixi), r#""==2""#);
+}
+
+#[tokio::test]
 async fn add_dependency_pinning_strategy() {
     setup_tracing();
 
