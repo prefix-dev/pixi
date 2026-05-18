@@ -39,7 +39,11 @@ __wrap__() {
     if [ "${PLATFORM-}" = "Darwin" ]; then
         PLATFORM="apple-darwin"
     elif [ "${PLATFORM-}" = "Linux" ]; then
-        PLATFORM="unknown-linux-musl"
+        if [ "${ARCH-}" = "riscv64" ]; then
+            PLATFORM="unknown-linux-gnu"
+        else
+            PLATFORM="unknown-linux-musl"
+        fi
     elif [ "$(uname -o)" = "Msys" ]; then
         IS_MSYS=true
         PLATFORM="pc-windows-msvc"
@@ -47,12 +51,7 @@ __wrap__() {
 
     case "${ARCH-}" in
     arm64 | aarch64) ARCH="aarch64" ;;
-    riscv64)
-        ARCH="riscv64gc"
-        if [ "${PLATFORM-}" = "unknown-linux-musl" ]; then
-            PLATFORM="unknown-linux-gnu"
-        fi
-        ;;
+    riscv64) ARCH="riscv64gc" ;;
     esac
 
     BINARY="pixi-${ARCH}-${PLATFORM}"
