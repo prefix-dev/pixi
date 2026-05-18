@@ -411,7 +411,7 @@ Until profiles are implemented, editable installations are not easily configurab
 This is the current behaviour:
 
 - `editable` is `true` when installing the package (e.g. with `pixi install`)
-- `editable` is `false` when building the package (e.g. with `pixi build`)
+- `editable` is `false` when building the package (e.g. with `pixi publish`)
 - Set environment variable `BUILD_EDITABLE_PYTHON` to `true` or `false` to enforce a certain behavior
 
 ## Default Variants

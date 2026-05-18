@@ -37,16 +37,21 @@ use rattler_package_streaming::seek::read_package_file;
 
 /// Build a conda package and publish it to a channel.
 ///
-/// This is a convenience command that combines `pixi build` and `pixi upload`.
+/// Builds the package from your workspace and either uploads it to a channel
+/// (`--target-channel`) or copies the artifact into a local directory
+/// (`--target-dir`).
 ///
-/// Supported target URLs (--target-channel / --to):
+/// Supported destinations for `--target-channel` (alias `--to`):
 ///   - prefix.dev: `https://prefix.dev/<channel-name>`
 ///   - anaconda.org: `https://anaconda.org/<owner>/<label>`
 ///   - S3: `s3://bucket-name`
-///   - Local channel (with indexing): `channel:///path/to/channel`
-///   - Local path (copy only): `file:///path/to/output`
 ///   - Quetz: `quetz://server/<channel>`
 ///   - Artifactory: `artifactory://server/<channel>`
+///   - Local filesystem channel (with indexing):
+///     `file:///path/to/channel` or a bare path
+///
+/// Use `--target-dir <PATH>` instead to copy the built package(s) into a
+/// directory without creating a channel structure.
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
 pub struct Args {
@@ -87,20 +92,15 @@ pub struct Args {
     #[arg(long)]
     pub path: Option<PathBuf>,
 
-    /// The target channel URL to publish packages to.
+    /// The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel.
     ///
-    /// Examples:
-    ///   <https://prefix.dev/my-channel>
-    ///   <https://anaconda.org/my-user>
-    ///   s3://my-bucket/my-channel
-    ///   channel:///path/to/local/channel
-    ///   file:///path/to/local/channel
+    /// Mutually exclusive with `--target-channel`.
     #[arg(long, visible_alias = "to", conflicts_with = "target_dir")]
     pub target_channel: Option<String>,
 
-    /// The target local directory to copy packages into (no channel indexing).
+    /// The local filesystem path to copy the built package(s) into (no channel indexing).
     ///
-    /// Accepts a local filesystem path.  Mutually exclusive with `--target-channel`.
+    /// Accepts an absolute or relative directory path. Mutually exclusive with `--target-channel`.
     #[arg(long, conflicts_with = "target_channel")]
     pub target_dir: Option<PathBuf>,
 
