@@ -593,8 +593,19 @@ pub enum UpdateMode {
     /// Validate if the prefix is up-to-date.
     /// Using a fast and simple validation method.
     /// Used for skipping the update if the prefix is already up-to-date, in
-    /// activating commands. Like `pixi shell` or `pixi run`.
+    /// commands that should still refresh source packages before execution,
+    /// like `pixi run`.
     QuickValidate,
+    /// Validate if the prefix is up-to-date for shell activation.
+    ///
+    /// This trusts the prefix marker when the lock-file hash matches, even when
+    /// the lock-file contains source packages. Shell activation should not
+    /// rebuild source packages or touch the network when an already-installed
+    /// prefix matches the lock-file; commands that execute tasks should use
+    /// [`Self::QuickValidate`] so source packages can still refresh.
+    ///
+    /// Used by `pixi shell` and `pixi shell-hook`.
+    QuickValidateActivation,
     /// Force a prefix install without running the short validation.
     /// Used for updating the prefix when the lock-file likely out of date.
     /// Like `pixi install` or `pixi update`.
@@ -696,8 +707,11 @@ impl<'p> LockFileDerivedData<'p> {
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
         let hash = self.locked_environment_hash(environment)?;
-        if update_mode == UpdateMode::QuickValidate
-            && let Some(prefix) = self.cached_prefix(environment, &hash)
+        if matches!(
+            update_mode,
+            UpdateMode::QuickValidate | UpdateMode::QuickValidateActivation
+        ) && let Some(prefix) =
+            self.cached_prefix(environment, &hash, update_mode == UpdateMode::QuickValidate)
         {
             return prefix;
         }
@@ -751,6 +765,7 @@ impl<'p> LockFileDerivedData<'p> {
         &self,
         environment: &Environment<'p>,
         hash: &LockedEnvironmentHash,
+        source_packages_invalidate_cache: bool,
     ) -> Option<Result<Prefix, Report>> {
         let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) else {
             tracing::debug!(
@@ -761,42 +776,56 @@ impl<'p> LockFileDerivedData<'p> {
         };
 
         if environment_file.environment_lock_file_hash == *hash {
-            // If we contain source packages from conda or PyPI we update the prefix by
-            // default
-            let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
-                self.lock_file
-                    .platform(&Platform::current().to_string())
-                    .and_then(|p| env.conda_packages(p))
-                    .is_some_and(|mut packages| {
-                        packages.any(|package| package.as_source().is_some())
-                    })
-            });
+            // If we contain source packages from conda or PyPI we update the
+            // prefix by default. Activation-only callers can opt out: they only
+            // need an already-installed prefix matching the lock-file marker and
+            // must not rebuild source packages as a side effect of shell setup.
+            let platform = environment.best_platform();
+            let contains_conda_source_pkgs = self
+                .lock_file
+                .environment(environment.name().as_str())
+                .is_some_and(|env| {
+                    self.lock_file
+                        .platform(&platform.to_string())
+                        .and_then(|p| env.conda_packages(p))
+                        .is_some_and(|mut packages| {
+                            packages.any(|package| package.as_source().is_some())
+                        })
+                });
 
             // Check if we have source packages from PyPI
             // that is a directory, this is basically the only kind of source dependency
             // that you'll modify on a general basis.
             let contains_pypi_source_pkgs = environment
-                .pypi_dependencies(Some(Platform::current()))
+                .pypi_dependencies(Some(platform))
                 .iter()
                 .any(|(_, req)| {
                     req.iter()
                         .any(|dep| dep.as_path().map(|p| p.is_dir()).unwrap_or_default())
                 });
-            if contains_conda_source_pkgs || contains_pypi_source_pkgs {
+            if source_packages_invalidate_cache
+                && (contains_conda_source_pkgs || contains_pypi_source_pkgs)
+            {
                 tracing::debug!(
                     "Lock file contains source packages: ignore lock file hash and update the prefix"
                 );
             } else {
-                tracing::info!(
-                    "Environment '{}' is up-to-date with lock file hash",
-                    environment.name().fancy_display()
-                );
+                if contains_conda_source_pkgs || contains_pypi_source_pkgs {
+                    tracing::debug!(
+                        "Environment '{}' is up-to-date with lock file hash; using cached prefix for activation despite source packages",
+                        environment.name().fancy_display()
+                    );
+                } else {
+                    tracing::info!(
+                        "Environment '{}' is up-to-date with lock file hash",
+                        environment.name().fancy_display()
+                    );
+                }
                 return Some(Ok(Prefix::new(environment.dir())));
             }
         }
         None
     }
-
     /// Returns the up-to-date prefix for the given environment.
     async fn update_prefix(
         &self,

@@ -2,6 +2,11 @@ use fs_err as fs;
 use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
+use pixi_core::{
+    InstallFilter, UpdateLockFileOptions,
+    environment::get_update_lock_file_and_prefix,
+    lock_file::{ReinstallPackages, UpdateMode},
+};
 use rattler_conda_types::{Platform, package::RunExportsJson};
 use rattler_lock::{LockFile, PackageBuildSource};
 use std::path::PathBuf;
@@ -2419,6 +2424,89 @@ my-package = {{ path = "./my-package" }}
         count_build_events(&second_build_events),
         0,
         "second install should reuse the existing build cache for an unchanged source package"
+    );
+}
+
+/// Shell activation should trust an already-installed prefix whose lock hash
+/// marker matches, even when the lock-file contains source packages. Falling
+/// through to the install path can initialize build backends and touch private
+/// channels while generating a shell hook.
+#[tokio::test]
+async fn activation_quick_validate_uses_cached_prefix_with_source_packages() {
+    setup_tracing();
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let backend_override = BackendOverride::from_memory(instantiator);
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "0.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#,
+    )
+    .unwrap();
+
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+name = "my-package"
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+            Platform::current()
+        ),
+    )
+    .unwrap();
+
+    pixi.install().await.unwrap();
+    assert_eq!(count_build_events(&observer.events()), 1);
+
+    let workspace = pixi.workspace().unwrap();
+    let environment = workspace.environment_from_name_or_env_var(None).unwrap();
+    let environment_file = environment
+        .dir()
+        .join(consts::CONDA_META_DIR)
+        .join(consts::ENVIRONMENT_FILE_NAME);
+    let before = fs::metadata(&environment_file).unwrap().modified().unwrap();
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+
+    get_update_lock_file_and_prefix(
+        &environment,
+        None,
+        UpdateMode::QuickValidateActivation,
+        UpdateLockFileOptions::default(),
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await
+    .unwrap();
+
+    assert!(
+        observer.events().is_empty(),
+        "activation quick validation should not invoke the source build backend"
+    );
+    let after = fs::metadata(&environment_file).unwrap().modified().unwrap();
+    assert_eq!(
+        before, after,
+        "activation quick validation should return from the cached-prefix path without rewriting the prefix marker"
     );
 }
 
