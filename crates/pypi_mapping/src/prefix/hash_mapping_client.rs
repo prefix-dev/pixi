@@ -41,14 +41,14 @@ impl From<reqwest::Error> for HashMappingClientError {
     }
 }
 
-impl From<HashMappingClientError> for MappingError {
-    fn from(value: HashMappingClientError) -> Self {
-        match value {
+impl HashMappingClientError {
+    fn into_mapping_error(self, url: String) -> MappingError {
+        match self {
             HashMappingClientError::Io(err) => MappingError::IoError {
                 source: err,
-                path: std::path::PathBuf::new(),
+                cache_path: String::new(),
             },
-            HashMappingClientError::Reqwest(err) => MappingError::Reqwest(err),
+            HashMappingClientError::Reqwest(err) => MappingError::Reqwest { source: err, url },
         }
     }
 }
@@ -246,7 +246,7 @@ async fn try_fetch_mapping(
     let hash_str = format!("{sha256:x}");
     let url = format!("{STORAGE_URL}/{HASH_DIR}/{hash_str}");
 
-    // Fetch the mapping from the server
+    tracing::debug!(url = %url, "fetching hash-based conda-pypi mapping");
     let response = client.client().get(&url).send().await?;
 
     cache_metrics.record_request_response(&response);
@@ -274,7 +274,13 @@ impl DerivePurls for HashMappingClient {
         };
 
         // Fetch the mapping from the server, or return None if it doesn't exist
-        let Some(mapped_package) = self.get_mapping(sha256, cache_metrics).await? else {
+        let hash_str = format!("{sha256:x}");
+        let url = format!("{STORAGE_URL}/{HASH_DIR}/{hash_str}");
+        let Some(mapped_package) = self
+            .get_mapping(sha256, cache_metrics)
+            .await
+            .map_err(|e| e.into_mapping_error(url))?
+        else {
             return Ok(None);
         };
 

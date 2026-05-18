@@ -155,22 +155,29 @@ impl MappingClientBuilder {
     }
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, miette::Diagnostic)]
 pub enum MappingError {
-    #[error("failed to access conda-pypi mapping cache at '{path}'")]
+    #[error("failed to access conda-pypi mapping cache at '{cache_path}'")]
+    #[diagnostic(help("try clearing the cache with: rm -rf {cache_path}"))]
     IoError {
         #[source]
         source: std::io::Error,
-        path: PathBuf,
+        cache_path: String,
     },
-    #[error("failed to fetch conda-pypi mapping from remote source")]
-    Reqwest(#[source] reqwest_middleware::Error),
-}
-
-impl From<reqwest_middleware::Error> for MappingError {
-    fn from(err: reqwest_middleware::Error) -> Self {
-        MappingError::Reqwest(err)
-    }
+    #[error("failed to fetch conda-pypi mapping from '{url}'")]
+    Reqwest {
+        #[source]
+        source: reqwest_middleware::Error,
+        url: String,
+    },
+    #[error(
+        "conda-pypi mapping cache error (cache path: {cache_path}). Try clearing it with: rm -rf {cache_path}"
+    )]
+    Cache {
+        #[source]
+        source: reqwest_middleware::Error,
+        cache_path: String,
+    },
 }
 
 impl MappingClient {
@@ -358,13 +365,19 @@ impl MappingClient {
         Ok(purls)
     }
 
-    /// Adds cache path context to a MappingError if it's an IO error.
+    /// Adds cache path context to a MappingError, and reclassifies middleware
+    /// errors (which originate from the HTTP cache layer) as cache corruption.
     fn with_cache_path_context(&self, err: MappingError) -> MappingError {
+        let cache_path = self.cache_path.display().to_string();
         match err {
-            MappingError::IoError { source, path: _ } => MappingError::IoError {
-                source,
-                path: self.cache_path.clone(),
-            },
+            MappingError::IoError { source, .. } => MappingError::IoError { source, cache_path },
+            MappingError::Reqwest { source, url } => {
+                if source.is_middleware() {
+                    MappingError::Cache { source, cache_path }
+                } else {
+                    MappingError::Reqwest { source, url }
+                }
+            }
             other => other,
         }
     }

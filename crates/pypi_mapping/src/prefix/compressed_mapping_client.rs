@@ -98,6 +98,7 @@ impl CompressedMappingClient {
                     ),
                     None => None,
                 };
+                tracing::debug!(url = %compressed_mapping_url, "fetching compressed conda-pypi mapping");
                 let response = inner
                     .client
                     .client()
@@ -127,7 +128,13 @@ impl DerivePurls for CompressedMappingClient {
         }
 
         // Get the mapping from the server
-        let mapping = self.get_mapping(cache_metrics).await?;
+        let mapping =
+            self.get_mapping(cache_metrics)
+                .await
+                .map_err(|source| MappingError::Reqwest {
+                    source,
+                    url: COMPRESSED_MAPPING.to_string(),
+                })?;
 
         // Determine the mapping for the record
         let Some(potential_pypi_name) = mapping.get(record.package_record.name.as_normalized())
