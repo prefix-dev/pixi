@@ -180,6 +180,111 @@ fn cli_variants_map(cli: &[(String, Vec<String>)]) -> BTreeMap<String, Vec<Varia
     grouped
 }
 
+/// Variant keys whose values either differ across the built outputs or were
+/// explicitly overridden on the CLI. These are the ones worth surfacing in
+/// per-package summaries — printing every keyed variant for every package would
+/// be noisy when most of them are identical across outputs.
+fn distinguishing_variant_keys(
+    package_variants: &[&BTreeMap<String, VariantValue>],
+    cli_keys: &BTreeSet<String>,
+) -> BTreeSet<String> {
+    let mut all_keys: BTreeSet<String> = BTreeSet::new();
+    for variants in package_variants {
+        all_keys.extend(variants.keys().cloned());
+    }
+
+    let mut keys = BTreeSet::new();
+    for key in all_keys {
+        if cli_keys.contains(&key) {
+            keys.insert(key);
+            continue;
+        }
+        let distinct: BTreeSet<Option<&VariantValue>> =
+            package_variants.iter().map(|v| v.get(&key)).collect();
+        if distinct.len() > 1 {
+            keys.insert(key);
+        }
+    }
+    keys
+}
+
+/// Render the selected variants for a single package as ` (key: value, ...)`,
+/// or an empty string when there are none to show.
+fn format_variant_suffix(
+    variants: &BTreeMap<String, VariantValue>,
+    keys: &BTreeSet<String>,
+) -> String {
+    let parts: Vec<String> = keys
+        .iter()
+        .filter_map(|k| variants.get(k).map(|v| format!("{k}: {v}")))
+        .collect();
+    if parts.is_empty() {
+        String::new()
+    } else {
+        format!(" ({})", parts.join(", "))
+    }
+}
+
+/// Collect every `--variant KEY=VAL` pair that doesn't appear in any of the
+/// resolved outputs. Catches typos like `--variant cmke=4.3.0` and flags values
+/// that were dropped because they had no matching variant.
+///
+/// Returns `(unused_keys, unused_values)` where each `unused_values` entry is
+/// `(key, value)`.
+fn unused_cli_variants(
+    cli_variants: &[(String, Vec<String>)],
+    package_variants: &[&BTreeMap<String, VariantValue>],
+) -> (Vec<String>, Vec<(String, String)>) {
+    let mut used: BTreeMap<&String, BTreeSet<&VariantValue>> = BTreeMap::new();
+    for variants in package_variants {
+        for (k, v) in *variants {
+            used.entry(k).or_default().insert(v);
+        }
+    }
+
+    let mut unused_keys = Vec::new();
+    let mut unused_values = Vec::new();
+    for (key, values) in cli_variants {
+        match used.get(key) {
+            None => unused_keys.push(key.clone()),
+            Some(used_values) => {
+                for value in values {
+                    let candidate = VariantValue::from(value.as_str());
+                    if !used_values.iter().any(|v| **v == candidate) {
+                        unused_values.push((key.clone(), value.clone()));
+                    }
+                }
+            }
+        }
+    }
+    (unused_keys, unused_values)
+}
+
+/// Print warnings for `--variant` overrides that didn't make it into any
+/// built output. Wraps [`unused_cli_variants`] with the user-facing format.
+fn warn_unused_cli_variants(
+    cli_variants: &[(String, Vec<String>)],
+    package_variants: &[&BTreeMap<String, VariantValue>],
+) {
+    let (unused_keys, unused_values) = unused_cli_variants(cli_variants, package_variants);
+    let warn_prefix = console::style(console::Emoji("⚠️  ", "warning: ")).yellow();
+    for key in unused_keys {
+        pixi_progress::println!(
+            "{}variant key '{}' was not used by any built package; check for typos",
+            warn_prefix,
+            key,
+        );
+    }
+    for (key, value) in unused_values {
+        pixi_progress::println!(
+            "{}variant value '{}={}' was not used by any built package",
+            warn_prefix,
+            key,
+            value,
+        );
+    }
+}
+
 /// Resolve CLI `--variant-config` paths against the given working directory.
 fn resolve_variant_config_paths(paths: &[PathBuf], cwd: &Path) -> Vec<PathBuf> {
     paths
@@ -467,19 +572,44 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let packages = &backend_metadata.metadata.outputs;
 
+    // The CondaOutput metadata uses `pixi_build_types::VariantValue`, while the
+    // rest of the publish flow (and our helpers) work with the
+    // `pixi_utils::variants::VariantValue` re-export. Convert once at the
+    // boundary so the helpers see a uniform value type.
+    let pkg_variant_maps_owned: Vec<BTreeMap<String, VariantValue>> = packages
+        .iter()
+        .map(|p| {
+            p.metadata
+                .variant
+                .iter()
+                .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
+                .collect()
+        })
+        .collect();
+    let pkg_variant_maps: Vec<&BTreeMap<String, VariantValue>> =
+        pkg_variant_maps_owned.iter().collect();
+
+    // Surface `--variant KEY=VAL` overrides that didn't make it into any output
+    // (typically typos like `cmke=4.3.0`) before the build runs.
+    warn_unused_cli_variants(&args.variant, &pkg_variant_maps);
+
+    let cli_variant_keys: BTreeSet<String> = args.variant.iter().map(|(k, _)| k.clone()).collect();
+    let display_variant_keys = distinguishing_variant_keys(&pkg_variant_maps, &cli_variant_keys);
+
     // Print initial build summary
     pixi_progress::println!(
         "\n{}Building {} package(s):",
         console::style(console::Emoji("📋 ", "")).cyan(),
         packages.len()
     );
-    for pkg in packages {
+    for (pkg, variants) in packages.iter().zip(&pkg_variant_maps_owned) {
         pixi_progress::println!(
-            "  - {} v{} [{}] ({})",
+            "  - {} v{} [{}] ({}){}",
             pkg.metadata.name.as_normalized(),
             pkg.metadata.version,
             pkg.metadata.build,
-            pkg.metadata.subdir
+            pkg.metadata.subdir,
+            format_variant_suffix(variants, &display_variant_keys),
         );
     }
     pixi_progress::println!("");
@@ -516,11 +646,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    // Build and collect all package paths
-    let mut built_package_paths: Vec<PathBuf> = Vec::new();
+    // Build and collect all package paths along with the variants each was
+    // built with, so the publish summary can attribute every artifact back to
+    // the variant that produced it.
+    let mut built_packages: Vec<(PathBuf, BTreeMap<String, VariantValue>)> = Vec::new();
 
     for record in resolved_records {
         let record = Arc::unwrap_or_clone(record);
+        let variants = record.variants.clone();
         let build_spec = SourceBuildSpec {
             record: Arc::new(record.into()),
             channels: channels.clone(),
@@ -544,12 +677,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let package_path = dunce::canonicalize(&built.artifact)
             .expect("failed to canonicalize output file which must now exist");
 
-        built_package_paths.push(package_path);
+        built_packages.push((package_path, variants));
     }
 
-    if built_package_paths.is_empty() {
+    if built_packages.is_empty() {
         miette::bail!("No packages were built. Nothing to publish.");
     }
+
+    let built_package_paths: Vec<PathBuf> = built_packages.iter().map(|(p, _)| p.clone()).collect();
 
     let base = std::env::current_dir()
         .into_diagnostic()
@@ -610,12 +745,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         target_type,
         target_str,
     );
-    for path in &built_package_paths {
+    for (path, variants) in &built_packages {
         let name = path
             .file_name()
             .map(|n| n.to_string_lossy())
             .unwrap_or_default();
-        pixi_progress::println!("  - {}", name);
+        pixi_progress::println!(
+            "  - {}{}",
+            name,
+            format_variant_suffix(variants, &display_variant_keys),
+        );
     }
 
     Ok(())
@@ -1101,6 +1240,94 @@ mod tests {
             variants.get("cuda-version").unwrap(),
             &vec![VariantValue::from("12.8"), VariantValue::from("13.0")],
         );
+    }
+
+    fn variant_map<const N: usize>(entries: [(&str, &str); N]) -> BTreeMap<String, VariantValue> {
+        entries
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), VariantValue::from(v)))
+            .collect()
+    }
+
+    #[test]
+    fn distinguishing_variant_keys_picks_differing_and_cli_keys() {
+        let pkg_a = variant_map([("python", "3.12"), ("cmake", "4.3.0")]);
+        let pkg_b = variant_map([("python", "3.12"), ("cmake", "4.3.2")]);
+        let pkgs = vec![&pkg_a, &pkg_b];
+
+        // Only `cmake` differs across packages.
+        assert_eq!(
+            distinguishing_variant_keys(&pkgs, &BTreeSet::new()),
+            BTreeSet::from(["cmake".to_string()]),
+        );
+
+        // CLI-overridden keys are surfaced even when they don't differ.
+        let cli_keys = BTreeSet::from(["python".to_string()]);
+        assert_eq!(
+            distinguishing_variant_keys(&pkgs, &cli_keys),
+            BTreeSet::from(["cmake".to_string(), "python".to_string()]),
+        );
+    }
+
+    #[test]
+    fn format_variant_suffix_renders_selected_keys() {
+        let variants = variant_map([("cmake", "4.3.0"), ("python", "3.12")]);
+        let keys = BTreeSet::from(["cmake".to_string(), "python".to_string()]);
+        assert_eq!(
+            format_variant_suffix(&variants, &keys),
+            " (cmake: 4.3.0, python: 3.12)",
+        );
+
+        // Single-key case.
+        let only_cmake = BTreeSet::from(["cmake".to_string()]);
+        assert_eq!(
+            format_variant_suffix(&variants, &only_cmake),
+            " (cmake: 4.3.0)",
+        );
+
+        // No selected keys → empty string (no trailing space).
+        assert_eq!(format_variant_suffix(&variants, &BTreeSet::new()), "");
+
+        // Selected key missing from this package → skipped.
+        let absent = BTreeSet::from(["cuda".to_string()]);
+        assert_eq!(format_variant_suffix(&variants, &absent), "");
+    }
+
+    #[test]
+    fn unused_cli_variants_flags_typos_and_dropped_values() {
+        let pkg_a = variant_map([("cmake", "4.3.0")]);
+        let pkg_b = variant_map([("cmake", "4.3.2")]);
+        let pkgs = vec![&pkg_a, &pkg_b];
+
+        let cli = vec![
+            // Typo: never appears in any output.
+            ("cmke".to_string(), vec!["4.3.0".to_string()]),
+            // Mixed: 4.3.0 and 4.3.2 are used, 5.0.0 is not.
+            (
+                "cmake".to_string(),
+                vec![
+                    "4.3.0".to_string(),
+                    "4.3.2".to_string(),
+                    "5.0.0".to_string(),
+                ],
+            ),
+        ];
+        let (unused_keys, unused_values) = unused_cli_variants(&cli, &pkgs);
+        assert_eq!(unused_keys, vec!["cmke".to_string()]);
+        assert_eq!(
+            unused_values,
+            vec![("cmake".to_string(), "5.0.0".to_string())]
+        );
+    }
+
+    #[test]
+    fn unused_cli_variants_silent_when_everything_used() {
+        let pkg = variant_map([("python", "3.12")]);
+        let pkgs = vec![&pkg];
+        let cli = vec![("python".to_string(), vec!["3.12".to_string()])];
+        let (keys, values) = unused_cli_variants(&cli, &pkgs);
+        assert!(keys.is_empty());
+        assert!(values.is_empty());
     }
 
     #[test]
