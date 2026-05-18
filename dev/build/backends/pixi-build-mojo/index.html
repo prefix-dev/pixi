@@ -4483,7 +4483,7 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Type</strong>: <code>Array&lt;BinConfig&gt;</code></li>
 <li><strong>Default</strong>: Auto-derived if not specified</li>
 </ul>
-<p>List of binary configurations to build. The created binary will be placed in the <code>$PREFIX/bin</code> dir and will be in the path after running <code>pixi install</code> assuming the package is listed as a dependency as in the example above. <code>pixi build</code> will create a conda package that includes the binary.</p>
+<p>List of binary configurations to build. The created binary will be placed in the <code>$PREFIX/bin</code> dir and will be in the path after running <code>pixi install</code> assuming the package is listed as a dependency as in the example above. Running <code>pixi publish</code> will create a conda package that includes the binary.</p>
 <p><strong>Auto-derive behavior:</strong>
 - If <code>bins</code> is not specified, pixi-build-mojo will search for a <code>main.mojo</code> file in the project root
 - If found, it creates a binary with the name set to the project name

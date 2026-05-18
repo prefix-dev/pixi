@@ -21,10 +21,10 @@ name = "pixi-build-rust"
 version = "0.*"
 ```
 
-Now you can use Pixi to build the package into a conda package:
+Now you can use Pixi to build the package into a conda package and copy it into the current directory:
 
 ```bash
-pixi build
+pixi publish --target-dir .
 ```
 
 Because of the isolation, the development dependencies such as `cargo` are not available in `pixi run`.

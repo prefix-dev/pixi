@@ -113,5 +113,5 @@ rich = "13.9.*"
 
 Using the preview feature you can now build packages from source.
 
-- `pixi build` has been added and will build a `.conda` file out of your package.
+- `pixi publish` builds a `.conda` file from your package and either uploads it to a channel (`--target-channel`) or copies it into a local directory (`--target-dir <PATH>`).
 - Other commands like `pixi install` and `pixi run` automatically make use of the build feature when a `path`, `git` or `url` dependency is present.

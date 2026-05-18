@@ -14,7 +14,6 @@ pixi [OPTIONS] [COMMAND]
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | [`add`](add/)                 | Adds dependencies to the workspace                                                                                                        |
 | [`auth`](auth/)               | Login to prefix.dev or anaconda.org servers to access private channels                                                                    |
-| [`build`](build/)             | Build a conda package from a Pixi package.                                                                                                |
 | [`clean`](clean/)             | Cleanup the environments                                                                                                                  |
 | [`completion`](completion/)   | Generates a completion script for a shell                                                                                                 |
 | [`config`](config/)           | Configuration management                                                                                                                  |

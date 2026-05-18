@@ -2,22 +2,23 @@
 
 Build a conda package and publish it to a channel.
 
-`pixi publish` **builds** a conda package from your workspace and **uploads** it to a channel.
+`pixi publish` **builds** a conda package from your workspace and **uploads** it to a channel or copies it into a directory.
 
-- With a target URL: builds and uploads to the specified destination.
-- Without a target URL: builds and copies the package to the current working directory.
+- With `--target-channel <URL>` (alias `--to`): builds and uploads to the specified channel.
+- With `--target-dir <PATH>`: builds and copies the package(s) into the given directory (no channel indexing).
 
-The target URL determines the upload backend:
+`--target-channel` and `--target-dir` are mutually exclusive. If neither is provided, the default is `--target-dir .` (copy to the current working directory).
 
-| URL pattern                      | Backend                                             |
-| -------------------------------- | --------------------------------------------------- |
-| `https://prefix.dev/<channel>`   | [prefix.dev](https://prefix.dev)                    |
-| `https://anaconda.org/<owner>`   | [Anaconda.org](https://anaconda.org)                |
-| `s3://bucket-name/channel`       | S3-compatible storage                               |
-| `channel:///path/to/channel`     | Local filesystem channel                            |
-| `file:///path/to/dir`            | Copy to local directory                             |
-| `quetz://server/<channel>`       | [Quetz](https://github.com/mamba-org/quetz)         |
-| `artifactory://server/<channel>` | [JFrog Artifactory](https://jfrog.com/artifactory/) |
+The `--target-channel` value determines the upload backend:
+
+| URL pattern                                               | Backend                                             |
+| --------------------------------------------------------- | --------------------------------------------------- |
+| `https://prefix.dev/<channel>`                            | [prefix.dev](https://prefix.dev)                    |
+| `https://anaconda.org/<owner>`                            | [Anaconda.org](https://anaconda.org)                |
+| `s3://bucket-name/channel`                                | S3-compatible storage                               |
+| `quetz://server/<channel>`                                | [Quetz](https://github.com/mamba-org/quetz)         |
+| `artifactory://server/<channel>`                          | [JFrog Artifactory](https://jfrog.com/artifactory/) |
+| `file:///path/to/channel` or a bare path like `./example` | Local filesystem channel (indexed)                  |
 
 ## Usage
 
@@ -49,13 +50,13 @@ pixi publish [OPTIONS]
 
 - [`--path <PATH>`](#arg---path) : The path to a directory containing a package manifest, or to a specific manifest file
 
-- [`--target-channel <TARGET_CHANNEL>`](#arg---target-channel) : The target channel URL to publish packages to
+- [`--target-channel <TARGET_CHANNEL>`](#arg---target-channel) : The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
 
   ```
   **aliases**: to
   ```
 
-- [`--target-dir <TARGET_DIR>`](#arg---target-dir) : The target local directory to copy packages into (no channel indexing)
+- [`--target-dir <TARGET_DIR>`](#arg---target-dir) : The local filesystem path to copy the built package(s) into (no channel indexing)
 
 - [`--force`](#arg---force) : Force overwrite existing packages
 
@@ -123,28 +124,20 @@ pixi publish [OPTIONS]
 
 Build a conda package and publish it to a channel.
 
-This is a convenience command that combines `pixi build` and `pixi upload`.
+Builds the package from your workspace and either uploads it to a channel (`--target-channel`) or copies the artifact into a local directory (`--target-dir`).
 
-Supported target URLs (--target-channel / --to):
+Supported destinations for `--target-channel` (alias `--to`):
 
 - prefix.dev: `https://prefix.dev/<channel-name>`
 - anaconda.org: `https://anaconda.org/<owner>/<label>`
 - S3: `s3://bucket-name`
-- Local channel (with indexing): `channel:///path/to/channel`
-- Local path (copy only): `file:///path/to/output`
 - Quetz: `quetz://server/<channel>`
 - Artifactory: `artifactory://server/<channel>`
+- Local filesystem channel (with indexing): `file:///path/to/channel` or a bare path
+
+Use `--target-dir <PATH>` instead to copy the built package(s) into a directory without creating a channel structure.
 
 ## Examples
-
-### Build and copy to current directory
-
-Omit the target URL to build and copy the resulting package to the current working directory.
-
-```shell
-# Build the package and copy it to the current directory
-pixi publish
-```
 
 ### Publishing to prefix.dev
 
@@ -152,16 +145,16 @@ The most common use case is publishing packages to a channel on [prefix.dev](htt
 
 ```shell
 # Build and publish to your prefix.dev channel
-pixi publish https://prefix.dev/my-channel
+pixi publish --target-channel https://prefix.dev/my-channel
 
 # Build for a specific target platform and publish
-pixi publish https://prefix.dev/my-channel --target-platform linux-64
+pixi publish --target-channel https://prefix.dev/my-channel --target-platform linux-64
 
 # Publish with sigstore attestation for supply chain security
-pixi publish https://prefix.dev/my-channel --generate-attestation
+pixi publish --target-channel https://prefix.dev/my-channel --generate-attestation
 
 # Force overwrite existing packages
-pixi publish https://prefix.dev/my-channel --force
+pixi publish --target-channel https://prefix.dev/my-channel --force
 ```
 
 For authentication, either log in first with `pixi auth login`, or set the `PREFIX_API_KEY` environment variable:
@@ -169,10 +162,10 @@ For authentication, either log in first with `pixi auth login`, or set the `PREF
 ```shell
 # Option 1: Log in (credentials are stored in the keychain)
 pixi auth login --token $MY_TOKEN https://prefix.dev
-pixi publish https://prefix.dev/my-channel
+pixi publish --target-channel https://prefix.dev/my-channel
 
 # Option 2: Use trusted publishing in CI (no credentials needed)
-pixi publish https://prefix.dev/my-channel
+pixi publish --target-channel https://prefix.dev/my-channel
 ```
 
 See the [prefix.dev deployment guide](../../../../deployment/prefix/) for more details on setting up channels and trusted publishing.
@@ -181,10 +174,10 @@ See the [prefix.dev deployment guide](../../../../deployment/prefix/) for more d
 
 ```shell
 # Build and publish to your Anaconda.org account
-pixi publish https://anaconda.org/my-username
+pixi publish --target-channel https://anaconda.org/my-username
 
 # Publish to a specific label/channel
-pixi publish https://anaconda.org/my-username/dev
+pixi publish --target-channel https://anaconda.org/my-username/dev
 ```
 
 ### Publishing to S3
@@ -193,53 +186,53 @@ When publishing to S3, the channel is automatically initialized (if new) and ind
 
 ```shell
 # Build and publish to an S3 bucket (using AWS credentials from environment)
-pixi publish s3://my-bucket/my-channel
+pixi publish --target-channel s3://my-bucket/my-channel
 ```
 
 S3 credentials are resolved from the standard AWS credential chain (environment variables, shared credentials file, instance profiles, etc.).
 
 ### Publishing to a local filesystem channel
 
-Local channels are useful for development and testing. The channel directory is automatically created and indexed.
+Local channels are useful for development and testing. The channel directory is automatically created and indexed. Pass a `file://` URL or a bare path to `--target-channel`.
 
 ```shell
-# Build and publish to a local channel
-pixi publish channel:///path/to/my-channel
+# Build and publish to a local channel (bare path)
+pixi publish --target-channel /path/to/my-channel
+
+# Equivalent, using a file:// URL
+pixi publish --target-channel file:///path/to/my-channel
 
 # Force overwrite if the package already exists
-pixi publish channel:///path/to/my-channel --force
+pixi publish --target-channel /path/to/my-channel --force
 ```
 
-### Copying to a local path
+### Copying to a local directory
 
-Use `file://` or a bare path to copy the built `.conda` artifact directly to a directory, without creating a channel structure.
+Use `--target-dir` to copy the built `.conda` artifact directly to a directory, without creating a channel structure.
 
 ```shell
-# Copy the built package to a directory (file:// URL)
-pixi publish file:///path/to/output/dir
+# Copy the built package(s) to a directory
+pixi publish --target-dir /path/to/output/dir
 
-# Bare paths also work -- relative or absolute
-pixi publish /tmp/my-packages
-pixi publish ../my-packages
+# Relative paths work too
+pixi publish --target-dir ../my-packages
 ```
-
-If the directory looks like a conda channel (contains `repodata.json`), pixi warns that you may have meant to use `channel://` instead.
 
 ### Publishing from a specific manifest
 
 ```shell
 # Publish a package from a specific recipe
-pixi publish https://prefix.dev/my-channel --path ./my-recipe/recipe.yaml
+pixi publish --target-channel https://prefix.dev/my-channel --path ./my-recipe/recipe.yaml
 
 # Publish from a different workspace
-pixi publish https://prefix.dev/my-channel --path ./my-project/
+pixi publish --target-channel https://prefix.dev/my-channel --path ./my-project/
 ```
 
 ### Clean rebuild and publish
 
 ```shell
 # Clean the build directory before building and publishing
-pixi publish https://prefix.dev/my-channel --clean
+pixi publish --target-channel https://prefix.dev/my-channel --clean
 ```
 
 ## Authentication
@@ -252,7 +245,7 @@ pixi publish https://prefix.dev/my-channel --clean
    pixi auth login --token $MY_TOKEN https://prefix.dev
    ```
 
-1. **Trusted publishing (CI)**: On GitHub Actions, GitLab CI, or Google Cloud, prefix.dev supports OIDC-based trusted publishing — no stored secrets required. See the [prefix.dev trusted publishing guide](../../../../deployment/prefix/#trusted-publishing).
+1. **Trusted publishing (CI)**: On GitHub Actions, GitLab CI, or Google Cloud, prefix.dev supports OIDC-based trusted publishing -- no stored secrets required. See the [prefix.dev trusted publishing guide](../../../../deployment/prefix/#trusted-publishing).
 
 1. **Environment variables**:
 

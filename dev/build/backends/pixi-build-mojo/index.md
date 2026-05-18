@@ -211,7 +211,7 @@ For detailed information about available compilers, platform-specific behavior, 
 - **Type**: `Array<BinConfig>`
 - **Default**: Auto-derived if not specified
 
-List of binary configurations to build. The created binary will be placed in the `$PREFIX/bin` dir and will be in the path after running `pixi install` assuming the package is listed as a dependency as in the example above. `pixi build` will create a conda package that includes the binary.
+List of binary configurations to build. The created binary will be placed in the `$PREFIX/bin` dir and will be in the path after running `pixi install` assuming the package is listed as a dependency as in the example above. Running `pixi publish` will create a conda package that includes the binary.
 
 **Auto-derive behavior:**
 

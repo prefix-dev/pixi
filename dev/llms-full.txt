@@ -7176,7 +7176,7 @@ Sometimes you want to override the build backend that is used by pixi. Meaning o
 
 ### Rebuilding Generated Recipes
 
-When you build a package using `pixi build`, the build backends generate a complete rattler-build recipe that is stored in your project's build directory. This can be useful for debugging build issues or understanding exactly how your package is being built.
+When you build a package (for example via `pixi publish`), the build backends generate a complete rattler-build recipe that is stored in your project's build directory. This can be useful for debugging build issues or understanding exactly how your package is being built.
 
 ### Recipe Locations
 
@@ -7412,7 +7412,7 @@ Warning
 
 `pixi-build` is a preview feature and will change until it is stabilized.
 
-`pixi-build` has built-in cross-compilation capabilities: if the build process of a package supports it, building a package for a platform (`linux-aarch64`) different from the host platform (`linux-64`) can be done simply with `pixi build --target-platform linux-aarch64`. However, a typical [nanobind](https://github.com/wjakob/nanobind) project, as described in the [Building a C++ Package tutorial](../cpp/), doesn't cross-compile out of the box. There are a couple of issues:
+`pixi-build` has built-in cross-compilation capabilities: if the build process of a package supports it, building a package for a platform (`linux-aarch64`) different from the host platform (`linux-64`) can be done simply with `pixi publish --target-platform linux-aarch64 --target-dir output`. However, a typical [nanobind](https://github.com/wjakob/nanobind) project, as described in the [Building a C++ Package tutorial](../cpp/), doesn't cross-compile out of the box. There are a couple of issues:
 
 #### 1. Finding Python and nanobind
 
@@ -7494,7 +7494,7 @@ elseif(CMAKE_CROSSCOMPILING)
   message(FATAL_ERROR "Cross-compiling is not available when building without pixi.")
 
 else()
-    # bare-metal or pixi build without cross-compilation. Use find_package with python >=3.12
+    # bare-metal or pixi without cross-compilation. Use find_package with python >=3.12
   find_package(Python 3.12 COMPONENTS Interpreter Development.Module REQUIRED)
   execute_process(
     COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
@@ -7570,7 +7570,7 @@ backend = { name = "pixi-build-rattler-build", version = "*" }
 start = "python -c 'import cpp_math; print(cpp_math.add(1, 2))'"
 ```
 
-The workspace lists **both** `linux-64` and `linux-aarch64` platforms. Pixi will cross-compile the `linux-aarch64` variant on a `linux-64` host when called with `pixi build --target-platform linux-aarch64`.
+The workspace lists **both** `linux-64` and `linux-aarch64` platforms. Pixi will cross-compile the `linux-aarch64` variant on a `linux-64` host when called with `pixi publish --target-platform linux-aarch64 --target-dir output`.
 
 ______________________________________________________________________
 
@@ -7587,7 +7587,7 @@ source:
 
 outputs:
 
-  # ── 1. Compiled extension — built for every target platform ─────────────────
+  # ── 1. Compiled extension -- built for every target platform ─────────────────
   - package:
       name: cpp_math
       version: ${{ version }}
@@ -7615,7 +7615,7 @@ outputs:
       run:
         - python
 
-  # ── 2. Stubs — noarch, built only on the host (linux-64) ───────────────────
+  # ── 2. Stubs -- noarch, built only on the host (linux-64) ───────────────────
   - package:
       name: cpp_math-stubs
       version: ${{ version }}
@@ -7648,7 +7648,7 @@ outputs:
         - python
 ```
 
-1. **`source.path: ../`** — points to the workspace root. rattler-build may skip untracked files; make sure your source files are tracked by git, or use `git_url` instead.
+1. **`source.path: ../`** -- points to the workspace root. rattler-build may skip untracked files; make sure your source files are tracked by git, or use `git_url` instead.
 1. **`build` dependencies** run on the *host machine*. `${{ compiler('cxx') }}` resolves to the right cross-compiler automatically.
 1. **`host` dependencies** are installed in the *target prefix* (`$PREFIX`). Python and nanobind headers are there, not in the build environment.
 1. **`noarch: python`** means the stubs package contains only Python files (`.pyi`, `py.typed`) and can be installed on any platform.
@@ -7662,7 +7662,7 @@ ______________________________________________________________________
 ### Native build on linux-64 host
 
 ```bash
-pixi build --output-dir output
+pixi publish --target-dir output
 ```
 
 This produces two packages under `output/`:
@@ -7676,7 +7676,7 @@ output/
 ### Cross-compilation build on linux-64 host
 
 ```bash
-pixi build --target-platform linux-aarch64 --output-dir output
+pixi publish --target-platform linux-aarch64 --target-dir output
 ```
 
 A third package is added:
@@ -7864,10 +7864,10 @@ name = "pixi-build-rust"
 version = "0.*"
 ```
 
-Now you can use Pixi to build the package into a conda package:
+Now you can use Pixi to build the package into a conda package and copy it into the current directory:
 
 ```bash
-pixi build
+pixi publish --target-dir .
 ```
 
 Because of the isolation, the development dependencies such as `cargo` are not available in `pixi run`.
@@ -8043,7 +8043,7 @@ rich = "13.9.*"
 
 Using the preview feature you can now build packages from source.
 
-- `pixi build` has been added and will build a `.conda` file out of your package.
+- `pixi publish` builds a `.conda` file from your package and either uploads it to a channel (`--target-channel`) or copies it into a local directory (`--target-dir <PATH>`).
 - Other commands like `pixi install` and `pixi run` automatically make use of the build feature when a `path`, `git` or `url` dependency is present.
 
 By default, the package definition assumes the location of the source to be in the root of the package definition.
@@ -8491,20 +8491,20 @@ With the package(s) added to the workspace, you can now build them.
 
 ```bash
 cd src/my_python_ros_pkg
-pixi build
+pixi publish --target-dir ../../output
 # then
 cd ../my_cmake_ros_pkg
-pixi build
+pixi publish --target-dir ../../output
 ```
 
-You can now upload these artifacts to a conda channel and depend on them from other Pixi workspaces.
+You can also publish directly to a channel with `pixi publish --target-channel <URL>`; the local `--target-dir` form simply collects the artifacts so you can depend on them from other Pixi workspaces.
 
 ## Tips and gotchas
 
 - ROS distro and platform: pick the correct RoboStack channel (e.g. `robostack-humble`, `robostack-jazzy`) and ensure your platform is supported.
 - Keep `package.xml` accurate: name, version, license, maintainers, URLs, and dependencies are read automatically; but you can override them in the [pixi manifest](https://pixi.sh/latest/reference/pixi_manifest/#the-package-section).
 - Backend docs: see the [pixi-build-ros documentation](../backends/pixi-build-ros/) for configuration details like `env`, `distro` and `extra-input-globs`.
-- Colcon vs pixi build: you don’t need `colcon` when using `pixi`; the backend invokes the right build flow. But since you don't have to change your package structure, you can still use `colcon` if you want.
+- Colcon vs `pixi publish`: you don’t need `colcon` when using `pixi`; the backend invokes the right build flow. But since you don't have to change your package structure, you can still use `colcon` if you want.
 - Not all ROS packages are available in RoboStack. If you depend on a package not in RoboStack, you can:
   - **Recommended:** Contribute to RoboStack to add it; see the [RoboStack Contributing page](https://robostack.github.io/Contributing.html)
   - Package it yourself with Pixi in a separate workspace and upload it to your own conda channel.
@@ -9215,7 +9215,7 @@ For detailed information about available compilers, platform-specific behavior, 
 - **Type**: `Array<BinConfig>`
 - **Default**: Auto-derived if not specified
 
-List of binary configurations to build. The created binary will be placed in the `$PREFIX/bin` dir and will be in the path after running `pixi install` assuming the package is listed as a dependency as in the example above. `pixi build` will create a conda package that includes the binary.
+List of binary configurations to build. The created binary will be placed in the `$PREFIX/bin` dir and will be in the path after running `pixi install` assuming the package is listed as a dependency as in the example above. Running `pixi publish` will create a conda package that includes the binary.
 
 **Auto-derive behavior:**
 
@@ -9749,7 +9749,7 @@ pip = "*"
 Until profiles are implemented, editable installations are not easily configurable. This is the current behaviour:
 
 - `editable` is `true` when installing the package (e.g. with `pixi install`)
-- `editable` is `false` when building the package (e.g. with `pixi build`)
+- `editable` is `false` when building the package (e.g. with `pixi publish`)
 - Set environment variable `BUILD_EDITABLE_PYTHON` to `true` or `false` to enforce a certain behavior
 
 ## Default Variants
@@ -10263,10 +10263,10 @@ tree -L 2
         └── pixi.toml  # Package configuration
 ```
 
-Then you can run `pixi build` to create conda packages for your ROS packages.
+Then you can run `pixi publish` to create conda packages for your ROS packages.
 
 ```shell
-pixi build
+pixi publish --target-dir ./output
 ```
 
 When you want to install it into your environment, you can do so by adding the following to your workspace `pixi.toml`:
@@ -11670,14 +11670,14 @@ The easiest way is to use `pixi publish`, which builds the package and uploads i
 
 ```bash
 # Build and publish in one step
-pixi publish https://prefix.dev/<channel-name>
+pixi publish --target-channel https://prefix.dev/<channel-name>
 ```
 
-You can also build and upload separately for more control:
+You can also build and upload separately for more control. Use `pixi publish --target-dir <PATH>` to build the package into a local directory (no channel indexing), then upload the artifact with `pixi upload`:
 
 ```bash
-# Build first, then upload the artifact
-pixi build --output-dir ./output
+# Build into a local directory first, then upload the artifact
+pixi publish --target-dir ./output
 pixi upload prefix --channel <channel-name> ./output/my-package-1.0.0-h123_0.conda
 ```
 
@@ -11724,10 +11724,10 @@ Prefix.dev supports trusted publishing from **GitHub Actions**, **GitLab CI/CD**
 
 Navigate to **Trusted Publishers** in your channel settings sidebar and fill in the required fields:
 
-- **GitHub Username or Organization Name** — the owner of the repository
-- **Repository Name** — the repository that will publish packages
-- **Name of the Workflow File** — the workflow file that triggers the upload (e.g. `release-workflow.yml`)
-- **Environment Name** (optional) — restrict publishing to a specific GitHub environment (e.g. `production`)
+- **GitHub Username or Organization Name** -- the owner of the repository
+- **Repository Name** -- the repository that will publish packages
+- **Name of the Workflow File** -- the workflow file that triggers the upload (e.g. `release-workflow.yml`)
+- **Environment Name** (optional) -- restrict publishing to a specific GitHub environment (e.g. `production`)
 
 ### Using trusted publishing in GitHub Actions
 
@@ -11744,14 +11744,14 @@ jobs:
 
       - uses: prefix-dev/setup-pixi@v0.8.0
 
-      # Build and publish in one step — no stored secrets needed!
-      - run: pixi publish https://prefix.dev/<channel-name>
+      # Build and publish in one step -- no stored secrets needed!
+      - run: pixi publish --target-channel https://prefix.dev/<channel-name>
 
       # Or with sigstore attestation for supply chain security:
-      # - run: pixi publish https://prefix.dev/<channel-name> --generate-attestation
+      # - run: pixi publish --target-channel https://prefix.dev/<channel-name> --generate-attestation
 ```
 
-With trusted publishing configured, pixi automatically handles the OIDC token exchange with prefix.dev — no stored API keys required.
+With trusted publishing configured, pixi automatically handles the OIDC token exchange with prefix.dev -- no stored API keys required.
 
 If you want to use S3 object storage to fetch your packages, you can use the `s3://` protocol as a channel.
 
@@ -16175,7 +16175,6 @@ pixi [OPTIONS] [COMMAND]
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | [`add`](add/)                 | Adds dependencies to the workspace                                                                                                        |
 | [`auth`](auth/)               | Login to prefix.dev or anaconda.org servers to access private channels                                                                    |
-| [`build`](build/)             | Build a conda package from a Pixi package.                                                                                                |
 | [`clean`](clean/)             | Cleanup the environments                                                                                                                  |
 | [`completion`](completion/)   | Generates a completion script for a shell                                                                                                 |
 | [`config`](config/)           | Configuration management                                                                                                                  |
@@ -16498,114 +16497,6 @@ pixi auth <COMMAND>
 | ------------------- | -------------------------------------------------- |
 | [`login`](login/)   | Store authentication information for a given host  |
 | [`logout`](logout/) | Remove authentication information for a given host |
-
-# [pixi](../) build
-
-Build a conda package from a Pixi package.
-
-## Usage
-
-```text
-pixi build [OPTIONS]
-```
-
-## Options
-
-- [`--target-platform (-t) <TARGET_PLATFORM>`](#arg---target-platform) : The target platform to build for (defaults to the current platform)
-
-  ```
-  **default**: `current_platform`
-  ```
-
-- [`--build-platform <BUILD_PLATFORM>`](#arg---build-platform) : The build platform to use for building (defaults to the current platform)
-
-  ```
-  **default**: `current_platform`
-  ```
-
-- [`--output-dir (-o) <OUTPUT_DIR>`](#arg---output-dir) : The output directory to place the built artifacts
-
-  ```
-  **default**: `.`
-  ```
-
-- [`--build-dir (-b) <BUILD_DIR>`](#arg---build-dir) : The directory to use for incremental builds artifacts
-
-- [`--clean (-c)`](#arg---clean) : Whether to clean the build directory before building
-
-- [`--path <PATH>`](#arg---path) : The path to a directory containing a package manifest, or to a specific manifest file
-
-## Config Options
-
-- [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
-
-- [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
-
-- [`--concurrent-solves <CONCURRENT_SOLVES>`](#arg---concurrent-solves) : Max concurrent solves, default is the number of CPUs
-
-- [`--pinning-strategy <PINNING_STRATEGY>`](#arg---pinning-strategy) : Set pinning strategy
-
-  ```
-  **options**: `semver`, `minor`, `major`, `latest-up`, `exact-version`, `no-pin`
-  ```
-
-- [`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`](#arg---pypi-keyring-provider) : Specifies whether to use the keyring to look up credentials for PyPI
-
-  ```
-  **options**: `disabled`, `subprocess`
-  ```
-
-- [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
-
-- [`--no-symbolic-links`](#arg---no-symbolic-links) : Disallow symbolic links during package installation
-
-  ```
-  **env**: `PIXI_NO_SYMBOLIC_LINKS`
-  ```
-
-- [`--no-hard-links`](#arg---no-hard-links) : Disallow hard links during package installation
-
-  ```
-  **env**: `PIXI_NO_HARD_LINKS`
-  ```
-
-- [`--no-ref-links`](#arg---no-ref-links) : Disallow ref links (copy-on-write) during package installation
-
-  ```
-  **env**: `PIXI_NO_REF_LINKS`
-  ```
-
-- [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
-
-- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
-
-  ```
-  **env**: `PIXI_TLS_ROOT_CERTS`
-  ```
-
-- [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
-
-## Update Options
-
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
-
-  ```
-  **env**: `PIXI_NO_INSTALL`
-  ```
-
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-
-  ```
-  **env**: `PIXI_FROZEN`
-  ```
-
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-
-  ```
-  **env**: `PIXI_LOCKED`
-  ```
-
-- [`--as-is`](#arg---as-is) : Shorthand for the combination of --no-install and --frozen
 
 # [pixi](../) clean
 
@@ -17358,22 +17249,23 @@ pixi lock --check
 
 Build a conda package and publish it to a channel.
 
-`pixi publish` **builds** a conda package from your workspace and **uploads** it to a channel.
+`pixi publish` **builds** a conda package from your workspace and **uploads** it to a channel or copies it into a directory.
 
-- With a target URL: builds and uploads to the specified destination.
-- Without a target URL: builds and copies the package to the current working directory.
+- With `--target-channel <URL>` (alias `--to`): builds and uploads to the specified channel.
+- With `--target-dir <PATH>`: builds and copies the package(s) into the given directory (no channel indexing).
 
-The target URL determines the upload backend:
+`--target-channel` and `--target-dir` are mutually exclusive. If neither is provided, the default is `--target-dir .` (copy to the current working directory).
 
-| URL pattern                      | Backend                                             |
-| -------------------------------- | --------------------------------------------------- |
-| `https://prefix.dev/<channel>`   | [prefix.dev](https://prefix.dev)                    |
-| `https://anaconda.org/<owner>`   | [Anaconda.org](https://anaconda.org)                |
-| `s3://bucket-name/channel`       | S3-compatible storage                               |
-| `channel:///path/to/channel`     | Local filesystem channel                            |
-| `file:///path/to/dir`            | Copy to local directory                             |
-| `quetz://server/<channel>`       | [Quetz](https://github.com/mamba-org/quetz)         |
-| `artifactory://server/<channel>` | [JFrog Artifactory](https://jfrog.com/artifactory/) |
+The `--target-channel` value determines the upload backend:
+
+| URL pattern                                               | Backend                                             |
+| --------------------------------------------------------- | --------------------------------------------------- |
+| `https://prefix.dev/<channel>`                            | [prefix.dev](https://prefix.dev)                    |
+| `https://anaconda.org/<owner>`                            | [Anaconda.org](https://anaconda.org)                |
+| `s3://bucket-name/channel`                                | S3-compatible storage                               |
+| `quetz://server/<channel>`                                | [Quetz](https://github.com/mamba-org/quetz)         |
+| `artifactory://server/<channel>`                          | [JFrog Artifactory](https://jfrog.com/artifactory/) |
+| `file:///path/to/channel` or a bare path like `./example` | Local filesystem channel (indexed)                  |
 
 ## Usage
 
@@ -17405,13 +17297,13 @@ pixi publish [OPTIONS]
 
 - [`--path <PATH>`](#arg---path) : The path to a directory containing a package manifest, or to a specific manifest file
 
-- [`--target-channel <TARGET_CHANNEL>`](#arg---target-channel) : The target channel URL to publish packages to
+- [`--target-channel <TARGET_CHANNEL>`](#arg---target-channel) : The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
 
   ```
   **aliases**: to
   ```
 
-- [`--target-dir <TARGET_DIR>`](#arg---target-dir) : The target local directory to copy packages into (no channel indexing)
+- [`--target-dir <TARGET_DIR>`](#arg---target-dir) : The local filesystem path to copy the built package(s) into (no channel indexing)
 
 - [`--force`](#arg---force) : Force overwrite existing packages
 
@@ -17479,28 +17371,20 @@ pixi publish [OPTIONS]
 
 Build a conda package and publish it to a channel.
 
-This is a convenience command that combines `pixi build` and `pixi upload`.
+Builds the package from your workspace and either uploads it to a channel (`--target-channel`) or copies the artifact into a local directory (`--target-dir`).
 
-Supported target URLs (--target-channel / --to):
+Supported destinations for `--target-channel` (alias `--to`):
 
 - prefix.dev: `https://prefix.dev/<channel-name>`
 - anaconda.org: `https://anaconda.org/<owner>/<label>`
 - S3: `s3://bucket-name`
-- Local channel (with indexing): `channel:///path/to/channel`
-- Local path (copy only): `file:///path/to/output`
 - Quetz: `quetz://server/<channel>`
 - Artifactory: `artifactory://server/<channel>`
+- Local filesystem channel (with indexing): `file:///path/to/channel` or a bare path
+
+Use `--target-dir <PATH>` instead to copy the built package(s) into a directory without creating a channel structure.
 
 ## Examples
-
-### Build and copy to current directory
-
-Omit the target URL to build and copy the resulting package to the current working directory.
-
-```shell
-# Build the package and copy it to the current directory
-pixi publish
-```
 
 ### Publishing to prefix.dev
 
@@ -17508,16 +17392,16 @@ The most common use case is publishing packages to a channel on [prefix.dev](htt
 
 ```shell
 # Build and publish to your prefix.dev channel
-pixi publish https://prefix.dev/my-channel
+pixi publish --target-channel https://prefix.dev/my-channel
 
 # Build for a specific target platform and publish
-pixi publish https://prefix.dev/my-channel --target-platform linux-64
+pixi publish --target-channel https://prefix.dev/my-channel --target-platform linux-64
 
 # Publish with sigstore attestation for supply chain security
-pixi publish https://prefix.dev/my-channel --generate-attestation
+pixi publish --target-channel https://prefix.dev/my-channel --generate-attestation
 
 # Force overwrite existing packages
-pixi publish https://prefix.dev/my-channel --force
+pixi publish --target-channel https://prefix.dev/my-channel --force
 ```
 
 For authentication, either log in first with `pixi auth login`, or set the `PREFIX_API_KEY` environment variable:
@@ -17525,10 +17409,10 @@ For authentication, either log in first with `pixi auth login`, or set the `PREF
 ```shell
 # Option 1: Log in (credentials are stored in the keychain)
 pixi auth login --token $MY_TOKEN https://prefix.dev
-pixi publish https://prefix.dev/my-channel
+pixi publish --target-channel https://prefix.dev/my-channel
 
 # Option 2: Use trusted publishing in CI (no credentials needed)
-pixi publish https://prefix.dev/my-channel
+pixi publish --target-channel https://prefix.dev/my-channel
 ```
 
 See the [prefix.dev deployment guide](../../../../deployment/prefix/) for more details on setting up channels and trusted publishing.
@@ -17537,10 +17421,10 @@ See the [prefix.dev deployment guide](../../../../deployment/prefix/) for more d
 
 ```shell
 # Build and publish to your Anaconda.org account
-pixi publish https://anaconda.org/my-username
+pixi publish --target-channel https://anaconda.org/my-username
 
 # Publish to a specific label/channel
-pixi publish https://anaconda.org/my-username/dev
+pixi publish --target-channel https://anaconda.org/my-username/dev
 ```
 
 ### Publishing to S3
@@ -17549,53 +17433,53 @@ When publishing to S3, the channel is automatically initialized (if new) and ind
 
 ```shell
 # Build and publish to an S3 bucket (using AWS credentials from environment)
-pixi publish s3://my-bucket/my-channel
+pixi publish --target-channel s3://my-bucket/my-channel
 ```
 
 S3 credentials are resolved from the standard AWS credential chain (environment variables, shared credentials file, instance profiles, etc.).
 
 ### Publishing to a local filesystem channel
 
-Local channels are useful for development and testing. The channel directory is automatically created and indexed.
+Local channels are useful for development and testing. The channel directory is automatically created and indexed. Pass a `file://` URL or a bare path to `--target-channel`.
 
 ```shell
-# Build and publish to a local channel
-pixi publish channel:///path/to/my-channel
+# Build and publish to a local channel (bare path)
+pixi publish --target-channel /path/to/my-channel
+
+# Equivalent, using a file:// URL
+pixi publish --target-channel file:///path/to/my-channel
 
 # Force overwrite if the package already exists
-pixi publish channel:///path/to/my-channel --force
+pixi publish --target-channel /path/to/my-channel --force
 ```
 
-### Copying to a local path
+### Copying to a local directory
 
-Use `file://` or a bare path to copy the built `.conda` artifact directly to a directory, without creating a channel structure.
+Use `--target-dir` to copy the built `.conda` artifact directly to a directory, without creating a channel structure.
 
 ```shell
-# Copy the built package to a directory (file:// URL)
-pixi publish file:///path/to/output/dir
+# Copy the built package(s) to a directory
+pixi publish --target-dir /path/to/output/dir
 
-# Bare paths also work -- relative or absolute
-pixi publish /tmp/my-packages
-pixi publish ../my-packages
+# Relative paths work too
+pixi publish --target-dir ../my-packages
 ```
-
-If the directory looks like a conda channel (contains `repodata.json`), pixi warns that you may have meant to use `channel://` instead.
 
 ### Publishing from a specific manifest
 
 ```shell
 # Publish a package from a specific recipe
-pixi publish https://prefix.dev/my-channel --path ./my-recipe/recipe.yaml
+pixi publish --target-channel https://prefix.dev/my-channel --path ./my-recipe/recipe.yaml
 
 # Publish from a different workspace
-pixi publish https://prefix.dev/my-channel --path ./my-project/
+pixi publish --target-channel https://prefix.dev/my-channel --path ./my-project/
 ```
 
 ### Clean rebuild and publish
 
 ```shell
 # Clean the build directory before building and publishing
-pixi publish https://prefix.dev/my-channel --clean
+pixi publish --target-channel https://prefix.dev/my-channel --clean
 ```
 
 ## Authentication
@@ -17608,7 +17492,7 @@ pixi publish https://prefix.dev/my-channel --clean
    pixi auth login --token $MY_TOKEN https://prefix.dev
    ```
 
-1. **Trusted publishing (CI)**: On GitHub Actions, GitLab CI, or Google Cloud, prefix.dev supports OIDC-based trusted publishing — no stored secrets required. See the [prefix.dev trusted publishing guide](../../../../deployment/prefix/#trusted-publishing).
+1. **Trusted publishing (CI)**: On GitHub Actions, GitLab CI, or Google Cloud, prefix.dev supports OIDC-based trusted publishing -- no stored secrets required. See the [prefix.dev trusted publishing guide](../../../../deployment/prefix/#trusted-publishing).
 
 1. **Environment variables**:
 
@@ -20337,112 +20221,6 @@ pixi global update pixi-pack
 pixi global update bat rattler-build
 ```
 
-# [pixi](../../) [global](../) upgrade-all
-
-Upgrade all globally installed packages This command has been removed, please use `pixi global update` instead
-
-## Usage
-
-```text
-pixi global upgrade-all [OPTIONS]
-```
-
-## Options
-
-- [`--channel (-c) <CHANNEL>`](#arg---channel) : The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
-
-  ```
-  May be provided more than once.
-  ```
-
-- [`--platform <PLATFORM>`](#arg---platform) : The platform to install the package for
-
-  ```
-  **default**: `current_platform`
-  ```
-
-## Config Options
-
-- [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
-
-- [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
-
-- [`--concurrent-solves <CONCURRENT_SOLVES>`](#arg---concurrent-solves) : Max concurrent solves, default is the number of CPUs
-
-- [`--pinning-strategy <PINNING_STRATEGY>`](#arg---pinning-strategy) : Set pinning strategy
-
-  ```
-  **options**: `semver`, `minor`, `major`, `latest-up`, `exact-version`, `no-pin`
-  ```
-
-- [`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`](#arg---pypi-keyring-provider) : Specifies whether to use the keyring to look up credentials for PyPI
-
-  ```
-  **options**: `disabled`, `subprocess`
-  ```
-
-- [`--run-post-link-scripts`](#arg---run-post-link-scripts) : Run post-link scripts (insecure)
-
-- [`--no-symbolic-links`](#arg---no-symbolic-links) : Disallow symbolic links during package installation
-
-  ```
-  **env**: `PIXI_NO_SYMBOLIC_LINKS`
-  ```
-
-- [`--no-hard-links`](#arg---no-hard-links) : Disallow hard links during package installation
-
-  ```
-  **env**: `PIXI_NO_HARD_LINKS`
-  ```
-
-- [`--no-ref-links`](#arg---no-ref-links) : Disallow ref links (copy-on-write) during package installation
-
-  ```
-  **env**: `PIXI_NO_REF_LINKS`
-  ```
-
-- [`--tls-no-verify`](#arg---tls-no-verify) : Do not verify the TLS certificate of the server
-
-- [`--tls-root-certs <TLS_ROOT_CERTS>`](#arg---tls-root-certs) : Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
-
-  ```
-  **env**: `PIXI_TLS_ROOT_CERTS`
-  ```
-
-- [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
-
-# [pixi](../../) [global](../) upgrade
-
-Upgrade specific package which is installed globally. This command has been removed, please use `pixi global update` instead
-
-## Usage
-
-```text
-pixi global upgrade [OPTIONS] [SPECS]...
-```
-
-## Arguments
-
-- [`<SPECS>`](#arg-%3CSPECS%3E) : Specifies the packages to upgrade
-
-  ```
-  May be provided more than once.
-  ```
-
-## Options
-
-- [`--channel (-c) <CHANNEL>`](#arg---channel) : The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
-
-  ```
-  May be provided more than once.
-  ```
-
-- [`--platform <PLATFORM>`](#arg---platform) : The platform to install the package for
-
-  ```
-  **default**: `current_platform`
-  ```
-
 # [pixi](../../../) [global](../../) [expose](../) add
 
 Add exposed binaries from an environment to your global environment
@@ -21067,72 +20845,6 @@ pixi upload cloudsmith [OPTIONS] --owner <OWNER> --repo <REPO>
 
   ```
   **env**: `CLOUDSMITH_API_URL`
-  ```
-
-# [pixi](../../) [upload](../) conda-forge
-
-Options for uploading to conda-forge
-
-## Usage
-
-```text
-pixi upload conda-forge [OPTIONS] --staging-token <STAGING_TOKEN> --feedstock <FEEDSTOCK> --feedstock-token <FEEDSTOCK_TOKEN>
-```
-
-## Options
-
-- [`--staging-token <STAGING_TOKEN>`](#arg---staging-token) : The Anaconda API key
-
-  ```
-  **required**: `true`
-    
-  **env**: `STAGING_BINSTAR_TOKEN`
-  ```
-
-- [`--feedstock <FEEDSTOCK>`](#arg---feedstock) : The feedstock name
-
-  ```
-  **required**: `true`
-    
-  **env**: `FEEDSTOCK_NAME`
-  ```
-
-- [`--feedstock-token <FEEDSTOCK_TOKEN>`](#arg---feedstock-token) : The feedstock token
-
-  ```
-  **required**: `true`
-    
-  **env**: `FEEDSTOCK_TOKEN`
-  ```
-
-- [`--staging-channel <STAGING_CHANNEL>`](#arg---staging-channel) : The staging channel name
-
-  ```
-  **env**: `STAGING_CHANNEL`
-  ```
-
-- [`--anaconda-url <ANACONDA_URL>`](#arg---anaconda-url) : The Anaconda Server URL
-
-  ```
-  **env**: `ANACONDA_SERVER_URL`
-  ```
-
-- [`--validation-endpoint <VALIDATION_ENDPOINT>`](#arg---validation-endpoint) : The validation endpoint url
-
-  ```
-  **env**: `VALIDATION_ENDPOINT`
-  ```
-
-- [`--provider <PROVIDER>`](#arg---provider) : The CI provider
-
-  ```
-  **env**: `CI`
-  ```
-
-- [`--dry-run`](#arg---dry-run) : Dry run, don't actually upload anything
-
-  ```
-  **env**: `DRY_RUN`
   ```
 
 # [pixi](../../) [upload](../) prefix

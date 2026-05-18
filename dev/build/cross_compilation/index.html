@@ -4294,7 +4294,7 @@ If you haven't read it yet, we recommend you to do so before continuing, as the 
 <p class="admonition-title">Warning</p>
 <p><code>pixi-build</code> is a preview feature and will change until it is stabilized.</p>
 </div>
-<p><code>pixi-build</code> has built-in cross-compilation capabilities: if the build process of a package supports it, building a package for a platform (<code>linux-aarch64</code>) different from the host platform (<code>linux-64</code>) can be done simply with <code>pixi build --target-platform linux-aarch64</code>.
+<p><code>pixi-build</code> has built-in cross-compilation capabilities: if the build process of a package supports it, building a package for a platform (<code>linux-aarch64</code>) different from the host platform (<code>linux-64</code>) can be done simply with <code>pixi publish --target-platform linux-aarch64 --target-dir output</code>.
 However, a typical <a href="https://github.com/wjakob/nanobind">nanobind</a> project, as described in the <a href="../cpp/">Building a C++ Package tutorial</a>, doesn't cross-compile out of the box.
 There are a couple of issues:</p>
 <h4 id="1-finding-python-and-nanobind">1. Finding Python and nanobind<a class="headerlink" href="#1-finding-python-and-nanobind" title="Permanent link">#</a></h4>
@@ -4384,7 +4384,7 @@ We will use it to build <strong>two packages</strong>: a platform-specific (supp
 </span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">  </span><span class="nb">message</span><span class="p">(</span><span class="s">FATAL_ERROR</span><span class="w"> </span><span class="s2">&quot;Cross-compiling is not available when building without pixi.&quot;</span><span class="p">)</span>
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
 </span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="nb">else</span><span class="p">()</span>
-</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="c"># bare-metal or pixi build without cross-compilation. Use find_package with python &gt;=3.12</span>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w">    </span><span class="c"># bare-metal or pixi without cross-compilation. Use find_package with python &gt;=3.12</span>
 </span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w">  </span><span class="nb">find_package</span><span class="p">(</span><span class="s">Python</span><span class="w"> </span><span class="s">3.12</span><span class="w"> </span><span class="s">COMPONENTS</span><span class="w"> </span><span class="s">Interpreter</span><span class="w"> </span><span class="s">Development.Module</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span>
 </span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w">  </span><span class="nb">execute_process</span><span class="p">(</span>
 </span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w">    </span><span class="s">COMMAND</span><span class="w"> </span><span class="s2">&quot;${Python_EXECUTABLE}&quot;</span><span class="w"> </span><span class="s">-m</span><span class="w"> </span><span class="s">nanobind</span><span class="w"> </span><span class="s">--cmake_dir</span>
@@ -4456,7 +4456,7 @@ Stub-generation:</li>
 </span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python -c &#39;import cpp_math; print(cpp_math.add(1, 2))&#39;&quot;</span>
 </span></code></pre></div>
 <p>The workspace lists <strong>both</strong> <code>linux-64</code> and <code>linux-aarch64</code> platforms.
-Pixi will cross-compile the <code>linux-aarch64</code> variant on a <code>linux-64</code> host when called with <code>pixi build --target-platform linux-aarch64</code>.</p>
+Pixi will cross-compile the <code>linux-aarch64</code> variant on a <code>linux-64</code> host when called with <code>pixi publish --target-platform linux-aarch64 --target-dir output</code>.</p>
 <hr />
 <h2 id="the-reciperecipeyml">The <code>recipe/recipe.yml</code><a class="headerlink" href="#the-reciperecipeyml" title="Permanent link">#</a></h2>
 <p>This is the heart of the build. The recipe declares <strong>two outputs</strong> from the same source tree.</p>
@@ -4468,7 +4468,7 @@ Pixi will cross-compile the <code>linux-aarch64</code> variant on a <code>linux-
 </span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
 </span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="nt">outputs</span><span class="p">:</span>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="c1"># ── 1. Compiled extension — built for every target platform ─────────────────</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">  </span><span class="c1"># ── 1. Compiled extension -- built for every target platform ─────────────────</span>
 </span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">package</span><span class="p">:</span>
 </span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cpp_math</span>
 </span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">      </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ version }}</span>
@@ -4496,7 +4496,7 @@ Pixi will cross-compile the <code>linux-aarch64</code> variant on a <code>linux-
 </span><span id="__span-4-34"><a id="__codelineno-4-34" name="__codelineno-4-34" href="#__codelineno-4-34"></a><span class="w">      </span><span class="nt">run</span><span class="p">:</span>
 </span><span id="__span-4-35"><a id="__codelineno-4-35" name="__codelineno-4-35" href="#__codelineno-4-35"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
 </span><span id="__span-4-36"><a id="__codelineno-4-36" name="__codelineno-4-36" href="#__codelineno-4-36"></a>
-</span><span id="__span-4-37"><a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="w">  </span><span class="c1"># ── 2. Stubs — noarch, built only on the host (linux-64) ───────────────────</span>
+</span><span id="__span-4-37"><a id="__codelineno-4-37" name="__codelineno-4-37" href="#__codelineno-4-37"></a><span class="w">  </span><span class="c1"># ── 2. Stubs -- noarch, built only on the host (linux-64) ───────────────────</span>
 </span><span id="__span-4-38"><a id="__codelineno-4-38" name="__codelineno-4-38" href="#__codelineno-4-38"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">package</span><span class="p">:</span>
 </span><span id="__span-4-39"><a id="__codelineno-4-39" name="__codelineno-4-39" href="#__codelineno-4-39"></a><span class="w">      </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cpp_math-stubs</span>
 </span><span id="__span-4-40"><a id="__codelineno-4-40" name="__codelineno-4-40" href="#__codelineno-4-40"></a><span class="w">      </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">${{ version }}</span>
@@ -4529,7 +4529,7 @@ Pixi will cross-compile the <code>linux-aarch64</code> variant on a <code>linux-
 </span><span id="__span-4-67"><a id="__codelineno-4-67" name="__codelineno-4-67" href="#__codelineno-4-67"></a><span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
 </span></code></pre></div>
 <ol>
-<li><strong><code>source.path: ../</code></strong> — points to the workspace root. rattler-build may skip untracked files; make sure your source files are tracked by git, or use <code>git_url</code> instead.</li>
+<li><strong><code>source.path: ../</code></strong> -- points to the workspace root. rattler-build may skip untracked files; make sure your source files are tracked by git, or use <code>git_url</code> instead.</li>
 <li><strong><code>build</code> dependencies</strong> run on the <em>host machine</em>. <code>${{ compiler('cxx') }}</code> resolves to the right cross-compiler automatically.</li>
 <li><strong><code>host</code> dependencies</strong> are installed in the <em>target prefix</em> (<code>$PREFIX</code>). Python and nanobind headers are there, not in the build environment.</li>
 <li><strong><code>noarch: python</code></strong> means the stubs package contains only Python files (<code>.pyi</code>, <code>py.typed</code>) and can be installed on any platform.</li>
@@ -4539,7 +4539,7 @@ Pixi will cross-compile the <code>linux-aarch64</code> variant on a <code>linux-
 <hr />
 <h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">#</a></h2>
 <h3 id="native-build-on-linux-64-host">Native build on linux-64 host<a class="headerlink" href="#native-build-on-linux-64-host" title="Permanent link">#</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>build<span class="w"> </span>--output-dir<span class="w"> </span>output
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-dir<span class="w"> </span>output
 </span></code></pre></div>
 <p>This produces two packages under <code>output/</code>:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>output/
@@ -4547,7 +4547,7 @@ Pixi will cross-compile the <code>linux-aarch64</code> variant on a <code>linux-
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>└── cpp_math-stubs-0.1.0-Linux64Hash_0.conda    ← stubs (platform-independent)
 </span></code></pre></div>
 <h3 id="cross-compilation-build-on-linux-64-host">Cross-compilation build on linux-64 host<a class="headerlink" href="#cross-compilation-build-on-linux-64-host" title="Permanent link">#</a></h3>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>build<span class="w"> </span>--target-platform<span class="w"> </span>linux-aarch64<span class="w"> </span>--output-dir<span class="w"> </span>output
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-platform<span class="w"> </span>linux-aarch64<span class="w"> </span>--target-dir<span class="w"> </span>output
 </span></code></pre></div>
 <p>A third package is added:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>output/

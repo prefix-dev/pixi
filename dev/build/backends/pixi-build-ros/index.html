@@ -4541,8 +4541,8 @@ For example, with a workspace structure like this:
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">        </span>└──<span class="w"> </span>pixi.toml<span class="w">  </span><span class="c1"># Package configuration</span>
 </span></code></pre></div></p>
 </details>
-<p>Then you can run <code>pixi build</code> to create conda packages for your ROS packages.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>build
+<p>Then you can run <code>pixi publish</code> to create conda packages for your ROS packages.
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-dir<span class="w"> </span>./output
 </span></code></pre></div></p>
 <p>When you want to install it into your environment, you can do so by adding the following to your workspace <code>pixi.toml</code>:</p>
 <p><div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[dependencies]</span>
