@@ -718,7 +718,7 @@ async fn read_local_package_metadata(
 
     // `dynamic` is set when *any* `[project.dynamic]` field is listed,
     // not just dependencies, so we accept the deps regardless.
-    let requires_dist = match database.requires_dist(directory, &pyproject_toml).await {
+    let requires_dist = match Box::pin(database.requires_dist(directory, &pyproject_toml)).await {
         Ok(Some(rd)) => {
             tracing::debug!(
                 package = %package_name,

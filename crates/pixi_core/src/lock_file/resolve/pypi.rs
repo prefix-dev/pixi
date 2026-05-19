@@ -725,22 +725,24 @@ pub async fn resolve_pypi(
         // lookaheads and a hash strategy refined by what it discovered along
         // the way. We adopt the refined strategy for the downstream resolver
         // matching uv's own `pip` flow.
-        let (lookaheads, hash_strategy) = LookaheadResolver::new(
-            &requirements,
-            &constraints,
-            &overrides,
-            &context.hash_strategy,
-            &lookahead_index,
-            DistributionDatabase::new(
-                &registry_client,
-                &lazy_build_dispatch,
-                context.concurrency.downloads_semaphore.clone(),
-            ),
+        let (lookaheads, hash_strategy) = Box::pin(
+            LookaheadResolver::new(
+                &requirements,
+                &constraints,
+                &overrides,
+                &context.hash_strategy,
+                &lookahead_index,
+                DistributionDatabase::new(
+                    &registry_client,
+                    &lazy_build_dispatch,
+                    context.concurrency.downloads_semaphore.clone(),
+                ),
+            )
+            .with_reporter(UvReporter::new_arc(
+                UvReporterOptions::new().with_existing(pb.clone()),
+            ))
+            .resolve(&resolver_env),
         )
-        .with_reporter(UvReporter::new_arc(
-            UvReporterOptions::new().with_existing(pb.clone()),
-        ))
-        .resolve(&resolver_env)
         .await
         .into_diagnostic()
         .map_err(|e| SolveError::LookAhead(e.into()))?;
@@ -813,8 +815,7 @@ pub async fn resolve_pypi(
             UvReporterOptions::new().with_existing(pb.clone()),
         ));
 
-        let resolution = resolver
-            .resolve()
+        let resolution = Box::pin(resolver.resolve())
             .await
             .map_err(|e| create_solve_error(e, &conda_python_packages))?;
 
@@ -1154,13 +1155,12 @@ async fn lock_pypi_packages(
                         })
                         .transpose()?;
 
-                    let metadata_response = database
-                        .get_or_build_wheel_metadata(
-                            &Dist::Source(source.clone()),
-                            HashPolicy::None,
-                        )
-                        .await
-                        .into_diagnostic()?;
+                    let metadata_response = Box::pin(database.get_or_build_wheel_metadata(
+                        &Dist::Source(source.clone()),
+                        HashPolicy::None,
+                    ))
+                    .await
+                    .into_diagnostic()?;
                     let metadata = metadata_response.metadata;
 
                     // Use the precise url if we got it back

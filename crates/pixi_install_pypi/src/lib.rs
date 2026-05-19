@@ -1191,13 +1191,15 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let start = std::time::Instant::now();
 
-        uv_installer::Installer::new(&setup.venv, uv_preview::Preview::default())
-            .with_link_mode(self.build_config.link_mode.unwrap_or_default())
-            .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
-            .with_reporter(UvReporter::new_arc(options))
-            .install(all_dists.clone())
-            .await
-            .expect("should be able to install all distributions");
+        Box::pin(
+            uv_installer::Installer::new(&setup.venv, uv_preview::Preview::default())
+                .with_link_mode(self.build_config.link_mode.unwrap_or_default())
+                .with_installer_name(Some(consts::PIXI_UV_INSTALLER.to_string()))
+                .with_reporter(UvReporter::new_arc(options))
+                .install(all_dists.clone()),
+        )
+        .await
+        .expect("should be able to install all distributions");
 
         let s = if all_dists.len() == 1 { "" } else { "s" };
         tracing::info!(
