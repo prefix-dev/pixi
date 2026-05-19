@@ -421,47 +421,62 @@ impl ComputeCtx {
     fn resolve<K: Key>(&mut self, key: &K) -> Resolved<K::Value> {
         let any_key = AnyKey::new(key.clone());
 
-        // Cheap path first: take the per-type slot lock, look up the
-        // value, and return synchronously if completed. Installing the
-        // active edge holds a single global parking_lot mutex and runs
-        // a BFS of the entire active-edge graph; under fan-out (e.g.
-        // 80+ concurrent compute callers all reading the same
-        // InjectedKey) that combination serializes everyone behind one
-        // lock and adds tens of seconds of wall time per call. The
-        // edge only exists to guard a wait on an in-flight future, so
-        // for cache hits there is nothing to guard.
+        // Cheap path first: peek the per-type slot without inserting on
+        // miss. Installing the active edge holds a single global
+        // parking_lot mutex and runs a BFS of the entire active-edge
+        // graph; under fan-out (80+ concurrent compute callers all
+        // reading the same InjectedKey) that combination serializes
+        // everyone behind one lock and adds tens of seconds of wall
+        // time per call. For an already-completed value there is
+        // nothing to await, so no edge is needed.
+        if let Some(Lookup::Completed(value)) = self.engine.graph.lookup(key) {
+            self.deps.lock().push(any_key);
+            return Resolved::Value(value);
+        }
+
+        // Miss or in-flight: we are going to wait. Install the active
+        // edge *before* spawning the child task so that any descendant
+        // task that races ahead and tries to close a back-edge sees
+        // our edge already in place. Spawning first (the previous
+        // ordering) opened a small window where the freshly-spawned
+        // child could start running on another worker, recursively
+        // spawn its own children, and close a cycle whose BFS misses
+        // our not-yet-installed edge, resulting in an undetected
+        // deadlock.
+        let edge_guard = match self.current.clone() {
+            Some(caller) => match self.install_active_edge(caller, &any_key) {
+                Ok(edge) => Some(edge),
+                Err(detected) => {
+                    Self::notify_cycle(detected);
+                    self.deps.lock().push(any_key);
+                    return Resolved::Cycle;
+                }
+            },
+            // Root ctx: no caller identity, nothing to add to the
+            // edge graph, nothing to cycle-check against.
+            None => None,
+        };
+
         let child_current = Some(any_key.clone());
         let lookup = self.engine.graph.get_or_insert_with(key, |generation| {
             spawn_compute_future::<K>(self.engine.clone(), key.clone(), child_current, generation)
         });
 
-        self.deps.lock().push(any_key.clone());
+        self.deps.lock().push(any_key);
 
         match lookup {
-            Lookup::Completed(value) => Resolved::Value(value),
-            Lookup::InFlight(shared) => {
-                // Only on a real wait do we need cycle detection. The
-                // BFS-under-lock is acceptable here because the
-                // alternative is an undetected cycle on a wait that
-                // can actually deadlock.
-                let edge_guard = match self.current.clone() {
-                    Some(caller) => match self.install_active_edge(caller, &any_key) {
-                        Ok(edge) => Some(edge),
-                        Err(detected) => {
-                            Self::notify_cycle(detected);
-                            return Resolved::Cycle;
-                        }
-                    },
-                    // Root ctx: no caller identity, nothing to add
-                    // to the edge graph, nothing to cycle-check
-                    // against.
-                    None => None,
-                };
-                Resolved::Future {
-                    shared,
-                    on_complete: edge_guard,
-                }
+            // Lost a benign race between the peek and the insert:
+            // another caller just completed it. Drop the edge guard
+            // (the BFS work was paid but harmless) and return the
+            // cached value.
+            Lookup::Completed(value) => {
+                drop(edge_guard);
+                Resolved::Value(value)
             }
+            Lookup::InFlight(shared) => Resolved::Future {
+                shared,
+                on_complete: edge_guard,
+            },
         }
     }
 
