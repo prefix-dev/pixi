@@ -6980,6 +6980,7 @@ dependencies = [
  "pixi_consts",
  "pixi_git",
  "pixi_path",
+ "pixi_test_utils",
  "pixi_toml",
  "rattler_conda_types",
  "rattler_digest",

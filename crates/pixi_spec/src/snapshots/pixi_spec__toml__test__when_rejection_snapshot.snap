@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_spec/src/toml.rs
+assertion_line: 1597
 expression: snapshot
 ---
 - label: json_top_level_array
@@ -13,13 +14,13 @@ expression: snapshot
   error: "`when` strings do not support build-string shorthand; use `{ package = ..., version = ..., build = ... }`"
 - label: toml_top_level_array
   input: "version = \"*\"\nwhen = [\"__unix\"]"
-  error: "`when` must be a string or a table with `all`, `any`, or `package`; top-level arrays are not allowed\n"
+  error: "  × `when` must be a string or a table with `all`, `any`, or `package`; top-level arrays are not allowed\n   ╭─[pixi.toml:2:8]\n 1 │ version = \"*\"\n 2 │ when = [\"__unix\"]\n   ·        ──────────\n   ╰────"
 - label: toml_all_and_any
   input: "version = \"*\"\nwhen = { all = [\"__unix\"], any = [\"__linux\"] }"
-  error: "`when` tables must contain exactly one of `all`, `any`, or `package`\n"
+  error: "  × `when` tables must contain exactly one of `all`, `any`, or `package`\n   ╭─[pixi.toml:2:8]\n 1 │ version = \"*\"\n 2 │ when = { all = [\"__unix\"], any = [\"__linux\"] }\n   ·        ───────────────────────────────────────\n   ╰────"
 - label: toml_empty_all
   input: "version = \"*\"\nwhen = { all = [] }"
-  error: "`when.all` must contain at least one condition\n"
+  error: "  × `when.all` must contain at least one condition\n   ╭─[pixi.toml:1:1]\n 1 │ ╭─▶ version = \"*\"\n 2 │ ╰─▶ when = { all = [] }\n   ╰────"
 - label: toml_empty_any
   input: "version = \"*\"\nwhen = { any = [] }"
-  error: "`when.any` must contain at least one condition\n"
+  error: "  × `when.any` must contain at least one condition\n   ╭─[pixi.toml:1:1]\n 1 │ ╭─▶ version = \"*\"\n 2 │ ╰─▶ when = { any = [] }\n   ╰────"

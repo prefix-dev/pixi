@@ -27,7 +27,7 @@ use crate::{
 
 /// A TOML representation of a package specification.
 #[serde_as]
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "kebab-case")]
 pub struct TomlSpec {
@@ -96,23 +96,63 @@ pub enum TomlWhen {
     Expanded(TomlWhenPackage),
 }
 
-/// The expanded package condition syntax.
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
+/// The expanded package condition syntax. Accepts the full set of matchspec
+/// fields that [`TomlSpec`] supports, except for source-location fields
+/// (`url`, `git`, `path`, `md5`, `sha256`, ...) and `channel` which do not
+/// make sense as `when` conditions.
+#[derive(Debug, Clone)]
 pub struct TomlWhenPackage {
     /// The package name to match.
     pub package: PackageName,
-    /// Optional version constraint.
-    #[serde(default)]
-    pub version: Option<TomlVersionSpecStr>,
-    /// Optional build string matcher.
-    #[serde(default)]
-    pub build: Option<StringMatcher>,
+    /// The remaining matchspec fields parsed via [`TomlSpec`]. Boxed to break
+    /// the [`TomlWhen`] -> [`TomlSpec`] -> [`TomlWhen`] cycle.
+    pub spec: Box<TomlSpec>,
+}
+
+impl<'de> serde::Deserialize<'de> for TomlWhenPackage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Helper {
+            package: PackageName,
+            #[serde(flatten)]
+            spec: TomlSpec,
+        }
+        let Helper { package, spec } = Helper::deserialize(deserializer)?;
+        let spec = Box::new(spec);
+        // Reject location / channel fields the same way the TOML path does so
+        // both deserializers stay in sync.
+        if spec.location.is_some()
+            && let Some(loc) = &spec.location
+            && (loc.url.is_some()
+                || loc.git.is_some()
+                || loc.path.is_some()
+                || loc.branch.is_some()
+                || loc.rev.is_some()
+                || loc.tag.is_some()
+                || loc.subdirectory.is_some()
+                || loc.md5.is_some()
+                || loc.sha256.is_some())
+        {
+            return Err(D::Error::custom(
+                "source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables",
+            ));
+        }
+        if spec.channel.is_some() {
+            return Err(D::Error::custom(
+                "`channel` is not yet supported inside `when` tables",
+            ));
+        }
+        Ok(TomlWhenPackage { package, spec })
+    }
 }
 
 /// A TOML representation of a package source location specification.
 #[serde_as]
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "kebab-case")]
 pub struct TomlLocationSpec {
@@ -571,21 +611,74 @@ impl TomlWhen {
             TomlWhen::All { all } => fold_when_conditions(all, MatchSpecCondition::And, "all"),
             TomlWhen::Any { any } => fold_when_conditions(any, MatchSpecCondition::Or, "any"),
             TomlWhen::Expanded(expanded) => Ok(MatchSpecCondition::MatchSpec(Box::new(
-                expanded.into_match_spec(),
+                expanded.into_match_spec()?,
             ))),
         }
     }
 }
 
 impl TomlWhenPackage {
-    fn into_match_spec(self) -> MatchSpec {
-        MatchSpec {
-            name: PackageNameMatcher::Exact(self.package),
-            version: self.version.map(TomlVersionSpecStr::into_inner),
-            build: self.build,
+    fn into_match_spec(self) -> Result<MatchSpec, SpecError> {
+        // Build the matchspec from the inner TomlSpec fields. Source-location
+        // and channel fields were already rejected at parse time by
+        // `validate_when_spec`.
+        let TomlWhenPackage { package, spec } = self;
+        let nested_condition = spec.when.map(TomlWhen::into_condition).transpose()?;
+        Ok(MatchSpec {
+            name: PackageNameMatcher::Exact(package),
+            version: spec.version,
+            build: spec.build,
+            build_number: spec.build_number,
+            file_name: spec.file_name,
+            extras: spec.extras,
+            flags: spec.flags,
+            subdir: spec.subdir,
+            license: spec.license,
+            license_family: spec.license_family,
+            track_features: spec.track_features,
+            condition: nested_condition,
             ..MatchSpec::default()
-        }
+        })
     }
+}
+
+/// Validate that a [`TomlSpec`] used inside an expanded `when` table only
+/// contains matchspec fields. Source-location fields (`url`, `git`, `path`,
+/// `md5`, `sha256`, ...) and `channel` are rejected — the former because they
+/// have no meaning as conditions, the latter because resolving it to a
+/// [`rattler_conda_types::Channel`] needs a [`ChannelConfig`] that isn't
+/// available at parse time.
+fn validate_when_spec(spec: &TomlSpec, span: toml_span::Span) -> Result<(), DeserError> {
+    let location_set = spec.location.as_ref().is_some_and(|loc| {
+        loc.url.is_some()
+            || loc.git.is_some()
+            || loc.path.is_some()
+            || loc.branch.is_some()
+            || loc.rev.is_some()
+            || loc.tag.is_some()
+            || loc.subdirectory.is_some()
+            || loc.md5.is_some()
+            || loc.sha256.is_some()
+    });
+    if location_set {
+        return Err(DeserError::from(toml_span::Error {
+            kind: ErrorKind::Custom(
+                "source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables".into(),
+            ),
+            span,
+            line_info: None,
+        }));
+    }
+    if spec.channel.is_some() {
+        return Err(DeserError::from(toml_span::Error {
+            kind: ErrorKind::Custom(
+                "`channel` is not yet supported inside `when` tables".into(),
+            ),
+            span,
+            line_info: None,
+        }));
+    }
+    Ok(())
 }
 
 fn parse_when_matchspec(input: &str) -> Result<MatchSpecCondition, SpecError> {
@@ -849,7 +942,17 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
 impl<'de> toml_span::Deserialize<'de> for TomlWhen {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
-            ValueInner::String(str) => Ok(TomlWhen::MatchSpec(str.to_string())),
+            ValueInner::String(str) => {
+                // Validate eagerly so the error carries the TOML span.
+                if let Err(err) = parse_when_matchspec(&str) {
+                    return Err(DeserError::from(toml_span::Error {
+                        kind: ErrorKind::Custom(err.to_string().into()),
+                        span: value.span,
+                        line_info: None,
+                    }));
+                }
+                Ok(TomlWhen::MatchSpec(str.to_string()))
+            }
             ValueInner::Array(_) => Err(DeserError::from(toml_span::Error {
                 kind: ErrorKind::Custom(
                     "`when` must be a string or a table with `all`, `any`, or `package`; top-level arrays are not allowed".into(),
@@ -859,26 +962,49 @@ impl<'de> toml_span::Deserialize<'de> for TomlWhen {
             })),
             inner @ ValueInner::Table(_) => {
                 let mut table_value = Value::with_span(inner, value.span);
-                let mut th = TableHelper::new(&mut table_value)?;
 
-                let all = th.optional::<Vec<TomlWhen>>("all");
-                let any = th.optional::<Vec<TomlWhen>>("any");
-                let package = th.optional::<TomlFromStr<PackageName>>("package");
-                let version = th.optional::<TomlVersionSpecStr>("version");
-                let build = th
-                    .optional::<TomlFromStr<StringMatcher>>("build")
-                    .map(TomlFromStr::into_inner);
+                // Decide between all / any / package by inspecting which keys
+                // the table contains.
+                let (has_all, has_any, has_package) =
+                    if let ValueInner::Table(table) = table_value.as_ref() {
+                        (
+                            table.contains_key("all"),
+                            table.contains_key("any"),
+                            table.contains_key("package"),
+                        )
+                    } else {
+                        unreachable!("table_value was just constructed from a Table")
+                    };
 
-                th.finalize(None)?;
+                match (has_all, has_any, has_package) {
+                    (true, false, false) => {
+                        let mut th = TableHelper::new(&mut table_value)?;
+                        let all = th.required::<Vec<TomlWhen>>("all")?;
+                        th.finalize(None)?;
+                        Ok(TomlWhen::All { all })
+                    }
+                    (false, true, false) => {
+                        let mut th = TableHelper::new(&mut table_value)?;
+                        let any = th.required::<Vec<TomlWhen>>("any")?;
+                        th.finalize(None)?;
+                        Ok(TomlWhen::Any { any })
+                    }
+                    (false, false, true) => {
+                        // Take `package` out and hand the remainder to
+                        // `TomlSpec::deserialize` so all matchspec fields
+                        // (`subdir`, `channel`, `extras`, ...) are accepted.
+                        let mut th = TableHelper::new(&mut table_value)?;
+                        let package = th
+                            .required::<TomlFromStr<PackageName>>("package")?
+                            .into_inner();
+                        th.finalize(Some(&mut table_value))?;
 
-                match (all, any, package, version, build) {
-                    (Some(all), None, None, None, None) => Ok(TomlWhen::All { all }),
-                    (None, Some(any), None, None, None) => Ok(TomlWhen::Any { any }),
-                    (None, None, Some(package), version, build) => {
+                        let spec =
+                            <TomlSpec as toml_span::Deserialize>::deserialize(&mut table_value)?;
+                        validate_when_spec(&spec, table_value.span)?;
                         Ok(TomlWhen::Expanded(TomlWhenPackage {
-                            package: package.into_inner(),
-                            version,
-                            build,
+                            package,
+                            spec: Box::new(spec),
                         }))
                     }
                     _ => Err(DeserError::from(toml_span::Error {
@@ -1057,6 +1183,8 @@ impl Serialize for PathSpec {
 
 #[cfg(test)]
 mod test {
+    use pixi_test_utils::format_parse_error;
+    use pixi_toml::TomlDiagnostic;
     use serde::Serialize;
     use serde_json::{Value, json};
 
@@ -1082,6 +1210,23 @@ mod test {
         <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
             .map(condition_string)
             .map_err(|err| err.to_string())
+    }
+
+    /// Parse a TOML pixi spec and render the first error with full
+    /// location/highlighting via miette — used to produce snapshots that show
+    /// where in the TOML the failure happened.
+    fn parse_toml_condition_diagnostic(input: &str) -> String {
+        let trimmed = input.trim();
+        let result = toml_span::parse(trimmed)
+            .map_err(DeserError::from)
+            .and_then(|mut v| <PixiSpec as toml_span::Deserialize>::deserialize(&mut v));
+        let err = result.expect_err("expected a parse failure");
+        let first = err
+            .errors
+            .into_iter()
+            .next()
+            .expect("DeserError contained no errors");
+        format_parse_error(trimmed, TomlDiagnostic(first))
     }
 
     #[test]
@@ -1430,6 +1575,7 @@ when = { any = [] }"#,
 
         let mut snapshot = Vec::new();
         for (label, input) in json_cases {
+            // JSON paths have no source spans, so we just stringify the error.
             let error = parse_json_condition(input.clone()).unwrap_err();
             snapshot.push(Snapshot {
                 label,
@@ -1439,10 +1585,12 @@ when = { any = [] }"#,
         }
 
         for (label, input) in toml_cases {
+            // TOML errors get rendered with miette so the snapshot shows the
+            // offending span.
             snapshot.push(Snapshot {
                 label,
                 input: input.trim().to_string(),
-                error: parse_toml_condition(input).unwrap_err(),
+                error: parse_toml_condition_diagnostic(input),
             });
         }
 
