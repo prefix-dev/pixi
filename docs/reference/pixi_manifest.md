@@ -490,9 +490,15 @@ More information in the [system requirements documentation](../workspace/system_
 ## The `pypi-options` table
 
 The `pypi-options` table is used to define options that are specific to PyPI registries.
-These options can be specified either at the root level, which will add it to the default options feature,
-or on feature level, which will create a union of these options when the features are included in the
-environment.
+It can appear in three scopes:
+
+- `[workspace.pypi-options]`: the workspace base. Always applied to every environment, including those that set `no-default-feature = true`.
+- `[pypi-options]` at the root of the manifest: shorthand for the default feature's options. Only applied to environments that include the default feature.
+- `[feature.<name>.pypi-options]`: per-feature options, applied to environments that include that feature.
+
+When an environment is resolved, the workspace base is used as the starting point and the options of all included features are overlaid on top. For single-assignment fields (`index-url`, `index-strategy`, `prerelease-mode`, `skip-wheel-filename-check`) a feature value overrides the workspace value; list-valued fields (`extra-index-urls`, `find-links`) and union-like fields (`no-build`, `no-binary`, `no-build-isolation`) are merged.
+
+Two features in the same environment may set the same single-assignment value, but conflicting values across features produce a parse-time error.
 
 The options that can be defined are:
 

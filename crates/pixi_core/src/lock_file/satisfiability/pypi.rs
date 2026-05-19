@@ -20,7 +20,7 @@ use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_options_to_build_options,
-    pypi_options_to_index_locations, to_index_strategy,
+    pypi_options_to_index_locations, to_index_strategy, to_requirements,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
@@ -28,7 +28,7 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
 use uv_configuration::RAYON_INITIALIZE;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
@@ -440,14 +440,7 @@ pub(super) async fn lock_pypi_packages(
 
                 read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx)
                     .await
-                    .map_err(|e| {
-                        CommandDispatcherError::Failed(Box::new(
-                            PlatformUnsat::FailedToReadLocalMetadata(
-                                pkg.name().clone(),
-                                format!("failed to read metadata: {e}"),
-                            ),
-                        ))
-                    })?
+                    .map_err(|e| CommandDispatcherError::Failed(Box::new(e)))?
             } else {
                 None
             }
@@ -508,18 +501,15 @@ async fn read_local_package_metadata(
 
     let pypi_options = ctx.environment.pypi_options();
 
-    // Find the Python interpreter from locked records
+    // Missing python is a conda-side gap (e.g. `unlock_packages` stripped
+    // it pre-resolve); raise the non-pypi-only variant so the env is
+    // marked `outdated_conda`. #6093.
     let python_record = ctx
         .locked_pixi_records
         .records
         .iter()
         .find(|r| is_python_record(r))
-        .ok_or_else(|| {
-            PlatformUnsat::FailedToReadLocalMetadata(
-                package_name.clone(),
-                "No Python interpreter found in locked packages".to_string(),
-            )
-        })?;
+        .ok_or(PlatformUnsat::MissingPythonInterpreter)?;
 
     // Create marker environment for the target platform
     let marker_environment = determine_marker_environment(ctx.platform, python_record.as_ref())
@@ -567,13 +557,11 @@ async fn read_local_package_metadata(
     );
 
     let registry_client = {
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts.clone())
-            .markers(&marker_environment)
-            .keyring(ctx.uv_context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(ctx.uv_context.use_native_tls)
-            .extra_middleware(ctx.uv_context.extra_middleware.clone());
+        let base_client_builder = ctx.uv_context.base_client_builder(
+            allow_insecure_hosts.clone(),
+            Some(&marker_environment),
+            Connectivity::Online,
+        );
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
@@ -752,22 +740,16 @@ async fn read_local_package_metadata(
         }
     };
 
-    // A round-trip failure here would be a uv bug, not "static doesn't
-    // apply", so propagate rather than swallow as `Ok(None)`.
-    let requires_dist_vec: Vec<pep508_rs::Requirement> = requires_dist
-        .requires_dist
-        .iter()
-        .map(|req| {
-            req.to_string()
-                .parse::<pep508_rs::Requirement>()
-                .map_err(|e| {
-                    PlatformUnsat::FailedToReadLocalMetadata(
-                        package_name.clone(),
-                        format!("Invalid requirement: {e}"),
-                    )
-                })
-        })
-        .collect::<Result<_, _>>()?;
+    // Match the lockfile-write serializer so both sides of
+    // `compare_metadata` agree on `[tool.uv.sources]` requirements
+    // (#6049 follow-up).
+    let requires_dist_vec: Vec<pep508_rs::Requirement> =
+        to_requirements(requires_dist.requires_dist.iter()).map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Invalid requirement: {e}"),
+            )
+        })?;
 
     let metadata = pypi_metadata::LocalPackageMetadata {
         version,

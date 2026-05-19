@@ -37,6 +37,8 @@ use crate::pypi_mapping::{
     map_requirements_with_channels,
 };
 
+const CYTHON_INPUT_GLOBS: &[&str] = &["**/*.{pyx,pxd,pxi}"];
+
 /// Compute the `python_abi` version spec from an optional `requires-python`
 /// specifier string.
 ///
@@ -167,6 +169,17 @@ impl GenerateRecipe for PythonGenerator {
         // the ProjectModel trait's platform-aware API instead of trying to evaluate
         // rattler-build selectors with simple string comparison.
         let model_dependencies = model.dependencies(Some(host_platform));
+        let cython_pkg = pixi_build_types::SourcePackageName::from(
+            rattler_conda_types::PackageName::new_unchecked("cython"),
+        );
+        let has_cython_dependency = model_dependencies.contains(&cython_pkg)
+            || pyproject_metadata_provider
+                .build_system_requires()?
+                .is_some_and(|requirements| {
+                    requirements
+                        .iter()
+                        .any(|req| req.name.as_ref().eq_ignore_ascii_case(cython_pkg.as_ref()))
+                });
 
         // Ensure the python build tools are added to the `host` requirements.
         // Please note: this is a subtle difference for python, where the build tools
@@ -390,6 +403,13 @@ impl GenerateRecipe for PythonGenerator {
         generated_recipe
             .metadata_input_globs
             .extend(pyproject_metadata_provider.input_globs());
+        if has_cython_dependency {
+            // Cython inputs affect compiled extension artifacts even when the
+            // Python package itself is installed editable.
+            generated_recipe
+                .build_input_globs
+                .extend(CYTHON_INPUT_GLOBS.iter().map(|glob| (*glob).to_string()));
+        }
 
         // Log any warnings collected during metadata extraction
         for warning in pyproject_metadata_provider.warnings() {
@@ -436,7 +456,7 @@ impl GenerateRecipe for PythonGenerator {
         let python_globs = if editable {
             Vec::new()
         } else {
-            Vec::from(["**/*.py", "**/*.pyx"])
+            Vec::from(["**/*.py"])
         };
 
         Ok(base_globs
@@ -1016,6 +1036,95 @@ version = "0.1.0"
             recipe.recipe.build.noarch.is_none(),
             "explicit noarch=false should override absence of compilers"
         );
+    }
+
+    #[tokio::test]
+    async fn test_cython_input_globs_added_for_model_dependency() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "cython": {
+                            "binary": {
+                                "version": "*"
+                            }
+                        }
+                    }
+                },
+            }
+        });
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &PythonBackendConfig::default_with_ignore_pyproject_manifest(),
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert!(
+            generated_recipe
+                .build_input_globs
+                .contains(CYTHON_INPUT_GLOBS[0])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cython_input_globs_added_for_build_system_requires() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            r#"[build-system]
+requires = ["setuptools", "Cython"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foobar"
+version = "0.1.0"
+"#,
+        )
+        .await
+        .expect("Failed to write pyproject.toml");
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &minimal_project(),
+                &PythonBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert!(
+            generated_recipe
+                .build_input_globs
+                .contains(CYTHON_INPUT_GLOBS[0])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cython_input_globs_not_added_without_cython_dependency() {
+        let recipe = generate_test_recipe(&PythonBackendConfig {
+            ignore_pyproject_manifest: Some(true),
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to generate recipe");
+
+        assert!(!recipe.build_input_globs.contains(CYTHON_INPUT_GLOBS[0]));
     }
 
     #[test]

@@ -7,14 +7,16 @@ pub trait MergeUnion {
 }
 
 /// Merge two optional single-assignment values.
-/// - If both are `Some`, return a conflict error via the provided closure.
+/// - If both are `Some` and equal, return that value.
+/// - If both are `Some` and differ, return a conflict error via the provided closure.
 /// - Otherwise prefer `a` when set, else `b`.
-pub fn merge_single_option<T: Clone, E>(
+pub fn merge_single_option<T: Clone + PartialEq, E>(
     a: &Option<T>,
     b: &Option<T>,
     conflict: impl FnOnce(&T, &T) -> E,
 ) -> Result<Option<T>, E> {
     match (a, b) {
+        (Some(a), Some(b)) if a == b => Ok(Some(a.clone())),
         (Some(a), Some(b)) => Err(conflict(a, b)),
         (Some(a), None) => Ok(Some(a.clone())),
         (None, Some(b)) => Ok(Some(b.clone())),
