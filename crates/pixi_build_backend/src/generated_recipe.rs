@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
@@ -62,6 +62,10 @@ pub trait GenerateRecipe {
     ///   The backend picks its own subdirectory inside and owns invalidation. See
     ///   `pixi_build_types::procedures::initialize::InitializeParams::workspace_scratch_directory`
     ///   for the convention.
+    /// * `workspace_directory` - Absolute path to the root of the workspace that owns this
+    ///   package, if any. Backends can use it to inspect sibling packages (e.g. the ROS
+    ///   backend uses it to discover sibling `package.xml` files and emit them as source
+    ///   dependencies). `None` when the package is built outside of a workspace context.
     #[allow(clippy::too_many_arguments)]
     async fn generate_recipe(
         &self,
@@ -74,6 +78,7 @@ pub trait GenerateRecipe {
         channels: Vec<ChannelUrl>,
         cache_dir: Option<PathBuf>,
         workspace_scratch_directory: Option<PathBuf>,
+        workspace_directory: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe>;
 
     /// Returns a list of globs that should be used to find the input files
@@ -85,8 +90,8 @@ pub trait GenerateRecipe {
         _config: &Self::Config,
         _workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
-        Ok(BTreeSet::new())
+    ) -> miette::Result<Vec<String>> {
+        Ok(Vec::new())
     }
 
     /// Returns "default" variants for the given host platform. This allows
@@ -143,8 +148,14 @@ pub enum GenerateRecipeError<MetadataProviderError: Diagnostic + 'static> {
 #[derive(Clone)]
 pub struct GeneratedRecipe {
     pub recipe: SingleOutputRecipe,
-    pub metadata_input_globs: BTreeSet<String>,
-    pub build_input_globs: BTreeSet<String>,
+    /// Globs whose matched files contribute to the metadata-cache fingerprint.
+    /// Pixi evaluates them with gitignore "last match wins" semantics, so
+    /// backends MUST emit inclusion patterns before any `!`-prefixed
+    /// exclusions that should override them.
+    pub metadata_input_globs: Vec<String>,
+    /// Globs whose matched files trigger a rebuild. Same ordering rule as
+    /// [`Self::metadata_input_globs`].
+    pub build_input_globs: Vec<String>,
 }
 
 /// Helper to create a concrete `Value<Url>` from an optional string
@@ -276,8 +287,8 @@ impl GeneratedRecipe {
 
         Ok(GeneratedRecipe {
             recipe,
-            metadata_input_globs: BTreeSet::new(),
-            build_input_globs: BTreeSet::new(),
+            metadata_input_globs: Vec::new(),
+            build_input_globs: Vec::new(),
         })
     }
 }

@@ -115,6 +115,35 @@ mod tests {
         "###);
     }
 
+    // Pin the gitignore "last-match-wins" semantics that `GlobSet` inherits
+    // from `ignore::overrides::Override`. Callers that emit a mix of
+    // inclusion and exclusion patterns must keep exclusions *after* the
+    // inclusions they intend to negate, otherwise the negation is undone by
+    // the later, broader include.
+    #[test]
+    fn collect_matching_order_is_last_match_wins() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path();
+        File::create(root_path.join("include1.txt")).unwrap();
+        File::create(root_path.join("exclude.txt")).unwrap();
+
+        // Exclude before include: the include re-matches `exclude.txt`.
+        let exclude_then_include = GlobSet::create(vec!["!exclude.txt", "**/*.txt"]);
+        let paths = sorted_paths(
+            exclude_then_include.collect_matching(root_path).unwrap(),
+            root_path,
+        );
+        assert_eq!(paths, vec!["exclude.txt", "include1.txt"]);
+
+        // Include before exclude: exclusion sticks.
+        let include_then_exclude = GlobSet::create(vec!["**/*.txt", "!exclude.txt"]);
+        let paths = sorted_paths(
+            include_then_exclude.collect_matching(root_path).unwrap(),
+            root_path,
+        );
+        assert_eq!(paths, vec!["include1.txt"]);
+    }
+
     // Check some general globbing support and make sure the correct things do not match
     #[test]
     fn collect_matching_relative_globs() {

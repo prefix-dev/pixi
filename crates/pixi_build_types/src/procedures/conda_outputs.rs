@@ -7,7 +7,7 @@
 //! This API was introduced in Pixi Build API version 1.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     path::PathBuf,
 };
 
@@ -70,7 +70,13 @@ pub struct CondaOutputsResult {
     /// The files that were read as part of the computation. These files are
     /// hashed and stored in the lock file. If the files change, the
     /// lock file will be invalidated.
-    pub input_globs: BTreeSet<String>,
+    ///
+    /// Backends MUST emit globs in gitignore-style "last match wins" order:
+    /// list inclusion patterns first, then any `!`-prefixed exclusions that
+    /// should override them. Pixi feeds these straight into its `GlobSet`
+    /// which inherits the same semantics, so reordering would silently
+    /// undo exclusions.
+    pub input_globs: Vec<String>,
 }
 
 #[serde_as]
@@ -111,8 +117,9 @@ pub struct CondaOutput {
     // pub cache: Option<CondaCacheMetadata>,
 
     /// Explicit input globs for this specific output. If this is `None`,
-    /// [`CondaOutputsResult::input_globs`] will be used.
-    pub input_globs: Option<BTreeSet<String>>,
+    /// [`CondaOutputsResult::input_globs`] will be used. Order matters; see
+    /// [`CondaOutputsResult::input_globs`].
+    pub input_globs: Option<Vec<String>>,
 }
 
 #[serde_as]

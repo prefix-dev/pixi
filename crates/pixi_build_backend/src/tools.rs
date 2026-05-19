@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
@@ -70,7 +70,7 @@ pub struct LoadedVariantConfig {
     pub variant_config: VariantConfig,
 
     /// Input globs that identity the files that were loaded.
-    pub input_globs: BTreeSet<String>,
+    pub input_globs: Vec<String>,
 }
 
 /// Track a potential variants.yaml location: always add it to `input_globs`
@@ -79,7 +79,7 @@ pub struct LoadedVariantConfig {
 fn track_variant_path(
     variant_path: PathBuf,
     source_dir: &Path,
-    input_globs: &mut BTreeSet<String>,
+    input_globs: &mut Vec<String>,
     variant_files: &mut Vec<PathBuf>,
 ) {
     if let Some(rel) = pathdiff::diff_paths(&variant_path, source_dir) {
@@ -88,7 +88,7 @@ fn track_variant_path(
         } else {
             rel.to_string_lossy().to_string()
         };
-        input_globs.insert(normalized);
+        input_globs.push(normalized);
     }
     if variant_path.is_file() {
         variant_files.push(variant_path);
@@ -106,7 +106,7 @@ impl LoadedVariantConfig {
         additional_variant_files: impl Iterator<Item = &'a Path>,
     ) -> Result<Self, VariantConfigError> {
         let mut variant_files = Vec::new();
-        let mut input_globs = BTreeSet::new();
+        let mut input_globs = Vec::new();
 
         // Check if there is a `variants.yaml` file next to the recipe that we
         // should potentially use.
@@ -458,8 +458,6 @@ pub fn output_directory(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeSet;
-
     use fs_err as fs;
     use rattler_conda_types::Platform;
     use tempfile::tempdir;
@@ -491,7 +489,10 @@ mod tests {
 
         // variants.yaml in source_dir should appear in input_globs
         assert!(
-            loaded.input_globs.contains(VARIANTS_CONFIG_FILE),
+            loaded
+                .input_globs
+                .iter()
+                .any(|g| g == VARIANTS_CONFIG_FILE),
             "input_globs should contain {VARIANTS_CONFIG_FILE} but was: {:?}",
             loaded.input_globs
         );
@@ -523,7 +524,10 @@ mod tests {
         // second block should NOT fire (recipe_path_parent == source_dir).
         // The glob should still be present from the first block.
         assert!(
-            loaded.input_globs.contains(VARIANTS_CONFIG_FILE),
+            loaded
+                .input_globs
+                .iter()
+                .any(|g| g == VARIANTS_CONFIG_FILE),
             "input_globs should contain {VARIANTS_CONFIG_FILE} but was: {:?}",
             loaded.input_globs
         );
@@ -550,12 +554,14 @@ mod tests {
         )
         .unwrap();
 
+        // Insertion order: first the variants.yaml next to the recipe, then
+        // the one in source_dir.
         assert_eq!(
             loaded.input_globs,
-            BTreeSet::from([
+            vec![
                 String::from("custom/variants.yaml"),
                 String::from(VARIANTS_CONFIG_FILE),
-            ])
+            ]
         );
     }
 }

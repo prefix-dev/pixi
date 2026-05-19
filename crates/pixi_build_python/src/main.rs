@@ -25,7 +25,7 @@ use rattler_conda_types::{
 };
 use std::collections::HashSet;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
@@ -130,6 +130,7 @@ impl GenerateRecipe for PythonGenerator {
         channels: Vec<ChannelUrl>,
         cache_dir: Option<PathBuf>,
         _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         let params = python_params.unwrap_or_default();
 
@@ -370,7 +371,7 @@ impl GenerateRecipe for PythonGenerator {
         let pyproject_manifest = if pyproject_manifest_path.exists() {
             let contents = fs::read_to_string(&pyproject_manifest_path).into_diagnostic()?;
             generated_recipe.build_input_globs =
-                BTreeSet::from([pyproject_manifest_path.to_string_lossy().to_string()]);
+                vec![pyproject_manifest_path.to_string_lossy().to_string()];
             Some(toml::from_str(&contents).into_diagnostic()?)
         } else {
             None
@@ -438,7 +439,7 @@ impl GenerateRecipe for PythonGenerator {
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
         editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
+    ) -> miette::Result<Vec<String>> {
         let base_globs = Vec::from([
             // Project configuration
             "setup.py",
@@ -707,6 +708,7 @@ version = "0.1.0"
                 vec![],
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -751,6 +753,7 @@ version = "0.1.0"
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -798,6 +801,7 @@ version = "0.1.0"
                 vec![],
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -839,6 +843,7 @@ version = "0.1.0"
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -913,6 +918,7 @@ version = "0.1.0"
                 vec![],
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -962,6 +968,7 @@ version = "0.1.0"
                 None,
                 &std::collections::HashSet::<pixi_build_backend::variants::NormalizedKey>::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -1082,6 +1089,7 @@ version = "0.1.0"
                 vec![],
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -1089,7 +1097,8 @@ version = "0.1.0"
         assert!(
             generated_recipe
                 .build_input_globs
-                .contains(CYTHON_INPUT_GLOBS[0])
+                .iter()
+                .any(|g| g == CYTHON_INPUT_GLOBS[0])
         );
     }
 
@@ -1121,6 +1130,7 @@ version = "0.1.0"
                 vec![],
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -1128,7 +1138,8 @@ version = "0.1.0"
         assert!(
             generated_recipe
                 .build_input_globs
-                .contains(CYTHON_INPUT_GLOBS[0])
+                .iter()
+                .any(|g| g == CYTHON_INPUT_GLOBS[0])
         );
     }
 
@@ -1141,7 +1152,12 @@ version = "0.1.0"
         .await
         .expect("Failed to generate recipe");
 
-        assert!(!recipe.build_input_globs.contains(CYTHON_INPUT_GLOBS[0]));
+        assert!(
+            !recipe
+                .build_input_globs
+                .iter()
+                .any(|g| g == CYTHON_INPUT_GLOBS[0])
+        );
     }
 
     #[test]
@@ -1222,6 +1238,7 @@ build-backend = "hatchling.build"
                 vec![ChannelUrl::from(
                     url::Url::parse("https://prefix.dev/conda-forge").unwrap(),
                 )],
+                None,
                 None,
                 None,
             )
@@ -1337,6 +1354,7 @@ build-backend = "setuptools.build_meta"
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )

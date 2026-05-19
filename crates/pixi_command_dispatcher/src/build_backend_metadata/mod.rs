@@ -960,8 +960,9 @@ impl BuildBackendMetadataInner {
 struct RawCondaOutputs {
     /// The outputs as reported by the build backend.
     outputs: Vec<pixi_build_types::procedures::conda_outputs::CondaOutput>,
-    /// Globs of files from which the metadata was derived.
-    input_globs: std::collections::BinaryHeap<String>,
+    /// Globs of files from which the metadata was derived. Order matters:
+    /// pixi's `GlobSet` is gitignore last-match-wins.
+    input_globs: Vec<String>,
     /// Paths of files that match the input globs.
     input_files: std::collections::BTreeSet<PathBuf>,
     /// The timestamp of when the metadata was computed.

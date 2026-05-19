@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, collections::HashMap, path::PathBuf, sync::LazyLock};
+use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
 
 use miette::Diagnostic;
 use once_cell::unsync::OnceCell;
@@ -325,11 +325,11 @@ impl DescriptionMetadataProvider {
     }
 
     /// Returns input globs for R package files
-    pub fn input_globs(&self) -> BTreeSet<String> {
-        let mut globs = BTreeSet::new();
+    pub fn input_globs(&self) -> Vec<String> {
+        let mut globs = Vec::new();
 
         if self.description_data.get().is_some() {
-            globs.insert("DESCRIPTION".to_string());
+            globs.push("DESCRIPTION".to_string());
         }
 
         globs

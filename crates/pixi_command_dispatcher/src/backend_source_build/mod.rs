@@ -5,7 +5,7 @@ mod ext;
 pub use ext::BackendSourceBuildExt;
 
 use std::{
-    collections::{BTreeMap, BTreeSet, BinaryHeap},
+    collections::{BTreeMap, BTreeSet},
     fmt::Display,
     path::PathBuf,
     sync::Arc,
@@ -132,7 +132,11 @@ pub struct BackendBuiltSource {
 
     /// The globs that were used as input to the build. Use these for
     /// re-verifying the build.
-    pub input_globs: BinaryHeap<String>,
+    ///
+    /// Order is preserved: pixi's `GlobSet` is gitignore last-match-wins, so
+    /// inclusion patterns must precede any negated exclusions that should
+    /// override them.
+    pub input_globs: Vec<String>,
 
     /// The actual files that matched the globs at build time. This allows
     /// detecting file deletions and additions.

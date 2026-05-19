@@ -43,6 +43,7 @@ impl GenerateRecipe for RustGenerator {
         _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
         _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Construct a CargoMetadataProvider to read the Cargo.toml file
         // and extract metadata from it.
@@ -212,7 +213,7 @@ impl GenerateRecipe for RustGenerator {
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
+    ) -> miette::Result<Vec<String>> {
         Ok([
             "**/*.rs",
             // Cargo configuration files
@@ -281,6 +282,7 @@ mod tests {
                 vec![],
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -310,19 +312,21 @@ mod tests {
             .extract_input_globs_from_build(&config, PathBuf::new(), false)
             .unwrap();
 
+        let contains = |needle: &str| result.iter().any(|g| g == needle);
+
         // Verify that all extra globs are included in the result
         for extra_glob in &config.extra_input_globs {
             assert!(
-                result.contains(extra_glob),
+                contains(extra_glob),
                 "Result should contain extra glob: {extra_glob}"
             );
         }
 
         // Verify that default globs are still present
-        assert!(result.contains("**/*.rs"));
-        assert!(result.contains("Cargo.toml"));
-        assert!(result.contains("Cargo.lock"));
-        assert!(result.contains("build.rs"));
+        assert!(contains("**/*.rs"));
+        assert!(contains("Cargo.toml"));
+        assert!(contains("Cargo.lock"));
+        assert!(contains("build.rs"));
     }
 
     #[macro_export]
@@ -361,6 +365,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -409,6 +414,7 @@ mod tests {
                 vec![],
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -453,6 +459,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -501,6 +508,7 @@ mod tests {
                 vec![],
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -534,6 +542,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -607,9 +616,9 @@ mod tests {
         );
 
         insta::assert_yaml_snapshot!(&generated_recipe.metadata_input_globs, @r###"
-        - "../../Cargo.toml"
-        - "../Cargo.toml"
         - Cargo.toml
+        - "../Cargo.toml"
+        - "../../Cargo.toml"
         "###);
     }
 
@@ -635,6 +644,7 @@ mod tests {
                 None,
                 &std::collections::HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -667,6 +677,7 @@ mod tests {
                 None,
                 &std::collections::HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -708,6 +719,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -783,6 +795,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -875,6 +888,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )
@@ -981,6 +995,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
             )

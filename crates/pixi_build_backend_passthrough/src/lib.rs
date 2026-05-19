@@ -919,7 +919,7 @@ pub struct PassthroughBackendConfig {
     pub noarch: Option<bool>,
 
     /// Build globs
-    pub build_globs: Option<BTreeSet<String>>,
+    pub build_globs: Option<Vec<String>>,
 }
 
 /// Observer that allows collecting backend events from an ObservableBackend.

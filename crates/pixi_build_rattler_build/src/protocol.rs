@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -546,7 +546,7 @@ fn build_input_globs(
     source: &Path,
     package_sources: Option<Vec<PathBuf>>,
     extra_globs: Vec<String>,
-) -> miette::Result<BTreeSet<String>> {
+) -> miette::Result<Vec<String>> {
     // Get parent directory path
     let src_parent = if source.is_file() {
         // use the parent path as glob
@@ -557,7 +557,7 @@ fn build_input_globs(
     };
 
     // Always add the current directory of the package to the globs
-    let mut input_globs = BTreeSet::from([build_relative_glob(manifest_root, &src_parent)?]);
+    let mut input_globs = vec![build_relative_glob(manifest_root, &src_parent)?];
 
     // If there are sources add them to the globs as well
     if let Some(package_sources) = package_sources {
@@ -567,7 +567,7 @@ fn build_input_globs(
             } else {
                 src_parent.join(source)
             };
-            input_globs.insert(build_relative_glob(manifest_root, &source)?);
+            input_globs.push(build_relative_glob(manifest_root, &source)?);
         }
     }
 
@@ -582,10 +582,10 @@ fn build_input_globs(
 fn get_metadata_input_globs(
     manifest_root: &Path,
     recipe_source_path: &Path,
-) -> miette::Result<BTreeSet<String>> {
+) -> miette::Result<Vec<String>> {
     match build_relative_glob(manifest_root, recipe_source_path) {
-        Ok(rel) if !rel.is_empty() => Ok(BTreeSet::from_iter([rel])),
-        Ok(_) => Ok(Default::default()),
+        Ok(rel) if !rel.is_empty() => Ok(vec![rel]),
+        Ok(_) => Ok(Vec::new()),
         Err(e) => Err(e),
     }
 }
@@ -1213,7 +1213,7 @@ numpy:
         let recipe_path = base_path.join("recipe.yaml");
         fs::write(&recipe_path, "fake").unwrap();
         let globs = super::build_input_globs(base_path, &recipe_path, None, Vec::new()).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("**")]));
+        assert_eq!(globs, vec![String::from("**")]);
 
         // Case 2: source is a directory, with a file and a dir as package sources
         let pkg_dir = base_path.join("pkg");
@@ -1230,11 +1230,11 @@ numpy:
         .unwrap();
         assert_eq!(
             globs,
-            BTreeSet::from([
+            vec![
                 String::from("**"),
                 String::from("pkg/file.txt"),
-                String::from("pkg/dir/**")
-            ])
+                String::from("pkg/dir/**"),
+            ]
         );
 
         // Case 3: source is a file in a subdirectory (custom recipe path)
@@ -1243,7 +1243,7 @@ numpy:
         fs::create_dir_all(&custom_dir).unwrap();
         fs::write(&custom_recipe, "fake").unwrap();
         let globs = super::build_input_globs(base_path, &custom_recipe, None, Vec::new()).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("custom/**")]));
+        assert_eq!(globs, vec![String::from("custom/**")]);
     }
 
     #[test]
@@ -1269,7 +1269,7 @@ numpy:
         .unwrap();
         assert_eq!(
             globs,
-            BTreeSet::from([String::from("source/**"), String::from("pkgsrc/**")])
+            vec![String::from("source/**"), String::from("pkgsrc/**")]
         );
     }
 
@@ -1298,7 +1298,7 @@ numpy:
         // The relative path from base_path to rel_dir should be "rel_folder/**"
         assert_eq!(
             globs,
-            BTreeSet::from_iter(["**", "rel_folder/**"].into_iter().map(ToString::to_string))
+            vec![String::from("**"), String::from("rel_folder/**")]
         );
     }
 
@@ -1309,30 +1309,27 @@ numpy:
         let manifest_root = PathBuf::from("/foo/bar");
         let path = PathBuf::from("/foo/bar/recipe.yaml");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("recipe.yaml")]));
+        assert_eq!(globs, vec![String::from("recipe.yaml")]);
         // Case: file with no name (root)
         let manifest_root = PathBuf::from("/");
         let path = PathBuf::from("/");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("**")]));
+        assert_eq!(globs, vec![String::from("**")]);
         // Case: file with .yml extension
         let manifest_root = PathBuf::from("/foo/bar");
         let path = PathBuf::from("/foo/bar/recipe.yml");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("recipe.yml")]));
+        assert_eq!(globs, vec![String::from("recipe.yml")]);
         // Case: file in subdir
         let manifest_root = PathBuf::from("/foo");
         let path = PathBuf::from("/foo/bar/recipe.yaml");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("bar/recipe.yaml")]));
+        assert_eq!(globs, vec![String::from("bar/recipe.yaml")]);
         // Case: custom recipe in nested subdir
         let manifest_root = PathBuf::from("/tmp/xxx");
         let path = PathBuf::from("/tmp/xxx/custom/my_recipe.yaml");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
-        assert_eq!(
-            globs,
-            BTreeSet::from([String::from("custom/my_recipe.yaml")])
-        );
+        assert_eq!(globs, vec![String::from("custom/my_recipe.yaml")]);
     }
 
     #[test]
@@ -1350,15 +1347,17 @@ numpy:
         let globs =
             super::build_input_globs(base_path, &recipe_path, None, extra_globs.clone()).unwrap();
 
+        let contains = |needle: &str| globs.iter().any(|g| g == needle);
+
         // Verify that all extra globs are included in the result
         for extra_glob in &extra_globs {
             assert!(
-                globs.contains(extra_glob),
+                contains(extra_glob),
                 "Result should contain extra glob: {extra_glob}"
             );
         }
 
         // Verify that the basic manifest glob is still present
-        assert!(globs.contains("**"));
+        assert!(contains("**"));
     }
 }

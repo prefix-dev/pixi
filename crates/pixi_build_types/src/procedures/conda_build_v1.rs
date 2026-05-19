@@ -6,7 +6,7 @@
 //! build the package.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     path::PathBuf,
 };
 
@@ -271,7 +271,11 @@ pub struct CondaBuildV1Result {
     /// The globs that were used as input to the build. If any of the files that
     /// match these globs changes, the package should be considered
     /// "out-of-date".
-    pub input_globs: BTreeSet<String>,
+    ///
+    /// Order is significant: pixi feeds these into a gitignore-style matcher,
+    /// so inclusion patterns must precede any `!`-prefixed exclusions that
+    /// should override them.
+    pub input_globs: Vec<String>,
 
     /// The normalized name of the package.
     pub name: String,
