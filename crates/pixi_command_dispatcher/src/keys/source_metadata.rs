@@ -25,7 +25,18 @@ use crate::{
 use pixi_compute_sources::SourceCheckoutExt;
 
 /// The result of resolving source metadata for all variants of a package.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+///
+/// `Hash`/`Eq` use pointer identity for `records` rather than recursing
+/// into each `SourceRecord`. `SourceRecord` derives `Hash` over its
+/// full `PackageRecord` plus `build_packages` / `host_packages`, which
+/// recurse into more `SourceRecord`s — a single `dyn_hash` on
+/// `SolveCondaSpec::source_repodata` was walking O(metadata × records ×
+/// record_fields) of data on every compute-graph lookup. Producers
+/// already maintain Arc identity: each unique `Arc<SourceRecord>` is
+/// created once inside `assemble_source_record_inner`, cached as the
+/// value of `ResolveSourcePackageKey`, and `Arc::clone`d through every
+/// consumer (including the `walk_and_resolve` push into `source_repodata`).
+#[derive(Clone, Debug)]
 pub struct SourceMetadata {
     /// Manifest and optional build source location for this metadata.
     pub source: PinnedSourceCodeLocation,
@@ -33,6 +44,30 @@ pub struct SourceMetadata {
     /// The metadata that was acquired from the build backend.
     pub records: Vec<Arc<SourceRecord>>,
 }
+
+impl Hash for SourceMetadata {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.source.hash(state);
+        self.records.len().hash(state);
+        for r in &self.records {
+            (Arc::as_ptr(r) as usize).hash(state);
+        }
+    }
+}
+
+impl PartialEq for SourceMetadata {
+    fn eq(&self, other: &Self) -> bool {
+        self.source == other.source
+            && self.records.len() == other.records.len()
+            && self
+                .records
+                .iter()
+                .zip(&other.records)
+                .all(|(a, b)| Arc::ptr_eq(a, b))
+    }
+}
+
+impl Eq for SourceMetadata {}
 
 /// Input to [`SourceMetadataKey`].
 ///
