@@ -2655,6 +2655,8 @@ host-lib = "*"
         force: false,
         skip_existing: true,
         generate_attestation: false,
+        variant: Vec::new(),
+        variant_config: Vec::new(),
     })
     .await
     .expect("publish should succeed");
