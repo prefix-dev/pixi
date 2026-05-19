@@ -792,7 +792,13 @@ where
                 subpackages: BTreeMap::new(),
                 packaging_settings: PackagingSettings::from_args(
                     CondaArchiveType::Conda,
-                    CompressionLevel::default(),
+                    // Development (editable) builds skip compression to favor build speed
+                    // over artifact size, since these packages are not meant for distribution.
+                    if params.editable.unwrap_or_default() {
+                        CompressionLevel::Lowest
+                    } else {
+                        CompressionLevel::default()
+                    },
                 ),
                 store_recipe: false,
                 force_colors: true,
