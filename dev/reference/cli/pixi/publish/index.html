@@ -4090,6 +4090,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#overriding-build-variants" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overriding build variants
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4257,6 +4268,20 @@
 <dd>Generate sigstore attestation (prefix.dev only)</dd>
 </dl>
 </li>
+<li>
+<dl>
+<dt><a id="arg---variant" href="#arg---variant"><code>--variant &lt;KEY=VALUES&gt;</code></a></dt>
+<dd>Override a build variant key with one or more values
+<br>May be provided more than once.</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---variant-config" href="#arg---variant-config"><code>--variant-config (-m) &lt;FILE&gt;</code></a></dt>
+<dd>Path to an additional variant configuration YAML file
+<br>May be provided more than once.</dd>
+</dl>
+</li>
 </ul>
 <h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
 <ul>
@@ -4421,12 +4446,29 @@ directory without creating a channel structure.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Clean the build directory before building and publishing</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/my-channel<span class="w"> </span>--clean
 </span></code></pre></div>
+<h3 id="overriding-build-variants">Overriding build variants<a class="headerlink" href="#overriding-build-variants" title="Permanent link">#</a></h3>
+<p>By default <code>pixi publish</code> builds every entry in the <a href="../../../pixi_manifest/#build-variants-optional"><code>[workspace.build-variants]</code></a> matrix. Use <code>--variant KEY=VALUE</code> to override individual variant keys at the command line — for iterating locally on a single variant, parallelizing CI jobs across the matrix, or anything else where you don't want the full cross-product.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Build just one entry of the matrix</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--variant<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Constrain a variant to a subset of values (cross-product with the</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># remaining workspace variants)</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--variant<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12<span class="w"> </span>--variant<span class="w"> </span>cuda-version<span class="o">=</span><span class="m">12</span>.8,13.0
+</span></code></pre></div>
+<p>CLI overrides replace the matching key from the workspace <code>build-variants</code>; workspace keys that aren't named on the command line keep their full value list.</p>
+<p>For shared variant configuration, prefer listing the YAML files in <a href="../../../pixi_manifest/#build-variants-files-optional"><code>[workspace.build-variants-files]</code></a> in <code>pixi.toml</code> so every contributor and CI run picks them up automatically. The <code>--variant-config</code> / <code>-m</code> flag is meant for one-off overrides — for example, an extra file you don't want to commit. CLI-supplied files are appended after the workspace files, so values from <code>-m</code> override any matching key from the workspace files (<code>rattler-build --variant-config</code> semantics).</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Use an extra variant file for this build only</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>-m<span class="w"> </span>variants.yaml
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Combine with a key override</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>pixi<span class="w"> </span>publish<span class="w"> </span>-m<span class="w"> </span>variants.yaml<span class="w"> </span>--variant<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
+</span></code></pre></div>
 <h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">#</a></h2>
 <p><code>pixi publish</code> uses the same authentication system as other pixi commands. Credentials can be configured in three ways:</p>
 <ol>
 <li>
 <p><strong>Keychain / auth-file</strong>: Use <code>pixi auth login</code> to store credentials
-   <div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--token<span class="w"> </span><span class="nv">$MY_TOKEN</span><span class="w"> </span>https://prefix.dev
+   <div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--token<span class="w"> </span><span class="nv">$MY_TOKEN</span><span class="w"> </span>https://prefix.dev
 </span></code></pre></div></p>
 </li>
 <li>
