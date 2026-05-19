@@ -511,13 +511,21 @@ impl BuildBackendMetadataInner {
                 )
                 .into_std_path_buf(),
         };
+        let backend_call_started = std::time::Instant::now();
         let outputs = backend_guard
             .conda_outputs(params, move |line| {
                 let _err = futures::executor::block_on(log_sink.send(line));
             })
             .await
             .map_err(|e| BuildBackendMetadataError::Communication(Arc::new(e)))?;
+        let backend_call_elapsed_ms = backend_call_started.elapsed().as_millis() as u64;
         let timestamp = SystemTime::now();
+        tracing::debug!(
+            backend = %backend_identifier,
+            outputs = outputs.outputs.len(),
+            backend_call_elapsed_ms,
+            "conda_outputs RPC returned"
+        );
 
         // If the backend supports unique variants, validate that outputs with the same name
         // have unique variants
