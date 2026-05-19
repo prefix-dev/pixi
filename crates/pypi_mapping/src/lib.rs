@@ -368,14 +368,21 @@ impl MappingClient {
     /// Adds cache path context to a MappingError, and reclassifies middleware
     /// errors (which originate from the HTTP cache layer) as cache corruption.
     fn with_cache_path_context(&self, err: MappingError) -> MappingError {
+        use rattler_redaction::Redact;
         let cache_path = self.cache_path.display().to_string();
         match err {
             MappingError::IoError { source, .. } => MappingError::IoError { source, cache_path },
             MappingError::Reqwest { source, url } => {
                 if source.is_middleware() {
-                    MappingError::Cache { source, cache_path }
+                    MappingError::Cache {
+                        source: source.redact(),
+                        cache_path,
+                    }
                 } else {
-                    MappingError::Reqwest { source, url }
+                    MappingError::Reqwest {
+                        source: source.redact(),
+                        url,
+                    }
                 }
             }
             other => other,
