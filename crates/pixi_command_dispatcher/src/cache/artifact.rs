@@ -73,6 +73,7 @@ impl std::fmt::Display for ArtifactCacheKey {
 ///
 /// The caller provides source-dep sha256s split into build / host buckets
 /// to preserve the same bucket separation applied to binary deps.
+#[allow(clippy::too_many_arguments)]
 pub fn compute_artifact_cache_key(
     record: &UnresolvedSourceRecord,
     build_platform: Platform,
@@ -81,6 +82,7 @@ pub fn compute_artifact_cache_key(
     build_source_dep_sha256s: &[Sha256Hash],
     host_source_dep_sha256s: &[Sha256Hash],
     project_model_overrides: &crate::ProjectModelOverrides,
+    package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
 ) -> ArtifactCacheKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);
@@ -91,6 +93,8 @@ pub fn compute_artifact_cache_key(
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
     project_model_overrides.hash(&mut hasher);
+    // Distinguish artifacts by output format.
+    package_format.hash(&mut hasher);
 
     // Bucket-tagged streams: the same (url, sha256) behaves differently
     // when installed into the build prefix vs. the host prefix because
@@ -841,6 +845,7 @@ mod cache_key_tests {
             extra_build_sha,
             &[],
             &Default::default(),
+            None,
         )
         .to_string()
     }
@@ -909,6 +914,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -919,6 +925,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -935,6 +942,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -945,6 +953,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -1025,6 +1034,7 @@ mod cache_key_tests {
             &[],
             &[sha(0xaa)],
             &Default::default(),
+            None,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -1035,6 +1045,7 @@ mod cache_key_tests {
             &[],
             &[sha(0xbb)],
             &Default::default(),
+            None,
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -1055,6 +1066,7 @@ mod cache_key_tests {
             &[sha(0xaa)],
             &[],
             &Default::default(),
+            None,
         )
         .to_string();
         let host_only = compute_artifact_cache_key(
@@ -1065,6 +1077,7 @@ mod cache_key_tests {
             &[],
             &[sha(0xaa)],
             &Default::default(),
+            None,
         )
         .to_string();
         assert_ne!(build_only, host_only);
@@ -1127,6 +1140,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
         );
         let osx_arm = compute_artifact_cache_key(
             &r,
@@ -1136,6 +1150,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
         );
         assert_ne!(linux, osx_arm);
     }
@@ -1151,6 +1166,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
         );
         let prefixed = compute_artifact_cache_key(
             &r,
@@ -1163,6 +1179,7 @@ mod cache_key_tests {
                 build_string_prefix: Some("foobar".to_string()),
                 build_number: None,
             },
+            None,
         );
         assert_ne!(bare, prefixed);
     }
@@ -1178,6 +1195,7 @@ mod cache_key_tests {
             &[],
             &[],
             &Default::default(),
+            None,
         );
         let numbered = compute_artifact_cache_key(
             &r,
@@ -1190,7 +1208,73 @@ mod cache_key_tests {
                 build_string_prefix: None,
                 build_number: Some(42),
             },
+            None,
         );
         assert_ne!(bare, numbered);
+    }
+
+    #[test]
+    fn archive_type_matters() {
+        use pixi_build_types::procedures::conda_build_v1::CondaPackageFormat;
+        use rattler_conda_types::package::CondaArchiveType;
+        let r = record("foo");
+        let conda = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+            Some(CondaPackageFormat {
+                archive_type: CondaArchiveType::Conda,
+                compression_level: Default::default(),
+            }),
+        );
+        let tar_bz2 = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+            Some(CondaPackageFormat {
+                archive_type: CondaArchiveType::TarBz2,
+                compression_level: Default::default(),
+            }),
+        );
+        assert_ne!(conda, tar_bz2);
+    }
+
+    #[test]
+    fn compression_level_matters() {
+        use pixi_build_types::procedures::conda_build_v1::{
+            CondaCompressionLevel, CondaPackageFormat, NamedCompressionLevel,
+        };
+        use rattler_conda_types::package::CondaArchiveType;
+        let pf = |level: CondaCompressionLevel| CondaPackageFormat {
+            archive_type: CondaArchiveType::Conda,
+            compression_level: level,
+        };
+        let r = record("foo");
+        let key = |level: CondaCompressionLevel| {
+            compute_artifact_cache_key(
+                &r,
+                Platform::Linux64,
+                Platform::Linux64,
+                "b",
+                &[],
+                &[],
+                &Default::default(),
+                Some(pf(level)),
+            )
+        };
+        let default_level = key(CondaCompressionLevel::Named(NamedCompressionLevel::Default));
+        let max_level = key(CondaCompressionLevel::Named(NamedCompressionLevel::Highest));
+        let numeric_level = key(CondaCompressionLevel::Numeric(5));
+        assert_ne!(default_level, max_level);
+        assert_ne!(default_level, numeric_level);
+        assert_ne!(max_level, numeric_level);
     }
 }

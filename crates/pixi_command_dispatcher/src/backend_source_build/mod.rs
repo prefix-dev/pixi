@@ -21,7 +21,7 @@ use pixi_build_types::{
     procedures::conda_build_v1::{
         CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource,
         CondaBuildV1DependencySource, CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix,
-        CondaBuildV1PrefixPackage, CondaBuildV1RunExports,
+        CondaBuildV1PrefixPackage, CondaBuildV1RunExports, CondaPackageFormat,
     },
 };
 use pixi_glob::GlobSet;
@@ -103,6 +103,9 @@ pub struct BackendSourceBuildV1Method {
 
     /// Whether to build the package in editable mode.
     pub editable: bool,
+
+    /// Archive format and compression level. `None` lets the backend pick.
+    pub package_format: Option<CondaPackageFormat>,
 }
 
 #[derive(Debug, Serialize)]
@@ -284,6 +287,7 @@ impl BackendSourceBuildSpec {
                     work_directory: work_directory.clone(),
                     output_directory: params.output_directory,
                     editable: Some(params.editable),
+                    package_format: params.package_format,
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));

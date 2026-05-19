@@ -111,6 +111,7 @@ async fn test_conda_build_v1() {
         work_directory: build_dir.clone(),
         output_directory: None,
         editable: None,
+        package_format: None,
     };
 
     let some_config = json!({
