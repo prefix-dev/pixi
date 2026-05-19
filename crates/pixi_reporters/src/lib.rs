@@ -6,10 +6,7 @@ mod repodata_reporter;
 mod sync_reporter;
 pub mod uv_reporter;
 
-use std::{
-    collections::HashMap,
-    sync::{Arc, LazyLock},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use git::GitCheckoutProgress;
 use indicatif::{MultiProgress, ProgressBar};
@@ -23,7 +20,7 @@ use pixi_compute_reporters::{OperationId, OperationRegistry};
 pub use release_notes::format_release_notes;
 use repodata_reporter::RepodataReporter;
 use sync_reporter::SyncReporter;
-use uv_configuration::RAYON_INITIALIZE;
+use uv_configuration::initialize_rayon_once;
 // Re-export the uv_reporter types for external use
 pub use uv_reporter::{UvReporter, UvReporterOptions};
 
@@ -169,7 +166,7 @@ impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {
             // Dependencies on conda packages trigger package-cache
             // validation via rayon; ensure it's initialized through the
             // uv path before the validation work starts.
-            LazyLock::force(&RAYON_INITIALIZE);
+            initialize_rayon_once();
         }
 
         let id = self.alloc();

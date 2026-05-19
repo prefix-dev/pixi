@@ -3,7 +3,6 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::LazyLock,
 };
 
 use dunce::canonicalize;
@@ -29,7 +28,7 @@ use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
-use uv_configuration::RAYON_INITIALIZE;
+use uv_configuration::initialize_rayon_once;
 use uv_normalize::PackageName;
 use uv_python::PythonEnvironment;
 
@@ -1428,7 +1427,7 @@ async fn test_multiple_prefix_update() {
 
     // Normally in pixi, the RAYON_INITIALIZE is lazily initialized by the reporter
     // associated with the command dispatcher.
-    LazyLock::force(&RAYON_INITIALIZE);
+    initialize_rayon_once();
 
     let channels = group
         .channel_urls(&group.workspace().channel_config())
