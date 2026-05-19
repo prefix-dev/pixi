@@ -11133,40 +11133,118 @@ For CI/CD pipelines, you can authenticate with Artifactory using OIDC (OpenID Co
 
 This requires configuring an OIDC provider in your Artifactory instance that trusts GitHub Actions. See JFrog's documentation on [OIDC integration](https://jfrog.com/help/r/jfrog-platform-administration-documentation/configure-an-oidc-integration) for setup instructions.
 
-You can authenticate Pixi with a server like prefix.dev, a private quetz instance or anaconda.org. Different servers use different authentication methods. In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.
+You can authenticate Pixi with a server like prefix.dev, a private quetz instance, anaconda.org, or any S3-compatible bucket. Different servers use different authentication methods. This page covers how to authenticate against each, and where the authentication information is stored.
 
 ```shell
 Usage: pixi auth login [OPTIONS] <HOST>
 
 Arguments:
-  <HOST>  The host to authenticate with (e.g. repo.prefix.dev)
+  <HOST>  The host to authenticate with (e.g. prefix.dev)
 
 Options:
-      --token <TOKEN>                                The token to use (for authentication with prefix.dev)
-      --username <USERNAME>                          The username to use (for basic HTTP authentication)
-      --password <PASSWORD>                          The password to use (for basic HTTP authentication)
-      --conda-token <CONDA_TOKEN>                    The token to use on anaconda.org / quetz authentication
+      --user-agent <USER_AGENT>  User-Agent header used for requests
+
+Token / Basic Authentication:
+      --token <TOKEN>              The token to use (for authentication with prefix.dev)
+      --username <USERNAME>        The username to use (for basic HTTP authentication)
+      --password <PASSWORD>        The password to use (for basic HTTP authentication)
+      --conda-token <CONDA_TOKEN>  The token to use on anaconda.org / quetz authentication
+
+S3 Authentication:
       --s3-access-key-id <S3_ACCESS_KEY_ID>          The S3 access key ID
       --s3-secret-access-key <S3_SECRET_ACCESS_KEY>  The S3 secret access key
       --s3-session-token <S3_SESSION_TOKEN>          The S3 session token
-  -v, --verbose...                                   Increase logging verbosity
-  -q, --quiet...                                     Decrease logging verbosity
-      --color <COLOR>                                Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto]
-      --no-progress                                  Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
-  -h, --help                                         Print help
+
+OAuth/OIDC Authentication:
+      --oauth                                      Use OAuth/OIDC authentication
+      --oauth-issuer-url <OAUTH_ISSUER_URL>        OIDC issuer URL (defaults to <https://{host>})
+      --oauth-client-id <OAUTH_CLIENT_ID>          OAuth client ID (defaults to "rattler")
+      --oauth-client-secret <OAUTH_CLIENT_SECRET>  OAuth client secret (for confidential clients)
+      --oauth-flow <OAUTH_FLOW>                    OAuth flow: auto (default), auth-code, device-code [possible values: auto, auth-code,
+                                                   device-code]
+      --oauth-scope <OAUTH_SCOPES>                 Additional OAuth scopes to request (repeatable)
+      --oauth-redirect-uri <OAUTH_REDIRECT_URI>    OAuth redirect URI (defaults to a random localhost port). Set this when the OAuth client on
+                                                   the `IdP` side is registered with a specific redirect URI such as
+                                                   `http://127.0.0.1:8000/auth/oidc`
+
+Global Options:
+  -h, --help           Display help information
+  -v, --verbose...     Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
+  -q, --quiet...       Decrease logging verbosity (quiet mode)
+      --color <COLOR>  Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto]
+      --no-progress    Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 ```
 
-The different options are "token", "conda-token" and "username + password".
+## OAuth/OIDC authentication
 
-The token variant implements a standard "Bearer Token" authentication as is used on the prefix.dev platform. A Bearer Token is sent with every request as an additional header of the form `Authentication: Bearer <TOKEN>`.
+The simplest way to authenticate against prefix.dev is:
 
-The conda-token option is used on anaconda.org and can be used with a quetz server. With this option, the token is sent as part of the URL following this scheme: `conda.anaconda.org/t/<TOKEN>/conda-forge/linux-64/...`.
+```shell
+pixi auth login prefix.dev
+```
 
-The last option, username & password, are used for "Basic HTTP Authentication". This is the equivalent of adding `http://user:password@myserver.com/...`. This authentication method can be configured quite easily with a reverse NGinx or Apache server and is thus commonly used in self-hosted systems.
+A browser tab opens, you log in to prefix.dev, and Pixi stores the credentials in your system keychain. Every later `pixi install`, `pixi upload`, or `pixi publish` reuses them automatically, and Pixi refreshes the token in the background before it expires.
+
+What this login allows
+
+Pixi requests the rights to access your profile, read from channels, and upload your packages. This covers the basics commands like `pixi install`, `pixi upload` or `pixi publish` to work out of the box.
+
+### Choosing an OAuth flow
+
+`pixi auth login` defaults to `--oauth-flow auto`, which picks at runtime:
+
+- **Authorization Code with PKCE** when you're on a desktop machine with a working browser. Pixi opens a browser tab, you sign in on prefix.dev, and a local callback page completes the exchange.
+- **Device Code** when Pixi can't open a browser for you. Pixi prints a short user code and a URL; you open the URL on any device, paste the code, and Pixi receives the authentication. This is the common case for SSH sessions, headless servers, container shells, and similar environments without a browser.
+
+You can force a specific flow if `auto` picks wrong for your environment:
+
+```shell
+pixi auth login prefix.dev --oauth-flow device-code
+```
+
+### Other OIDC providers
+
+For self-hosted OIDC providers (or any host where Pixi doesn't ship built-in defaults), pass the configuration explicitly:
+
+```shell
+pixi auth login my.private.host \
+    --oauth \
+    --oauth-issuer-url https://idp.example.com \
+    --oauth-client-id my-cli-client \
+    --oauth-scope openid --oauth-scope channel:read
+```
+
+## Token authentication
+
+If you prefer to manage tokens yourself (e.g. in CI, where browser login isn't an option), you can use a standard "Bearer Token" authentication
+
+```shell
+pixi auth login prefix.dev --token pfx_jj8WDzvnuTHEGdAhwRZMC1Ag8gSto8
+```
+
+Bearer tokens are sent with every request as an `Authorization: Bearer <TOKEN>` header.
+
+## anaconda.org / quetz
+
+```shell
+pixi auth login anaconda.org --conda-token xy-72b914cc-c105-4ec7-a969-ab21d23480ed
+```
+
+The conda-token is embedded in the URL path: `conda.anaconda.org/t/<TOKEN>/conda-forge/linux-64/...`. Quetz servers accept the same scheme.
+
+## Basic HTTP authentication
+
+```shell
+pixi auth login myserver.com --username user --password password
+```
+
+This is the equivalent of `http://user:password@myserver.com/...` and is the typical choice for self-hosted channels behind an NGINX/Apache reverse proxy with HTTP basic auth.
 
 ## Examples
 
-Login to prefix.dev:
+Below are the existing per-method examples, kept for quick reference.
+
+Login to prefix.dev with a manual token:
 
 ```shell
 pixi auth login prefix.dev --token pfx_jj8WDzvnuTHEGdAhwRZMC1Ag8gSto8
@@ -11197,8 +11275,6 @@ Note
 S3 authentication is also supported through AWS's typical `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` environment variables, see the [S3 section](../s3/) for more details.
 
 ## Where does Pixi store the authentication information?
-
-The storage location for the authentication information is system-dependent. By default, Pixi tries to use the keychain to store this sensitive information securely on your machine.
 
 On Windows, the credentials are stored in the "credentials manager". Searching for `rattler` (the underlying library Pixi uses) you should find any credentials stored by Pixi (or other rattler-based programs).
 
@@ -19037,6 +19113,29 @@ pixi auth login [OPTIONS] <HOST>
 - [`--conda-token <CONDA_TOKEN>`](#arg---conda-token) : The token to use on anaconda.org / quetz authentication
 
 ## Examples
+
+OAuth against prefix.dev
+
+```shell
+pixi auth login prefix.dev
+```
+
+OAuth against a self-hosted OIDC provider:
+
+```shell
+pixi auth login my.private.host \
+    --oauth \
+    --oauth-issuer-url https://idp.example.com \
+    --oauth-client-id my-cli-client
+```
+
+OAuth on a headless machine (no usable browser — uses the device-code flow):
+
+```shell
+pixi auth login prefix.dev --oauth-flow device-code
+```
+
+Manual tokens, basic auth, and S3 credentials:
 
 ```shell
 pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD

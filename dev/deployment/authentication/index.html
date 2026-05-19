@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#examples" class="md-skip">
+        <a href="#oauthoidc-authentication" class="md-skip">
           Skip to content
         </a>
       
@@ -2431,6 +2431,78 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#oauthoidc-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OAuth/OIDC authentication
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="OAuth/OIDC authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#choosing-an-oauth-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing an OAuth flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-oidc-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other OIDC providers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#anacondaorg-quetz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        anaconda.org / quetz
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-http-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic HTTP authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4088,6 +4160,78 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#oauthoidc-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OAuth/OIDC authentication
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="OAuth/OIDC authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#choosing-an-oauth-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Choosing an OAuth flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-oidc-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other OIDC providers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Token authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#anacondaorg-quetz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        anaconda.org / quetz
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#basic-http-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic HTTP authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4197,54 +4341,105 @@
 
   <h1>Authentication</h1>
 
-<p>You can authenticate Pixi with a server like prefix.dev, a private quetz instance or anaconda.org.
-Different servers use different authentication methods.
-In this documentation page, we detail how you can authenticate against the different servers and where the authentication information is stored.</p>
+<p>You can authenticate Pixi with a server like prefix.dev, a private quetz instance, anaconda.org, or any S3-compatible bucket. Different servers use different authentication methods. This page covers how to authenticate against each, and where the authentication information is stored.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Usage:<span class="w"> </span>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span><span class="o">[</span>OPTIONS<span class="o">]</span><span class="w"> </span>&lt;HOST&gt;
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Arguments:
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>&lt;HOST&gt;<span class="w">  </span>The<span class="w"> </span>host<span class="w"> </span>to<span class="w"> </span>authenticate<span class="w"> </span>with<span class="w"> </span><span class="o">(</span>e.g.<span class="w"> </span>repo.prefix.dev<span class="o">)</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">  </span>&lt;HOST&gt;<span class="w">  </span>The<span class="w"> </span>host<span class="w"> </span>to<span class="w"> </span>authenticate<span class="w"> </span>with<span class="w"> </span><span class="o">(</span>e.g.<span class="w"> </span>prefix.dev<span class="o">)</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
 </span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>Options:
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span>--token<span class="w"> </span>&lt;TOKEN&gt;<span class="w">                                </span>The<span class="w"> </span>token<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>authentication<span class="w"> </span>with<span class="w"> </span>prefix.dev<span class="o">)</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">      </span>--username<span class="w"> </span>&lt;USERNAME&gt;<span class="w">                          </span>The<span class="w"> </span>username<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>basic<span class="w"> </span>HTTP<span class="w"> </span>authentication<span class="o">)</span>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">      </span>--password<span class="w"> </span>&lt;PASSWORD&gt;<span class="w">                          </span>The<span class="w"> </span>password<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>basic<span class="w"> </span>HTTP<span class="w"> </span>authentication<span class="o">)</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">      </span>--conda-token<span class="w"> </span>&lt;CONDA_TOKEN&gt;<span class="w">                    </span>The<span class="w"> </span>token<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span>on<span class="w"> </span>anaconda.org<span class="w"> </span>/<span class="w"> </span>quetz<span class="w"> </span>authentication
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">      </span>--s3-access-key-id<span class="w"> </span>&lt;S3_ACCESS_KEY_ID&gt;<span class="w">          </span>The<span class="w"> </span>S3<span class="w"> </span>access<span class="w"> </span>key<span class="w"> </span>ID
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">      </span>--s3-secret-access-key<span class="w"> </span>&lt;S3_SECRET_ACCESS_KEY&gt;<span class="w">  </span>The<span class="w"> </span>S3<span class="w"> </span>secret<span class="w"> </span>access<span class="w"> </span>key
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span>--s3-session-token<span class="w"> </span>&lt;S3_SESSION_TOKEN&gt;<span class="w">          </span>The<span class="w"> </span>S3<span class="w"> </span>session<span class="w"> </span>token
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a><span class="w">  </span>-v,<span class="w"> </span>--verbose...<span class="w">                                   </span>Increase<span class="w"> </span>logging<span class="w"> </span>verbosity
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="w">  </span>-q,<span class="w"> </span>--quiet...<span class="w">                                     </span>Decrease<span class="w"> </span>logging<span class="w"> </span>verbosity
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span>--color<span class="w"> </span>&lt;COLOR&gt;<span class="w">                                </span>Whether<span class="w"> </span>the<span class="w"> </span>log<span class="w"> </span>needs<span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>colored<span class="w"> </span><span class="o">[</span>env:<span class="w"> </span><span class="nv">PIXI_COLOR</span><span class="o">=]</span><span class="w"> </span><span class="o">[</span>default:<span class="w"> </span>auto<span class="o">]</span><span class="w"> </span><span class="o">[</span>possible<span class="w"> </span>values:<span class="w"> </span>always,<span class="w"> </span>never,<span class="w"> </span>auto<span class="o">]</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span>--no-progress<span class="w">                                  </span>Hide<span class="w"> </span>all<span class="w"> </span>progress<span class="w"> </span>bars,<span class="w"> </span>always<span class="w"> </span>turned<span class="w"> </span>on<span class="w"> </span><span class="k">if</span><span class="w"> </span>stderr<span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>a<span class="w"> </span>terminal<span class="w"> </span><span class="o">[</span>env:<span class="w"> </span><span class="nv">PIXI_NO_PROGRESS</span><span class="o">=]</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">  </span>-h,<span class="w"> </span>--help<span class="w">                                         </span>Print<span class="w"> </span><span class="nb">help</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">      </span>--user-agent<span class="w"> </span>&lt;USER_AGENT&gt;<span class="w">  </span>User-Agent<span class="w"> </span>header<span class="w"> </span>used<span class="w"> </span><span class="k">for</span><span class="w"> </span>requests
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>Token<span class="w"> </span>/<span class="w"> </span>Basic<span class="w"> </span>Authentication:
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">      </span>--token<span class="w"> </span>&lt;TOKEN&gt;<span class="w">              </span>The<span class="w"> </span>token<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>authentication<span class="w"> </span>with<span class="w"> </span>prefix.dev<span class="o">)</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">      </span>--username<span class="w"> </span>&lt;USERNAME&gt;<span class="w">        </span>The<span class="w"> </span>username<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>basic<span class="w"> </span>HTTP<span class="w"> </span>authentication<span class="o">)</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">      </span>--password<span class="w"> </span>&lt;PASSWORD&gt;<span class="w">        </span>The<span class="w"> </span>password<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>basic<span class="w"> </span>HTTP<span class="w"> </span>authentication<span class="o">)</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">      </span>--conda-token<span class="w"> </span>&lt;CONDA_TOKEN&gt;<span class="w">  </span>The<span class="w"> </span>token<span class="w"> </span>to<span class="w"> </span>use<span class="w"> </span>on<span class="w"> </span>anaconda.org<span class="w"> </span>/<span class="w"> </span>quetz<span class="w"> </span>authentication
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>S3<span class="w"> </span>Authentication:
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="w">      </span>--s3-access-key-id<span class="w"> </span>&lt;S3_ACCESS_KEY_ID&gt;<span class="w">          </span>The<span class="w"> </span>S3<span class="w"> </span>access<span class="w"> </span>key<span class="w"> </span>ID
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a><span class="w">      </span>--s3-secret-access-key<span class="w"> </span>&lt;S3_SECRET_ACCESS_KEY&gt;<span class="w">  </span>The<span class="w"> </span>S3<span class="w"> </span>secret<span class="w"> </span>access<span class="w"> </span>key
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a><span class="w">      </span>--s3-session-token<span class="w"> </span>&lt;S3_SESSION_TOKEN&gt;<span class="w">          </span>The<span class="w"> </span>S3<span class="w"> </span>session<span class="w"> </span>token
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>OAuth/OIDC<span class="w"> </span>Authentication:
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a><span class="w">      </span>--oauth<span class="w">                                      </span>Use<span class="w"> </span>OAuth/OIDC<span class="w"> </span>authentication
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="w">      </span>--oauth-issuer-url<span class="w"> </span>&lt;OAUTH_ISSUER_URL&gt;<span class="w">        </span>OIDC<span class="w"> </span>issuer<span class="w"> </span>URL<span class="w"> </span><span class="o">(</span>defaults<span class="w"> </span>to<span class="w"> </span>&lt;https://<span class="o">{</span>host&gt;<span class="o">})</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a><span class="w">      </span>--oauth-client-id<span class="w"> </span>&lt;OAUTH_CLIENT_ID&gt;<span class="w">          </span>OAuth<span class="w"> </span>client<span class="w"> </span>ID<span class="w"> </span><span class="o">(</span>defaults<span class="w"> </span>to<span class="w"> </span><span class="s2">&quot;rattler&quot;</span><span class="o">)</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a><span class="w">      </span>--oauth-client-secret<span class="w"> </span>&lt;OAUTH_CLIENT_SECRET&gt;<span class="w">  </span>OAuth<span class="w"> </span>client<span class="w"> </span>secret<span class="w"> </span><span class="o">(</span><span class="k">for</span><span class="w"> </span>confidential<span class="w"> </span>clients<span class="o">)</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a><span class="w">      </span>--oauth-flow<span class="w"> </span>&lt;OAUTH_FLOW&gt;<span class="w">                    </span>OAuth<span class="w"> </span>flow:<span class="w"> </span>auto<span class="w"> </span><span class="o">(</span>default<span class="o">)</span>,<span class="w"> </span>auth-code,<span class="w"> </span>device-code<span class="w"> </span><span class="o">[</span>possible<span class="w"> </span>values:<span class="w"> </span>auto,<span class="w"> </span>auth-code,
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a><span class="w">                                                   </span>device-code<span class="o">]</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a><span class="w">      </span>--oauth-scope<span class="w"> </span>&lt;OAUTH_SCOPES&gt;<span class="w">                 </span>Additional<span class="w"> </span>OAuth<span class="w"> </span>scopes<span class="w"> </span>to<span class="w"> </span>request<span class="w"> </span><span class="o">(</span>repeatable<span class="o">)</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="w">      </span>--oauth-redirect-uri<span class="w"> </span>&lt;OAUTH_REDIRECT_URI&gt;<span class="w">    </span>OAuth<span class="w"> </span>redirect<span class="w"> </span>URI<span class="w"> </span><span class="o">(</span>defaults<span class="w"> </span>to<span class="w"> </span>a<span class="w"> </span>random<span class="w"> </span>localhost<span class="w"> </span>port<span class="o">)</span>.<span class="w"> </span>Set<span class="w"> </span>this<span class="w"> </span>when<span class="w"> </span>the<span class="w"> </span>OAuth<span class="w"> </span>client<span class="w"> </span>on
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="w">                                                   </span>the<span class="w"> </span><span class="sb">`</span>IdP<span class="sb">`</span><span class="w"> </span>side<span class="w"> </span>is<span class="w"> </span>registered<span class="w"> </span>with<span class="w"> </span>a<span class="w"> </span>specific<span class="w"> </span>redirect<span class="w"> </span>URI<span class="w"> </span>such<span class="w"> </span>as
+</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a><span class="w">                                                   </span><span class="sb">`</span>http://127.0.0.1:8000/auth/oidc<span class="sb">`</span>
+</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>
+</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>Global<span class="w"> </span>Options:
+</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a><span class="w">  </span>-h,<span class="w"> </span>--help<span class="w">           </span>Display<span class="w"> </span><span class="nb">help</span><span class="w"> </span>information
+</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a><span class="w">  </span>-v,<span class="w"> </span>--verbose...<span class="w">     </span>Increase<span class="w"> </span>logging<span class="w"> </span>verbosity<span class="w"> </span><span class="o">(</span>-v<span class="w"> </span><span class="k">for</span><span class="w"> </span>warnings,<span class="w"> </span>-vv<span class="w"> </span><span class="k">for</span><span class="w"> </span>info,<span class="w"> </span>-vvv<span class="w"> </span><span class="k">for</span><span class="w"> </span>debug,<span class="w"> </span>-vvvv<span class="w"> </span><span class="k">for</span><span class="w"> </span>trace<span class="o">)</span>
+</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a><span class="w">  </span>-q,<span class="w"> </span>--quiet...<span class="w">       </span>Decrease<span class="w"> </span>logging<span class="w"> </span>verbosity<span class="w"> </span><span class="o">(</span>quiet<span class="w"> </span>mode<span class="o">)</span>
+</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a><span class="w">      </span>--color<span class="w"> </span>&lt;COLOR&gt;<span class="w">  </span>Whether<span class="w"> </span>the<span class="w"> </span>log<span class="w"> </span>needs<span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>colored<span class="w"> </span><span class="o">[</span>env:<span class="w"> </span><span class="nv">PIXI_COLOR</span><span class="o">=]</span><span class="w"> </span><span class="o">[</span>default:<span class="w"> </span>auto<span class="o">]</span><span class="w"> </span><span class="o">[</span>possible<span class="w"> </span>values:<span class="w"> </span>always,<span class="w"> </span>never,<span class="w"> </span>auto<span class="o">]</span>
+</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a><span class="w">      </span>--no-progress<span class="w">    </span>Hide<span class="w"> </span>all<span class="w"> </span>progress<span class="w"> </span>bars,<span class="w"> </span>always<span class="w"> </span>turned<span class="w"> </span>on<span class="w"> </span><span class="k">if</span><span class="w"> </span>stderr<span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>a<span class="w"> </span>terminal<span class="w"> </span><span class="o">[</span>env:<span class="w"> </span><span class="nv">PIXI_NO_PROGRESS</span><span class="o">=]</span>
+</span></code></pre></div></p>
+<h2 id="oauthoidc-authentication">OAuth/OIDC authentication<a class="headerlink" href="#oauthoidc-authentication" title="Permanent link">#</a></h2>
+<p>The simplest way to authenticate against prefix.dev is:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>prefix.dev
 </span></code></pre></div>
-<p>The different options are "token", "conda-token" and "username + password".</p>
-<p>The token variant implements a standard "Bearer Token" authentication as is used on the prefix.dev platform.
-A Bearer Token is sent with every request as an additional header of the form <code>Authentication: Bearer &lt;TOKEN&gt;</code>.</p>
-<p>The conda-token option is used on anaconda.org and can be used with a quetz server. With this option, the token is sent as part of the URL following this scheme: <code>conda.anaconda.org/t/&lt;TOKEN&gt;/conda-forge/linux-64/...</code>.</p>
-<p>The last option, username &amp; password, are used for "Basic HTTP Authentication". This is the equivalent of adding <code>http://user:password@myserver.com/...</code>. This authentication method can be configured quite easily with a reverse NGinx or Apache server and is thus commonly used in self-hosted systems.</p>
+<p>A browser tab opens, you log in to prefix.dev, and Pixi stores the credentials in your system keychain. Every later <code>pixi install</code>, <code>pixi upload</code>, or <code>pixi publish</code> reuses them automatically, and Pixi refreshes the token in the background before it expires.</p>
+<div class="admonition info">
+<p class="admonition-title">What this login allows</p>
+<p>Pixi requests the rights to access your profile, read from channels, and upload your packages. This covers the basics commands like <code>pixi install</code>, <code>pixi upload</code> or <code>pixi publish</code> to work out of the box.</p>
+</div>
+<h3 id="choosing-an-oauth-flow">Choosing an OAuth flow<a class="headerlink" href="#choosing-an-oauth-flow" title="Permanent link">#</a></h3>
+<p><code>pixi auth login</code> defaults to <code>--oauth-flow auto</code>, which picks at runtime:</p>
+<ul>
+<li><strong>Authorization Code with PKCE</strong> when you're on a desktop machine with a working browser. Pixi opens a browser tab, you sign in on prefix.dev, and a local callback page completes the exchange.</li>
+<li><strong>Device Code</strong> when Pixi can't open a browser for you. Pixi prints a short user code and a URL; you open the URL on any device, paste the code, and Pixi receives the authentication. This is the common case for SSH sessions, headless servers, container shells, and similar environments without a browser.</li>
+</ul>
+<p>You can force a specific flow if <code>auto</code> picks wrong for your environment:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>prefix.dev<span class="w"> </span>--oauth-flow<span class="w"> </span>device-code
+</span></code></pre></div>
+<h3 id="other-oidc-providers">Other OIDC providers<a class="headerlink" href="#other-oidc-providers" title="Permanent link">#</a></h3>
+<p>For self-hosted OIDC providers (or any host where Pixi doesn't ship built-in defaults), pass the configuration explicitly:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>my.private.host<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">    </span>--oauth<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span>--oauth-issuer-url<span class="w"> </span>https://idp.example.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span>--oauth-client-id<span class="w"> </span>my-cli-client<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">    </span>--oauth-scope<span class="w"> </span>openid<span class="w"> </span>--oauth-scope<span class="w"> </span>channel:read
+</span></code></pre></div>
+<h2 id="token-authentication">Token authentication<a class="headerlink" href="#token-authentication" title="Permanent link">#</a></h2>
+<p>If you prefer to manage tokens yourself (e.g. in CI, where browser login isn't an option), you can use a standard "Bearer Token" authentication</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_jj8WDzvnuTHEGdAhwRZMC1Ag8gSto8
+</span></code></pre></div>
+<p>Bearer tokens are sent with every request as an <code>Authorization: Bearer &lt;TOKEN&gt;</code> header.</p>
+<h2 id="anacondaorg-quetz">anaconda.org / quetz<a class="headerlink" href="#anacondaorg-quetz" title="Permanent link">#</a></h2>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>xy-72b914cc-c105-4ec7-a969-ab21d23480ed
+</span></code></pre></div>
+<p>The conda-token is embedded in the URL path: <code>conda.anaconda.org/t/&lt;TOKEN&gt;/conda-forge/linux-64/...</code>. Quetz servers accept the same scheme.</p>
+<h2 id="basic-http-authentication">Basic HTTP authentication<a class="headerlink" href="#basic-http-authentication" title="Permanent link">#</a></h2>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>myserver.com<span class="w"> </span>--username<span class="w"> </span>user<span class="w"> </span>--password<span class="w"> </span>password
+</span></code></pre></div>
+<p>This is the equivalent of <code>http://user:password@myserver.com/...</code> and is the typical choice for self-hosted channels behind an NGINX/Apache reverse proxy with HTTP basic auth.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
-<p>Login to prefix.dev:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_jj8WDzvnuTHEGdAhwRZMC1Ag8gSto8
+<p>Below are the existing per-method examples, kept for quick reference.</p>
+<p>Login to prefix.dev with a manual token:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_jj8WDzvnuTHEGdAhwRZMC1Ag8gSto8
 </span></code></pre></div>
 <p>Login to anaconda.org:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>xy-72b914cc-c105-4ec7-a969-ab21d23480ed
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>xy-72b914cc-c105-4ec7-a969-ab21d23480ed
 </span></code></pre></div>
 <p>Login to a basic HTTP secured server:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>myserver.com<span class="w"> </span>--username<span class="w"> </span>user<span class="w"> </span>--password<span class="w"> </span>password
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>myserver.com<span class="w"> </span>--username<span class="w"> </span>user<span class="w"> </span>--password<span class="w"> </span>password
 </span></code></pre></div>
 <p>Login to an S3 bucket:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span>--s3-secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># if your key uses a session token, you can also use:</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span>--s3-secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;<span class="w"> </span>--s3-session-token<span class="w"> </span>&lt;session-token&gt;
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span>--s3-secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="c1"># if your key uses a session token, you can also use:</span>
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span>&lt;access-key-id&gt;<span class="w"> </span>--s3-secret-access-key<span class="w"> </span>&lt;secret-access-key&gt;<span class="w"> </span>--s3-session-token<span class="w"> </span>&lt;session-token&gt;
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>S3 authentication is also supported through AWS's typical <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> environment variables, see the <a href="../s3/">S3 section</a> for more details.</p>
 </div>
 <h2 id="where-does-pixi-store-the-authentication-information">Where does Pixi store the authentication information?<a class="headerlink" href="#where-does-pixi-store-the-authentication-information" title="Permanent link">#</a></h2>
-<p>The storage location for the authentication information is system-dependent. By default, Pixi tries to use the keychain to store this sensitive information securely on your machine.</p>
 <p>On Windows, the credentials are stored in the "credentials manager". Searching for <code>rattler</code> (the underlying library Pixi uses) you should find any credentials stored by Pixi (or other rattler-based programs).</p>
 <p>On macOS, the passwords are stored in the keychain. To access the password, you can use the <code>Keychain Access</code> program that comes pre-installed on macOS. Searching for <code>rattler</code> (the underlying library Pixi uses) you should find any credentials stored by Pixi (or other rattler-based programs).</p>
 <p>On Linux, one can use <code>GNOME Keyring</code> (or just Keyring) to access credentials that are securely stored by <code>libsecret</code>. Searching for <code>rattler</code> should list all the credentials stored by Pixi and other rattler-based programs.</p>
@@ -4255,36 +4450,36 @@ This JSON file is located at <code>~/.rattler/credentials.json</code> and contai
 <p>You can use the <code>RATTLER_AUTH_FILE</code> environment variable to override the default location of the credentials file.
 When this environment variable is set, it provides the only source of authentication data that is used by pixi.</p>
 <p>E.g.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">RATTLER_AUTH_FILE</span><span class="o">=</span><span class="nv">$HOME</span>/credentials.json
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># You can also specify the file in the command line</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--auth-file<span class="w"> </span><span class="nv">$HOME</span>/credentials.json<span class="w"> </span>...
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">RATTLER_AUTH_FILE</span><span class="o">=</span><span class="nv">$HOME</span>/credentials.json
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># You can also specify the file in the command line</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>--auth-file<span class="w"> </span><span class="nv">$HOME</span>/credentials.json<span class="w"> </span>...
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p><code>RATTLER_AUTH_FILE</code> has higher precedence than the CLI argument.</p>
 </div>
 <p>The JSON should follow the following format:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">    </span><span class="nt">&quot;*.prefix.dev&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">        </span><span class="nt">&quot;BearerToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span><span class="nt">&quot;otherhost.com&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">        </span><span class="nt">&quot;BasicHTTP&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="w">            </span><span class="nt">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_username&quot;</span><span class="p">,</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="w">            </span><span class="nt">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_password&quot;</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span><span class="nt">&quot;conda.anaconda.org&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">        </span><span class="nt">&quot;CondaToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span><span class="p">},</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span><span class="nt">&quot;s3://my-bucket&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a><span class="w">        </span><span class="nt">&quot;S3Credentials&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="w">            </span><span class="nt">&quot;access_key_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-access-key-id&quot;</span><span class="p">,</span>
-</span><span id="__span-6-17"><a id="__codelineno-6-17" name="__codelineno-6-17" href="#__codelineno-6-17"></a><span class="w">            </span><span class="nt">&quot;secret_access_key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-secret-access-key&quot;</span><span class="p">,</span>
-</span><span id="__span-6-18"><a id="__codelineno-6-18" name="__codelineno-6-18" href="#__codelineno-6-18"></a><span class="w">            </span><span class="nt">&quot;session_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
-</span><span id="__span-6-19"><a id="__codelineno-6-19" name="__codelineno-6-19" href="#__codelineno-6-19"></a><span class="w">        </span><span class="p">}</span>
-</span><span id="__span-6-20"><a id="__codelineno-6-20" name="__codelineno-6-20" href="#__codelineno-6-20"></a><span class="w">    </span><span class="p">}</span>
-</span><span id="__span-6-21"><a id="__codelineno-6-21" name="__codelineno-6-21" href="#__codelineno-6-21"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="p">{</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">    </span><span class="nt">&quot;*.prefix.dev&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">        </span><span class="nt">&quot;BearerToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
+</span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-12-5"><a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">    </span><span class="nt">&quot;otherhost.com&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-12-6"><a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">        </span><span class="nt">&quot;BasicHTTP&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-12-7"><a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">            </span><span class="nt">&quot;username&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_username&quot;</span><span class="p">,</span>
+</span><span id="__span-12-8"><a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">            </span><span class="nt">&quot;password&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_password&quot;</span>
+</span><span id="__span-12-9"><a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-12-10"><a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-12-11"><a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">    </span><span class="nt">&quot;conda.anaconda.org&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-12-12"><a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">        </span><span class="nt">&quot;CondaToken&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your_token&quot;</span>
+</span><span id="__span-12-13"><a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">    </span><span class="p">},</span>
+</span><span id="__span-12-14"><a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">    </span><span class="nt">&quot;s3://my-bucket&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-12-15"><a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="w">        </span><span class="nt">&quot;S3Credentials&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-12-16"><a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="w">            </span><span class="nt">&quot;access_key_id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-access-key-id&quot;</span><span class="p">,</span>
+</span><span id="__span-12-17"><a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="w">            </span><span class="nt">&quot;secret_access_key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-secret-access-key&quot;</span><span class="p">,</span>
+</span><span id="__span-12-18"><a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="w">            </span><span class="nt">&quot;session_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span>
+</span><span id="__span-12-19"><a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="w">        </span><span class="p">}</span>
+</span><span id="__span-12-20"><a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="w">    </span><span class="p">}</span>
+</span><span id="__span-12-21"><a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>Note: if you use a wildcard in the host, any subdomain will match (e.g. <code>*.prefix.dev</code> also matches <code>repo.prefix.dev</code>).</p>
 <p>Lastly you can set the authentication override file in the <a href="../../reference/pixi_configuration/">global configuration file</a>.</p>
@@ -4302,19 +4497,19 @@ When this environment variable is set, it provides the only source of authentica
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Basic Auth</label><label for="__tabbed_1_2">Google Artifact Registry</label><label for="__tabbed_1_3">Azure DevOps Artifacts</label><label for="__tabbed_1_4">AWS CodeArtifact</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.google-artifactregistry-auth
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.google-artifactregistry-auth
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.artifacts
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.artifacts
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.codeartifact
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>keyring<span class="w"> </span>--with<span class="w"> </span>keyrings.codeartifact
 </span></code></pre></div>
 </div>
 </div>
@@ -4325,44 +4520,44 @@ When this environment variable is set, it provides the only source of authentica
 <div class="tabbed-content">
 <div class="tabbed-block">
 <p>Use keyring to store your credentials e.g:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>keyring<span class="w"> </span><span class="nb">set</span><span class="w"> </span>https://my-index/simple<span class="w"> </span>your_username
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># prompt will appear for your password</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>keyring<span class="w"> </span><span class="nb">set</span><span class="w"> </span>https://my-index/simple<span class="w"> </span>your_username
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="c1"># prompt will appear for your password</span>
 </span></code></pre></div>
 <p>Add the following configuration to your Pixi manifest, making sure to include <code>your_username@</code> in the URL of the registry:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://your_username@custom-registry.com/simple&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">[pypi-options]</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://your_username@custom-registry.com/simple&quot;</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
 <p>After making sure you are logged in, for instance by running <code>gcloud auth login</code>, add the following configuration to your Pixi manifest:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://oauth2accesstoken@&lt;location&gt;-python.pkg.dev/&lt;project&gt;/&lt;repository&gt;/simple&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">[pypi-options]</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://oauth2accesstoken@&lt;location&gt;-python.pkg.dev/&lt;project&gt;/&lt;repository&gt;/simple&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>To find this URL more easily, you can use the <code>gcloud</code> command:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>gcloud<span class="w"> </span>artifacts<span class="w"> </span>print-settings<span class="w"> </span>python<span class="w"> </span>--project<span class="o">=</span>&lt;project&gt;<span class="w"> </span>--repository<span class="o">=</span>&lt;repository&gt;<span class="w"> </span>--location<span class="o">=</span>&lt;location&gt;
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>gcloud<span class="w"> </span>artifacts<span class="w"> </span>print-settings<span class="w"> </span>python<span class="w"> </span>--project<span class="o">=</span>&lt;project&gt;<span class="w"> </span>--repository<span class="o">=</span>&lt;repository&gt;<span class="w"> </span>--location<span class="o">=</span>&lt;location&gt;
 </span></code></pre></div>
 </div>
 </div>
 <div class="tabbed-block">
 <p>After following the <a href="https://github.com/jslorrma/keyrings.artifacts?tab=readme-ov-file#usage"><code>keyrings.artifacts</code> instructions</a> and making sure that keyring works correctly, add the following configuration to your Pixi manifest:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[pypi-options]</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://VssSessionToken@pkgs.dev.azure.com/{organization}/{project}/_packaging/{feed}/pypi/simple/&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
 <p>Ensure you are logged in e.g via <code>aws sso login</code> and add the following configuration to your Pixi manifest:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[pypi-options]</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://aws@&lt;your-domain&gt;-&lt;your-account&gt;.d.codeartifact.&lt;your-region&gt;.amazonaws.com/pypi/&lt;your-repository&gt;/simple/&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[pypi-options]</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://aws@&lt;your-domain&gt;-&lt;your-account&gt;.d.codeartifact.&lt;your-region&gt;.amazonaws.com/pypi/&lt;your-repository&gt;/simple/&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 </div>
 </div>
 </div>
 <h4 id="installing-your-environment">Installing your environment<a class="headerlink" href="#installing-your-environment" title="Permanent link">#</a></h4>
 <p>Either configure your <a href="../../reference/pixi_configuration/#pypi-config">Global Config</a>, or use the flag <code>--pypi-keyring-provider</code> which can either be set to <code>subprocess</code> (activated) or <code>disabled</code>:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># From an existing pixi workspace</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># From an existing pixi workspace</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
 </span></code></pre></div>
 <h3 id="netrc-file"><code>.netrc</code> file<a class="headerlink" href="#netrc-file" title="Permanent link">#</a></h3>
 <p><code>pixi</code> allows you to access private registries securely by authenticating with credentials stored in a <code>.netrc</code> file.</p>
@@ -4373,9 +4568,9 @@ When this environment variable is set, it provides the only source of authentica
   e.g <code>export NETRC=/my/custom/location/.netrc pixi install</code></li>
 </ul>
 <p>In the <code>.netrc</code> file, you store authentication details like this:</p>
-<div class="language-sh highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>machine<span class="w"> </span>registry-name
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>login<span class="w"> </span>admin
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>password<span class="w"> </span>admin
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>machine<span class="w"> </span>registry-name
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>login<span class="w"> </span>admin
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>password<span class="w"> </span>admin
 </span></code></pre></div>
 <p>For more details, you can access the <a href="https://www.ibm.com/docs/en/aix/7.2?topic=formats-netrc-file-format-tcpip">.netrc docs</a>.</p>
 

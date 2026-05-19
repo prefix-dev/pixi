@@ -59,6 +59,29 @@ pixi auth login [OPTIONS] <HOST>
 
 ## Examples
 
+OAuth against prefix.dev
+
+```shell
+pixi auth login prefix.dev
+```
+
+OAuth against a self-hosted OIDC provider:
+
+```shell
+pixi auth login my.private.host \
+    --oauth \
+    --oauth-issuer-url https://idp.example.com \
+    --oauth-client-id my-cli-client
+```
+
+OAuth on a headless machine (no usable browser — uses the device-code flow):
+
+```shell
+pixi auth login prefix.dev --oauth-flow device-code
+```
+
+Manual tokens, basic auth, and S3 credentials:
+
 ```shell
 pixi auth login repo.prefix.dev --token pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD
 pixi auth login anaconda.org --conda-token ABCDEFGHIJKLMNOP

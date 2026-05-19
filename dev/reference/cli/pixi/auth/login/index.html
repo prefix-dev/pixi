@@ -4180,10 +4180,23 @@
 </li>
 </ul>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>repo.prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>ABCDEFGHIJKLMNOP
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>https://myquetz.server<span class="w"> </span>--username<span class="w"> </span>john<span class="w"> </span>--password<span class="w"> </span>xxxxxx
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span><span class="nv">$AWS_ACCESS_KEY_ID</span><span class="w"> </span>--s3-secret-access-key<span class="w"> </span><span class="nv">$AWS_SECRET_ACCESS_KEY</span>
+<p>OAuth against prefix.dev</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>prefix.dev
+</span></code></pre></div>
+<p>OAuth against a self-hosted OIDC provider:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>my.private.host<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">    </span>--oauth<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span>--oauth-issuer-url<span class="w"> </span>https://idp.example.com<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span>--oauth-client-id<span class="w"> </span>my-cli-client
+</span></code></pre></div>
+<p>OAuth on a headless machine (no usable browser — uses the device-code flow):</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>prefix.dev<span class="w"> </span>--oauth-flow<span class="w"> </span>device-code
+</span></code></pre></div>
+<p>Manual tokens, basic auth, and S3 credentials:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>repo.prefix.dev<span class="w"> </span>--token<span class="w"> </span>pfx_JQEV-m_2bdz-D8NSyRSaAndHANx0qHjq7f2iD
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>anaconda.org<span class="w"> </span>--conda-token<span class="w"> </span>ABCDEFGHIJKLMNOP
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>https://myquetz.server<span class="w"> </span>--username<span class="w"> </span>john<span class="w"> </span>--password<span class="w"> </span>xxxxxx
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>s3://my-bucket<span class="w"> </span>--s3-access-key-id<span class="w"> </span><span class="nv">$AWS_ACCESS_KEY_ID</span><span class="w"> </span>--s3-secret-access-key<span class="w"> </span><span class="nv">$AWS_SECRET_ACCESS_KEY</span>
 </span></code></pre></div>
 
 
