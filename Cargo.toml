@@ -282,38 +282,6 @@ rattler_build_types = { git = "https://github.com/prefix-dev/rattler-build", bra
 rattler_build_variant_config = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
 rattler_build_yaml_parser = { git = "https://github.com/prefix-dev/rattler-build", branch = "main" }
 
-# Pull in conda/rattler#2402 (`feat: add oauth default login`) ahead of a
-# crates.io release. PR is merged on rattler main; pinned to a known-good SHA
-# so unrelated rattler changes don't sneak in between cargo updates. To bump:
-# `gh api repos/conda/rattler/commits/main --jq .sha` and update `rev` below.
-# Every rattler workspace crate pixi consumes is patched so the transitive
-# graph builds from one source (avoids duplicate `rattler_conda_types` etc.).
-coalesced_map = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-file_url = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-path_resolver = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_cache = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_conda_types = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_config = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_digest = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_git = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_index = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_lock = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_macros = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_menuinst = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_networking = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_package_streaming = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_prefix_guard = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_pty = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_redaction = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_repodata_gateway = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_s3 = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_shell = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_solve = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_upload = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-rattler_virtual_packages = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-simple_spawn_blocking = { git = "https://github.com/conda/rattler", rev = "6f2d1a601ee168457de82a1882ff3624a957c2b7" }
-
 [patch."https://github.com/prefix-dev/rattler-build"]
 #rattler-build = { path = "/var/home/tobias/src/rattler-build" }
 
