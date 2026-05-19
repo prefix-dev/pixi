@@ -136,18 +136,20 @@ pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 
+bzip2 = "0.6.1"
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.13", default-features = false }
+reqwest-middleware = { package = "astral-reqwest-middleware", version = "0.5", features = [
+  "multipart",
+] }
+reqwest-retry = { package = "astral-reqwest-retry", version = "0.9" }
 retry-policies = "0.5"
+rlimit = "0.11.0"
+roxmltree = "0.21.0"
+rstest = "0.26.0"
 rustls-native-certs = "0.8"
 rustls-pki-types = "1"
-roxmltree = "0.21.0"
-bzip2 = "0.6.1"
-reqwest-middleware = { package = "astral-reqwest-middleware", version = "0.5", features = ["multipart"] }
-reqwest-retry = { package = "astral-reqwest-retry", version = "0.9" }
-rlimit = "0.11.0"
-rstest = "0.26.0"
 same-file = "1.0.6"
 schemars = "1.1.0"
 self-replace = "1.5.0"
@@ -185,7 +187,6 @@ tracing-subscriber = "=0.3.19"
 tracing-test = "0.2"
 typed-path = "0.12.0"
 url = "2.5"
-webpki-root-certs = "1"
 uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.11.0" }
 uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.11.0" }
 uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.11.0" }
@@ -214,6 +215,7 @@ uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.11.0" 
 uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.11.0" }
 uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.11.0" }
 uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.11.0" }
+webpki-root-certs = "1"
 which = "8.0.0"
 xxhash-rust = "0.8.15"
 zip = { version = "8.0.0", default-features = false }
