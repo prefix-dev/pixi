@@ -200,8 +200,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style(package).bold(),
         );
         eprintln!(
-            "  Run {} to get the newest compatible version",
-            console::style(format!("pixi upgrade {package}")).bold(),
+            "  Run `{}` to get the newest compatible version",
+            console::style(format!("pixi upgrade {package}"))
+                .green()
+                .bold(),
         );
     }
 
