@@ -82,7 +82,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     args.dependency_config
-        .display_success("Removed", Default::default(), &[]);
+        .display_success("Removed", Default::default());
 
     Ok(())
 }

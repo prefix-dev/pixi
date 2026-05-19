@@ -333,22 +333,13 @@ impl DependencyConfig {
         &self,
         operation: &str,
         implicit_constraints: HashMap<String, String>,
-        skipped: &[String],
     ) {
-        for package in self.specs.clone() {
-            if skipped.iter().any(|s| {
-                package == s.as_str()
-                    || package.strip_prefix(s.as_str()).is_some_and(|rest| {
-                        rest.starts_with(|c: char| !c.is_alphanumeric() && c != '-' && c != '_')
-                    })
-            }) {
-                continue;
-            }
+        for package in &self.specs {
             eprintln!(
                 "{}{operation} {}{}",
                 console::style(console::Emoji("✔ ", "")).green(),
                 console::style(&package).bold(),
-                if let Some(constraint) = implicit_constraints.get(&package) {
+                if let Some(constraint) = implicit_constraints.get(package.as_str()) {
                     format!(" {}", console::style(constraint).dim())
                 } else {
                     "".to_string()
