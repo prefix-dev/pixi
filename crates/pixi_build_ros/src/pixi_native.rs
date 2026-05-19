@@ -318,7 +318,13 @@ fn spec(name: &str) -> Item<SerializableMatchSpec> {
 /// Maintainer is required by the package format. We parse the first author
 /// in the model; if absent or unparseable, fall back to a placeholder.
 fn synthesize_package_xml(model: &ProjectModel, build_type: RosBuildType) -> String {
-    let name = model.name.as_deref().unwrap_or("unnamed");
+    // ROS package names must be snake_case; pixi.toml often uses kebab-case.
+    let name = model
+        .name
+        .as_deref()
+        .unwrap_or("unnamed")
+        .replace('-', "_");
+    let name = name.as_str();
     let version = model
         .version
         .as_ref()
