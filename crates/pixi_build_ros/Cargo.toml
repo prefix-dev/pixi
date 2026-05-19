@@ -18,6 +18,7 @@ slow_integration_tests = []
 [dependencies]
 async-trait = { workspace = true }
 fs-err = { workspace = true }
+http-cache-reqwest = { workspace = true }
 indexmap = { workspace = true }
 miette = { workspace = true }
 pixi_build_backend = { workspace = true }
@@ -28,6 +29,7 @@ rattler_build_types = { workspace = true }
 rattler_conda_types = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
 roxmltree = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

@@ -729,6 +729,7 @@ mod tests {
                         configuration: None,
                         target_configuration: None,
                         cache_directory: None,
+                        workspace_scratch_directory: None,
                     })
                     .await
                     .unwrap();
@@ -794,6 +795,7 @@ mod tests {
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -840,6 +842,7 @@ mod tests {
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -905,6 +908,7 @@ numpy:
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -978,6 +982,7 @@ numpy:
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();

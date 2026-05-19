@@ -75,6 +75,7 @@ where
         configuration: None,
         target_configuration: None,
         cache_directory: None,
+        workspace_scratch_directory: None,
     })
     .await
     .unwrap();
