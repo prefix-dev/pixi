@@ -43,6 +43,12 @@ pixi publish [OPTIONS]
 <br>**options**: `true`, `false`
 - <a id="arg---generate-attestation" href="#arg---generate-attestation">`--generate-attestation`</a>
 :  Generate sigstore attestation (prefix.dev only)
+- <a id="arg---variant" href="#arg---variant">`--variant <KEY=VALUES>`</a>
+:  Override a build variant key with one or more values
+<br>May be provided more than once.
+- <a id="arg---variant-config" href="#arg---variant-config">`--variant-config (-m) <FILE>`</a>
+:  Path to an additional variant configuration YAML file
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
