@@ -154,8 +154,13 @@ pub fn expand_self_extras(
                 path.remove(&extra);
             }
             Frame::Expand(req) => {
-                if req.name != *package_name || req.extras.is_empty() {
+                if req.name != *package_name {
                     result.push(req);
+                    continue;
+                }
+                // Bare self-reference (no extras) is a no-op — build
+                // backends drop these so the lockfile never contains them.
+                if req.extras.is_empty() {
                     continue;
                 }
                 // `foo[a, b]` and `foo[a]` + `foo[b]` produce the same
@@ -528,6 +533,29 @@ dev  = ["foo[test]"]
         insta::assert_snapshot!(render(&expanded), @r"
         trio ; python_full_version >= '3.10' and extra == 'all'
         trio ; python_full_version >= '3.10' and extra == 'async'
+        ");
+    }
+
+    /// Regression test for <https://github.com/prefix-dev/pixi/issues/6136>
+    /// A bare self-reference like `itables ; extra == "test-base"` should
+    /// be dropped during expansion (build backends drop these too).
+    #[test]
+    fn expand_self_extras_drops_bare_self_reference() {
+        let input = vec![
+            req("pytest ; extra == 'test-base'"),
+            req("itables ; extra == 'test-base'"),
+            req("itables[test-base] ; extra == 'dev'"),
+            req("watchfiles ; extra == 'dev'"),
+        ];
+        let expanded = expand_self_extras(&input, &pkg_name("itables"));
+        // The bare `itables ; extra == 'test-base'` must NOT appear.
+        // `itables ; extra == 'dev'` must NOT appear either (expanded
+        // from `itables[test-base] ; extra == 'dev'` hitting the bare ref).
+        // `pytest ; extra == 'test-base'` is a real top-level entry.
+        insta::assert_snapshot!(render(&expanded), @r"
+        pytest ; extra == 'dev'
+        pytest ; extra == 'test-base'
+        watchfiles ; extra == 'dev'
         ");
     }
 }

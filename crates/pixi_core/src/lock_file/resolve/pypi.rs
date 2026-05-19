@@ -46,9 +46,7 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{
-    BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder,
-};
+use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
@@ -476,13 +474,11 @@ pub async fn resolve_pypi(
     );
 
     let registry_client = {
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts)
-            .markers(&marker_environment)
-            .keyring(context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(context.use_native_tls)
-            .extra_middleware(context.extra_middleware.clone());
+        let base_client_builder = context.base_client_builder(
+            allow_insecure_hosts,
+            Some(&marker_environment),
+            Connectivity::Online,
+        );
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, context.cache.clone())
@@ -493,7 +489,7 @@ pub async fn resolve_pypi(
             uv_client_builder = uv_client_builder.proxy(p.clone())
         }
 
-        Arc::new(uv_client_builder.build())
+        Arc::new(uv_client_builder.build().into_diagnostic()?)
     };
     let dependency_overrides =
         pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
@@ -725,22 +721,28 @@ pub async fn resolve_pypi(
 
     let resolution_future = panic::AssertUnwindSafe(async {
         let lookahead_index = InMemoryIndex::default();
-        let lookaheads = LookaheadResolver::new(
-            &requirements,
-            &constraints,
-            &overrides,
-            &context.hash_strategy,
-            &lookahead_index,
-            DistributionDatabase::new(
-                &registry_client,
-                &lazy_build_dispatch,
-                context.concurrency.downloads_semaphore.clone(),
-            ),
+        // uv 0.11.4 changed `LookaheadResolver::resolve` to return both the
+        // lookaheads and a hash strategy refined by what it discovered along
+        // the way. We adopt the refined strategy for the downstream resolver
+        // matching uv's own `pip` flow.
+        let (lookaheads, hash_strategy) = Box::pin(
+            LookaheadResolver::new(
+                &requirements,
+                &constraints,
+                &overrides,
+                &context.hash_strategy,
+                &lookahead_index,
+                DistributionDatabase::new(
+                    &registry_client,
+                    &lazy_build_dispatch,
+                    context.concurrency.downloads_semaphore.clone(),
+                ),
+            )
+            .with_reporter(UvReporter::new_arc(
+                UvReporterOptions::new().with_existing(pb.clone()),
+            ))
+            .resolve(&resolver_env),
         )
-        .with_reporter(UvReporter::new_arc(
-            UvReporterOptions::new().with_existing(pb.clone()),
-        ))
-        .resolve(&resolver_env)
         .await
         .into_diagnostic()
         .map_err(|e| SolveError::LookAhead(e.into()))?;
@@ -769,8 +771,9 @@ pub async fn resolve_pypi(
             Some(&provider_tags),
             &requires_python,
             AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
-            &context.hash_strategy,
+            &hash_strategy,
             options.exclude_newer.clone(),
+            &index_locations,
             &build_options,
             &context.capabilities,
         );
@@ -787,7 +790,7 @@ pub async fn resolve_pypi(
         let resolver = Resolver::new_custom_io(
             manifest,
             options,
-            &context.hash_strategy,
+            &hash_strategy,
             resolver_env,
             &marker_environment,
             Some(tags),
@@ -812,8 +815,7 @@ pub async fn resolve_pypi(
             UvReporterOptions::new().with_existing(pb.clone()),
         ));
 
-        let resolution = resolver
-            .resolve()
+        let resolution = Box::pin(resolver.resolve())
             .await
             .map_err(|e| create_solve_error(e, &conda_python_packages))?;
 
@@ -1153,13 +1155,12 @@ async fn lock_pypi_packages(
                         })
                         .transpose()?;
 
-                    let metadata_response = database
-                        .get_or_build_wheel_metadata(
-                            &Dist::Source(source.clone()),
-                            HashPolicy::None,
-                        )
-                        .await
-                        .into_diagnostic()?;
+                    let metadata_response = Box::pin(database.get_or_build_wheel_metadata(
+                        &Dist::Source(source.clone()),
+                        HashPolicy::None,
+                    ))
+                    .await
+                    .into_diagnostic()?;
                     let metadata = metadata_response.metadata;
 
                     // Use the precise url if we got it back

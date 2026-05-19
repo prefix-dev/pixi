@@ -33,6 +33,7 @@ use crate::{
     InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
     ProjectModelOverrides, SourceBuildError,
     build::{Dependencies, PixiRunExports},
+    compute_data::HasGateway,
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_sources::SourceCheckoutExt;
@@ -258,25 +259,35 @@ async fn compute_inner(
     let output = fetch_matching_output(&backend, &spec, &work_directory).await?;
 
     // install_prefix recurses into source entries via SourceBuildKey,
-    // so build_records / host_records are all binaries on disk.
+    // so build_records / host_records are all binaries on disk. Build
+    // and host packages come pre-resolved on the input record (v7+
+    // lockfile), so the two installs are independent and can run
+    // concurrently.
     let directories = Directories::new(&work_directory, spec.build_environment.host_platform);
-    let (build_records, _build_install_result) = install_prefix(
-        ctx,
-        &spec,
-        InstallTarget::Build,
-        directories.build_prefix.clone(),
-        spec.record.build_packages.clone(),
-    )
-    .await?;
-
-    let (host_records, _host_install_result) = install_prefix(
-        ctx,
-        &spec,
-        InstallTarget::Host,
-        directories.host_prefix.clone(),
-        spec.record.host_packages.clone(),
-    )
-    .await?;
+    let ((build_records, _build_install_result), (host_records, _host_install_result)) = ctx
+        .try_compute2(
+            async |ctx| {
+                install_prefix(
+                    ctx,
+                    &spec,
+                    InstallTarget::Build,
+                    directories.build_prefix.clone(),
+                    spec.record.build_packages.clone(),
+                )
+                .await
+            },
+            async |ctx| {
+                install_prefix(
+                    ctx,
+                    &spec,
+                    InstallTarget::Host,
+                    directories.host_prefix.clone(),
+                    spec.record.host_packages.clone(),
+                )
+                .await
+            },
+        )
+        .await?;
 
     // Resolve `pin_compatible` markers against the build/host records we
     // just produced. Visibility ordering:
@@ -285,17 +296,20 @@ async fn compute_inner(
     // - host deps see build records
     // - run deps (+ run_exports) see build + host records
     let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
-    let build_pixi_records: Vec<PixiRecord> = build_records
+    let mut build_pixi_records: Vec<PixiRecord> = build_records
         .iter()
         .cloned()
         .map(|r| PixiRecord::Binary(Arc::new(r)))
         .collect();
-    let host_pixi_records: Vec<PixiRecord> = host_records
+    let mut host_pixi_records: Vec<PixiRecord> = host_records
         .iter()
         .cloned()
         .map(|r| PixiRecord::Binary(Arc::new(r)))
         .collect();
 
+    // Resolve build dependencies first; the build env can't reference
+    // pin-compatible markers against anything (it's the env being defined)
+    // so we hand `Dependencies::new` an empty compatibility map.
     let build_dependencies = output
         .build_dependencies
         .as_ref()
@@ -310,6 +324,23 @@ async fn compute_inner(
         .map_err(SourceBuildError::from)?
         .unwrap_or_default();
 
+    // Extract run-exports from the build env now so the host
+    // dependencies (and ultimately the run dependencies) can incorporate
+    // them. Without this step the backend receives the raw
+    // `run_dependencies` from the output and the resulting
+    // `info/index.json` `depends` array is missing any dependencies
+    // contributed by build / host packages' run-exports.
+    let gateway = ctx.global_data().gateway().clone();
+    let build_run_exports = build_dependencies
+        .extract_run_exports(
+            &mut build_pixi_records,
+            &output.ignore_run_exports,
+            &gateway,
+            None,
+        )
+        .await
+        .map_err(|err| SourceBuildError::RunExportsExtraction("build".into(), Arc::new(err)))?;
+
     let mut compat_map: std::collections::HashMap<rattler_conda_types::PackageName, &PixiRecord> =
         std::collections::HashMap::new();
     for r in &build_pixi_records {
@@ -322,14 +353,32 @@ async fn compute_inner(
         .map(|deps| Dependencies::new(deps, Some(source_anchor.clone()), &compat_map))
         .transpose()
         .map_err(SourceBuildError::from)?
-        .unwrap_or_default();
+        .unwrap_or_default()
+        // Apply strong build run-exports to host so the host env's
+        // run-export extraction sees them as direct dependencies.
+        .extend_with_run_exports_from_build(&build_run_exports);
+
+    let host_run_exports = host_dependencies
+        .extract_run_exports(
+            &mut host_pixi_records,
+            &output.ignore_run_exports,
+            &gateway,
+            None,
+        )
+        .await
+        .map_err(|err| SourceBuildError::RunExportsExtraction("host".into(), Arc::new(err)))?;
 
     for r in &host_pixi_records {
         compat_map.insert(r.name().clone(), r);
     }
 
     let run_dependencies = Dependencies::new(&output.run_dependencies, None, &compat_map)
-        .map_err(SourceBuildError::from)?;
+        .map_err(SourceBuildError::from)?
+        .extend_with_run_exports_from_build_and_host(
+            host_run_exports,
+            build_run_exports,
+            output.metadata.subdir,
+        );
     let run_exports = PixiRunExports::try_from_protocol(&output.run_exports, &compat_map)
         .map_err(SourceBuildError::from)?;
 

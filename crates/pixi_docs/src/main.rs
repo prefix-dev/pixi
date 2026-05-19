@@ -204,6 +204,10 @@ fn process_subcommands(
     parent_path: Vec<String>,
     output_dir: &Path,
 ) -> Result<(), Box<dyn Error>> {
+    if command.is_hide_set() {
+        return Ok(());
+    }
+
     let mut current_path = parent_path;
     current_path.push(command.get_name().to_string());
 

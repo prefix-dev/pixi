@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::{Arc, LazyLock},
+    sync::Arc,
 };
 use uv_redacted::DisplaySafeUrl;
 
@@ -28,8 +28,8 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{BaseClientBuilder, Connectivity, FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::RAYON_INITIALIZE;
+use uv_client::{Connectivity, FlatIndexClient, RegistryClientBuilder};
+use uv_configuration::initialize_rayon_once;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
 use uv_git_types::GitReference;
@@ -440,14 +440,7 @@ pub(super) async fn lock_pypi_packages(
 
                 read_local_package_metadata(&absolute_path, pkg.name(), &build_ctx)
                     .await
-                    .map_err(|e| {
-                        CommandDispatcherError::Failed(Box::new(
-                            PlatformUnsat::FailedToReadLocalMetadata(
-                                pkg.name().clone(),
-                                format!("failed to read metadata: {e}"),
-                            ),
-                        ))
-                    })?
+                    .map_err(|e| CommandDispatcherError::Failed(Box::new(e)))?
             } else {
                 None
             }
@@ -508,18 +501,15 @@ async fn read_local_package_metadata(
 
     let pypi_options = ctx.environment.pypi_options();
 
-    // Find the Python interpreter from locked records
+    // Missing python is a conda-side gap (e.g. `unlock_packages` stripped
+    // it pre-resolve); raise the non-pypi-only variant so the env is
+    // marked `outdated_conda`. #6093.
     let python_record = ctx
         .locked_pixi_records
         .records
         .iter()
         .find(|r| is_python_record(r))
-        .ok_or_else(|| {
-            PlatformUnsat::FailedToReadLocalMetadata(
-                package_name.clone(),
-                "No Python interpreter found in locked packages".to_string(),
-            )
-        })?;
+        .ok_or(PlatformUnsat::MissingPythonInterpreter)?;
 
     // Create marker environment for the target platform
     let marker_environment = determine_marker_environment(ctx.platform, python_record.as_ref())
@@ -567,13 +557,11 @@ async fn read_local_package_metadata(
     );
 
     let registry_client = {
-        let base_client_builder = BaseClientBuilder::default()
-            .allow_insecure_host(allow_insecure_hosts.clone())
-            .markers(&marker_environment)
-            .keyring(ctx.uv_context.keyring_provider)
-            .connectivity(Connectivity::Online)
-            .native_tls(ctx.uv_context.use_native_tls)
-            .extra_middleware(ctx.uv_context.extra_middleware.clone());
+        let base_client_builder = ctx.uv_context.base_client_builder(
+            allow_insecure_hosts.clone(),
+            Some(&marker_environment),
+            Connectivity::Online,
+        );
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
@@ -584,7 +572,11 @@ async fn read_local_package_metadata(
             uv_client_builder = uv_client_builder.proxy(p.clone())
         }
 
-        Arc::new(uv_client_builder.build())
+        Arc::new(
+            uv_client_builder
+                .build()
+                .expect("failed to build uv registry client"),
+        )
     };
 
     // Get tags for this platform (needed for FlatIndex)
@@ -653,7 +645,7 @@ async fn read_local_package_metadata(
 
             // Force the initialization of the rayon thread pool to avoid implicit creation
             // by the uv.
-            LazyLock::force(&RAYON_INITIALIZE);
+            initialize_rayon_once();
 
             CondaPrefixUpdater::builder(
                 group,
@@ -726,7 +718,7 @@ async fn read_local_package_metadata(
 
     // `dynamic` is set when *any* `[project.dynamic]` field is listed,
     // not just dependencies, so we accept the deps regardless.
-    let requires_dist = match database.requires_dist(directory, &pyproject_toml).await {
+    let requires_dist = match Box::pin(database.requires_dist(directory, &pyproject_toml)).await {
         Ok(Some(rd)) => {
             tracing::debug!(
                 package = %package_name,
