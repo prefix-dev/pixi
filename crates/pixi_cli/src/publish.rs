@@ -4,7 +4,7 @@ use pixi_consts::consts::{
     WORKSPACE_MANIFEST,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     ffi::OsStr,
     fmt,
     path::{Path, PathBuf},
@@ -22,9 +22,11 @@ use pixi_command_dispatcher::{
     ComputeResultExt, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
-use pixi_config::{Config, ConfigCli};
-use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart};
-use pixi_manifest::FeaturesExt;
+use pixi_config::ConfigCli;
+use pixi_core::{
+    Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
+};
+use pixi_manifest::{FeaturesExt, S3Options};
 use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -32,7 +34,7 @@ use pixi_reporters::TopLevelProgress;
 use pixi_spec::SourceLocationSpec;
 use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
-use rattler_networking::AuthenticationStorage;
+use rattler_networking::{AuthenticationStorage, s3_middleware};
 use rattler_package_streaming::seek::read_package_file;
 
 /// Build a conda package and publish it to a channel.
@@ -108,7 +110,7 @@ pub struct Args {
     #[arg(long)]
     pub force: bool,
 
-    /// Skip uploading packages that already exist on the target channel.
+    /// Skip uploading packages that already exist at the target.
     /// This is enabled by default. Use `--no-skip-existing` to disable.
     #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     pub skip_existing: bool,
@@ -116,6 +118,80 @@ pub struct Args {
     /// Generate sigstore attestation (prefix.dev only)
     #[arg(long)]
     pub generate_attestation: bool,
+}
+
+/// Resolved inputs that the upload dispatch needs to pick a backend and talk
+/// to it.
+///
+/// Built once from the workspace + CLI args, then passed by reference to
+/// `upload_packages_to_channel` and the per-backend helpers so each one can
+/// pull only what it needs (S3 bucket options, credentials, behavior flags).
+pub struct PublishContext {
+    /// S3 bucket options merged from the global config, any workspace-local
+    /// config files, and the manifest's `[workspace.s3-options]` table.
+    /// Manifest entries override config-file entries for the same bucket.
+    pub s3_options: HashMap<String, s3_middleware::S3Config>,
+
+    /// Credential lookup used by every non-S3 backend (prefix.dev, anaconda,
+    /// quetz, artifactory) and as the access-key source when S3 credentials
+    /// are not provided directly.
+    pub auth_storage: AuthenticationStorage,
+
+    /// Overwrite packages that already exist on the target channel.
+    pub force: bool,
+
+    /// Skip packages that already exist on the target channel.
+    pub skip_existing: bool,
+
+    /// Request a sigstore attestation for the upload (prefix.dev only).
+    pub generate_attestation: bool,
+}
+
+impl PublishContext {
+    pub fn new(
+        workspace: &Workspace,
+        force: bool,
+        skip_existing: bool,
+        generate_attestation: bool,
+    ) -> miette::Result<Self> {
+        let config = workspace.config();
+
+        let s3_options = merge_s3_options(
+            config.compute_s3_config(),
+            workspace.workspace.value.workspace.s3_options.as_ref(),
+        );
+
+        Ok(Self {
+            s3_options,
+            auth_storage: get_auth_store(config).into_diagnostic()?,
+            force,
+            skip_existing,
+            generate_attestation,
+        })
+    }
+}
+
+/// Merge config-file `s3_options` with manifest `[workspace.s3-options]`.
+///
+/// Manifest entries override config entries for the same bucket name.
+fn merge_s3_options(
+    mut base: HashMap<String, s3_middleware::S3Config>,
+    manifest: Option<&HashMap<String, S3Options>>,
+) -> HashMap<String, s3_middleware::S3Config> {
+    let Some(manifest) = manifest else {
+        return base;
+    };
+    for (bucket, opts) in manifest {
+        base.insert(
+            bucket.clone(),
+            s3_middleware::S3Config::Custom {
+                endpoint_url: opts.endpoint_url.clone(),
+                region: opts.region.clone(),
+                force_path_style: opts.force_path_style,
+            },
+        );
+    }
+    base
 }
 
 /// Validate that the full path of package manifest exists and is a supported
@@ -258,6 +334,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     sanity_check_workspace(&workspace).await?;
+
+    let ctx = PublishContext::new(
+        &workspace,
+        args.force,
+        args.skip_existing,
+        args.generate_attestation,
+    )?;
 
     let multi_progress = global_multi_progress();
     let anchor_pb = multi_progress.add(ProgressBar::hidden());
@@ -492,25 +575,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         target_str,
     );
 
-    let config = Config::load_global();
-    let auth_storage = get_auth_store(&config).into_diagnostic()?;
-
     match &target {
         UrlOrPath::Url(url) => {
             pixi_progress::await_in_progress("uploading packages", |_| {
-                upload_packages_to_channel(
-                    url,
-                    &built_package_paths,
-                    &auth_storage,
-                    args.force,
-                    args.skip_existing,
-                    args.generate_attestation,
-                )
+                upload_packages_to_channel(url, &built_package_paths, &ctx)
             })
             .await?;
         }
         UrlOrPath::Path(destination) => {
-            upload_to_local_filesystem_path(&built_package_paths, destination).await?
+            upload_to_local_filesystem_path(&built_package_paths, destination, &ctx).await?
         }
     }
 
@@ -565,52 +638,30 @@ fn determine_package_subdir(package_path: &std::path::Path) -> miette::Result<St
 async fn upload_packages_to_channel(
     url: &Url,
     package_paths: &[PathBuf],
-    auth_storage: &AuthenticationStorage,
-    force: bool,
-    skip_existing: bool,
-    generate_attestation: bool,
+    ctx: &PublishContext,
 ) -> miette::Result<()> {
     let scheme = url.scheme();
 
     match scheme {
-        "s3" => upload_to_s3(url, package_paths, force).await,
-        "quetz" => upload_to_quetz(url, package_paths, auth_storage).await,
-        "artifactory" => upload_to_artifactory(url, package_paths, auth_storage).await,
-        "prefix" => {
-            upload_to_prefix(
-                url,
-                package_paths,
-                auth_storage,
-                force,
-                skip_existing,
-                generate_attestation,
-            )
-            .await
-        }
+        "s3" => upload_to_s3(url, package_paths, ctx).await,
+        "quetz" => upload_to_quetz(url, package_paths, ctx).await,
+        "artifactory" => upload_to_artifactory(url, package_paths, ctx).await,
+        "prefix" => upload_to_prefix(url, package_paths, ctx).await,
         "file" => {
             let destination = url
                 .to_file_path()
                 .map_err(|()| miette::miette!("Invalid file URL: {}", url))?;
-            upload_to_local_filesystem_channel(&destination, package_paths, force, skip_existing)
-                .await
+            upload_to_local_filesystem_channel(&destination, package_paths, ctx).await
         }
         "http" | "https" => {
             let host = url.host_str().unwrap_or("");
 
             if host.contains("prefix.dev") {
-                upload_to_prefix(
-                    url,
-                    package_paths,
-                    auth_storage,
-                    force,
-                    skip_existing,
-                    generate_attestation,
-                )
-                .await
+                upload_to_prefix(url, package_paths, ctx).await
             } else if host.contains("anaconda.org") {
-                upload_to_anaconda(url, package_paths, auth_storage, force).await
+                upload_to_anaconda(url, package_paths, ctx).await
             } else if host.contains("quetz") {
-                upload_to_quetz(url, package_paths, auth_storage).await
+                upload_to_quetz(url, package_paths, ctx).await
             } else {
                 Err(miette::miette!(
                     "Cannot determine upload backend from URL '{}'. \n\
@@ -630,6 +681,7 @@ async fn upload_packages_to_channel(
 async fn upload_to_local_filesystem_path(
     package_paths: &[PathBuf],
     destination: &Path,
+    ctx: &PublishContext,
 ) -> miette::Result<()> {
     tokio_fs::create_dir_all(destination)
         .await
@@ -644,6 +696,11 @@ async fn upload_to_local_filesystem_path(
             .file_name()
             .ok_or_else(|| miette::miette!("Package path '{}' has no filename", p.display()))?;
         let dest = destination.join(file_name);
+
+        if should_skip_existing(&dest, &file_name.to_string_lossy(), ctx)? {
+            continue;
+        }
+
         tokio_fs::copy(p, &dest)
             .await
             .into_diagnostic()
@@ -656,14 +713,43 @@ async fn upload_to_local_filesystem_path(
 
     Ok(())
 }
+
+/// Decide what to do when a destination path already exists.
+///
+/// Returns `Ok(true)` when the caller should skip writing (path exists and
+/// `skip_existing` is set), `Ok(false)` when the caller should proceed
+/// (path is free, or `force` is set), and `Err` when neither flag permits
+/// overwriting an existing file.
+fn should_skip_existing(
+    dest: &Path,
+    display_name: &str,
+    ctx: &PublishContext,
+) -> miette::Result<bool> {
+    if !dest.exists() {
+        return Ok(false);
+    }
+    if ctx.skip_existing {
+        pixi_progress::println!(
+            "{}Skipping '{}' (already exists)",
+            console::style(console::Emoji("⏭ ", "")).yellow(),
+            display_name
+        );
+        return Ok(true);
+    }
+    if !ctx.force {
+        return Err(miette::miette!(
+            "Package already exists at {}. Use --force to overwrite.",
+            dest.display()
+        ));
+    }
+    Ok(false)
+}
+
 /// Upload packages to a Prefix.dev server.
 async fn upload_to_prefix(
     url: &Url,
     package_paths: &[PathBuf],
-    auth_storage: &AuthenticationStorage,
-    force: bool,
-    skip_existing: bool,
-    generate_attestation: bool,
+    ctx: &PublishContext,
 ) -> miette::Result<()> {
     use rattler_upload::upload::opt::{
         AttestationSource, ForceOverwrite, PrefixData, SkipExisting,
@@ -686,7 +772,7 @@ async fn upload_to_prefix(
     }
     server_url.set_path("");
 
-    let attestation = if generate_attestation {
+    let attestation = if ctx.generate_attestation {
         AttestationSource::GenerateAttestation
     } else {
         AttestationSource::NoAttestation
@@ -697,12 +783,12 @@ async fn upload_to_prefix(
         channel,
         None,
         attestation,
-        SkipExisting(skip_existing),
-        ForceOverwrite(force),
+        SkipExisting(ctx.skip_existing),
+        ForceOverwrite(ctx.force),
         false,
     );
 
-    upload_package_to_prefix(auth_storage, &package_paths.to_vec(), prefix_data)
+    upload_package_to_prefix(&ctx.auth_storage, &package_paths.to_vec(), prefix_data)
         .await
         .into_diagnostic()
 }
@@ -711,8 +797,7 @@ async fn upload_to_prefix(
 async fn upload_to_anaconda(
     url: &Url,
     package_paths: &[PathBuf],
-    auth_storage: &AuthenticationStorage,
-    force: bool,
+    ctx: &PublishContext,
 ) -> miette::Result<()> {
     use rattler_upload::upload::opt::{AnacondaData, ForceOverwrite};
     use rattler_upload::upload::upload_package_to_anaconda;
@@ -739,10 +824,10 @@ async fn upload_to_anaconda(
         Some(vec![channel]),
         None,
         None,
-        ForceOverwrite(force),
+        ForceOverwrite(ctx.force),
     );
 
-    upload_package_to_anaconda(auth_storage, &package_paths.to_vec(), anaconda_data)
+    upload_package_to_anaconda(&ctx.auth_storage, &package_paths.to_vec(), anaconda_data)
         .await
         .into_diagnostic()
 }
@@ -751,7 +836,7 @@ async fn upload_to_anaconda(
 async fn upload_to_quetz(
     url: &Url,
     package_paths: &[PathBuf],
-    auth_storage: &AuthenticationStorage,
+    ctx: &PublishContext,
 ) -> miette::Result<()> {
     use rattler_upload::upload::opt::QuetzData;
     use rattler_upload::upload::upload_package_to_quetz;
@@ -774,14 +859,14 @@ async fn upload_to_quetz(
 
     let quetz_data = QuetzData::new(server_url, channel, None);
 
-    upload_package_to_quetz(auth_storage, &package_paths.to_vec(), quetz_data).await
+    upload_package_to_quetz(&ctx.auth_storage, &package_paths.to_vec(), quetz_data).await
 }
 
 /// Upload packages to an Artifactory server.
 async fn upload_to_artifactory(
     url: &Url,
     package_paths: &[PathBuf],
-    auth_storage: &AuthenticationStorage,
+    ctx: &PublishContext,
 ) -> miette::Result<()> {
     use rattler_upload::upload::opt::ArtifactoryData;
     use rattler_upload::upload::upload_package_to_artifactory;
@@ -804,21 +889,60 @@ async fn upload_to_artifactory(
 
     let artifactory_data = ArtifactoryData::new(server_url, channel, None);
 
-    upload_package_to_artifactory(auth_storage, &package_paths.to_vec(), artifactory_data).await
+    upload_package_to_artifactory(&ctx.auth_storage, &package_paths.to_vec(), artifactory_data)
+        .await
 }
 
 /// Upload packages to S3 and run indexing.
-async fn upload_to_s3(url: &Url, package_paths: &[PathBuf], force: bool) -> miette::Result<()> {
+async fn upload_to_s3(
+    url: &Url,
+    package_paths: &[PathBuf],
+    ctx: &PublishContext,
+) -> miette::Result<()> {
     use rattler_index::{IndexS3Config, ensure_channel_initialized_s3, index_s3};
     use rattler_upload::upload::upload_package_to_s3;
     use std::collections::HashSet;
 
     tracing::info!("Uploading packages to S3: {}", url);
 
-    // Resolve S3 credentials using AWS SDK default credential chain
-    let resolved_credentials = rattler_s3::ResolvedS3Credentials::from_sdk()
-        .await
-        .map_err(|e| miette::miette!("Failed to resolve S3 credentials: {}", e))?;
+    let bucket_config = url.host_str().and_then(|bucket| ctx.s3_options.get(bucket));
+
+    let resolved_credentials = match bucket_config {
+        Some(s3_middleware::S3Config::Custom {
+            endpoint_url,
+            region,
+            force_path_style,
+        }) => {
+            // The workspace manifest or a config file pinned this bucket to a
+            // specific endpoint; honor it and pull the access keys from the
+            // auth store (populated via `pixi auth login s3://<bucket>`).
+            let s3_creds = rattler_s3::S3Credentials {
+                endpoint_url: endpoint_url.clone(),
+                region: region.clone(),
+                addressing_style: if *force_path_style {
+                    rattler_s3::S3AddressingStyle::Path
+                } else {
+                    rattler_s3::S3AddressingStyle::VirtualHost
+                },
+                access_key_id: None,
+                secret_access_key: None,
+                session_token: None,
+            };
+            s3_creds.resolve(url, &ctx.auth_storage).ok_or_else(|| {
+                let bucket = url.host_str().unwrap_or("<unknown>");
+                miette::miette!(
+                    "Bucket '{bucket}' is configured in `s3-options` but no \
+                         credentials were found in the auth store. Run \
+                         `pixi auth login s3://{bucket}` to store credentials."
+                )
+            })?
+        }
+        Some(s3_middleware::S3Config::FromAWS) | None => {
+            rattler_s3::ResolvedS3Credentials::from_sdk()
+                .await
+                .map_err(|e| miette::miette!("Failed to resolve S3 credentials: {}", e))?
+        }
+    };
 
     ensure_channel_initialized_s3(url, &resolved_credentials)
         .await
@@ -834,7 +958,7 @@ async fn upload_to_s3(url: &Url, package_paths: &[PathBuf], force: bool) -> miet
         url.clone(),
         resolved_credentials.clone(),
         &package_paths.to_vec(),
-        force,
+        ctx.force,
     )
     .await?;
 
@@ -874,8 +998,7 @@ async fn upload_to_s3(url: &Url, package_paths: &[PathBuf], force: bool) -> miet
 async fn upload_to_local_filesystem_channel(
     target_dir: &std::path::Path,
     package_paths: &[PathBuf],
-    force: bool,
-    skip_existing: bool,
+    ctx: &PublishContext,
 ) -> miette::Result<()> {
     use rattler_index::{IndexFsConfig, ensure_channel_initialized_fs, index_fs};
     use std::collections::HashSet;
@@ -905,21 +1028,8 @@ async fn upload_to_local_filesystem_channel(
         fs_err::create_dir_all(&target_subdir).into_diagnostic()?;
         let target_path = target_subdir.join(package_name);
 
-        if target_path.exists() {
-            if skip_existing {
-                pixi_progress::println!(
-                    "{}Skipping '{}' (already exists)",
-                    console::style(console::Emoji("⏭ ", "")).yellow(),
-                    package_name.to_string_lossy()
-                );
-                continue;
-            }
-            if !force {
-                return Err(miette::miette!(
-                    "Package already exists at {}. Use --force to overwrite.",
-                    target_path.display()
-                ));
-            }
+        if should_skip_existing(&target_path, &package_name.to_string_lossy(), ctx)? {
+            continue;
         }
 
         tracing::info!(
@@ -958,4 +1068,73 @@ async fn upload_to_local_filesystem_channel(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn manifest_s3_options_override_config_for_same_bucket() {
+        let mut config = HashMap::new();
+        config.insert("bucket-a".to_string(), s3_middleware::S3Config::FromAWS);
+        config.insert(
+            "bucket-b".to_string(),
+            s3_middleware::S3Config::Custom {
+                endpoint_url: Url::parse("https://from-config.example/").unwrap(),
+                region: "us-east-1".to_string(),
+                force_path_style: false,
+            },
+        );
+
+        let mut manifest = HashMap::new();
+        manifest.insert(
+            "bucket-b".to_string(),
+            S3Options {
+                endpoint_url: Url::parse("https://from-manifest.example/").unwrap(),
+                region: "eu-central-1".to_string(),
+                force_path_style: true,
+            },
+        );
+        manifest.insert(
+            "bucket-c".to_string(),
+            S3Options {
+                endpoint_url: Url::parse("https://only-in-manifest.example/").unwrap(),
+                region: "ap-south-1".to_string(),
+                force_path_style: false,
+            },
+        );
+
+        let merged = merge_s3_options(config, Some(&manifest));
+
+        assert!(matches!(
+            merged.get("bucket-a"),
+            Some(s3_middleware::S3Config::FromAWS),
+        ));
+        let s3_middleware::S3Config::Custom {
+            endpoint_url,
+            region,
+            force_path_style,
+        } = merged.get("bucket-b").unwrap()
+        else {
+            panic!("bucket-b should resolve to a Custom config from the manifest");
+        };
+        assert_eq!(endpoint_url.as_str(), "https://from-manifest.example/");
+        assert_eq!(region, "eu-central-1");
+        assert!(force_path_style);
+        assert!(merged.contains_key("bucket-c"));
+    }
+
+    #[test]
+    fn merge_s3_options_passes_base_through_when_manifest_absent() {
+        let mut config = HashMap::new();
+        config.insert("bucket-a".to_string(), s3_middleware::S3Config::FromAWS);
+
+        let merged = merge_s3_options(config.clone(), None);
+        assert_eq!(merged.len(), config.len());
+        assert!(matches!(
+            merged.get("bucket-a"),
+            Some(s3_middleware::S3Config::FromAWS),
+        ));
+    }
 }
