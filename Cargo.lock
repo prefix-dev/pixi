@@ -5940,6 +5940,7 @@ dependencies = [
  "pypi_mapping",
  "rattler_conda_types",
  "rattler_lock",
+ "rattler_package_streaming",
  "rattler_virtual_packages",
  "reqwest",
  "serde_json",

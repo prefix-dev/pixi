@@ -2537,3 +2537,160 @@ backend.version = "0.1.0"
         ".pixi/.gitignore was not created after publish"
     );
 }
+
+/// Regression test for https://github.com/prefix-dev/pixi/issues/6147
+///
+/// When building a source package whose `[package.host-dependencies]` provide
+/// run-exports, the resulting `.conda` artifact's `info/index.json` `depends`
+/// array must list the host dependency *and* every run-export it contributes.
+///
+/// In pixi 0.68.0 the `SourceBuildKey` pipeline forwarded only the recipe's
+/// raw `output.run_dependencies` to the build backend, skipping the
+/// `extend_with_run_exports_from_build_and_host` merge step that the lockfile
+/// resolution path uses. This caused the built package's `depends` to come
+/// back empty even though the lockfile recorded the correct dependencies.
+///
+/// The test exercises the end-to-end path: it puts a mock host package with
+/// run-exports in a local channel, builds a source package that uses it as a
+/// host-dependency, and then inspects the produced `.conda` to make sure the
+/// merged `depends` (plus the license forwarded from the project model) is
+/// what landed in `info/index.json`.
+#[tokio::test]
+async fn test_build_propagates_host_run_exports_into_index_json() {
+    use rattler_conda_types::package::IndexJson;
+
+    setup_tracing();
+
+    // A host package whose run-exports pull in `runtime-lib >=1.0` and pin
+    // `host-lib` itself into the consumer's `depends`. This mirrors how
+    // real C libraries (e.g. hdf5) advertise both a pin on themselves and
+    // a runtime link via `pin_subpackage` + extra runtime deps.
+    let run_exports = RunExportsJson {
+        weak: vec![
+            "host-lib >=2.5,<3.0a0".to_string(),
+            "runtime-lib >=1.0".to_string(),
+        ],
+        ..Default::default()
+    };
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("host-lib", "2.5.0")
+            .with_subdir(Platform::current())
+            .with_materialize(true)
+            .with_run_exports(run_exports.clone())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("runtime-lib", "1.0.0")
+            .with_subdir(Platform::current())
+            .with_materialize(true)
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    // NOTE: we intentionally do NOT call `.with_run_exports(...)` on the
+    // PassthroughBackend instantiator here. That would make the backend
+    // pre-bake the run-exports into the `conda_outputs` response and bypass
+    // the bug being tested. With this configuration the backend returns an
+    // empty `run_dependencies` list and pixi is solely responsible for
+    // resolving run-exports from the host environment.
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
+
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[package]
+name = "my-pkg"
+version = "0.4.2"
+license = "BSD-3-Clause"
+
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+
+# Opt the passthrough backend into a platform-specific build so weak
+# run-exports from host-dependencies actually propagate (NoArch only
+# picks up `noarch` run-exports).
+[package.build.config]
+noarch = false
+
+[package.host-dependencies]
+host-lib = "*"
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    pixi.update_manifest(&manifest_content).unwrap();
+
+    // Publish into a target_dir so we get a stable on-disk location for the
+    // produced .conda artifact.
+    let target_dir = TempDir::new().unwrap();
+    publish::execute(publish::Args {
+        backend_override: Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        config_cli: Default::default(),
+        target_platform: Platform::current(),
+        build_platform: Platform::current(),
+        build_string_prefix: None,
+        build_number: None,
+        build_dir: None,
+        clean: false,
+        path: Some(pixi.manifest_path()),
+        target_channel: None,
+        target_dir: Some(target_dir.path().to_path_buf()),
+        force: false,
+        skip_existing: true,
+        generate_attestation: false,
+    })
+    .await
+    .expect("publish should succeed");
+
+    // `--target-dir` mode copies the produced `.conda` files directly into
+    // the destination directory.
+    let produced = fs::read_dir(target_dir.path())
+        .unwrap()
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| {
+            path.extension().and_then(|s| s.to_str()) == Some("conda")
+                && path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .is_some_and(|n| n.starts_with("my-pkg-"))
+        })
+        .expect("publish did not produce a .conda for my-pkg");
+
+    // Read the produced .conda's info/index.json and snapshot it. Subdir
+    // is redacted because it varies with the host platform the test runs
+    // on; everything else (name, version, license, depends, constrains,
+    // noarch, build string / number) must stay stable, and in particular
+    // both run-exports — the `host-lib` self-pin and the runtime link to
+    // `runtime-lib` — must show up in `depends`. Before the fix `depends`
+    // came back as `[]`.
+    let index_json: IndexJson = rattler_package_streaming::seek::read_package_file(&produced)
+        .expect("failed to read info/index.json from the produced .conda");
+
+    // Subdir is redacted because it varies with the host platform the
+    // test runs on.
+    insta::assert_yaml_snapshot!(index_json, {
+        ".subdir" => "[SUBDIR]",
+    }, @r###"
+    build: ""
+    build_number: 0
+    depends:
+      - "host-lib >=2.5,<3.0a0"
+      - runtime-lib >=1.0
+    license: BSD-3-Clause
+    name: my-pkg
+    subdir: "[SUBDIR]"
+    version: 0.4.2
+    "###);
+}
