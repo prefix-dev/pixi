@@ -1,0 +1,5 @@
+---
+source: crates/pixi_spec/src/toml.rs
+expression: parse_json_error(input)
+---
+`when` cannot be used with `path`

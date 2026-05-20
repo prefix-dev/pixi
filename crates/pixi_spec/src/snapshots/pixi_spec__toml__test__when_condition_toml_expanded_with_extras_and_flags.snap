@@ -1,0 +1,5 @@
+---
+source: crates/pixi_spec/src/toml.rs
+expression: parse_toml_condition(input)
+---
+python[extras=[dev], flags=[cuda, blas:*]]

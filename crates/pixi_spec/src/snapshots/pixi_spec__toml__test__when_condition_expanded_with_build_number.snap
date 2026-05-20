@@ -1,0 +1,5 @@
+---
+source: crates/pixi_spec/src/toml.rs
+expression: parse_json_condition(input)
+---
+python[version=">=3.10", build_number=">=3"]

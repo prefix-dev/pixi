@@ -1181,6 +1181,7 @@ impl Serialize for PathSpec {
 
 #[cfg(test)]
 mod test {
+    use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
     use pixi_toml::TomlDiagnostic;
     use serde::Serialize;
@@ -1188,38 +1189,37 @@ mod test {
 
     use super::*;
 
-    fn condition_string(spec: PixiSpec) -> String {
+    fn parse_toml_condition(input: &str) -> String {
+        let mut value = toml_span::parse(input).expect("valid TOML");
+        let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
+            .expect("expected parse to succeed");
         spec.as_detailed()
-            .expect("when is only accepted on detailed specs")
+            .expect("`when` only accepted on detailed specs")
             .condition
             .as_ref()
-            .expect("expected parsed when condition")
+            .expect("expected parsed `when` condition")
             .to_string()
     }
 
-    fn parse_json_condition(input: Value) -> Result<String, String> {
-        serde_json::from_value::<PixiSpec>(input)
-            .map(condition_string)
-            .map_err(|err| err.to_string())
+    fn parse_json_condition(input: Value) -> String {
+        let spec: PixiSpec = serde_json::from_value(input).expect("expected parse to succeed");
+        spec.as_detailed()
+            .expect("`when` only accepted on detailed specs")
+            .condition
+            .as_ref()
+            .expect("expected parsed `when` condition")
+            .to_string()
     }
 
-    fn parse_toml_condition(input: &str) -> Result<String, String> {
-        let mut value = toml_span::parse(input).map_err(|err| err.to_string())?;
-        <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
-            .map(condition_string)
-            .map_err(|err| err.to_string())
-    }
-
-    /// Parse a TOML pixi spec and render the first error with full
-    /// location/highlighting via miette — used to produce snapshots that show
-    /// where in the TOML the failure happened.
-    fn parse_toml_condition_diagnostic(input: &str) -> String {
+    /// Parse a TOML pixi spec and render the first error via miette so the
+    /// snapshot shows the offending source span.
+    fn parse_toml_error(input: &str) -> String {
         let trimmed = input.trim();
         let result = toml_span::parse(trimmed)
             .map_err(DeserError::from)
             .and_then(|mut v| <PixiSpec as toml_span::Deserialize>::deserialize(&mut v));
-        let err = result.expect_err("expected a parse failure");
-        let first = err
+        let first = result
+            .expect_err("expected a parse failure")
             .errors
             .into_iter()
             .next()
@@ -1227,8 +1227,7 @@ mod test {
         format_parse_error(trimmed, TomlDiagnostic(first))
     }
 
-    /// Like [`parse_json_condition`] but only returns the error message — used
-    /// for rejection cases that don't involve a parsed `when` condition.
+    /// JSON parse failures don't carry source spans, so we just stringify.
     fn parse_json_error(input: Value) -> String {
         serde_json::from_value::<PixiSpec>(input)
             .expect_err("expected a parse failure")
@@ -1434,111 +1433,137 @@ mod test {
     }
 
     #[test]
-    fn test_when_condition_parsing_snapshot() {
-        #[derive(Serialize)]
-        struct Snapshot {
-            label: &'static str,
-            input: String,
-            condition: String,
-        }
+    fn test_when_condition_string_matchspec() {
+        let input = json!({ "version": "*", "when": "__unix" });
+        assert_snapshot!(parse_json_condition(input));
+    }
 
-        let json_cases = [
-            (
-                "json_string_matchspec",
-                json!({ "version": "*", "when": "__unix" }),
-            ),
-            (
-                "json_all",
-                json!({ "version": "*", "when": { "all": ["__unix", "python >=3.10"] } }),
-            ),
-            (
-                "json_any",
-                json!({ "version": "*", "when": { "any": ["__linux", "__osx"] } }),
-            ),
-            (
-                "json_nested_all_any",
-                json!({ "version": "*", "when": { "all": ["__unix", { "any": ["__linux", "__osx"] }] } }),
-            ),
-            (
-                "json_expanded_build_match",
-                json!({ "version": "*", "when": { "package": "python", "version": ">=3.10", "build": "*cuda" } }),
-            ),
-            (
-                "json_expanded_with_build_number",
-                json!({ "version": "*", "when": { "package": "python", "version": ">=3.10", "build-number": ">=3" } }),
-            ),
-            (
-                "json_expanded_with_subdir",
-                json!({ "version": "*", "when": { "package": "python", "subdir": "linux-64" } }),
-            ),
-            (
-                "json_expanded_with_extras",
-                json!({ "version": "*", "when": { "package": "python", "extras": ["dev"] } }),
-            ),
-            (
-                "json_expanded_with_flags",
-                json!({ "version": "*", "when": { "package": "python", "flags": ["cuda", "blas:*"] } }),
-            ),
-            (
-                "json_expanded_with_track_features",
-                json!({ "version": "*", "when": { "package": "python", "track-features": ["legacy"] } }),
-            ),
-            (
-                "json_expanded_with_file_name",
-                json!({ "version": "*", "when": { "package": "python", "file-name": "python-3.10.0-h12debd9_0.tar.bz2" } }),
-            ),
-            (
-                "json_expanded_with_license",
-                json!({ "version": "*", "when": { "package": "python", "license": "MIT", "license-family": "BSD" } }),
-            ),
-        ];
+    #[test]
+    fn test_when_condition_all() {
+        let input = json!({ "version": "*", "when": { "all": ["__unix", "python >=3.10"] } });
+        assert_snapshot!(parse_json_condition(input));
+    }
 
-        let toml_cases = [
-            (
-                "toml_all_with_expanded_build_match",
-                r#"version = "*"
-when = { all = ["__unix", { package = "python", version = ">=3.10", build = "*cuda" }] }"#,
-            ),
-            (
-                "toml_any",
-                r#"version = "*"
-when = { any = ["__linux", "__osx"] }"#,
-            ),
-            (
-                "toml_expanded_with_build_number",
-                r#"version = "*"
-when = { package = "python", version = ">=3.10", build-number = ">=3" }"#,
-            ),
-            (
-                "toml_expanded_with_extras_and_flags",
-                r#"version = "*"
-when = { package = "python", extras = ["dev"], flags = ["cuda", "blas:*"] }"#,
-            ),
-            (
-                "toml_expanded_with_track_features",
-                r#"version = "*"
-when = { package = "python", track-features = ["legacy"] }"#,
-            ),
-        ];
+    #[test]
+    fn test_when_condition_any() {
+        let input = json!({ "version": "*", "when": { "any": ["__linux", "__osx"] } });
+        assert_snapshot!(parse_json_condition(input));
+    }
 
-        let mut snapshot = Vec::new();
-        for (label, input) in json_cases {
-            snapshot.push(Snapshot {
-                label,
-                input: serde_json::to_string_pretty(&input).unwrap(),
-                condition: parse_json_condition(input).unwrap(),
-            });
-        }
+    #[test]
+    fn test_when_condition_nested_all_any() {
+        let input = json!({
+            "version": "*",
+            "when": { "all": ["__unix", { "any": ["__linux", "__osx"] }] },
+        });
+        assert_snapshot!(parse_json_condition(input));
+    }
 
-        for (label, input) in toml_cases {
-            snapshot.push(Snapshot {
-                label,
-                input: input.trim().to_string(),
-                condition: parse_toml_condition(input).unwrap(),
-            });
-        }
+    #[test]
+    fn test_when_condition_expanded_build_match() {
+        let input = json!({
+            "version": "*",
+            "when": { "package": "python", "version": ">=3.10", "build": "*cuda" },
+        });
+        assert_snapshot!(parse_json_condition(input));
+    }
 
-        insta::assert_yaml_snapshot!(snapshot);
+    #[test]
+    fn test_when_condition_expanded_with_build_number() {
+        let input = json!({
+            "version": "*",
+            "when": { "package": "python", "version": ">=3.10", "build-number": ">=3" },
+        });
+        assert_snapshot!(parse_json_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_expanded_with_subdir() {
+        let input = json!({
+            "version": "*",
+            "when": { "package": "python", "subdir": "linux-64" },
+        });
+        assert_snapshot!(parse_json_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_expanded_with_extras() {
+        let input = json!({
+            "version": "*",
+            "when": { "package": "python", "extras": ["dev"] },
+        });
+        assert_snapshot!(parse_json_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_expanded_with_flags() {
+        let input = json!({
+            "version": "*",
+            "when": { "package": "python", "flags": ["cuda", "blas:*"] },
+        });
+        assert_snapshot!(parse_json_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_expanded_with_track_features() {
+        let input = json!({
+            "version": "*",
+            "when": { "package": "python", "track-features": ["legacy"] },
+        });
+        assert_snapshot!(parse_json_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_expanded_with_file_name() {
+        let input = json!({
+            "version": "*",
+            "when": { "package": "python", "file-name": "python-3.10.0-h12debd9_0.tar.bz2" },
+        });
+        assert_snapshot!(parse_json_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_expanded_with_license() {
+        let input = json!({
+            "version": "*",
+            "when": { "package": "python", "license": "MIT", "license-family": "BSD" },
+        });
+        assert_snapshot!(parse_json_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_toml_all_with_expanded_build_match() {
+        let input = r#"version = "*"
+when = { all = ["__unix", { package = "python", version = ">=3.10", build = "*cuda" }] }"#;
+        assert_snapshot!(parse_toml_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_toml_any() {
+        let input = r#"version = "*"
+when = { any = ["__linux", "__osx"] }"#;
+        assert_snapshot!(parse_toml_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_toml_expanded_with_build_number() {
+        let input = r#"version = "*"
+when = { package = "python", version = ">=3.10", build-number = ">=3" }"#;
+        assert_snapshot!(parse_toml_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_toml_expanded_with_extras_and_flags() {
+        let input = r#"version = "*"
+when = { package = "python", extras = ["dev"], flags = ["cuda", "blas:*"] }"#;
+        assert_snapshot!(parse_toml_condition(input));
+    }
+
+    #[test]
+    fn test_when_condition_toml_expanded_with_track_features() {
+        let input = r#"version = "*"
+when = { package = "python", track-features = ["legacy"] }"#;
+        assert_snapshot!(parse_toml_condition(input));
     }
 
     #[test]
@@ -1576,251 +1601,249 @@ when = { package = "python", track-features = ["legacy"] }"#,
     }
 
     #[test]
-    fn test_when_rejection_snapshot() {
-        #[derive(Serialize)]
-        struct Snapshot {
-            label: &'static str,
-            input: String,
-            error: String,
-        }
-
-        let json_cases = [
-            (
-                "json_top_level_array",
-                json!({ "version": "*", "when": ["__unix", "python >=3.10"] }),
-            ),
-            (
-                "json_bracket_matchspec",
-                json!({ "version": "*", "when": "python[version='>=3.10']" }),
-            ),
-            (
-                "json_build_shorthand",
-                json!({ "version": "*", "when": "python >=3.10 *cuda" }),
-            ),
-            (
-                "json_string_no_package_name",
-                json!({ "version": "*", "when": ">=3.10" }),
-            ),
-            (
-                "json_string_with_channel_prefix",
-                json!({ "version": "*", "when": "conda-forge::python" }),
-            ),
-            (
-                "json_expanded_with_url",
-                json!({
-                    "version": "*",
-                    "when": { "package": "python", "url": "https://example.com/python-3.10.conda" },
-                }),
-            ),
-            (
-                "json_expanded_with_channel",
-                json!({
-                    "version": "*",
-                    "when": { "package": "python", "channel": "conda-forge" },
-                }),
-            ),
-            (
-                "json_when_combined_with_path",
-                json!({ "path": "../foo", "when": "__unix" }),
-            ),
-        ];
-
-        let toml_cases = [
-            (
-                "toml_top_level_array",
-                r#"version = "*"
-when = ["__unix"]"#,
-            ),
-            (
-                "toml_all_and_any",
-                r#"version = "*"
-when = { all = ["__unix"], any = ["__linux"] }"#,
-            ),
-            (
-                "toml_empty_all",
-                r#"version = "*"
-when = { all = [] }"#,
-            ),
-            (
-                "toml_empty_any",
-                r#"version = "*"
-when = { any = [] }"#,
-            ),
-            (
-                "toml_string_no_package_name",
-                r#"version = "*"
-when = ">=3.10""#,
-            ),
-            (
-                "toml_string_with_channel_prefix",
-                r#"version = "*"
-when = "conda-forge::python""#,
-            ),
-            (
-                "toml_expanded_with_url",
-                r#"version = "*"
-when = { package = "python", url = "https://example.com/python-3.10.conda" }"#,
-            ),
-            (
-                "toml_expanded_with_path",
-                r#"version = "*"
-when = { package = "python", path = "../foo" }"#,
-            ),
-            (
-                "toml_expanded_with_md5",
-                r#"version = "*"
-when = { package = "python", md5 = "d41d8cd98f00b204e9800998ecf8427e" }"#,
-            ),
-            (
-                "toml_expanded_with_branch",
-                r#"version = "*"
-when = { package = "python", branch = "main" }"#,
-            ),
-            (
-                "toml_expanded_with_channel",
-                r#"version = "*"
-when = { package = "python", channel = "conda-forge" }"#,
-            ),
-            (
-                "toml_table_without_directive",
-                r#"version = "*"
-when = { build = "*cuda" }"#,
-            ),
-            (
-                "toml_expanded_invalid_version",
-                r#"version = "*"
-when = { package = "python", version = "//" }"#,
-            ),
-            (
-                "toml_nested_invalid_leaf",
-                r#"version = "*"
-when = { all = ["__unix", "python[version='>=3.10']"] }"#,
-            ),
-            (
-                "toml_when_combined_with_path",
-                r#"path = "../foo"
-when = "__unix""#,
-            ),
-        ];
-
-        let mut snapshot = Vec::new();
-        for (label, input) in json_cases {
-            // JSON paths have no source spans, so we just stringify the error.
-            let error = parse_json_condition(input.clone()).unwrap_err();
-            snapshot.push(Snapshot {
-                label,
-                input: serde_json::to_string_pretty(&input).unwrap(),
-                error,
-            });
-        }
-
-        for (label, input) in toml_cases {
-            // TOML errors get rendered with miette so the snapshot shows the
-            // offending span.
-            snapshot.push(Snapshot {
-                label,
-                input: input.trim().to_string(),
-                error: parse_toml_condition_diagnostic(input),
-            });
-        }
-
-        insta::assert_yaml_snapshot!(snapshot);
+    fn test_when_reject_top_level_array_json() {
+        let input = json!({ "version": "*", "when": ["__unix", "python >=3.10"] });
+        assert_snapshot!(parse_json_error(input));
     }
 
     #[test]
-    fn test_v3_field_rejection_snapshot() {
-        #[derive(Serialize)]
-        struct Snapshot {
-            label: &'static str,
-            input: String,
-            error: String,
-        }
+    fn test_when_reject_bracket_matchspec_json() {
+        let input = json!({ "version": "*", "when": "python[version='>=3.10']" });
+        assert_snapshot!(parse_json_error(input));
+    }
 
-        let json_cases = [
-            (
-                "json_extras_not_array",
-                json!({ "version": "*", "extras": "dev" }),
-            ),
-            (
-                "json_extras_non_string_element",
-                json!({ "version": "*", "extras": [42] }),
-            ),
-            (
-                "json_flags_not_array",
-                json!({ "version": "*", "flags": "cuda" }),
-            ),
-            (
-                "json_extras_with_path",
-                json!({ "path": "../foo", "extras": ["dev"] }),
-            ),
-            (
-                "json_flags_with_git",
-                json!({ "git": "https://example.com/foo.git", "flags": ["cuda"] }),
-            ),
-            (
-                "json_track_features_with_url",
-                json!({
-                    "url": "https://example.com/foo.conda",
-                    "track-features": ["legacy"],
-                }),
-            ),
-        ];
+    #[test]
+    fn test_when_reject_build_shorthand_json() {
+        let input = json!({ "version": "*", "when": "python >=3.10 *cuda" });
+        assert_snapshot!(parse_json_error(input));
+    }
 
-        let toml_cases = [
-            (
-                "toml_extras_not_array",
-                r#"version = "*"
-extras = "dev""#,
-            ),
-            (
-                "toml_flags_not_array",
-                r#"version = "*"
-flags = "cuda""#,
-            ),
-            (
-                "toml_flags_invalid_regex",
-                r#"version = "*"
-flags = ["^[invalid$"]"#,
-            ),
-            (
-                "toml_flags_invalid_glob",
-                r#"version = "*"
-flags = ["*[unclosed"]"#,
-            ),
-            (
-                "toml_extras_with_path",
-                r#"path = "../foo"
-extras = ["dev"]"#,
-            ),
-            (
-                "toml_flags_with_url",
-                r#"url = "https://example.com/foo.conda"
-flags = ["cuda"]"#,
-            ),
-            (
-                "toml_track_features_with_git",
-                r#"git = "https://example.com/foo.git"
-track-features = ["legacy"]"#,
-            ),
-        ];
+    #[test]
+    fn test_when_reject_string_no_package_name_json() {
+        let input = json!({ "version": "*", "when": ">=3.10" });
+        assert_snapshot!(parse_json_error(input));
+    }
 
-        let mut snapshot = Vec::new();
-        for (label, input) in json_cases {
-            snapshot.push(Snapshot {
-                label,
-                input: serde_json::to_string_pretty(&input).unwrap(),
-                error: parse_json_error(input),
-            });
-        }
+    #[test]
+    fn test_when_reject_string_with_channel_prefix_json() {
+        let input = json!({ "version": "*", "when": "conda-forge::python" });
+        assert_snapshot!(parse_json_error(input));
+    }
 
-        for (label, input) in toml_cases {
-            snapshot.push(Snapshot {
-                label,
-                input: input.trim().to_string(),
-                error: parse_toml_condition_diagnostic(input),
-            });
-        }
+    #[test]
+    fn test_when_reject_expanded_with_url_json() {
+        let input = json!({
+            "version": "*",
+            "when": { "package": "python", "url": "https://example.com/python-3.10.conda" },
+        });
+        assert_snapshot!(parse_json_error(input));
+    }
 
-        insta::assert_yaml_snapshot!(snapshot);
+    #[test]
+    fn test_when_reject_expanded_with_channel_json() {
+        let input = json!({
+            "version": "*",
+            "when": { "package": "python", "channel": "conda-forge" },
+        });
+        assert_snapshot!(parse_json_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_combined_with_path_json() {
+        let input = json!({ "path": "../foo", "when": "__unix" });
+        assert_snapshot!(parse_json_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_top_level_array_toml() {
+        let input = r#"version = "*"
+when = ["__unix"]"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_all_and_any_toml() {
+        let input = r#"version = "*"
+when = { all = ["__unix"], any = ["__linux"] }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_empty_all_toml() {
+        let input = r#"version = "*"
+when = { all = [] }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_empty_any_toml() {
+        let input = r#"version = "*"
+when = { any = [] }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_string_no_package_name_toml() {
+        let input = r#"version = "*"
+when = ">=3.10""#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_string_with_channel_prefix_toml() {
+        let input = r#"version = "*"
+when = "conda-forge::python""#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_expanded_with_url_toml() {
+        let input = r#"version = "*"
+when = { package = "python", url = "https://example.com/python-3.10.conda" }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_expanded_with_path_toml() {
+        let input = r#"version = "*"
+when = { package = "python", path = "../foo" }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_expanded_with_md5_toml() {
+        let input = r#"version = "*"
+when = { package = "python", md5 = "d41d8cd98f00b204e9800998ecf8427e" }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_expanded_with_branch_toml() {
+        let input = r#"version = "*"
+when = { package = "python", branch = "main" }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_expanded_with_channel_toml() {
+        let input = r#"version = "*"
+when = { package = "python", channel = "conda-forge" }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_table_without_directive_toml() {
+        let input = r#"version = "*"
+when = { build = "*cuda" }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_expanded_invalid_version_toml() {
+        let input = r#"version = "*"
+when = { package = "python", version = "//" }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_nested_invalid_leaf_toml() {
+        let input = r#"version = "*"
+when = { all = ["__unix", "python[version='>=3.10']"] }"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_when_reject_combined_with_path_toml() {
+        let input = r#"path = "../foo"
+when = "__unix""#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_extras_not_array_json() {
+        let input = json!({ "version": "*", "extras": "dev" });
+        assert_snapshot!(parse_json_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_extras_non_string_element_json() {
+        let input = json!({ "version": "*", "extras": [42] });
+        assert_snapshot!(parse_json_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_flags_not_array_json() {
+        let input = json!({ "version": "*", "flags": "cuda" });
+        assert_snapshot!(parse_json_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_extras_with_path_json() {
+        let input = json!({ "path": "../foo", "extras": ["dev"] });
+        assert_snapshot!(parse_json_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_flags_with_git_json() {
+        let input = json!({ "git": "https://example.com/foo.git", "flags": ["cuda"] });
+        assert_snapshot!(parse_json_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_track_features_with_url_json() {
+        let input = json!({
+            "url": "https://example.com/foo.conda",
+            "track-features": ["legacy"],
+        });
+        assert_snapshot!(parse_json_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_extras_not_array_toml() {
+        let input = r#"version = "*"
+extras = "dev""#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_flags_not_array_toml() {
+        let input = r#"version = "*"
+flags = "cuda""#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_flags_invalid_regex_toml() {
+        let input = r#"version = "*"
+flags = ["^[invalid$"]"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_flags_invalid_glob_toml() {
+        let input = r#"version = "*"
+flags = ["*[unclosed"]"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_extras_with_path_toml() {
+        let input = r#"path = "../foo"
+extras = ["dev"]"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_flags_with_url_toml() {
+        let input = r#"url = "https://example.com/foo.conda"
+flags = ["cuda"]"#;
+        assert_snapshot!(parse_toml_error(input));
+    }
+
+    #[test]
+    fn test_v3_reject_track_features_with_git_toml() {
+        let input = r#"git = "https://example.com/foo.git"
+track-features = ["legacy"]"#;
+        assert_snapshot!(parse_toml_error(input));
     }
 }

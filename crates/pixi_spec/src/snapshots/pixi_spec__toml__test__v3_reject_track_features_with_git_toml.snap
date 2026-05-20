@@ -1,0 +1,9 @@
+---
+source: crates/pixi_spec/src/toml.rs
+expression: parse_toml_error(input)
+---
+  × `track-features` cannot be used with `git`
+   ╭─[pixi.toml:1:1]
+ 1 │ ╭─▶ git = "https://example.com/foo.git"
+ 2 │ ╰─▶ track-features = ["legacy"]
+   ╰────

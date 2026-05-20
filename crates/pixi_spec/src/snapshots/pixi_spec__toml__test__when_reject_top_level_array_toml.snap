@@ -1,0 +1,10 @@
+---
+source: crates/pixi_spec/src/toml.rs
+expression: parse_toml_error(input)
+---
+  × `when` must be a string or a table with `all`, `any`, or `package`; top-level arrays are not allowed
+   ╭─[pixi.toml:2:8]
+ 1 │ version = "*"
+ 2 │ when = ["__unix"]
+   ·        ──────────
+   ╰────
