@@ -23,7 +23,7 @@ pixi remove [OPTIONS] <SPEC>...
 - <a id="arg---pypi" href="#arg---pypi">`--pypi`</a>
 :  The specified dependencies are pypi dependencies. Conflicts with `host` and `build`
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
-:  The platform for which the dependency should be modified
+:  The platform for which the dependency should be modified. Must be the name of a platform already defined in the workspace
 <br>May be provided more than once.
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the dependency should be modified

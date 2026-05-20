@@ -17,7 +17,9 @@ use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 
-use super::errors::{EnvironmentUnsat, IndexesMismatch, verify_exclude_newer};
+use super::errors::{
+    EnvironmentUnsat, IndexesMismatch, PlatformDefinitionChanged, verify_exclude_newer,
+};
 use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 
 /// Verifies that all the requirements of the specified `environment` can be
@@ -67,13 +69,21 @@ pub fn verify_environment_satisfiability(
     }
 
     let platforms = environment.platforms();
-    let locked_platforms = locked_environment
+    let locked_platform_data: Vec<rattler_lock::PlatformData> = locked_environment
         .platforms()
+        .map(|p| rattler_lock::PlatformData {
+            name: p.name().clone(),
+            subdir: p.subdir(),
+            virtual_packages: p.virtual_packages().to_vec(),
+        })
+        .collect();
+    let locked_platforms: HashSet<PixiPlatformName> = locked_platform_data
+        .iter()
         .map(|p| {
-            PixiPlatformName::try_from(p.name().as_str())
+            PixiPlatformName::try_from(p.name.as_str())
                 .expect("lockfile platform name should be a valid pixi platform name")
         })
-        .collect::<HashSet<_>>();
+        .collect();
     let additional_platforms = locked_platforms
         .difference(&platforms)
         .cloned()
@@ -82,6 +92,51 @@ pub fn verify_environment_satisfiability(
         return Err(EnvironmentUnsat::AdditionalPlatformsInLockFile(
             additional_platforms,
         ));
+    }
+
+    // For every platform that the workspace and the lockfile share by name,
+    // make sure their `subdir` and declared virtual-package set still agree.
+    // Without this check, `pixi workspace platform edit ... --subdir X` or
+    // `--cuda V` would update the manifest but leave the lockfile silently
+    // stale: the satisfiability layer would say "fine, same name" and the
+    // outdated-envs machinery would short-circuit without re-solving.
+    let workspace_manifest = environment.workspace_manifest();
+    for locked in &locked_platform_data {
+        let Ok(name) = PixiPlatformName::try_from(locked.name.as_str()) else {
+            continue;
+        };
+        if !platforms.contains(&name) {
+            continue;
+        }
+        let Some(workspace_platform) = workspace_manifest.workspace.platform_by_name(&name) else {
+            continue;
+        };
+        let expected_vps: Vec<String> = workspace_platform
+            .declared_virtual_packages()
+            .iter()
+            .map(|vp| vp.to_string())
+            .collect();
+        let same_subdir = workspace_platform.subdir() == locked.subdir;
+        // Compare VPs as multisets: lockfile ordering is not part of the
+        // platform's identity for satisfiability purposes.
+        let same_vps = {
+            let mut a = expected_vps.clone();
+            let mut b = locked.virtual_packages.clone();
+            a.sort();
+            b.sort();
+            a == b
+        };
+        if !same_subdir || !same_vps {
+            return Err(EnvironmentUnsat::PlatformDefinitionChanged(
+                PlatformDefinitionChanged {
+                    name,
+                    expected_subdir: workspace_platform.subdir(),
+                    found_subdir: locked.subdir,
+                    expected_virtual_packages: expected_vps,
+                    found_virtual_packages: locked.virtual_packages.clone(),
+                },
+            ));
+        }
     }
 
     // Do some more checks if we have pypi dependencies

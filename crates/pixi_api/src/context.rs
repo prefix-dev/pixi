@@ -5,8 +5,8 @@ use miette::IntoDiagnostic;
 use pixi_core::workspace::{Environment, PypiDeps, UpdateDeps, WorkspaceMut};
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, PixiPlatform, PixiPlatformName, PrioritizedChannel,
-    SpecType, TargetSelector, Task, TaskName,
+    EnvironmentName, Feature, FeatureName, PixiPlatform, PixiPlatformName, PlatformEdit,
+    PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -161,6 +161,27 @@ impl<I: Interface> WorkspaceContext<I> {
             feature,
         )
         .await
+    }
+
+    pub async fn edit_platform(
+        &self,
+        name: PixiPlatformName,
+        edit: PlatformEdit,
+        no_install: bool,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::edit(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            edit,
+            no_install,
+        )
+        .await
+    }
+
+    /// Look up an existing workspace platform by name.
+    pub async fn get_workspace_platform(&self, name: &PixiPlatformName) -> Option<PixiPlatform> {
+        crate::workspace::workspace::platform::get_workspace_platform(&self.workspace, name).await
     }
 
     pub async fn list_environments(&self) -> Vec<Environment<'_>> {

@@ -15,9 +15,9 @@ use rattler_conda_types::{ParseStrictness::Strict, Version, VersionSpec};
 use toml_edit::Value;
 
 use crate::{
-    DependencyOverwriteBehavior, GetFeatureError, PixiPlatform, PixiPlatformName, Preview,
-    PrioritizedChannel, PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task,
-    TaskName, TomlError, WorkspaceTarget, consts,
+    DependencyOverwriteBehavior, GetFeatureError, PixiPlatform, PixiPlatformName, PlatformEdit,
+    Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, SystemRequirements,
+    TargetSelector, Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -457,21 +457,28 @@ impl WorkspaceManifestMut<'_> {
             .platforms
             .extend(platforms.iter().cloned());
 
-        // Update TOML document platforms
+        self.rewrite_workspace_platforms_toml()
+    }
+
+    /// Rewrite the `platforms` array in the TOML document from the current
+    /// in-memory workspace state. Each entry is emitted as a bare string for
+    /// subdir-platforms and as an inline table for rich entries (custom name
+    /// and/or declared virtual packages).
+    fn rewrite_workspace_platforms_toml(&mut self) -> miette::Result<()> {
+        let entries: Vec<toml_edit::Value> = self
+            .workspace
+            .workspace
+            .platforms
+            .iter()
+            .sorted()
+            .map(crate::toml::platform::pixi_platform_to_toml_value)
+            .collect();
+
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
-
         array.clear();
-        array.extend(
-            self.workspace
-                .workspace
-                .platforms
-                .iter()
-                .sorted()
-                .map(|p| p.to_string()),
-        );
-
+        array.extend(entries);
         Ok(())
     }
 
@@ -500,6 +507,37 @@ impl WorkspaceManifestMut<'_> {
             .extend(platforms.drain(..).map(|pn| pn.as_str().to_string()));
 
         Ok(())
+    }
+
+    /// Apply a [`PlatformEdit`] to the workspace platform identified by
+    /// `name`. Fails if the platform is unknown or is a subdir-platform
+    /// (where name == subdir).
+    pub fn edit_workspace_platform(
+        &mut self,
+        name: &PixiPlatformName,
+        edit: PlatformEdit,
+    ) -> miette::Result<()> {
+        let mut updated = self
+            .workspace
+            .workspace
+            .platforms
+            .iter()
+            .find(|p| p.name() == name)
+            .cloned()
+            .ok_or_else(|| {
+                miette!(
+                    "workspace does not define a platform named '{}'",
+                    name.as_str()
+                )
+            })?;
+
+        updated.apply_edit(edit).map_err(|e| miette!(e))?;
+
+        // IndexSet::replace preserves the position of the existing entry; we
+        // rely on this so the on-disk ordering stays stable across edits.
+        self.workspace.workspace.platforms.replace(updated);
+
+        self.rewrite_workspace_platforms_toml()
     }
 
     /// Add platforms to the workspace and, optionally, to a non-default
@@ -550,13 +588,23 @@ impl WorkspaceManifestMut<'_> {
             .platforms
             .retain(|existing| !platforms.contains(existing.name()));
 
-        // Update TOML document platforms
+        // Update TOML document platforms. Retain-and-filter (rather than
+        // clear-and-rebuild) so we preserve the user's quoting and spacing
+        // for the entries that survive.
         self.document
             .get_array_mut("platforms", &FeatureName::DEFAULT)?
             .retain(|item| {
-                item.as_str()
-                    .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
-                    .unwrap_or(true)
+                let entry_name = if let Some(s) = item.as_str() {
+                    Some(s)
+                } else if let Some(table) = item.as_inline_table() {
+                    table.get("name").and_then(|v| v.as_str())
+                } else {
+                    None
+                };
+                match entry_name {
+                    Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
+                    None => true, // unexpected shape -- leave it alone
+                }
             });
 
         Ok(())

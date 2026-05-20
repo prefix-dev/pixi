@@ -7,7 +7,7 @@ mod feature;
 mod manifest;
 mod package;
 mod package_target;
-mod platform;
+pub(crate) mod platform;
 mod preview;
 mod pypi_options;
 pub mod pyproject;

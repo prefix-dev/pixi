@@ -269,10 +269,41 @@ fn parse_generic_virtual_package(s: &str, span: Span) -> Result<GenericVirtualPa
     })
 }
 
+/// Render a [`PixiPlatform`] as a [`toml_edit::Value`] using the same
+/// bare-string vs inline-table shape as the serde `Serialize` impl above.
+/// This lets the document-editor rewrite the `platforms` array without
+/// going through serde.
+pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit::Value {
+    let name = platform.name().as_str();
+    let subdir_str = platform.subdir().to_string();
+    let virtual_packages: Vec<String> = platform
+        .declared_virtual_packages()
+        .iter()
+        .map(format_virtual_package)
+        .collect();
+
+    if name == subdir_str && virtual_packages.is_empty() {
+        return toml_edit::Value::from(name);
+    }
+
+    let mut table = toml_edit::InlineTable::new();
+    table.insert("name", name.into());
+    if name != subdir_str {
+        table.insert("subdir", subdir_str.into());
+    }
+    if !virtual_packages.is_empty() {
+        table.insert(
+            "virtual-packages",
+            toml_edit::Array::from_iter(virtual_packages).into(),
+        );
+    }
+    toml_edit::Value::InlineTable(table)
+}
+
 /// Render a `GenericVirtualPackage` as the shortest conda spec that
 /// round-trips through [`parse_generic_virtual_package`]: drop a zero
 /// `build_string` and, when also zero, the version.
-fn format_virtual_package(gvp: &GenericVirtualPackage) -> String {
+pub(crate) fn format_virtual_package(gvp: &GenericVirtualPackage) -> String {
     let name = gvp.name.as_normalized();
     let version_is_zero = gvp.version == Version::major(0);
     let build_is_zero = gvp.build_string.is_empty() || gvp.build_string == "0";

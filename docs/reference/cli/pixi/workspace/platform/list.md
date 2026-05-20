@@ -10,7 +10,11 @@ List the platforms in the workspace file
 
 ## Usage
 ```
-pixi workspace platform list
+pixi workspace platform list [OPTIONS]
 ```
+
+## Options
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Emit machine-readable JSON instead of the human view
 
 --8<-- "docs/reference/cli/pixi/workspace/platform/list_extender:example"

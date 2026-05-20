@@ -301,8 +301,12 @@ async fn find_unsatisfiable_targets<'p>(
                 | EnvironmentUnsat::InvalidChannel(_)
                 | EnvironmentUnsat::ChannelPriorityMismatch { .. }
                 | EnvironmentUnsat::SolveStrategyMismatch { .. }
-                | EnvironmentUnsat::ExcludeNewerMismatch(..) => {
+                | EnvironmentUnsat::ExcludeNewerMismatch(..)
+                | EnvironmentUnsat::PlatformDefinitionChanged(_) => {
                     // We cannot trust any of the locked contents.
+                    // For PlatformDefinitionChanged: the records under the
+                    // affected platform were solved under different subdir/VP
+                    // assumptions and must be re-derived from scratch.
                     unsatisfiable_targets
                         .disregard_locked_content
                         .conda

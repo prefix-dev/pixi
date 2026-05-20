@@ -49,7 +49,9 @@ pub use manifests::{
 };
 use miette::Diagnostic;
 pub use package::Package;
-pub use platform::{PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError};
+pub use platform::{
+    PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
+};
 pub use preview::{KnownPreviewFeature, Preview};
 pub use s3::S3Options;
 pub use spec_type::SpecType;

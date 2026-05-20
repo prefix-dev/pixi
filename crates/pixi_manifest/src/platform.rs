@@ -2,7 +2,7 @@ use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform};
 use rattler_virtual_packages::{
     DetectVirtualPackageError, Override, VirtualPackageOverrides, VirtualPackages,
 };
@@ -223,6 +223,76 @@ impl PixiPlatform {
     pub fn declared_virtual_packages(&self) -> &[GenericVirtualPackage] {
         &self.declared_virtual_packages
     }
+
+    /// Apply an in-place edit to this platform. Returns
+    /// [`PixiPlatformError::IsSubdirPlatform`] when called on a subdir-platform
+    /// (where `name == subdir`), because those entries are required to remain
+    /// exact aliases for the underlying conda subdir.
+    ///
+    /// Operations are applied in this order so the result is independent of
+    /// argument ordering: clear the VP list (if requested), then upsert each
+    /// VP from `upsert_virtual_packages` (replacing any existing entry with
+    /// the same package name), then remove any VPs whose name is in
+    /// `remove_virtual_packages`, then set the subdir if provided.
+    pub fn apply_edit(&mut self, edit: PlatformEdit) -> Result<(), PixiPlatformError> {
+        if self.is_subdir_platform() {
+            return Err(PixiPlatformError::IsSubdirPlatform);
+        }
+
+        if edit.clear_virtual_packages {
+            self.declared_virtual_packages.clear();
+        }
+
+        for upsert in edit.upsert_virtual_packages {
+            if let Some(existing) = self
+                .declared_virtual_packages
+                .iter_mut()
+                .find(|gvp| gvp.name == upsert.name)
+            {
+                *existing = upsert;
+            } else {
+                self.declared_virtual_packages.push(upsert);
+            }
+        }
+
+        if !edit.remove_virtual_packages.is_empty() {
+            self.declared_virtual_packages
+                .retain(|gvp| !edit.remove_virtual_packages.contains(&gvp.name));
+        }
+
+        if let Some(subdir) = edit.set_subdir {
+            self.subdir = subdir;
+        }
+
+        Ok(())
+    }
+}
+
+/// A set of changes to apply to an existing [`PixiPlatform`].
+///
+/// Used by [`PixiPlatform::apply_edit`] and the manifest-level platform editor.
+/// Default value is a no-op.
+#[derive(Debug, Default, Clone)]
+pub struct PlatformEdit {
+    /// New value for `subdir`. Unset means "leave alone".
+    pub set_subdir: Option<Platform>,
+    /// When `true`, drop the existing virtual-package list before applying
+    /// the upserts below. Used by `--clear-virtual-packages`.
+    pub clear_virtual_packages: bool,
+    /// Virtual packages to add or, when a package with the same name already
+    /// exists, replace.
+    pub upsert_virtual_packages: Vec<GenericVirtualPackage>,
+    /// Virtual packages to remove by name (no-op if not present).
+    pub remove_virtual_packages: Vec<PackageName>,
+}
+
+impl PlatformEdit {
+    pub fn is_noop(&self) -> bool {
+        self.set_subdir.is_none()
+            && !self.clear_virtual_packages
+            && self.upsert_virtual_packages.is_empty()
+            && self.remove_virtual_packages.is_empty()
+    }
 }
 
 /// Translate the manifest-declared virtual packages into the typed override
@@ -294,5 +364,126 @@ impl Hash for PixiPlatform {
 impl fmt::Display for PixiPlatform {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.name.0.as_str())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use rattler_conda_types::{PackageName, Version};
+
+    use super::*;
+
+    fn rich(name: &str, subdir: Platform, vps: Vec<GenericVirtualPackage>) -> PixiPlatform {
+        PixiPlatform::new(
+            PixiPlatformName::try_from(name).expect("valid name"),
+            subdir,
+            vps,
+        )
+    }
+
+    fn gvp(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: PackageName::try_from(name).unwrap(),
+            version: Version::from_str(version).unwrap(),
+            build_string: String::new(),
+        }
+    }
+
+    #[test]
+    fn apply_edit_upserts_replace_by_name() {
+        let mut p = rich(
+            "gpu-linux",
+            Platform::Linux64,
+            vec![gvp("__cuda", "12.0"), gvp("__glibc", "2.28")],
+        );
+
+        p.apply_edit(PlatformEdit {
+            upsert_virtual_packages: vec![gvp("__cuda", "12.4")],
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert_eq!(
+            p.declared_virtual_packages()
+                .iter()
+                .map(|g| (g.name.as_normalized().to_string(), g.version.to_string()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("__cuda".to_string(), "12.4".to_string()),
+                ("__glibc".to_string(), "2.28".to_string()),
+            ],
+        );
+    }
+
+    #[test]
+    fn apply_edit_clear_then_upsert_drops_old() {
+        let mut p = rich(
+            "gpu-linux",
+            Platform::Linux64,
+            vec![gvp("__cuda", "12.0"), gvp("__glibc", "2.28")],
+        );
+
+        p.apply_edit(PlatformEdit {
+            clear_virtual_packages: true,
+            upsert_virtual_packages: vec![gvp("__archspec", "0")],
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert_eq!(p.declared_virtual_packages().len(), 1);
+        assert_eq!(
+            p.declared_virtual_packages()[0].name.as_normalized(),
+            "__archspec"
+        );
+    }
+
+    #[test]
+    fn apply_edit_remove_by_name_removes_only_matches() {
+        let mut p = rich(
+            "gpu-linux",
+            Platform::Linux64,
+            vec![gvp("__cuda", "12.0"), gvp("__glibc", "2.28")],
+        );
+
+        p.apply_edit(PlatformEdit {
+            remove_virtual_packages: vec![PackageName::try_from("__glibc").unwrap()],
+            ..Default::default()
+        })
+        .unwrap();
+
+        assert_eq!(p.declared_virtual_packages().len(), 1);
+        assert_eq!(
+            p.declared_virtual_packages()[0].name.as_normalized(),
+            "__cuda"
+        );
+    }
+
+    #[test]
+    fn apply_edit_rejected_on_subdir_platform() {
+        // A subdir-platform (name == subdir) refuses any mutation. This is the
+        // invariant the CLI relies on to keep bare-string entries pristine.
+        let mut p = PixiPlatform::from_subdir(Platform::Linux64);
+        let err = p
+            .apply_edit(PlatformEdit {
+                upsert_virtual_packages: vec![gvp("__cuda", "12.0")],
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert!(matches!(err, PixiPlatformError::IsSubdirPlatform));
+    }
+
+    #[test]
+    fn apply_edit_set_subdir_changes_only_subdir() {
+        let mut p = rich("gpu-linux", Platform::Linux64, vec![gvp("__cuda", "12.0")]);
+        p.apply_edit(PlatformEdit {
+            set_subdir: Some(Platform::LinuxAarch64),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(p.subdir(), Platform::LinuxAarch64);
+        assert_eq!(p.name().as_str(), "gpu-linux");
+        assert_eq!(p.declared_virtual_packages().len(), 1);
     }
 }

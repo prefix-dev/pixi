@@ -1,5 +1,8 @@
 use miette::IntoDiagnostic;
-use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatform, PixiPlatformName};
+use pixi_manifest::{
+    EnvironmentName, FeatureName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
+    PlatformEdit,
+};
 use std::collections::HashMap;
 
 use pixi_core::{Workspace, workspace::WorkspaceMut};
@@ -19,6 +22,52 @@ pub async fn list(workspace: &Workspace) -> HashMap<EnvironmentName, Vec<PixiPla
         .iter()
         .map(|e| (e.name().clone(), e.platforms().into_iter().collect()))
         .collect()
+}
+
+/// Look up the full [`PixiPlatform`] for `name` in the workspace manifest, or
+/// `None` if no platform with that name is declared.
+pub async fn get_workspace_platform(
+    workspace: &Workspace,
+    name: &PixiPlatformName,
+) -> Option<PixiPlatform> {
+    workspace
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .iter()
+        .find(|p| p.name() == name)
+        .cloned()
+}
+
+/// Apply an edit to an existing workspace platform identified by `name`.
+/// Updates the lockfile and saves the manifest.
+pub async fn edit<I: Interface>(
+    interface: &I,
+    mut workspace: WorkspaceMut,
+    name: PixiPlatformName,
+    edit: PlatformEdit,
+    no_install: bool,
+) -> miette::Result<()> {
+    workspace.manifest().edit_workspace_platform(&name, edit)?;
+
+    get_update_lock_file_and_prefix(
+        &workspace.workspace().default_environment(),
+        None,
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Update,
+            no_install,
+            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+            ..Default::default()
+        },
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await?;
+    workspace.save().await.into_diagnostic()?;
+
+    interface.success(&format!("Updated platform {name}")).await;
+    Ok(())
 }
 
 pub async fn add<I: Interface>(
