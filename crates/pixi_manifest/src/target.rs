@@ -491,7 +491,7 @@ impl std::fmt::Display for TargetSelector {
             TargetSelector::Unix => write!(f, "unix"),
             TargetSelector::Win => write!(f, "win"),
             TargetSelector::MacOs => write!(f, "osx"),
-            TargetSelector::Expression(expr) => write!(f, "{expr}"),
+            TargetSelector::Expression(expr) => write!(f, "if({expr})"),
         }
     }
 }
@@ -517,12 +517,18 @@ impl FromStr for TargetSelector {
 }
 
 impl TargetSelector {
-    /// Parse a target selector, falling back to an `Expression` variant for
-    /// strings that are not known platform names. This is used in the
-    /// `[package]` section where arbitrary rattler-build selector expressions
-    /// are allowed.
-    pub fn from_str_or_expression(s: &str) -> Self {
-        s.parse().unwrap_or_else(|_| TargetSelector::Expression(s.to_string()))
+    /// Parse a target selector that accepts either a platform name (or
+    /// `unix`/`linux`/`win`/`osx` family) or an `if(<expression>)` wrapper for
+    /// arbitrary rattler-build selector expressions. This is used in the
+    /// `[package]` section where expression selectors are allowed.
+    ///
+    /// The stored expression is the bare inner string without the `if(...)`
+    /// wrapper.
+    pub fn from_str_or_expression(s: &str) -> Result<Self, ParsePlatformError> {
+        if let Some(inner) = s.strip_prefix("if(").and_then(|r| r.strip_suffix(')')) {
+            return Ok(TargetSelector::Expression(inner.trim().to_string()));
+        }
+        s.parse()
     }
 }
 
@@ -1054,28 +1060,40 @@ mod tests {
 
         // Known platforms still parse as platform selectors
         assert_eq!(
-            TargetSelector::from_str_or_expression("linux"),
+            TargetSelector::from_str_or_expression("linux").unwrap(),
             TargetSelector::Linux
         );
         assert!(matches!(
-            TargetSelector::from_str_or_expression("linux-64"),
+            TargetSelector::from_str_or_expression("linux-64").unwrap(),
             TargetSelector::Platform(_)
         ));
 
-        // Unknown strings become expression selectors
-        let expr = TargetSelector::from_str_or_expression("host_platform == build_platform");
+        // `if(...)` strings become expression selectors, storing the bare
+        // inner expression.
+        let expr =
+            TargetSelector::from_str_or_expression("if(host_platform == build_platform)").unwrap();
         assert!(
             matches!(expr, TargetSelector::Expression(ref s) if s == "host_platform == build_platform")
         );
         assert!(expr.is_expression());
-        assert_eq!(expr.to_string(), "host_platform == build_platform");
+        // Display re-wraps with `if(...)` for round-tripping.
+        assert_eq!(expr.to_string(), "if(host_platform == build_platform)");
 
         // Expression selectors don't match any platform
         assert!(!expr.matches(rattler_conda_types::Platform::Linux64));
         assert!(!expr.matches(rattler_conda_types::Platform::OsxArm64));
 
-        // Another expression
-        let expr2 = TargetSelector::from_str_or_expression("host_platform != 'linux-64'");
+        // Another expression — inner whitespace is trimmed.
+        let expr2 =
+            TargetSelector::from_str_or_expression("if( host_platform != 'linux-64' )").unwrap();
         assert!(expr2.is_expression());
+        if let TargetSelector::Expression(inner) = &expr2 {
+            assert_eq!(inner, "host_platform != 'linux-64'");
+        }
+
+        // Bare expression strings without `if(...)` are rejected.
+        assert!(
+            TargetSelector::from_str_or_expression("host_platform == build_platform").is_err()
+        );
     }
 }

@@ -20,16 +20,16 @@ use crate::{
 
 /// A wrapper around [`TargetSelector`] for use as a TOML key in the
 /// `[package.target]` section. Unlike `TargetSelector::from_str`, this
-/// accepts arbitrary strings as expression selectors that are passed through
-/// to rattler-build.
+/// additionally accepts `if(<expression>)` wrappers for selector expressions
+/// passed through to rattler-build.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct PackageTargetKey(pub TargetSelector);
 
 impl<'de> FromKey<'de> for PackageTargetKey {
-    type Err = std::convert::Infallible;
+    type Err = rattler_conda_types::ParsePlatformError;
 
     fn from_key(key: toml_span::value::Key<'de>) -> Result<Self, Self::Err> {
-        Ok(PackageTargetKey(TargetSelector::from_str_or_expression(&key.name)))
+        TargetSelector::from_str_or_expression(&key.name).map(PackageTargetKey)
     }
 }
 
@@ -1335,7 +1335,7 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
 
-        [target."host_platform == build_platform".build-dependencies]
+        [target."if(host_platform == build_platform)".build-dependencies]
         cmake = "*"
         "#;
         let package = TomlPackage::from_toml_str(input).unwrap();
@@ -1364,10 +1364,32 @@ mod test {
                 })
             })
             .expect("expected an expression selector target");
+        // Display re-wraps the expression in `if(...)` for round-tripping.
         assert_eq!(
             expr_target.0.to_string(),
-            "host_platform == build_platform"
+            "if(host_platform == build_platform)"
         );
         assert!(expr_target.1.build_dependencies().is_some());
+    }
+
+    #[test]
+    fn test_bare_expression_in_package_target_is_rejected() {
+        // Without the `if(...)` wrapper, an expression-like key must fail to
+        // parse as a platform.
+        let input = r#"
+        name = "package-name"
+        version = "1.0.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target."host_platform == build_platform".build-dependencies]
+        cmake = "*"
+        "#;
+        let result = TomlPackage::from_toml_str(input);
+        assert!(
+            result.is_err(),
+            "bare expression keys without if(...) should be rejected, got: {result:?}"
+        );
     }
 }
