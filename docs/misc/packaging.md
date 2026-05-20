@@ -20,14 +20,14 @@ Pixi provides some compile-time options, which can influence the build
 #### TLS
 
 By default, Pixi is built with Rustls TLS implementation. You can compile Pixi using the platform native TLS implementation
-using by adding `--no-default-features --feature native-tls` to the build command. Note that this might add additional
+using by adding `--no-default-features --features native-tls` to the build command. Note that this might add additional
 runtime dependencies, such as OpenSSL on Linux.
 
 #### Self-Update
 
 Pixi has a self-update functionality. When Pixi is installed using another package manager one usually doesn't want pixi
 to try to update itself and instead let it be updated by the package manager.
-For this reason the self-update feature is disabled by default. It can be enabled by adding `--feature self_update` to
+For this reason the self-update feature is disabled by default. It can be enabled by adding `--features self_update` to
 the build command.
 
 When the self-update feature is disabled and a user tries to run `pixi self-update` an error message is displayed. This
