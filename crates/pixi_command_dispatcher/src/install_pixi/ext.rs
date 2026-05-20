@@ -12,6 +12,7 @@ use rattler_conda_types::{PackageName, RepoDataRecord};
 
 use crate::BuildProfile;
 use crate::CommandDispatcherError;
+use crate::CondaPackageFormat;
 use crate::cache::markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir};
 use crate::compute_data::{
     HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasPackageCache, HasPixiInstallReporter,
@@ -171,6 +172,9 @@ async fn install_inner(
                 // forwards user-supplied values here.
                 build_string_prefix: None,
                 build_number: None,
+                // Source packages built during `pixi install` are unpacked
+                // immediately, so use the cheapest compression.
+                package_format: Some(CondaPackageFormat::fast()),
             };
             sub_ctx
                 .compute(&SourceBuildKey::new(build_spec))

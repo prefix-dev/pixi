@@ -49,6 +49,8 @@ pixi publish [OPTIONS]
 - <a id="arg---variant-config" href="#arg---variant-config">`--variant-config (-m) <FILE>`</a>
 :  Path to an additional variant configuration YAML file
 <br>May be provided more than once.
+- <a id="arg---package-format" href="#arg---package-format">`--package-format <PACKAGE_FORMAT>`</a>
+:  Archive format and optional compression level, e.g. `conda`, `tar-bz2`, `conda:max`, `conda:15`, `tar-bz2:9`. Numeric ranges match rattler-build: -7..=22 for `.conda`, 1..=9 for `.tar.bz2`
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>

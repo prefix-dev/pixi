@@ -19,10 +19,10 @@ use pixi_auth::get_auth_store;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs,
-    ComputeResultExt, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
+    ComputeResultExt, CondaPackageFormat, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
-use pixi_config::ConfigCli;
+use pixi_config::{ConfigCli, PackageFormatAndCompression};
 use pixi_core::{
     Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
 };
@@ -138,6 +138,12 @@ pub struct Args {
     /// `build-variants-files`.
     #[arg(long = "variant-config", short = 'm', value_name = "FILE")]
     pub variant_config: Vec<PathBuf>,
+
+    /// Archive format and optional compression level, e.g. `conda`,
+    /// `tar-bz2`, `conda:max`, `conda:15`, `tar-bz2:9`. Numeric ranges
+    /// match rattler-build: -7..=22 for `.conda`, 1..=9 for `.tar.bz2`.
+    #[arg(long)]
+    pub package_format: Option<PackageFormatAndCompression>,
 }
 
 /// Parse a `KEY=VAL[,VAL...]` variant override.
@@ -747,6 +753,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             variant_files: Some(variant_files.clone()),
             build_string_prefix: args.build_string_prefix.clone(),
             build_number: args.build_number,
+            package_format: args.package_format.as_ref().map(|f| CondaPackageFormat {
+                archive_type: f.archive_type,
+                compression_level: f.compression_level.into(),
+            }),
         };
         let built = command_dispatcher
             .engine()
@@ -1300,7 +1310,10 @@ async fn upload_to_local_filesystem_channel(
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
+    use rattler_conda_types::{compression_level::CompressionLevel, package::CondaArchiveType};
 
     #[test]
     fn parse_variant_accepts_single_and_comma_list() {
@@ -1312,6 +1325,38 @@ mod tests {
             parse_variant("cuda-version=12.8,13.0").unwrap(),
             ("cuda-version".into(), vec!["12.8".into(), "13.0".into()]),
         );
+    }
+
+    #[test]
+    fn parses_bare_package_format() {
+        let parsed = PackageFormatAndCompression::from_str("conda").unwrap();
+        assert_eq!(parsed.archive_type, CondaArchiveType::Conda);
+        assert_eq!(parsed.compression_level, CompressionLevel::Default);
+    }
+
+    #[test]
+    fn parses_named_compression_level() {
+        let parsed = PackageFormatAndCompression::from_str("conda:max").unwrap();
+        assert_eq!(parsed.archive_type, CondaArchiveType::Conda);
+        assert_eq!(parsed.compression_level, CompressionLevel::Highest);
+    }
+
+    #[test]
+    fn parses_numeric_compression_level() {
+        let parsed = PackageFormatAndCompression::from_str("tar-bz2:5").unwrap();
+        assert_eq!(parsed.archive_type, CondaArchiveType::TarBz2);
+        assert_eq!(parsed.compression_level, CompressionLevel::Numeric(5));
+    }
+
+    #[test]
+    fn rejects_unknown_format() {
+        assert!(PackageFormatAndCompression::from_str("zip").is_err());
+    }
+
+    #[test]
+    fn rejects_out_of_range_numeric_level() {
+        assert!(PackageFormatAndCompression::from_str("tar-bz2:42").is_err());
+        assert!(PackageFormatAndCompression::from_str("conda:99").is_err());
     }
 
     #[test]
