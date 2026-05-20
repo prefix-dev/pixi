@@ -1352,7 +1352,7 @@ mod test {
                 .as_ref()
                 .unwrap()
                 .to_string(),
-            "python >=3.10 *cuda"
+            "python[version=\">=3.10\", build=\"*cuda\"]"
         );
 
         let spec: PixiSpec = serde_json::from_value(json!({
@@ -1375,8 +1375,8 @@ mod test {
             panic!("expected nested AND condition");
         };
         assert_eq!(left_left.to_string(), "__unix");
-        assert_eq!(left_right.to_string(), "python >=3.10");
-        assert_eq!(right.to_string(), "numpy >=2 *cuda");
+        assert_eq!(left_right.to_string(), "python>=3.10");
+        assert_eq!(right.to_string(), "numpy[version=\">=2\", build=\"*cuda\"]");
 
         let spec: PixiSpec = serde_json::from_value(json!({
             "version": "*",
@@ -1423,7 +1423,7 @@ mod test {
                 .as_ref()
                 .unwrap()
                 .to_string(),
-            "(__unix and python >=3.10 *cuda)"
+            "(__unix and python[version=\">=3.10\", build=\"*cuda\"])"
         );
     }
 
