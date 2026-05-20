@@ -1463,6 +1463,34 @@ mod test {
                 "json_expanded_build_match",
                 json!({ "version": "*", "when": { "package": "python", "version": ">=3.10", "build": "*cuda" } }),
             ),
+            (
+                "json_expanded_with_build_number",
+                json!({ "version": "*", "when": { "package": "python", "version": ">=3.10", "build-number": ">=3" } }),
+            ),
+            (
+                "json_expanded_with_subdir",
+                json!({ "version": "*", "when": { "package": "python", "subdir": "linux-64" } }),
+            ),
+            (
+                "json_expanded_with_extras",
+                json!({ "version": "*", "when": { "package": "python", "extras": ["dev"] } }),
+            ),
+            (
+                "json_expanded_with_flags",
+                json!({ "version": "*", "when": { "package": "python", "flags": ["cuda", "blas:*"] } }),
+            ),
+            (
+                "json_expanded_with_track_features",
+                json!({ "version": "*", "when": { "package": "python", "track-features": ["legacy"] } }),
+            ),
+            (
+                "json_expanded_with_file_name",
+                json!({ "version": "*", "when": { "package": "python", "file-name": "python-3.10.0-h12debd9_0.tar.bz2" } }),
+            ),
+            (
+                "json_expanded_with_license",
+                json!({ "version": "*", "when": { "package": "python", "license": "MIT", "license-family": "BSD" } }),
+            ),
         ];
 
         let toml_cases = [
@@ -1475,6 +1503,21 @@ when = { all = ["__unix", { package = "python", version = ">=3.10", build = "*cu
                 "toml_any",
                 r#"version = "*"
 when = { any = ["__linux", "__osx"] }"#,
+            ),
+            (
+                "toml_expanded_with_build_number",
+                r#"version = "*"
+when = { package = "python", version = ">=3.10", build-number = ">=3" }"#,
+            ),
+            (
+                "toml_expanded_with_extras_and_flags",
+                r#"version = "*"
+when = { package = "python", extras = ["dev"], flags = ["cuda", "blas:*"] }"#,
+            ),
+            (
+                "toml_expanded_with_track_features",
+                r#"version = "*"
+when = { package = "python", track-features = ["legacy"] }"#,
             ),
         ];
 
