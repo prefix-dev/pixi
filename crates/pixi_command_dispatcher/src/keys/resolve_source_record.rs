@@ -117,12 +117,6 @@ async fn assemble_source_record_inner(
     let source_anchor = SourceAnchor::from(source_location.clone());
     let channel_config = ctx.compute(&ChannelConfigKey).await;
     let pkg_name = output.metadata.name.clone();
-    tracing::debug!(
-        name = %pkg_name.as_source(),
-        env = %env_ref,
-        hints_ptr = ?Arc::as_ptr(installed_source_hints.as_arc()),
-        "assemble_source_record: enter"
-    );
 
     // Look up this `(package, source_location)`'s install hint. The
     // nested build / host solves use it as their prior-resolution
@@ -148,10 +142,6 @@ async fn assemble_source_record_inner(
         .map_err(SourceRecordError::from)?
         .unwrap_or_default();
 
-    tracing::debug!(
-        name = %pkg_name.as_source(),
-        "assemble_source_record: entering nested_solve(Build)"
-    );
     let mut build_records = nested_solve(
         ctx,
         &pkg_name,
@@ -164,11 +154,6 @@ async fn assemble_source_record_inner(
         installed_source_hints,
     )
     .await?;
-    tracing::debug!(
-        name = %pkg_name.as_source(),
-        records = build_records.len(),
-        "assemble_source_record: nested_solve(Build) returned"
-    );
 
     // Clone the gateway handle so we don't hold an immutable borrow
     // on `ctx` across the subsequent mutable-borrow calls (another
@@ -201,10 +186,6 @@ async fn assemble_source_record_inner(
         .unwrap_or_default()
         .extend_with_run_exports_from_build(&build_run_exports);
 
-    tracing::debug!(
-        name = %pkg_name.as_source(),
-        "assemble_source_record: entering nested_solve(Host)"
-    );
     let mut host_records = nested_solve(
         ctx,
         &pkg_name,
@@ -217,11 +198,6 @@ async fn assemble_source_record_inner(
         installed_source_hints,
     )
     .await?;
-    tracing::debug!(
-        name = %pkg_name.as_source(),
-        records = host_records.len(),
-        "assemble_source_record: nested_solve(Host) returned"
-    );
 
     let host_run_exports = host_dependencies
         .extract_run_exports(

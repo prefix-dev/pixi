@@ -69,16 +69,6 @@ pub(crate) fn checkout_root_for(
     }
 }
 
-/// Resolve a command string into an absolute path to an executable.
-///
-/// Treats `cmd` as either an absolute path (used as-is when executable),
-/// a relative path, or a bare command name (resolved against `PATH`).
-/// Returns `None` if the lookup fails so callers can fall back to
-/// disabling the cache for this backend.
-fn resolve_executable_path(cmd: &str) -> Option<PathBuf> {
-    which::which(cmd).ok()
-}
-
 /// Public request for build-backend metadata. The outer layer of the
 /// two-level key design: identity is
 /// `(manifest_source, preferred_build_source, env_ref)`, so two envs
@@ -263,7 +253,7 @@ impl BuildBackendMetadataInner {
             && let Some(CommandSpec::System(SystemCommandSpec { command: Some(cmd) })) =
                 overridden.named_backend_override(&json_rpc_spec.name)
         {
-            return match resolve_executable_path(&cmd) {
+            return match which::which(&cmd).ok() {
                 Some(path) => BackendCacheStrategy::Fingerprint(path),
                 None => BackendCacheStrategy::Skip {
                     reason: "override-unresolved",
@@ -272,14 +262,14 @@ impl BuildBackendMetadataInner {
         }
 
         match &json_rpc_spec.command {
-            CommandSpec::System(SystemCommandSpec {
-                command: Some(cmd),
-            }) => match resolve_executable_path(cmd) {
-                Some(path) => BackendCacheStrategy::Fingerprint(path),
-                None => BackendCacheStrategy::Skip {
-                    reason: "system-unresolved",
-                },
-            },
+            CommandSpec::System(SystemCommandSpec { command: Some(cmd) }) => {
+                match which::which(cmd).ok() {
+                    Some(path) => BackendCacheStrategy::Fingerprint(path),
+                    None => BackendCacheStrategy::Skip {
+                        reason: "system-unresolved",
+                    },
+                }
+            }
             CommandSpec::System(SystemCommandSpec { command: None }) => {
                 BackendCacheStrategy::Skip {
                     reason: "system-no-command",
@@ -301,6 +291,7 @@ impl BuildBackendMetadataInner {
     /// - `Ok(Err(Some(metadata)))` if the cache is stale but the metadata is
     ///   returned for comparison (e.g. to reuse the ID if outputs match).
     /// - `Ok(Err(None))` if no cache entry exists.
+    #[allow(clippy::too_many_arguments)]
     async fn verify_cache_freshness(
         ctx: &mut ComputeCtx,
         cache_entry: Option<CacheEntry<BuildBackendMetadataCache>>,

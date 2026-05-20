@@ -16,7 +16,6 @@ parking_lot = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "sync"] }
-tracing = { workspace = true }
 
 [dev-dependencies]
 derive_more = { workspace = true, features = ["display"] }

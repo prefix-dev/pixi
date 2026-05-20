@@ -140,8 +140,7 @@ pub fn filter_lock_file<
                                 )
                             });
                         }
-                        let data =
-                            record.into_conda_package_data(&mut writer, workspace_root);
+                        let data = record.into_conda_package_data(&mut writer, workspace_root);
                         writer
                             .builder
                             .add_conda_package(environment_name, &platform_str, data)

@@ -2574,19 +2574,11 @@ async fn spawn_solve_conda_environment_task(
     command_dispatcher: CommandDispatcher,
     pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
 ) -> Result<TaskResult, CommandDispatcherError<SolveCondaEnvironmentError>> {
-    let _trace_group = group.name().to_string();
-    tracing::debug!(
-        group = %_trace_group,
-        platform = %platform,
-        "spawn_solve_conda_environment_task: enter"
-    );
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
-    tracing::debug!(group = %_trace_group, "[step] combined_dependencies done");
 
     // Get the dev dependencies for this platform
     let dev_dependencies = group.combined_dev_dependencies(Some(platform));
-    tracing::debug!(group = %_trace_group, "[step] combined_dev_dependencies done");
 
     // Get the constraints for this platform and convert to binary specs.
     // Source specs are not meaningful as constraints and are an error.
@@ -2624,11 +2616,9 @@ async fn spawn_solve_conda_environment_task(
 
     // Get the virtual packages for this platform
     let virtual_packages = group.virtual_packages(platform);
-    tracing::debug!(group = %_trace_group, "[step] virtual_packages done");
 
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = group.has_pypi_dependencies();
-    tracing::debug!(group = %_trace_group, "[step] has_pypi_dependencies done");
 
     // Whether we should use custom mapping location
     let pypi_name_mapping_location = group
@@ -2640,20 +2630,16 @@ async fn spawn_solve_conda_environment_task(
             ))
         })?
         .clone();
-    tracing::debug!(group = %_trace_group, "[step] pypi_name_mapping_source done");
 
     // The list of channels and platforms we need for this task
     let channels = group.channels().into_iter().cloned().collect_vec();
-    tracing::debug!(group = %_trace_group, "[step] channels collected");
 
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
-    tracing::debug!(group = %_trace_group, "[step] channel_config done");
     let exclude_newer = group
         .exclude_newer_config_resolved(&channel_config)
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
-    tracing::debug!(group = %_trace_group, "[step] exclude_newer_config_resolved done");
 
     // Resolve the channel URLs for the channels we need.
     let channels = channels
@@ -2662,10 +2648,8 @@ async fn spawn_solve_conda_environment_task(
         .collect::<Result<Vec<_>, _>>()
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
-    tracing::debug!(group = %_trace_group, "[step] channel URLs resolved");
 
     // Determine the build variants
-    tracing::debug!(group = %_trace_group, "[step] computing variants...");
     let VariantConfig {
         variant_configuration,
         variant_files,
@@ -2674,7 +2658,6 @@ async fn spawn_solve_conda_environment_task(
         .variants(platform)
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
-    tracing::debug!(group = %_trace_group, "[step] variants done");
 
     // Convert dev dependencies to DevSourceSpecs
     let dev_sources: OrderMap<_, _> = dev_dependencies
@@ -2692,7 +2675,6 @@ async fn spawn_solve_conda_environment_task(
         .collect();
 
     let start = Instant::now();
-    tracing::debug!(group = %_trace_group, "[step] dev_sources collected, about to allocate env_ref");
 
     // Solve the environment.
     let env_ref = EnvironmentRef::Workspace(command_dispatcher.workspace_env_registry().allocate(
@@ -2709,7 +2691,6 @@ async fn spawn_solve_conda_environment_task(
             channel_priority: channel_priority.into(),
         },
     ));
-    tracing::debug!(group = %_trace_group, "[step] env_ref allocated");
     // Pass partial source records through alongside binary and full
     // source records: their `manifest_source` and `build_packages` /
     // `host_packages` flow into `InstalledSourceHints`, which the
@@ -2718,19 +2699,8 @@ async fn spawn_solve_conda_environment_task(
     // hints and cause unnecessary version churn / commit drift.
     let installed: Arc<[pixi_record::UnresolvedPixiRecord]> =
         existing_repodata_records.records.iter().cloned().collect();
-    tracing::debug!(
-        group = %_trace_group,
-        installed = installed.len(),
-        "[step] installed records collected"
-    );
     let installed_source_hints = pixi_command_dispatcher::PtrArc::from_value(
         pixi_command_dispatcher::InstalledSourceHints::from_records(&installed),
-    );
-    tracing::debug!(group = %_trace_group, "[step] installed_source_hints built");
-    tracing::debug!(
-        group = %group_name,
-        platform = %platform,
-        "spawn_solve_conda_environment_task: about to invoke SolvePixiEnvironmentKey"
     );
     let records_arc = command_dispatcher
         .engine()

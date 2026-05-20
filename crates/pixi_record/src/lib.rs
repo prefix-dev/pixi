@@ -369,8 +369,8 @@ struct RegistrationCache {
     sources: HashMap<SourceCacheKey, PackageHandle>,
 }
 
-/// Pairs a [`LockFileBuilder`] with a [`RegistrationCache`] so they flow
-/// through the lock file write path as one argument.
+/// Pairs a [`LockFileBuilder`] with a private registration cache so they
+/// flow through the lock file write path as one argument.
 ///
 /// Construct one at the start of a rebuild and pass it to every
 /// `into_conda_package_data` call against the same builder. The cache lives

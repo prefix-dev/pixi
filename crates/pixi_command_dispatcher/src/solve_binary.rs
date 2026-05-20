@@ -55,10 +55,7 @@ impl SolveCondaExt for ComputeCtx {
         &mut self,
         spec: SolveCondaEnvironmentSpec,
     ) -> Result<Vec<PixiRecord>, SolveCondaEnvironmentError> {
-        let fn_started = std::time::Instant::now();
-        let config_started = std::time::Instant::now();
         let channel_config = self.compute(&ChannelConfigKey).await;
-        let channel_config_elapsed_ms = config_started.elapsed().as_millis() as u64;
         let data: &DataStore = self.global_data();
         let semaphore = data.conda_solve_semaphore().cloned();
         let reporter = data.conda_solve_reporter().cloned();
@@ -66,10 +63,6 @@ impl SolveCondaExt for ComputeCtx {
         let lifecycle =
             ReporterLifecycle::<CondaSolveReporterLifecycle>::queued(reporter.as_deref(), &spec);
 
-        // Time the semaphore wait separately from the actual solve so we
-        // can tell whether a slow solve is genuinely CPU-bound work or just
-        // queued behind other solves holding the slot.
-        let acquire_started = std::time::Instant::now();
         let _permit = match semaphore.as_ref() {
             Some(s) => Some(
                 s.acquire()
@@ -78,29 +71,9 @@ impl SolveCondaExt for ComputeCtx {
             ),
             None => None,
         };
-        let acquire_elapsed_ms = acquire_started.elapsed().as_millis() as u64;
-        tracing::debug!(
-            channel_config_elapsed_ms,
-            acquire_elapsed_ms,
-            permit = semaphore.is_some(),
-            "conda solve semaphore acquired"
-        );
         let _lifecycle = lifecycle.start();
 
-        let solve_started = std::time::Instant::now();
         let result = spec.solve_on_blocking_pool(channel_config).await;
-        let solve_elapsed_ms = solve_started.elapsed().as_millis() as u64;
-        let total_elapsed_ms = fn_started.elapsed().as_millis() as u64;
-        let unaccounted_ms = total_elapsed_ms
-            .saturating_sub(channel_config_elapsed_ms + acquire_elapsed_ms + solve_elapsed_ms);
-        tracing::debug!(
-            channel_config_elapsed_ms,
-            acquire_elapsed_ms,
-            solve_elapsed_ms,
-            total_elapsed_ms,
-            unaccounted_ms,
-            "solve_on_blocking_pool returned"
-        );
 
         match result {
             Ok(records) => Ok(records),

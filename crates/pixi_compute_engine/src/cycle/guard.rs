@@ -74,14 +74,7 @@ impl GuardHandle {
     /// Fire the cycle notification. No-op if the guard was already
     /// notified or if the caller's `select!` has already resolved.
     pub(crate) fn notify(&self, err: CycleError) {
-        let mut slot = self.sender.lock();
-        let was_armed = slot.is_some();
-        tracing::debug!(
-            guard = ?std::ptr::from_ref(self),
-            was_armed,
-            "GuardHandle::notify"
-        );
-        if let Some(sender) = slot.take() {
+        if let Some(sender) = self.sender.lock().take() {
             let _ = sender.send(err);
         }
     }
