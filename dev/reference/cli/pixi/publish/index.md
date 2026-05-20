@@ -82,6 +82,8 @@ pixi publish [OPTIONS]
   May be provided more than once.
   ```
 
+- [`--package-format <PACKAGE_FORMAT>`](#arg---package-format) : Archive format and optional compression level, e.g. `conda`, `tar-bz2`, `conda:max`, `conda:15`, `tar-bz2:9`. Numeric ranges match rattler-build: -7..=22 for `.conda`, 1..=9 for `.tar.bz2`
+
 ## Config Options
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
