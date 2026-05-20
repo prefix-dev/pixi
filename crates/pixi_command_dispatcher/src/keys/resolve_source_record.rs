@@ -117,6 +117,12 @@ async fn assemble_source_record_inner(
     let source_anchor = SourceAnchor::from(source_location.clone());
     let channel_config = ctx.compute(&ChannelConfigKey).await;
     let pkg_name = output.metadata.name.clone();
+    tracing::debug!(
+        name = %pkg_name.as_source(),
+        env = %env_ref,
+        hints_ptr = ?Arc::as_ptr(installed_source_hints.as_arc()),
+        "assemble_source_record: enter"
+    );
 
     // Look up this `(package, source_location)`'s install hint. The
     // nested build / host solves use it as their prior-resolution
@@ -142,6 +148,10 @@ async fn assemble_source_record_inner(
         .map_err(SourceRecordError::from)?
         .unwrap_or_default();
 
+    tracing::debug!(
+        name = %pkg_name.as_source(),
+        "assemble_source_record: entering nested_solve(Build)"
+    );
     let mut build_records = nested_solve(
         ctx,
         &pkg_name,
@@ -154,6 +164,11 @@ async fn assemble_source_record_inner(
         installed_source_hints,
     )
     .await?;
+    tracing::debug!(
+        name = %pkg_name.as_source(),
+        records = build_records.len(),
+        "assemble_source_record: nested_solve(Build) returned"
+    );
 
     // Clone the gateway handle so we don't hold an immutable borrow
     // on `ctx` across the subsequent mutable-borrow calls (another
@@ -186,6 +201,10 @@ async fn assemble_source_record_inner(
         .unwrap_or_default()
         .extend_with_run_exports_from_build(&build_run_exports);
 
+    tracing::debug!(
+        name = %pkg_name.as_source(),
+        "assemble_source_record: entering nested_solve(Host)"
+    );
     let mut host_records = nested_solve(
         ctx,
         &pkg_name,
@@ -198,6 +217,11 @@ async fn assemble_source_record_inner(
         installed_source_hints,
     )
     .await?;
+    tracing::debug!(
+        name = %pkg_name.as_source(),
+        records = host_records.len(),
+        "assemble_source_record: nested_solve(Host) returned"
+    );
 
     let host_run_exports = host_dependencies
         .extract_run_exports(
@@ -364,33 +388,36 @@ async fn assemble_source_record_inner(
         .map(|(name, source)| (name.as_source().to_string(), source))
         .collect();
 
-    let record = SourceRecord {
-        data: FullSourceRecordData {
+    // `SourceRecord::new` derives `identifier_hash` from the contents.
+    // Source deps in build/host_packages were assembled by earlier
+    // recursive invocations of this function, so their own hashes are
+    // already filled — the bottom-up invariant holds.
+    let record = SourceRecord::new(
+        FullSourceRecordData {
             package_record,
             sources: sources_by_str,
         },
-        variants: output
+        source.manifest_source().clone(),
+        source.build_source().cloned(),
+        output
             .metadata
             .variant
             .iter()
             .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
             .collect(),
-        manifest_source: source.manifest_source().clone(),
-        build_source: source.build_source().cloned(),
-        identifier_hash: None,
         // Carry the resolved build / host env package sets forward.
         // Downstream consumers (lock file writer, installer) need
         // the exact packages this source was built against, not just
         // their aggregated run-exports.
-        build_packages: build_records
+        build_records
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
-        host_packages: host_records
+        host_records
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
-    };
+    );
 
     Ok(Arc::new(record))
 }

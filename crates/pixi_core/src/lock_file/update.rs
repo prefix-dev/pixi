@@ -2385,6 +2385,7 @@ impl<'p> UpdateContext<'p> {
         let mut builder = LockFile::builder()
             .with_platforms(all_platforms)
             .expect("all platforms should be unique");
+        let mut writer = pixi_record::LockFileWriter::new(&mut builder);
 
         // Iterate over all environments and add their records to the lock file.
         for environment in project.environments() {
@@ -2406,8 +2407,8 @@ impl<'p> UpdateContext<'p> {
                 .try_collect()
                 .into_diagnostic()?;
 
-            builder.set_channels(&environment_name, channels);
-            builder.set_options(
+            writer.builder.set_channels(&environment_name, channels);
+            writer.builder.set_options(
                 &environment_name,
                 rattler_lock::SolveOptions {
                     strategy: grouped_env.solve_strategy().into(),
@@ -2425,15 +2426,17 @@ impl<'p> UpdateContext<'p> {
                 let platform_str = platform.to_string();
                 if let Some(records) = self.take_latest_repodata_records(&environment, platform) {
                     for record in records.into_inner() {
-                        let data = record.into_conda_package_data(&mut builder, project.root());
-                        builder
+                        let data = record.into_conda_package_data(&mut writer, project.root());
+                        writer
+                            .builder
                             .add_conda_package(&environment_name, &platform_str, data)
                             .expect("platform was registered");
                     }
                 }
                 if let Some(records) = self.take_latest_pypi_records(&environment, platform) {
                     for r in records.into_inner() {
-                        builder
+                        writer
+                            .builder
                             .add_pypi_package(&environment_name, &platform_str, r.data.clone())
                             .expect("platform was registered");
                         has_pypi_records = true;
@@ -2444,9 +2447,12 @@ impl<'p> UpdateContext<'p> {
             // Store the indexes that were used to solve the environment. But only if there
             // are pypi packages.
             if has_pypi_records {
-                builder.set_pypi_indexes(&environment_name, grouped_pypi_options.into());
+                writer
+                    .builder
+                    .set_pypi_indexes(&environment_name, grouped_pypi_options.into());
             }
         }
+        drop(writer);
 
         // Store the lock file
         let lock_file = builder.finish();
@@ -2568,11 +2574,19 @@ async fn spawn_solve_conda_environment_task(
     command_dispatcher: CommandDispatcher,
     pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
 ) -> Result<TaskResult, CommandDispatcherError<SolveCondaEnvironmentError>> {
+    let _trace_group = group.name().to_string();
+    tracing::debug!(
+        group = %_trace_group,
+        platform = %platform,
+        "spawn_solve_conda_environment_task: enter"
+    );
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
+    tracing::debug!(group = %_trace_group, "[step] combined_dependencies done");
 
     // Get the dev dependencies for this platform
     let dev_dependencies = group.combined_dev_dependencies(Some(platform));
+    tracing::debug!(group = %_trace_group, "[step] combined_dev_dependencies done");
 
     // Get the constraints for this platform and convert to binary specs.
     // Source specs are not meaningful as constraints and are an error.
@@ -2610,9 +2624,11 @@ async fn spawn_solve_conda_environment_task(
 
     // Get the virtual packages for this platform
     let virtual_packages = group.virtual_packages(platform);
+    tracing::debug!(group = %_trace_group, "[step] virtual_packages done");
 
     // Whether there are pypi dependencies, and we should fetch purls.
     let has_pypi_dependencies = group.has_pypi_dependencies();
+    tracing::debug!(group = %_trace_group, "[step] has_pypi_dependencies done");
 
     // Whether we should use custom mapping location
     let pypi_name_mapping_location = group
@@ -2624,16 +2640,20 @@ async fn spawn_solve_conda_environment_task(
             ))
         })?
         .clone();
+    tracing::debug!(group = %_trace_group, "[step] pypi_name_mapping_source done");
 
     // The list of channels and platforms we need for this task
     let channels = group.channels().into_iter().cloned().collect_vec();
+    tracing::debug!(group = %_trace_group, "[step] channels collected");
 
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
+    tracing::debug!(group = %_trace_group, "[step] channel_config done");
     let exclude_newer = group
         .exclude_newer_config_resolved(&channel_config)
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
+    tracing::debug!(group = %_trace_group, "[step] exclude_newer_config_resolved done");
 
     // Resolve the channel URLs for the channels we need.
     let channels = channels
@@ -2642,8 +2662,10 @@ async fn spawn_solve_conda_environment_task(
         .collect::<Result<Vec<_>, _>>()
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
+    tracing::debug!(group = %_trace_group, "[step] channel URLs resolved");
 
     // Determine the build variants
+    tracing::debug!(group = %_trace_group, "[step] computing variants...");
     let VariantConfig {
         variant_configuration,
         variant_files,
@@ -2652,6 +2674,7 @@ async fn spawn_solve_conda_environment_task(
         .variants(platform)
         .map_err(SolveCondaEnvironmentError::from)
         .map_err(CommandDispatcherError::Failed)?;
+    tracing::debug!(group = %_trace_group, "[step] variants done");
 
     // Convert dev dependencies to DevSourceSpecs
     let dev_sources: OrderMap<_, _> = dev_dependencies
@@ -2669,6 +2692,7 @@ async fn spawn_solve_conda_environment_task(
         .collect();
 
     let start = Instant::now();
+    tracing::debug!(group = %_trace_group, "[step] dev_sources collected, about to allocate env_ref");
 
     // Solve the environment.
     let env_ref = EnvironmentRef::Workspace(command_dispatcher.workspace_env_registry().allocate(
@@ -2685,6 +2709,7 @@ async fn spawn_solve_conda_environment_task(
             channel_priority: channel_priority.into(),
         },
     ));
+    tracing::debug!(group = %_trace_group, "[step] env_ref allocated");
     // Pass partial source records through alongside binary and full
     // source records: their `manifest_source` and `build_packages` /
     // `host_packages` flow into `InstalledSourceHints`, which the
@@ -2693,8 +2718,19 @@ async fn spawn_solve_conda_environment_task(
     // hints and cause unnecessary version churn / commit drift.
     let installed: Arc<[pixi_record::UnresolvedPixiRecord]> =
         existing_repodata_records.records.iter().cloned().collect();
+    tracing::debug!(
+        group = %_trace_group,
+        installed = installed.len(),
+        "[step] installed records collected"
+    );
     let installed_source_hints = pixi_command_dispatcher::PtrArc::from_value(
         pixi_command_dispatcher::InstalledSourceHints::from_records(&installed),
+    );
+    tracing::debug!(group = %_trace_group, "[step] installed_source_hints built");
+    tracing::debug!(
+        group = %group_name,
+        platform = %platform,
+        "spawn_solve_conda_environment_task: about to invoke SolvePixiEnvironmentKey"
     );
     let records_arc = command_dispatcher
         .engine()
@@ -2756,11 +2792,22 @@ async fn spawn_extract_environment_task(
     grouped_pypi_records: impl Future<Output = Arc<LockedPypiRecordsByName>>,
     command_dispatcher: CommandDispatcher,
 ) -> miette::Result<TaskResult> {
+    let env_name = environment.name().clone();
+    tracing::debug!(
+        env = %env_name,
+        platform = %platform,
+        "spawn_extract_environment_task: awaiting group records"
+    );
     let group = GroupedEnvironment::from(environment.clone());
 
     // Await the records from the group
     let (grouped_repodata_records, grouped_pypi_records) =
         tokio::join!(grouped_repodata_records, grouped_pypi_records);
+    tracing::debug!(
+        env = %env_name,
+        platform = %platform,
+        "spawn_extract_environment_task: group records received"
+    );
 
     // If the group is just the environment on its own we can immediately return the
     // records.

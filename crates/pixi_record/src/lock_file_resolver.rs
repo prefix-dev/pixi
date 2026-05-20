@@ -78,9 +78,9 @@ impl LockFileResolver {
                     match state[next] {
                         State::Done => {}
                         State::Visiting => {
-                            return Err(LockFileResolverError::Cycle(format_cycle(
-                                &stack, next, packages,
-                            )));
+                            let cycle = format_cycle(&stack, next, packages);
+                            tracing::debug!(cycle = %cycle, "LockFileResolver: cycle detected");
+                            return Err(LockFileResolverError::Cycle(cycle));
                         }
                         State::Unvisited => {
                             state[next] = State::Visiting;

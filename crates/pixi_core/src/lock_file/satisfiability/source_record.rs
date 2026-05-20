@@ -911,7 +911,7 @@ mod tests {
             }),
             build_source: None,
             variants: Default::default(),
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages,
             host_packages,
         }
@@ -1389,7 +1389,7 @@ mod tests {
             }),
             build_source: None,
             variants: Default::default(),
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages: Vec::new(),
             host_packages: Vec::new(),
         }

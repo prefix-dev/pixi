@@ -33,6 +33,7 @@ tokio = { workspace = true, features = ["rt", "sync"] }
 tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
+which = { workspace = true }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 rattler = { workspace = true }

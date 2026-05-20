@@ -80,6 +80,13 @@ impl Key for ResolveSourcePackageKey {
     )]
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         let spec = self.0.clone();
+        tracing::debug!(
+            name = %spec.package.as_source(),
+            location = %spec.source_location,
+            env = %spec.env_ref,
+            hints_ptr = ?Arc::as_ptr(spec.installed_source_hints.as_arc()),
+            "RSP::compute enter"
+        );
 
         // Reuse the previously-locked manifest pin when it is still
         // compatible with the manifest's source spec. Without this,
@@ -135,11 +142,20 @@ impl Key for ResolveSourcePackageKey {
         let active_id = lifecycle.id();
         let _lifecycle = lifecycle.start();
 
+        let log_name = spec.package.clone();
+        let log_loc = spec.source_location.clone();
         let work = resolve_source_package_inner(ctx, spec, own_pin, manifest_pin_override);
-        match active_id {
+        let result = match active_id {
             Some(id) => id.scope_active(work).await,
             None => work.await,
-        }
+        };
+        tracing::debug!(
+            name = %log_name.as_source(),
+            location = %log_loc,
+            ok = result.is_ok(),
+            "RSP::compute exit"
+        );
+        result
     }
 }
 
