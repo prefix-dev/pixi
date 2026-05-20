@@ -4123,12 +4123,12 @@ let cargo optimize the binary for other metrics.</p>
 <p>Pixi provides some compile-time options, which can influence the build</p>
 <h4 id="tls">TLS<a class="headerlink" href="#tls" title="Permanent link">#</a></h4>
 <p>By default, Pixi is built with Rustls TLS implementation. You can compile Pixi using the platform native TLS implementation
-using by adding <code>--no-default-features --feature native-tls</code> to the build command. Note that this might add additional
+using by adding <code>--no-default-features --features native-tls</code> to the build command. Note that this might add additional
 runtime dependencies, such as OpenSSL on Linux.</p>
 <h4 id="self-update">Self-Update<a class="headerlink" href="#self-update" title="Permanent link">#</a></h4>
 <p>Pixi has a self-update functionality. When Pixi is installed using another package manager one usually doesn't want pixi
 to try to update itself and instead let it be updated by the package manager.
-For this reason the self-update feature is disabled by default. It can be enabled by adding <code>--feature self_update</code> to
+For this reason the self-update feature is disabled by default. It can be enabled by adding <code>--features self_update</code> to
 the build command.</p>
 <p>When the self-update feature is disabled and a user tries to run <code>pixi self-update</code> an error message is displayed. This
 message can be customized by setting the <code>PIXI_SELF_UPDATE_DISABLED_MESSAGE</code> environment variable at build time to point
