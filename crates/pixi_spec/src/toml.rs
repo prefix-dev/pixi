@@ -1435,19 +1435,19 @@ mod test {
     #[test]
     fn test_when_condition_string_matchspec() {
         let input = json!({ "version": "*", "when": "__unix" });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @"__unix");
     }
 
     #[test]
     fn test_when_condition_all() {
         let input = json!({ "version": "*", "when": { "all": ["__unix", "python >=3.10"] } });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @"(__unix and python>=3.10)");
     }
 
     #[test]
     fn test_when_condition_any() {
         let input = json!({ "version": "*", "when": { "any": ["__linux", "__osx"] } });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @"(__linux or __osx)");
     }
 
     #[test]
@@ -1456,7 +1456,7 @@ mod test {
             "version": "*",
             "when": { "all": ["__unix", { "any": ["__linux", "__osx"] }] },
         });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @"(__unix and (__linux or __osx))");
     }
 
     #[test]
@@ -1465,7 +1465,7 @@ mod test {
             "version": "*",
             "when": { "package": "python", "version": ">=3.10", "build": "*cuda" },
         });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @r###"python[version=">=3.10", build="*cuda"]"###);
     }
 
     #[test]
@@ -1474,7 +1474,7 @@ mod test {
             "version": "*",
             "when": { "package": "python", "version": ">=3.10", "build-number": ">=3" },
         });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @r###"python[version=">=3.10", build_number=">=3"]"###);
     }
 
     #[test]
@@ -1483,7 +1483,7 @@ mod test {
             "version": "*",
             "when": { "package": "python", "subdir": "linux-64" },
         });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @r###"python[subdir="linux-64"]"###);
     }
 
     #[test]
@@ -1492,7 +1492,7 @@ mod test {
             "version": "*",
             "when": { "package": "python", "extras": ["dev"] },
         });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @"python[extras=[dev]]");
     }
 
     #[test]
@@ -1501,7 +1501,7 @@ mod test {
             "version": "*",
             "when": { "package": "python", "flags": ["cuda", "blas:*"] },
         });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @"python[flags=[cuda, blas:*]]");
     }
 
     #[test]
@@ -1510,7 +1510,7 @@ mod test {
             "version": "*",
             "when": { "package": "python", "track-features": ["legacy"] },
         });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @r###"python[track_features="legacy"]"###);
     }
 
     #[test]
@@ -1519,7 +1519,7 @@ mod test {
             "version": "*",
             "when": { "package": "python", "file-name": "python-3.10.0-h12debd9_0.tar.bz2" },
         });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @r###"python[fn="python-3.10.0-h12debd9_0.tar.bz2"]"###);
     }
 
     #[test]
@@ -1528,42 +1528,42 @@ mod test {
             "version": "*",
             "when": { "package": "python", "license": "MIT", "license-family": "BSD" },
         });
-        assert_snapshot!(parse_json_condition(input));
+        assert_snapshot!(parse_json_condition(input), @r###"python[license="MIT", license_family="BSD"]"###);
     }
 
     #[test]
     fn test_when_condition_toml_all_with_expanded_build_match() {
         let input = r#"version = "*"
 when = { all = ["__unix", { package = "python", version = ">=3.10", build = "*cuda" }] }"#;
-        assert_snapshot!(parse_toml_condition(input));
+        assert_snapshot!(parse_toml_condition(input), @r###"(__unix and python[version=">=3.10", build="*cuda"])"###);
     }
 
     #[test]
     fn test_when_condition_toml_any() {
         let input = r#"version = "*"
 when = { any = ["__linux", "__osx"] }"#;
-        assert_snapshot!(parse_toml_condition(input));
+        assert_snapshot!(parse_toml_condition(input), @"(__linux or __osx)");
     }
 
     #[test]
     fn test_when_condition_toml_expanded_with_build_number() {
         let input = r#"version = "*"
 when = { package = "python", version = ">=3.10", build-number = ">=3" }"#;
-        assert_snapshot!(parse_toml_condition(input));
+        assert_snapshot!(parse_toml_condition(input), @r###"python[version=">=3.10", build_number=">=3"]"###);
     }
 
     #[test]
     fn test_when_condition_toml_expanded_with_extras_and_flags() {
         let input = r#"version = "*"
 when = { package = "python", extras = ["dev"], flags = ["cuda", "blas:*"] }"#;
-        assert_snapshot!(parse_toml_condition(input));
+        assert_snapshot!(parse_toml_condition(input), @"python[extras=[dev], flags=[cuda, blas:*]]");
     }
 
     #[test]
     fn test_when_condition_toml_expanded_with_track_features() {
         let input = r#"version = "*"
 when = { package = "python", track-features = ["legacy"] }"#;
-        assert_snapshot!(parse_toml_condition(input));
+        assert_snapshot!(parse_toml_condition(input), @r###"python[track_features="legacy"]"###);
     }
 
     #[test]
@@ -1603,31 +1603,31 @@ when = { package = "python", track-features = ["legacy"] }"#;
     #[test]
     fn test_when_reject_top_level_array_json() {
         let input = json!({ "version": "*", "when": ["__unix", "python >=3.10"] });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"data did not match any variant of untagged enum TomlWhen");
     }
 
     #[test]
     fn test_when_reject_bracket_matchspec_json() {
         let input = json!({ "version": "*", "when": "python[version='>=3.10']" });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"`when` strings do not support bracket matchspec syntax; use the expanded `{ package = ..., version = ..., build = ... }` form");
     }
 
     #[test]
     fn test_when_reject_build_shorthand_json() {
         let input = json!({ "version": "*", "when": "python >=3.10 *cuda" });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"`when` strings do not support build-string shorthand; use `{ package = ..., version = ..., build = ... }`");
     }
 
     #[test]
     fn test_when_reject_string_no_package_name_json() {
         let input = json!({ "version": "*", "when": ">=3.10" });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"invalid `when` matchspec: missing package name");
     }
 
     #[test]
     fn test_when_reject_string_with_channel_prefix_json() {
         let input = json!({ "version": "*", "when": "conda-forge::python" });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"`when` strings only support package names with optional version constraints; use the expanded form for additional matchspec fields");
     }
 
     #[test]
@@ -1636,7 +1636,7 @@ when = { package = "python", track-features = ["legacy"] }"#;
             "version": "*",
             "when": { "package": "python", "url": "https://example.com/python-3.10.conda" },
         });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"data did not match any variant of untagged enum TomlWhen");
     }
 
     #[test]
@@ -1645,148 +1645,250 @@ when = { package = "python", track-features = ["legacy"] }"#;
             "version": "*",
             "when": { "package": "python", "channel": "conda-forge" },
         });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"data did not match any variant of untagged enum TomlWhen");
     }
 
     #[test]
     fn test_when_reject_combined_with_path_json() {
         let input = json!({ "path": "../foo", "when": "__unix" });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"`when` cannot be used with `path`");
     }
 
     #[test]
     fn test_when_reject_top_level_array_toml() {
         let input = r#"version = "*"
 when = ["__unix"]"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `when` must be a string or a table with `all`, `any`, or `package`; top-level arrays are not allowed
+          ╭─[pixi.toml:2:8]
+        1 │ version = "*"
+        2 │ when = ["__unix"]
+          ·        ──────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_all_and_any_toml() {
         let input = r#"version = "*"
 when = { all = ["__unix"], any = ["__linux"] }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `when` tables must contain exactly one of `all`, `any`, or `package`
+          ╭─[pixi.toml:2:8]
+        1 │ version = "*"
+        2 │ when = { all = ["__unix"], any = ["__linux"] }
+          ·        ───────────────────────────────────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_empty_all_toml() {
         let input = r#"version = "*"
 when = { all = [] }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `when.all` must contain at least one condition
+          ╭─[pixi.toml:1:1]
+        1 │ ╭─▶ version = "*"
+        2 │ ╰─▶ when = { all = [] }
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_empty_any_toml() {
         let input = r#"version = "*"
 when = { any = [] }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `when.any` must contain at least one condition
+          ╭─[pixi.toml:1:1]
+        1 │ ╭─▶ version = "*"
+        2 │ ╰─▶ when = { any = [] }
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_string_no_package_name_toml() {
         let input = r#"version = "*"
 when = ">=3.10""#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × invalid `when` matchspec: missing package name
+          ╭─[pixi.toml:2:9]
+        1 │ version = "*"
+        2 │ when = ">=3.10"
+          ·         ──────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_string_with_channel_prefix_toml() {
         let input = r#"version = "*"
 when = "conda-forge::python""#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `when` strings only support package names with optional version constraints; use the expanded form for additional matchspec fields
+          ╭─[pixi.toml:2:9]
+        1 │ version = "*"
+        2 │ when = "conda-forge::python"
+          ·         ───────────────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_expanded_with_url_toml() {
         let input = r#"version = "*"
 when = { package = "python", url = "https://example.com/python-3.10.conda" }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables
+          ╭─[pixi.toml:2:8]
+        1 │ version = "*"
+        2 │ when = { package = "python", url = "https://example.com/python-3.10.conda" }
+          ·        ─────────────────────────────────────────────────────────────────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_expanded_with_path_toml() {
         let input = r#"version = "*"
 when = { package = "python", path = "../foo" }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables
+          ╭─[pixi.toml:2:8]
+        1 │ version = "*"
+        2 │ when = { package = "python", path = "../foo" }
+          ·        ───────────────────────────────────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_expanded_with_md5_toml() {
         let input = r#"version = "*"
 when = { package = "python", md5 = "d41d8cd98f00b204e9800998ecf8427e" }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables
+          ╭─[pixi.toml:2:8]
+        1 │ version = "*"
+        2 │ when = { package = "python", md5 = "d41d8cd98f00b204e9800998ecf8427e" }
+          ·        ────────────────────────────────────────────────────────────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_expanded_with_branch_toml() {
         let input = r#"version = "*"
 when = { package = "python", branch = "main" }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables
+          ╭─[pixi.toml:2:8]
+        1 │ version = "*"
+        2 │ when = { package = "python", branch = "main" }
+          ·        ───────────────────────────────────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_expanded_with_channel_toml() {
         let input = r#"version = "*"
 when = { package = "python", channel = "conda-forge" }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `channel` is not yet supported inside `when` tables
+          ╭─[pixi.toml:2:8]
+        1 │ version = "*"
+        2 │ when = { package = "python", channel = "conda-forge" }
+          ·        ───────────────────────────────────────────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_table_without_directive_toml() {
         let input = r#"version = "*"
 when = { build = "*cuda" }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `when` tables must contain exactly one of `all`, `any`, or `package`
+          ╭─[pixi.toml:2:8]
+        1 │ version = "*"
+        2 │ when = { build = "*cuda" }
+          ·        ───────────────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_expanded_invalid_version_toml() {
         let input = r#"version = "*"
 when = { package = "python", version = "//" }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = "//" }'
+          ╭─[pixi.toml:2:41]
+        1 │ version = "*"
+        2 │ when = { package = "python", version = "//" }
+          ·                                         ──
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_nested_invalid_leaf_toml() {
         let input = r#"version = "*"
 when = { all = ["__unix", "python[version='>=3.10']"] }"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `when` strings do not support bracket matchspec syntax; use the expanded `{ package = ..., version = ..., build = ... }` form
+          ╭─[pixi.toml:2:28]
+        1 │ version = "*"
+        2 │ when = { all = ["__unix", "python[version='>=3.10']"] }
+          ·                            ────────────────────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_when_reject_combined_with_path_toml() {
         let input = r#"path = "../foo"
 when = "__unix""#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `when` cannot be used with `path`
+          ╭─[pixi.toml:1:1]
+        1 │ ╭─▶ path = "../foo"
+        2 │ ╰─▶ when = "__unix"
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_v3_reject_extras_not_array_json() {
         let input = json!({ "version": "*", "extras": "dev" });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @r###"invalid type: string "dev", expected a sequence"###);
     }
 
     #[test]
     fn test_v3_reject_extras_non_string_element_json() {
         let input = json!({ "version": "*", "extras": [42] });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"invalid type: integer `42`, expected a string");
     }
 
     #[test]
     fn test_v3_reject_flags_not_array_json() {
         let input = json!({ "version": "*", "flags": "cuda" });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @r###"invalid type: string "cuda", expected a sequence"###);
     }
 
     #[test]
     fn test_v3_reject_extras_with_path_json() {
         let input = json!({ "path": "../foo", "extras": ["dev"] });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"`extras` cannot be used with `path`");
     }
 
     #[test]
     fn test_v3_reject_flags_with_git_json() {
         let input = json!({ "git": "https://example.com/foo.git", "flags": ["cuda"] });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"`flags` cannot be used with `git`");
     }
 
     #[test]
@@ -1795,55 +1897,101 @@ when = "__unix""#;
             "url": "https://example.com/foo.conda",
             "track-features": ["legacy"],
         });
-        assert_snapshot!(parse_json_error(input));
+        assert_snapshot!(parse_json_error(input), @"`track-features` cannot be used with `url`");
     }
 
     #[test]
     fn test_v3_reject_extras_not_array_toml() {
         let input = r#"version = "*"
 extras = "dev""#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × expected an array, found string
+          ╭─[pixi.toml:2:11]
+        1 │ version = "*"
+        2 │ extras = "dev"
+          ·           ───
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_v3_reject_flags_not_array_toml() {
         let input = r#"version = "*"
 flags = "cuda""#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × expected array, found string
+          ╭─[pixi.toml:2:10]
+        1 │ version = "*"
+        2 │ flags = "cuda"
+          ·          ────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_v3_reject_flags_invalid_regex_toml() {
         let input = r#"version = "*"
 flags = ["^[invalid$"]"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × invalid regex: ^[invalid$
+          ╭─[pixi.toml:2:11]
+        1 │ version = "*"
+        2 │ flags = ["^[invalid$"]
+          ·           ──────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_v3_reject_flags_invalid_glob_toml() {
         let input = r#"version = "*"
 flags = ["*[unclosed"]"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × invalid glob: *[unclosed
+          ╭─[pixi.toml:2:11]
+        1 │ version = "*"
+        2 │ flags = ["*[unclosed"]
+          ·           ──────────
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_v3_reject_extras_with_path_toml() {
         let input = r#"path = "../foo"
 extras = ["dev"]"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `extras` cannot be used with `path`
+          ╭─[pixi.toml:1:1]
+        1 │ ╭─▶ path = "../foo"
+        2 │ ╰─▶ extras = ["dev"]
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_v3_reject_flags_with_url_toml() {
         let input = r#"url = "https://example.com/foo.conda"
 flags = ["cuda"]"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `flags` cannot be used with `url`
+          ╭─[pixi.toml:1:1]
+        1 │ ╭─▶ url = "https://example.com/foo.conda"
+        2 │ ╰─▶ flags = ["cuda"]
+          ╰────
+        "###);
     }
 
     #[test]
     fn test_v3_reject_track_features_with_git_toml() {
         let input = r#"git = "https://example.com/foo.git"
 track-features = ["legacy"]"#;
-        assert_snapshot!(parse_toml_error(input));
+        assert_snapshot!(parse_toml_error(input), @r###"
+         × `track-features` cannot be used with `git`
+          ╭─[pixi.toml:1:1]
+        1 │ ╭─▶ git = "https://example.com/foo.git"
+        2 │ ╰─▶ track-features = ["legacy"]
+          ╰────
+        "###);
     }
 }

@@ -1,5 +1,0 @@
----
-source: crates/pixi_spec/src/toml.rs
-expression: parse_toml_condition(input)
----
-python[track_features="legacy"]

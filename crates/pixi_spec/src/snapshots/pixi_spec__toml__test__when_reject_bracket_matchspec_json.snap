@@ -1,5 +1,0 @@
----
-source: crates/pixi_spec/src/toml.rs
-expression: parse_json_error(input)
----
-`when` strings do not support bracket matchspec syntax; use the expanded `{ package = ..., version = ..., build = ... }` form

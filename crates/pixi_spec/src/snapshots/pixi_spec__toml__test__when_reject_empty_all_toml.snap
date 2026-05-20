@@ -1,9 +1,0 @@
----
-source: crates/pixi_spec/src/toml.rs
-expression: parse_toml_error(input)
----
-  × `when.all` must contain at least one condition
-   ╭─[pixi.toml:1:1]
- 1 │ ╭─▶ version = "*"
- 2 │ ╰─▶ when = { all = [] }
-   ╰────

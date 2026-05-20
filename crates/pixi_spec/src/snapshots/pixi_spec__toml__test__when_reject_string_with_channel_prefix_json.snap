@@ -1,5 +1,0 @@
----
-source: crates/pixi_spec/src/toml.rs
-expression: parse_json_error(input)
----
-`when` strings only support package names with optional version constraints; use the expanded form for additional matchspec fields

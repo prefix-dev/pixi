@@ -1,9 +1,0 @@
----
-source: crates/pixi_spec/src/toml.rs
-expression: parse_toml_error(input)
----
-  × `extras` cannot be used with `path`
-   ╭─[pixi.toml:1:1]
- 1 │ ╭─▶ path = "../foo"
- 2 │ ╰─▶ extras = ["dev"]
-   ╰────

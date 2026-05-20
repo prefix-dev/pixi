@@ -1,5 +1,0 @@
----
-source: crates/pixi_spec/src/toml.rs
-expression: parse_json_condition(input)
----
-(__unix and (__linux or __osx))

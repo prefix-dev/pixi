@@ -1,5 +1,0 @@
----
-source: crates/pixi_spec/src/toml.rs
-expression: parse_json_error(input)
----
-`flags` cannot be used with `git`
