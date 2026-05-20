@@ -1092,8 +1092,6 @@ mod tests {
         }
 
         // Bare expression strings without `if(...)` are rejected.
-        assert!(
-            TargetSelector::from_str_or_expression("host_platform == build_platform").is_err()
-        );
+        assert!(TargetSelector::from_str_or_expression("host_platform == build_platform").is_err());
     }
 }

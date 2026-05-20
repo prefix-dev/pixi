@@ -505,15 +505,13 @@ mod test {
 
     #[test]
     fn test_to_rattler_build_selector_expression_passthrough() {
-        let selector =
-            TargetSelector::Expression("host_platform == build_platform".to_string());
+        let selector = TargetSelector::Expression("host_platform == build_platform".to_string());
         assert_eq!(
             to_rattler_build_selector(&selector, PlatformKind::Host),
             "host_platform == build_platform"
         );
 
-        let selector2 =
-            TargetSelector::Expression("target_platform != 'linux-64'".to_string());
+        let selector2 = TargetSelector::Expression("target_platform != 'linux-64'".to_string());
         assert_eq!(
             to_rattler_build_selector(&selector2, PlatformKind::Build),
             "target_platform != 'linux-64'"

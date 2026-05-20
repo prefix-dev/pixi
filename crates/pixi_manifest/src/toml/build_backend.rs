@@ -89,7 +89,9 @@ impl TomlPackageBuild {
             .target
             .into_iter()
             .flat_map(|(selector, target)| {
-                target.config.map(|config| (selector.into_inner().0, config))
+                target
+                    .config
+                    .map(|config| (selector.into_inner().0, config))
             })
             .collect::<IndexMap<_, _>>();
 
