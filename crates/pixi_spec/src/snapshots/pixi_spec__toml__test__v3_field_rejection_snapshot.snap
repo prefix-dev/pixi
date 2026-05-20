@@ -19,7 +19,7 @@ expression: snapshot
   error: "`flags` cannot be used with `git`"
 - label: json_track_features_with_url
   input: "{\n  \"url\": \"https://example.com/foo.conda\",\n  \"track-features\": [\n    \"legacy\"\n  ]\n}"
-  error: "`track_features` cannot be used with `url`"
+  error: "`track-features` cannot be used with `url`"
 - label: toml_extras_not_array
   input: "version = \"*\"\nextras = \"dev\""
   error: "  × expected an array, found string\n   ╭─[pixi.toml:2:11]\n 1 │ version = \"*\"\n 2 │ extras = \"dev\"\n   ·           ───\n   ╰────"
@@ -40,4 +40,4 @@ expression: snapshot
   error: "  × `flags` cannot be used with `url`\n   ╭─[pixi.toml:1:1]\n 1 │ ╭─▶ url = \"https://example.com/foo.conda\"\n 2 │ ╰─▶ flags = [\"cuda\"]\n   ╰────"
 - label: toml_track_features_with_git
   input: "git = \"https://example.com/foo.git\"\ntrack-features = [\"legacy\"]"
-  error: "  × `track_features` cannot be used with `git`\n   ╭─[pixi.toml:1:1]\n 1 │ ╭─▶ git = \"https://example.com/foo.git\"\n 2 │ ╰─▶ track-features = [\"legacy\"]\n   ╰────"
+  error: "  × `track-features` cannot be used with `git`\n   ╭─[pixi.toml:1:1]\n 1 │ ╭─▶ git = \"https://example.com/foo.git\"\n 2 │ ╰─▶ track-features = [\"legacy\"]\n   ╰────"

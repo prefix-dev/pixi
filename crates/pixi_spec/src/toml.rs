@@ -335,14 +335,14 @@ impl TomlSpec {
             for (field_name, is_some) in [
                 ("`version`", self.version.is_some()),
                 ("`build`", self.build.is_some()),
-                ("`build_number`", self.build_number.is_some()),
-                ("`file_name`", self.file_name.is_some()),
+                ("`build-number`", self.build_number.is_some()),
+                ("`file-name`", self.file_name.is_some()),
                 ("`extras`", self.extras.is_some()),
                 ("`flags`", self.flags.is_some()),
                 ("`channel`", self.channel.is_some()),
                 ("`subdir`", self.subdir.is_some()),
                 ("`when`", self.when.is_some()),
-                ("`track_features`", self.track_features.is_some()),
+                ("`track-features`", self.track_features.is_some()),
             ] {
                 if is_some {
                     return Err(SpecError::InvalidCombination(
