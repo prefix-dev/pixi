@@ -257,7 +257,7 @@ fn print_heading(value: &str) {
 
 /// Create a human-readable representation of a list of tasks.
 /// Using a tabwriter for described tasks.
-fn print_tasks(
+pub fn print_tasks(
     task_map: HashMap<EnvironmentName, HashMap<TaskName, Task>>,
     summary: bool,
 ) -> Result<(), std::io::Error> {
