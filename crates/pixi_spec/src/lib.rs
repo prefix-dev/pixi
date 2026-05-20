@@ -691,7 +691,6 @@ impl From<VersionSpec> for BinarySpec {
     }
 }
 
-#[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::SourceLocation> for SourceLocationSpec {
     fn from(value: rattler_lock::source::SourceLocation) -> Self {
         match value {
@@ -702,7 +701,6 @@ impl From<rattler_lock::source::SourceLocation> for SourceLocationSpec {
     }
 }
 
-#[cfg(feature = "rattler_lock")]
 impl From<SourceLocationSpec> for rattler_lock::source::SourceLocation {
     fn from(value: SourceLocationSpec) -> Self {
         match value {
@@ -713,7 +711,6 @@ impl From<SourceLocationSpec> for rattler_lock::source::SourceLocation {
     }
 }
 
-#[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::UrlSourceLocation> for UrlSourceSpec {
     fn from(value: rattler_lock::source::UrlSourceLocation) -> Self {
         let rattler_lock::source::UrlSourceLocation {
@@ -734,7 +731,6 @@ impl From<rattler_lock::source::UrlSourceLocation> for UrlSourceSpec {
     }
 }
 
-#[cfg(feature = "rattler_lock")]
 impl From<UrlSourceSpec> for rattler_lock::source::UrlSourceLocation {
     fn from(value: UrlSourceSpec) -> Self {
         Self {
@@ -746,7 +742,6 @@ impl From<UrlSourceSpec> for rattler_lock::source::UrlSourceLocation {
     }
 }
 
-#[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::GitSourceLocation> for GitSpec {
     fn from(value: rattler_lock::source::GitSourceLocation) -> Self {
         Self {
@@ -767,7 +762,6 @@ impl From<rattler_lock::source::GitSourceLocation> for GitSpec {
     }
 }
 
-#[cfg(feature = "rattler_lock")]
 impl From<GitSpec> for rattler_lock::source::GitSourceLocation {
     fn from(value: GitSpec) -> Self {
         Self {
@@ -785,14 +779,12 @@ impl From<GitSpec> for rattler_lock::source::GitSourceLocation {
     }
 }
 
-#[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::PathSourceLocation> for PathSourceSpec {
     fn from(value: rattler_lock::source::PathSourceLocation) -> Self {
         Self { path: value.path }
     }
 }
 
-#[cfg(feature = "rattler_lock")]
 impl From<PathSourceSpec> for rattler_lock::source::PathSourceLocation {
     fn from(value: PathSourceSpec) -> Self {
         Self { path: value.path }
