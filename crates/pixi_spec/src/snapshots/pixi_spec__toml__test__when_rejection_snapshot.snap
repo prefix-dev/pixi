@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_spec/src/toml.rs
-assertion_line: 1597
 expression: snapshot
 ---
 - label: json_top_level_array
@@ -12,6 +11,21 @@ expression: snapshot
 - label: json_build_shorthand
   input: "{\n  \"version\": \"*\",\n  \"when\": \"python >=3.10 *cuda\"\n}"
   error: "`when` strings do not support build-string shorthand; use `{ package = ..., version = ..., build = ... }`"
+- label: json_string_no_package_name
+  input: "{\n  \"version\": \"*\",\n  \"when\": \">=3.10\"\n}"
+  error: "invalid `when` matchspec: missing package name"
+- label: json_string_with_channel_prefix
+  input: "{\n  \"version\": \"*\",\n  \"when\": \"conda-forge::python\"\n}"
+  error: "`when` strings only support package names with optional version constraints; use the expanded form for additional matchspec fields"
+- label: json_expanded_with_url
+  input: "{\n  \"version\": \"*\",\n  \"when\": {\n    \"package\": \"python\",\n    \"url\": \"https://example.com/python-3.10.conda\"\n  }\n}"
+  error: data did not match any variant of untagged enum TomlWhen
+- label: json_expanded_with_channel
+  input: "{\n  \"version\": \"*\",\n  \"when\": {\n    \"package\": \"python\",\n    \"channel\": \"conda-forge\"\n  }\n}"
+  error: data did not match any variant of untagged enum TomlWhen
+- label: json_when_combined_with_path
+  input: "{\n  \"path\": \"../foo\",\n  \"when\": \"__unix\"\n}"
+  error: "`when` cannot be used with `path`"
 - label: toml_top_level_array
   input: "version = \"*\"\nwhen = [\"__unix\"]"
   error: "  × `when` must be a string or a table with `all`, `any`, or `package`; top-level arrays are not allowed\n   ╭─[pixi.toml:2:8]\n 1 │ version = \"*\"\n 2 │ when = [\"__unix\"]\n   ·        ──────────\n   ╰────"
@@ -24,3 +38,36 @@ expression: snapshot
 - label: toml_empty_any
   input: "version = \"*\"\nwhen = { any = [] }"
   error: "  × `when.any` must contain at least one condition\n   ╭─[pixi.toml:1:1]\n 1 │ ╭─▶ version = \"*\"\n 2 │ ╰─▶ when = { any = [] }\n   ╰────"
+- label: toml_string_no_package_name
+  input: "version = \"*\"\nwhen = \">=3.10\""
+  error: "  × invalid `when` matchspec: missing package name\n   ╭─[pixi.toml:2:9]\n 1 │ version = \"*\"\n 2 │ when = \">=3.10\"\n   ·         ──────\n   ╰────"
+- label: toml_string_with_channel_prefix
+  input: "version = \"*\"\nwhen = \"conda-forge::python\""
+  error: "  × `when` strings only support package names with optional version constraints; use the expanded form for additional matchspec fields\n   ╭─[pixi.toml:2:9]\n 1 │ version = \"*\"\n 2 │ when = \"conda-forge::python\"\n   ·         ───────────────────\n   ╰────"
+- label: toml_expanded_with_url
+  input: "version = \"*\"\nwhen = { package = \"python\", url = \"https://example.com/python-3.10.conda\" }"
+  error: "  × source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables\n   ╭─[pixi.toml:2:8]\n 1 │ version = \"*\"\n 2 │ when = { package = \"python\", url = \"https://example.com/python-3.10.conda\" }\n   ·        ─────────────────────────────────────────────────────────────────────\n   ╰────"
+- label: toml_expanded_with_path
+  input: "version = \"*\"\nwhen = { package = \"python\", path = \"../foo\" }"
+  error: "  × source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables\n   ╭─[pixi.toml:2:8]\n 1 │ version = \"*\"\n 2 │ when = { package = \"python\", path = \"../foo\" }\n   ·        ───────────────────────────────────────\n   ╰────"
+- label: toml_expanded_with_md5
+  input: "version = \"*\"\nwhen = { package = \"python\", md5 = \"d41d8cd98f00b204e9800998ecf8427e\" }"
+  error: "  × source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables\n   ╭─[pixi.toml:2:8]\n 1 │ version = \"*\"\n 2 │ when = { package = \"python\", md5 = \"d41d8cd98f00b204e9800998ecf8427e\" }\n   ·        ────────────────────────────────────────────────────────────────\n   ╰────"
+- label: toml_expanded_with_branch
+  input: "version = \"*\"\nwhen = { package = \"python\", branch = \"main\" }"
+  error: "  × source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables\n   ╭─[pixi.toml:2:8]\n 1 │ version = \"*\"\n 2 │ when = { package = \"python\", branch = \"main\" }\n   ·        ───────────────────────────────────────\n   ╰────"
+- label: toml_expanded_with_channel
+  input: "version = \"*\"\nwhen = { package = \"python\", channel = \"conda-forge\" }"
+  error: "  × `channel` is not yet supported inside `when` tables\n   ╭─[pixi.toml:2:8]\n 1 │ version = \"*\"\n 2 │ when = { package = \"python\", channel = \"conda-forge\" }\n   ·        ───────────────────────────────────────────────\n   ╰────"
+- label: toml_table_without_directive
+  input: "version = \"*\"\nwhen = { build = \"*cuda\" }"
+  error: "  × `when` tables must contain exactly one of `all`, `any`, or `package`\n   ╭─[pixi.toml:2:8]\n 1 │ version = \"*\"\n 2 │ when = { build = \"*cuda\" }\n   ·        ───────────────────\n   ╰────"
+- label: toml_expanded_invalid_version
+  input: "version = \"*\"\nwhen = { package = \"python\", version = \"//\" }"
+  error: "  × it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"//\" }'\n   ╭─[pixi.toml:2:41]\n 1 │ version = \"*\"\n 2 │ when = { package = \"python\", version = \"//\" }\n   ·                                         ──\n   ╰────"
+- label: toml_nested_invalid_leaf
+  input: "version = \"*\"\nwhen = { all = [\"__unix\", \"python[version='>=3.10']\"] }"
+  error: "  × `when` strings do not support bracket matchspec syntax; use the expanded `{ package = ..., version = ..., build = ... }` form\n   ╭─[pixi.toml:2:28]\n 1 │ version = \"*\"\n 2 │ when = { all = [\"__unix\", \"python[version='>=3.10']\"] }\n   ·                            ────────────────────────\n   ╰────"
+- label: toml_when_combined_with_path
+  input: "path = \"../foo\"\nwhen = \"__unix\""
+  error: "  × `when` cannot be used with `path`\n   ╭─[pixi.toml:1:1]\n 1 │ ╭─▶ path = \"../foo\"\n 2 │ ╰─▶ when = \"__unix\"\n   ╰────"
