@@ -9,7 +9,10 @@ use std::{collections::BTreeMap, hash::Hash, path::PathBuf, sync::Arc};
 
 use derive_more::Display;
 use futures::{SinkExt, channel::mpsc::unbounded};
-use pixi_build_types::procedures::conda_outputs::{CondaOutput, CondaOutputsParams};
+use pixi_build_types::procedures::{
+    conda_build_v1::CondaPackageFormat,
+    conda_outputs::{CondaOutput, CondaOutputsParams},
+};
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
@@ -78,6 +81,11 @@ pub struct SourceBuildSpec {
     /// User-supplied build number forwarded to the backend's project
     /// model. Overrides any value declared in the manifest.
     pub build_number: Option<u64>,
+
+    /// Archive format and compression level. `None` lets the backend pick.
+    /// Folds into the artifact cache key but not the workspace key, so
+    /// different formats share build state but get distinct artifacts.
+    pub package_format: Option<CondaPackageFormat>,
 }
 
 /// Built artifact plus its sha256 and a
@@ -186,6 +194,7 @@ async fn compute_inner(
         &build_source_dep_sha256s,
         &host_source_dep_sha256s,
         &project_model_overrides,
+        spec.package_format,
     );
 
     // On artifact cache hit, return without invoking the backend.
@@ -236,6 +245,8 @@ async fn compute_inner(
 
     // Workspace dir is the backend's build root; state persists across
     // runs that share the same (source, deps, variants, backend).
+    // `package_format` is intentionally not included: differently-encoded
+    // outputs of the same build can share the same workdir.
     let workspace_key = compute_workspace_key(
         &spec.record,
         spec.build_environment.build_platform,
@@ -404,6 +415,7 @@ async fn compute_inner(
                 },
                 variant: output.metadata.variant.clone(),
                 output_directory: None,
+                package_format: spec.package_format,
             }),
             backend,
             name: output.metadata.name.clone(),
@@ -507,6 +519,9 @@ async fn build_source_deps(
                 // dependency closure builds against consistent values.
                 build_string_prefix: spec.build_string_prefix.clone(),
                 build_number: spec.build_number,
+                // Nested source deps are unpacked into the parent's
+                // prefix immediately; use the cheapest compression.
+                package_format: Some(CondaPackageFormat::fast()),
             };
             let result = sub_ctx.compute(&SourceBuildKey::new(nested_spec)).await?;
             Ok(result.artifact_sha256)

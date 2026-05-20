@@ -117,6 +117,9 @@ pub use instantiate_backend_key::{
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use keys::SourceMetadata;
+pub use pixi_build_types::procedures::conda_build_v1::{
+    CondaCompressionLevel, CondaPackageFormat, NamedCompressionLevel,
+};
 pub use pixi_compute_cache_dirs::{
     CacheBase, CacheDirKey, CacheDirsExt, CacheDirsKey, CacheLocation,
 };
