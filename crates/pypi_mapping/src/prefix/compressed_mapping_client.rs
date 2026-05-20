@@ -10,11 +10,14 @@ use crate::{
     CacheMetrics, CompressedMapping, DerivePurls, MappingError, PurlSource, is_conda_forge_record,
 };
 
+// Served from Cloudflare R2 via the `conda-mapping.prefix.dev` domain. The
+// previous `raw.githubusercontent.com` URL is blocked on some corporate
+// networks (see prefix-dev/pixi#5980 and prefix-dev/parselmouth#70).
 const COMPRESSED_MAPPING: &str =
-    "https://raw.githubusercontent.com/prefix-dev/parselmouth/main/files/compressed_mapping.json";
+    "https://conda-mapping.prefix.dev/compressed-v0/compressed_mapping.json";
 
-/// A client for fetching and caching the compressed mapping from the
-/// parselmouth github repository.
+/// A client for fetching and caching the compressed mapping published by
+/// parselmouth.
 ///
 /// This mapping provides a mapping from the conda-forge package names to their
 /// pypi counterparts, or `None` if the package is not a pypi package.
