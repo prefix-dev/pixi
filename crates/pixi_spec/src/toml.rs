@@ -671,9 +671,7 @@ fn validate_when_spec(spec: &TomlSpec, span: toml_span::Span) -> Result<(), Dese
     }
     if spec.channel.is_some() {
         return Err(DeserError::from(toml_span::Error {
-            kind: ErrorKind::Custom(
-                "`channel` is not yet supported inside `when` tables".into(),
-            ),
+            kind: ErrorKind::Custom("`channel` is not yet supported inside `when` tables".into()),
             span,
             line_info: None,
         }));
