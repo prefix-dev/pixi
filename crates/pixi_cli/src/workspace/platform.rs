@@ -28,7 +28,7 @@ pub struct AddArgs {
 
     /// Don't update the environment, only add changed packages to the
     /// lock-file.
-    #[clap(long)]
+    #[clap(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
     /// The name of the feature to add the platform to.
@@ -44,7 +44,7 @@ pub struct RemoveArgs {
 
     /// Don't update the environment, only remove the platform(s) from the
     /// lock-file.
-    #[clap(long)]
+    #[clap(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
     /// The name of the feature to remove the platform from.

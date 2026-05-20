@@ -50,5 +50,5 @@ def test_log_failing(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> 
             tmp_pixi_workspace,
         ],
         ExitCode.FAILURE,
-        stderr_contains="Building package simple-app",
+        stderr_contains="failed to build 'simple-app'",
     )

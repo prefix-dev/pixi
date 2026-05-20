@@ -83,7 +83,7 @@ def test_sync_platform(pixi: Path, tmp_path: Path) -> None:
     [envs.test]
     channels = ["https://prefix.dev/conda-forge"]
     platform = "win-64"
-    dependencies = { binutils = "2.40.*" }\
+    dependencies = { vc = "14.*" }\
     """
     parsed_toml = tomllib.loads(toml)
     manifest.write_text(toml)
@@ -1166,7 +1166,7 @@ def test_install_platform(pixi: Path, tmp_path: Path) -> None:
             "install",
             "--platform",
             "win-64",
-            "binutils=2.40",
+            "vc=14.*",
             "--channel",
             "https://prefix.dev/conda-forge",
         ],
@@ -1181,7 +1181,7 @@ def test_install_platform(pixi: Path, tmp_path: Path) -> None:
             "install",
             "--platform",
             "osx-64",
-            "binutils=2.40",
+            "vc=14.*",
             "--channel",
             "https://prefix.dev/conda-forge",
         ],

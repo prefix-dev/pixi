@@ -292,15 +292,56 @@ requires-pixi = ">=0.40,<1.0"
 
 ### `exclude-newer` (optional)
 
-When specified this will exclude any package from consideration that is newer than the specified date.
-This is useful to reproduce installations regardless of new package releases.
+When specified on the workspace this will exclude any package from consideration that is newer than the specified timestamp or duration.
+This is useful to reproduce installations regardless of new package releases, or to reduce the risk of
+installing recently published (and potentially compromised) packages.
 
-The date may be specified in the following formats:
+The value may be specified in the following formats:
 
 * As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
-* As a date in the format `YYYY-MM-DD` (e.g. `2023-10-01`) in the systems time zone.
+* As a date in `YYYY-MM-DD` format (e.g. `2026-03-30`). This is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
+* As a relative duration (e.g. `7d`, `1h30m`, `30m`). Relative durations support everything [`humantime`](https://docs.rs/humantime/latest/humantime/fn.parse_duration.html) accepts. The duration is relative to the current time at solve time.
+
+When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
 Both PyPi and conda packages are considered.
+
+For conda packages, the workspace-level cutoff can be overridden per package in the
+[`[exclude-newer]`](#exclude-newer-optional) table.
+
+For PyPI packages, the workspace-level cutoff can be overridden per package in the
+[`[pypi-exclude-newer]`](#exclude-newer-optional) table.
+
+This is especially useful when a package is pinned to a separate `channel` or `index` and needs a
+different cutoff than the rest of the workspace.
+
+!!! note "Satisfiability checks with `exclude-newer`"
+    For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during
+    lock-file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve
+    when a locked conda package is newer than the configured cutoff.
+
+    For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a
+    result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same
+    lock-file satisfiability check for already locked PyPI packages. Run `pixi update` to
+    re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
+
+```toml
+[workspace]
+exclude-newer = "2025-01-01"
+
+[dependencies]
+pytorch-cpu = { version = ">=2.10.0", channel = "pytorch" }
+
+[exclude-newer]
+pytorch-cpu = "0d"
+openssl = "0d"
+
+[pypi-dependencies]
+torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
+
+[pypi-exclude-newer]
+torch = "0d"
+```
 
 !!! note
     Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
@@ -405,7 +446,7 @@ cmd = { cmd="echo Same as a simple task but now more verbose" }
 depending = { cmd="echo run after simple", depends-on="simple" }
 alias = { depends-on=["depending"] }
 download = { cmd="curl -o file.txt https://example.com/file.txt" , outputs=["file.txt"] }
-build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"] }
+build = { cmd="npm run build", cwd="frontend", inputs=["frontend/package.json", "frontend/*.js"] }
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }} # Set an environment variable
 backend = { cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] } # Template strings in env
 format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
@@ -449,9 +490,15 @@ More information in the [system requirements documentation](../workspace/system_
 ## The `pypi-options` table
 
 The `pypi-options` table is used to define options that are specific to PyPI registries.
-These options can be specified either at the root level, which will add it to the default options feature,
-or on feature level, which will create a union of these options when the features are included in the
-environment.
+It can appear in three scopes:
+
+- `[workspace.pypi-options]`: the workspace base. Always applied to every environment, including those that set `no-default-feature = true`.
+- `[pypi-options]` at the root of the manifest: shorthand for the default feature's options. Only applied to environments that include the default feature.
+- `[feature.<name>.pypi-options]`: per-feature options, applied to environments that include that feature.
+
+When an environment is resolved, the workspace base is used as the starting point and the options of all included features are overlaid on top. For single-assignment fields (`index-url`, `index-strategy`, `prerelease-mode`, `skip-wheel-filename-check`) a feature value overrides the workspace value; list-valued fields (`extra-index-urls`, `find-links`) and union-like fields (`no-build`, `no-binary`, `no-build-isolation`) are merged.
+
+Two features in the same environment may set the same single-assignment value, but conflicting values across features produce a parse-time error.
 
 The options that can be defined are:
 
@@ -743,6 +790,12 @@ openssl = ">=3.0"
 
 Constraints use the same [VersionSpec](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/version_spec/enum.VersionSpec.html)
 syntax as `[dependencies]`.
+They also support the same inline MatchSpec fields, including `channel`.
+
+```toml
+[constraints]
+openssl = { channel = "conda-forge", version = ">=3.0" }
+```
 
 !!! note
     Constraints do **not** cause a package to be installed. They only restrict which version is
@@ -1236,6 +1289,7 @@ The package section is defined using the following fields:
 - `build-dependencies`: The build dependencies of the package.
 - `host-dependencies`: The host dependencies of the package.
 - `run-dependencies`: The run dependencies of the package.
+- `run-constraints`: Version constraints applied to the package's run environment.
 - `target`: The target table to configure target specific dependencies. (Similar to the [target](#the-target-table) table)
 
 And to extend the basics, it can also contain the following fields:
@@ -1282,6 +1336,7 @@ The build system is a table that can contain the following fields:
 - `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
   - Each target can have its own `config` table to override or extend the base configuration for specific platforms.
+- `secrets`: a list of environment variable names whose values are exposed to the build script. The names are read from the manifest; the values are looked up in the host environment at build time and forwarded to the build backend through the recipe (`build.script.secrets`), matching rattler-build's behavior. Useful for passing credentials such as `GH_TOKEN` or registry tokens into the build without recording them in the manifest.
 
 More documentation on the backends can be found in the [build backend documentation](../build/backends.md).
 
@@ -1297,7 +1352,7 @@ For platform-specific build configuration, use the `[package.build.target.<platf
 
 ```toml
 [package.build]
-backend = { name = "pixi-build-cmake", version = "0.3.*" }
+backend = { name = "pixi-build-cmake", version = "0.*" }
 
 [package.build.config]
 # Base configuration applied to all platforms
@@ -1313,13 +1368,14 @@ extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"]
 ```
 
 
-### The `build` `host` and `run` dependencies tables
-The dependencies of a package are split into three tables.
+### The `build`, `host`, `run` and `run-constraints` dependency tables
+The dependencies of a package are split into four tables.
 Each of these tables has a different purpose and is used to define the dependencies of the package.
 
 - [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
 - [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link against the package on the target platform.
 - [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
+- [`run-constraints`](#run-constraints): Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.
 
 
 ### `build-dependencies`
@@ -1370,4 +1426,15 @@ The `run-dependencies` are the packages that will be installed in the environmen
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-dependencies"
+```
+
+### `run-constraints`
+
+The `run-constraints` are version constraints applied to the package's run environment.
+They constrain the versions of packages that may be installed *if* they are pulled in by another dependency, without themselves causing those packages to be installed.
+
+This mirrors the conda concept that surfaces as `run_constrained` in the package metadata.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-constraints"
 ```

@@ -182,7 +182,7 @@ pub trait HasDependencyConfig: Sized {
                     self.dependency_config().host = false;
                     self.dependency_config().build = true;
                 }
-                SpecType::Run => {
+                SpecType::Run | SpecType::RunConstraints => {
                     self.dependency_config().host = false;
                     self.dependency_config().build = false;
                 }
@@ -500,6 +500,11 @@ impl InstallBuilder {
 
     pub fn with_environment(mut self, env: Vec<String>) -> Self {
         self.args.environment = Some(env);
+        self
+    }
+
+    pub fn with_all(mut self, all: bool) -> Self {
+        self.args.all = all;
         self
     }
 }

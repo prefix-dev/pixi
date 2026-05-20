@@ -1,8 +1,13 @@
-use pixi_command_dispatcher::CacheDirs;
+use pixi_command_dispatcher::{
+    BackendMetadataDir, BuildBackendsDir, CacheDirs, GitDir, SourceBuildArtifactsDir,
+    SourceBuildWorkspacesDir, UrlDir,
+};
 use pixi_consts::consts;
+use pixi_core::Workspace;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceRegistry;
 use pixi_manifest::EnvironmentName;
+use pixi_path::AbsPathBuf;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -10,9 +15,11 @@ use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use fs_err::tokio as tokio_fs;
+use human_bytes::human_bytes;
 use indicatif::ProgressBar;
 use miette::IntoDiagnostic;
 use pixi_progress::{global_multi_progress, long_running_progress_style};
+use std::path::Path;
 use std::str::FromStr;
 
 /// Command to clean the parts of your system which are touched by pixi.
@@ -121,52 +128,50 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .transpose()?;
 
+    let mut total_removed: u64 = 0;
     if let Some(explicit_env) = explicit_environment {
         if args.activation_cache {
-            remove_file(explicit_env.activation_cache_file_path(), true).await?;
+            total_removed += remove_file(explicit_env.activation_cache_file_path(), true).await?;
             tracing::info!(
                 "Only removing activation cache for explicit environment '{}'",
                 explicit_env.name().fancy_display()
             );
         } else {
-            remove_folder_with_progress(explicit_env.dir(), true).await?;
-            remove_file(explicit_env.activation_cache_file_path(), false).await?;
+            total_removed += remove_folder_with_progress(explicit_env.dir(), true).await?;
+            total_removed += remove_file(explicit_env.activation_cache_file_path(), false).await?;
             tracing::info!(
                 "Skipping removal of task cache and solve group environments for explicit environment '{}'",
                 explicit_env.name().fancy_display()
             );
         }
     } else if !args.activation_cache && !args.build && !args.workspaces_registry {
-        // Remove all pixi related work from the workspace.
-        if !workspace
-            .environments_dir()
-            .starts_with(workspace.pixi_dir())
-            && workspace.default_environments_dir().exists()
-        {
+        // Remove all pixi related work from the workspace. Always clean both
+        // the default .pixi location and the effective (possibly detached) location
+        // so leftover artifacts are removed regardless of config changes.
+        total_removed +=
             remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
+        total_removed +=
             remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
                 .await?;
+        total_removed += remove_folder_with_progress(workspace.environments_dir(), false).await?;
+        total_removed +=
+            remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
+        total_removed += remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
+        total_removed +=
+            remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
+        for dir in workspace_build_cache_dirs(&workspace) {
+            total_removed += remove_folder_with_progress(dir, false).await?;
         }
-        remove_folder_with_progress(workspace.environments_dir(), true).await?;
-        remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
-        remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
-        remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
-        remove_folder_with_progress(
-            workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR),
-            false,
-        )
-        .await?;
         prune_workspace_registry().await?;
     } else {
         if args.activation_cache {
-            remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
+            total_removed +=
+                remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
         }
         if args.build {
-            remove_folder_with_progress(
-                workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR),
-                true,
-            )
-            .await?;
+            for dir in workspace_build_cache_dirs(&workspace) {
+                total_removed += remove_folder_with_progress(dir, false).await?;
+            }
             eprintln!(
                 "{}When issues persist, you can remove all build related global cache with: {}",
                 console::style("Hint: ").blue(),
@@ -177,6 +182,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             prune_workspace_registry().await?;
         }
     }
+    print_total_removed(total_removed);
     Ok(())
 }
 
@@ -186,19 +192,29 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     let mut dirs = vec![];
 
     if args.pypi {
-        dirs.push(cache_dir.join(consts::PYPI_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::PypiWheels,
+        )?);
     }
     if args.conda {
-        dirs.push(cache_dir.join(consts::CONDA_PACKAGE_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::CondaPackages,
+        )?);
     }
     if args.repodata {
-        dirs.push(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::Repodata,
+        )?);
     }
     if args.mapping {
-        dirs.push(cache_dir.join(consts::CONDA_PYPI_MAPPING_CACHE_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::PypiMapping,
+        )?);
     }
     if args.exec {
-        dirs.push(cache_dir.join(consts::CACHED_ENVS_DIR));
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::ExecEnvironments,
+        )?);
     }
     if args.build_backends {
         let cache_dirs = CacheDirs::new(
@@ -206,8 +222,10 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
                 .expect("cache dir is not absolute")
                 .into_assume_dir(),
         );
-        dirs.push(cache_dirs.build_backends().into());
-        dirs.push(cache_dir.join(consts::CACHED_BUILD_TOOL_ENVS_DIR));
+        dirs.push(cache_dirs.resolve_from_env::<BuildBackendsDir>().into());
+        dirs.push(pixi_config::cache_dir_for(
+            pixi_config::CacheKind::BuildToolEnvironments,
+        )?);
         // TODO: Let's clean deprecated cache directory.
         // This will be removed in a future release.
         dirs.push(cache_dir.join(consts::_CACHED_BUILD_ENVS_DIR));
@@ -218,13 +236,20 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
                 .expect("cache dir is not absolute")
                 .into_assume_dir(),
         );
-        dirs.push(cache_dirs.git().into());
-        dirs.push(cache_dirs.working_dirs().into());
-        dirs.push(cache_dirs.build_backends().into());
-        dirs.push(cache_dirs.url().into());
-        dirs.push(cache_dirs.source_builds().into());
-        dirs.push(cache_dirs.build_backend_metadata().into());
-        dirs.push(cache_dirs.source_metadata().into());
+        dirs.push(cache_dirs.resolve_from_env::<GitDir>().into());
+        dirs.push(cache_dirs.resolve_from_env::<BuildBackendsDir>().into());
+        dirs.push(cache_dirs.resolve_from_env::<UrlDir>().into());
+        dirs.push(
+            cache_dirs
+                .resolve_from_env::<SourceBuildArtifactsDir>()
+                .into(),
+        );
+        dirs.push(
+            cache_dirs
+                .resolve_from_env::<SourceBuildWorkspacesDir>()
+                .into(),
+        );
+        dirs.push(cache_dirs.resolve_from_env::<BackendMetadataDir>().into());
     }
     if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
@@ -240,9 +265,11 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         return Ok(());
     }
 
+    let mut total_removed: u64 = 0;
     for dir in dirs {
-        remove_folder_with_progress(dir, true).await?;
+        total_removed += remove_folder_with_progress(dir, true).await?;
     }
+    print_total_removed(total_removed);
     Ok(())
 }
 
@@ -264,16 +291,16 @@ async fn prune_workspace_registry() -> miette::Result<()> {
 async fn remove_folder_with_progress(
     folder: PathBuf,
     warning_non_existent: bool,
-) -> miette::Result<()> {
+) -> miette::Result<u64> {
     if !folder.exists() {
         if warning_non_existent {
             eprintln!(
                 "{} Folder {:?} was already clean.",
                 console::style("INFO:").yellow(),
-                &folder
+                folder
             );
         }
-        return Ok(());
+        return Ok(0);
     }
     let pb = global_multi_progress().add(ProgressBar::new_spinner());
     pb.enable_steady_tick(Duration::from_millis(100));
@@ -284,43 +311,142 @@ async fn remove_folder_with_progress(
         folder.clone().display()
     ));
 
-    match tokio_fs::remove_dir_all(&folder).await {
-        Ok(()) => {
+    let removed = {
+        let folder = folder.clone();
+        tokio::task::spawn_blocking(move || remove_dir_recording_size(&folder))
+            .await
+            .unwrap_or(Ok(0))
+    };
+
+    match removed {
+        Ok(size) => {
             pb.finish_with_message(format!(
-                "{} {}",
+                "{} {} ({})",
                 console::style("Removed").green(),
-                folder.display()
+                folder.display(),
+                human_bytes(size as f64)
             ));
+            Ok(size)
         }
-        Err(e) => {
+        Err((size, e)) => {
             pb.finish_with_message(format!(
                 "{} {} ({})",
                 console::style("Failed to remove").red(),
                 folder.display(),
                 e
             ));
+            Ok(size)
         }
     }
-    Ok(())
 }
 
-async fn remove_file(file: PathBuf, warning_non_existent: bool) -> miette::Result<()> {
+/// Recursively delete `path`, summing the size of every file/symlink that was
+/// successfully removed. On error, returns the partial total alongside the
+/// first I/O error encountered.
+fn remove_dir_recording_size(path: &Path) -> Result<u64, (u64, std::io::Error)> {
+    let meta = match fs_err::symlink_metadata(path) {
+        Ok(m) => m,
+        Err(e) => return Err((0, e)),
+    };
+
+    if meta.is_dir() && !meta.file_type().is_symlink() {
+        let mut total = 0u64;
+        let entries = match fs_err::read_dir(path) {
+            Ok(e) => e,
+            Err(e) => return Err((0, e)),
+        };
+        for entry in entries {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(e) => return Err((total, e)),
+            };
+            match remove_dir_recording_size(&entry.path()) {
+                Ok(size) => total = total.saturating_add(size),
+                Err((size, e)) => return Err((total.saturating_add(size), e)),
+            }
+        }
+        if let Err(e) = fs_err::remove_dir(path) {
+            return Err((total, e));
+        }
+        Ok(total)
+    } else {
+        let size = meta.len();
+        if let Err(e) = fs_err::remove_file(path) {
+            return Err((0, e));
+        }
+        Ok(size)
+    }
+}
+
+fn print_total_removed(total: u64) {
+    if total == 0 {
+        return;
+    }
+    eprintln!(
+        "{} {}",
+        console::style("Removed").green().bold(),
+        human_bytes(total as f64)
+    );
+}
+
+/// Build-related per-workspace cache directories. Aggregated here so
+/// `pixi clean` (workspace-level) and `pixi clean --build` wipe every
+/// location the command dispatcher writes to. Includes the legacy
+/// `.pixi/build/` path for migration from the pre-hoist layout.
+fn workspace_build_cache_dirs(workspace: &Workspace) -> Vec<PathBuf> {
+    let cache_dir = match pixi_config::get_cache_dir() {
+        Ok(c) => c,
+        Err(_) => return Vec::new(),
+    };
+    let Ok(cache_abs) = AbsPathBuf::new(cache_dir) else {
+        return Vec::new();
+    };
+    let Ok(workspace_abs) = AbsPathBuf::new(workspace.pixi_dir()) else {
+        return Vec::new();
+    };
+    let cache_dirs =
+        CacheDirs::new(cache_abs.into_assume_dir()).with_workspace(workspace_abs.into_assume_dir());
+    vec![
+        cache_dirs
+            .resolve_from_env::<SourceBuildArtifactsDir>()
+            .into(),
+        cache_dirs
+            .resolve_from_env::<SourceBuildWorkspacesDir>()
+            .into(),
+        cache_dirs.resolve_from_env::<BackendMetadataDir>().into(),
+        // Legacy pre-hoist location. Empty on fresh installs; still
+        // wiped so users migrating from the old layout see a clean
+        // `.pixi/`.
+        workspace.default_build_dir(),
+        workspace.build_dir(),
+    ]
+}
+
+async fn remove_file(file: PathBuf, warning_non_existent: bool) -> miette::Result<u64> {
     if !file.exists() {
         if warning_non_existent {
             eprintln!(
                 "{}",
-                console::style(format!("File {:?} was not found.", &file)).yellow()
+                console::style(format!("File {:?} was not found.", file)).yellow()
             );
         }
-        return Ok(());
+        return Ok(0);
     }
+
+    let size = fs_err::metadata(&file).map(|m| m.len()).unwrap_or(0);
 
     // Ignore errors
     let result = tokio_fs::remove_file(&file).await;
     if let Err(e) = result {
         tracing::info!("Failed to remove file {:?}: {}", file, e);
+        Ok(0)
     } else {
-        eprintln!("{} {}", console::style("removed").green(), file.display());
+        eprintln!(
+            "{} {} ({})",
+            console::style("removed").green(),
+            file.display(),
+            human_bytes(size as f64)
+        );
+        Ok(size)
     }
-    Ok(())
 }

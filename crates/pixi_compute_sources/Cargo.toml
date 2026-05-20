@@ -1,0 +1,41 @@
+[package]
+authors.workspace = true
+description = "Source-spec resolution and checkout Keys for the pixi compute engine"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_compute_sources"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+derive_more = { workspace = true, features = ["display"] }
+dirs = { workspace = true }
+futures = { workspace = true }
+miette = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+typed-path = { workspace = true }
+
+pixi_compute_cache_dirs = { workspace = true }
+pixi_compute_engine = { workspace = true }
+pixi_compute_network = { workspace = true }
+pixi_compute_reporters = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_git = { workspace = true }
+pixi_path = { workspace = true }
+pixi_record = { workspace = true }
+pixi_spec = { workspace = true }
+pixi_url = { workspace = true }
+url = { workspace = true }
+
+[dev-dependencies]
+fs-err = { workspace = true }
+pixi_compute_env_vars = { workspace = true }
+pixi_test_utils = { workspace = true }
+rattler_digest = { workspace = true }
+rattler_networking = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

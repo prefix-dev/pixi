@@ -127,14 +127,17 @@ impl RawPyPiRequirement {
                 self.extras,
                 self.marker,
             ),
-            (None, Some(path), None, None) => PixiPypiSpec::with_extras_and_markers(
-                PixiPypiSource::Path {
-                    path,
-                    editable: self.editable,
-                },
-                self.extras,
-                self.marker,
-            ),
+            (None, Some(path), None, None) => {
+                let given = path.display().to_string();
+                PixiPypiSpec::with_extras_and_markers(
+                    PixiPypiSource::Path {
+                        path: pixi_spec::Verbatim::new_with_given(path, given),
+                        editable: self.editable,
+                    },
+                    self.extras,
+                    self.marker,
+                )
+            }
             (None, None, Some(git), None) => {
                 let rev = match (self.branch, self.rev, self.tag) {
                     (Some(branch), None, None) => Some(GitReference::Branch(branch)),
@@ -382,7 +385,9 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                 table.insert(
                     "path",
                     toml_edit::Value::String(toml_edit::Formatted::new(
-                        path.to_string_lossy().to_string(),
+                        path.given()
+                            .map(|g| g.to_string())
+                            .unwrap_or_else(|| path.display().to_string()),
                     )),
                 );
                 if editable == &Some(true) {
@@ -606,7 +611,10 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PixiPypiSpec::new(PixiPypiSource::Path {
-                path: PathBuf::from("../numpy-test"),
+                path: pixi_spec::Verbatim::new_with_given(
+                    PathBuf::from("../numpy-test"),
+                    "../numpy-test".to_string(),
+                ),
                 editable: None,
             }),
         );
@@ -621,7 +629,10 @@ mod test {
         assert_eq!(
             requirement.first().unwrap().1,
             &PixiPypiSpec::new(PixiPypiSource::Path {
-                path: PathBuf::from("../numpy-test"),
+                path: pixi_spec::Verbatim::new_with_given(
+                    PathBuf::from("../numpy-test"),
+                    "../numpy-test".to_string(),
+                ),
                 editable: Some(true),
             })
         );

@@ -458,6 +458,8 @@ impl Feature {
 #[cfg(test)]
 mod tests {
 
+    use std::path::Path;
+
     use assert_matches::assert_matches;
 
     use super::*;
@@ -465,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_dependencies_borrowed() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "foo"
@@ -484,6 +486,7 @@ mod tests {
         [feature.bla.host-dependencies]
         # empty on purpose
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -530,7 +533,7 @@ mod tests {
 
     #[test]
     fn test_activation() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "foo"
@@ -543,6 +546,7 @@ mod tests {
         [target.linux-64.activation]
         scripts = ["linux-64.bat"]
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -563,7 +567,7 @@ mod tests {
 
     #[test]
     pub fn test_pypi_options_manifest() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "foo"
@@ -576,6 +580,7 @@ mod tests {
         [pypi-options]
         extra-index-urls = ["https://mypypi.org/simple"]
         "#,
+            Path::new(""),
         )
         .unwrap();
 

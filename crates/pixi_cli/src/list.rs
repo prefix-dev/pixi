@@ -219,8 +219,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Sort according to the sorting strategy
     match args.sort_by {
         SortBy::Size => {
-            packages_to_output
-                .sort_by(|a, b| a.size_bytes.unwrap_or(0).cmp(&b.size_bytes.unwrap_or(0)));
+            packages_to_output.sort_by_key(|a| a.size_bytes.unwrap_or(0));
         }
         SortBy::Name => {
             packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
@@ -230,7 +229,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    if packages_to_output.is_empty() {
+    if packages_to_output.is_empty() && !args.json {
         miette::bail!(
             "No packages found in '{}' environment for '{}' platform.",
             environment.name().fancy_display(),
@@ -269,7 +268,7 @@ fn get_field_cell(package: &Package, field: Field) -> Cell {
             };
             Cell::new(content)
         }
-        Field::Version => Cell::new(&package.version),
+        Field::Version => Cell::new(package.version.as_deref().unwrap_or_default()),
         Field::Build => Cell::new(package.build.as_deref().unwrap_or_default()),
         Field::BuildNumber => Cell::new(
             package

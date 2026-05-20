@@ -469,7 +469,7 @@ and how those ways interact with each other.
 
 Notes on environment variables in tasks:
 - Values set via `tasks.<name>.env` are interpreted by `deno_task_shell` when the task runs. Shell-style expansions like `env = { VAR = "$FOO" }` therefore work the same on all operating systems.
-- Templating is allowed in env variables, when you have something like `{ cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] }`. The arg `{{ backend }}` value is interpreted by the `backend` values passed in.  
+- Templating is allowed in env variables, when you have something like `{ cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] }`. The arg `{{ backend }}` value is interpreted by the `backend` values passed in.
 
 !!! warning
 
@@ -587,3 +587,85 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
   - `echo data[0-9].csv` will echo all filenames that have a single number after `data` and before `.csv`
 
 More info in [`deno_task_shell` documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner).
+
+## Best Practices
+
+Task can be very handy and may even replace simple Makefiles.
+There are a few principles that can make tasks more useful.
+
+### Use a `description`
+
+It is a good habit to add a description to your task:
+
+```toml title="pixi.toml"
+[tasks]
+echo = { cmd = "echo Hello Pixi user", description = "Friendly greeting to a Pixi user" }
+build = { cmd = "build", description = "Build everything" }
+test = { cmd = "test", description = "Run all tests" }
+```
+
+Now, the command `pixi task list` will not only list all task names but also
+the their descriptions.
+
+```shell
+pixi task list
+Tasks that can run on this machine:
+-----------------------------------
+build, echo, test
+Task   Description
+build  Build everything
+echo   Friendly greeting to a Pixi user
+test   Run all tests
+```
+
+This list can be very helpful to quickly find the right tasks.
+
+### Use different TOML syntax for long commands
+
+Tasks can get quite long:
+
+```toml title="pixi.toml"
+echo-arg = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello"}], description = "Display the given argument" }
+```
+
+While it is possible to add line breaks inside the task in your `pixi.toml` to
+make the task more readable:
+
+```toml title="pixi.toml"
+echo-arg = {
+    cmd = "echo {{ ARGUMENT }}",
+    args = [{"arg" = "ARGUMENT", "default" = "hello"}],
+    description = "Display the given argument"
+}
+```
+
+it will not work in `pyproject.toml` because it supports only TOML 1.0,
+that doesn't allow line breaks inside the task specification.
+Other tools can't parse the `pyproject.toml` anymore.
+So if you use an editable dependency:
+
+```toml title="pyproject.toml"
+[tool.pixi.pypi-dependencies]
+myproject = { path = ".", editable = true }
+```
+
+Pixi will use your build system and reports an error:
+
+```shell
+Error:   × Failed to update PyPI packages for environment 'default'
+  ├─▶ Failed to prepare distributions
+  ├─▶ Failed to build `proj1 @ file:///.../proj1`
+  ├─▶ The build backend returned an error
+  ╰─▶ Call to `hatchling.build.build_editable` failed (exit status: 1)
+```
+
+There is an alternative syntax, adding the task name to the table header:
+
+```toml title="pyproject.toml"
+[tool.pixi.tasks.echo-arg]
+cmd = "echo {{ ARGUMENT }}"
+args = [{"arg" = "ARGUMENT", "default" = "hello"}]
+description = "Display the given argument"
+```
+
+This is valid  TOML 1.0 syntax and makes more complex task better readable.

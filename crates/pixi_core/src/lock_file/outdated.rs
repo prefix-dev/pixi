@@ -1,27 +1,70 @@
-use super::{verify_environment_satisfiability, verify_platform_satisfiability};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::Arc,
+};
+
+use super::{
+    CondaPrefixUpdater,
+    resolve::build_dispatch::LazyBuildDispatchDependencies,
+    satisfiability::{
+        VerifySatisfiabilityContext, pypi_metadata, verify_environment_satisfiability,
+    },
+    verify_platform_satisfiability,
+};
 use crate::{
     Workspace,
-    lock_file::satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
+    lock_file::{
+        records_by_name::LockedPypiRecordsByName,
+        satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
+    },
     workspace::{Environment, SolveGroup},
 };
+use dashmap::DashMap;
 use fancy_display::FancyDisplay;
-use futures::FutureExt;
 use futures::StreamExt;
-use futures::stream::FuturesUnordered;
 use itertools::Itertools;
-use pixi_command_dispatcher::CommandDispatcher;
+use once_cell::sync::OnceCell;
+use pixi_command_dispatcher::executor::CancellationAwareFutures;
+use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
 use pixi_consts::consts;
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_record::LockFileResolver;
+use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockedPackageRef};
-use std::collections::{HashMap, HashSet};
+use rattler_lock::{LockFile, LockedPackage};
+
+/// Cache for build-related resources that can be shared between
+/// satisfiability checking and PyPI resolution.
+#[derive(Default)]
+pub struct PypiEnvironmentBuildCache {
+    /// Lazily initialized build dispatch dependencies (interpreter, env, etc.)
+    pub lazy_build_dispatch_deps: LazyBuildDispatchDependencies,
+    /// Optional conda prefix updater (created during satisfiability checking)
+    pub conda_prefix_updater: OnceCell<CondaPrefixUpdater>,
+}
+
+/// Key for the build cache, combining environment name and platform.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BuildCacheKey {
+    pub environment: EnvironmentName,
+    pub platform: Platform,
+}
+
+impl BuildCacheKey {
+    pub fn new(environment: EnvironmentName, platform: Platform) -> Self {
+        Self {
+            environment,
+            platform,
+        }
+    }
+}
 
 /// A struct that contains information about specific outdated environments.
 ///
-/// Use the [`OutdatedEnvironments::from_project_and_lock_file`] to create an
+/// Use [`OutdatedEnvironments::from_workspace_and_lock_file`] to create an
 /// instance of this struct by examining the project and lock-file and finding
 /// any mismatches.
-#[derive(Debug)]
 pub struct OutdatedEnvironments<'p> {
     /// The conda environments that are considered out of date with the
     /// lock-file.
@@ -35,6 +78,22 @@ pub struct OutdatedEnvironments<'p> {
     /// discarded. This is the case for instance when the order of the
     /// channels changed.
     pub disregard_locked_content: DisregardLockedContent<'p>,
+
+    /// Lazily initialized UV context for building dynamic metadata.
+    /// This is shared between satisfiability checking and pypi resolution.
+    pub uv_context: OnceCell<UvResolutionContext>,
+
+    /// Per-environment-platform build caches for sharing resources between
+    /// satisfiability checking and PyPI resolution.
+    pub build_caches: HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
+
+    /// Cache for static metadata extracted from pyproject.toml files.
+    /// This is shared across platforms since static metadata is platform-independent.
+    pub static_metadata_cache: HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+
+    /// Locked pypi records with metadata, resolved during the satisfiability
+    /// check. Forwarded to the update path to avoid re-reading source trees.
+    pub locked_pypi_records: HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
 }
 
 /// A struct that stores whether the locked content of certain environments
@@ -66,13 +125,20 @@ impl<'p> OutdatedEnvironments<'p> {
         workspace: &'p Workspace,
         command_dispatcher: CommandDispatcher,
         lock_file: &LockFile,
+        resolver: &LockFileResolver,
     ) -> Self {
         // Find all targets that are not satisfied by the lock-file
-        let UnsatisfiableTargets {
-            mut outdated_conda,
-            mut outdated_pypi,
-            disregard_locked_content,
-        } = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file).await;
+        let (
+            UnsatisfiableTargets {
+                mut outdated_conda,
+                mut outdated_pypi,
+                disregard_locked_content,
+            },
+            uv_context,
+            build_caches,
+            static_metadata_cache,
+            locked_pypi_records,
+        ) = find_unsatisfiable_targets(workspace, command_dispatcher, lock_file, resolver).await;
 
         // Extend the outdated targets to include the solve groups
         let (mut conda_solve_groups_out_of_date, mut pypi_solve_groups_out_of_date) =
@@ -126,6 +192,10 @@ impl<'p> OutdatedEnvironments<'p> {
             conda: outdated_conda,
             pypi: outdated_pypi,
             disregard_locked_content,
+            uv_context,
+            build_caches,
+            static_metadata_cache,
+            locked_pypi_records,
         }
     }
 
@@ -145,13 +215,38 @@ struct UnsatisfiableTargets<'p> {
 
 /// Find all targets (combination of environment and platform) who's
 /// requirements in the `project` are not satisfied by the `lock_file`.
+///
+/// Returns the unsatisfiable targets, the lazily-initialized UV context
+/// (which may have been initialized during satisfiability checking),
+/// build caches for each environment, and the static metadata cache.
 async fn find_unsatisfiable_targets<'p>(
     project: &'p Workspace,
     command_dispatcher: CommandDispatcher,
     lock_file: &LockFile,
-) -> UnsatisfiableTargets<'p> {
+    resolver: &LockFileResolver,
+) -> (
+    UnsatisfiableTargets<'p>,
+    OnceCell<UvResolutionContext>,
+    HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
+    HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
+    HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
+) {
     let mut verified_environments = HashMap::new();
+    let mut locked_pypi_by_env_platform = HashMap::new();
     let mut unsatisfiable_targets = UnsatisfiableTargets::default();
+
+    // Create UV context lazily for building dynamic metadata
+    let uv_context: OnceCell<UvResolutionContext> = OnceCell::new();
+
+    // Create build caches for sharing between satisfiability and resolution
+    let build_caches: DashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>> = DashMap::new();
+
+    // Create static metadata cache for sharing across platforms
+    let static_metadata_cache: DashMap<PathBuf, pypi_metadata::LocalPackageMetadata> =
+        DashMap::new();
+
+    let project_config = project.config();
+
     for environment in project.environments() {
         let platforms = environment.platforms();
 
@@ -166,7 +261,7 @@ async fn find_unsatisfiable_targets<'p>(
                 .outdated_conda
                 .entry(environment.clone())
                 .or_default()
-                .extend(platforms);
+                .extend(platforms.iter().copied());
 
             continue;
         };
@@ -182,7 +277,7 @@ async fn find_unsatisfiable_targets<'p>(
                 .outdated_conda
                 .entry(environment.clone())
                 .or_default()
-                .extend(platforms);
+                .extend(platforms.iter().copied());
 
             match unsat {
                 EnvironmentUnsat::AdditionalPlatformsInLockFile(platforms) => {
@@ -215,6 +310,12 @@ async fn find_unsatisfiable_targets<'p>(
                         .insert(environment.clone());
                 }
 
+                EnvironmentUnsat::SourceExcludeNewerMismatch(..) => {
+                    // Source packages will be re-resolved with updated
+                    // timestamps during the update phase. No need to disregard
+                    // locked content.
+                }
+
                 EnvironmentUnsat::IndexesMismatch(_)
                 | EnvironmentUnsat::InvalidDistExtensionInNoBuild(_)
                 | EnvironmentUnsat::NoBuildWithNonBinaryPackages(_)
@@ -228,53 +329,80 @@ async fn find_unsatisfiable_targets<'p>(
                 }
             }
 
-            continue;
+            if unsatisfiable_targets
+                .disregard_locked_content
+                .should_disregard_conda(&environment)
+            {
+                continue;
+            }
         }
 
-        // Verify each individual platform concurrently
-        let mut verify_futures = FuturesUnordered::new();
+        // Verify each individual platform in parallel
+        let mut platform_futures = CancellationAwareFutures::new(command_dispatcher.executor());
         for platform in platforms {
-            verify_futures.push(
-                verify_platform_satisfiability(
-                    &environment,
-                    command_dispatcher.clone(),
-                    locked_environment,
-                    platform,
-                    project.root(),
-                )
-                .map(move |result| (platform, result)),
-            );
+            let ctx = VerifySatisfiabilityContext {
+                environment: &environment,
+                command_dispatcher: command_dispatcher.clone(),
+                platform,
+                project_root: project.root(),
+                uv_context: &uv_context,
+                config: project_config,
+                project_env_vars: project.env_vars().clone(),
+                build_caches: &build_caches,
+                static_metadata_cache: &static_metadata_cache,
+                resolver,
+            };
+            platform_futures.push(async move {
+                let result = verify_platform_satisfiability(&ctx, locked_environment).await;
+                Ok::<_, CommandDispatcherError<std::convert::Infallible>>((platform, result))
+            });
         }
 
-        while let Some((platform, verify_result)) = verify_futures.next().await {
-            match verify_result {
-                Ok(verified_env) => {
-                    verified_environments.insert((environment.clone(), platform), verified_env);
-                }
-                Err(unsat) if unsat.is_pypi_only() => {
-                    tracing::info!(
-                        "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                        environment.name().fancy_display()
-                    );
+        // Collect all platform results
+        while let Some(result) = platform_futures.next().await {
+            match result {
+                Ok((platform, outcome)) => {
+                    match outcome {
+                        Ok((verified_env, locked_pypi)) => {
+                            verified_environments
+                                .insert((environment.clone(), platform), verified_env);
+                            locked_pypi_by_env_platform
+                                .insert((environment.clone(), platform), locked_pypi);
+                        }
+                        Err(CommandDispatcherError::Cancelled) => {
+                            // Cancellation is handled by CancellationAwareFutures;
+                            // remaining platforms will be skipped automatically.
+                        }
+                        Err(CommandDispatcherError::Failed(unsat)) if unsat.is_pypi_only() => {
+                            tracing::info!(
+                                "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                                environment.name().fancy_display()
+                            );
 
-                    unsatisfiable_targets
-                        .outdated_pypi
-                        .entry(environment.clone())
-                        .or_default()
-                        .insert(platform);
-                }
-                Err(unsat) => {
-                    tracing::info!(
-                        "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                        environment.name().fancy_display()
-                    );
+                            unsatisfiable_targets
+                                .outdated_pypi
+                                .entry(environment.clone())
+                                .or_default()
+                                .insert(platform);
+                        }
+                        Err(CommandDispatcherError::Failed(unsat)) => {
+                            tracing::info!(
+                                "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                                environment.name().fancy_display()
+                            );
 
-                    unsatisfiable_targets
-                        .outdated_conda
-                        .entry(environment.clone())
-                        .or_default()
-                        .insert(platform);
+                            unsatisfiable_targets
+                                .outdated_conda
+                                .entry(environment.clone())
+                                .or_default()
+                                .insert(platform);
+                        }
+                    }
                 }
+                Err(CommandDispatcherError::Cancelled) => {
+                    unreachable!("platform task cannot cancel")
+                }
+                Err(CommandDispatcherError::Failed(_)) => unreachable!("platform task cannot fail"),
             }
         }
     }
@@ -329,7 +457,13 @@ async fn find_unsatisfiable_targets<'p>(
             .insert(platform);
     }
 
-    unsatisfiable_targets
+    (
+        unsatisfiable_targets,
+        uv_context,
+        build_caches.into_iter().collect(),
+        static_metadata_cache.into_iter().collect(),
+        locked_pypi_by_env_platform,
+    )
 }
 
 /// Given a mapping of outdated targets, construct a new mapping of all the
@@ -426,25 +560,29 @@ fn find_inconsistent_solve_groups<'p>(
                 continue;
             };
 
-            for package in locked_env.packages(platform).into_iter().flatten() {
+            let lock_platform = locked_env.lock_file().platform(&platform.to_string());
+            for package in lock_platform
+                .and_then(|p| locked_env.packages(p))
+                .into_iter()
+                .flatten()
+            {
                 match package {
-                    LockedPackageRef::Conda(pkg) => {
-                        match conda_packages_by_name.get(&pkg.record().name) {
-                            None => {
-                                conda_packages_by_name
-                                    .insert(pkg.record().name.clone(), pkg.location().clone());
-                            }
-                            Some(url) if pkg.location() != url => {
-                                conda_package_mismatch = true;
-                            }
-                            _ => {}
-                        }
-                    }
-                    LockedPackageRef::Pypi(pkg, _) => match pypi_packages_by_name.get(&pkg.name) {
+                    LockedPackage::Conda(pkg) => match conda_packages_by_name.get(pkg.name()) {
                         None => {
-                            pypi_packages_by_name.insert(pkg.name.clone(), pkg.location.clone());
+                            conda_packages_by_name
+                                .insert(pkg.name().clone(), pkg.location().clone());
                         }
-                        Some(url) if &pkg.location != url => {
+                        Some(url) if pkg.location() != url => {
+                            conda_package_mismatch = true;
+                        }
+                        _ => {}
+                    },
+                    LockedPackage::Pypi(pkg) => match pypi_packages_by_name.get(pkg.name()) {
+                        None => {
+                            pypi_packages_by_name
+                                .insert(pkg.name().clone(), pkg.location().clone());
+                        }
+                        Some(url) if pkg.location() != url => {
                             pypi_package_mismatch = true;
                         }
                         _ => {}

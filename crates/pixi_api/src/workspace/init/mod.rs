@@ -157,7 +157,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                 Some(name) => (name.to_string(), false),
                 None => (default_name.clone(), true),
             };
-            let environments = pyproject.environments_from_groups().into_diagnostic()?;
+            let environments = pyproject.environments_from_groups(&dir).into_diagnostic()?;
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,

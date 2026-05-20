@@ -10,7 +10,7 @@ use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
 use rattler_conda_types::{
     ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
 };
-use rattler_lock::{CondaPackageData, Environment, LockedPackageRef};
+use rattler_lock::{CondaPackageData, Environment, LockedPackage};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
@@ -105,7 +105,14 @@ fn render_env_platform(
     platform: &Platform,
     ignore_pypi_errors: bool,
 ) -> miette::Result<()> {
-    let packages = env.packages(*platform).ok_or(miette::miette!(
+    let lock_platform = env
+        .lock_file()
+        .platform(&platform.to_string())
+        .ok_or(miette::miette!(
+            "platform '{platform}' not found for env {}",
+            env_name,
+        ))?;
+    let packages = env.packages(lock_platform).ok_or(miette::miette!(
         "platform '{platform}' not found for env {}",
         env_name,
     ))?;
@@ -114,21 +121,21 @@ fn render_env_platform(
 
     for package in packages {
         match package {
-            LockedPackageRef::Conda(CondaPackageData::Binary(p)) => {
+            LockedPackage::Conda(CondaPackageData::Binary(p)) => {
                 conda_packages_from_lockfile.push(p.clone())
             }
-            LockedPackageRef::Conda(CondaPackageData::Source(_)) => {
+            LockedPackage::Conda(CondaPackageData::Source(_)) => {
                 miette::bail!(
                     "Conda source packages are not supported in a conda explicit spec. \
                         Specify `--ignore-source-errors` to ignore this error and create \
                         a spec file containing only the binary conda dependencies from the lockfile."
                 );
             }
-            LockedPackageRef::Pypi(pypi, _) => {
+            LockedPackage::Pypi(pypi) => {
                 if ignore_pypi_errors {
                     tracing::warn!(
                         "ignoring PyPI package {} since PyPI packages are not supported",
-                        pypi.name
+                        pypi.name()
                     );
                 } else {
                     miette::bail!(
@@ -143,8 +150,8 @@ fn render_env_platform(
 
     // Topologically sort packages
     let repodata = conda_packages_from_lockfile
-        .iter()
-        .map(|p| RepoDataRecord::try_from(p.clone()))
+        .into_iter()
+        .map(|p| RepoDataRecord::try_from(*p))
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()
         .with_context(|| "Failed to convert conda packages to RepoDataRecords")?;
@@ -170,11 +177,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(args.config.clone());
 
     let lockfile = workspace
-        .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-            no_install: args.no_install_config.no_install,
-            max_concurrent_solves: workspace.config().max_concurrent_solves(),
-        })
+        .update_lock_file(
+            Some(pixi_reporters::TopLevelProgress::from_global()),
+            UpdateLockFileOptions {
+                lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+                no_install: args.no_install_config.no_install,
+                max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
+            },
+        )
         .await?
         .0
         .into_lock_file();
@@ -198,7 +209,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut env_platform = Vec::new();
 
     for (env_name, env) in environments {
-        let available_platforms: HashSet<Platform> = HashSet::from_iter(env.platforms());
+        let available_platforms: HashSet<Platform> = env.platforms().map(|p| p.subdir()).collect();
 
         if let Some(ref platforms) = args.platform {
             for plat in platforms {
@@ -252,7 +263,8 @@ mod tests {
         let output_dir = tempdir().unwrap();
 
         for (env_name, env) in lockfile.environments() {
-            for platform in env.platforms() {
+            for lock_platform in env.platforms() {
+                let platform = lock_platform.subdir();
                 // example contains pypi dependencies so should fail if `ignore_pypi_errors` is
                 // false.
                 assert!(

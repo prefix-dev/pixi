@@ -10,14 +10,19 @@ use miette::IntoDiagnostic;
 use pixi_build_backend::variants::NormalizedKey;
 use pixi_build_backend::{
     Variable,
+    compilers::default_compiler_variants,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
+    tools::BackendIdentifier,
     traits::ProjectModel,
 };
 use pyproject_toml::PyProjectToml;
-use rattler_conda_types::{ChannelUrl, Platform, Version, VersionBumpType, package::EntryPoint};
-use recipe_stage0::matchspec::PackageDependency;
-use recipe_stage0::recipe::{Item, NoArchKind, Python, Script};
+use rattler_build_recipe::stage0::{
+    ConditionalList, Item, PythonBuild, Script, SerializableMatchSpec, Value,
+};
+use rattler_conda_types::{
+    ChannelUrl, NoArchType, Platform, Version, VersionBumpType, package::EntryPoint,
+};
 use std::collections::HashSet;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -31,6 +36,8 @@ use crate::pypi_mapping::{
     detect_compilers_from_build_requirements, filter_mapped_pypi_deps,
     map_requirements_with_channels,
 };
+
+const CYTHON_INPUT_GLOBS: &[&str] = &["**/*.{pyx,pxd,pxi}"];
 
 /// Compute the `python_abi` version spec from an optional `requires-python`
 /// specifier string.
@@ -73,6 +80,13 @@ fn python_abi_spec_from_requires_python(requires_python: Option<&str>) -> miette
     Ok(format!(">={lower_bound},<{upper_bound}"))
 }
 
+/// Parse a string into an `Item<SerializableMatchSpec>` for use in requirements.
+fn matchspec_item(
+    spec: &str,
+) -> Result<Item<SerializableMatchSpec>, rattler_conda_types::ParseMatchSpecError> {
+    Ok(Item::Value(Value::new_concrete(spec.parse()?, None)))
+}
+
 #[derive(Default, Clone)]
 pub struct PythonGenerator {}
 
@@ -80,19 +94,24 @@ impl PythonGenerator {
     /// Read the entry points from the pyproject.toml and return them as a list.
     ///
     /// If the manifest is not a pyproject.toml file no entry-points are added.
-    pub(crate) fn entry_points(pyproject_manifest: Option<PyProjectToml>) -> Vec<EntryPoint> {
+    pub(crate) fn entry_points(
+        pyproject_manifest: Option<PyProjectToml>,
+    ) -> ConditionalList<EntryPoint> {
         let scripts = pyproject_manifest
             .as_ref()
             .and_then(|p| p.project.as_ref())
             .and_then(|p| p.scripts.as_ref());
 
-        scripts
+        let items: Vec<Item<EntryPoint>> = scripts
             .into_iter()
             .flatten()
             .flat_map(|(name, entry_point)| {
                 EntryPoint::from_str(&format!("{name} = {entry_point}"))
+                    .map(|ep| Item::Value(Value::new_concrete(ep, None)))
             })
-            .collect()
+            .collect();
+
+        ConditionalList::new(items)
     }
 }
 
@@ -150,6 +169,17 @@ impl GenerateRecipe for PythonGenerator {
         // the ProjectModel trait's platform-aware API instead of trying to evaluate
         // rattler-build selectors with simple string comparison.
         let model_dependencies = model.dependencies(Some(host_platform));
+        let cython_pkg = pixi_build_types::SourcePackageName::from(
+            rattler_conda_types::PackageName::new_unchecked("cython"),
+        );
+        let has_cython_dependency = model_dependencies.contains(&cython_pkg)
+            || pyproject_metadata_provider
+                .build_system_requires()?
+                .is_some_and(|requirements| {
+                    requirements
+                        .iter()
+                        .any(|req| req.name.as_ref().eq_ignore_ascii_case(cython_pkg.as_ref()))
+                });
 
         // Ensure the python build tools are added to the `host` requirements.
         // Please note: this is a subtle difference for python, where the build tools
@@ -159,14 +189,13 @@ impl GenerateRecipe for PythonGenerator {
         let installer =
             Installer::determine_installer_from_names(model_dependencies.build_and_host_names());
 
-        let installer_name = installer.package_name().to_string();
-        let installer_pkg = pixi_build_types::SourcePackageName::from(installer_name.as_str());
+        let installer_pkg = installer.package_name();
 
         // add installer in the host requirements
         if !model_dependencies.host.contains_key(&installer_pkg) {
             requirements
                 .host
-                .push(installer_name.parse().into_diagnostic()?);
+                .push(matchspec_item(installer_pkg.as_ref()).into_diagnostic()?);
         }
 
         // Get Python requirement spec
@@ -176,9 +205,10 @@ impl GenerateRecipe for PythonGenerator {
         };
 
         // Add python to host and run requirements, if not already set in the package manifest
-        let python_pkg = pixi_build_types::SourcePackageName::from("python");
-        let python_requirement: Item<PackageDependency> =
-            python_requirement_str.parse().into_diagnostic()?;
+        let python_pkg = pixi_build_types::SourcePackageName::from(
+            rattler_conda_types::PackageName::new_unchecked("python"),
+        );
+        let python_requirement = matchspec_item(&python_requirement_str).into_diagnostic()?;
         if !model_dependencies.host.contains_key(&python_pkg) {
             requirements.host.push(python_requirement.clone());
         }
@@ -231,8 +261,8 @@ impl GenerateRecipe for PythonGenerator {
         if config.abi3 == Some(true) {
             let requires_python_str = pyproject_metadata_provider.requires_python().ok().flatten();
             let abi_spec = python_abi_spec_from_requires_python(requires_python_str.as_deref())?;
-            let python_abi_req: Item<PackageDependency> =
-                format!("python_abi {abi_spec}").parse().into_diagnostic()?;
+            let python_abi_req =
+                matchspec_item(&format!("python_abi {abi_spec}")).into_diagnostic()?;
             requirements.host.push(python_abi_req);
         }
 
@@ -265,7 +295,7 @@ impl GenerateRecipe for PythonGenerator {
                 for match_spec in filter_mapped_pypi_deps(&mapped_deps, &skip_packages) {
                     requirements
                         .run
-                        .push(match_spec.to_string().parse().into_diagnostic()?);
+                        .push(matchspec_item(&match_spec.to_string()).into_diagnostic()?);
                 }
             }
 
@@ -290,7 +320,7 @@ impl GenerateRecipe for PythonGenerator {
                 for match_spec in filter_mapped_pypi_deps(&mapped_deps, &skip_packages) {
                     requirements
                         .host
-                        .push(match_spec.to_string().parse().into_diagnostic()?);
+                        .push(matchspec_item(&match_spec.to_string()).into_diagnostic()?);
                 }
             }
         }
@@ -327,9 +357,9 @@ impl GenerateRecipe for PythonGenerator {
         }
         .render();
 
-        // Convert the is_noarch boolean to the NoArchKind enum
+        // Convert the is_noarch boolean to the NoArchType value
         let noarch_kind = if is_noarch {
-            Some(NoArchKind::Python)
+            Some(Value::new_concrete(NoArchType::python(), None))
         } else {
             None
         };
@@ -346,24 +376,40 @@ impl GenerateRecipe for PythonGenerator {
         };
 
         // Construct python specific settings
-        let python = Python {
+        let python = PythonBuild {
             entry_points: PythonGenerator::entry_points(pyproject_manifest),
-            version_independent: config.abi3 == Some(true),
+            version_independent: if config.abi3 == Some(true) {
+                Some(Value::new_concrete(true, None))
+            } else {
+                None
+            },
+            ..PythonBuild::default()
         };
 
         generated_recipe.recipe.build.python = python;
         generated_recipe.recipe.build.noarch = noarch_kind;
 
-        generated_recipe.recipe.build.script = Script {
-            content: build_script,
-            env: config.env.clone(),
-            ..Script::default()
-        };
+        generated_recipe.recipe.build.script = Script::from_content(build_script)
+            .with_env(
+                config
+                    .env
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                    .collect(),
+            )
+            .with_secrets(model.secrets.iter().cloned().collect());
 
         // Add the metadata input globs from the MetadataProvider
         generated_recipe
             .metadata_input_globs
             .extend(pyproject_metadata_provider.input_globs());
+        if has_cython_dependency {
+            // Cython inputs affect compiled extension artifacts even when the
+            // Python package itself is installed editable.
+            generated_recipe
+                .build_input_globs
+                .extend(CYTHON_INPUT_GLOBS.iter().map(|glob| (*glob).to_string()));
+        }
 
         // Log any warnings collected during metadata extraction
         for warning in pyproject_metadata_provider.warnings() {
@@ -410,7 +456,7 @@ impl GenerateRecipe for PythonGenerator {
         let python_globs = if editable {
             Vec::new()
         } else {
-            Vec::from(["**/*.py", "**/*.pyx"])
+            Vec::from(["**/*.py"])
         };
 
         Ok(base_globs
@@ -426,25 +472,18 @@ impl GenerateRecipe for PythonGenerator {
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        let mut variants = BTreeMap::new();
-
-        if host_platform.is_windows() {
-            // Default to the Visual Studio 2022 compiler on Windows
-            // Not 2019 due to Conda-forge switching and the mainstream support dropping in 2024.
-            // rattler-build will default to vs2017 which for most github runners is too
-            // old.
-            variants.insert(NormalizedKey::from("c_compiler"), vec!["vs2022".into()]);
-            variants.insert(NormalizedKey::from("cxx_compiler"), vec!["vs2022".into()]);
-        }
-
-        Ok(variants)
+        Ok(default_compiler_variants(host_platform))
     }
 }
 
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<PythonGenerator>::new(log, Arc::default())
+        IntermediateBackendInstantiator::<PythonGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            log,
+            Arc::default(),
+        )
     })
     .await
     {
@@ -460,7 +499,7 @@ mod tests {
     use indexmap::IndexMap;
     use pixi_build_backend::utils::test::intermediate_conda_outputs;
     use pixi_build_types::VariantValue;
-    use recipe_stage0::recipe::{Item, Value};
+    use rattler_build_recipe::stage0::Item;
     use tokio::fs;
 
     use super::*;
@@ -631,7 +670,7 @@ version = "0.1.0"
     }
 
     #[tokio::test]
-    async fn test_pip_is_in_host_requirements() {
+    async fn test_uv_is_in_host_requirements() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -798,7 +837,10 @@ version = "0.1.0"
         let compiler_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
+                Item::Value(value) => value
+                    .as_template()
+                    .filter(|t| t.to_string().contains("compiler"))
+                    .map(|t| t.to_string()),
                 _ => None,
             })
             .collect();
@@ -866,7 +908,10 @@ version = "0.1.0"
         let compiler_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
+                Item::Value(value) => value
+                    .as_template()
+                    .filter(|t| t.to_string().contains("compiler"))
+                    .map(|t| t.to_string()),
                 _ => None,
             })
             .collect();
@@ -918,7 +963,14 @@ version = "0.1.0"
         .expect("Failed to generate recipe");
 
         assert!(
-            matches!(recipe.recipe.build.noarch, Some(NoArchKind::Python)),
+            recipe
+                .recipe
+                .build
+                .noarch
+                .as_ref()
+                .and_then(|v| v.as_concrete())
+                .map(|t| t.is_python())
+                == Some(true),
             "noarch should default to true when no compilers specified"
         );
     }
@@ -955,7 +1007,14 @@ version = "0.1.0"
             .expect("Failed to generate recipe");
 
         assert!(
-            matches!(recipe.recipe.build.noarch, Some(NoArchKind::Python)),
+            recipe
+                .recipe
+                .build
+                .noarch
+                .as_ref()
+                .and_then(|v| v.as_concrete())
+                .map(|t| t.is_python())
+                == Some(true),
             "explicit noarch=true should override compiler presence"
         );
     }
@@ -977,6 +1036,95 @@ version = "0.1.0"
             recipe.recipe.build.noarch.is_none(),
             "explicit noarch=false should override absence of compilers"
         );
+    }
+
+    #[tokio::test]
+    async fn test_cython_input_globs_added_for_model_dependency() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "cython": {
+                            "binary": {
+                                "version": "*"
+                            }
+                        }
+                    }
+                },
+            }
+        });
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &PythonBackendConfig::default_with_ignore_pyproject_manifest(),
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert!(
+            generated_recipe
+                .build_input_globs
+                .contains(CYTHON_INPUT_GLOBS[0])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cython_input_globs_added_for_build_system_requires() {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            r#"[build-system]
+requires = ["setuptools", "Cython"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foobar"
+version = "0.1.0"
+"#,
+        )
+        .await
+        .expect("Failed to write pyproject.toml");
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &minimal_project(),
+                &PythonBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert!(
+            generated_recipe
+                .build_input_globs
+                .contains(CYTHON_INPUT_GLOBS[0])
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cython_input_globs_not_added_without_cython_dependency() {
+        let recipe = generate_test_recipe(&PythonBackendConfig {
+            ignore_pyproject_manifest: Some(true),
+            ..Default::default()
+        })
+        .await
+        .expect("Failed to generate recipe");
+
+        assert!(!recipe.build_input_globs.contains(CYTHON_INPUT_GLOBS[0]));
     }
 
     #[test]
@@ -1078,7 +1226,7 @@ build-backend = "hatchling.build"
             "run deps should only contain python when ignore_pypi_mapping=true"
         );
 
-        // Host requirements should only contain pip (auto-added installer) and python
+        // Host requirements should only contain uv (auto-added default installer) and python
         let host_deps: Vec<String> = generated_recipe
             .recipe
             .requirements
@@ -1089,8 +1237,8 @@ build-backend = "hatchling.build"
 
         assert_eq!(
             host_deps,
-            vec!["pip", "python"],
-            "host deps should only contain pip and python when ignore_pypi_mapping=true"
+            vec!["uv", "python"],
+            "host deps should only contain uv and python when ignore_pypi_mapping=true"
         );
     }
 
@@ -1196,7 +1344,15 @@ build-backend = "setuptools.build_meta"
         );
         // Check version_independent is set
         assert!(
-            generated_recipe.recipe.build.python.version_independent,
+            generated_recipe
+                .recipe
+                .build
+                .python
+                .version_independent
+                .as_ref()
+                .and_then(|v| v.as_concrete())
+                .copied()
+                == Some(true),
             "version_independent should be true when abi3=true"
         );
     }

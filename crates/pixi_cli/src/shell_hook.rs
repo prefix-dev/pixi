@@ -1,8 +1,9 @@
-use std::{collections::HashMap, default::Default};
+use std::{collections::HashMap, default::Default, path::PathBuf};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
+use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
@@ -60,6 +61,7 @@ pub struct Args {
 #[derive(Serialize)]
 struct ShellEnv<'a> {
     environment_variables: &'a HashMap<String, String>,
+    activation_scripts: Vec<PathBuf>,
 }
 
 /// Generates the activation script.
@@ -134,8 +136,17 @@ async fn generate_environment_json(
     )
     .await?;
 
+    let platform = Platform::current();
+    let activation_scripts: Vec<PathBuf> = environment
+        .activation_scripts(Some(platform))
+        .into_iter()
+        .map(|s| environment.workspace().root().join(s))
+        .filter(|p| p.is_file())
+        .collect();
+
     let shell_env = ShellEnv {
         environment_variables,
+        activation_scripts,
     };
 
     serde_json::to_string(&shell_env).into_diagnostic()
@@ -156,11 +167,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
+        Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
             lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
             no_install: args.lock_and_install_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
         },
         ReinstallPackages::default(),
         &pixi_core::environment::InstallFilter::default(),
@@ -207,10 +220,13 @@ mod tests {
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 
-        let script =
-            generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)
-                .await
-                .unwrap();
+        let script = generate_activation_script(
+            Some(ShellEnum::Bash(Bash::default())),
+            &environment,
+            &project,
+        )
+        .await
+        .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
 

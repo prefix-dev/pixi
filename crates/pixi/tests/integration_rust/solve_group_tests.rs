@@ -205,14 +205,17 @@ async fn test_purl_are_added_for_pypi() {
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
+    let p = lock_file
+        .platform(&Platform::current().to_string())
+        .unwrap();
     lock_file
         .default_environment()
         .unwrap()
-        .packages(Platform::current())
+        .packages(p)
         .unwrap()
         .for_each(|dep| {
-            if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
-                assert!(dep.as_conda().unwrap().record().purls.is_none());
+            if dep.as_conda().unwrap().name() == &PackageName::from_str("boltons").unwrap() {
+                assert!(dep.as_conda().unwrap().record().unwrap().purls.is_none());
             }
         });
 
@@ -225,19 +228,20 @@ async fn test_purl_are_added_for_pypi() {
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Check if boltons has a purl
+    let p = lock_file
+        .platform(&Platform::current().to_string())
+        .unwrap();
     lock_file
         .default_environment()
         .unwrap()
-        .packages(Platform::current())
+        .packages(p)
         .unwrap()
         .for_each(|dep| {
-            if dep.as_conda().unwrap().record().name == PackageName::from_str("boltons").unwrap() {
+            if dep.as_conda().unwrap().name() == &PackageName::from_str("boltons").unwrap() {
                 assert_eq!(
                     dep.as_conda()
-                        .unwrap()
-                        .record()
-                        .purls
-                        .as_ref()
+                        .and_then(|c| c.as_binary())
+                        .and_then(|c| c.package_record.purls.as_ref())
                         .unwrap()
                         .first()
                         .unwrap()
@@ -940,8 +944,9 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
 
     // Get the lock file
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
     let environment = lock.environment(DEFAULT_ENVIRONMENT_NAME).unwrap();
-    let conda_packages = environment.conda_packages(Platform::Linux64).unwrap();
+    let conda_packages = environment.conda_packages(p).unwrap();
 
     // Collect conda packages to a vector so we can iterate over them
     let conda_packages: Vec<_> = conda_packages.collect();
@@ -1064,30 +1069,100 @@ version = "0.1.0"
         lock_file.contains_pypi_package("dev", platform, "my-local-pkg"),
         "dev environment should contain my-local-pkg"
     );
+}
 
-    // With the new architecture, the lock file always stores editable=false
-    // The actual editability is determined from the manifest at install time
-    let prod_editable = lock_file
-        .is_pypi_package_editable("prod", platform, "my-local-pkg")
-        .expect("should find my-local-pkg in prod");
-    let dev_editable = lock_file
-        .is_pypi_package_editable("dev", platform, "my-local-pkg")
-        .expect("should find my-local-pkg in dev");
+/// Regression test for #6121: `core` declared editable both as a direct
+/// pixi pypi-dependency and via the transitive `[tool.uv.sources]` of
+/// `middle` must not produce a "conflicting URLs" error.
+#[tokio::test]
+async fn test_transitive_uv_sources_editable_consistency() {
+    setup_tracing();
 
-    // Both should have editable=false in the lock file
-    // The actual editability is applied at install time based on the manifest
+    // Create a fake channel with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("python", "3.10.0").finish());
+
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let channel = Url::from_file_path(channel_dir.path()).unwrap();
+    let platform = Platform::current();
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-transitive-editable"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    conda-pypi-map = {{}} # disable mapping
+
+    [dependencies]
+    python = "*"
+
+    [pypi-dependencies]
+    core   = {{ path = "./core",   editable = true }}
+    middle = {{ path = "./middle", editable = true }}
+    "#
+    ))
+    .unwrap();
+
+    let project_path = pixi.workspace_path();
+
+    let core_dir = project_path.join("core");
+    fs_err::create_dir_all(&core_dir).unwrap();
+    fs_err::write(
+        core_dir.join("pyproject.toml"),
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "core"
+version = "0.1.0"
+"#,
+    )
+    .unwrap();
+    let core_src = core_dir.join("core");
+    fs_err::create_dir_all(&core_src).unwrap();
+    fs_err::write(core_src.join("__init__.py"), "").unwrap();
+
+    let middle_dir = project_path.join("middle");
+    fs_err::create_dir_all(&middle_dir).unwrap();
+    fs_err::write(
+        middle_dir.join("pyproject.toml"),
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "middle"
+version = "0.1.0"
+dependencies = ["core"]
+
+[tool.uv.sources]
+core = { path = "../core", editable = true }
+"#,
+    )
+    .unwrap();
+    let middle_src = middle_dir.join("middle");
+    fs_err::create_dir_all(&middle_src).unwrap();
+    fs_err::write(middle_src.join("__init__.py"), "").unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
     assert!(
-        !prod_editable,
-        "prod environment should have my-local-pkg with editable=false in lock file, but got editable={prod_editable}",
+        lock_file.contains_pypi_package("default", platform, "core"),
+        "default environment should contain core"
     );
     assert!(
-        !dev_editable,
-        "dev environment should have my-local-pkg with editable=false in lock file, but got editable={dev_editable}",
+        lock_file.contains_pypi_package("default", platform, "middle"),
+        "default environment should contain middle"
     );
-
-    // The key benefit of this architecture is that changing editability in the manifest
-    // does NOT require re-locking - only re-installing. Both environments share the same
-    // lock file entry but can have different editability at install time.
 }
 
 #[tokio::test]

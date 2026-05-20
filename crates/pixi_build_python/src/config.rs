@@ -74,13 +74,8 @@ impl BackendConfig for PythonBackendConfig {
     /// - noarch: Platform-specific takes precedence (critical for cross-platform)
     /// - env: Platform env vars override base, others merge
     /// - extra_args: Platform-specific completely replaces base
-    /// - debug_dir: Not allowed to have target specific value
     /// - extra_input_globs: Platform-specific completely replaces base
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
-        if target_config.debug_dir.is_some() {
-            miette::bail!("`debug_dir` cannot have a target specific value");
-        }
-
         Ok(Self {
             noarch: target_config.noarch.or(self.noarch),
             env: {
@@ -329,23 +324,5 @@ mod tests {
 
         // Target value should override base value
         assert_eq!(merged.noarch, Some(false));
-    }
-
-    #[test]
-    fn test_merge_target_debug_dir_error() {
-        let base_config = PythonBackendConfig {
-            debug_dir: Some(PathBuf::from("/base/debug")),
-            ..Default::default()
-        };
-
-        let target_config = PythonBackendConfig {
-            debug_dir: Some(PathBuf::from("/target/debug")),
-            ..Default::default()
-        };
-
-        let result = base_config.merge_with_target_config(&target_config);
-        assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("`debug_dir` cannot have a target specific value"));
     }
 }

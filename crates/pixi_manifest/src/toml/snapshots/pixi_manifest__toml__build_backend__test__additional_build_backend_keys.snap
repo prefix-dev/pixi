@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_manifest/src/toml/build_backend.rs
+assertion_line: 368
 expression: "expect_parse_failure(r#\"\n            backend = { name = \"foobar\", version = \"*\", sub = \"bar\" }\n        \"#)"
 ---
   × Unexpected keys, expected only 'version', 'url', 'git', 'path', 'branch', 'rev', 'tag', 'subdirectory', 'build', 'build-number', 'file-name', 'channel', 'subdir', 'license', 'md5', 'sha256'

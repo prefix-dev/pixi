@@ -4,13 +4,12 @@ use std::{
 };
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_spec::TomlVersionSpecStr;
+use pixi_spec::{ExcludeNewer, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
 
-use crate::exclude_newer::ExcludeNewer;
 use crate::{
     PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
     error::GenericError,
@@ -67,7 +66,7 @@ impl TomlWorkspace {
     pub fn into_workspace(
         self,
         external: ExternalWorkspaceProperties,
-        root_directory: Option<&Path>,
+        root_directory: &Path,
     ) -> Result<WithWarnings<Workspace>, TomlError> {
         if let Some(Spanned {
             value: license,
@@ -84,8 +83,8 @@ impl TomlWorkspace {
         }
 
         let check_file_existence = |path: &Option<Spanned<PathBuf>>| {
-            if let (Some(root_directory), Some(Spanned { span, value: path })) =
-                (root_directory, path)
+            if !root_directory.as_os_str().is_empty()
+                && let Some(Spanned { span, value: path }) = path
             {
                 let full_path = root_directory.join(path);
                 if !full_path.is_file() {
@@ -147,6 +146,8 @@ impl TomlWorkspace {
             ),
             requires_pixi: self.requires_pixi,
             exclude_newer: self.exclude_newer,
+            exclude_newer_package_overrides: IndexMap::default(),
+            pypi_exclude_newer_package_overrides: IndexMap::default(),
         })
         .with_warnings(warnings))
     }
@@ -154,7 +155,7 @@ impl TomlWorkspace {
 
 fn convert_build_variant_files(
     entries: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
-    root_directory: Option<&Path>,
+    root_directory: &Path,
 ) -> Result<Vec<BuildVariantSource>, TomlError> {
     if let Some(entries) = entries {
         entries
@@ -167,7 +168,7 @@ fn convert_build_variant_files(
                     Some(span.into())
                 };
 
-                if let Some(root_directory) = root_directory {
+                if !root_directory.as_os_str().is_empty() {
                     let full_path = root_directory.join(&path);
                     if !full_path.is_file() {
                         return Err(TomlError::from(
@@ -322,12 +323,12 @@ mod test {
         platforms = []
         license-file = "LICENSE.txt"
         "#;
-        let path = Path::new("");
+        let path = Path::new("/nonexistent");
         let parse_error = TomlWorkspace::from_toml_str(input)
-            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
+            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), path))
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error), @r###"
-         × 'LICENSE.txt' does not exist
+         × '/nonexistent/LICENSE.txt' does not exist
           ╭─[pixi.toml:4:25]
         3 │         platforms = []
         4 │         license-file = "LICENSE.txt"
@@ -344,12 +345,12 @@ mod test {
         platforms = []
         readme = "README.md"
         "#;
-        let path = Path::new("");
+        let path = Path::new("/nonexistent");
         let parse_error = TomlWorkspace::from_toml_str(input)
-            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
+            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), path))
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error), @r###"
-         × 'README.md' does not exist
+         × '/nonexistent/README.md' does not exist
           ╭─[pixi.toml:4:19]
         3 │         platforms = []
         4 │         readme = "README.md"
@@ -366,12 +367,12 @@ mod test {
         platforms = []
         build-variants-files = ["missing.yaml"]
         "#;
-        let path = Path::new("");
+        let path = Path::new("/nonexistent");
         let parse_error = TomlWorkspace::from_toml_str(input)
-            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
+            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), path))
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error), @r#"
-         × 'missing.yaml' does not exist
+         × '/nonexistent/missing.yaml' does not exist
           ╭─[pixi.toml:4:34]
         3 │         platforms = []
         4 │         build-variants-files = ["missing.yaml"]
@@ -390,10 +391,10 @@ mod test {
         "#;
         let path = Path::new("");
         let parse_error = TomlWorkspace::from_toml_str(input)
-            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
+            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), path))
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error), @r#"
-         × `date` is neither a valid date (input contains invalid characters) nor a valid datetime (premature end of input)
+         × `date` is neither a valid duration, date (input contains invalid characters), nor timestamp (premature end of input)
           ╭─[pixi.toml:4:26]
         3 │         platforms = []
         4 │         exclude-newer = "date"

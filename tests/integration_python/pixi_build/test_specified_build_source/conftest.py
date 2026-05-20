@@ -15,20 +15,8 @@ class LocalGitRepo:
     tag: str
 
 
-@pytest.fixture
-def local_cpp_git_repo(
-    pixi: Path,
-    build_data: Path,
-    tmp_path_factory: pytest.TempPathFactory,
-) -> LocalGitRepo:
-    """
-    Create a local git repository mirroring the minimal pixi-build-cmake workspace so tests can
-    exercise git sources without touching the network.
-    """
-
+def _build_local_cpp_git_repo(repo_path: Path, build_data: Path) -> LocalGitRepo:
     source_root = build_data.joinpath("minimal-backend-workspaces", "pixi-build-cmake")
-    repo_root = tmp_path_factory.mktemp("git-repo")
-    repo_path = repo_root.joinpath("repo")
     copytree_with_local_backend(source_root, repo_path)
 
     marker = repo_path.joinpath("src", "LOCAL_MARKER.txt")
@@ -39,7 +27,7 @@ def local_cpp_git_repo(
 
     def run_git(*args: str) -> str:
         result = subprocess.run(
-            [str(pixi), "run", "git", *args],
+            ["git", *args],
             cwd=repo_path,
             capture_output=True,
             text=True,
@@ -89,3 +77,27 @@ def local_cpp_git_repo(
         other_feature_rev=other_feature_rev,
         tag="fixture-v1",
     )
+
+
+@pytest.fixture(scope="session")
+def local_cpp_git_repo(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> LocalGitRepo:
+    """
+    Session-scoped local git repository mirroring the minimal pixi-build-cmake workspace so tests
+    can exercise git sources without touching the network. Tests that need to mutate the repo
+    should use `local_cpp_git_repo_mutable` instead.
+    """
+    build_data = Path(__file__).parents[3].joinpath("data", "pixi-build").resolve()
+    repo_path = tmp_path_factory.mktemp("git-repo").joinpath("repo")
+    return _build_local_cpp_git_repo(repo_path, build_data)
+
+
+@pytest.fixture
+def local_cpp_git_repo_mutable(
+    build_data: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> LocalGitRepo:
+    """Per-test copy for tests that push commits into the repo."""
+    repo_path = tmp_path_factory.mktemp("git-repo-mut").joinpath("repo")
+    return _build_local_cpp_git_repo(repo_path, build_data)

@@ -42,11 +42,13 @@ pub async fn reinstall<I: Interface>(
         // Update the prefix by installing all packages
         get_update_lock_file_and_prefix(
             &environment,
+            None,
             UpdateMode::Revalidate,
             UpdateLockFileOptions {
                 lock_file_usage,
                 no_install: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
+                ..Default::default()
             },
             options.reinstall_packages.clone(),
             &InstallFilter::default(),

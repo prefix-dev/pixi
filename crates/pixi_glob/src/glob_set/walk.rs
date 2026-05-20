@@ -97,7 +97,7 @@ pub fn walk_globs(
     let enable_ignoring_hidden = if let Some(ref patterns) = ignore_patterns {
         // If we added negated patterns for hidden folders, we want to allow searching through hidden folders
         // unless the user explicitly included them
-        tracing::debug!("Adding ignore patterns for hidden folders: {:?}", patterns);
+        tracing::trace!("Adding ignore patterns for hidden folders: {:?}", patterns);
         for pattern in patterns {
             ob.add(pattern).map_err(GlobSetError::BuildOverrides)?;
         }
@@ -138,7 +138,7 @@ pub fn walk_globs(
     let include_patterns = include.iter().map(|g| g.to_pattern()).join(", ");
     let exclude_patterns = excludes.iter().map(|g| g.to_pattern()).join(", ");
 
-    tracing::debug!(
+    tracing::trace!(
         include = include_patterns,
         excludes = exclude_patterns,
         matched,
@@ -247,7 +247,7 @@ pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
         .iter()
         .any(|p| p == ".*" || p == ".**" || p == "**/.*" || p == "./.*" || p == ".**/*");
 
-    tracing::debug!(
+    tracing::trace!(
         user_includes_hidden,
         has_negation_for_all_folders,
         search_all_hidden,

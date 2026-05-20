@@ -10,14 +10,18 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+chrono = { workspace = true }
 dirs = { workspace = true }
 file_url = { workspace = true }
+humantime = { workspace = true }
 itertools = { workspace = true }
+pixi_build_types = { workspace = true, optional = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }
 rattler_lock = { workspace = true, optional = true }
+rattler_solve = { workspace = true }
 serde = { workspace = true }
 serde-untagged = { workspace = true }
 serde_with = { workspace = true }
@@ -33,4 +37,5 @@ toml-span = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "filters"] }
+rattler_lock = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }

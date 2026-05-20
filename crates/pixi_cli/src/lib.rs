@@ -37,6 +37,7 @@ pub mod install;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
+pub mod publish;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
@@ -155,6 +156,7 @@ pub enum Command {
     #[clap(visible_alias = "a")]
     Add(add::Args),
     Auth(rattler::cli::auth::Args),
+    #[clap(hide = true)]
     Build(build::Args),
     Clean(clean::Args),
     Completion(completion::Args),
@@ -172,6 +174,7 @@ pub enum Command {
     List(list::Args),
     Lock(lock::Args),
     Reinstall(reinstall::Args),
+    Publish(publish::Args),
     #[clap(visible_alias = "rm")]
     Remove(remove::Args),
     #[clap(visible_alias = "r")]
@@ -309,7 +312,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         EnvFilter::builder()
             .with_default_directive(level_filter.into())
             .parse(format!(
-                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}"
+                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},rattler_upload={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}"
             ))
             .into_diagnostic()?
     } else {
@@ -317,7 +320,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         // Parse RUST_LOG because we need to set it other our other directives
         let env_directives = env::var("RUST_LOG").unwrap_or_default();
         let original_directives = format!(
-            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}",
+            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},rattler_upload={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}",
         );
         // Concatenate both directives where the LOG overrides the potential original directives
         let final_directives = if env_directives.is_empty() {
@@ -367,6 +370,7 @@ pub async fn execute_command(
         Command::Task(cmd) => task::execute(cmd).await,
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Import(cmd) => import::execute(cmd).await,
+        Command::Publish(cmd) => publish::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Workspace(cmd) => workspace::execute(cmd).await,

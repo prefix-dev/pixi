@@ -32,7 +32,7 @@ use rattler_build_core::{
     DiscoveredOutput,
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
-    metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
+    metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
     tool_configuration::Configuration,
     types::{PackageIdentifier, PackagingSettings},
 };
@@ -86,12 +86,18 @@ impl Protocol for RattlerBuildBackend {
         let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(params.host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(params.host_platform)
             .with_experimental(self.config.experimental.unwrap_or(false))
             .with_recipe_path(&self.recipe_source.path);
+        if let Some(prefix) = &self.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -337,12 +343,18 @@ impl Protocol for RattlerBuildBackend {
         let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(host_platform)
             .with_experimental(self.config.experimental.unwrap_or(false))
             .with_recipe_path(&self.recipe_source.path);
+        if let Some(prefix) = &self.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -425,14 +437,21 @@ impl Protocol for RattlerBuildBackend {
                 timestamp: chrono::Utc::now(),
                 subpackages: BTreeMap::new(),
                 packaging_settings: PackagingSettings::from_args(
-                    CondaArchiveType::Conda,
-                    CompressionLevel::default(),
+                    params
+                        .package_format
+                        .map(|pf| pf.archive_type)
+                        .unwrap_or(CondaArchiveType::Conda),
+                    params
+                        .package_format
+                        .map(|pf| CompressionLevel::from(pf.compression_level))
+                        .unwrap_or_default(),
                 ),
                 store_recipe: false,
                 force_colors: true,
                 sandbox_config: None,
-                debug: Debug::new(false),
                 exclude_newer: None,
+                env_isolation: Default::default(),
+                v3: false,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,
@@ -445,8 +464,12 @@ impl Protocol for RattlerBuildBackend {
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
             build_summary: Arc::default(),
-            system_tools: Default::default(),
+            system_tools: rattler_build_core::system_tools::SystemTools::new(
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+            ),
             extra_meta: None,
+            staging_library_name_map: None,
         };
 
         let (output, output_path) =
@@ -590,6 +613,12 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
 
         let mut workspace_dependencies = HashMap::new();
 
+        let build_string_prefix = params
+            .project_model
+            .as_ref()
+            .and_then(|m| m.build_string_prefix.clone());
+        let build_number = params.project_model.as_ref().and_then(|m| m.build_number);
+
         if let Some(target) = params.project_model.and_then(|m| m.targets) {
             fn extract_workspace_deps(
                 target: Target,
@@ -608,7 +637,7 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
                         match spec {
                             pixi_build_types::PackageSpec::Source(source_spec) => {
                                 // Source dependencies are allowed - they represent workspace packages
-                                workspace_deps.insert(name, source_spec);
+                                workspace_deps.insert(name.to_string(), source_spec);
                             }
                             pixi_build_types::PackageSpec::Binary(_) => {
                                 // Binary dependencies must be specified in the recipe, not here
@@ -649,8 +678,9 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
             config,
         )?;
 
-        // Set the workspace dependencies
         instance.workspace_dependencies = workspace_dependencies;
+        instance.build_string_prefix = build_string_prefix;
+        instance.build_number = build_number;
 
         Ok((Box::new(instance), InitializeResult {}))
     }

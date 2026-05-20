@@ -88,7 +88,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             eprintln!(
                 "{} Workspace '{}' has been removed from the registry successfully.",
                 console::style(console::Emoji("✔ ", "")).green(),
-                &remove_args.name
+                remove_args.name
             );
         }
         Some(Command::Prune(_)) => {

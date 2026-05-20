@@ -105,6 +105,8 @@ fn to_pixi_spec_v1(
                 extras: _,
                 condition: _,
                 track_features: _,
+                flags: _,
+                license_family: _,
             } = binary.try_into_nameless_match_spec(channel_config)?;
             pbt::PackageSpec::Binary(pbt::BinaryPackageSpec {
                 version,
@@ -131,7 +133,7 @@ fn to_pbt_dependencies<'a>(
 ) -> Result<OrderMap<pbt::SourcePackageName, pbt::PackageSpec>, SpecConversionError> {
     iter.map(|(name, spec)| {
         let converted = to_pixi_spec_v1(spec, channel_config)?;
-        Ok((name.as_normalized().to_string(), converted))
+        Ok((pbt::SourcePackageName::from(name.clone()), converted))
     })
     .collect()
 }
@@ -161,6 +163,13 @@ fn to_target_v1(
         run_dependencies: Some(
             target
                 .run_dependencies()
+                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .transpose()?
+                .unwrap_or_default(),
+        ),
+        run_constraints: Some(
+            target
+                .run_constraints()
                 .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
@@ -206,8 +215,8 @@ pub fn to_project_model_v1(
 ) -> Result<pbt::ProjectModel, SpecConversionError> {
     let project = pbt::ProjectModel {
         name: manifest.package.name.clone(),
-        build_string: None,
-        build_number: None,
+        build_string_prefix: manifest.build.build_string_prefix.clone(),
+        build_number: manifest.build.build_number,
         version: manifest.package.version.clone(),
         description: manifest.package.description.clone(),
         authors: manifest.package.authors.clone(),
@@ -218,6 +227,7 @@ pub fn to_project_model_v1(
         repository: manifest.package.repository.clone(),
         documentation: manifest.package.documentation.clone(),
         targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
+        secrets: manifest.build.secrets.clone(),
     };
     Ok(project)
 }
@@ -285,5 +295,55 @@ mod tests {
         manifest_path: PathBuf,
     ) {
         snapshot_test!(manifest_path);
+    }
+
+    /// Regression test: `to_target_v1` must propagate `[package.run-constraints]`
+    /// (the `SpecType::RunConstraints` bucket on `PackageTarget`) into the
+    /// `pbt::Target.run_constraints` field. A previous version dropped them
+    /// silently because `to_target_v1` only mapped run/host/build.
+    #[test]
+    fn test_to_target_v1_run_constraints() {
+        use std::str::FromStr;
+
+        use pixi_manifest::{DependencyOverwriteBehavior, PackageTarget, SpecType};
+        use pixi_spec::PixiSpec;
+        use rattler_conda_types::{PackageName, ParseStrictness, VersionSpec};
+
+        use super::pbt;
+
+        let mut package_target = PackageTarget::default();
+        let constrained = PackageName::from_str("constrained").unwrap();
+        let spec =
+            PixiSpec::Version(VersionSpec::from_str(">=1.0", ParseStrictness::Strict).unwrap());
+        package_target
+            .try_add_dependency(
+                &constrained,
+                &spec,
+                SpecType::RunConstraints,
+                DependencyOverwriteBehavior::Error,
+            )
+            .unwrap();
+
+        let target = super::to_target_v1(&package_target, &some_channel_config()).unwrap();
+
+        let constraints = target
+            .run_constraints
+            .expect("run_constraints should be Some");
+        assert_eq!(constraints.len(), 1);
+        let (name, converted) = constraints.iter().next().unwrap();
+        assert_eq!(name.as_str(), "constrained");
+        match converted {
+            pbt::PackageSpec::Binary(binary) => assert_eq!(
+                binary.version.as_ref().unwrap().to_string(),
+                ">=1.0",
+                "expected version spec to round-trip",
+            ),
+            other => panic!("expected Binary spec, got {other:?}"),
+        }
+
+        // Confirm the other buckets stay empty so we know we routed only to constraints.
+        assert!(target.run_dependencies.unwrap().is_empty());
+        assert!(target.host_dependencies.unwrap().is_empty());
+        assert!(target.build_dependencies.unwrap().is_empty());
     }
 }

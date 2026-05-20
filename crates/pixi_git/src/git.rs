@@ -25,6 +25,7 @@ use crate::{
 /// checkout is ready to go. See [`GitCheckout::reset`] for why we need this.
 const CHECKOUT_READY_LOCK: &str = ".ok";
 pub const GIT_DIR: &str = "GIT_DIR";
+pub const GIT_TERMINAL_PROMPT: &str = "GIT_TERMINAL_PROMPT";
 
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum GitBinaryError {
@@ -625,6 +626,10 @@ fn fetch_with_cli(
         //     // location (this takes precedence over the cwd). Make sure this is
         //     // unset so git will look at cwd for the repo.
         .env_remove(GIT_DIR)
+        // Disable interactive credential prompts so an unreachable or
+        // non-existent remote fails fast instead of hanging waiting for
+        // input on the controlling TTY.
+        .env(GIT_TERMINAL_PROMPT, "0")
         .current_dir(&repo.path);
 
     // // We capture the output to avoid streaming it to the user's console during clones.
@@ -761,7 +766,6 @@ fn github_fast_path(
         }
 
         let response = request.send().await?;
-        response.error_for_status_ref()?;
         let response_code = response.status();
         if response_code == StatusCode::NOT_MODIFIED {
             Ok(FastPathRev::UpToDate)
@@ -769,9 +773,11 @@ fn github_fast_path(
             let oid_to_fetch = response.text().await?.parse()?;
             Ok(FastPathRev::NeedsFetch(oid_to_fetch))
         } else {
-            // Usually response_code == 404 if the repository does not exist, and
-            // response_code == 422 if exists but GitHub is unable to resolve the
-            // requested rev.
+            // The fast path is only an optimization; any non-success status
+            // (404 for a missing repo, 422 when the rev cannot be resolved,
+            // 403 when rate-limited, 5xx, etc.) just falls back to a normal
+            // git fetch.
+            tracing::debug!("GitHub fast path returned {response_code}, falling back to git fetch");
             Ok(FastPathRev::Indeterminate)
         }
     })

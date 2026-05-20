@@ -27,7 +27,6 @@ packages:
   name: bar
   version: 0.1.0
   path: ./bar
-  sha256: a15c6f6e3f1d3b572750d1e07aa1f6d4f78bd6cedad23d8686b8070b5842d287
   editable: true
 - kind: conda
   name: bzip2
@@ -61,7 +60,6 @@ packages:
   name: foo
   version: 0.1.0
   path: ./foo
-  sha256: 4c02a56d3fefcc603952a33463c51455bfed58f0ebaca70694b9d6ee17f5ebb2
   requires_dist:
   - bar
   editable: true

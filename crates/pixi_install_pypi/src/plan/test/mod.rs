@@ -124,7 +124,7 @@ fn test_install_required_mismatch() {
     assert_matches!(
         installs.reinstalls[0].1,
         NeedReinstall::VersionMismatch { ref installed_version, ref locked_version }
-        if installed_version.to_string() == "0.6.0" && locked_version.to_string() == "0.7.0"
+        if installed_version.to_string() == "0.6.0" && locked_version == "0.7.0"
     );
     assert!(installs.cached.is_empty());
     // Not cached we get it from the remote
@@ -160,7 +160,7 @@ fn test_install_required_mismatch_cached() {
     assert_matches!(
         installs.reinstalls[0].1,
         NeedReinstall::VersionMismatch { ref installed_version, ref locked_version }
-        if installed_version.to_string() == "0.6.0" && locked_version.to_string() == "0.7.0"
+        if installed_version.to_string() == "0.6.0" && locked_version == "0.7.0"
     );
     assert!(installs.remote.is_empty());
     // Not cached we get it from the remote
@@ -575,7 +575,7 @@ fn test_installed_editable_required_non_editable() {
     assert_matches!(
         installs.reinstalls[0].1,
         NeedReinstall::EditableStatusChanged {
-            locked_editable: false,
+            required_editable: false,
             installed_editable: true
         }
     );

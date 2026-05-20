@@ -25,6 +25,10 @@ def setup_data(tmp_path: Path) -> SetupData:
     env = {
         "PIXI_HOME": str(pixi_home),
         "HOME": str(data_home),  # Used for macOS and Linux
+        # menuinst follows XDG on Linux and falls back to $HOME/.local/share only when
+        # XDG_DATA_HOME is unset, so override it explicitly to keep the shortcut inside
+        # the per-test data_home.
+        "XDG_DATA_HOME": str(data_home / ".local" / "share"),
         "MENUINST_FAKE_DIRECTORIES": str(data_home),  # Used for Windows
     }
     return SetupData(pixi_home=pixi_home, data_home=data_home, env=env)

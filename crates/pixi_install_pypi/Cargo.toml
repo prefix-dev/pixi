@@ -10,7 +10,6 @@ version = "0.1.0"
 
 [dependencies]
 ahash = { workspace = true }
-chrono = { workspace = true }
 console = { workspace = true }
 csv = { workspace = true }
 fancy_display = { workspace = true }
@@ -42,7 +41,6 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
-uv-auth = { workspace = true }
 uv-cache = { workspace = true }
 uv-cache-info = { workspace = true }
 uv-client = { workspace = true }

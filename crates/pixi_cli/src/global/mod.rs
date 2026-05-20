@@ -51,7 +51,7 @@ pub enum Command {
 /// Subcommand for global package management actions.
 ///
 /// Install packages on the user level.
-/// Into to the [`$PIXI_HOME`] directory, which defaults to `~/.pixi`.
+/// Into to the `$PIXI_HOME` directory, which defaults to `~/.pixi`.
 #[derive(Debug, Parser)]
 pub struct Args {
     #[command(subcommand)]

@@ -5,9 +5,9 @@ name = "pixi_build_backend"
 version = "0.1.7"
 
 [features]
-default = ["rustls-tls"]
+default = ["rustls"]
 # Use rustls for TLS (pure Rust implementation)
-rustls-tls = ["rattler_build_core/rustls-tls"]
+rustls = ["rattler_build_core/rustls"]
 # Use native-tls/OpenSSL for TLS
 native-tls = ["rattler_build_core/native-tls"]
 
@@ -46,12 +46,8 @@ pixi_build_types = { workspace = true }
 jsonrpc-core = { workspace = true }
 jsonrpc-http-server = { workspace = true }
 jsonrpc-stdio-server = { workspace = true }
-recipe_stage0 = { workspace = true }
 
 
 [dev-dependencies]
 insta = { version = "1.42.1", features = ["yaml", "redactions", "filters"] }
-toml = { version = "0.9.0" }
-
-[package.metadata.cargo-shear]
-ignored = ["async-trait"]
+toml = { version = "1.0.0" }

@@ -7,7 +7,7 @@ preview = ['pixi-build']
 # --8<-- [start:package]
 [package.build.backend]
 name = "pixi-build-rust"
-version = "0.4.*"
+version = "0.*"
 
 # --8<-- [end:minimal]
 [package.build-dependencies]

@@ -300,7 +300,7 @@ fn print_tasks(
         header_style.apply_to("Task"),
         header_style.apply_to("Description"),
     );
-    writeln!(writer, "{}", &header)?;
+    writeln!(writer, "{}", header)?;
     for (taskname, row) in formatted_descriptions {
         writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
     }
@@ -351,8 +351,8 @@ async fn list_tasks(
 
     if args.machine_readable {
         let unformatted: String = tasks_per_env
-            .iter()
-            .flat_map(|(_, v)| v.keys())
+            .values()
+            .flat_map(|v| v.keys())
             .sorted()
             .map(|name| name.as_str())
             .join(" ");

@@ -19,7 +19,7 @@ use crate::PinnedSourceSpec;
 /// This contains all the metadata needed by the solver to select and use this output.
 /// Unlike `SourceRecord`, this represents a "virtual" package where only the dependencies
 /// are installed, not the package itself.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct DevSourceRecord {
     /// The name of the package/output
     pub name: PackageName,

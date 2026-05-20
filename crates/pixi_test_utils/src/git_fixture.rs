@@ -47,6 +47,11 @@ pub struct GitRepoFixture {
     /// Kept alive to prevent cleanup until the fixture is dropped.
     _tempdir: TempDir,
 
+    /// Path to the repository working directory. Useful for tests that
+    /// need to mutate the repo after construction (extra branches, more
+    /// commits, etc.).
+    pub repo_path: std::path::PathBuf,
+
     /// Git URL for the repository (git+file://...).
     pub url: String,
 
@@ -165,11 +170,35 @@ impl GitRepoFixture {
 
         Self {
             _tempdir: tempdir,
+            repo_path,
             url: format!("git+{base_url}"),
             base_url,
             commits,
             tags,
         }
+    }
+
+    /// Run a `git` command against the fixture's working directory and
+    /// return trimmed stdout. Panics on non-zero exit. Useful for tests
+    /// that need to extend the repo after construction (e.g., creating
+    /// extra branches that the numbered-fixture format can't express).
+    pub fn git(&self, args: &[&str]) -> String {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(&self.repo_path)
+            .output()
+            .unwrap_or_else(|err| panic!("failed to spawn `git {}`: {err}", args.join(" ")));
+        assert!(
+            output.status.success(),
+            "`git {}` failed: stdout={:?} stderr={:?}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        String::from_utf8(output.stdout)
+            .expect("git output must be utf-8")
+            .trim()
+            .to_string()
     }
 
     /// Returns the first commit hash, or panics if there are no commits.

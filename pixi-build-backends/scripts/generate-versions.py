@@ -2,7 +2,6 @@
 
 import json
 import subprocess
-import tomllib
 from datetime import datetime
 from pathlib import Path
 
@@ -44,33 +43,18 @@ def main():
 
     # Rust backends
     rust_packages = [
-        "pixi_build_cmake",
-        "pixi_build_mojo",
-        "pixi_build_python",
-        "pixi_build_r",
-        "pixi_build_rattler_build",
-        "pixi_build_rust",
+        "pixi-build-cmake",
+        "pixi-build-mojo",
+        "pixi-build-python",
+        "pixi-build-r",
+        "pixi-build-rattler-build",
+        "pixi-build-ros",
+        "pixi-build-rust",
     ]
     for package in cargo_metadata.get("packages", []):
         if package["name"] in rust_packages:
             env_name = package["name"].replace("-", "_").upper() + "_VERSION"
             env_vars[env_name] = f"{package['version']}.{version_suffix}"
-
-    # py-pixi-build-backend (separate workspace)
-    py_backend_cargo = repo_root / "pixi-build-backends" / "py-pixi-build-backend" / "Cargo.toml"
-    with open(py_backend_cargo, "rb") as f:
-        cargo_toml = tomllib.load(f)
-        version = cargo_toml["package"]["version"]
-        env_vars["PY_PIXI_BUILD_BACKEND_VERSION"] = f"{version}.{version_suffix}"
-
-    # pixi-build-ros (Python package)
-    ros_pyproject = (
-        repo_root / "pixi-build-backends" / "backends" / "pixi-build-ros" / "pyproject.toml"
-    )
-    with open(ros_pyproject, "rb") as f:
-        pyproject = tomllib.load(f)
-        version = pyproject["project"]["version"]
-        env_vars["PIXI_BUILD_ROS_VERSION"] = f"{version}.{version_suffix}"
 
     for name, value in env_vars.items():
         print(f"{name}={value}")

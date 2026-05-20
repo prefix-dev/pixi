@@ -4,7 +4,7 @@ expression: project_model
 ---
 {
   "name": "sdl_example",
-  "buildString": null,
+  "buildStringPrefix": null,
   "buildNumber": null,
   "version": "0.1.0",
   "description": null,
@@ -34,7 +34,8 @@ expression: project_model
         }
       },
       "buildDependencies": {},
-      "runDependencies": {}
+      "runDependencies": {},
+      "runConstraints": {}
     },
     "targets": {}
   }

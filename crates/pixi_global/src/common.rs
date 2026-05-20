@@ -795,7 +795,10 @@ impl StateChanges {
             }
         }
 
-        top_level_changes.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
+        #[allow(clippy::unnecessary_sort_by)]
+        {
+            top_level_changes.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
+        }
 
         let was_removed = top_level_changes
             .iter()

@@ -1,0 +1,18 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+assertion_line: 771
+expression: snapshot
+---
+  × invalid version specifier in 'requires-pixi'
+  ╰─▶ 0: at line 1, in Eof:
+      not a valid version spec!!
+         ^
+
+
+   ╭─[<CARGO_ROOT>/tests/data/workspace-discovery/requires-newer-pixi-malformed/pixi.toml:5:18]
+ 4 │ platforms = []
+ 5 │ requires-pixi = "not a valid version spec!!"
+   ·                  ─────────────┬────────────
+   ·                               ╰── could not parse this as a version specifier
+ 6 │ some-future-field = true
+   ╰────

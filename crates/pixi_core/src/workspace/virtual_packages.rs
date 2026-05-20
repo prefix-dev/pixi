@@ -93,6 +93,12 @@ pub fn verify_current_platform_can_run_environment(
     environment: &Environment<'_>,
     lockfile: Option<&LockFile>,
 ) -> Result<(), VerifyCurrentPlatformError> {
+    // When overriding platform skip validation entirely.
+    // The host platform wouldn't satisfy the requirements
+    if std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+        return Ok(());
+    }
+
     let current_platform = environment.best_platform();
 
     // Are there dependencies and is the current platform in the list of supported platforms?

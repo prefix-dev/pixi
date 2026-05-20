@@ -27,14 +27,9 @@ impl BackendConfig for RattlerBuildBackendConfig {
 
     /// Merge this configuration with a target-specific configuration.
     /// Target-specific values override base values using the following rules:
-    /// - debug_dir: Not allowed to have target specific value
     /// - extra_input_globs: Platform-specific completely replaces base
     /// - experimental: Not allowed to have target specific value
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
-        if target_config.debug_dir.is_some() {
-            miette::bail!("`debug_dir` cannot have a target specific value");
-        }
-
         if target_config.experimental.is_some() {
             miette::bail!("`experimental` cannot have a target specific value");
         }
@@ -119,24 +114,6 @@ mod tests {
         assert_eq!(merged.extra_input_globs, vec!["*.base".to_string()]);
         // experimental should be true when base has it enabled
         assert_eq!(merged.experimental, Some(true));
-    }
-
-    #[test]
-    fn test_merge_target_debug_dir_error() {
-        let base_config = RattlerBuildBackendConfig {
-            debug_dir: Some(PathBuf::from("/base/debug")),
-            ..Default::default()
-        };
-
-        let target_config = RattlerBuildBackendConfig {
-            debug_dir: Some(PathBuf::from("/target/debug")),
-            ..Default::default()
-        };
-
-        let result = base_config.merge_with_target_config(&target_config);
-        assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("`debug_dir` cannot have a target specific value"));
     }
 
     #[test]

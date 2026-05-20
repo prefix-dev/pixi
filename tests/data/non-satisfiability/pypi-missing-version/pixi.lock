@@ -1,0 +1,29 @@
+#
+# This lock-file should not satisfy the accompanying pixi.toml file.
+#
+# my-dep is requested as a versioned pypi package (>=1.0) but the lock-file
+# entry has no version. A registry dependency always requires a version
+# in the lock-file to verify that it matches the requested specifier.
+
+version: 7
+platforms:
+- name: win-64
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    indexes:
+    - https://pypi.org/simple
+    packages:
+      win-64:
+      - conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
+      - pypi: https://files.pythonhosted.org/packages/my-dep-1.0.0.whl
+packages:
+- conda: https://conda.anaconda.org/conda-forge/win-64/python-3.12.3-h2628c8c_0_cpython.conda
+  sha256: 1a95494abe572a8819c933f978df89f00bde72ea9432d46a70632599e8029ea4
+  md5: f07c8c5dd98767f9a652de5d039b284e
+  # Faked to be empty to reduce the size of the example
+  depends: []
+- pypi: https://files.pythonhosted.org/packages/my-dep-1.0.0.whl
+  name: my-dep
+  sha256: 0000000000000000000000000000000000000000000000000000000000000000

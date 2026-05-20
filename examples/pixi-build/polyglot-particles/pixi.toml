@@ -1,0 +1,20 @@
+[workspace]
+authors = ["Bas Zalmstra <bas@prefix.dev>"]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "polyglot-particles"
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+preview = ["pixi-build"]
+
+# A single dep on the high-level Python kit pulls in the entire graph:
+#   particle_kit -> particle_view, particle_cpp_py, particle_rs_py
+#                -> particle_cpp, particle_rs
+#                -> particle_core
+[dependencies]
+particle_kit = { path = "particle_kit" }
+
+[tasks]
+demo = { cmd = "python -m particle_kit", description = "Build a small particle scene in Python and render it through the SDL view" }
+list = { cmd = "python -c 'from particle_kit import registry; registry.print_all()'", description = "List every emitter and modifier exposed by the C++ and Rust packages" }

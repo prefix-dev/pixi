@@ -1,0 +1,17 @@
+[package]
+authors.workspace = true
+description = "Operation-id reporting context shared by pixi reporter implementations"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_compute_reporters"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+dashmap = { workspace = true }
+futures = { workspace = true }
+pixi_compute_engine = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }

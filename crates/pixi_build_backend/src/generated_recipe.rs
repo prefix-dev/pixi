@@ -1,18 +1,20 @@
+use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::convert::Infallible;
+use std::fmt::Debug;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+
 use miette::Diagnostic;
 use pixi_build_types::ProjectModel;
 use rattler_build_jinja::Variable;
-use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Platform, Version};
-use recipe_stage0::recipe::{About, IntermediateRecipe, Package, Value};
-use serde::de::DeserializeOwned;
-use std::collections::HashSet;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    convert::Infallible,
-    fmt::Debug,
-    path::{Path, PathBuf},
+use rattler_build_recipe::stage0::{
+    About, ConditionalList, Item, License, Package, SingleOutputRecipe, Value,
 };
+use rattler_build_types::NormalizedKey;
+use rattler_conda_types::{ChannelUrl, Platform, SourcePackageName, Version, VersionWithSource};
+use serde::de::DeserializeOwned;
 use thiserror::Error;
+use url::Url;
 
 use crate::specs_conversion::from_targets_v1_to_conditional_requirements;
 
@@ -24,7 +26,7 @@ pub struct PythonParams {
 }
 
 /// The trait is responsible of converting a certain [`ProjectModel`] (or
-/// others in the future) into an [`IntermediateRecipe`].
+/// others in the future) into a [`SingleOutputRecipe`].
 /// By implementing this trait, you can create a new backend for `pixi-build`.
 ///
 /// It also uses a [`BackendConfig`] to provide additional configuration
@@ -37,7 +39,7 @@ pub struct PythonParams {
 pub trait GenerateRecipe {
     type Config: BackendConfig;
 
-    /// Generates an [`IntermediateRecipe`] from a [`ProjectModel`].
+    /// Generates a [`SingleOutputRecipe`] from a [`ProjectModel`].
     ///
     /// # Parameters
     ///
@@ -111,6 +113,18 @@ pub enum GenerateRecipeError<MetadataProviderError: Diagnostic + 'static> {
     NoNameDefined,
     #[error("There was no version defined for the recipe")]
     NoVersionDefined,
+    #[error("failed to parse package name")]
+    InvalidPackageName(
+        #[source]
+        #[from]
+        rattler_conda_types::InvalidPackageNameError,
+    ),
+    #[error("failed to parse version")]
+    InvalidVersion(String),
+    #[error("failed to parse URL: {0}")]
+    InvalidUrl(String),
+    #[error("failed to parse license: {0}")]
+    InvalidLicense(String),
     #[error("An error occurred while querying the {0}")]
     MetadataProviderError(
         String,
@@ -120,11 +134,33 @@ pub enum GenerateRecipeError<MetadataProviderError: Diagnostic + 'static> {
     ),
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct GeneratedRecipe {
-    pub recipe: IntermediateRecipe,
+    pub recipe: SingleOutputRecipe,
     pub metadata_input_globs: BTreeSet<String>,
     pub build_input_globs: BTreeSet<String>,
+}
+
+/// Helper to create a concrete `Value<Url>` from an optional string
+fn parse_url_value(s: String) -> Option<Value<Url>> {
+    match Url::parse(&s) {
+        Ok(url) => Some(Value::new_concrete(url, None)),
+        Err(err) => {
+            tracing::warn!("failed to parse URL '{s}': {err}");
+            None
+        }
+    }
+}
+
+/// Helper to create a concrete `Value<License>` from an optional string
+fn parse_license_value(s: String) -> Option<Value<License>> {
+    match License::from_str(&s) {
+        Ok(lic) => Some(Value::new_concrete(lic, None)),
+        Err(err) => {
+            tracing::warn!("failed to parse license '{s}': {err}");
+            None
+        }
+    }
 }
 
 impl GeneratedRecipe {
@@ -167,10 +203,15 @@ impl GeneratedRecipe {
                 .ok_or(GenerateRecipeError::NoVersionDefined)?,
         };
 
-        let package = Package {
-            name: Value::Concrete(name),
-            version: Value::Concrete(version.to_string()),
-        };
+        let pkg_name = rattler_conda_types::PackageName::try_from(name)?;
+        let version_str = version.to_string();
+        let version_with_source = VersionWithSource::from_str(&version_str)
+            .map_err(|_| GenerateRecipeError::InvalidVersion(version_str))?;
+
+        let package = Package::new(
+            Value::new_concrete(SourcePackageName::from(pkg_name), None),
+            Value::new_concrete(version_with_source, None),
+        );
 
         let requirements =
             from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default());
@@ -190,39 +231,47 @@ impl GeneratedRecipe {
         }
 
         let about = About {
-            homepage: derive_value!(homepage).map(Value::Concrete),
-            license: derive_value!(license).map(Value::Concrete),
-            description: derive_value!(description).map(Value::Concrete),
-            documentation: derive_value!(documentation).map(Value::Concrete),
-            repository: derive_value!(repository).map(Value::Concrete),
+            homepage: derive_value!(homepage).and_then(parse_url_value),
+            license: derive_value!(license).and_then(parse_license_value),
+            description: derive_value!(description).map(|s| Value::new_concrete(s, None)),
+            documentation: derive_value!(documentation).and_then(parse_url_value),
+            repository: derive_value!(repository).and_then(parse_url_value),
             license_file: match model.license_file {
-                Some(v) => Some(vec![Value::Concrete(v.display().to_string())]),
+                Some(v) => {
+                    let item = Item::Value(Value::new_concrete(v.display().to_string(), None));
+                    Some(ConditionalList::new(vec![item]))
+                }
                 None => provider
                     .license_files()
                     .map_err(|e| {
                         GenerateRecipeError::MetadataProviderError(String::from("license-files"), e)
                     })?
-                    .map(|files| files.into_iter().map(Value::Concrete).collect()),
+                    .map(|files| {
+                        ConditionalList::new(
+                            files
+                                .into_iter()
+                                .map(|f| Item::Value(Value::new_concrete(f, None)))
+                                .collect(),
+                        )
+                    }),
             },
+            license_family: None,
             summary: provider
                 .summary()
                 .map_err(|e| {
                     GenerateRecipeError::MetadataProviderError(String::from("summary"), e)
                 })?
-                .map(Value::Concrete),
+                .map(|s| Value::new_concrete(s, None)),
         };
 
-        let ir = IntermediateRecipe {
-            package,
-            requirements,
-            about: Some(about),
-            ..Default::default()
-        };
+        let mut recipe = SingleOutputRecipe::new(package);
+        recipe.requirements = requirements;
+        recipe.about = about;
 
         Ok(GeneratedRecipe {
-            recipe: ir,
-            // TODO: extract real input globs from the model
-            ..Default::default()
+            recipe,
+            metadata_input_globs: BTreeSet::new(),
+            build_input_globs: BTreeSet::new(),
         })
     }
 }

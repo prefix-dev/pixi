@@ -42,7 +42,7 @@ pub enum PixiPypiSource {
     },
     /// From a local file system path (directory or file).
     Path {
-        path: PathBuf,
+        path: pixi_spec::Verbatim<PathBuf>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         editable: Option<bool>,
     },
@@ -58,7 +58,7 @@ impl PixiPypiSource {
     /// Returns the path if this is a Path source.
     pub fn as_path(&self) -> Option<&PathBuf> {
         match self {
-            PixiPypiSource::Path { path, .. } => Some(path),
+            PixiPypiSource::Path { path, .. } => Some(path.inner()),
             _ => None,
         }
     }
@@ -361,7 +361,10 @@ mod tests {
     #[test]
     fn test_is_source_dependency_for_path() {
         let spec = PixiPypiSpec::new(PixiPypiSource::Path {
-            path: PathBuf::from("./local"),
+            path: pixi_spec::Verbatim::new_with_given(
+                PathBuf::from("./local"),
+                "./local".to_string(),
+            ),
             editable: None,
         });
         assert!(spec.is_source_dependency());
@@ -439,7 +442,10 @@ mod tests {
     #[test]
     fn test_source_accessor() {
         let spec = PixiPypiSpec::new(PixiPypiSource::Path {
-            path: PathBuf::from("./local"),
+            path: pixi_spec::Verbatim::new_with_given(
+                PathBuf::from("./local"),
+                "./local".to_string(),
+            ),
             editable: Some(true),
         });
 
@@ -465,7 +471,10 @@ mod tests {
     #[test]
     fn test_as_version_returns_none_for_non_registry() {
         let spec = PixiPypiSpec::new(PixiPypiSource::Path {
-            path: PathBuf::from("./local"),
+            path: pixi_spec::Verbatim::new_with_given(
+                PathBuf::from("./local"),
+                "./local".to_string(),
+            ),
             editable: None,
         });
         assert!(spec.as_version().is_none());
@@ -489,7 +498,10 @@ mod tests {
 
         // Non-registry source
         let spec = PixiPypiSpec::new(PixiPypiSource::Path {
-            path: PathBuf::from("./local"),
+            path: pixi_spec::Verbatim::new_with_given(
+                PathBuf::from("./local"),
+                "./local".to_string(),
+            ),
             editable: None,
         });
         assert!(spec.index().is_none());
@@ -498,7 +510,10 @@ mod tests {
     #[test]
     fn test_from_source_conversion() {
         let source = PixiPypiSource::Path {
-            path: PathBuf::from("./local"),
+            path: pixi_spec::Verbatim::new_with_given(
+                PathBuf::from("./local"),
+                "./local".to_string(),
+            ),
             editable: Some(true),
         };
         let spec: PixiPypiSpec = source.clone().into();
@@ -601,7 +616,7 @@ mod tests {
         assert_eq!(
             as_pypi_req,
             PixiPypiSpec::new(PixiPypiSource::Path {
-                path: PathBuf::from("C:/path/to/boltons"),
+                path: PathBuf::from("C:/path/to/boltons").into(),
                 editable: None,
             })
         );
@@ -609,10 +624,49 @@ mod tests {
         assert_eq!(
             as_pypi_req,
             PixiPypiSpec::new(PixiPypiSource::Path {
-                path: PathBuf::from("/path/to/boltons"),
+                path: pixi_spec::Verbatim::new(PathBuf::from("/path/to/boltons")),
                 editable: None,
             })
         );
+    }
+
+    #[test]
+    fn test_pep508_file_url_serializes_as_path() {
+        // Regression: a `file://` URL in a PEP 508 requirement must round-trip
+        // through the manifest as a filesystem path, NOT as `path = "file://..."`.
+        // The latter is unloadable because, on reload, the string is treated as
+        // a relative PathBuf and joined with the project root.
+        // See prefix-dev/pixi#6071.
+        #[cfg(target_os = "windows")]
+        let pypi: pep508_rs::Requirement = "boltons @ file:///C:/path/to/boltons".parse().unwrap();
+        #[cfg(not(target_os = "windows"))]
+        let pypi: pep508_rs::Requirement = "boltons @ file:///path/to/boltons".parse().unwrap();
+
+        let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
+        let serialized = as_pypi_req.to_string();
+        assert!(
+            !serialized.contains("file://"),
+            "serialized PixiPypiSpec must not contain `file://`, got: {serialized}",
+        );
+    }
+
+    #[test]
+    fn test_pep508_relative_path_preserves_given() {
+        // Counterpart to `test_pep508_file_url_serializes_as_path`: when the
+        // user writes a *bare relative path* (pep508_rs's non-PEP-508 extension),
+        // we must keep their original spelling as `given` so the lockfile and
+        // manifest stay portable. Only the `file://` URL form should be discarded.
+        let working_dir = std::env::temp_dir();
+        let pypi: pep508_rs::Requirement =
+            pep508_rs::Requirement::parse("mine @ ./mine", &working_dir).unwrap();
+
+        let as_pypi_req: PixiPypiSpec = pypi.try_into().unwrap();
+        match as_pypi_req.source() {
+            PixiPypiSource::Path { path, .. } => {
+                assert_eq!(path.given(), Some("./mine"));
+            }
+            other => panic!("expected Path source, got {other:?}"),
+        }
     }
 
     #[test]

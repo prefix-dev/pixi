@@ -44,10 +44,19 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts">`--run-post-link-scripts`</a>
 :  Run post-link scripts (insecure)
+- <a id="arg---no-symbolic-links" href="#arg---no-symbolic-links">`--no-symbolic-links`</a>
+:  Disallow symbolic links during package installation
+<br>**env**: `PIXI_NO_SYMBOLIC_LINKS`
+- <a id="arg---no-hard-links" href="#arg---no-hard-links">`--no-hard-links`</a>
+:  Disallow hard links during package installation
+<br>**env**: `PIXI_NO_HARD_LINKS`
+- <a id="arg---no-ref-links" href="#arg---no-ref-links">`--no-ref-links`</a>
+:  Disallow ref links (copy-on-write) during package installation
+<br>**env**: `PIXI_NO_REF_LINKS`
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
-:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both)
+:  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 <br>**env**: `PIXI_TLS_ROOT_CERTS`
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
@@ -55,6 +64,7 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
+<br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`

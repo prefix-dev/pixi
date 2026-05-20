@@ -5,7 +5,7 @@ use console::Color;
 use miette::{Context, IntoDiagnostic};
 use regex::Regex;
 use std::collections::HashMap;
-use std::io::{StdoutLock, Write};
+use std::io::Write;
 
 /// Defines the source of a package. Global packages can only have Conda dependencies.
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -14,12 +14,22 @@ pub enum PackageSource {
     Pypi,
 }
 
+/// An edge from a package to one of its dependencies, optionally tagged with
+/// the parent extras that activated it.
+#[derive(Debug, Clone)]
+pub struct Dependency {
+    pub name: String,
+    /// Names of the parent's extras whose marker made this edge active. Empty
+    /// for base (non-extra-gated) dependencies.
+    pub via_extras: Vec<String>,
+}
+
 /// Represents a view of a Package with only the fields required for the tree visualization.
 #[derive(Debug, Clone)]
 pub struct Package {
     pub name: String,
     pub version: String,
-    pub dependencies: Vec<String>,
+    pub dependencies: Vec<Dependency>,
     pub needed_by: Vec<String>,
     pub source: PackageSource,
 }
@@ -55,7 +65,7 @@ static UTF8_SYMBOLS: Symbols = Symbols {
 ///
 /// Returns `Ok(())` if the tree was printed successfully, or an error if the regex was invalid or no matches were found
 pub fn print_dependency_tree(
-    handle: &mut StdoutLock,
+    handle: &mut impl Write,
     dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
     regex: &Option<String>,
@@ -89,6 +99,8 @@ pub fn print_dependency_tree(
 
     let mut visited_pkgs = HashSet::new();
     let direct_dep_count = filtered_deps.len();
+    let mut filtered_deps: Vec<String> = filtered_deps.into_iter().collect();
+    filtered_deps.sort();
 
     for (index, pkg_name) in filtered_deps.iter().enumerate() {
         if !visited_pkgs.insert(pkg_name.clone()) {
@@ -111,6 +123,7 @@ pub fn print_dependency_tree(
                 pkg,
                 direct_deps.contains(&pkg.name),
                 false,
+                &[],
             )?;
 
             let prefix = if last {
@@ -169,7 +182,7 @@ pub fn print_dependency_tree(
 ///
 /// This function can return an error if writing to the output stream fails.
 fn print_dependency_node(
-    handle: &mut StdoutLock,
+    handle: &mut impl Write,
     package: &Package,
     prefix: String,
     dep_map: &HashMap<String, Package>,
@@ -177,7 +190,7 @@ fn print_dependency_node(
     direct_deps: &HashSet<String>,
 ) -> miette::Result<()> {
     let dep_count = package.dependencies.len();
-    for (index, dep_name) in package.dependencies.iter().enumerate() {
+    for (index, edge) in package.dependencies.iter().enumerate() {
         let last = index == dep_count - 1;
         let symbol = if last {
             UTF8_SYMBOLS.ell
@@ -185,7 +198,7 @@ fn print_dependency_node(
             UTF8_SYMBOLS.tee
         };
 
-        if let Some(dep) = dep_map.get(dep_name) {
+        if let Some(dep) = dep_map.get(&edge.name) {
             let visited = !visited_pkgs.insert(dep.name.clone());
 
             print_package(
@@ -194,6 +207,7 @@ fn print_dependency_node(
                 dep,
                 direct_deps.contains(&dep.name),
                 visited,
+                &edge.via_extras,
             )?;
 
             if visited {
@@ -207,13 +221,13 @@ fn print_dependency_node(
             };
             print_dependency_node(handle, dep, new_prefix, dep_map, visited_pkgs, direct_deps)?;
         } else {
-            let visited = !visited_pkgs.insert(dep_name.clone());
+            let visited = !visited_pkgs.insert(edge.name.clone());
 
             print_package(
                 handle,
                 &format!("{prefix}{symbol} "),
                 &Package {
-                    name: dep_name.to_owned(),
+                    name: edge.name.clone(),
                     version: String::from(""),
                     dependencies: Vec::new(),
                     needed_by: Vec::new(),
@@ -221,6 +235,7 @@ fn print_dependency_node(
                 },
                 false,
                 visited,
+                &edge.via_extras,
             )?;
         }
     }
@@ -240,15 +255,21 @@ fn print_dependency_node(
 /// # Errors
 /// This function can return an error if writing to the output stream fails.
 pub fn print_package(
-    handle: &mut StdoutLock,
+    handle: &mut impl Write,
     prefix: &str,
     package: &Package,
     direct: bool,
     visited: bool,
+    via_extras: &[String],
 ) -> miette::Result<()> {
+    let extras_label = if via_extras.is_empty() {
+        String::new()
+    } else {
+        format!("(extra: {})", via_extras.join(", "))
+    };
     writeln!(
         handle,
-        "{}{} {} {}",
+        "{}{} {} {}{}",
         prefix,
         if direct {
             console::style(&package.name).fg(Color::Green).bold()
@@ -259,7 +280,8 @@ pub fn print_package(
             PackageSource::Conda => console::style(&package.version).fg(Color::Yellow),
             PackageSource::Pypi => console::style(&package.version).fg(Color::Blue),
         },
-        if visited { "(*)" } else { "" }
+        console::style(extras_label).fg(Color::Cyan),
+        if visited { " (*)" } else { "" }
     )
     .map_err(|e| {
         if e.kind() == std::io::ErrorKind::BrokenPipe {
@@ -287,7 +309,7 @@ pub fn print_package(
 ///
 /// Returns `Ok(())` if the tree was printed successfully, or an error if the regex was invalid or no matches were found
 pub fn print_inverted_dependency_tree(
-    handle: &mut StdoutLock,
+    handle: &mut impl Write,
     inverted_dep_map: &HashMap<String, Package>,
     direct_deps: &HashSet<String>,
     regex: &Option<String>,
@@ -315,7 +337,14 @@ pub fn print_inverted_dependency_tree(
     for pkg_name in root_pkg_names {
         if let Some(pkg) = inverted_dep_map.get(pkg_name) {
             let visited = !visited_pkgs.insert(pkg_name.clone());
-            print_package(handle, "\n", pkg, direct_deps.contains(&pkg.name), visited)?;
+            print_package(
+                handle,
+                "\n",
+                pkg,
+                direct_deps.contains(&pkg.name),
+                visited,
+                &[],
+            )?;
 
             if !visited {
                 print_inverted_node(
@@ -357,7 +386,7 @@ pub fn print_inverted_dependency_tree(
 ///
 /// This function can return an error if writing to the output stream fails.
 fn print_inverted_node(
-    handle: &mut StdoutLock,
+    handle: &mut impl Write,
     package: &Package,
     prefix: String,
     inverted_dep_map: &HashMap<String, Package>,
@@ -381,6 +410,7 @@ fn print_inverted_node(
                 needed_pkg,
                 direct_deps.contains(&needed_pkg.name),
                 visited,
+                &[],
             )?;
 
             if !visited {
@@ -423,8 +453,8 @@ pub fn build_reverse_dependency_map(
     let mut inverted_deps = dep_map.clone();
 
     for pkg in dep_map.values() {
-        for dep in pkg.dependencies.iter() {
-            if let Some(idep) = inverted_deps.get_mut(dep) {
+        for edge in pkg.dependencies.iter() {
+            if let Some(idep) = inverted_deps.get_mut(&edge.name) {
                 idep.needed_by.push(pkg.name.clone());
             }
         }

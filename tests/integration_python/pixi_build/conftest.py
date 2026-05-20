@@ -27,6 +27,7 @@ def setup_build_backend_override(request: pytest.FixtureRequest) -> None:
         "pixi-build-cmake",
         "pixi-build-python",
         "pixi-build-rattler-build",
+        "pixi-build-ros",
         "pixi-build-rust",
     ]
 

@@ -73,7 +73,7 @@ fn create_unsupported_selector_warning(
 
     GenericError::new(format!(
         "The target selector '{}' does not match any of the platforms supported by the {}",
-        selector.value, &feature_or_workspace,
+        selector.value, feature_or_workspace,
     ))
     .with_opt_span(selector.span.clone())
     .with_span_label("target selector specified here")

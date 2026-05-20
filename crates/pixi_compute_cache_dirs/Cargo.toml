@@ -1,0 +1,18 @@
+[package]
+authors.workspace = true
+description = "Engine-tracked cache-directory lookup for pixi"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_compute_cache_dirs"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+pixi_compute_engine = { workspace = true }
+pixi_compute_env_vars = { workspace = true }
+pixi_path = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
