@@ -1231,8 +1231,7 @@ mod test {
     /// for rejection cases that don't involve a parsed `when` condition.
     fn parse_json_error(input: Value) -> String {
         serde_json::from_value::<PixiSpec>(input)
-            .err()
-            .expect("expected a parse failure")
+            .expect_err("expected a parse failure")
             .to_string()
     }
 
