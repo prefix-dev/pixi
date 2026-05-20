@@ -16,11 +16,7 @@ native-tls = [
   "rattler_networking/native-tls",
   "reqwest/native-tls",
 ]
-rustls = [
-  "pixi_auth/rustls",
-  "rattler_networking/rustls",
-  "reqwest/rustls",
-]
+rustls = ["pixi_auth/rustls", "rattler_networking/rustls", "reqwest/rustls"]
 
 
 [dependencies]
