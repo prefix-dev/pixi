@@ -146,18 +146,18 @@ click = "==8.3.3"
 mdx_truly_sane_lists = ">=1.3,<2"
 mike = ">=2.1.3,<3"
 mkdocs-llmstxt = ">=0.4.0,<0.5"
-mkdocs-material = ">=9.6.21,<10"
 mkdocs-redirects = ">=1.2.1,<2"
 nushell = ">=0.112.1,<0.113"
 pillow = ">=12,<13"
+zensical = "*"
 
 [feature.docs.tasks]
-build-docs = { cmd = "mkdocs build --strict", depends-on = [
+build-docs = { cmd = "zensical build --strict", depends-on = [
   "download-font",
 ], description = "Build documentation" }
 deploy-dev = { cmd = "mike deploy --push dev devel", description = "Deploy development docs" }
 deploy-latest = { cmd = "mike deploy --push --update-aliases $RELEASE_VERSION latest", description = "Deploy latest release docs" }
-docs = { cmd = "mkdocs serve", depends-on = [
+docs = { cmd = "zensical serve", depends-on = [
   "download-font",
 ], description = "Serve the docs locally" }
 download-font = { cmd = "nu docs/layouts/download-font-to-cache.nu", description = "Download fonts for documentation" }

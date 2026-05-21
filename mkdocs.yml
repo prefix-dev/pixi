@@ -5,8 +5,7 @@ repo_url: https://github.com/prefix-dev/pixi/
 edit_uri: edit/main/docs/
 
 theme:
-  name: material
-  custom_dir: docs/overrides
+  custom_dir: overrides
   favicon: assets/pixi.png
   logo: assets/pixi-logo.svg
   font:
@@ -210,10 +209,10 @@ nav:
       - Community: misc/Community.md
       - FAQ: misc/FAQ.md
 
-hooks:
-  - schema/docs_hooks.py
-  - install/docs_hooks.py
-  - docs/docs_hooks.py
+# hooks:
+#   - schema/docs_hooks.py
+#   - install/docs_hooks.py
+#   - docs/docs_hooks.py
 
 validation:
   omitted_files: warn
@@ -221,9 +220,9 @@ validation:
   unrecognized_links: warn
   anchors: warn
 
-not_in_nav: |
-  reference/cli/
-  partials/
+# not_in_nav: |
+#   reference/cli/
+#   partials/
 
 plugins:
   - redirects:
