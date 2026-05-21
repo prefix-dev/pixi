@@ -77,8 +77,7 @@ pub struct TomlSpec {
 }
 
 /// A TOML representation of a package condition.
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum TomlWhen {
     /// A package matchspec without bracket or build-string shorthand syntax.
     MatchSpec(String),
@@ -109,6 +108,54 @@ pub struct TomlWhenPackage {
     pub spec: Box<TomlSpec>,
 }
 
+const WHEN_SOURCE_LOCATION_ERROR: &str = "source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables";
+const WHEN_CHANNEL_ERROR: &str = "`channel` is not supported inside `when` tables";
+
+fn validate_when_spec_error(spec: &TomlSpec) -> Option<&'static str> {
+    if spec
+        .location
+        .as_ref()
+        .is_some_and(toml_location_spec_has_any_field)
+    {
+        return Some(WHEN_SOURCE_LOCATION_ERROR);
+    }
+    if spec.channel.is_some() {
+        return Some(WHEN_CHANNEL_ERROR);
+    }
+    None
+}
+
+fn toml_location_spec_has_any_field(loc: &TomlLocationSpec) -> bool {
+    loc.url.is_some()
+        || loc.git.is_some()
+        || loc.path.is_some()
+        || loc.branch.is_some()
+        || loc.rev.is_some()
+        || loc.tag.is_some()
+        || loc.subdirectory.is_some()
+        || loc.md5.is_some()
+        || loc.sha256.is_some()
+}
+
+fn toml_spec_has_any_field(spec: &TomlSpec) -> bool {
+    spec.version.is_some()
+        || spec
+            .location
+            .as_ref()
+            .is_some_and(toml_location_spec_has_any_field)
+        || spec.build.is_some()
+        || spec.build_number.is_some()
+        || spec.file_name.is_some()
+        || spec.extras.is_some()
+        || spec.flags.is_some()
+        || spec.channel.is_some()
+        || spec.subdir.is_some()
+        || spec.license.is_some()
+        || spec.license_family.is_some()
+        || spec.when.is_some()
+        || spec.track_features.is_some()
+}
+
 impl<'de> serde::Deserialize<'de> for TomlWhenPackage {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -125,28 +172,69 @@ impl<'de> serde::Deserialize<'de> for TomlWhenPackage {
         let spec = Box::new(spec);
         // Reject location / channel fields the same way the TOML path does so
         // both deserializers stay in sync.
-        if spec.location.is_some()
-            && let Some(loc) = &spec.location
-            && (loc.url.is_some()
-                || loc.git.is_some()
-                || loc.path.is_some()
-                || loc.branch.is_some()
-                || loc.rev.is_some()
-                || loc.tag.is_some()
-                || loc.subdirectory.is_some()
-                || loc.md5.is_some()
-                || loc.sha256.is_some())
-        {
-            return Err(D::Error::custom(
-                "source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables",
-            ));
-        }
-        if spec.channel.is_some() {
-            return Err(D::Error::custom(
-                "`channel` is not yet supported inside `when` tables",
-            ));
+        if let Some(err) = validate_when_spec_error(&spec) {
+            return Err(D::Error::custom(err));
         }
         Ok(TomlWhenPackage { package, spec })
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for TomlWhen {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Helper {
+            all: Option<Vec<TomlWhen>>,
+            any: Option<Vec<TomlWhen>>,
+            package: Option<PackageName>,
+            #[serde(flatten)]
+            spec: TomlSpec,
+        }
+
+        serde_untagged::UntaggedEnumVisitor::new()
+            .expecting("a string or a table with `all`, `any`, or `package`")
+            .string(|str| {
+                parse_when_matchspec(str).map_err(serde_untagged::de::Error::custom)?;
+                Ok(TomlWhen::MatchSpec(str.to_string()))
+            })
+            .seq(|_| {
+                Err(serde_untagged::de::Error::custom(
+                    "`when` must be a string or a table with `all`, `any`, or `package`; top-level arrays are not allowed",
+                ))
+            })
+            .map(|map| {
+                let Helper {
+                    all,
+                    any,
+                    package,
+                    spec,
+                } = map.deserialize()?;
+
+                match (all, any, package) {
+                    (Some(all), None, None) if !toml_spec_has_any_field(&spec) => {
+                        Ok(TomlWhen::All { all })
+                    }
+                    (None, Some(any), None) if !toml_spec_has_any_field(&spec) => {
+                        Ok(TomlWhen::Any { any })
+                    }
+                    (None, None, Some(package)) => {
+                        if let Some(err) = validate_when_spec_error(&spec) {
+                            return Err(serde_untagged::de::Error::custom(err));
+                        }
+                        Ok(TomlWhen::Expanded(TomlWhenPackage {
+                            package,
+                            spec: Box::new(spec),
+                        }))
+                    }
+                    _ => Err(serde_untagged::de::Error::custom(
+                        "`when` tables must contain exactly one of `all`, `any`, or `package`",
+                    )),
+                }
+            })
+            .deserialize(deserializer)
     }
 }
 
@@ -649,29 +737,9 @@ impl TomlWhenPackage {
 /// [`rattler_conda_types::Channel`] needs a [`ChannelConfig`] that isn't
 /// available at parse time.
 fn validate_when_spec(spec: &TomlSpec, span: toml_span::Span) -> Result<(), DeserError> {
-    let location_set = spec.location.as_ref().is_some_and(|loc| {
-        loc.url.is_some()
-            || loc.git.is_some()
-            || loc.path.is_some()
-            || loc.branch.is_some()
-            || loc.rev.is_some()
-            || loc.tag.is_some()
-            || loc.subdirectory.is_some()
-            || loc.md5.is_some()
-            || loc.sha256.is_some()
-    });
-    if location_set {
+    if let Some(err) = validate_when_spec_error(spec) {
         return Err(DeserError::from(toml_span::Error {
-            kind: ErrorKind::Custom(
-                "source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables".into(),
-            ),
-            span,
-            line_info: None,
-        }));
-    }
-    if spec.channel.is_some() {
-        return Err(DeserError::from(toml_span::Error {
-            kind: ErrorKind::Custom("`channel` is not yet supported inside `when` tables".into()),
+            kind: ErrorKind::Custom(err.into()),
             span,
             line_info: None,
         }));
@@ -679,13 +747,103 @@ fn validate_when_spec(spec: &TomlSpec, span: toml_span::Span) -> Result<(), Dese
     Ok(())
 }
 
-fn parse_when_matchspec(input: &str) -> Result<MatchSpecCondition, SpecError> {
-    if input.contains(['[', ']']) {
-        return Err(SpecError::InvalidWhen(
-            "`when` strings do not support bracket matchspec syntax; use the expanded `{ package = ..., version = ..., build = ... }` form".to_string(),
+fn toml_string_literal(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+fn toml_string_array_literal<'a>(values: impl IntoIterator<Item = &'a str>) -> String {
+    format!(
+        "[{}]",
+        values
+            .into_iter()
+            .map(toml_string_literal)
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+fn expanded_when_matchspec(match_spec: &MatchSpec) -> Option<String> {
+    let package = match_spec.name.as_exact()?.as_source();
+    let mut fields = vec![format!("package = {}", toml_string_literal(package))];
+
+    if let Some(version) = &match_spec.version {
+        fields.push(format!(
+            "version = {}",
+            toml_string_literal(&version.to_string())
+        ));
+    }
+    if let Some(build) = &match_spec.build {
+        fields.push(format!(
+            "build = {}",
+            toml_string_literal(&build.to_string())
+        ));
+    }
+    if let Some(build_number) = &match_spec.build_number {
+        fields.push(format!(
+            "build-number = {}",
+            toml_string_literal(&build_number.to_string())
+        ));
+    }
+    if let Some(file_name) = &match_spec.file_name {
+        fields.push(format!("file-name = {}", toml_string_literal(file_name)));
+    }
+    if let Some(extras) = &match_spec.extras {
+        fields.push(format!(
+            "extras = {}",
+            toml_string_array_literal(extras.iter().map(String::as_str))
+        ));
+    }
+    if let Some(flags) = &match_spec.flags {
+        let flags = flags.iter().map(ToString::to_string).collect::<Vec<_>>();
+        fields.push(format!(
+            "flags = {}",
+            toml_string_array_literal(flags.iter().map(String::as_str))
+        ));
+    }
+    if let Some(channel) = &match_spec.channel {
+        fields.push(format!(
+            "channel = {}",
+            toml_string_literal(&channel.name())
+        ));
+    }
+    if let Some(subdir) = &match_spec.subdir {
+        fields.push(format!("subdir = {}", toml_string_literal(subdir)));
+    }
+    if let Some(md5) = &match_spec.md5 {
+        fields.push(format!(
+            "md5 = {}",
+            toml_string_literal(&format!("{md5:x}"))
+        ));
+    }
+    if let Some(sha256) = &match_spec.sha256 {
+        fields.push(format!(
+            "sha256 = {}",
+            toml_string_literal(&format!("{sha256:x}"))
+        ));
+    }
+    if let Some(url) = &match_spec.url {
+        fields.push(format!("url = {}", toml_string_literal(url.as_str())));
+    }
+    if let Some(license) = &match_spec.license {
+        fields.push(format!("license = {}", toml_string_literal(license)));
+    }
+    if let Some(license_family) = &match_spec.license_family {
+        fields.push(format!(
+            "license-family = {}",
+            toml_string_literal(license_family)
+        ));
+    }
+    if let Some(track_features) = &match_spec.track_features {
+        fields.push(format!(
+            "track-features = {}",
+            toml_string_array_literal(track_features.iter().map(String::as_str))
         ));
     }
 
+    Some(format!("when = {{ {} }}", fields.join(", ")))
+}
+
+fn parse_when_matchspec(input: &str) -> Result<MatchSpecCondition, SpecError> {
     let match_spec = MatchSpec::from_str(
         input,
         ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
@@ -698,15 +856,37 @@ fn parse_when_matchspec(input: &str) -> Result<MatchSpecCondition, SpecError> {
         ));
     }
 
+    let expanded = expanded_when_matchspec(&match_spec);
+
+    if input.contains(['[', ']']) {
+        let hint = expanded
+            .map(|expanded| format!("; use the expanded form `{expanded}`"))
+            .unwrap_or_default();
+        return Err(SpecError::InvalidWhen(format!(
+            "`when` strings do not support bracket matchspec syntax{hint}"
+        )));
+    }
+
     if match_spec.build.is_some() {
-        return Err(SpecError::InvalidWhen(
-            "`when` strings do not support build-string shorthand; use `{ package = ..., version = ..., build = ... }`".to_string(),
-        ));
+        let hint = expanded
+            .map(|expanded| format!("; use the expanded form `{expanded}`"))
+            .unwrap_or_default();
+        return Err(SpecError::InvalidWhen(format!(
+            "`when` strings do not support build-string shorthand{hint}"
+        )));
+    }
+
+    if match_spec.channel.is_some() {
+        let hint = expanded
+            .map(|expanded| format!("; this would be `{expanded}`"))
+            .unwrap_or_default();
+        return Err(SpecError::InvalidWhen(format!(
+            "`when` strings do not support channel prefixes{hint}, but `channel` is not supported inside `when` tables"
+        )));
     }
 
     if match_spec.build_number.is_some()
         || match_spec.file_name.is_some()
-        || match_spec.channel.is_some()
         || match_spec.subdir.is_some()
         || match_spec.md5.is_some()
         || match_spec.sha256.is_some()
@@ -717,10 +897,14 @@ fn parse_when_matchspec(input: &str) -> Result<MatchSpecCondition, SpecError> {
         || match_spec.flags.is_some()
         || match_spec.condition.is_some()
         || match_spec.track_features.is_some()
+        || match_spec.namespace.is_some()
     {
-        return Err(SpecError::InvalidWhen(
-            "`when` strings only support package names with optional version constraints; use the expanded form for additional matchspec fields".to_string(),
-        ));
+        let hint = expanded
+            .map(|expanded| format!("; use the expanded form `{expanded}`"))
+            .unwrap_or_default();
+        return Err(SpecError::InvalidWhen(format!(
+            "`when` strings only support package names with optional version constraints{hint}"
+        )));
     }
 
     Ok(MatchSpecCondition::MatchSpec(Box::new(match_spec)))
@@ -977,15 +1161,33 @@ impl<'de> toml_span::Deserialize<'de> for TomlWhen {
                 match (has_all, has_any, has_package) {
                     (true, false, false) => {
                         let mut th = TableHelper::new(&mut table_value)?;
-                        let all = th.required::<Vec<TomlWhen>>("all")?;
+                        let all = th.required_s::<Vec<TomlWhen>>("all")?;
+                        if all.value.is_empty() {
+                            return Err(DeserError::from(toml_span::Error {
+                                kind: ErrorKind::Custom(
+                                    "`when.all` must contain at least one condition".into(),
+                                ),
+                                span: all.span,
+                                line_info: None,
+                            }));
+                        }
                         th.finalize(None)?;
-                        Ok(TomlWhen::All { all })
+                        Ok(TomlWhen::All { all: all.value })
                     }
                     (false, true, false) => {
                         let mut th = TableHelper::new(&mut table_value)?;
-                        let any = th.required::<Vec<TomlWhen>>("any")?;
+                        let any = th.required_s::<Vec<TomlWhen>>("any")?;
+                        if any.value.is_empty() {
+                            return Err(DeserError::from(toml_span::Error {
+                                kind: ErrorKind::Custom(
+                                    "`when.any` must contain at least one condition".into(),
+                                ),
+                                span: any.span,
+                                line_info: None,
+                            }));
+                        }
                         th.finalize(None)?;
-                        Ok(TomlWhen::Any { any })
+                        Ok(TomlWhen::Any { any: any.value })
                     }
                     (false, false, true) => {
                         // Take `package` out and hand the remainder to
@@ -1603,19 +1805,34 @@ when = { package = "python", track-features = ["legacy"] }"#;
     #[test]
     fn test_when_reject_top_level_array_json() {
         let input = json!({ "version": "*", "when": ["__unix", "python >=3.10"] });
-        assert_snapshot!(parse_json_error(input), @"data did not match any variant of untagged enum TomlWhen");
+        assert_snapshot!(parse_json_error(input), @"`when` must be a string or a table with `all`, `any`, or `package`; top-level arrays are not allowed");
     }
 
     #[test]
     fn test_when_reject_bracket_matchspec_json() {
         let input = json!({ "version": "*", "when": "python[version='>=3.10']" });
-        assert_snapshot!(parse_json_error(input), @"`when` strings do not support bracket matchspec syntax; use the expanded `{ package = ..., version = ..., build = ... }` form");
+        assert_snapshot!(parse_json_error(input), @r###"`when` strings do not support bracket matchspec syntax; use the expanded form `when = { package = "python", version = ">=3.10" }`"###);
+    }
+
+    #[test]
+    fn test_when_reject_bracket_matchspec_expands_multiple_fields_json() {
+        let input = json!({
+            "version": "*",
+            "when": "python[version='>=3.10',build_number='>=3',subdir='linux-64']",
+        });
+        assert_snapshot!(parse_json_error(input), @r###"`when` strings do not support bracket matchspec syntax; use the expanded form `when = { package = "python", version = ">=3.10", build-number = ">=3", subdir = "linux-64" }`"###);
     }
 
     #[test]
     fn test_when_reject_build_shorthand_json() {
         let input = json!({ "version": "*", "when": "python >=3.10 *cuda" });
-        assert_snapshot!(parse_json_error(input), @"`when` strings do not support build-string shorthand; use `{ package = ..., version = ..., build = ... }`");
+        assert_snapshot!(parse_json_error(input), @r###"`when` strings do not support build-string shorthand; use the expanded form `when = { package = "python", version = ">=3.10", build = "*cuda" }`"###);
+    }
+
+    #[test]
+    fn test_when_reject_build_shorthand_expands_channel_json() {
+        let input = json!({ "version": "*", "when": "conda-forge::python >=3.10 *cuda" });
+        assert_snapshot!(parse_json_error(input), @r###"`when` strings do not support build-string shorthand; use the expanded form `when = { package = "python", version = ">=3.10", build = "*cuda", channel = "conda-forge" }`"###);
     }
 
     #[test]
@@ -1626,8 +1843,8 @@ when = { package = "python", track-features = ["legacy"] }"#;
 
     #[test]
     fn test_when_reject_string_with_channel_prefix_json() {
-        let input = json!({ "version": "*", "when": "conda-forge::python" });
-        assert_snapshot!(parse_json_error(input), @"`when` strings only support package names with optional version constraints; use the expanded form for additional matchspec fields");
+        let input = json!({ "version": "*", "when": "conda-forge::python >=3.10" });
+        assert_snapshot!(parse_json_error(input), @r###"`when` strings do not support channel prefixes; this would be `when = { package = "python", version = ">=3.10", channel = "conda-forge" }`, but `channel` is not supported inside `when` tables"###);
     }
 
     #[test]
@@ -1636,7 +1853,7 @@ when = { package = "python", track-features = ["legacy"] }"#;
             "version": "*",
             "when": { "package": "python", "url": "https://example.com/python-3.10.conda" },
         });
-        assert_snapshot!(parse_json_error(input), @"data did not match any variant of untagged enum TomlWhen");
+        assert_snapshot!(parse_json_error(input), @"source-location fields (`url`, `git`, `path`, `md5`, `sha256`, ...) are not allowed inside `when` tables");
     }
 
     #[test]
@@ -1645,7 +1862,7 @@ when = { package = "python", track-features = ["legacy"] }"#;
             "version": "*",
             "when": { "package": "python", "channel": "conda-forge" },
         });
-        assert_snapshot!(parse_json_error(input), @"data did not match any variant of untagged enum TomlWhen");
+        assert_snapshot!(parse_json_error(input), @"`channel` is not supported inside `when` tables");
     }
 
     #[test]
@@ -1688,9 +1905,10 @@ when = { all = ["__unix"], any = ["__linux"] }"#;
 when = { all = [] }"#;
         assert_snapshot!(parse_toml_error(input), @r###"
          × `when.all` must contain at least one condition
-          ╭─[pixi.toml:1:1]
-        1 │ ╭─▶ version = "*"
-        2 │ ╰─▶ when = { all = [] }
+          ╭─[pixi.toml:2:16]
+        1 │ version = "*"
+        2 │ when = { all = [] }
+          ·                ──
           ╰────
         "###);
     }
@@ -1701,9 +1919,10 @@ when = { all = [] }"#;
 when = { any = [] }"#;
         assert_snapshot!(parse_toml_error(input), @r###"
          × `when.any` must contain at least one condition
-          ╭─[pixi.toml:1:1]
-        1 │ ╭─▶ version = "*"
-        2 │ ╰─▶ when = { any = [] }
+          ╭─[pixi.toml:2:16]
+        1 │ version = "*"
+        2 │ when = { any = [] }
+          ·                ──
           ╰────
         "###);
     }
@@ -1725,13 +1944,13 @@ when = ">=3.10""#;
     #[test]
     fn test_when_reject_string_with_channel_prefix_toml() {
         let input = r#"version = "*"
-when = "conda-forge::python""#;
+when = "conda-forge::python >=3.10""#;
         assert_snapshot!(parse_toml_error(input), @r###"
-         × `when` strings only support package names with optional version constraints; use the expanded form for additional matchspec fields
+         × `when` strings do not support channel prefixes; this would be `when = { package = "python", version = ">=3.10", channel = "conda-forge" }`, but `channel` is not supported inside `when` tables
           ╭─[pixi.toml:2:9]
         1 │ version = "*"
-        2 │ when = "conda-forge::python"
-          ·         ───────────────────
+        2 │ when = "conda-forge::python >=3.10"
+          ·         ──────────────────────────
           ╰────
         "###);
     }
@@ -1797,7 +2016,7 @@ when = { package = "python", branch = "main" }"#;
         let input = r#"version = "*"
 when = { package = "python", channel = "conda-forge" }"#;
         assert_snapshot!(parse_toml_error(input), @r###"
-         × `channel` is not yet supported inside `when` tables
+         × `channel` is not supported inside `when` tables
           ╭─[pixi.toml:2:8]
         1 │ version = "*"
         2 │ when = { package = "python", channel = "conda-forge" }
@@ -1839,7 +2058,7 @@ when = { package = "python", version = "//" }"#;
         let input = r#"version = "*"
 when = { all = ["__unix", "python[version='>=3.10']"] }"#;
         assert_snapshot!(parse_toml_error(input), @r###"
-         × `when` strings do not support bracket matchspec syntax; use the expanded `{ package = ..., version = ..., build = ... }` form
+         × `when` strings do not support bracket matchspec syntax; use the expanded form `when = { package = "python", version = ">=3.10" }`
           ╭─[pixi.toml:2:28]
         1 │ version = "*"
         2 │ when = { all = ["__unix", "python[version='>=3.10']"] }
