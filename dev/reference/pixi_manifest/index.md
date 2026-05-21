@@ -1356,6 +1356,7 @@ The `run-dependencies` are the packages that will be installed in the environmen
 ```toml
 [package.run-dependencies]
 rich = ">=13.9.4,<14"
+unix-helper = { version = "*", when = "__unix" }
 ```
 
 ### `run-constraints`
