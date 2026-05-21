@@ -801,10 +801,7 @@ fn expanded_when_matchspec(match_spec: &MatchSpec) -> Option<String> {
         ));
     }
     if let Some(channel) = &match_spec.channel {
-        fields.push(format!(
-            "channel = {}",
-            toml_string_literal(&channel.name())
-        ));
+        fields.push(format!("channel = {}", toml_string_literal(channel.name())));
     }
     if let Some(subdir) = &match_spec.subdir {
         fields.push(format!("subdir = {}", toml_string_literal(subdir)));
