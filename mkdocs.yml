@@ -98,7 +98,7 @@ extra:
       link: https://bsky.app/profile/prefix.dev
     - icon: fontawesome/brands/linkedin
       link: https://www.linkedin.com/company/prefix-dev
-    - icon: fontawesome/brands/twitter
+    - icon: fontawesome/brands/x-twitter
       link: https://twitter.com/prefix_dev
   version:
     provider: mike
@@ -210,15 +210,11 @@ nav:
       - Community: misc/Community.md
       - FAQ: misc/FAQ.md
 
-hooks:
-  - schema/docs_hooks.py
-  - install/docs_hooks.py
-  - docs/docs_hooks.py
-
 validation:
   omitted_files: warn
   absolute_links: warn
   unrecognized_links: warn
+  unresolved_references: false
   anchors: warn
 
 not_in_nav: |
@@ -271,11 +267,6 @@ plugins:
 
   - search:
       separator: '[\s\u200b\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
-  - social:
-      cards_layout_dir: docs/layouts
-      cards_layout: custom
-      # Set debug to true to help troubleshoot social card generation issues
-      debug: false
   - mike:
       # These fields are all optional; the defaults are as below...
       # alias_type: symlink
