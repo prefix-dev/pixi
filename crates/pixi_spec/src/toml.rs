@@ -1824,15 +1824,36 @@ when = { package = "python", track-features = ["legacy"] }"#;
     }
 
     #[test]
+    fn test_when_reject_bracket_matchspec_expands_metadata_fields_json() {
+        let input = json!({
+            "version": "*",
+            "when": "python[version='>=3.10',fn='python-3.10.0-h123_0.conda',license='BSD-3-Clause',license_family='BSD']",
+        });
+        assert_snapshot!(parse_json_error(input), @r###"`when` strings do not support bracket matchspec syntax; use the expanded form `when = { package = "python", version = ">=3.10", file-name = "python-3.10.0-h123_0.conda", license = "BSD-3-Clause", license-family = "BSD" }`"###);
+    }
+
+    #[test]
     fn test_when_reject_build_shorthand_json() {
         let input = json!({ "version": "*", "when": "python >=3.10 *cuda" });
         assert_snapshot!(parse_json_error(input), @r###"`when` strings do not support build-string shorthand; use the expanded form `when = { package = "python", version = ">=3.10", build = "*cuda" }`"###);
     }
 
     #[test]
+    fn test_when_reject_build_shorthand_expands_name_version_build_json() {
+        let input = json!({ "version": "*", "when": "foobar >=123.3 *cuda" });
+        assert_snapshot!(parse_json_error(input), @r###"`when` strings do not support build-string shorthand; use the expanded form `when = { package = "foobar", version = ">=123.3", build = "*cuda" }`"###);
+    }
+
+    #[test]
     fn test_when_reject_build_shorthand_expands_channel_json() {
         let input = json!({ "version": "*", "when": "conda-forge::python >=3.10 *cuda" });
         assert_snapshot!(parse_json_error(input), @r###"`when` strings do not support build-string shorthand; use the expanded form `when = { package = "python", version = ">=3.10", build = "*cuda", channel = "conda-forge" }`"###);
+    }
+
+    #[test]
+    fn test_when_reject_build_shorthand_expands_channel_subdir_json() {
+        let input = json!({ "version": "*", "when": "conda-forge/linux-64::python >=3.10 py310*" });
+        assert_snapshot!(parse_json_error(input), @r###"`when` strings do not support build-string shorthand; use the expanded form `when = { package = "python", version = ">=3.10", build = "py310*", channel = "conda-forge", subdir = "linux-64" }`"###);
     }
 
     #[test]
