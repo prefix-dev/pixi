@@ -898,10 +898,19 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
+          "description": "The platforms that the feature supports: a union of all features combined in one environment is used for the environment. Each entry is either a conda subdir or the name of a workspace platform.",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Platform"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Platform"
+              },
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+              }
+            ]
           }
         },
         "pypi-dependencies": {
@@ -3200,10 +3209,22 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the project supports",
+          "description": "The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table that names a workspace platform (`name`, optional `subdir`, optional `virtual-packages`).",
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Platform"
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Platform"
+              },
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+              },
+              {
+                "$ref": "#/$defs/WorkspacePlatform"
+              }
+            ]
           }
         },
         "preview": {
@@ -3309,6 +3330,36 @@
           "description": "Must be true to inherit from workspace",
           "type": "boolean",
           "const": true
+        }
+      }
+    },
+    "WorkspacePlatform": {
+      "title": "WorkspacePlatform",
+      "description": "A workspace platform: a name-bound view of a conda subdir, optionally\nextended with declared virtual-package guarantees.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "description": "The workspace-unique name. Alphanumeric and dashes; must start and end with an alphanumeric character.",
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+        },
+        "subdir": {
+          "$ref": "#/$defs/Platform",
+          "description": "The conda subdir this platform targets. Defaults to `name` parsed as a subdir when omitted."
+        },
+        "virtual-packages": {
+          "title": "Virtual-Packages",
+          "description": "Virtual-package guarantees declared for this platform, e.g. `__cuda=12.0`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

@@ -49,6 +49,10 @@ ExtraName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9._+-]{1,64}$")]
 # Variant flags are non-empty strings with optional `key:value` semantics,
 # allowing a single colon as the separator.
 FlagName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]+(:[a-z0-9_]+)?$")]
+PlatformName = Annotated[
+    str,
+    StringConstraints(pattern=r"^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$", max_length=64),
+]
 Glob = NonEmptyStr
 UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
@@ -97,6 +101,25 @@ class Platform(str, Enum):
 
 class StrictBaseModel(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", alias_generator=hyphenize)
+
+
+class WorkspacePlatform(StrictBaseModel):
+    """A workspace platform: a name-bound view of a conda subdir, optionally
+    extended with declared virtual-package guarantees."""
+
+    name: str = Field(
+        pattern=r"^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$",
+        max_length=64,
+        description="The workspace-unique name. Alphanumeric and dashes; must start and end with an alphanumeric character.",
+    )
+    subdir: Platform | None = Field(
+        None,
+        description="The conda subdir this platform targets. Defaults to `name` parsed as a subdir when omitted.",
+    )
+    virtual_packages: list[str] | None = Field(
+        None,
+        description="Virtual-package guarantees declared for this platform, e.g. `__cuda=12.0`.",
+    )
 
 
 class WorkspaceInheritance(StrictBaseModel):
@@ -200,8 +223,9 @@ class Workspace(StrictBaseModel):
         ],
         description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
     )
-    platforms: list[Platform] | None = Field(
-        None, description="The platforms that the project supports"
+    platforms: list[Platform | PlatformName | WorkspacePlatform] | None = Field(
+        None,
+        description="The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table that names a workspace platform (`name`, optional `subdir`, optional `virtual-packages`).",
     )
     license: NonEmptyStr | None = Field(
         None,
@@ -758,9 +782,9 @@ class Feature(StrictBaseModel):
 - 'lowest': solve all packages to the lowest compatible version.
 - 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
     )
-    platforms: list[Platform] | None = Field(
+    platforms: list[Platform | PlatformName] | None = Field(
         None,
-        description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment.",
+        description="The platforms that the feature supports: a union of all features combined in one environment is used for the environment. Each entry is either a conda subdir or the name of a workspace platform.",
     )
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField

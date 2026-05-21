@@ -1,0 +1,12 @@
+#:schema ./../../schema.json
+[workspace]
+channels = ["conda-forge"]
+name = "rich"
+platforms = [
+  "linux-64",
+  { name = "linux-64-cuda", subdir = "linux-64", virtual-packages = [
+    "__cuda=12.0",
+    "__glibc=2.28",
+  ] },
+  { name = "osx-arm64" },
+]
