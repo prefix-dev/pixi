@@ -335,11 +335,39 @@ class WhenAny(StrictBaseModel):
 
 
 class WhenPackage(StrictBaseModel):
-    """Expanded package condition syntax."""
+    """Expanded package condition syntax.
+
+    Accepts the same matchspec fields as a regular package dependency except
+    for `when` itself, `channel`, and source-location fields (`url`, `git`,
+    `path`, `md5`, `sha256`, ...).
+    """
 
     package: NonEmptyStr = Field(description="The package name to match")
     version: NonEmptyStr | None = Field(None, description="Optional version constraint")
     build: NonEmptyStr | None = Field(None, description="Optional build string matcher")
+    build_number: NonEmptyStr | None = Field(
+        None,
+        description="The build number of the package",
+    )
+    file_name: NonEmptyStr | None = Field(None, description="The file name of the package")
+    subdir: NonEmptyStr | None = Field(
+        None, description="The subdir of the package, also known as platform"
+    )
+    extras: list[NonEmptyStr] | None = Field(
+        None,
+        description="Optional extra dependencies to select for the package",
+    )
+    flags: list[NonEmptyStr] | None = Field(
+        None,
+        description="Plain string flags used to select package variants",
+    )
+    license: NonEmptyStr | None = Field(None, description="The license of the package")
+    license_family: NonEmptyStr | None = Field(
+        None, description="The license family of the package"
+    )
+    track_features: list[NonEmptyStr] | None = Field(
+        None, description="The track features of the package"
+    )
 
 
 When = NonEmptyStr | WhenAll | WhenAny | WhenPackage
