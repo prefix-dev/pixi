@@ -67,6 +67,23 @@ git = "https://github.com/org/repo"
 rev = "abc123def"
 # --8<-- [end:git-fields]
 
+# --8<-- [start:source-with-matchspec-fields]
+# Source specs can be combined with the usual matchspec fields
+# (`version`, `build`, `build-number`, `extras`, `flags`, `when`,
+# `track-features`, `license`, `license-family`, `subdir`).
+[dependencies.local-package-with-build]
+path = "./packages/mypackage"
+# Restrict the build string that the source build must produce
+build = "py311*"
+
+[dependencies.git-package-with-when]
+git = "https://github.com/org/repo"
+branch = "main"
+# Only apply this dependency on Linux
+when = "__linux"
+flags = ["cuda"]
+# --8<-- [end:source-with-matchspec-fields]
+
 
 # --8<-- [start:pypi-fields]
 [pypi-dependencies]

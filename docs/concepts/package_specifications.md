@@ -289,6 +289,22 @@ For git repositories, you can specify:
 - **rev**: Specific git revision/commit SHA
 - **subdirectory**: Path within the repository
 
+### Combining source locations with MatchSpec fields
+
+A source spec (`path`, `git`, or source `url`) can be combined with the same
+MatchSpec fields you would use for a channel-resolved dependency, such as
+`version`, `build`, `build-number`, `extras`, `flags`, `when`,
+`track-features`, `license`, `license-family`, and `subdir`. This is useful
+when you want to constrain which build of a source package is selected, or
+to gate the dependency on a condition:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/package_specifications.toml:source-with-matchspec-fields"
+```
+
+Fields that don't apply to source packages (`channel`, `file-name`, and
+`md5`/`sha256` for non-URL sources) are still rejected.
+
 ## PyPI package specifications
 
 Pixi also supports installing package dependencies from PyPI using `pixi add --pypi` and in your `pixi.toml` and `pyproject.toml`.
