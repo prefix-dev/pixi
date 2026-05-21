@@ -47,11 +47,6 @@ outputs:
           AWS_LC_SYS_CMAKE_BUILDER: "1"
           CARGO_PROFILE_RELEASE_STRIP: symbols
         content:
-          - if: osx and x86_64
-            then:
-              # use the default linker for osx-64 as we are hitting a bug with the conda-forge linker
-              # https://github.com/rust-lang/rust/issues/140686
-              - unset CARGO_TARGET_X86_64_APPLE_DARWIN_LINKER
           - if: unix
             then:
               - export RUSTC_WRAPPER=sccache
