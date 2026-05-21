@@ -54,7 +54,7 @@ Next to that publishing a package became much easier with `--variant`, `--build-
 - Propagate run-exports from host/build by @baszalmstra in [#6151](https://github.com/prefix-dev/pixi/pull/6151)
 - Hook up repodata fetch reporter to gateway queries by @baszalmstra in [#6112](https://github.com/prefix-dev/pixi/pull/6112)
 - Invalidate build-backend metadata cache when backend spec changes by @baszalmstra in [#6111](https://github.com/prefix-dev/pixi/pull/6111)
-
+- Normalize extras order in lockfile metadata comparison by @benmoss in [#6165](https://github.com/prefix-dev/pixi/pull/6165)
 
 #### Performance
 
