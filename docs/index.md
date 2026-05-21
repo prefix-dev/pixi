@@ -1,6 +1,5 @@
 ---
 title: Home
-template: home.html
 ---
 # Pixi
 
