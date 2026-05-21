@@ -40,7 +40,14 @@ outputs:
     build:
       script:
         env:
+          AWS_LC_SYS_CMAKE_BUILDER: "1"
           CARGO_PROFILE_RELEASE_STRIP: symbols
+        secrets:
+          - ACTIONS_CACHE_SERVICE_V2
+          - ACTIONS_CACHE_URL
+          - ACTIONS_RESULTS_URL
+          - ACTIONS_RUNTIME_TOKEN
+          - SCCACHE_GHA_ENABLED
         content:
           - if: osx and x86_64
             then:
