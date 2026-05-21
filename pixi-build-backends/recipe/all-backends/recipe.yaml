@@ -35,6 +35,8 @@ outputs:
         - ninja
         - cargo-bundle-licenses
         - cargo-auditable
+        - if: osx
+          then: ld64
       host:
         - pkg-config
         - libzlib
