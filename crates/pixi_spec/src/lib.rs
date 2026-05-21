@@ -32,6 +32,7 @@ use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, MatchSpec, MatchSpecCondition, NamedChannelOrUrl,
     NamelessMatchSpec, PackageName, ParseChannelError, StringMatcher, VersionSpec,
 };
+#[cfg(feature = "rattler_lock")]
 pub use rattler_lock::Verbatim;
 pub use source_anchor::SourceAnchor;
 pub use subdirectory::{Subdirectory, SubdirectoryError};

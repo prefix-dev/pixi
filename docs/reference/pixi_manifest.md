@@ -1361,6 +1361,7 @@ The build system is a table that can contain the following fields:
   - `rev`: a string representing SHA revision to checkout.
   - `subdirectory`: a string representing path to subdirectory to use.
 - `channels`: specifies the channels to get the build backend from.
+- `flags`: package variant flags recorded in the produced package metadata.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use.
@@ -1406,6 +1407,7 @@ Each of these tables has a different purpose and is used to define the dependenc
 - [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
 - [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link against the package on the target platform.
 - [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
+- [`extra-dependencies`](#extra-dependencies): Optional run dependency groups that consumers can request through `extras`.
 - [`run-constraints`](#run-constraints): Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.
 
 
@@ -1457,6 +1459,21 @@ The `run-dependencies` are the packages that will be installed in the environmen
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-dependencies"
+```
+
+### `extra-dependencies`
+
+The `extra-dependencies` table defines extra dependency groups for a package. For example, a package that declares `test` and `cuda` groups:
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:extra-dependencies"
+```
+
+A workspace that consumes this package as a source dependency requests the `test` group with:
+
+```toml
+[dependencies]
+mypackage = { path = "./mypackage", extras = ["test"] }
 ```
 
 ### `run-constraints`

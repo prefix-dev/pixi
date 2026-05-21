@@ -225,8 +225,9 @@ impl DevSourceMetadataSpec {
                         // Match directly on PackageSpec
                         let resolved_spec = match &depend.spec {
                             PackageSpec::Binary(binary) => {
-                                let spec =
-                                    crate::build::conversion::from_binary_spec_v1(binary.clone());
+                                let spec = crate::build::conversion::from_binary_spec_v1(
+                                    (**binary).clone(),
+                                );
                                 PixiSpec::from(spec)
                             }
                             PackageSpec::Source(source) => {

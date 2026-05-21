@@ -136,6 +136,7 @@ pub struct TomlPackage {
     pub host_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
     pub run_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
+    pub extra_dependencies: IndexMap<PixiSpanned<String>, PixiSpanned<InheritablePackageMap>>,
     pub run_constraints: Option<PixiSpanned<InheritablePackageMap>>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
 
@@ -175,6 +176,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
         let run_dependencies = th.optional("run-dependencies");
+        let extra_dependencies = th
+            .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("extra-dependencies")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
         let run_constraints = th.optional("run-constraints");
         let build = th.required("build")?;
         let target = th
@@ -197,6 +202,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             host_dependencies,
             build_dependencies,
             run_dependencies,
+            extra_dependencies,
             run_constraints,
             build,
             target,
@@ -358,6 +364,7 @@ impl TomlPackage {
             run_constraints: self.run_constraints,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
+            extra_dependencies: self.extra_dependencies,
         }
         .into_package_target(preview, &workspace_dependencies)?;
 
@@ -691,6 +698,83 @@ mod test {
         5 │
           ╰────
         "###);
+    }
+
+    #[test]
+    fn test_package_extras_dependencies() {
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [extra-dependencies.test]
+        gtest = "*"
+        pytest = ">=8"
+        "#;
+
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let manifest = package
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let test_extra = manifest
+            .targets
+            .default()
+            .extra_dependencies
+            .get("test")
+            .expect("test extra exists");
+        let names = test_extra
+            .names()
+            .map(|name| name.as_normalized())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["gtest", "pytest"]);
+    }
+
+    #[test]
+    fn test_package_target_extras_dependencies() {
+        // Per-target extras should land on the matching package target rather
+        // than on the default target.
+        let input = r#"
+        name = "bla"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target.win.extra-dependencies.test]
+        gtest = "*"
+
+        [target.win.extra-dependencies.bench]
+        criterion = "*"
+        "#;
+
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let manifest = package
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let win_target = manifest
+            .targets
+            .for_target(&TargetSelector::Win)
+            .expect("win target exists");
+        assert!(win_target.extra_dependencies.contains_key("test"));
+        assert!(win_target.extra_dependencies.contains_key("bench"));
+        // Default target should NOT have the per-target extras.
+        assert!(manifest.targets.default().extra_dependencies.is_empty());
     }
 
     #[test]

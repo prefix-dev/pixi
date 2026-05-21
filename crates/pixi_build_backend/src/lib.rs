@@ -16,6 +16,7 @@ pub mod source;
 pub mod tools;
 pub mod traits;
 pub mod utils;
+pub mod v3;
 pub mod variants;
 
 pub mod consts;

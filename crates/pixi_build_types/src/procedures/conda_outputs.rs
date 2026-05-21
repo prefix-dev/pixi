@@ -9,11 +9,14 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use ordermap::OrderSet;
-use rattler_conda_types::{ChannelUrl, NoArchType, PackageName, Platform, VersionWithSource};
+use rattler_conda_types::{ChannelUrl, Flag, NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{ConstraintSpec, InputGlobSet, PackageSpec, VariantValue, project_model::NamedSpec};
+use crate::{
+    ConstraintSpec, ExtraGroupName, InputGlobSet, PackageSpec, VariantValue,
+    project_model::NamedSpec,
+};
 
 pub const METHOD_NAME: &str = "conda/outputs";
 
@@ -110,6 +113,12 @@ pub struct CondaOutput {
     /// also installed.
     pub run_dependencies: CondaOutputDependencies,
 
+    /// Extra groups, keyed by group name. Each group is a list of
+    /// additional run dependencies. A consumer that requests the group via a
+    /// MatchSpec extra (`pkg[group]`) also pulls in these dependencies.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub extra_dependencies: BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>>,
+
     /// Describes which run-exports should be ignored for this package.
     pub ignore_run_exports: CondaOutputIgnoreRunExports,
 
@@ -158,6 +167,10 @@ pub struct CondaOutputMetadata {
 
     /// The license family of the package
     pub license_family: Option<String>,
+
+    /// Plain string flags used to select package variants.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub flags: Vec<Flag>,
 
     /// The noarch type of the package
     pub noarch: NoArchType,
