@@ -1,18 +1,21 @@
+use indexmap::IndexMap;
+use pixi_spec::TomlSpec;
+use rattler_conda_types::PackageName;
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use crate::{
     KnownPreviewFeature, Preview, SpecType, TomlError,
     target::PackageTarget,
     toml::target::combine_target_dependencies,
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    utils::{PixiSpanned, inheritable_package_map::InheritablePackageMap},
 };
 
 #[derive(Debug)]
 pub struct TomlPackageTarget {
-    pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub run_constraints: Option<PixiSpanned<UniquePackageMap>>,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub run_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
+    pub run_constraints: Option<PixiSpanned<InheritablePackageMap>>,
+    pub host_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
+    pub build_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlPackageTarget {
@@ -33,16 +36,38 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageTarget {
 }
 
 impl TomlPackageTarget {
-    pub fn into_package_target(self, preview: &Preview) -> Result<PackageTarget, TomlError> {
+    pub fn into_package_target(
+        self,
+        preview: &Preview,
+        workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
+    ) -> Result<PackageTarget, TomlError> {
+        let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+
+        let resolve = |entry: Option<PixiSpanned<InheritablePackageMap>>| -> Result<
+            Option<PixiSpanned<crate::utils::package_map::UniquePackageMap>>,
+            TomlError,
+        > {
+            entry
+                .map(|spanned| {
+                    let PixiSpanned { value, span } = spanned;
+                    let resolved = value.resolve(workspace_dependencies, pixi_build_enabled)?;
+                    Ok::<_, TomlError>(PixiSpanned {
+                        value: resolved,
+                        span,
+                    })
+                })
+                .transpose()
+        };
+
         Ok(PackageTarget {
             dependencies: combine_target_dependencies(
                 [
-                    (SpecType::Run, self.run_dependencies),
-                    (SpecType::Host, self.host_dependencies),
-                    (SpecType::Build, self.build_dependencies),
-                    (SpecType::RunConstraints, self.run_constraints),
+                    (SpecType::Run, resolve(self.run_dependencies)?),
+                    (SpecType::Host, resolve(self.host_dependencies)?),
+                    (SpecType::Build, resolve(self.build_dependencies)?),
+                    (SpecType::RunConstraints, resolve(self.run_constraints)?),
                 ],
-                preview.is_enabled(KnownPreviewFeature::PixiBuild),
+                pixi_build_enabled,
             )?,
         })
     }
@@ -79,7 +104,7 @@ mod test {
 
         let package_target = TomlPackageTarget::from_toml_str(input)
             .unwrap()
-            .into_package_target(&Preview::default())
+            .into_package_target(&Preview::default(), &IndexMap::new())
             .unwrap();
 
         let lookup = |spec_type: SpecType, name: &str| -> String {

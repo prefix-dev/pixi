@@ -2,7 +2,7 @@ use std::{collections::HashMap, path::PathBuf};
 
 use indexmap::{IndexMap, IndexSet};
 use pixi_pypi_spec::PypiPackageName;
-use pixi_spec::ExcludeNewer;
+use pixi_spec::{ExcludeNewer, TomlSpec};
 use pixi_toml::TomlEnum;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, Version, VersionSpec};
 use serde::Deserialize;
@@ -95,6 +95,14 @@ pub struct Workspace {
 
     /// Workspace-wide PyPI package exclude-newer overrides.
     pub pypi_exclude_newer_package_overrides: IndexMap<PypiPackageName, ExcludeNewer>,
+
+    /// `[workspace.dependencies]` pool. Path specs remain relative to
+    /// `root_directory`; members re-base them at inheritance time.
+    pub dependencies: IndexMap<PackageName, TomlSpec>,
+
+    /// Absolute directory of the workspace manifest. Used to re-base relative
+    /// path specs in `dependencies` for members in other directories.
+    pub root_directory: PathBuf,
 }
 
 /// A source that contributes additional build variant definitions.

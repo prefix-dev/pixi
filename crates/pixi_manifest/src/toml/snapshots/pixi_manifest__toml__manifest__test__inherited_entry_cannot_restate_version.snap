@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+assertion_line: 1003
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"monorepo\"\n        channels = []\n        platforms = ['linux-64']\n        preview = [\"pixi-build\"]\n\n        [workspace.dependencies]\n        numpy = \"1.*\"\n\n        [package]\n        name = \"lib\"\n        version = \"0.1.0\"\n\n        [package.build]\n        backend = { name = \"foobar\", version = \"*\" }\n\n        [package.host-dependencies]\n        numpy = { workspace = true, version = \"2.0\" }\n        \"#,)"
+---
+  × `version` is mutual exclusive with `workspace`
+    ╭─[pixi.toml:19:37]
+ 18 │         [package.host-dependencies]
+ 19 │         numpy = { workspace = true, version = "2.0" }
+    ·                                     ───────
+ 20 │
+    ╰────
