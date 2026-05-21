@@ -1,7 +1,7 @@
 use std::{borrow::Cow, fmt::Display, path::PathBuf};
 
 use itertools::Either;
-use pixi_toml::{TomlDigest, TomlFromStr, TomlWith};
+use pixi_toml::{TomlDigest, TomlFromStr, TomlWith, custom_error_message_with_help};
 use rattler_conda_types::{
     BuildNumberSpec, ChannelConfig, MatchSpec, MatchSpecCondition, NamedChannelOrUrl,
     NamelessMatchSpec, PackageName, PackageNameMatcher, ParseMatchSpecOptions,
@@ -22,7 +22,7 @@ use url::Url;
 
 use crate::{
     BinarySpec, DetailedSpec, GitReference, GitSpec, PathSourceSpec, PathSpec, PixiSpec,
-    SourceLocationSpec, Subdirectory, SubdirectoryError, UrlSourceSpec, UrlSpec,
+    SourceLocationSpec, SourceSpec, Subdirectory, SubdirectoryError, UrlSourceSpec, UrlSpec,
 };
 
 /// A TOML representation of a package specification.
@@ -197,7 +197,8 @@ impl<'de> serde::Deserialize<'de> for TomlWhen {
         serde_untagged::UntaggedEnumVisitor::new()
             .expecting("a string or a table with `all`, `any`, or `package`")
             .string(|str| {
-                parse_when_matchspec(str).map_err(serde_untagged::de::Error::custom)?;
+                parse_when_matchspec(str)
+                    .map_err(|err| serde_untagged::de::Error::custom(err.message_with_help()))?;
                 Ok(TomlWhen::MatchSpec(str.to_string()))
             })
             .seq(|_| {
@@ -351,14 +352,47 @@ pub enum SpecError {
     #[error("{0} cannot be used with {1}")]
     InvalidCombination(Cow<'static, str>, Cow<'static, str>),
 
-    #[error("{0}")]
-    InvalidWhen(String),
+    #[error("{message}")]
+    InvalidWhen {
+        message: String,
+        help: Option<String>,
+    },
+
+    #[error("`when` can only be used with source {0} specifications, not binary package archives")]
+    ConditionalBinaryLocation(Cow<'static, str>),
 
     #[error(transparent)]
     NotABinary(NotBinary),
 
     #[error(transparent)]
     InvalidSubdirectory(#[from] SubdirectoryError),
+}
+
+impl SpecError {
+    fn message_with_help(&self) -> String {
+        match self {
+            SpecError::InvalidWhen {
+                message,
+                help: Some(help),
+            } => format!("{message}; {help}"),
+            err => err.to_string(),
+        }
+    }
+
+    fn into_toml_error(self, span: toml_span::Span) -> toml_span::Error {
+        let kind = match self {
+            SpecError::InvalidWhen {
+                message,
+                help: Some(help),
+            } => ErrorKind::Custom(custom_error_message_with_help(&message, &help).into()),
+            err => ErrorKind::Custom(err.to_string().into()),
+        };
+        toml_span::Error {
+            kind,
+            span,
+            line_info: None,
+        }
+    }
 }
 
 #[derive(Error, Debug)]
@@ -429,7 +463,6 @@ impl TomlSpec {
                 ("`flags`", self.flags.is_some()),
                 ("`channel`", self.channel.is_some()),
                 ("`subdir`", self.subdir.is_some()),
-                ("`when`", self.when.is_some()),
                 ("`track-features`", self.track_features.is_some()),
             ] {
                 if is_some {
@@ -470,20 +503,50 @@ impl TomlSpec {
     pub fn into_spec(self) -> Result<PixiSpec, SpecError> {
         self.validate_field_combinations()?;
 
+        let condition = self.when.map(TomlWhen::into_condition).transpose()?;
         let spec: PixiSpec;
         if let Some(loc) = self.location {
             spec = match (loc.url, loc.path, loc.git) {
-                (Some(url), None, None) => PixiSpec::Url(UrlSpec {
-                    url,
-                    md5: loc.md5,
-                    sha256: loc.sha256,
-                    subdirectory: loc
-                        .subdirectory
-                        .map(Subdirectory::try_from)
-                        .transpose()?
-                        .unwrap_or_default(),
-                }),
-                (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
+                (Some(url), None, None) => {
+                    let url = UrlSpec {
+                        url,
+                        md5: loc.md5,
+                        sha256: loc.sha256,
+                        subdirectory: loc
+                            .subdirectory
+                            .map(Subdirectory::try_from)
+                            .transpose()?
+                            .unwrap_or_default(),
+                    };
+                    if let Some(condition) = condition {
+                        match url.into_source_or_binary() {
+                            Either::Left(url) => {
+                                source_spec_with_condition(SourceLocationSpec::Url(url), condition)
+                            }
+                            Either::Right(_) => {
+                                return Err(SpecError::ConditionalBinaryLocation("`url`".into()));
+                            }
+                        }
+                    } else {
+                        PixiSpec::Url(url)
+                    }
+                }
+                (None, Some(path), None) => {
+                    let path = PathSpec { path: path.into() };
+                    if let Some(condition) = condition {
+                        match path.into_source_or_binary() {
+                            Either::Left(path) => source_spec_with_condition(
+                                SourceLocationSpec::Path(path),
+                                condition,
+                            ),
+                            Either::Right(_) => {
+                                return Err(SpecError::ConditionalBinaryLocation("`path`".into()));
+                            }
+                        }
+                    } else {
+                        PixiSpec::Path(path)
+                    }
+                }
                 (None, None, Some(git)) => {
                     let rev = match (loc.branch, loc.rev, loc.tag) {
                         (Some(branch), None, None) => Some(GitReference::Branch(branch)),
@@ -499,11 +562,16 @@ impl TomlSpec {
                         .map(Subdirectory::try_from)
                         .transpose()?
                         .unwrap_or_default();
-                    PixiSpec::Git(GitSpec {
+                    let git = GitSpec {
                         git,
                         rev,
                         subdirectory,
-                    })
+                    };
+                    if let Some(condition) = condition {
+                        source_spec_with_condition(SourceLocationSpec::Git(git), condition)
+                    } else {
+                        PixiSpec::Git(git)
+                    }
                 }
                 (None, None, None) => {
                     let is_detailed = self.version.is_some()
@@ -518,7 +586,7 @@ impl TomlSpec {
                         || loc.sha256.is_some()
                         || self.license.is_some()
                         || self.license_family.is_some()
-                        || self.when.is_some()
+                        || condition.is_some()
                         || self.track_features.is_some();
                     if !is_detailed {
                         return Err(SpecError::MissingDetailedIdentifier);
@@ -537,7 +605,7 @@ impl TomlSpec {
                         sha256: loc.sha256,
                         license: self.license,
                         license_family: self.license_family,
-                        condition: self.when.map(TomlWhen::into_condition).transpose()?,
+                        condition,
                         track_features: self.track_features,
                     }))
                 }
@@ -554,7 +622,7 @@ impl TomlSpec {
                 || self.subdir.is_some()
                 || self.license.is_some()
                 || self.license_family.is_some()
-                || self.when.is_some()
+                || condition.is_some()
                 || self.track_features.is_some();
             if !is_detailed {
                 return Err(SpecError::MissingDetailedIdentifier);
@@ -573,7 +641,7 @@ impl TomlSpec {
                 sha256: None,
                 license: self.license,
                 license_family: self.license_family,
-                condition: self.when.map(TomlWhen::into_condition).transpose()?,
+                condition,
                 track_features: self.track_features,
             }));
         }
@@ -585,10 +653,14 @@ impl TomlSpec {
     pub fn into_binary_spec(self) -> Result<BinarySpec, SpecError> {
         self.validate_field_combinations()?;
 
+        let condition = self.when.map(TomlWhen::into_condition).transpose()?;
         let spec: BinarySpec;
         if let Some(loc) = self.location {
             spec = match (loc.url, loc.path, loc.git) {
                 (Some(url), None, None) => {
+                    if condition.is_some() {
+                        return Err(SpecError::ConditionalBinaryLocation("`url`".into()));
+                    }
                     let url_spec = UrlSpec {
                         url,
                         md5: loc.md5,
@@ -606,6 +678,9 @@ impl TomlSpec {
                     }
                 }
                 (None, Some(path), None) => {
+                    if condition.is_some() {
+                        return Err(SpecError::ConditionalBinaryLocation("`path`".into()));
+                    }
                     let path_spec = PathSpec { path: path.into() };
                     if let Either::Right(binary) = path_spec.into_source_or_binary() {
                         BinarySpec::Path(binary)
@@ -629,7 +704,7 @@ impl TomlSpec {
                         || loc.sha256.is_some()
                         || self.license.is_some()
                         || self.license_family.is_some()
-                        || self.when.is_some()
+                        || condition.is_some()
                         || self.track_features.is_some();
                     if !is_detailed {
                         return Err(SpecError::MissingDetailedIdentifier);
@@ -648,7 +723,7 @@ impl TomlSpec {
                         sha256: loc.sha256,
                         license: self.license,
                         license_family: self.license_family,
-                        condition: self.when.map(TomlWhen::into_condition).transpose()?,
+                        condition,
                         track_features: self.track_features,
                     }))
                 }
@@ -665,7 +740,7 @@ impl TomlSpec {
                 || self.subdir.is_some()
                 || self.license.is_some()
                 || self.license_family.is_some()
-                || self.when.is_some()
+                || condition.is_some()
                 || self.track_features.is_some();
             if !is_detailed {
                 return Err(SpecError::MissingDetailedIdentifier);
@@ -684,12 +759,21 @@ impl TomlSpec {
                 sha256: None,
                 license: self.license,
                 license_family: self.license_family,
-                condition: self.when.map(TomlWhen::into_condition).transpose()?,
+                condition,
                 track_features: self.track_features,
             }));
         };
         Ok(spec)
     }
+}
+
+fn source_spec_with_condition(
+    location: SourceLocationSpec,
+    condition: MatchSpecCondition,
+) -> PixiSpec {
+    let mut source = SourceSpec::from(location);
+    source.condition = Some(condition);
+    PixiSpec::Source(Box::new(source))
 }
 
 impl TomlWhen {
@@ -840,46 +924,64 @@ fn expanded_when_matchspec(match_spec: &MatchSpec) -> Option<String> {
     Some(format!("when = {{ {} }}", fields.join(", ")))
 }
 
+fn invalid_when(message: impl Into<String>) -> SpecError {
+    SpecError::InvalidWhen {
+        message: message.into(),
+        help: None,
+    }
+}
+
+fn invalid_when_with_help(message: impl Into<String>, help: impl Into<String>) -> SpecError {
+    SpecError::InvalidWhen {
+        message: message.into(),
+        help: Some(help.into()),
+    }
+}
+
 fn parse_when_matchspec(input: &str) -> Result<MatchSpecCondition, SpecError> {
     let match_spec = MatchSpec::from_str(
         input,
         ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
     )
-    .map_err(|err| SpecError::InvalidWhen(format!("invalid `when` matchspec: {err}")))?;
+    .map_err(|err| invalid_when(format!("invalid `when` matchspec: {err}")))?;
 
     if match_spec.name.as_exact().is_none() {
-        return Err(SpecError::InvalidWhen(
-            "`when` strings must name an exact package".to_string(),
-        ));
+        return Err(invalid_when("`when` strings must name an exact package"));
     }
 
     let expanded = expanded_when_matchspec(&match_spec);
 
     if input.contains(['[', ']']) {
-        let hint = expanded
-            .map(|expanded| format!("; use the expanded form `{expanded}`"))
-            .unwrap_or_default();
-        return Err(SpecError::InvalidWhen(format!(
-            "`when` strings do not support bracket matchspec syntax{hint}"
-        )));
+        let message = "`when` strings do not support bracket matchspec syntax";
+        return Err(match expanded {
+            Some(expanded) => {
+                invalid_when_with_help(message, format!("use the expanded form `{expanded}`"))
+            }
+            None => invalid_when(message),
+        });
     }
 
     if match_spec.build.is_some() {
-        let hint = expanded
-            .map(|expanded| format!("; use the expanded form `{expanded}`"))
-            .unwrap_or_default();
-        return Err(SpecError::InvalidWhen(format!(
-            "`when` strings do not support build-string shorthand{hint}"
-        )));
+        let message = "`when` strings do not support build-string shorthand";
+        return Err(match expanded {
+            Some(expanded) => {
+                invalid_when_with_help(message, format!("use the expanded form `{expanded}`"))
+            }
+            None => invalid_when(message),
+        });
     }
 
     if match_spec.channel.is_some() {
-        let hint = expanded
-            .map(|expanded| format!("; this would be `{expanded}`"))
-            .unwrap_or_default();
-        return Err(SpecError::InvalidWhen(format!(
-            "`when` strings do not support channel prefixes{hint}, but `channel` is not supported inside `when` tables"
-        )));
+        let message = "`when` strings do not support channel prefixes";
+        return Err(match expanded {
+            Some(expanded) => invalid_when_with_help(
+                message,
+                format!(
+                    "this would be `{expanded}`, but `channel` is not supported inside `when` tables"
+                ),
+            ),
+            None => invalid_when(message),
+        });
     }
 
     if match_spec.build_number.is_some()
@@ -896,12 +998,13 @@ fn parse_when_matchspec(input: &str) -> Result<MatchSpecCondition, SpecError> {
         || match_spec.track_features.is_some()
         || match_spec.namespace.is_some()
     {
-        let hint = expanded
-            .map(|expanded| format!("; use the expanded form `{expanded}`"))
-            .unwrap_or_default();
-        return Err(SpecError::InvalidWhen(format!(
-            "`when` strings only support package names with optional version constraints{hint}"
-        )));
+        let message = "`when` strings only support package names with optional version constraints";
+        return Err(match expanded {
+            Some(expanded) => {
+                invalid_when_with_help(message, format!("use the expanded form `{expanded}`"))
+            }
+            None => invalid_when(message),
+        });
     }
 
     Ok(MatchSpecCondition::MatchSpec(Box::new(match_spec)))
@@ -914,7 +1017,7 @@ fn fold_when_conditions(
 ) -> Result<MatchSpecCondition, SpecError> {
     let mut conditions = conditions.into_iter().map(TomlWhen::into_condition);
     let first = conditions.next().ok_or_else(|| {
-        SpecError::InvalidWhen(format!(
+        invalid_when(format!(
             "`when.{field}` must contain at least one condition"
         ))
     })??;
@@ -1124,11 +1227,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWhen {
             ValueInner::String(str) => {
                 // Validate eagerly so the error carries the TOML span.
                 if let Err(err) = parse_when_matchspec(&str) {
-                    return Err(DeserError::from(toml_span::Error {
-                        kind: ErrorKind::Custom(err.to_string().into()),
-                        span: value.span,
-                        line_info: None,
-                    }));
+                    return Err(DeserError::from(err.into_toml_error(value.span)));
                 }
                 Ok(TomlWhen::MatchSpec(str.to_string()))
             }
@@ -1276,13 +1375,7 @@ impl<'de> toml_span::Deserialize<'de> for PixiSpec {
                 Ok(
                     <TomlSpec as toml_span::Deserialize>::deserialize(&mut table_value)?
                         .into_spec()
-                        .map_err(|e| {
-                            DeserError::from(toml_span::Error {
-                                kind: ErrorKind::Custom(e.to_string().into()),
-                                span: table_value.span,
-                                line_info: None,
-                            })
-                        })?,
+                        .map_err(|e| DeserError::from(e.into_toml_error(table_value.span)))?,
                 )
             }
             inner => Err(expected("a string or a table", inner, value.span).into()),
@@ -1339,7 +1432,8 @@ impl<'de> Deserialize<'de> for PixiSpec {
             })
             .map(|map| {
                 let spec: TomlSpec = map.deserialize()?;
-                spec.into_spec().map_err(serde_untagged::de::Error::custom)
+                spec.into_spec()
+                    .map_err(|err| serde_untagged::de::Error::custom(err.message_with_help()))
             })
             .deserialize(deserializer)
     }
@@ -1388,24 +1482,26 @@ mod test {
 
     use super::*;
 
+    fn condition_from_spec(spec: &PixiSpec) -> Option<&MatchSpecCondition> {
+        match spec {
+            PixiSpec::DetailedVersion(spec) => spec.condition.as_ref(),
+            PixiSpec::Source(spec) => spec.condition.as_ref(),
+            _ => None,
+        }
+    }
+
     fn parse_toml_condition(input: &str) -> String {
         let mut value = toml_span::parse(input).expect("valid TOML");
         let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
             .expect("expected parse to succeed");
-        spec.as_detailed()
-            .expect("`when` only accepted on detailed specs")
-            .condition
-            .as_ref()
+        condition_from_spec(&spec)
             .expect("expected parsed `when` condition")
             .to_string()
     }
 
     fn parse_json_condition(input: Value) -> String {
         let spec: PixiSpec = serde_json::from_value(input).expect("expected parse to succeed");
-        spec.as_detailed()
-            .expect("`when` only accepted on detailed specs")
-            .condition
-            .as_ref()
+        condition_from_spec(&spec)
             .expect("expected parsed `when` condition")
             .to_string()
     }
@@ -1884,9 +1980,20 @@ when = { package = "python", track-features = ["legacy"] }"#;
     }
 
     #[test]
-    fn test_when_reject_combined_with_path_json() {
+    fn test_when_accept_source_path_json() {
         let input = json!({ "path": "../foo", "when": "__unix" });
-        assert_snapshot!(parse_json_error(input), @"`when` cannot be used with `path`");
+        let spec: PixiSpec = serde_json::from_value(input).expect("expected parse to succeed");
+        let PixiSpec::Source(source) = spec else {
+            panic!("expected source spec");
+        };
+        assert!(matches!(source.location, SourceLocationSpec::Path(_)));
+        assert_snapshot!(source.condition.unwrap().to_string(), @"__unix");
+    }
+
+    #[test]
+    fn test_when_reject_binary_path_json() {
+        let input = json!({ "path": "python-3.10.0-h123_0.conda", "when": "__unix" });
+        assert_snapshot!(parse_json_error(input), @"`when` can only be used with source `path` specifications, not binary package archives");
     }
 
     #[test]
@@ -1964,12 +2071,13 @@ when = ">=3.10""#;
         let input = r#"version = "*"
 when = "conda-forge::python >=3.10""#;
         assert_snapshot!(parse_toml_error(input), @r###"
-         × `when` strings do not support channel prefixes; this would be `when = { package = "python", version = ">=3.10", channel = "conda-forge" }`, but `channel` is not supported inside `when` tables
+         × `when` strings do not support channel prefixes
           ╭─[pixi.toml:2:9]
         1 │ version = "*"
         2 │ when = "conda-forge::python >=3.10"
           ·         ──────────────────────────
           ╰────
+         help: this would be `when = { package = "python", version = ">=3.10", channel = "conda-forge" }`, but `channel` is not supported inside `when` tables
         "###);
     }
 
@@ -2076,26 +2184,28 @@ when = { package = "python", version = "//" }"#;
         let input = r#"version = "*"
 when = { all = ["__unix", "python[version='>=3.10']"] }"#;
         assert_snapshot!(parse_toml_error(input), @r###"
-         × `when` strings do not support bracket matchspec syntax; use the expanded form `when = { package = "python", version = ">=3.10" }`
+         × `when` strings do not support bracket matchspec syntax
           ╭─[pixi.toml:2:28]
         1 │ version = "*"
         2 │ when = { all = ["__unix", "python[version='>=3.10']"] }
           ·                            ────────────────────────
           ╰────
+         help: use the expanded form `when = { package = "python", version = ">=3.10" }`
         "###);
     }
 
     #[test]
-    fn test_when_reject_combined_with_path_toml() {
+    fn test_when_accept_source_path_toml() {
         let input = r#"path = "../foo"
 when = "__unix""#;
-        assert_snapshot!(parse_toml_error(input), @r###"
-         × `when` cannot be used with `path`
-          ╭─[pixi.toml:1:1]
-        1 │ ╭─▶ path = "../foo"
-        2 │ ╰─▶ when = "__unix"
-          ╰────
-        "###);
+        assert_snapshot!(parse_toml_condition(input), @"__unix");
+    }
+
+    #[test]
+    fn test_when_accept_source_git_toml() {
+        let input = r#"git = "https://github.com/prefix-dev/pixi"
+when = "__unix""#;
+        assert_snapshot!(parse_toml_condition(input), @"__unix");
     }
 
     #[test]

@@ -312,6 +312,10 @@ pub struct SourcePackageSpec {
     /// The md5 hash of the package
     /// The license of the package
     pub license: Option<String>,
+    /// The condition under which this source package applies.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<serde_json::Value>"))]
+    pub condition: Option<MatchSpecCondition>,
 }
 
 impl From<PathSpec> for SourcePackageSpec {
@@ -323,6 +327,7 @@ impl From<PathSpec> for SourcePackageSpec {
             build_number: None,
             subdir: None,
             license: None,
+            condition: None,
         }
     }
 }
@@ -336,6 +341,7 @@ impl From<UrlSpec> for SourcePackageSpec {
             build_number: None,
             subdir: None,
             license: None,
+            condition: None,
         }
     }
 }
@@ -349,6 +355,7 @@ impl From<GitSpec> for SourcePackageSpec {
             build_number: None,
             subdir: None,
             license: None,
+            condition: None,
         }
     }
 }
@@ -718,6 +725,16 @@ impl IsDefault for PinBound {
     }
 }
 
+struct HashableOptionalMatchSpecCondition<'a>(&'a Option<MatchSpecCondition>);
+
+impl IsDefault for HashableOptionalMatchSpecCondition<'_> {
+    type Item = MatchSpecCondition;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        self.0.as_ref()
+    }
+}
+
 impl Hash for SourcePackageSpec {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let Self {
@@ -727,6 +744,7 @@ impl Hash for SourcePackageSpec {
             build_number,
             subdir,
             license,
+            condition,
         } = self;
 
         // Hash the location first to ensure compatibility with older versions.
@@ -734,9 +752,11 @@ impl Hash for SourcePackageSpec {
 
         // Add the new fields using StableHashBuilder for forward/backward
         // compatibility.
+        let condition = HashableOptionalMatchSpecCondition(condition);
         StableHashBuilder::<H>::new()
             .field("build", build)
             .field("build_number", build_number)
+            .field("condition", &condition)
             .field("license", license)
             .field("subdir", subdir)
             .field("version", version)

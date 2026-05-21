@@ -83,6 +83,10 @@ pub enum PixiSpec {
     /// be retrieved from a channel.
     DetailedVersion(Box<DetailedSpec>),
 
+    /// The spec is represented by a source location plus source package
+    /// metadata such as a condition.
+    Source(Box<SourceSpec>),
+
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
     /// either represent a source or binary package depending on the archive
@@ -110,6 +114,7 @@ impl Display for PixiSpec {
         match self {
             PixiSpec::Version(version) => write!(f, "{version}"),
             PixiSpec::DetailedVersion(detailed) => write!(f, "{detailed}"),
+            PixiSpec::Source(source) => write!(f, "{source}"),
             PixiSpec::Url(url) => write!(f, "{url}"),
             PixiSpec::Git(git) => write!(f, "{git}"),
             PixiSpec::Path(path) => write!(f, "{path}"),
@@ -187,6 +192,7 @@ impl PixiSpec {
         match self {
             Self::Version(v) => v != &VersionSpec::Any,
             Self::DetailedVersion(v) => v.version.as_ref().is_some_and(|v| v != &VersionSpec::Any),
+            Self::Source(v) => v.version.as_ref().is_some_and(|v| v != &VersionSpec::Any),
             _ => false,
         }
     }
@@ -238,6 +244,7 @@ impl PixiSpec {
         match self {
             Self::Version(v) => Some(v),
             Self::DetailedVersion(v) => v.version,
+            Self::Source(v) => v.version,
             _ => None,
         }
     }
@@ -293,6 +300,7 @@ impl PixiSpec {
             PixiSpec::DetailedVersion(spec) => {
                 Some(spec.try_into_nameless_match_spec(channel_config)?)
             }
+            PixiSpec::Source(_) => None,
             PixiSpec::Url(url) => url.try_into_nameless_match_spec().ok(),
             PixiSpec::Git(_) => None,
             PixiSpec::Path(path) => path.try_into_nameless_match_spec(&channel_config.root_dir)?,
@@ -308,6 +316,7 @@ impl PixiSpec {
             PixiSpec::DetailedVersion(detailed) => {
                 Either::Right(BinarySpec::DetailedVersion(detailed))
             }
+            PixiSpec::Source(source) => Either::Left(*source),
             PixiSpec::Url(url) => url
                 .into_source_or_binary()
                 .map_left(|url| SourceLocationSpec::Url(url).into())
@@ -325,6 +334,7 @@ impl PixiSpec {
     #[allow(clippy::result_large_err)]
     pub fn try_into_source_spec(self) -> Result<SourceSpec, Self> {
         match self {
+            PixiSpec::Source(source) => Ok(*source),
             PixiSpec::Url(url) => url
                 .try_into_source_url()
                 .map(SourceSpec::from)
@@ -343,6 +353,7 @@ impl PixiSpec {
         match self {
             Self::Version(_) => true,
             Self::DetailedVersion(_) => true,
+            Self::Source(_) => false,
             Self::Url(url) => url.is_binary(),
             Self::Git(_) => false,
             Self::Path(path) => path.is_binary(),
@@ -361,6 +372,7 @@ impl PixiSpec {
         match self {
             Self::Version(_) => false,
             Self::DetailedVersion(_) => false,
+            Self::Source(source) => matches!(source.location, SourceLocationSpec::Path(_)),
             Self::Url(_) => false,
             Self::Git(_) => false,
             Self::Path(path) => !path.is_binary(),
@@ -380,7 +392,7 @@ impl PixiSpec {
         channel_config: &ChannelConfig,
     ) -> Result<NamelessMatchSpec, SpecConversionError> {
         match self.into_source_or_binary() {
-            Either::Left(_source) => Ok(NamelessMatchSpec::default()),
+            Either::Left(source) => Ok(source.to_nameless_match_spec()),
             Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config),
         }
     }
@@ -590,10 +602,25 @@ impl SourceLocationSpec {
 
 impl From<SourceSpec> for PixiSpec {
     fn from(value: SourceSpec) -> Self {
-        match value.location {
-            SourceLocationSpec::Url(url) => Self::Url(url.into()),
-            SourceLocationSpec::Git(git) => Self::Git(git),
-            SourceLocationSpec::Path(path) => Self::Path(path.into()),
+        let has_metadata = value.version.is_some()
+            || value.build.is_some()
+            || value.build_number.is_some()
+            || value.extras.is_some()
+            || value.flags.is_some()
+            || value.subdir.is_some()
+            || value.namespace.is_some()
+            || value.license.is_some()
+            || value.license_family.is_some()
+            || value.condition.is_some()
+            || value.track_features.is_some();
+        if has_metadata {
+            Self::Source(Box::new(value))
+        } else {
+            match value.location {
+                SourceLocationSpec::Url(url) => Self::Url(url.into()),
+                SourceLocationSpec::Git(git) => Self::Git(git),
+                SourceLocationSpec::Path(path) => Self::Path(path.into()),
+            }
         }
     }
 }
@@ -1001,6 +1028,21 @@ mod test {
         assert_eq!(
             match_spec.name.as_exact().map(PackageName::as_normalized),
             Some("my-package")
+        );
+    }
+
+    #[test]
+    fn test_source_condition_to_nameless_match_spec_ref() {
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let spec: PixiSpec =
+            serde_json::from_value(json!({ "path": "../foo", "when": "__unix" })).unwrap();
+        let nameless = spec
+            .try_into_nameless_match_spec_ref(&channel_config)
+            .unwrap();
+
+        assert_eq!(
+            nameless.condition.as_ref().map(ToString::to_string),
+            Some("__unix".to_string())
         );
     }
 
