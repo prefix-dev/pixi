@@ -36,7 +36,7 @@ fn to_pixi_spec_v1(
                 namespace: None,
                 license,
                 license_family: None,
-                condition,
+                condition: None,
                 track_features: None,
             } = source
             else {
@@ -89,7 +89,6 @@ fn to_pixi_spec_v1(
                 build_number,
                 subdir,
                 license,
-                condition,
             })
         }
         itertools::Either::Right(binary) => {
@@ -349,36 +348,5 @@ mod tests {
         assert!(target.run_dependencies.unwrap().is_empty());
         assert!(target.host_dependencies.unwrap().is_empty());
         assert!(target.build_dependencies.unwrap().is_empty());
-    }
-
-    #[test]
-    fn test_to_pixi_spec_v1_preserves_source_condition() {
-        use pixi_spec::{PathSourceSpec, PixiSpec, SourceLocationSpec, SourceSpec};
-        use rattler_conda_types::{
-            MatchSpec, MatchSpecCondition, ParseMatchSpecOptions, RepodataRevision,
-        };
-
-        use super::pbt;
-
-        let condition = MatchSpecCondition::MatchSpec(Box::new(
-            MatchSpec::from_str(
-                "__unix",
-                ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
-            )
-            .unwrap(),
-        ));
-        let mut source = SourceSpec::from(SourceLocationSpec::Path(PathSourceSpec {
-            path: "../foo".into(),
-        }));
-        source.condition = Some(condition.clone());
-
-        let converted =
-            super::to_pixi_spec_v1(&PixiSpec::Source(Box::new(source)), &some_channel_config())
-                .unwrap();
-
-        let pbt::PackageSpec::Source(source) = converted else {
-            panic!("expected source package spec");
-        };
-        assert_eq!(source.condition, Some(condition));
     }
 }

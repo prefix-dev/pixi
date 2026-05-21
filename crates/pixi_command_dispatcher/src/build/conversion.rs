@@ -11,7 +11,6 @@ pub fn from_source_spec_v1(source: SourcePackageSpec) -> pixi_spec::SourceSpec {
         build_number,
         subdir,
         license,
-        condition,
     } = source;
     let location = from_source_package_location_spec(location);
     pixi_spec::SourceSpec {
@@ -25,7 +24,7 @@ pub fn from_source_spec_v1(source: SourcePackageSpec) -> pixi_spec::SourceSpec {
         flags: None,
         namespace: None,
         license_family: None,
-        condition,
+        condition: None,
         track_features: None,
     }
 }

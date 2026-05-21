@@ -354,9 +354,6 @@
             "string",
             "null"
           ]
-        },
-        "condition": {
-          "description": "The condition under which this source package applies."
         }
       },
       "oneOf": [
