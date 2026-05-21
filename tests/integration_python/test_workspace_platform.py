@@ -378,6 +378,41 @@ def test_add_to_named_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert "linux-64" in data["feature"]["gpu"]["platforms"]
 
 
+def test_add_rich_platform_to_named_feature(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """`--feature` and a virtual-package flag compose: the rich platform
+    lands in both the workspace's platforms list (as an inline table) and
+    the feature's platforms list (as a bare name reference)."""
+    manifest = _seed_workspace(tmp_pixi_workspace, [CURRENT_PLATFORM])
+    manifest.write_text(
+        manifest.read_text()
+        + "\n[feature.gpu]\nplatforms = []\n[environments]\ngpu = [\"gpu\"]\n"
+    )
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "gpu-linux=linux-64",
+        "--cuda",
+        "12.0",
+        "--feature",
+        "gpu",
+        "--no-install",
+    )
+    data = tomllib.loads(manifest.read_text())
+    # Feature lists the platform by name.
+    assert "gpu-linux" in data["feature"]["gpu"]["platforms"]
+    # Workspace got the rich entry with the declared VP.
+    rich = next(
+        p
+        for p in _platforms_from_toml(manifest)
+        if isinstance(p, dict) and p.get("name") == "gpu-linux"
+    )
+    assert rich["subdir"] == "linux-64"
+    assert rich["virtual-packages"] == ["__cuda=12.0"]
+
+
 # ----------------------------------------------------------------------------
 # lockfile invalidation: adding/removing platforms must rewrite pixi.lock
 # ----------------------------------------------------------------------------
