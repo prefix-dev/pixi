@@ -11471,7 +11471,7 @@ More examples
 For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.68.1 AS build
+FROM ghcr.io/prefix-dev/pixi:0.69.0 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
@@ -12124,7 +12124,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.4
   with:
-    pixi-version: v0.68.1
+    pixi-version: v0.69.0
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -12934,7 +12934,7 @@ Create a new directory `.devcontainer` in the root of your workspace. Then, crea
 ```dockerfile
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.68.1
+ARG PIXI_VERSION=v0.69.0
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -22176,6 +22176,75 @@ pixi workspace version set <VERSION>
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.69.0] - 2026-05-20
+
+#### ✨ Highlights
+
+Pixi now supports easy authentication to prefix.dev, just like GitHub CLI you can run:
+
+```shell
+pixi auth login prefix.dev
+```
+
+And it will take you to the login page of prefix.dev.
+
+Next to that publishing a package became much easier with `--variant`, `--build-number` and more.
+
+#### Added
+
+- Support `build-string-prefix` and `build-number` in `[package-build]` by @hunger in [#6051](https://github.com/prefix-dev/pixi/pull/6051)
+- Centralize default compiler variants and add CUDA support by @wolfv in [#6108](https://github.com/prefix-dev/pixi/pull/6108)
+- Support build backend secrets by @wolfv in [#6101](https://github.com/prefix-dev/pixi/pull/6101)
+- Honor workspace.s3-options when uploading to s3 by @hunger in [#6069](https://github.com/prefix-dev/pixi/pull/6069)
+- Add oauth default login by @nichmor in [#6140](https://github.com/prefix-dev/pixi/pull/6140)
+- Add `--variant` and `--variant-config` flags by @wolfv in [#6109](https://github.com/prefix-dev/pixi/pull/6109)
+- Add `--package-format` to `pixi publish` for tar.bz2 output by @baszalmstra in [#6156](https://github.com/prefix-dev/pixi/pull/6156)
+
+#### Documentation
+
+- Reword Basic Usages / Managing workspaces from manifest to workspace by @timhoffm in [#6104](https://github.com/prefix-dev/pixi/pull/6104)
+- Remove pixi build from FAQ by @timhoffm in [#6105](https://github.com/prefix-dev/pixi/pull/6105)
+- Fix typo by @pavelzw in [#6157](https://github.com/prefix-dev/pixi/pull/6157)
+
+#### Fixed
+
+- Uv is default updates lockfile by @baszalmstra in [#6088](https://github.com/prefix-dev/pixi/pull/6088)
+- Preserve version spec when other constraints are present by @wolfv in [#6087](https://github.com/prefix-dev/pixi/pull/6087)
+- Include `precise` in CheckoutGit dedup key by @baszalmstra in [#6094](https://github.com/prefix-dev/pixi/pull/6094)
+- Deflake test_signal_forwarding by waiting for handler installation by @baszalmstra in [#6113](https://github.com/prefix-dev/pixi/pull/6113)
+- Bump rust version for backends by @baszalmstra in [#6117](https://github.com/prefix-dev/pixi/pull/6117)
+- Align `--locked` metadata serializer with lock-write side by @baszalmstra in [#6115](https://github.com/prefix-dev/pixi/pull/6115)
+- Apply workspace `pypi-options` to `no-default-feature` envs by @baszalmstra in [#6110](https://github.com/prefix-dev/pixi/pull/6110)
+- Update libtapi to fix compilation issues on macos by @benmoss in [#6119](https://github.com/prefix-dev/pixi/pull/6119)
+- Detect BeeGFS, Lustre, GPFS and CephFS as network filesystem by @flferretti in [#6118](https://github.com/prefix-dev/pixi/pull/6118)
+- Remove support for the fire emoji in Mojo backend by @Ahajha in [#6125](https://github.com/prefix-dev/pixi/pull/6125)
+- Click dependency for the docs env by @ruben-arts in [#6130](https://github.com/prefix-dev/pixi/pull/6130)
+- Track Cython inputs for editable pixi-build-python builds by @kkraus14 in [#6123](https://github.com/prefix-dev/pixi/pull/6123)
+- Avoid editable-flag conflict with transitive tool.uv.sources by @baszalmstra in [#6131](https://github.com/prefix-dev/pixi/pull/6131)
+- Don't misclassify missing python as pypi-only during upgrade by @baszalmstra in [#6095](https://github.com/prefix-dev/pixi/pull/6095)
+- Drop bare self-references in expand_self_extras by @benmoss in [#6142](https://github.com/prefix-dev/pixi/pull/6142)
+- Use gnu target for riscv64 in install.sh by @benmoss in [#6143](https://github.com/prefix-dev/pixi/pull/6143)
+- Propagate run-exports from host/build by @baszalmstra in [#6151](https://github.com/prefix-dev/pixi/pull/6151)
+- Hook up repodata fetch reporter to gateway queries by @baszalmstra in [#6112](https://github.com/prefix-dev/pixi/pull/6112)
+- Invalidate build-backend metadata cache when backend spec changes by @baszalmstra in [#6111](https://github.com/prefix-dev/pixi/pull/6111)
+- Normalize extras order in lockfile metadata comparison by @benmoss in [#6165](https://github.com/prefix-dev/pixi/pull/6165)
+
+#### Performance
+
+- Install build and host environments concurrently by @baszalmstra in [#6152](https://github.com/prefix-dev/pixi/pull/6152)
+
+#### Refactor
+
+- Route cache-dir and env-var lookup through the compute engine by @baszalmstra in [#6041](https://github.com/prefix-dev/pixi/pull/6041)
+- Extract pixi_compute_sources, pixi_compute_network, and move reporter_lifecycle by @baszalmstra in [#6046](https://github.com/prefix-dev/pixi/pull/6046)
+
+#### New Contributors
+
+- @kkraus14 made their first contribution in [#6123](https://github.com/prefix-dev/pixi/pull/6123)
+- @Ahajha made their first contribution in [#6125](https://github.com/prefix-dev/pixi/pull/6125)
+- @flferretti made their first contribution in [#6118](https://github.com/prefix-dev/pixi/pull/6118)
+- @timhoffm made their first contribution in [#6105](https://github.com/prefix-dev/pixi/pull/6105)
 
 ### [0.68.1] - 2026-05-12
 
