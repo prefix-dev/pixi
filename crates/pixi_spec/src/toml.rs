@@ -492,9 +492,7 @@ impl TomlSpec {
 
     /// Build a `SourceSpec` location from the location fields. Caller must
     /// have already validated that exactly one of `url`/`path`/`git` is set.
-    fn build_source_location(
-        loc: TomlLocationSpec,
-    ) -> Result<SourceLocationSpec, SpecError> {
+    fn build_source_location(loc: TomlLocationSpec) -> Result<SourceLocationSpec, SpecError> {
         match (loc.url, loc.path, loc.git) {
             (Some(url), None, None) => Ok(SourceLocationSpec::Url(UrlSourceSpec {
                 url,
@@ -539,8 +537,7 @@ impl TomlSpec {
 
         let spec: PixiSpec;
         if let Some(loc) = self.location {
-            let has_location =
-                loc.url.is_some() || loc.path.is_some() || loc.git.is_some();
+            let has_location = loc.url.is_some() || loc.path.is_some() || loc.git.is_some();
             if has_location {
                 let location = Self::build_source_location(loc)?;
                 spec = PixiSpec::Source(Box::new(SourceSpec {
@@ -1951,10 +1948,7 @@ when = { package = "python", track-features = ["legacy"] }"#;
         let spec: PixiSpec = serde_json::from_value(input).expect("expected parse to succeed");
         let source = spec.as_source().expect("expected a source spec");
         assert!(matches!(source.location, SourceLocationSpec::Path(_)));
-        assert_eq!(
-            source.condition.as_ref().unwrap().to_string(),
-            "__unix"
-        );
+        assert_eq!(source.condition.as_ref().unwrap().to_string(), "__unix");
     }
 
     #[test]
@@ -2164,10 +2158,7 @@ when = "__unix""#;
             .expect("expected `when` to combine with `path`");
         let source = spec.as_source().expect("expected a source spec");
         assert!(matches!(source.location, SourceLocationSpec::Path(_)));
-        assert_eq!(
-            source.condition.as_ref().unwrap().to_string(),
-            "__unix"
-        );
+        assert_eq!(source.condition.as_ref().unwrap().to_string(), "__unix");
     }
 
     #[test]

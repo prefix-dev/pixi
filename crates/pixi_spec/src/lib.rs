@@ -314,10 +314,13 @@ impl PixiSpec {
                 Some(spec.try_into_nameless_match_spec(channel_config)?)
             }
             PixiSpec::Source(source) => match source.location.clone() {
-                SourceLocationSpec::Url(url) => UrlSpec::from(url).try_into_nameless_match_spec().ok(),
+                SourceLocationSpec::Url(url) => {
+                    UrlSpec::from(url).try_into_nameless_match_spec().ok()
+                }
                 SourceLocationSpec::Git(_) => None,
-                SourceLocationSpec::Path(path) => PathSpec::from(path)
-                    .try_into_nameless_match_spec(&channel_config.root_dir)?,
+                SourceLocationSpec::Path(path) => {
+                    PathSpec::from(path).try_into_nameless_match_spec(&channel_config.root_dir)?
+                }
             },
         };
 
@@ -364,16 +367,12 @@ impl PixiSpec {
             PixiSpec::Source(source) => {
                 let source = *source;
                 let is_source = match &source.location {
-                    SourceLocationSpec::Url(url) => {
-                        !UrlSpec::from(url.clone()).is_binary()
-                    }
+                    SourceLocationSpec::Url(url) => !UrlSpec::from(url.clone()).is_binary(),
                     SourceLocationSpec::Git(_) => true,
-                    SourceLocationSpec::Path(path) => {
-                        !PathSpec {
-                            path: path.path.clone(),
-                        }
-                        .is_binary()
+                    SourceLocationSpec::Path(path) => !PathSpec {
+                        path: path.path.clone(),
                     }
+                    .is_binary(),
                 };
                 if is_source {
                     Ok(source)
@@ -744,7 +743,10 @@ impl From<GitSpec> for PixiSpec {
 
 impl From<PathSpec> for PixiSpec {
     fn from(value: PathSpec) -> Self {
-        SourceSpec::from(SourceLocationSpec::Path(PathSourceSpec { path: value.path })).into()
+        SourceSpec::from(SourceLocationSpec::Path(PathSourceSpec {
+            path: value.path,
+        }))
+        .into()
     }
 }
 
