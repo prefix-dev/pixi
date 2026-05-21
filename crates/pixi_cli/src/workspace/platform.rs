@@ -366,7 +366,7 @@ async fn execute_edit(
     workspace_ctx: &WorkspaceContext<CliInterface>,
     args: EditArgs,
 ) -> miette::Result<()> {
-    let upsert_virtual_packages = args.virtual_packages.clone().into_specs(
+    let insert_or_update_virtual_packages = args.virtual_packages.clone().into_specs(
         // For `edit`, we don't yet know the platform's subdir if --subdir wasn't
         // supplied, so resolve from the workspace first.
         match args.subdir {
@@ -401,7 +401,7 @@ async fn execute_edit(
     let edit = PlatformEdit {
         set_subdir: args.subdir,
         clear_virtual_packages: args.clear_virtual_packages,
-        upsert_virtual_packages,
+        insert_or_update_virtual_packages,
         remove_virtual_packages,
     };
 

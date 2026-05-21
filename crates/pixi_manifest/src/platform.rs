@@ -57,28 +57,25 @@ impl PixiPlatformName {
             } else {
                 '�'
             };
+            let is_first = pos == 0;
+            let is_last = pos + 1 == input_len;
 
-            match (pos, c) {
-                (0, c) if !c.is_ascii_lowercase() && !c.is_ascii_alphabetic() => {
-                    return Err(PixiPlatformNameError::InvalidCharacter {
-                        character,
-                        position: 0,
-                    });
-                }
-                (p, c) if p == input_len && !c.is_ascii_alphanumeric() => {
-                    return Err(PixiPlatformNameError::InvalidCharacter {
-                        character,
-                        position: p,
-                    });
-                }
-                (p, c) if p < input_len && !c.is_ascii_alphanumeric() && *c != b'-' => {
-                    return Err(PixiPlatformNameError::InvalidCharacter {
-                        character,
-                        position: p,
-                    });
-                }
-                _ => {}
+            let ok = if is_first {
+                // Alphabetic only -- no leading digit or dash.
+                c.is_ascii_alphabetic()
+            } else if is_last {
+                // Trailing `-` is not allowed.
+                c.is_ascii_alphanumeric()
+            } else {
+                c.is_ascii_alphanumeric() || *c == b'-'
             };
+
+            if !ok {
+                return Err(PixiPlatformNameError::InvalidCharacter {
+                    character,
+                    position: pos,
+                });
+            }
         }
         Ok(input.to_string())
     }
@@ -240,9 +237,9 @@ impl PixiPlatform {
     /// exact aliases for the underlying conda subdir.
     ///
     /// Operations are applied in this order so the result is independent of
-    /// argument ordering: clear the VP list (if requested), then upsert each
-    /// VP from `upsert_virtual_packages` (replacing any existing entry with
-    /// the same package name), then remove any VPs whose name is in
+    /// argument ordering: clear the VP list (if requested), then for each entry
+    /// in `insert_or_update_virtual_packages` replace an existing VP with the
+    /// same name or push it if absent, then remove any VPs whose name is in
     /// `remove_virtual_packages`, then set the subdir if provided.
     pub fn apply_edit(&mut self, edit: PlatformEdit) -> Result<(), PixiPlatformError> {
         if self.is_subdir_platform() {
@@ -253,7 +250,7 @@ impl PixiPlatform {
             self.declared_virtual_packages.clear();
         }
 
-        for upsert in edit.upsert_virtual_packages {
+        for upsert in edit.insert_or_update_virtual_packages {
             if let Some(existing) = self
                 .declared_virtual_packages
                 .iter_mut()
@@ -287,11 +284,11 @@ pub struct PlatformEdit {
     /// New value for `subdir`. Unset means "leave alone".
     pub set_subdir: Option<Platform>,
     /// When `true`, drop the existing virtual-package list before applying
-    /// the upserts below. Used by `--clear-virtual-packages`.
+    /// the insert-or-update list below. Used by `--clear-virtual-packages`.
     pub clear_virtual_packages: bool,
     /// Virtual packages to add or, when a package with the same name already
     /// exists, replace.
-    pub upsert_virtual_packages: Vec<GenericVirtualPackage>,
+    pub insert_or_update_virtual_packages: Vec<GenericVirtualPackage>,
     /// Virtual packages to remove by name (no-op if not present).
     pub remove_virtual_packages: Vec<PackageName>,
 }
@@ -300,7 +297,7 @@ impl PlatformEdit {
     pub fn is_noop(&self) -> bool {
         self.set_subdir.is_none()
             && !self.clear_virtual_packages
-            && self.upsert_virtual_packages.is_empty()
+            && self.insert_or_update_virtual_packages.is_empty()
             && self.remove_virtual_packages.is_empty()
     }
 }
@@ -410,7 +407,7 @@ mod tests {
         );
 
         p.apply_edit(PlatformEdit {
-            upsert_virtual_packages: vec![gvp("__cuda", "12.4")],
+            insert_or_update_virtual_packages: vec![gvp("__cuda", "12.4")],
             ..Default::default()
         })
         .unwrap();
@@ -437,7 +434,7 @@ mod tests {
 
         p.apply_edit(PlatformEdit {
             clear_virtual_packages: true,
-            upsert_virtual_packages: vec![gvp("__archspec", "0")],
+            insert_or_update_virtual_packages: vec![gvp("__archspec", "0")],
             ..Default::default()
         })
         .unwrap();
@@ -477,11 +474,62 @@ mod tests {
         let mut p = PixiPlatform::from_subdir(Platform::Linux64);
         let err = p
             .apply_edit(PlatformEdit {
-                upsert_virtual_packages: vec![gvp("__cuda", "12.0")],
+                insert_or_update_virtual_packages: vec![gvp("__cuda", "12.0")],
                 ..Default::default()
             })
             .unwrap_err();
         assert!(matches!(err, PixiPlatformError::IsSubdirPlatform));
+    }
+
+    /// Combine all four ops in one `PlatformEdit`. Documented order is
+    /// clear → insert-or-update → remove → set_subdir, so the result is
+    /// independent of how the caller orders the fields.
+    #[test]
+    fn apply_edit_combined_runs_in_documented_order() {
+        let mut p = rich(
+            "gpu-linux",
+            Platform::Linux64,
+            vec![
+                gvp("__cuda", "11.0"),
+                gvp("__archspec", "0"),
+                gvp("__glibc", "2.17"),
+            ],
+        );
+
+        p.apply_edit(PlatformEdit {
+            clear_virtual_packages: false,
+            insert_or_update_virtual_packages: vec![
+                // Existing entry -> update in place.
+                gvp("__cuda", "12.4"),
+                // New entry -> push.
+                gvp("__future_pkg", "1.2"),
+            ],
+            remove_virtual_packages: vec![
+                PackageName::try_from("__archspec").unwrap(),
+                // Removing a name we just inserted-or-updated must still
+                // win because remove runs after the insert-or-update pass.
+                PackageName::try_from("__future_pkg").unwrap(),
+            ],
+            set_subdir: Some(Platform::LinuxAarch64),
+        })
+        .unwrap();
+
+        // __cuda was updated, __archspec and __future_pkg are gone,
+        // __glibc was untouched.
+        let kept: Vec<_> = p
+            .declared_virtual_packages()
+            .iter()
+            .map(|g| (g.name.as_normalized().to_string(), g.version.to_string()))
+            .collect();
+        assert_eq!(
+            kept,
+            vec![
+                ("__cuda".to_string(), "12.4".to_string()),
+                ("__glibc".to_string(), "2.17".to_string()),
+            ],
+        );
+        assert_eq!(p.subdir(), Platform::LinuxAarch64);
+        assert_eq!(p.name().as_str(), "gpu-linux");
     }
 
     #[test]
@@ -530,6 +578,11 @@ mod tests {
             ("linux+64", '+', 5),
             // Tab is a control byte; the validator renders it as U+FFFD.
             ("linux\t64", '\u{FFFD}', 5),
+            // Trailing `-` was silently accepted before -- name must end
+            // in an alphanumeric character.
+            ("linux-", '-', 5),
+            ("a-", '-', 1),
+            ("ab-c-", '-', 4),
         ];
         for (input, expected_char, expected_pos) in cases {
             let err = PixiPlatformName::try_from(*input)
