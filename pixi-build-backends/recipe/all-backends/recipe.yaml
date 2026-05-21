@@ -28,6 +28,7 @@ outputs:
     requirements:
       build:
         - ${{ compiler("rust") }}
+        - ${{ compiler("c") }}
         - ${{ stdlib("c") }}
         # for building aws-lc-sys
         - cmake
