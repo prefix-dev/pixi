@@ -17,7 +17,14 @@ pub enum PixiPlatformNameError {
     InvalidCharacter { character: char, position: usize },
     #[error("'{0}' is a reserved platform name")]
     ReservedName(String),
+    #[error("a platform name can not be longer than {max} bytes (got {actual})")]
+    TooLong { max: usize, actual: usize },
 }
+
+/// Cap names so attacker-controlled manifests can't pass unbounded keys.
+/// Longest real conda subdir is 17 bytes; 64 is comfortable for descriptive
+/// custom names like `gpu-linux-cuda12-glibc228`.
+const MAX_PLATFORM_NAME_BYTES: usize = 64;
 
 #[derive(
     Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
@@ -37,6 +44,12 @@ impl PixiPlatformName {
         let input_len = bytes.len();
         if bytes.is_empty() {
             return Err(PixiPlatformNameError::Empty);
+        }
+        if input_len > MAX_PLATFORM_NAME_BYTES {
+            return Err(PixiPlatformNameError::TooLong {
+                max: MAX_PLATFORM_NAME_BYTES,
+                actual: input_len,
+            });
         }
         for (pos, c) in bytes.iter().enumerate() {
             let character = if !c.is_ascii_control() && *c < 128 {
@@ -71,17 +84,14 @@ impl PixiPlatformName {
     }
 }
 
-/// Family-style target selectors that must not be usable as workspace platform
-/// names -- the manifest reads them as keys for `target.unix.*` etc., so a
-/// platform literally called `unix` would collide.
-const RESERVED_FAMILY_NAMES: &[&str] = &["linux", "unix", "win", "osx"];
-
 impl TryFrom<&str> for PixiPlatformName {
     type Error = PixiPlatformNameError;
 
     fn try_from(input: &str) -> Result<Self, Self::Error> {
         let validated = Self::valid_pixi_platform_name(input)?;
-        if RESERVED_FAMILY_NAMES.contains(&validated.as_str()) {
+        // Family selectors (`linux`/`unix`/`win`/`osx`/`macos`) double as
+        // `target.<family>.*` keys; a platform named after one would shadow them.
+        if crate::target::family_name_to_selector(&validated).is_some() {
             return Err(PixiPlatformNameError::ReservedName(validated));
         }
         Ok(PixiPlatformName(validated))
@@ -485,5 +495,122 @@ mod tests {
         assert_eq!(p.subdir(), Platform::LinuxAarch64);
         assert_eq!(p.name().as_str(), "gpu-linux");
         assert_eq!(p.declared_virtual_packages().len(), 1);
+    }
+
+    #[test]
+    fn name_rejects_reserved_family_names() {
+        for reserved in ["linux", "unix", "win", "osx", "macos"] {
+            let err = PixiPlatformName::try_from(reserved).unwrap_err();
+            assert!(
+                matches!(err, PixiPlatformNameError::ReservedName(ref n) if n == reserved),
+                "expected ReservedName({reserved}), got {err:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn name_rejects_empty() {
+        let err = PixiPlatformName::try_from("").unwrap_err();
+        assert!(
+            matches!(err, PixiPlatformNameError::Empty),
+            "expected Empty, got {err:?}",
+        );
+    }
+
+    #[test]
+    fn name_rejects_invalid_characters() {
+        let cases: &[(&str, char, usize)] = &[
+            ("1linux", '1', 0),
+            ("-linux", '-', 0),
+            ("_linux", '_', 0),
+            ("linux 64", ' ', 5),
+            ("linux/64", '/', 5),
+            ("linux.64", '.', 5),
+            ("linux@64", '@', 5),
+            ("linux+64", '+', 5),
+            // Tab is a control byte; the validator renders it as U+FFFD.
+            ("linux\t64", '\u{FFFD}', 5),
+        ];
+        for (input, expected_char, expected_pos) in cases {
+            let err = PixiPlatformName::try_from(*input)
+                .err()
+                .unwrap_or_else(|| panic!("expected error for '{input}'"));
+            assert!(
+                matches!(
+                    err,
+                    PixiPlatformNameError::InvalidCharacter { character, position }
+                        if character == *expected_char && position == *expected_pos
+                ),
+                "input '{input}': expected InvalidCharacter({expected_char:?}, {expected_pos}), got {err:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn name_rejects_too_long() {
+        let long = "a".repeat(128);
+        let err = PixiPlatformName::try_from(long.as_str()).unwrap_err();
+        assert!(
+            matches!(err, PixiPlatformNameError::TooLong { .. }),
+            "expected TooLong, got {err:?}",
+        );
+    }
+
+    /// Every real conda subdir must round-trip through `PixiPlatformName`
+    /// and `from_subdir` must produce a locked-down subdir-platform.
+    #[test]
+    fn every_rattler_platform_round_trips_and_is_locked() {
+        use strum::IntoEnumIterator;
+
+        for subdir in Platform::iter() {
+            if subdir == Platform::NoArch || subdir == Platform::Unknown {
+                continue;
+            }
+
+            let subdir_str = subdir.as_str();
+
+            let parsed = PixiPlatformName::try_from(subdir_str).unwrap_or_else(|e| {
+                panic!("rattler subdir '{subdir_str}' rejected by validator: {e:?}")
+            });
+            assert_eq!(parsed.as_str(), subdir_str);
+
+            let via_from: PixiPlatformName = subdir.into();
+            assert_eq!(via_from, parsed);
+
+            let mut platform = PixiPlatform::from_subdir(subdir);
+            assert!(
+                platform.is_subdir_platform(),
+                "from_subdir({subdir_str}) should be a subdir-platform",
+            );
+            assert_eq!(platform.name().as_str(), subdir_str);
+            assert_eq!(platform.subdir(), subdir);
+            assert!(platform.declared_virtual_packages().is_empty());
+
+            let some_other_subdir = if subdir == Platform::Linux64 {
+                Platform::Osx64
+            } else {
+                Platform::Linux64
+            };
+            let alt_name = PixiPlatformName::try_from("custom").unwrap();
+            assert!(matches!(
+                platform.set_name(alt_name),
+                Err(PixiPlatformError::IsSubdirPlatform)
+            ));
+            assert!(matches!(
+                platform.set_subdir(some_other_subdir),
+                Err(PixiPlatformError::IsSubdirPlatform)
+            ));
+            assert!(matches!(
+                platform.set_declared_virtual_packages(vec![gvp("__cuda", "12.0")]),
+                Err(PixiPlatformError::IsSubdirPlatform)
+            ));
+            assert!(matches!(
+                platform.apply_edit(PlatformEdit {
+                    set_subdir: Some(some_other_subdir),
+                    ..Default::default()
+                }),
+                Err(PixiPlatformError::IsSubdirPlatform)
+            ));
+        }
     }
 }
