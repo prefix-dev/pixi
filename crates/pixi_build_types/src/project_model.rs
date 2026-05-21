@@ -126,7 +126,8 @@ impl FromStr for TargetSelector {
             "unix" => Ok(TargetSelector::Unix),
             "linux" => Ok(TargetSelector::Linux),
             "win" => Ok(TargetSelector::Win),
-            "macos" => Ok(TargetSelector::MacOs),
+            // `macos` (wire form) and `osx` (conda subdir family).
+            "macos" | "osx" => Ok(TargetSelector::MacOs),
             other => {
                 let other = other.to_string();
                 if rattler_conda_types::Platform::from_str(&other).is_ok() {

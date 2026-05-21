@@ -513,25 +513,31 @@ impl FromStr for TargetSelector {
     type Err = ParsePlatformError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "linux" => Ok(TargetSelector::Linux),
-            "unix" => Ok(TargetSelector::Unix),
-            "win" => Ok(TargetSelector::Win),
-            "osx" => Ok(TargetSelector::MacOs),
-            _ => {
-                if let Ok(platform) = Platform::from_str(s) {
-                    Ok(TargetSelector::Subdir(platform))
-                } else {
-                    let Ok(platform) = PixiPlatformName::try_from(s) else {
-                        return Err(ParsePlatformError {
-                            string: s.to_string(),
-                        });
-                    };
-
-                    Ok(TargetSelector::Platform(platform))
-                }
-            }
+        if let Some(selector) = family_name_to_selector(s) {
+            return Ok(selector);
         }
+        if let Ok(platform) = Platform::from_str(s) {
+            return Ok(TargetSelector::Subdir(platform));
+        }
+        let Ok(platform) = PixiPlatformName::try_from(s) else {
+            return Err(ParsePlatformError {
+                string: s.to_string(),
+            });
+        };
+        Ok(TargetSelector::Platform(platform))
+    }
+}
+
+/// `target.<family>.*` selector for the four families pixi recognises.
+pub(crate) fn family_name_to_selector(s: &str) -> Option<TargetSelector> {
+    match s {
+        "linux" => Some(TargetSelector::Linux),
+        "unix" => Some(TargetSelector::Unix),
+        "win" => Some(TargetSelector::Win),
+        // `osx` (conda family) and `macos` (the alias used by
+        // `[system-requirements]` and `pixi_build_types::TargetSelector`).
+        "osx" | "macos" => Some(TargetSelector::MacOs),
+        _ => None,
     }
 }
 
