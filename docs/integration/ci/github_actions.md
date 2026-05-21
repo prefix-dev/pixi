@@ -240,7 +240,7 @@ If you only want pixi to use the authenticated remote channel during the action'
 then run `pixi auth logout <auth-host>` after `pixi install` has completed but before the action
 returns, so that later steps cannot reach the private channel anymore.
 
-```yml
+```yaml
 - uses: prefix-dev/setup-pixi@v0.9.6
   with:
     auth-host: prefix.dev
