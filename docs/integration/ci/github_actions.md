@@ -363,8 +363,8 @@ This can be enabled by running the action with the `RUNNER_DEBUG` environment va
 
 Alternatively, you can enable debug logging for the action by re-running the action in debug mode:
 
-![Re-run in debug mode]([.github/assets/enable-debug-logging-light.png#gh-light-mode-only](https://raw.githubusercontent.com/prefix-dev/setup-pixi/main/.github/assets/enable-debug-logging-light.png#only-light))
-![Re-run in debug mode]([.github/assets/enable-debug-logging-dark.png#gh-dark-mode-only](https://raw.githubusercontent.com/prefix-dev/setup-pixi/main/.github/assets/enable-debug-logging-dark.png#only-dark))
+![Re-run in debug mode](https://raw.githubusercontent.com/prefix-dev/setup-pixi/main/.github/assets/enable-debug-logging-light.png#only-light)
+![Re-run in debug mode](https://raw.githubusercontent.com/prefix-dev/setup-pixi/main/.github/assets/enable-debug-logging-dark.png#only-dark)
 
 > For more information about debug logging in GitHub Actions, see [the official documentation](https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/enabling-debug-logging).
 
