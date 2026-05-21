@@ -6011,7 +6011,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-cmake"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6037,7 +6037,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-mojo"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6060,7 +6060,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-python"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6114,7 +6114,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-rattler-build"
-version = "0.3.11"
+version = "0.3.12"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6138,7 +6138,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-ros"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6165,7 +6165,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-rust"
-version = "0.4.9"
+version = "0.4.10"
 dependencies = [
  "async-trait",
  "cargo_toml",
