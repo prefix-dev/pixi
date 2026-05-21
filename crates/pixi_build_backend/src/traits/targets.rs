@@ -174,7 +174,7 @@ impl Targets for pbt::Targets {
     }
 
     fn empty_spec() -> pbt::PackageSpec {
-        pbt::PackageSpec::Binary(rattler_conda_types::VersionSpec::Any.into())
+        rattler_conda_types::VersionSpec::Any.into()
     }
 
     fn run_dependencies(

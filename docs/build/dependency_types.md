@@ -102,6 +102,44 @@ When using something like `zlib`, you would only need to specify it in the `host
 These are the dependencies that are required to when running the package, they are the most common dependencies.
 And are what you would usually use in a `workspace`.
 
+### [Extra Dependencies](../reference/pixi_manifest.md#extra-dependencies)
+
+Package manifests can define optional run dependency groups in `package.extra-dependencies`.
+Each group is a named set of additional run dependencies that consumers can opt into, using the same conda package specification syntax as `run-dependencies`.
+
+For example, here is a complete package manifest that declares a `test` group for its test suite and a `cuda` group for GPU support:
+
+```toml
+[package]
+name = "mypackage"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "0.*" }
+
+[package.run-dependencies]
+numpy = ">=2"
+
+[package.extra-dependencies.test]
+pytest = ">=8"
+hypothesis = "*"
+
+[package.extra-dependencies.cuda]
+cupy = ">=13"
+```
+
+A workspace that consumes `mypackage` as a source dependency can request one or more of these groups through the `extras` field:
+
+```toml
+[workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+# Pulls in the `cuda` group of `mypackage` in addition to its regular run dependencies.
+mypackage = { path = "./mypackage", extras = ["cuda"] }
+```
+
 ### [Run Constraints](../reference/pixi_manifest.md#run-constraints)
 
 Constraints that apply to the package's run environment, but only when the constrained package is pulled in as a dependency by something else.

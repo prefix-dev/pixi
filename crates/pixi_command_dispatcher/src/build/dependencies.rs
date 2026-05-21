@@ -108,7 +108,7 @@ impl Dependencies {
             // Match directly on PackageSpec
             match &depend.spec {
                 pbt::PackageSpec::Binary(binary) => {
-                    let spec = conversion::from_binary_spec_v1(binary.clone());
+                    let spec = conversion::from_binary_spec_v1((**binary).clone());
                     dependencies.insert(name, PixiSpec::from(spec).into());
                 }
                 pbt::PackageSpec::Source(source) => {
@@ -332,7 +332,7 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     build_number: None,
                     file_name: None,
                     extras: None,
-                    condition: None,
+                    flags: None,
                     channel: None,
                     subdir: None,
                     namespace: None,
@@ -340,9 +340,9 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     sha256: None,
                     url: _,
                     license: None,
-                    track_features: None,
-                    flags: None,
                     license_family: None,
+                    condition: None,
+                    track_features: None,
                 } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
                 NamelessMatchSpec {
                     version,
@@ -418,7 +418,7 @@ impl PixiRunExports {
 
                     let spec = match named_spec.spec {
                         pbt::PackageSpec::Binary(binary) => {
-                            conversion::from_binary_spec_v1(binary).into()
+                            conversion::from_binary_spec_v1(*binary).into()
                         }
                         pbt::PackageSpec::Source(source) => {
                             conversion::from_source_spec_v1(source).into()

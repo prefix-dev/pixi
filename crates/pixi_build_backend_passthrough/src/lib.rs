@@ -411,19 +411,23 @@ fn is_star_requirement(spec: &PackageSpec) -> bool {
         return false;
     };
 
-    match boxed {
+    match boxed.as_ref() {
         BinaryPackageSpec {
             version,
             build: None,
             build_number: None,
             file_name: None,
+            extras: None,
+            flags: None,
             channel: None,
             subdir: None,
             md5: None,
             sha256: None,
             url: None,
             license: None,
+            license_family: None,
             condition: None,
+            track_features: None,
         } => version
             .as_ref()
             .is_none_or(|v| matches!(v, VersionSpec::Any)),
@@ -584,6 +588,7 @@ fn create_output(
         )),
         host_dependencies: Some(host_deps),
         run_dependencies,
+        extra_depends: index_json.experimental_extra_depends.clone(),
         metadata: CondaOutputMetadata {
             name: project_model
                 .name
@@ -602,6 +607,7 @@ fn create_output(
             subdir,
             license: project_model.license.clone(),
             license_family: None,
+            flags: index_json.flags.clone(),
             noarch: index_json.noarch,
             purls: None,
             python_site_packages_path: None,
@@ -642,7 +648,7 @@ fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, Pa
                     let resolved_spec = if is_star_requirement(spec) {
                         if let Some(variant_value) = variant.get(name.as_str()) {
                             // Replace with a version spec using the variant value
-                            PackageSpec::Binary(BinaryPackageSpec {
+                            BinaryPackageSpec {
                                 version: Some(
                                     rattler_conda_types::VersionSpec::from_str(
                                         variant_value.to_string().as_str(),
@@ -651,7 +657,8 @@ fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, Pa
                                     .unwrap(),
                                 ),
                                 ..Default::default()
-                            })
+                            }
+                            .into()
                         } else {
                             spec.clone()
                         }
@@ -714,10 +721,16 @@ fn resolve_run_export_spec(
 
     Some(NamedSpec {
         name: SourcePackageName::from(pkg_name),
-        spec: PackageSpec::Binary(BinaryPackageSpec {
+        spec: BinaryPackageSpec {
             version: version_spec,
+            extras: match_spec.extras.clone(),
+            flags: match_spec.flags.clone(),
+            license_family: match_spec.license_family.clone(),
+            condition: match_spec.condition.clone(),
+            track_features: match_spec.track_features.clone(),
             ..Default::default()
-        }),
+        }
+        .into(),
     })
 }
 
@@ -739,10 +752,16 @@ fn convert_run_exports_json(
 
                 Some(NamedSpec {
                     name: SourcePackageName::from(pkg_name),
-                    spec: PackageSpec::Binary(BinaryPackageSpec {
+                    spec: BinaryPackageSpec {
                         version: match_spec.version.clone(),
+                        extras: match_spec.extras.clone(),
+                        flags: match_spec.flags.clone(),
+                        license_family: match_spec.license_family.clone(),
+                        condition: match_spec.condition.clone(),
+                        track_features: match_spec.track_features.clone(),
                         ..Default::default()
-                    }),
+                    }
+                    .into(),
                 })
             })
             .collect()
@@ -764,6 +783,11 @@ fn convert_run_exports_json(
                     name: SourcePackageName::from(pkg_name),
                     spec: ConstraintSpec::Binary(BinaryPackageSpec {
                         version: match_spec.version.clone(),
+                        extras: match_spec.extras.clone(),
+                        flags: match_spec.flags.clone(),
+                        license_family: match_spec.license_family.clone(),
+                        condition: match_spec.condition.clone(),
+                        track_features: match_spec.track_features.clone(),
                         ..Default::default()
                     }),
                 })
@@ -1092,27 +1116,29 @@ mod tests {
 
     #[test]
     fn test_is_star_requirement_with_star() {
-        let spec = PackageSpec::Binary(BinaryPackageSpec {
+        let spec: PackageSpec = BinaryPackageSpec {
             version: Some(VersionSpec::from_str("*", ParseStrictness::Lenient).unwrap()),
             ..Default::default()
-        });
+        }
+        .into();
 
         assert!(is_star_requirement(&spec));
     }
 
     #[test]
     fn test_is_star_requirement_with_version() {
-        let spec = PackageSpec::Binary(BinaryPackageSpec {
+        let spec: PackageSpec = BinaryPackageSpec {
             version: Some(VersionSpec::from_str(">=1.0", ParseStrictness::Lenient).unwrap()),
             ..Default::default()
-        });
+        }
+        .into();
 
         assert!(!is_star_requirement(&spec));
     }
 
     #[test]
     fn test_is_star_requirement_with_no_version() {
-        let spec = PackageSpec::Binary(BinaryPackageSpec::default());
+        let spec: PackageSpec = BinaryPackageSpec::default().into();
 
         assert!(is_star_requirement(&spec));
     }

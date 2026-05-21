@@ -272,6 +272,14 @@ impl GeneratedRecipe {
 
         let mut recipe = SingleOutputRecipe::new(package);
         recipe.requirements = requirements;
+        if let Some(flags) = model.build_flags {
+            recipe.build.flags = ConditionalList::new(
+                flags
+                    .into_iter()
+                    .map(|flag| Item::Value(Value::new_concrete(flag, None)))
+                    .collect(),
+            );
+        }
         recipe.about = about;
 
         Ok(GeneratedRecipe {
@@ -330,4 +338,130 @@ pub struct DefaultMetadataProvider;
 
 impl MetadataProvider for DefaultMetadataProvider {
     type Error = Infallible;
+}
+
+#[cfg(test)]
+mod tests {
+    use ordermap::OrderMap;
+    use pixi_build_types::{
+        BinaryPackageSpec, ExtraDependencies, SourcePackageName, Target, TargetSelector, Targets,
+    };
+    use rattler_conda_types::{Flag, PackageName};
+
+    use super::*;
+
+    fn extras_with_gtest() -> ExtraDependencies {
+        let mut dependencies = OrderMap::new();
+        dependencies.insert(
+            SourcePackageName::from(PackageName::new_unchecked("gtest")),
+            BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+        let mut extras = ExtraDependencies::new();
+        extras.insert("test".to_string(), dependencies);
+        extras
+    }
+
+    #[test]
+    fn generated_recipe_declares_package_extras() {
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            targets: Some(Targets {
+                default_target: Some(Target {
+                    extra_dependencies: Some(extras_with_gtest()),
+                    ..Target::default()
+                }),
+                targets: None,
+            }),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+        let value = serde_json::to_value(&generated.recipe.requirements.extras).unwrap();
+
+        assert!(crate::v3::generated_recipe_uses_v3(&generated.recipe));
+        assert_eq!(
+            value,
+            serde_json::json!({
+                "test": ["gtest"]
+            })
+        );
+    }
+
+    /// Per-target extras must be wrapped in a `Conditional` block in the
+    /// generated recipe rather than landing as a bare entry.
+    #[test]
+    fn generated_recipe_declares_per_target_extras() {
+        let mut platform_targets = OrderMap::new();
+        platform_targets.insert(
+            TargetSelector::Win,
+            Target {
+                extra_dependencies: Some(extras_with_gtest()),
+                ..Target::default()
+            },
+        );
+
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            targets: Some(Targets {
+                default_target: None,
+                targets: Some(platform_targets),
+            }),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+        let test_group = generated
+            .recipe
+            .requirements
+            .extras
+            .get("test")
+            .expect("test group present");
+        let first = test_group
+            .iter()
+            .next()
+            .expect("test group has at least one item");
+        assert!(
+            matches!(first, rattler_build_recipe::stage0::Item::Conditional(_)),
+            "per-target extras must be wrapped in a Conditional in the generated recipe",
+        );
+        assert!(crate::v3::generated_recipe_uses_v3(&generated.recipe));
+    }
+
+    #[test]
+    fn generated_recipe_declares_build_flags() {
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            build_flags: Some(vec![
+                "cuda".parse::<Flag>().unwrap(),
+                "blas_openblas".parse::<Flag>().unwrap(),
+            ]),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+        let value = serde_json::to_value(&generated.recipe.build.flags).unwrap();
+
+        assert!(crate::v3::generated_recipe_uses_v3(&generated.recipe));
+        assert_eq!(value, serde_json::json!(["cuda", "blas_openblas"]));
+    }
+
+    #[test]
+    fn generated_recipe_without_v3_features_does_not_require_v3() {
+        let model = ProjectModel {
+            name: Some("example".to_string()),
+            version: Some("0.1.0".parse().unwrap()),
+            ..ProjectModel::default()
+        };
+
+        let generated = GeneratedRecipe::from_model(model, &mut DefaultMetadataProvider).unwrap();
+
+        assert!(!crate::v3::generated_recipe_uses_v3(&generated.recipe));
+    }
 }

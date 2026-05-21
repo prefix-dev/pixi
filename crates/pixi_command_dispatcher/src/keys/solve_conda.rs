@@ -300,7 +300,13 @@ fn derive_fetch_specs_from_source_repodata(spec: &SolveCondaSpec) -> Vec<MatchSp
     for sm in &spec.source_repodata {
         for record in &sm.records {
             let sources = record.sources();
-            for depend in &record.package_record().depends {
+            for depend in record.package_record().depends.iter().chain(
+                record
+                    .package_record()
+                    .experimental_extra_depends
+                    .values()
+                    .flatten(),
+            ) {
                 let Ok(match_spec) = MatchSpec::from_str(
                     depend,
                     ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),

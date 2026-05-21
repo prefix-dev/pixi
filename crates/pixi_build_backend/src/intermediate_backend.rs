@@ -34,7 +34,7 @@ use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
-    Platform, compression_level::CompressionLevel, package::CondaArchiveType,
+    Platform, RepodataRevision, compression_level::CompressionLevel, package::CondaArchiveType,
 };
 
 use serde::Deserialize;
@@ -54,6 +54,7 @@ use crate::{
     },
     tools::{BackendIdentifier, OneOrMultipleOutputs, output_directory},
     traits::targets::TargetSelector as _,
+    v3::generated_recipe_uses_v3,
 };
 
 use fs_err::tokio as tokio_fs;
@@ -307,14 +308,24 @@ where
             named_source.code.to_string(),
         );
 
+        let repodata_revision = if generated_recipe_uses_v3(&generated_recipe.recipe) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
+
         // Parse the recipe into stage0
-        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+        let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+            &source,
+            rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+        )?;
 
         // Build render config
         let mut render_config = RenderConfig::new()
             .with_target_platform(params.host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(params.host_platform)
+            .with_repodata_revision(repodata_revision)
             .with_recipe_path(&recipe_path);
         if let Some(prefix) = &self.project_model.build_string_prefix {
             render_config = render_config.with_build_string_prefix(prefix);
@@ -464,8 +475,9 @@ where
                     build: discovered_output.build_string.clone(),
                     build_number,
                     subdir: discovered_output.target_platform,
-                    license: recipe.about.license.map(|l| l.to_string()),
-                    license_family: recipe.about.license_family,
+                    license: recipe.about.license.clone().map(|l| l.to_string()),
+                    license_family: recipe.about.license_family.clone(),
+                    flags: recipe.build().flags.clone(),
                     noarch,
                     purls: None,
                     python_site_packages_path: None,
@@ -519,6 +531,17 @@ where
                         &subpackages,
                     )?,
                 },
+                extra_depends: recipe
+                    .requirements
+                    .extras
+                    .iter()
+                    .map(|(group, deps)| {
+                        (
+                            group.clone(),
+                            deps.iter().map(ToString::to_string).collect(),
+                        )
+                    })
+                    .collect(),
                 ignore_run_exports: CondaOutputIgnoreRunExports {
                     by_name: recipe
                         .requirements
@@ -647,7 +670,16 @@ where
             recipe_code.to_string(),
         );
 
-        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+        let repodata_revision = if generated_recipe_uses_v3(&recipe.recipe) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
+
+        let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+            &source,
+            rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+        )?;
 
         let variant_config = VariantConfig {
             variants,
@@ -659,6 +691,7 @@ where
             .with_target_platform(host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(host_platform)
+            .with_repodata_revision(repodata_revision)
             .with_recipe_path(&recipe_path);
         if let Some(prefix) = &self.project_model.build_string_prefix {
             render_config = render_config.with_build_string_prefix(prefix);
@@ -811,7 +844,7 @@ where
                 sandbox_config: None,
                 exclude_newer: None,
                 env_isolation: Default::default(),
-                v3: false,
+                repodata_revision,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,

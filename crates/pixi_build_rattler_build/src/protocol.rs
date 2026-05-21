@@ -10,6 +10,7 @@ use pixi_build_backend::specs_conversion::{
     convert_variant_from_pixi_build_types, convert_variant_to_pixi_build_types,
     from_build_v1_args_to_finalized_dependencies,
 };
+use pixi_build_backend::v3::recipe_source_uses_v3;
 use pixi_build_backend::{
     dependencies::{convert_constraint_dependencies, convert_dependencies},
     intermediate_backend::{conda_build_v1_directories, find_matching_output},
@@ -40,7 +41,7 @@ use rattler_build_recipe::{stage1::Source as RecipeSource, variant_render::Rende
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
-    Platform, compression_level::CompressionLevel, package::CondaArchiveType,
+    Platform, RepodataRevision, compression_level::CompressionLevel, package::CondaArchiveType,
 };
 use tracing::warn;
 pub struct RattlerBuildBackendInstantiator {
@@ -82,8 +83,17 @@ impl Protocol for RattlerBuildBackend {
             self.recipe_source.code.to_string(),
         );
 
+        let repodata_revision = if recipe_source_uses_v3(&self.recipe_source.code) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
+
         // Parse the recipe into stage0
-        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+        let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+            &source,
+            rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+        )?;
 
         // Build render config
         let mut render_config = RenderConfig::new()
@@ -91,6 +101,7 @@ impl Protocol for RattlerBuildBackend {
             .with_build_platform(build_platform)
             .with_host_platform(params.host_platform)
             .with_experimental(self.config.experimental.unwrap_or(false))
+            .with_repodata_revision(repodata_revision)
             .with_recipe_path(&self.recipe_source.path);
         if let Some(prefix) = &self.build_string_prefix {
             render_config = render_config.with_build_string_prefix(prefix);
@@ -184,8 +195,9 @@ impl Protocol for RattlerBuildBackend {
                     build: discovered_output.build_string.clone(),
                     build_number,
                     subdir: discovered_output.target_platform,
-                    license: recipe.about.license.map(|l| l.to_string()),
-                    license_family: recipe.about.license_family,
+                    license: recipe.about.license.clone().map(|l| l.to_string()),
+                    license_family: recipe.about.license_family.clone(),
+                    flags: build.flags.clone(),
                     noarch,
                     purls: None,
                     python_site_packages_path,
@@ -239,6 +251,17 @@ impl Protocol for RattlerBuildBackend {
                         &subpackages,
                     )?,
                 },
+                extra_depends: recipe
+                    .requirements
+                    .extras
+                    .iter()
+                    .map(|(group, deps)| {
+                        (
+                            group.clone(),
+                            deps.iter().map(ToString::to_string).collect(),
+                        )
+                    })
+                    .collect(),
                 ignore_run_exports: CondaOutputIgnoreRunExports {
                     by_name: recipe
                         .requirements
@@ -340,7 +363,16 @@ impl Protocol for RattlerBuildBackend {
         );
 
         // Parse the recipe into stage0
-        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+        let repodata_revision = if recipe_source_uses_v3(&self.recipe_source.code) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
+
+        let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+            &source,
+            rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+        )?;
 
         // Build render config
         let mut render_config = RenderConfig::new()
@@ -348,6 +380,7 @@ impl Protocol for RattlerBuildBackend {
             .with_build_platform(build_platform)
             .with_host_platform(host_platform)
             .with_experimental(self.config.experimental.unwrap_or(false))
+            .with_repodata_revision(repodata_revision)
             .with_recipe_path(&self.recipe_source.path);
         if let Some(prefix) = &self.build_string_prefix {
             render_config = render_config.with_build_string_prefix(prefix);
@@ -451,7 +484,7 @@ impl Protocol for RattlerBuildBackend {
                 sandbox_config: None,
                 exclude_newer: None,
                 env_isolation: Default::default(),
-                v3: false,
+                repodata_revision,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,

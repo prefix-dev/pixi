@@ -55,6 +55,9 @@ pub struct WorkspaceTarget {
 pub struct PackageTarget {
     /// Dependencies for this target.
     pub dependencies: HashMap<SpecType, DependencyMap<PackageName, PixiSpec>>,
+
+    /// Optional dependency groups declared by the package for this target.
+    pub extra_dependencies: IndexMap<String, DependencyMap<PackageName, PixiSpec>>,
 }
 
 impl WorkspaceTarget {
