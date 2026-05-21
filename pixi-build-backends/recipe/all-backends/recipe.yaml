@@ -29,6 +29,9 @@ outputs:
       build:
         - ${{ compiler("rust") }}
         - ${{ stdlib("c") }}
+        # for building aws-lc-sys
+        - cmake
+        - ninja
         - cargo-bundle-licenses
         - cargo-auditable
       host:

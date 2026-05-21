@@ -95,7 +95,8 @@ rm -rf output/bld/ && \
   --channel https://prefix.dev/conda-forge \
   --variant-config pixi-build-backends/recipe/variants.yaml \
   --recipe pixi-build-backends/recipe/all-backends/recipe.yaml \
-  --target-platform {{ target_platform }}
+  --target-platform {{ target_platform }} \
+  --env-isolation=none
 """
 description = "Build a backend packages"
 
