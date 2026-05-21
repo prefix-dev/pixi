@@ -1269,8 +1269,7 @@ mod tests {
             vec![],
             None,
         );
-        let locked_data =
-            UnresolvedPypiRecord::from(data).lock(pep440_rs::MIN_VERSION.clone());
+        let locked_data = UnresolvedPypiRecord::from(data).lock(pep440_rs::MIN_VERSION.clone());
 
         // Transitive requirement from another wheel's `requires_dist`:
         // pep508 with a registry-style specifier.
