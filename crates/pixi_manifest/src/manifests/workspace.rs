@@ -2507,6 +2507,143 @@ feature_target_dep = "*"
         );
     }
 
+    /// `remove_workspace_platforms` intentionally leaves feature platform
+    /// lists alone -- a feature that explicitly enumerates its platforms is
+    /// an opt-in to that exact set, not a derivation from the workspace.
+    /// The resulting "dangling" reference (a feature listing a platform
+    /// the workspace no longer declares) is the documented post-state and
+    /// must not break manifest construction or feature lookup.
+    #[test]
+    fn test_workspace_remove_leaves_feature_reference() {
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            channels = []
+            platforms = ["linux-64", "osx-arm64"]
+
+            [feature.gpu]
+            platforms = ["osx-arm64"]
+
+            [environments]
+            gpu = ["gpu"]
+        "#;
+
+        let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
+
+        fn pp(p: Platform) -> PixiPlatform {
+            PixiPlatform::from_subdir(p)
+        }
+        fn pn(p: Platform) -> PixiPlatformName {
+            p.into()
+        }
+
+        // Workspace-level remove of OsxArm64.
+        manifest
+            .remove_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::DEFAULT)
+            .unwrap();
+
+        assert_eq!(
+            manifest.workspace.workspace.platforms,
+            [pp(Platform::Linux64)].into_iter().collect::<IndexSet<_>>(),
+        );
+
+        // The feature still references OsxArm64 -- this is the dangling
+        // reference. Reading it back must still work.
+        let dangling = manifest
+            .workspace
+            .feature(&FeatureName::from("gpu"))
+            .unwrap()
+            .platforms
+            .clone()
+            .unwrap();
+        assert_eq!(
+            dangling,
+            [pn(Platform::OsxArm64)]
+                .into_iter()
+                .collect::<IndexSet<_>>(),
+        );
+    }
+
+    /// `add --feature` and `remove --feature` are intentionally asymmetric:
+    /// add extends both the workspace and the named feature (a feature can
+    /// only reference workspace-declared platforms, so the workspace has to
+    /// grow), while remove only shrinks the feature (other features or
+    /// environments may still depend on the workspace-level entry).
+    #[test]
+    fn test_add_remove_feature_scoped_is_asymmetric() {
+        let file_contents = r#"
+            [project]
+            name = "foo"
+            version = "0.1.0"
+            channels = []
+            platforms = ["linux-64"]
+
+            [feature.gpu]
+            platforms = []
+
+            [environments]
+            gpu = ["gpu"]
+        "#;
+
+        let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
+
+        fn pp(p: Platform) -> PixiPlatform {
+            PixiPlatform::from_subdir(p)
+        }
+        fn pn(p: Platform) -> PixiPlatformName {
+            p.into()
+        }
+
+        // `add ... --feature gpu` extends both sides.
+        manifest
+            .add_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::from("gpu"))
+            .unwrap();
+        assert_eq!(
+            manifest.workspace.workspace.platforms,
+            [pp(Platform::Linux64), pp(Platform::OsxArm64)]
+                .into_iter()
+                .collect::<IndexSet<_>>(),
+        );
+        assert_eq!(
+            manifest
+                .workspace
+                .feature(&FeatureName::from("gpu"))
+                .unwrap()
+                .platforms
+                .clone()
+                .unwrap(),
+            [pn(Platform::OsxArm64)]
+                .into_iter()
+                .collect::<IndexSet<_>>(),
+        );
+
+        // `remove ... --feature gpu` shrinks only the feature.
+        manifest
+            .remove_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::from("gpu"))
+            .unwrap();
+        assert_eq!(
+            manifest
+                .workspace
+                .feature(&FeatureName::from("gpu"))
+                .unwrap()
+                .platforms
+                .clone()
+                .unwrap(),
+            IndexSet::<PixiPlatformName>::new(),
+        );
+        // Workspace still lists OsxArm64 -- another feature or environment
+        // might still reference it.
+        assert_eq!(
+            manifest.workspace.workspace.platforms,
+            [pp(Platform::Linux64), pp(Platform::OsxArm64)]
+                .into_iter()
+                .collect::<IndexSet<_>>(),
+        );
+    }
+
     #[test]
     fn test_add_channels() {
         // Using known files in the project so the test succeed including the file
