@@ -78,7 +78,8 @@ expression: snapshot
     path: foobar
     version: 1.2.3
   result:
-    error: "ERROR: `version` cannot be used with `path`"
+    path: foobar
+    version: "==1.2.3"
 - input:
     version: //
   result:

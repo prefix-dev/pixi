@@ -105,7 +105,7 @@ impl GlobalSpecs {
                     .transpose()?
                     .unwrap_or_default(),
             };
-            Some(PixiSpec::Git(git_spec))
+            Some(PixiSpec::from(git_spec))
         } else if let Some(path) = &self.path {
             let absolute_path = dunce::canonicalize(path.as_str())
                 .map_err(|_| GlobalSpecsConversionError::AbsolutizePath(path.to_string()))?;
@@ -159,7 +159,7 @@ impl GlobalSpecs {
                         manifest_root.to_string_lossy().to_string(),
                     )
                 })?;
-            Some(PixiSpec::Path(pixi_spec::PathSpec {
+            Some(PixiSpec::from(pixi_spec::PathSpec {
                 path: Utf8NativePathBuf::from(relative_path.to_string_lossy().to_string())
                     .to_typed_path_buf(),
             }))
@@ -274,10 +274,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(global_specs.len(), 1);
-        assert!(matches!(
-            &global_specs.first().unwrap().spec,
-            &PixiSpec::Git(..)
-        ))
+        assert!(global_specs.first().unwrap().spec.as_git().is_some())
     }
 
     #[tokio::test]
@@ -315,7 +312,7 @@ mod tests {
                 assert_eq!(global_specs.len(), 1);
                 let installed_spec = &global_specs[0];
 
-                let PixiSpec::Path(path_spec) = &installed_spec.spec else {
+                let Some(path_spec) = installed_spec.spec.as_path() else {
                     panic!("expected path spec");
                 };
 

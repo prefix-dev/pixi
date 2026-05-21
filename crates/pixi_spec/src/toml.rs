@@ -22,7 +22,7 @@ use url::Url;
 
 use crate::{
     BinarySpec, DetailedSpec, GitReference, GitSpec, PathSourceSpec, PathSpec, PixiSpec,
-    SourceLocationSpec, Subdirectory, SubdirectoryError, UrlSourceSpec, UrlSpec,
+    SourceLocationSpec, SourceSpec, Subdirectory, SubdirectoryError, UrlSourceSpec, UrlSpec,
 };
 
 /// A TOML representation of a package specification.
@@ -439,7 +439,7 @@ impl TomlSpec {
             (false, false, false)
         };
 
-        let non_detailed_keys = [
+        let location_keys = [
             is_git.then_some("`git`"),
             is_path.then_some("`path`"),
             is_url.then_some("`url`"),
@@ -449,24 +449,17 @@ impl TomlSpec {
         .collect::<Vec<_>>()
         .join(", ");
 
-        // Common field checks
-        if !non_detailed_keys.is_empty() {
+        // `file-name` and `channel` only make sense for channel-resolved
+        // (non-source) packages.
+        if !location_keys.is_empty() {
             for (field_name, is_some) in [
-                ("`version`", self.version.is_some()),
-                ("`build`", self.build.is_some()),
-                ("`build-number`", self.build_number.is_some()),
                 ("`file-name`", self.file_name.is_some()),
-                ("`extras`", self.extras.is_some()),
-                ("`flags`", self.flags.is_some()),
                 ("`channel`", self.channel.is_some()),
-                ("`subdir`", self.subdir.is_some()),
-                ("`when`", self.when.is_some()),
-                ("`track-features`", self.track_features.is_some()),
             ] {
                 if is_some {
                     return Err(SpecError::InvalidCombination(
                         field_name.into(),
-                        non_detailed_keys.into(),
+                        location_keys.into(),
                     ));
                 }
             }
@@ -497,83 +490,111 @@ impl TomlSpec {
         Ok(())
     }
 
+    /// Build a `SourceSpec` location from the location fields. Caller must
+    /// have already validated that exactly one of `url`/`path`/`git` is set.
+    fn build_source_location(
+        loc: TomlLocationSpec,
+    ) -> Result<SourceLocationSpec, SpecError> {
+        match (loc.url, loc.path, loc.git) {
+            (Some(url), None, None) => Ok(SourceLocationSpec::Url(UrlSourceSpec {
+                url,
+                md5: loc.md5,
+                sha256: loc.sha256,
+                subdirectory: loc
+                    .subdirectory
+                    .map(Subdirectory::try_from)
+                    .transpose()?
+                    .unwrap_or_default(),
+            })),
+            (None, Some(path), None) => Ok(SourceLocationSpec::Path(PathSourceSpec {
+                path: path.into(),
+            })),
+            (None, None, Some(git)) => {
+                let rev = match (loc.branch, loc.rev, loc.tag) {
+                    (Some(branch), None, None) => Some(GitReference::Branch(branch)),
+                    (None, Some(rev), None) => Some(GitReference::Rev(rev)),
+                    (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
+                    (None, None, None) => None,
+                    _ => return Err(SpecError::MultipleGitRefs),
+                };
+                let subdirectory = loc
+                    .subdirectory
+                    .map(Subdirectory::try_from)
+                    .transpose()?
+                    .unwrap_or_default();
+                Ok(SourceLocationSpec::Git(GitSpec {
+                    git,
+                    rev,
+                    subdirectory,
+                }))
+            }
+            (None, None, None) => unreachable!("caller verified at least one identifier present"),
+            (_, _, _) => Err(SpecError::MultipleIdentifiers),
+        }
+    }
+
     /// Convert the TOML representation into an actual [`PixiSpec`].
     pub fn into_spec(self) -> Result<PixiSpec, SpecError> {
         self.validate_field_combinations()?;
 
         let spec: PixiSpec;
         if let Some(loc) = self.location {
-            spec = match (loc.url, loc.path, loc.git) {
-                (Some(url), None, None) => PixiSpec::Url(UrlSpec {
-                    url,
+            let has_location =
+                loc.url.is_some() || loc.path.is_some() || loc.git.is_some();
+            if has_location {
+                let location = Self::build_source_location(loc)?;
+                spec = PixiSpec::Source(Box::new(SourceSpec {
+                    location,
+                    version: self.version,
+                    build: self.build,
+                    build_number: self.build_number,
+                    extras: self.extras,
+                    flags: self.flags,
+                    subdir: self.subdir,
+                    namespace: None,
+                    license: self.license,
+                    license_family: self.license_family,
+                    condition: self.when.map(TomlWhen::into_condition).transpose()?,
+                    track_features: self.track_features,
+                }));
+                return Ok(spec);
+            } else {
+                let is_detailed = self.version.is_some()
+                    || self.build.is_some()
+                    || self.build_number.is_some()
+                    || self.file_name.is_some()
+                    || self.extras.is_some()
+                    || self.flags.is_some()
+                    || self.channel.is_some()
+                    || self.subdir.is_some()
+                    || loc.md5.is_some()
+                    || loc.sha256.is_some()
+                    || self.license.is_some()
+                    || self.license_family.is_some()
+                    || self.when.is_some()
+                    || self.track_features.is_some();
+                if !is_detailed {
+                    return Err(SpecError::MissingDetailedIdentifier);
+                }
+
+                spec = PixiSpec::DetailedVersion(Box::new(DetailedSpec {
+                    version: self.version,
+                    build: self.build,
+                    build_number: self.build_number,
+                    file_name: self.file_name,
+                    extras: self.extras,
+                    flags: self.flags,
+                    channel: self.channel,
+                    subdir: self.subdir,
                     md5: loc.md5,
                     sha256: loc.sha256,
-                    subdirectory: loc
-                        .subdirectory
-                        .map(Subdirectory::try_from)
-                        .transpose()?
-                        .unwrap_or_default(),
-                }),
-                (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
-                (None, None, Some(git)) => {
-                    let rev = match (loc.branch, loc.rev, loc.tag) {
-                        (Some(branch), None, None) => Some(GitReference::Branch(branch)),
-                        (None, Some(rev), None) => Some(GitReference::Rev(rev)),
-                        (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
-                        (None, None, None) => None,
-                        _ => {
-                            return Err(SpecError::MultipleGitRefs);
-                        }
-                    };
-                    let subdirectory = loc
-                        .subdirectory
-                        .map(Subdirectory::try_from)
-                        .transpose()?
-                        .unwrap_or_default();
-                    PixiSpec::Git(GitSpec {
-                        git,
-                        rev,
-                        subdirectory,
-                    })
-                }
-                (None, None, None) => {
-                    let is_detailed = self.version.is_some()
-                        || self.build.is_some()
-                        || self.build_number.is_some()
-                        || self.file_name.is_some()
-                        || self.extras.is_some()
-                        || self.flags.is_some()
-                        || self.channel.is_some()
-                        || self.subdir.is_some()
-                        || loc.md5.is_some()
-                        || loc.sha256.is_some()
-                        || self.license.is_some()
-                        || self.license_family.is_some()
-                        || self.when.is_some()
-                        || self.track_features.is_some();
-                    if !is_detailed {
-                        return Err(SpecError::MissingDetailedIdentifier);
-                    }
-
-                    PixiSpec::DetailedVersion(Box::new(DetailedSpec {
-                        version: self.version,
-                        build: self.build,
-                        build_number: self.build_number,
-                        file_name: self.file_name,
-                        extras: self.extras,
-                        flags: self.flags,
-                        channel: self.channel,
-                        subdir: self.subdir,
-                        md5: loc.md5,
-                        sha256: loc.sha256,
-                        license: self.license,
-                        license_family: self.license_family,
-                        condition: self.when.map(TomlWhen::into_condition).transpose()?,
-                        track_features: self.track_features,
-                    }))
-                }
-                (_, _, _) => return Err(SpecError::MultipleIdentifiers),
-            };
+                    license: self.license,
+                    license_family: self.license_family,
+                    condition: self.when.map(TomlWhen::into_condition).transpose()?,
+                    track_features: self.track_features,
+                }));
+                return Ok(spec);
+            }
         } else {
             let is_detailed = self.version.is_some()
                 || self.build.is_some()
@@ -1925,9 +1946,15 @@ when = { package = "python", track-features = ["legacy"] }"#;
     }
 
     #[test]
-    fn test_when_reject_combined_with_path_json() {
+    fn test_when_accepts_combined_with_path_json() {
         let input = json!({ "path": "../foo", "when": "__unix" });
-        assert_snapshot!(parse_json_error(input), @"`when` cannot be used with `path`");
+        let spec: PixiSpec = serde_json::from_value(input).expect("expected parse to succeed");
+        let source = spec.as_source().expect("expected a source spec");
+        assert!(matches!(source.location, SourceLocationSpec::Path(_)));
+        assert_eq!(
+            source.condition.as_ref().unwrap().to_string(),
+            "__unix"
+        );
     }
 
     #[test]
@@ -2129,16 +2156,18 @@ when = { all = ["__unix", "python[version='>=3.10']"] }"#;
     }
 
     #[test]
-    fn test_when_reject_combined_with_path_toml() {
+    fn test_when_accepts_combined_with_path_toml() {
         let input = r#"path = "../foo"
 when = "__unix""#;
-        assert_snapshot!(parse_toml_error(input), @r###"
-         × `when` cannot be used with `path`
-          ╭─[pixi.toml:1:1]
-        1 │ ╭─▶ path = "../foo"
-        2 │ ╰─▶ when = "__unix"
-          ╰────
-        "###);
+        let mut value = toml_span::parse(input).expect("valid TOML");
+        let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
+            .expect("expected `when` to combine with `path`");
+        let source = spec.as_source().expect("expected a source spec");
+        assert!(matches!(source.location, SourceLocationSpec::Path(_)));
+        assert_eq!(
+            source.condition.as_ref().unwrap().to_string(),
+            "__unix"
+        );
     }
 
     #[test]
@@ -2160,24 +2189,35 @@ when = "__unix""#;
     }
 
     #[test]
-    fn test_v3_reject_extras_with_path_json() {
+    fn test_v3_extras_with_path_json() {
         let input = json!({ "path": "../foo", "extras": ["dev"] });
-        assert_snapshot!(parse_json_error(input), @"`extras` cannot be used with `path`");
+        let spec: PixiSpec = serde_json::from_value(input).expect("expected parse to succeed");
+        let source = spec.as_source().expect("expected a source spec");
+        assert!(matches!(source.location, SourceLocationSpec::Path(_)));
+        assert_eq!(source.extras, Some(vec!["dev".to_string()]));
     }
 
     #[test]
-    fn test_v3_reject_flags_with_git_json() {
+    fn test_v3_flags_with_git_json() {
         let input = json!({ "git": "https://example.com/foo.git", "flags": ["cuda"] });
-        assert_snapshot!(parse_json_error(input), @"`flags` cannot be used with `git`");
+        let spec: PixiSpec = serde_json::from_value(input).expect("expected parse to succeed");
+        let source = spec.as_source().expect("expected a source spec");
+        assert!(matches!(source.location, SourceLocationSpec::Git(_)));
+        let flags = source.flags.as_ref().unwrap();
+        assert_eq!(flags.len(), 1);
+        assert_eq!(flags[0].to_string(), "cuda");
     }
 
     #[test]
-    fn test_v3_reject_track_features_with_url_json() {
+    fn test_v3_track_features_with_url_json() {
         let input = json!({
             "url": "https://example.com/foo.conda",
             "track-features": ["legacy"],
         });
-        assert_snapshot!(parse_json_error(input), @"`track-features` cannot be used with `url`");
+        let spec: PixiSpec = serde_json::from_value(input).expect("expected parse to succeed");
+        let source = spec.as_source().expect("expected a source spec");
+        assert!(matches!(source.location, SourceLocationSpec::Url(_)));
+        assert_eq!(source.track_features, Some(vec!["legacy".to_string()]));
     }
 
     #[test]
@@ -2237,40 +2277,89 @@ flags = ["*[unclosed"]"#;
     }
 
     #[test]
-    fn test_v3_reject_extras_with_path_toml() {
+    fn test_v3_extras_with_path_toml() {
         let input = r#"path = "../foo"
 extras = ["dev"]"#;
-        assert_snapshot!(parse_toml_error(input), @r###"
-         × `extras` cannot be used with `path`
-          ╭─[pixi.toml:1:1]
-        1 │ ╭─▶ path = "../foo"
-        2 │ ╰─▶ extras = ["dev"]
-          ╰────
-        "###);
+        let mut value = toml_span::parse(input).expect("valid TOML");
+        let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
+            .expect("expected `extras` to combine with `path`");
+        let source = spec.as_source().expect("expected a source spec");
+        assert_eq!(source.extras, Some(vec!["dev".to_string()]));
     }
 
     #[test]
-    fn test_v3_reject_flags_with_url_toml() {
+    fn test_v3_flags_with_url_toml() {
         let input = r#"url = "https://example.com/foo.conda"
 flags = ["cuda"]"#;
+        let mut value = toml_span::parse(input).expect("valid TOML");
+        let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
+            .expect("expected `flags` to combine with `url`");
+        let source = spec.as_source().expect("expected a source spec");
+        let flags = source.flags.as_ref().unwrap();
+        assert_eq!(flags.len(), 1);
+        assert_eq!(flags[0].to_string(), "cuda");
+    }
+
+    #[test]
+    fn test_v3_track_features_with_git_toml() {
+        let input = r#"git = "https://example.com/foo.git"
+track-features = ["legacy"]"#;
+        let mut value = toml_span::parse(input).expect("valid TOML");
+        let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
+            .expect("expected `track-features` to combine with `git`");
+        let source = spec.as_source().expect("expected a source spec");
+        assert_eq!(source.track_features, Some(vec!["legacy".to_string()]));
+    }
+
+    #[test]
+    fn test_path_with_build_toml() {
+        // The headline use case: combine a path source spec with a build matcher.
+        let input = r#"path = "./foo"
+build = "foo*""#;
+        let mut value = toml_span::parse(input).expect("valid TOML");
+        let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
+            .expect("expected `build` to combine with `path`");
+        let source = spec.as_source().expect("expected a source spec");
+        assert!(matches!(source.location, SourceLocationSpec::Path(_)));
+        assert_eq!(source.build.as_ref().unwrap().to_string(), "foo*");
+    }
+
+    #[test]
+    fn test_git_with_version_and_when_toml() {
+        let input = r#"git = "https://example.com/foo.git"
+version = ">=1.0"
+when = "__unix""#;
+        let mut value = toml_span::parse(input).expect("valid TOML");
+        let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut value)
+            .expect("expected source spec with version+when");
+        let source = spec.as_source().expect("expected a source spec");
+        assert!(matches!(source.location, SourceLocationSpec::Git(_)));
+        assert_eq!(source.version.as_ref().unwrap().to_string(), ">=1.0");
+        assert_eq!(source.condition.as_ref().unwrap().to_string(), "__unix");
+    }
+
+    #[test]
+    fn test_v3_reject_channel_with_path_toml() {
+        let input = r#"path = "../foo"
+channel = "conda-forge""#;
         assert_snapshot!(parse_toml_error(input), @r###"
-         × `flags` cannot be used with `url`
+         × `channel` cannot be used with `path`
           ╭─[pixi.toml:1:1]
-        1 │ ╭─▶ url = "https://example.com/foo.conda"
-        2 │ ╰─▶ flags = ["cuda"]
+        1 │ ╭─▶ path = "../foo"
+        2 │ ╰─▶ channel = "conda-forge"
           ╰────
         "###);
     }
 
     #[test]
-    fn test_v3_reject_track_features_with_git_toml() {
+    fn test_v3_reject_file_name_with_git_toml() {
         let input = r#"git = "https://example.com/foo.git"
-track-features = ["legacy"]"#;
+file-name = "foo-1.2.3-py38h0db86a8_1.conda""#;
         assert_snapshot!(parse_toml_error(input), @r###"
-         × `track-features` cannot be used with `git`
+         × `file-name` cannot be used with `git`
           ╭─[pixi.toml:1:1]
         1 │ ╭─▶ git = "https://example.com/foo.git"
-        2 │ ╰─▶ track-features = ["legacy"]
+        2 │ ╰─▶ file-name = "foo-1.2.3-py38h0db86a8_1.conda"
           ╰────
         "###);
     }

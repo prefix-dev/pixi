@@ -13,7 +13,7 @@ use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSource;
 pub use pixi_python_status::PythonStatus;
-use pixi_spec::{GitSpec, PixiSpec};
+use pixi_spec::GitSpec;
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackage};
@@ -401,7 +401,7 @@ pub fn extract_git_requirements_from_workspace(project: &Workspace) -> Vec<GitSp
             let pypi_dependencies = env.pypi_dependencies(Some(platform));
             for (_, dep_spec) in dependencies {
                 for spec in dep_spec {
-                    if let PixiSpec::Git(spec) = spec {
+                    if let Some(spec) = spec.as_git() {
                         requirements.push(spec.clone());
                     }
                 }
@@ -438,8 +438,8 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
             let dependencies = env.combined_dependencies(Some(platform));
             for (_, dep_spec) in dependencies {
                 for spec in dep_spec {
-                    if let PixiSpec::Git(spec) = spec {
-                        store_credentials_from_url(&spec.git);
+                    if let Some(git_spec) = spec.as_git() {
+                        store_credentials_from_url(&git_spec.git);
                     }
                 }
             }
