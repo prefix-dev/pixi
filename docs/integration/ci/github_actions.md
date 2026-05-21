@@ -42,7 +42,8 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 
 ## Features
 
-To see all available input arguments, see the [`action.yml`](action.yml) file.
+To see all available input arguments, see the [`action.yml`](https://github.com/prefix-dev/setup-pixi/blob/main/action.yml) file in `setup-pixi`.
+The most important features are described below.
 
 ### Caching
 
@@ -77,7 +78,7 @@ You can also specify which environment(s) you want to install by setting the `en
 This will install all environments that are specified and cache them.
 
 ```toml
-[project]
+[workspace]
 name = "my-package"
 channels = ["conda-forge"]
 platforms = ["linux-64"]
@@ -162,7 +163,7 @@ There are currently five ways to authenticate with pixi:
 - using an S3 key pair
 - using keyring for PyPI registries
 
-For more information, see the [pixi documentation](https://pixi.sh/latest/deployment/authentication/).
+For more information, see [Authentication](../../deployment/authentication.md).
 
 > [!WARNING]
 > Please only store sensitive information using [GitHub secrets](https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions). Do not store them in your repository.
@@ -221,7 +222,7 @@ You can also specify the session token using the `auth-session-token` input argu
     auth-s3-session-token: ${{ secrets.SESSION_TOKEN }}
 ```
 
-See the [pixi documentation](https://pixi.sh/latest/advanced/s3) for more information about S3 authentication.
+See the [S3 section](../../deployment/s3.md) for more information about S3 authentication.
 
 #### Restricting credentials to the install step
 
@@ -302,7 +303,7 @@ With `pixi exec`, you can also run a one-off command inside a temporary pixi env
   shell: pixi exec --spec python=3.11.* --spec ruamel.yaml -- python {0}
 ```
 
-See [here](https://pixi.sh/latest/reference/cli#exec) for more information about `pixi exec`.
+See [here](../../reference/cli/pixi/exec.md) for more information about `pixi exec`.
 
 ### Environment activation
 
@@ -333,7 +334,7 @@ However, be aware that this option augments the environment of your job.
 ### `--frozen` and `--locked`
 
 You can specify whether `setup-pixi` should run `pixi install --frozen` or `pixi install --locked` depending on the `frozen` or the `locked` input argument.
-See the [official documentation](https://pixi.sh/latest/reference/cli/pixi/install/#update-options) for more information about the `--frozen` and `--locked` flags.
+See the [official documentation](../../reference/cli/pixi/install.md#update-options) for more information about the `--frozen` and `--locked` flags.
 
 ```yml
 - uses: prefix-dev/setup-pixi@v0.9.6
@@ -362,8 +363,8 @@ This can be enabled by running the action with the `RUNNER_DEBUG` environment va
 
 Alternatively, you can enable debug logging for the action by re-running the action in debug mode:
 
-![Re-run in debug mode](.github/assets/enable-debug-logging-light.png#gh-light-mode-only)
-![Re-run in debug mode](.github/assets/enable-debug-logging-dark.png#gh-dark-mode-only)
+![Re-run in debug mode]([.github/assets/enable-debug-logging-light.png#gh-light-mode-only](https://raw.githubusercontent.com/prefix-dev/setup-pixi/main/.github/assets/enable-debug-logging-light.png#only-light))
+![Re-run in debug mode]([.github/assets/enable-debug-logging-dark.png#gh-dark-mode-only](https://raw.githubusercontent.com/prefix-dev/setup-pixi/main/.github/assets/enable-debug-logging-dark.png#only-dark))
 
 > For more information about debug logging in GitHub Actions, see [the official documentation](https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/enabling-debug-logging).
 
