@@ -242,6 +242,7 @@ impl TomlWorkspace {
             pypi_exclude_newer_package_overrides: IndexMap::default(),
             dependencies,
             root_directory: root_directory.to_path_buf(),
+            must_migrate: false,
         })
         .with_warnings(warnings))
     }

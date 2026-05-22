@@ -722,6 +722,23 @@ impl ManifestDocument {
         Ok(feature_table.remove(feature_name.as_str()).is_some())
     }
 
+    /// Remove the `[system-requirements]` table from the document. When
+    /// `feature_name` is `Some` and refers to a named feature, removes
+    /// `[feature.X.system-requirements]`; otherwise removes the workspace-level
+    /// table. No-op if the table doesn't exist.
+    pub fn remove_system_requirements_section(
+        &mut self,
+        feature_name: Option<&FeatureName>,
+    ) -> Result<(), TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_feature_name(feature_name);
+        self.manifest_mut()
+            .get_or_insert_nested_table(&table_name.as_keys())?
+            .remove(consts::SYSTEM_REQUIREMENTS);
+        Ok(())
+    }
+
     pub fn add_system_requirements(
         &mut self,
         system_requirements: &SystemRequirements,

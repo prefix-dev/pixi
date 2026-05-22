@@ -501,6 +501,12 @@ fn migrate_system_requirements_to_platforms(
     // would be ambiguous which set of declarations wins.
     let all_simple_subdir = originals.iter().all(PixiPlatform::is_subdir_platform);
 
+    // Any feature (incl. default) carries `[system-requirements]` and the
+    // workspace is still in legacy subdir-only shape: a follow-up add/edit
+    // of a non-subdir platform will commit the migration to pixi.toml.
+    workspace.must_migrate =
+        all_simple_subdir && features.values().any(|f| !f.system_requirements.is_empty());
+
     if all_simple_subdir {
         extend_originals_with_referenced_subdirs(&mut originals, features)?;
     }

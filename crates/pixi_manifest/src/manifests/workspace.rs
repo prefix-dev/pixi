@@ -451,12 +451,19 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: &IndexSet<PixiPlatform>,
     ) -> miette::Result<()> {
-        // Update Manifest platforms
+        // Only newly-added rich platforms count toward the legacy-syntax
+        // migration trigger; re-adding an existing platform must not rewrite
+        // `[system-requirements]`.
+        let added_rich = platforms
+            .iter()
+            .any(|p| !p.is_subdir_platform() && !self.workspace.workspace.platforms.contains(p));
+
         self.workspace
             .workspace
             .platforms
             .extend(platforms.iter().cloned());
 
+        migrate_to_rich_platforms::commit_if_needed(self, added_rich)?;
         self.rewrite_workspace_platforms_toml()
     }
 
@@ -531,12 +538,18 @@ impl WorkspaceManifestMut<'_> {
                 )
             })?;
 
+        // Track the poor→rich transition before mutating; that's the only
+        // shape of edit that introduces new richness and so the only one that
+        // should trigger the legacy-syntax migration.
+        let was_subdir = updated.is_subdir_platform();
         updated.apply_edit(edit).map_err(|e| miette!(e))?;
+        let poor_to_rich = was_subdir && !updated.is_subdir_platform();
 
         // IndexSet::replace preserves the position of the existing entry; we
         // rely on this so the on-disk ordering stays stable across edits.
         self.workspace.workspace.platforms.replace(updated);
 
+        migrate_to_rich_platforms::commit_if_needed(self, poor_to_rich)?;
         self.rewrite_workspace_platforms_toml()
     }
 
@@ -1159,6 +1172,70 @@ pub enum RemoveDependencyError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Toml(#[from] TomlError),
+}
+
+/// One-shot migration from the legacy `[system-requirements]` shape to the
+/// per-platform-VPs shape. Lives in its own module so it's easy to delete
+/// once the legacy syntax is fully retired: drop the module, drop the
+/// `must_migrate` field on `Workspace`, drop the two call sites in
+/// `add_workspace_platforms` and `edit_workspace_platform`.
+mod migrate_to_rich_platforms {
+    use miette::miette;
+
+    use super::WorkspaceManifestMut;
+    use crate::FeatureName;
+
+    /// Persist the in-memory migration when `must_migrate` is set and the
+    /// edit produces a non-subdir platform: drop every `[system-requirements]`
+    /// table and rewrite each non-default feature's `platforms` array to the
+    /// synthesised names. Clears `must_migrate` afterwards.
+    pub(super) fn commit_if_needed(
+        manifest: &mut WorkspaceManifestMut<'_>,
+        edit_produces_rich: bool,
+    ) -> miette::Result<()> {
+        if !manifest.workspace.workspace.must_migrate || !edit_produces_rich {
+            return Ok(());
+        }
+
+        manifest
+            .document
+            .remove_system_requirements_section(None)
+            .map_err(|e| miette!(e))?;
+
+        let named_features: Vec<FeatureName> = manifest
+            .workspace
+            .features
+            .keys()
+            .filter(|name| !name.is_default())
+            .cloned()
+            .collect();
+        for feature_name in &named_features {
+            manifest
+                .document
+                .remove_system_requirements_section(Some(feature_name))
+                .map_err(|e| miette!(e))?;
+
+            let Some(in_memory) = manifest
+                .workspace
+                .features
+                .get(feature_name)
+                .and_then(|f| f.platforms.clone())
+            else {
+                continue;
+            };
+            let array = manifest
+                .document
+                .get_array_mut("platforms", feature_name)
+                .map_err(|e| miette!(e))?;
+            array.clear();
+            for platform_name in &in_memory {
+                array.push(platform_name.as_str());
+            }
+        }
+
+        manifest.workspace.workspace.must_migrate = false;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -4093,6 +4170,159 @@ exclude-newer = "2015-12-02T02:07:43Z"
             chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
                 .unwrap()
                 .with_timezone(&chrono::Utc)
+        );
+    }
+
+    #[test]
+    fn test_legacy_sysreqs_migration_commits_on_rich_add() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = ["linux-64"]
+
+            [system-requirements]
+            cuda = "12.0"
+
+            [feature.gpu]
+            platforms = ["linux-64"]
+            system-requirements = { cuda = "13.0" }
+            [environments]
+            gpu = ["gpu"]
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        // Initial in-memory state: migration ran in parse, must_migrate is set,
+        // document still has the legacy `[system-requirements]` tables.
+        assert!(workspace.manifest.workspace.must_migrate);
+        let initial = workspace.document.to_string();
+        assert!(initial.contains("[system-requirements]"));
+        // Inline form on the feature: `system-requirements = { ... }`.
+        assert!(initial.contains("system-requirements ="));
+
+        let mut editable = workspace.editable();
+        let rich = PixiPlatform::new(
+            PixiPlatformName::try_from("gpu-12-4").unwrap(),
+            Platform::Linux64,
+            vec![rattler_conda_types::GenericVirtualPackage {
+                name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
+                version: Version::from_str("12.4").unwrap(),
+                build_string: String::new(),
+            }],
+        );
+        editable
+            .add_platforms([&rich], &FeatureName::DEFAULT)
+            .unwrap();
+
+        // Flag clears, legacy tables are gone, feature platforms point at the
+        // synthesised names instead of the bare subdir.
+        assert!(!editable.workspace.workspace.must_migrate);
+        let after = editable.document.to_string();
+        assert!(
+            !after.contains("[system-requirements]"),
+            "workspace-level sysreqs should be gone:\n{after}",
+        );
+        assert!(
+            !after.contains("system-requirements"),
+            "feature-level sysreqs should be gone too:\n{after}",
+        );
+        let gpu_platforms = editable
+            .workspace
+            .feature(&FeatureName::from("gpu"))
+            .unwrap()
+            .platforms
+            .clone()
+            .unwrap();
+        assert!(
+            gpu_platforms
+                .iter()
+                .all(|p| p.as_str().starts_with("linux-64-cuda")),
+            "feature.gpu's platforms should be the synthesised names, got: {gpu_platforms:?}",
+        );
+    }
+
+    #[test]
+    fn test_legacy_sysreqs_migration_skipped_for_subdir_only_add() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = ["linux-64"]
+
+            [system-requirements]
+            cuda = "12.0"
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(workspace.manifest.workspace.must_migrate);
+
+        let mut editable = workspace.editable();
+        editable
+            .add_platforms(
+                [PixiPlatform::from_subdir(Platform::Osx64)].iter(),
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        // Subdir-only add: legacy syntax stays put, flag still set so a later
+        // rich add will trigger the migration.
+        assert!(editable.workspace.workspace.must_migrate);
+        let after = editable.document.to_string();
+        assert!(after.contains("[system-requirements]"));
+    }
+
+    #[test]
+    fn test_legacy_sysreqs_migration_skipped_for_edit_of_existing_rich_platform() {
+        // The parse-time shim synthesises a rich platform from the legacy
+        // `[system-requirements]` table. Editing that synthesised platform
+        // must not rewrite the manifest: nothing new became rich.
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = ["linux-64"]
+
+            [system-requirements]
+            cuda = "12.0"
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(workspace.manifest.workspace.must_migrate);
+        let synthesised = workspace
+            .manifest
+            .workspace
+            .platforms
+            .iter()
+            .find(|p| !p.is_subdir_platform())
+            .expect("legacy sysreqs should have produced a synthesised rich platform")
+            .name()
+            .clone();
+
+        let mut editable = workspace.editable();
+        editable
+            .edit_workspace_platform(
+                &synthesised,
+                PlatformEdit {
+                    insert_or_update_virtual_packages: vec![
+                        rattler_conda_types::GenericVirtualPackage {
+                            name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
+                            version: Version::from_str("12.5").unwrap(),
+                            build_string: String::new(),
+                        },
+                    ],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        // Edit of an existing rich platform must not trigger the migration:
+        // legacy tables stay put and the flag remains set for a future rich
+        // add.
+        assert!(editable.workspace.workspace.must_migrate);
+        let after = editable.document.to_string();
+        assert!(
+            after.contains("[system-requirements]"),
+            "legacy sysreqs should stay on disk after editing an already-rich platform:\n{after}",
         );
     }
 }

@@ -107,6 +107,12 @@ pub struct Workspace {
     /// Absolute directory of the workspace manifest. Used to re-base relative
     /// path specs in `dependencies` for members in other directories.
     pub root_directory: PathBuf,
+
+    /// Set during parsing when the source pixi.toml uses the legacy
+    /// `[system-requirements]` shape on top of subdir-only platforms. The
+    /// next add/edit operation that produces a non-subdir platform persists
+    /// the in-memory migration to disk so the file moves to the new syntax.
+    pub must_migrate: bool,
 }
 
 impl Workspace {
