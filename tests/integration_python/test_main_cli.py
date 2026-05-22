@@ -1220,13 +1220,6 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
-                    "system_requirements": {
-                        "macos": None,
-                        "linux": None,
-                        "cuda": None,
-                        "libc": None,
-                        "archspec": None,
-                    },
                 },
                 {
                     "name": "py312",
@@ -1239,13 +1232,6 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
-                    "system_requirements": {
-                        "macos": None,
-                        "linux": None,
-                        "cuda": None,
-                        "libc": None,
-                        "archspec": None,
-                    },
                 },
             ],
             "config_locations": IsAnyList,

@@ -8,8 +8,8 @@ use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_global::{BinDir, EnvRoot};
-use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName, SystemRequirements};
-use pixi_manifest::{FeaturesExt, HasFeaturesIter};
+use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName};
+use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasWorkspaceManifest};
 use pixi_progress::await_in_progress;
 use pixi_task::TaskName;
 use pixi_utils::reqwest::tls_backend;
@@ -19,7 +19,6 @@ use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
 use serde_with::{DisplayFromStr, serde_as};
 use tokio::task::spawn_blocking;
-use toml_edit::ser::to_string;
 
 use crate::cli_config::WorkspaceConfig;
 
@@ -53,6 +52,38 @@ pub struct WorkspaceInfo {
 }
 
 #[derive(Serialize)]
+pub struct PlatformInfo {
+    name: PixiPlatformName,
+    subdir: String,
+    virtual_packages: Vec<String>,
+}
+
+impl From<&pixi_manifest::PixiPlatform> for PlatformInfo {
+    fn from(platform: &pixi_manifest::PixiPlatform) -> Self {
+        Self {
+            name: platform.name().clone(),
+            subdir: platform.subdir().to_string(),
+            virtual_packages: platform
+                .declared_virtual_packages()
+                .iter()
+                .map(|gvp| gvp.to_string())
+                .collect(),
+        }
+    }
+}
+
+/// Human-readable representation of a platform entry in the `pixi info`
+/// output: bare name when it carries no declared VPs, otherwise
+/// `<name> (vp1, vp2, ...)`.
+fn format_platform(info: &PlatformInfo) -> String {
+    if info.virtual_packages.is_empty() {
+        info.name.to_string()
+    } else {
+        format!("{} ({})", info.name, info.virtual_packages.join(", "))
+    }
+}
+
+#[derive(Serialize)]
 pub struct EnvironmentInfo {
     name: EnvironmentName,
     features: Vec<FeatureName>,
@@ -60,11 +91,10 @@ pub struct EnvironmentInfo {
     environment_size: Option<String>,
     dependencies: Vec<String>,
     pypi_dependencies: Vec<String>,
-    platforms: Vec<PixiPlatformName>,
+    platforms: Vec<PlatformInfo>,
     tasks: Vec<TaskName>,
     channels: Vec<String>,
     prefix: PathBuf,
-    system_requirements: SystemRequirements,
 }
 
 impl Display for EnvironmentInfo {
@@ -136,7 +166,7 @@ impl Display for EnvironmentInfo {
         }
 
         if !self.platforms.is_empty() {
-            let platform_list = self.platforms.iter().map(|p| p.to_string()).format(", ");
+            let platform_list = self.platforms.iter().map(format_platform).format(", ");
             writeln!(
                 f,
                 "{:>WIDTH$}: {}",
@@ -151,27 +181,6 @@ impl Display for EnvironmentInfo {
             bold.apply_to("Prefix location"),
             self.prefix.display()
         )?;
-
-        if !self.system_requirements.is_empty() {
-            let serialized = to_string(&self.system_requirements)
-                .expect("it should always be possible to convert system requirements to a string");
-            let indented = serialized
-                .lines()
-                .enumerate()
-                .map(|(i, line)| {
-                    if i == 0 {
-                        // First line includes the label
-                        format!("{:>WIDTH$}: {}", bold.apply_to("System requirements"), line)
-                    } else {
-                        // Subsequent lines are indented to align
-                        format!("{:>WIDTH$}  {}", "", line)
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-
-            writeln!(f, "{indented}")?;
-        }
 
         if !self.tasks.is_empty() {
             let tasks_list = self
@@ -452,8 +461,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             .into_iter()
                             .map(|(name, _p)| name.as_source().to_string())
                             .collect(),
-                        platforms: env.platforms().into_iter().collect(),
-                        system_requirements: env.system_requirements().clone(),
+                        platforms: env
+                            .platforms()
+                            .iter()
+                            .filter_map(|name| {
+                                env.workspace_manifest()
+                                    .workspace
+                                    .platform_by_name(name)
+                                    .map(PlatformInfo::from)
+                            })
+                            .collect(),
                         channels: env.channels().into_iter().map(|c| c.to_string()).collect(),
                         prefix: env.dir(),
                         tasks,
