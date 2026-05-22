@@ -150,6 +150,14 @@ impl From<UrlSourceSpec> for UrlSpec {
     }
 }
 
+impl UrlSourceSpec {
+    /// Returns true if the URL points to a binary conda archive
+    /// (`.conda`/`.tar.bz2`).
+    pub fn is_binary(&self) -> bool {
+        CondaArchiveIdentifier::try_from_url(&self.url).is_some()
+    }
+}
+
 /// A specification of a source archive from a URL.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct UrlBinarySpec {

@@ -313,7 +313,7 @@ impl PixiSpec {
             PixiSpec::DetailedVersion(spec) => {
                 Some(spec.try_into_nameless_match_spec(channel_config)?)
             }
-            PixiSpec::Source(source) => match source.location.clone() {
+            PixiSpec::Source(source) => match source.location {
                 SourceLocationSpec::Url(url) => {
                     UrlSpec::from(url).try_into_nameless_match_spec().ok()
                 }
@@ -336,23 +336,20 @@ impl PixiSpec {
             }
             PixiSpec::Source(source) => {
                 let source = *source;
-                match &source.location {
-                    SourceLocationSpec::Url(url) => {
-                        let url_spec = UrlSpec::from(url.clone());
-                        match url_spec.into_source_or_binary() {
-                            Either::Left(_) => Either::Left(source),
-                            Either::Right(binary) => Either::Right(BinarySpec::Url(binary)),
-                        }
-                    }
-                    SourceLocationSpec::Git(_) => Either::Left(source),
+                if !source.is_binary() {
+                    return Either::Left(source);
+                }
+                match source.location {
+                    SourceLocationSpec::Url(url) => Either::Right(BinarySpec::Url(UrlBinarySpec {
+                        url: url.url,
+                        md5: url.md5,
+                        sha256: url.sha256,
+                    })),
                     SourceLocationSpec::Path(path) => {
-                        let path_spec = PathSpec {
-                            path: path.path.clone(),
-                        };
-                        match path_spec.into_source_or_binary() {
-                            Either::Left(_) => Either::Left(source),
-                            Either::Right(binary) => Either::Right(BinarySpec::Path(binary)),
-                        }
+                        Either::Right(BinarySpec::Path(PathBinarySpec { path: path.path }))
+                    }
+                    SourceLocationSpec::Git(_) => {
+                        unreachable!("git locations are never binary")
                     }
                 }
             }
@@ -365,19 +362,10 @@ impl PixiSpec {
     pub fn try_into_source_spec(self) -> Result<SourceSpec, Self> {
         match self {
             PixiSpec::Source(source) => {
-                let source = *source;
-                let is_source = match &source.location {
-                    SourceLocationSpec::Url(url) => !UrlSpec::from(url.clone()).is_binary(),
-                    SourceLocationSpec::Git(_) => true,
-                    SourceLocationSpec::Path(path) => !PathSpec {
-                        path: path.path.clone(),
-                    }
-                    .is_binary(),
-                };
-                if is_source {
-                    Ok(source)
+                if source.is_binary() {
+                    Err(PixiSpec::Source(source))
                 } else {
-                    Err(PixiSpec::Source(Box::new(source)))
+                    Ok(*source)
                 }
             }
             _ => Err(self),
@@ -668,6 +656,18 @@ impl SourceLocationSpec {
             _ => None,
         }
     }
+
+    /// Returns true if the underlying location resolves to a binary archive.
+    ///
+    /// Git locations are always source. Path and URL locations are inspected
+    /// for known conda archive extensions.
+    pub fn is_binary(&self) -> bool {
+        match self {
+            SourceLocationSpec::Url(url) => url.is_binary(),
+            SourceLocationSpec::Git(_) => false,
+            SourceLocationSpec::Path(path) => path.is_binary(),
+        }
+    }
 }
 
 impl SourceSpec {
@@ -676,25 +676,12 @@ impl SourceSpec {
     /// Git locations are always source. Path and URL locations are inspected
     /// for known conda archive extensions.
     pub fn is_binary(&self) -> bool {
-        match &self.location {
-            SourceLocationSpec::Url(url) => UrlSpec::from(url.clone()).is_binary(),
-            SourceLocationSpec::Git(_) => false,
-            SourceLocationSpec::Path(path) => PathSpec {
-                path: path.path.clone(),
-            }
-            .is_binary(),
-        }
+        self.location.is_binary()
     }
 
     /// Returns true if the underlying location is a local source path.
     pub fn is_mutable(&self) -> bool {
-        match &self.location {
-            SourceLocationSpec::Url(_) | SourceLocationSpec::Git(_) => false,
-            SourceLocationSpec::Path(path) => !PathSpec {
-                path: path.path.clone(),
-            }
-            .is_binary(),
-        }
+        matches!(&self.location, SourceLocationSpec::Path(path) if !path.is_binary())
     }
 }
 

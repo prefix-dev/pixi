@@ -147,6 +147,12 @@ impl PathSourceSpec {
     pub fn resolve(&self, root_dir: impl AsRef<Path>) -> Result<PathBuf, SpecConversionError> {
         resolve_path(Path::new(self.path.as_str()), root_dir)
     }
+
+    /// Returns true if this path points to a binary archive (e.g.
+    /// `.conda`/`.tar.bz2`).
+    pub fn is_binary(&self) -> bool {
+        CondaArchiveType::try_from(Path::new(self.path.as_str())).is_some()
+    }
 }
 
 /// Path to a source package. Different from [`PathSpec`] in that this type only
