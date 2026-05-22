@@ -135,20 +135,20 @@ With the package(s) added to the workspace, you can now build them.
 
 ```bash
 cd src/my_python_ros_pkg
-pixi build
+pixi publish --target-dir ../../output
 # then
 cd ../my_cmake_ros_pkg
-pixi build
+pixi publish --target-dir ../../output
 ```
 
-You can now upload these artifacts to a conda channel and depend on them from other Pixi workspaces.
+You can also publish directly to a channel with `pixi publish --target-channel <URL>`; the local `--target-dir` form simply collects the artifacts so you can depend on them from other Pixi workspaces.
 
 ## Tips and gotchas
 
 - ROS distro and platform: pick the correct RoboStack channel (e.g. `robostack-humble`, `robostack-jazzy`) and ensure your platform is supported.
 - Keep `package.xml` accurate: name, version, license, maintainers, URLs, and dependencies are read automatically; but you can override them in the [pixi manifest](https://pixi.sh/latest/reference/pixi_manifest/#the-package-section).
 - Backend docs: see the [pixi-build-ros documentation](backends/pixi-build-ros.md) for configuration details like `env`, `distro` and `extra-input-globs`.
-- Colcon vs pixi build: you don’t need `colcon` when using `pixi`; the backend invokes the right build flow. But since you don't have to change your package structure, you can still use `colcon` if you want.
+- Colcon vs `pixi publish`: you don’t need `colcon` when using `pixi`; the backend invokes the right build flow. But since you don't have to change your package structure, you can still use `colcon` if you want.
 - Not all ROS packages are available in RoboStack. If you depend on a package not in RoboStack, you can:
   - **Recommended:** Contribute to RoboStack to add it; see the [RoboStack Contributing page](https://robostack.github.io/Contributing.html)
   - Package it yourself with Pixi in a separate workspace and upload it to your own conda channel.

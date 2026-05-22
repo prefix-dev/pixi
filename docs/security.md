@@ -160,7 +160,7 @@ For more background on Sigstore attestations in the conda ecosystem, see the [Ra
 For example:
 
 ```bash
-pixi publish https://prefix.dev/<channel-name> --generate-attestation
+pixi publish --target-channel https://prefix.dev/<channel-name> --generate-attestation
 ```
 
 When using the lower-level upload command for prefix.dev, Pixi can also upload an existing attestation or generate one during CI:

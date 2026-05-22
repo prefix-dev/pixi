@@ -261,9 +261,11 @@ fn create_tags(
         implementation_name,
         // TODO: This might not be entirely correct..
         python_version,
-        true,
-        gil_disabled,
-        false,
+        uv_platform_tags::TagsOptions {
+            manylinux_compatible: true,
+            gil_disabled,
+            ..Default::default()
+        },
     )
     .map_err(PyPITagError::FailedToDetermineWheelTags)
 }

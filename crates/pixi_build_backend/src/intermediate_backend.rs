@@ -791,8 +791,14 @@ where
                 timestamp: chrono::Utc::now(),
                 subpackages: BTreeMap::new(),
                 packaging_settings: PackagingSettings::from_args(
-                    CondaArchiveType::Conda,
-                    CompressionLevel::default(),
+                    params
+                        .package_format
+                        .map(|pf| pf.archive_type)
+                        .unwrap_or(CondaArchiveType::Conda),
+                    params
+                        .package_format
+                        .map(|pf| CompressionLevel::from(pf.compression_level))
+                        .unwrap_or_default(),
                 ),
                 store_recipe: false,
                 force_colors: true,

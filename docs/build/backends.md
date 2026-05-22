@@ -49,7 +49,7 @@ For example: `pixi-build-cmake=/path/to/bin,pixi-build-python` will:
 
 ### Rebuilding Generated Recipes
 
-When you build a package using `pixi build`, the build backends generate a complete rattler-build recipe that is stored in your project's build directory. This can be useful for debugging build issues or understanding exactly how your package is being built.
+When you build a package (for example via `pixi publish`), the build backends generate a complete rattler-build recipe that is stored in your project's build directory. This can be useful for debugging build issues or understanding exactly how your package is being built.
 
 ### Recipe Locations
 

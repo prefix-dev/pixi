@@ -63,6 +63,7 @@ impl PackageSpec for pbt::PackageSpec {
                     sha256,
                     url,
                     license,
+                    condition,
                 } = spec;
 
                 version == &Some(rattler_conda_types::VersionSpec::Any)
@@ -75,6 +76,7 @@ impl PackageSpec for pbt::PackageSpec {
                     && sha256.is_none()
                     && url.is_none()
                     && license.is_none()
+                    && condition.is_none()
             }
             _ => false,
         }
@@ -131,7 +133,7 @@ impl BinarySpecExt for pbt::BinaryPackageSpec {
             license: self.license.clone(),
             extras: None,
             namespace: None,
-            condition: None,
+            condition: self.condition.clone(),
             track_features: None,
             flags: None,
             license_family: None,
@@ -166,6 +168,7 @@ mod tests {
             sha256: None,
             url: None,
             license: None,
+            condition: None,
         };
 
         let package_spec = pbt::PackageSpec::Binary(binary_spec);
@@ -199,6 +202,7 @@ mod tests {
             sha256: None,
             url: None,
             license: None,
+            condition: None,
         };
 
         let package_spec = pbt::PackageSpec::Binary(binary_spec);
@@ -230,6 +234,7 @@ mod tests {
             sha256: None,
             url: None,
             license: None,
+            condition: None,
         };
 
         let package_spec = pbt::PackageSpec::Binary(binary_spec);

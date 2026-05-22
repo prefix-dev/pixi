@@ -172,6 +172,24 @@ impl InMemoryBackend for PassthroughBackend {
                 }
                 modified_index_json.license = self.project_model.license.clone();
 
+                // Reflect the run-dependencies and run-constraints that
+                // the frontend resolved (including run-exports propagated
+                // from build / host envs) into the package's index.json
+                // so that consumers inspecting the built `.conda` see the
+                // expected `depends` / `constrains` arrays.
+                if let Some(run_dependencies) = &params.run_dependencies {
+                    modified_index_json.depends = run_dependencies
+                        .iter()
+                        .map(|dep| dep.spec.to_string())
+                        .collect();
+                }
+                if let Some(run_constraints) = &params.run_constraints {
+                    modified_index_json.constrains = run_constraints
+                        .iter()
+                        .map(|dep| dep.spec.to_string())
+                        .collect();
+                }
+
                 create_conda_package_on_the_fly(&modified_index_json, &output_path).map_err(
                     |err| {
                         Box::new(
@@ -405,6 +423,7 @@ fn is_star_requirement(spec: &PackageSpec) -> bool {
             sha256: None,
             url: None,
             license: None,
+            condition: None,
         } => version
             .as_ref()
             .is_none_or(|v| matches!(v, VersionSpec::Any)),
