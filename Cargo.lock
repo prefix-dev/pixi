@@ -6150,6 +6150,7 @@ dependencies = [
  "pathdiff",
  "pixi_build_backend",
  "pixi_build_types",
+ "pixi_glob",
  "rattler_build_jinja",
  "rattler_build_recipe",
  "rattler_build_types",

@@ -489,10 +489,7 @@ mod tests {
 
         // variants.yaml in source_dir should appear in input_globs
         assert!(
-            loaded
-                .input_globs
-                .iter()
-                .any(|g| g == VARIANTS_CONFIG_FILE),
+            loaded.input_globs.iter().any(|g| g == VARIANTS_CONFIG_FILE),
             "input_globs should contain {VARIANTS_CONFIG_FILE} but was: {:?}",
             loaded.input_globs
         );
@@ -524,10 +521,7 @@ mod tests {
         // second block should NOT fire (recipe_path_parent == source_dir).
         // The glob should still be present from the first block.
         assert!(
-            loaded
-                .input_globs
-                .iter()
-                .any(|g| g == VARIANTS_CONFIG_FILE),
+            loaded.input_globs.iter().any(|g| g == VARIANTS_CONFIG_FILE),
             "input_globs should contain {VARIANTS_CONFIG_FILE} but was: {:?}",
             loaded.input_globs
         );

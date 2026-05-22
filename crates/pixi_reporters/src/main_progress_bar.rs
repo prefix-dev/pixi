@@ -226,7 +226,11 @@ impl<T: Tracker> State<T> {
                 match (first_queued, queued_items.len()) {
                     (Some(first), 1) => format!("queued: {}", first.tracker.name()),
                     (Some(first), _) => {
-                        format!("queued: {} (+{})", first.tracker.name(), queued_items.len() - 1)
+                        format!(
+                            "queued: {} (+{})",
+                            first.tracker.name(),
+                            queued_items.len() - 1
+                        )
                     }
                     (None, _) => String::new(),
                 }

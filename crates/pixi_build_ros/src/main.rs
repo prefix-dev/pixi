@@ -58,6 +58,7 @@ impl GenerateRecipe for RosGenerator {
         _cache_dir: Option<PathBuf>,
         workspace_scratch_directory: Option<PathBuf>,
         workspace_directory: Option<PathBuf>,
+        checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root
         let manifest_root = if manifest_path.is_file() {
@@ -131,13 +132,13 @@ impl GenerateRecipe for RosGenerator {
             package_mapping_files,
         )?;
 
-        // `parse_and_render` already populated `metadata_input_globs` with the
-        // provider's anchored package-local patterns (`setup.py`,
-        // `CMakeLists.txt`, ...). Lift them out for now and re-append after
-        // discovery so they sit *after* discovery's broad `!<dir>/**`
-        // exclusions; pixi's last-match-wins matcher then leaves them
-        // intact.
-        let provider_globs = std::mem::take(&mut generated_recipe.metadata_input_globs);
+        // `parse_and_render` already populated `metadata_input_globs` with
+        // the provider's anchored package-local patterns (`setup.py`,
+        // `CMakeLists.txt`, ...).  Workspace-discovery globs (the
+        // `../**/package.xml` / `**/COLCON_IGNORE` family and the
+        // `!**/.*/**` hidden-folder exclusion) are no longer emitted on
+        // the flat list: they're carried by `metadata_input_glob_sets`
+        // with marker semantics that the flat form can't express.
 
         // Load package mappings
         let robostack_yaml: &str = include_str!("../robostack.yaml");
@@ -161,19 +162,27 @@ impl GenerateRecipe for RosGenerator {
         // package.xml deps that match a sibling into source dependencies, so
         // pixi resolves them against the sibling directory instead of looking
         // them up as a binary through RoboStack.
-        if let Some(workspace_root) = workspace_directory.as_deref()
+        //
+        // Prefer `checkout_root` (set by newer pixi versions) when available
+        // because it correctly resolves to the git/url checkout root for
+        // remote source dependencies — `workspace_directory` for those
+        // cases points at the package's subdirectory and would miss every
+        // sibling.  For path sources the two values agree.  Older pixi
+        // versions don't send `checkout_root`; fall back to
+        // `workspace_directory` so this backend keeps working there.
+        let discovery_root = checkout_root.as_deref().or(workspace_directory.as_deref());
+        if let Some(workspace_root) = discovery_root
             && !config.ignore_workspace_sources
         {
             let discovery = workspace_discovery::discover_ros_packages(workspace_root)?;
 
-            for glob in &discovery.input_globs {
-                let rewritten = workspace_discovery::rewrite_glob_for_manifest_root(
-                    glob,
-                    workspace_root,
-                    &manifest_root,
-                );
-                generated_recipe.metadata_input_globs.push(rewritten);
-            }
+            // Emit the structured form.  Pointing `root` at the workspace
+            // lets pixi walk from there directly without ascending via
+            // `../..` patterns; the marker semantics handle pruning at
+            // `COLCON_IGNORE` / `AMENT_IGNORE` / `CATKIN_IGNORE`.
+            let mut structured = discovery.input_glob_set;
+            structured.root = Some(workspace_root.to_path_buf());
+            generated_recipe.metadata_input_glob_sets.push(structured);
 
             let sibling_specs = workspace_discovery::sibling_source_spec_map(
                 &discovery.packages,
@@ -211,11 +220,19 @@ impl GenerateRecipe for RosGenerator {
             );
         }
 
-        // Re-append the provider globs at the very end of the list so they
-        // sit after any discovery exclusions and aren't suppressed by them.
-        generated_recipe
-            .metadata_input_globs
-            .extend(provider_globs);
+        // Mirror the provider's package-local literals (`setup.py`,
+        // `CMakeLists.txt`, ...) into the structured list as a second
+        // group rooted at the package manifest (the consumer's default).
+        if !generated_recipe.metadata_input_globs.is_empty() {
+            generated_recipe
+                .metadata_input_glob_sets
+                .push(pixi_build_types::InputGlobSet {
+                    patterns: generated_recipe.metadata_input_globs.clone(),
+                    markers: Vec::new(),
+                    exclude_hidden: true,
+                    root: None,
+                });
+        }
 
         // Add standard build dependencies
         let mut build_deps: Vec<&str> = vec![
@@ -525,6 +542,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -655,6 +673,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe")
@@ -743,6 +762,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
                 None,
@@ -973,6 +993,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe with explicit package.xml path");
@@ -1009,6 +1030,7 @@ mod tests {
                 vec![ChannelUrl::from(
                     url::Url::parse("https://prefix.dev/robostack-jazzy").unwrap(),
                 )],
+                None,
                 None,
                 None,
                 None,
@@ -1060,6 +1082,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("Explicit distro should override channel");
@@ -1104,6 +1127,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await;
 
@@ -1139,6 +1163,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
                 None,
@@ -1265,7 +1290,7 @@ mod tests {
     }
 
     fn write_minimal_package_xml(dir: &std::path::Path, name: &str, deps: &[&str]) {
-        std::fs::create_dir_all(dir).unwrap();
+        fs::create_dir_all(dir).unwrap();
         let depend_tags: String = deps
             .iter()
             .map(|d| format!("  <depend>{d}</depend>\n"))
@@ -1282,7 +1307,7 @@ mod tests {
 {depend_tags}</package>
 "#
         );
-        std::fs::write(dir.join("package.xml"), xml).unwrap();
+        fs::write(dir.join("package.xml"), xml).unwrap();
     }
 
     /// Returns the first concrete item whose package name equals `conda_name`.
@@ -1306,7 +1331,11 @@ mod tests {
         let workspace = tempfile::tempdir().unwrap();
         let workspace_root = workspace.path();
 
-        write_minimal_package_xml(&workspace_root.join("src").join("pkg_a"), "pkg_a", &["pkg_b"]);
+        write_minimal_package_xml(
+            &workspace_root.join("src").join("pkg_a"),
+            "pkg_a",
+            &["pkg_b"],
+        );
         write_minimal_package_xml(&workspace_root.join("src").join("pkg_b"), "pkg_b", &[]);
 
         let pkg_a_manifest = workspace_root.join("src").join("pkg_a");
@@ -1329,6 +1358,7 @@ mod tests {
                 None,
                 None,
                 Some(workspace_root.to_path_buf()),
+                None,
             )
             .await
             .expect("generate_recipe should succeed");
@@ -1341,9 +1371,8 @@ mod tests {
             "expected ros-jazzy-pkg-b to be a source dep, got: {sibling_in_build}"
         );
 
-        let sibling_in_run =
-            find_concrete(&generated.recipe.requirements.run, "ros-jazzy-pkg-b")
-                .expect("sibling should also appear in run requirements");
+        let sibling_in_run = find_concrete(&generated.recipe.requirements.run, "ros-jazzy-pkg-b")
+            .expect("sibling should also appear in run requirements");
         assert!(
             sibling_in_run.0.url.is_some(),
             "expected ros-jazzy-pkg-b in run to be source, got: {sibling_in_run}"
@@ -1376,6 +1405,7 @@ mod tests {
                 None,
                 None,
                 Some(workspace_root.to_path_buf()),
+                None,
             )
             .await
             .expect("generate_recipe should succeed");
@@ -1424,6 +1454,7 @@ mod tests {
                 None,
                 None,
                 Some(workspace_root.to_path_buf()),
+                None,
             )
             .await
             .expect("generate_recipe should succeed");
@@ -1448,8 +1479,8 @@ mod tests {
         let workspace = tempfile::tempdir().unwrap();
         let workspace_root = workspace.path();
         write_minimal_package_xml(&workspace_root.join("src").join("pkg_a"), "pkg_a", &[]);
-        std::fs::create_dir_all(workspace_root.join("build")).unwrap();
-        std::fs::write(workspace_root.join("build").join("COLCON_IGNORE"), b"").unwrap();
+        fs::create_dir_all(workspace_root.join("build")).unwrap();
+        fs::write(workspace_root.join("build").join("COLCON_IGNORE"), b"").unwrap();
 
         let model = project_fixture!({ "targets": { "defaultTarget": {} } });
         let config = RosBackendConfig {
@@ -1469,41 +1500,38 @@ mod tests {
                 None,
                 None,
                 Some(workspace_root.to_path_buf()),
+                None,
             )
             .await
             .expect("generate_recipe should succeed");
 
-        // From src/pkg_a the workspace_root is two levels up; the rewritten
-        // globs should carry that `../..` prefix.
-        let all: Vec<String> = generated.metadata_input_globs.iter().cloned().collect();
+        // The flat `metadata_input_globs` carries only the provider's
+        // anchored package-local literals.  Workspace discovery patterns
+        // are now expressed structurally via `metadata_input_glob_sets`.
+        let flat: Vec<String> = generated.metadata_input_globs.to_vec();
         assert!(
-            all.iter().any(|g| g.ends_with("/**/package.xml")),
-            "expected a workspace-rooted package.xml include, got: {all:?}"
+            flat.iter().any(|g| g == "package.xml"),
+            "expected provider glob 'package.xml' in flat list, got: {flat:?}"
         );
         assert!(
-            all.iter().any(|g| g.ends_with("/**/COLCON_IGNORE")),
-            "expected a workspace-rooted COLCON_IGNORE include, got: {all:?}"
+            !flat.iter().any(|g| g.contains("COLCON_IGNORE")),
+            "workspace discovery patterns should not appear in flat list, got: {flat:?}"
         );
         assert!(
-            all.iter().any(|g| g.starts_with("!") && g.contains("/build/**")),
-            "expected an exclusion glob for the pruned build/ directory, got: {all:?}"
+            !flat
+                .iter()
+                .any(|g| g == "!**/.*/**" || g.ends_with("/!**/.*/**")),
+            "hidden-folder exclusion should not appear in flat list, got: {flat:?}"
         );
 
-        // Provider globs (anchored package-local manifests) must sit AFTER
-        // the discovery exclusions so last-match-wins doesn't let a broad
-        // !<dir>/** cancel them. Concretely: the index of "package.xml" must
-        // be greater than the index of any "!.../**" exclusion.
-        let provider_pos = all
-            .iter()
-            .position(|g| g == "package.xml")
-            .expect("provider glob package.xml should be present");
-        let last_excl_pos = all
-            .iter()
-            .rposition(|g| g.starts_with('!'))
-            .expect("at least one discovery exclusion should be present");
+        // The structured list carries the workspace discovery (with markers)
+        // plus a second group for the provider literals.
+        let groups = &generated.metadata_input_glob_sets;
         assert!(
-            provider_pos > last_excl_pos,
-            "provider globs must come after discovery exclusions; got at {provider_pos} vs last excl at {last_excl_pos}: {all:?}"
+            groups
+                .iter()
+                .any(|g| g.markers.iter().any(|m| m == "COLCON_IGNORE")),
+            "expected a structured group with COLCON_IGNORE as a marker, got: {groups:?}"
         );
     }
 
@@ -1515,7 +1543,7 @@ mod tests {
         // pkg_b is buried under a COLCON_IGNORE'd directory, so discovery should
         // skip it and the recipe must fall back to RoboStack (binary).
         write_minimal_package_xml(&workspace_root.join("vendor").join("pkg_b"), "pkg_b", &[]);
-        std::fs::write(workspace_root.join("vendor").join("COLCON_IGNORE"), b"").unwrap();
+        fs::write(workspace_root.join("vendor").join("COLCON_IGNORE"), b"").unwrap();
 
         let model = project_fixture!({ "targets": { "defaultTarget": {} } });
         let config = RosBackendConfig {
@@ -1535,6 +1563,7 @@ mod tests {
                 None,
                 None,
                 Some(workspace_root.to_path_buf()),
+                None,
             )
             .await
             .expect("generate_recipe should succeed");
@@ -1571,6 +1600,7 @@ mod tests {
                 None,
                 None,
                 Some(workspace_root.to_path_buf()),
+                None,
             )
             .await
             .expect("generate_recipe should succeed");

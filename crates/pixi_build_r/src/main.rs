@@ -77,6 +77,7 @@ impl GenerateRecipe for RGenerator {
         _cache_dir: Option<PathBuf>,
         _workspace_scratch_directory: Option<PathBuf>,
         _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root
         let manifest_root = if manifest_path.is_file() {
@@ -351,6 +352,7 @@ LinkingTo: Rcpp
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -412,6 +414,7 @@ LinkingTo: Rcpp
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
                 None,
@@ -509,6 +512,7 @@ Imports:
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
                 None,
@@ -618,6 +622,7 @@ Imports:
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
                 None,

@@ -61,6 +61,7 @@ impl GenerateRecipe for CMakeGenerator {
         _cache_dir: Option<PathBuf>,
         _workspace_scratch_directory: Option<PathBuf>,
         _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root, because `manifest_path` can be
         // either a direct file path or a directory path.
@@ -271,6 +272,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -316,6 +318,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -353,6 +356,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
                 None,
                 None,
@@ -408,6 +412,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -432,6 +437,7 @@ mod tests {
         )
         .initialize(InitializeParams {
             workspace_directory: None,
+            checkout_root: None,
             source_directory: None,
             manifest_path: PathBuf::from("pixi.toml"),
             project_model: Some(project_model),
@@ -479,6 +485,7 @@ mod tests {
             )
             .initialize(InitializeParams {
                 workspace_directory: None,
+                checkout_root: None,
                 source_directory: None,
                 manifest_path: PathBuf::from("pixi.toml"),
                 project_model: Some(project_model.clone()),
@@ -633,6 +640,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -694,6 +702,7 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -742,6 +751,7 @@ mod tests {
                 None,
                 &HashSet::from_iter([NormalizedKey("c_stdlib".into())]),
                 vec![],
+                None,
                 None,
                 None,
                 None,

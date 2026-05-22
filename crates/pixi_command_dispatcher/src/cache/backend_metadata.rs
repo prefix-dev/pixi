@@ -195,6 +195,13 @@ pub struct BuildBackendMetadataCacheEntry {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub input_globs: Vec<String>,
 
+    /// Structured form of [`Self::input_globs`].  Populated when the
+    /// backend response carried `input_glob_sets`; pixi prefers this when
+    /// re-walking for new-file detection because it can express
+    /// marker-driven pruning that the flat list cannot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<pixi_build_types::InputGlobSet>>,
+
     /// Paths relative to the source checkout of files that were used to
     /// determine the metadata. This is the result of the matching the globs
     /// against the filesystem.

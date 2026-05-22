@@ -6,17 +6,14 @@
 //!
 //! This API was introduced in Pixi Build API version 1.
 
-use std::{
-    collections::BTreeMap,
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use ordermap::OrderSet;
 use rattler_conda_types::{ChannelUrl, NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{ConstraintSpec, PackageSpec, VariantValue, project_model::NamedSpec};
+use crate::{ConstraintSpec, InputGlobSet, PackageSpec, VariantValue, project_model::NamedSpec};
 
 pub const METHOD_NAME: &str = "conda/outputs";
 
@@ -77,6 +74,14 @@ pub struct CondaOutputsResult {
     /// which inherits the same semantics, so reordering would silently
     /// undo exclusions.
     pub input_globs: Vec<String>,
+
+    /// Optional structured description of the same inputs.  When present,
+    /// pixi uses this in preference to [`Self::input_globs`]; older clients
+    /// that don't recognise the field fall back to the flat list above.
+    /// Backends migrating to this field SHOULD populate both for
+    /// compatibility during the transition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<InputGlobSet>>,
 }
 
 #[serde_as]
@@ -120,6 +125,13 @@ pub struct CondaOutput {
     /// [`CondaOutputsResult::input_globs`] will be used. Order matters; see
     /// [`CondaOutputsResult::input_globs`].
     pub input_globs: Option<Vec<String>>,
+
+    /// Optional structured form for this output's inputs.  When present,
+    /// supersedes [`Self::input_globs`] for newer pixi clients; older
+    /// clients fall back to the flat list.  Backends migrating to this
+    /// field SHOULD populate both for compatibility during the transition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<InputGlobSet>>,
 }
 
 #[serde_as]

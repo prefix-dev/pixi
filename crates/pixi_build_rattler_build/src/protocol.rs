@@ -286,6 +286,7 @@ impl Protocol for RattlerBuildBackend {
 
                 // The input globs are the same for all outputs
                 input_globs: None,
+                input_glob_sets: None,
                 // TODO: Implement caching
             });
         }
@@ -299,6 +300,7 @@ impl Protocol for RattlerBuildBackend {
         Ok(CondaOutputsResult {
             outputs,
             input_globs,
+            input_glob_sets: None,
         })
     }
 
@@ -484,6 +486,7 @@ impl Protocol for RattlerBuildBackend {
                 extract_mutable_package_sources(&output),
                 self.config.extra_input_globs.clone(),
             )?,
+            input_glob_sets: None,
             name: output.name().as_normalized().to_string(),
             version: output.version().clone(),
             build: output.build_string().into_owned(),
@@ -723,6 +726,7 @@ mod tests {
                 let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
                     .initialize(InitializeParams {
                         workspace_directory: None,
+                        checkout_root: None,
                         source_directory: None,
                         manifest_path: recipe_path.to_path_buf(),
                         project_model: None,
@@ -789,6 +793,7 @@ mod tests {
         let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
             .initialize(InitializeParams {
                 workspace_directory: None,
+                checkout_root: None,
                 source_directory: None,
                 manifest_path: recipe_path,
                 project_model: None,
@@ -836,6 +841,7 @@ mod tests {
         let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
             .initialize(InitializeParams {
                 workspace_directory: None,
+                checkout_root: None,
                 source_directory: None,
                 manifest_path: recipe_path.clone(),
                 project_model: None,
@@ -902,6 +908,7 @@ numpy:
         let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
             .initialize(InitializeParams {
                 workspace_directory: None,
+                checkout_root: None,
                 source_directory: None,
                 manifest_path: recipe_path,
                 project_model: None,
@@ -976,6 +983,7 @@ numpy:
         let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
             .initialize(InitializeParams {
                 workspace_directory: None,
+                checkout_root: None,
                 source_directory: None,
                 manifest_path: recipe_path,
                 project_model: None,

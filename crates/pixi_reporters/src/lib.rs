@@ -8,11 +8,11 @@ pub mod uv_reporter;
 
 use std::{collections::HashMap, sync::Arc};
 
+use futures::stream::StreamExt;
 use git::GitCheckoutProgress;
 use indicatif::{MultiProgress, ProgressBar};
 use main_progress_bar::MainProgressBar;
 use parking_lot::Mutex;
-use futures::stream::StreamExt;
 use pixi_command_dispatcher::{
     BuildBackendMetadataInner, BuildBackendMetadataReporter, CommandDispatcherBuilder,
     InstallPixiEnvironmentSpec, PixiSolveEnvironmentSpec, SolveCondaEnvironmentSpec,

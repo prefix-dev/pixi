@@ -12,6 +12,8 @@ use std::str::FromStr;
 
 use fs_err as fs;
 use miette::Diagnostic;
+use pixi_build_types::InputGlobSet;
+use pixi_glob::GlobSet;
 use rattler_build_recipe::stage0::{ConditionalList, Item, SerializableMatchSpec, Value};
 use thiserror::Error;
 use url::Url;
@@ -19,6 +21,7 @@ use url::Url;
 use crate::package_map::item_package_name;
 use crate::package_xml::{PackageXml, PackageXmlError};
 
+const PACKAGE_XML: &str = "package.xml";
 const IGNORE_MARKERS: &[&str] = &["COLCON_IGNORE", "AMENT_IGNORE", "CATKIN_IGNORE"];
 
 /// Result of walking a workspace root for ROS packages.
@@ -27,22 +30,19 @@ pub struct WorkspaceDiscovery {
     /// Map from the `<name>` of each discovered package to the absolute path of
     /// its `package.xml`.
     pub packages: HashMap<String, PathBuf>,
-    /// Gitignore-style glob patterns relative to the workspace root.
-    ///
-    /// Layout is "includes first, then exclusions" so pixi's last-match-wins
-    /// matcher correctly cancels the discovery-include in pruned subtrees.
-    /// Callers that mix these globs with other patterns (for example a
-    /// metadata-provider's anchored `setup.py` or a user's `**/*.urdf`)
-    /// should append those other patterns *after* the list returned here, so
-    /// they aren't suppressed by the broad `!<dir>/**` exclusions.
-    pub input_globs: Vec<String>,
+    /// Structured glob description of the discovery, suitable for pixi's
+    /// metadata invalidation cache.  Pixi replays the same walk later
+    /// using the marker semantics carried here; we deliberately don't
+    /// emit a flat `Vec<String>` form because per-pruned-dir exclusions
+    /// (`!build/**`, `!log/**`, ...) and the hidden-folder exclusion
+    /// (`!**/.*/**`) can't be expressed losslessly without the markers
+    /// the structured form carries.
+    pub input_glob_set: InputGlobSet,
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum WorkspaceDiscoveryError {
-    #[error(
-        "duplicate ROS package name `{name}` declared by both:\n  - {first}\n  - {second}"
-    )]
+    #[error("duplicate ROS package name `{name}` declared by both:\n  - {first}\n  - {second}")]
     #[diagnostic(help(
         "Each ROS package in a workspace must have a unique <name> in its package.xml."
     ))]
@@ -52,11 +52,11 @@ pub enum WorkspaceDiscoveryError {
         second: PathBuf,
     },
 
-    #[error("failed to read directory entry under {path}")]
-    Io {
+    #[error("workspace walk failed at {path}")]
+    Walk {
         path: PathBuf,
         #[source]
-        source: std::io::Error,
+        source: Box<pixi_glob::GlobSetError>,
     },
 
     #[error("failed to read {path}")]
@@ -93,114 +93,72 @@ pub fn discover_ros_packages(
     let started = std::time::Instant::now();
 
     let mut packages: HashMap<String, PathBuf> = HashMap::new();
-    let mut pruned_dirs: Vec<PathBuf> = Vec::new();
 
     if workspace_root.is_dir() {
-        walk(workspace_root, workspace_root, &mut packages, &mut pruned_dirs)?;
+        let mut marker_filenames = Vec::with_capacity(IGNORE_MARKERS.len() + 1);
+        marker_filenames.push(PACKAGE_XML);
+        marker_filenames.extend(IGNORE_MARKERS.iter().copied());
+
+        // Hidden directories (`.git`, `.pixi`, `.vscode`, ...) are skipped
+        // by the walker; matches colcon's behaviour and avoids descending
+        // into the installed `.pixi/envs/.../share/...` tree whose
+        // `package.xml`s are not workspace siblings.
+        let matches = GlobSet::create([format!("**/{PACKAGE_XML}").as_str()])
+            .with_exclude_hidden(true)
+            .with_ignore_marker_filenames(marker_filenames)
+            .collect_matching(workspace_root)
+            .map_err(|source| WorkspaceDiscoveryError::Walk {
+                path: workspace_root.to_path_buf(),
+                source: Box::new(source),
+            })?;
+
+        for matched in matches {
+            let package_xml = matched.into_path();
+            let content = fs::read_to_string(&package_xml).map_err(|source| {
+                WorkspaceDiscoveryError::ReadFile {
+                    path: package_xml.clone(),
+                    source,
+                }
+            })?;
+            let parsed =
+                PackageXml::parse(&content).map_err(|source| WorkspaceDiscoveryError::Parse {
+                    path: package_xml.clone(),
+                    source,
+                })?;
+
+            if let Some(existing) = packages.get(&parsed.name) {
+                return Err(WorkspaceDiscoveryError::DuplicateName {
+                    name: parsed.name,
+                    first: existing.clone(),
+                    second: package_xml,
+                });
+            }
+            packages.insert(parsed.name, package_xml);
+        }
     }
 
     tracing::info!(
         elapsed_ms = started.elapsed().as_millis() as u64,
         packages = packages.len(),
-        pruned_dirs = pruned_dirs.len(),
         "ROS workspace discovery finished"
     );
 
-    let mut input_globs = vec![
-        "**/package.xml".to_string(),
-        "**/COLCON_IGNORE".to_string(),
-        "**/AMENT_IGNORE".to_string(),
-        "**/CATKIN_IGNORE".to_string(),
-    ];
-    // Skip the contents of any dot-prefixed directory in one shot, so we do
-    // not have to enumerate every `.git` / `.pixi` / `.vscode` / etc. that
-    // happens to live under the workspace. Marker-bearing dirs (which may or
-    // may not be hidden) still get their own specific exclusion below.
-    input_globs.push("!**/.*/**".to_string());
-    for dir in pruned_dirs {
-        input_globs.push(format!("!{}/**", path_to_forward_slashes(&dir)));
-    }
+    let mut markers: Vec<String> = Vec::with_capacity(IGNORE_MARKERS.len() + 1);
+    markers.push(PACKAGE_XML.to_string());
+    markers.extend(IGNORE_MARKERS.iter().map(|m| m.to_string()));
+    let input_glob_set = InputGlobSet {
+        patterns: vec![format!("**/{PACKAGE_XML}")],
+        markers,
+        exclude_hidden: true,
+        // Caller (pixi-build-ros::main) fills in the workspace root
+        // before emitting the recipe.
+        root: None,
+    };
 
     Ok(WorkspaceDiscovery {
         packages,
-        input_globs,
+        input_glob_set,
     })
-}
-
-fn walk(
-    workspace_root: &Path,
-    dir: &Path,
-    packages: &mut HashMap<String, PathBuf>,
-    pruned_dirs: &mut Vec<PathBuf>,
-) -> Result<(), WorkspaceDiscoveryError> {
-    if IGNORE_MARKERS.iter().any(|m| dir.join(m).is_file()) {
-        record_pruned(workspace_root, dir, pruned_dirs);
-        return Ok(());
-    }
-
-    let package_xml = dir.join("package.xml");
-    if package_xml.is_file() {
-        let content =
-            fs::read_to_string(&package_xml).map_err(|source| WorkspaceDiscoveryError::ReadFile {
-                path: package_xml.clone(),
-                source: source.into(),
-            })?;
-        let parsed = PackageXml::parse(&content).map_err(|source| WorkspaceDiscoveryError::Parse {
-            path: package_xml.clone(),
-            source,
-        })?;
-
-        if let Some(existing) = packages.get(&parsed.name) {
-            return Err(WorkspaceDiscoveryError::DuplicateName {
-                name: parsed.name,
-                first: existing.clone(),
-                second: package_xml,
-            });
-        }
-        packages.insert(parsed.name, package_xml);
-    }
-
-    let entries = fs::read_dir(dir).map_err(|source| WorkspaceDiscoveryError::Io {
-        path: dir.to_path_buf(),
-        source: source.into(),
-    })?;
-
-    for entry in entries {
-        let entry = entry.map_err(|source| WorkspaceDiscoveryError::Io {
-            path: dir.to_path_buf(),
-            source,
-        })?;
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        // Skip dot-prefixed directories the same way colcon does: this covers
-        // `.pixi`, `.git`, `.vscode`, etc. without hardcoding any specific
-        // name. The check is only applied to subdirectories, never to the
-        // workspace root itself. A single `!**/.*/**` glob (emitted by the
-        // caller) covers the invalidation side for all of these without
-        // needing to enumerate them, so we do not record each one here.
-        if is_hidden_dir(&path) {
-            continue;
-        }
-        walk(workspace_root, &path, packages, pruned_dirs)?;
-    }
-
-    Ok(())
-}
-
-fn is_hidden_dir(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|n| n.to_str())
-        .is_some_and(|name| name.starts_with('.'))
-}
-
-fn record_pruned(workspace_root: &Path, dir: &Path, pruned_dirs: &mut Vec<PathBuf>) {
-    if let Some(rel) = pathdiff::diff_paths(dir, workspace_root)
-        && !rel.as_os_str().is_empty()
-    {
-        pruned_dirs.push(rel);
-    }
 }
 
 fn path_to_forward_slashes(path: &Path) -> String {
@@ -211,7 +169,11 @@ fn path_to_forward_slashes(path: &Path) -> String {
 /// `ros-<distro>-<name>[url="source://?path=<rel-to-manifest>"]` that, when
 /// parsed via `SerializableMatchSpec::from`, yields a source dependency
 /// pointing at the sibling's `package.xml`.
-pub fn sibling_source_spec(conda_name: &str, sibling_package_xml: &Path, manifest_root: &Path) -> String {
+pub fn sibling_source_spec(
+    conda_name: &str,
+    sibling_package_xml: &Path,
+    manifest_root: &Path,
+) -> String {
     let rel = pathdiff::diff_paths(sibling_package_xml, manifest_root)
         .unwrap_or_else(|| sibling_package_xml.to_path_buf());
     let rel = path_to_forward_slashes(&rel);
@@ -290,27 +252,10 @@ pub fn apply_sibling_overrides(
     ConditionalList::new(items)
 }
 
-/// Rewrite a discovery glob (relative to the workspace root) so it can be
-/// evaluated from the package's `manifest_root`. The glob system rebases
-/// `../`-style up-traversal patterns to a shared search root, so prefixing
-/// each pattern with the relative path from `manifest_root` to
-/// `workspace_root` is enough.
-pub fn rewrite_glob_for_manifest_root(glob: &str, workspace_root: &Path, manifest_root: &Path) -> String {
-    let rel = match pathdiff::diff_paths(workspace_root, manifest_root) {
-        Some(p) if !p.as_os_str().is_empty() => path_to_forward_slashes(&p),
-        _ => return glob.to_string(),
-    };
-    if let Some(rest) = glob.strip_prefix('!') {
-        format!("!{rel}/{rest}")
-    } else {
-        format!("{rel}/{glob}")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use fs_err as fs;
     use tempfile::tempdir;
 
     fn write_package_xml(dir: &Path, name: &str) {
@@ -381,7 +326,15 @@ mod tests {
         let result = discover_ros_packages(root).unwrap();
         assert_eq!(result.packages.len(), 1);
         assert!(result.packages.contains_key("pkg_a"));
-        assert!(result.input_globs.iter().any(|g| g == "!build/**"));
+        // Pixi re-runs the discovery with the same marker semantics to
+        // learn that `build/` is pruned; the marker carries that intent.
+        assert!(
+            result
+                .input_glob_set
+                .markers
+                .iter()
+                .any(|m| m == "COLCON_IGNORE")
+        );
     }
 
     #[test]
@@ -416,12 +369,24 @@ mod tests {
     }
 
     #[test]
-    fn empty_workspace_returns_no_packages_but_keeps_globs() {
+    fn empty_workspace_returns_no_packages_but_keeps_glob_set() {
         let tmp = tempdir().unwrap();
         let result = discover_ros_packages(tmp.path()).unwrap();
         assert!(result.packages.is_empty());
-        assert!(result.input_globs.iter().any(|g| g == "**/package.xml"));
-        assert!(result.input_globs.iter().any(|g| g == "**/COLCON_IGNORE"));
+        assert_eq!(
+            result.input_glob_set.patterns,
+            vec!["**/package.xml".to_string()]
+        );
+        assert!(
+            result
+                .input_glob_set
+                .markers
+                .iter()
+                .any(|m| m == "COLCON_IGNORE"),
+            "expected COLCON_IGNORE marker, got: {:?}",
+            result.input_glob_set.markers
+        );
+        assert!(result.input_glob_set.exclude_hidden);
     }
 
     #[test]
@@ -454,50 +419,6 @@ mod tests {
         let result = discover_ros_packages(root).unwrap();
         assert_eq!(result.packages.len(), 1);
         assert!(result.packages.contains_key("pkg_a"));
-        let contains = |needle: &str| result.input_globs.iter().any(|g| g == needle);
-        assert!(
-            contains("!**/.*/**"),
-            "expected the single hidden-dir exclusion glob, got: {:?}",
-            result.input_globs
-        );
-        // Per-hidden-dir exclusions are no longer emitted: the static
-        // `!**/.*/**` covers all of them in one shot.
-        assert!(
-            !contains("!.pixi/**"),
-            "per-hidden-dir exclusion must not be emitted any more, got: {:?}",
-            result.input_globs
-        );
-        assert!(
-            !contains("!.git/**"),
-            "per-hidden-dir exclusion must not be emitted any more, got: {:?}",
-            result.input_globs
-        );
-    }
-
-    /// Exclusions must come after the includes so pixi's last-match-wins
-    /// matcher actually cancels the includes inside pruned subtrees.
-    #[test]
-    fn input_globs_emit_includes_before_excludes() {
-        let tmp = tempdir().unwrap();
-        let root = tmp.path();
-        write_package_xml(&root.join("pkg"), "pkg");
-        touch(&root.join("build").join("COLCON_IGNORE"));
-
-        let result = discover_ros_packages(root).unwrap();
-        let first_exclude = result
-            .input_globs
-            .iter()
-            .position(|g| g.starts_with('!'))
-            .expect("expected at least one exclusion");
-        let last_include = result
-            .input_globs
-            .iter()
-            .rposition(|g| !g.starts_with('!'))
-            .expect("expected at least one include");
-        assert!(
-            last_include < first_exclude,
-            "all includes must come before any exclusion, got: {:?}",
-            result.input_globs
-        );
+        assert!(result.input_glob_set.exclude_hidden);
     }
 }

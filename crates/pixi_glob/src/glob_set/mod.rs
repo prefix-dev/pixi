@@ -14,16 +14,87 @@
 mod walk;
 mod walk_root;
 
-use std::path::{Path, PathBuf};
+use std::{
+    fs::Metadata,
+    io,
+    path::{Path, PathBuf},
+};
 
 use thiserror::Error;
 
 use walk_root::{WalkRoot, WalkRootsError};
 
+/// A single result from [`GlobSet::collect_matching`].
+///
+/// `Pattern` matches retain the underlying `ignore::DirEntry` so callers
+/// can reuse the metadata cached by the directory walk on platforms that
+/// hand it back from `readdir` (notably Windows).  `Leaf` matches come
+/// from the leaf-marker side channel: the walker only ever saw the
+/// containing directory, so callers that need metadata have to stat the
+/// file themselves.
+#[derive(Debug)]
+pub enum Match {
+    /// Result of a positive glob match emitted by the walker.
+    Pattern(ignore::DirEntry),
+    /// Leaf marker hit; the walker pruned the subtree after recording it.
+    Leaf(PathBuf),
+}
+
+impl Match {
+    /// Borrowed view of the matched path.
+    pub fn path(&self) -> &Path {
+        match self {
+            Match::Pattern(d) => d.path(),
+            Match::Leaf(p) => p.as_path(),
+        }
+    }
+
+    /// Consume the match, returning the owned path.
+    pub fn into_path(self) -> PathBuf {
+        match self {
+            Match::Pattern(d) => d.into_path(),
+            Match::Leaf(p) => p,
+        }
+    }
+
+    /// Resolve the entry's metadata, reusing the walker's cached copy for
+    /// `Pattern` matches and falling back to a fresh `stat` for `Leaf`
+    /// matches.
+    pub fn metadata(&self) -> io::Result<Metadata> {
+        match self {
+            Match::Pattern(d) => d.metadata().map_err(io::Error::other),
+            Match::Leaf(p) => fs_err::metadata(p),
+        }
+    }
+}
+
 /// A glob set implemented using the `ignore` crate (globset + fast walker).
+///
+/// In addition to gitignore-style patterns, callers can declare *markers*:
+/// file names that the walker looks for in every directory it enters.
+/// When a marker file is present, its full path is matched against the
+/// pattern set:
+///
+/// - matches an include pattern → the marker is recorded as a result and
+///   descent under that directory stops (leaf semantics);
+/// - matches anything else (an exclude `!` pattern, or no pattern at all)
+///   → the entire subtree is skipped (prune semantics).
+///
+/// In other words, listed markers always affect the walk; include patterns
+/// promote them from "prune" (default) to "leaf".  This lets a single
+/// pattern set express both ordinary glob matching and the structural
+/// pruning / leaf detection needed by workspace-discovery callers (e.g.
+/// ROS).
 pub struct GlobSet {
-    /// Include patterns (gitignore-style), without leading '!'.
+    /// Include/exclude patterns (gitignore-style), grouped by their walk root.
     pub walk_roots: WalkRoot,
+    /// File names whose presence in a directory triggers a per-dir
+    /// override-match against [`GlobSet::walk_roots`].  See the type docs.
+    pub markers: Vec<String>,
+    /// When true (the default), hidden files and directories (names that
+    /// start with `.`) are skipped during the walk unless the user's
+    /// patterns explicitly opt them in.
+    pub exclude_hidden: bool,
 }
 
 #[derive(Error, Debug)]
@@ -44,24 +115,59 @@ impl GlobSet {
     pub fn create<'t>(globs: impl IntoIterator<Item = &'t str>) -> GlobSet {
         GlobSet {
             walk_roots: WalkRoot::build(globs).expect("should not fail"),
+            markers: Vec::new(),
+            exclude_hidden: true,
         }
     }
 
-    /// Walks files matching all include/exclude patterns using a single parallel walker.
-    /// Returns a flat Vec of results to keep lifetimes simple and predictable.
-    pub fn collect_matching(&self, root_dir: &Path) -> Result<Vec<ignore::DirEntry>, GlobSetError> {
-        if self.walk_roots.is_empty() {
-            return Ok(vec![]);
+    /// Builder-style setter for [`GlobSet::exclude_hidden`].  Pass `false`
+    /// to walk into hidden directories regardless of the pattern shape.
+    pub fn with_exclude_hidden(mut self, exclude_hidden: bool) -> Self {
+        self.exclude_hidden = exclude_hidden;
+        self
+    }
+
+    /// Builder-style setter that replaces [`GlobSet::markers`].  Each
+    /// supplied file name causes the walker, on entering a directory, to
+    /// probe for that file and apply the leaf-or-prune dispatch described
+    /// in the type-level documentation.
+    pub fn with_ignore_marker_filenames<'m, I>(mut self, filenames: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: AsRef<str> + 'm,
+    {
+        self.markers = filenames
+            .into_iter()
+            .map(|s| s.as_ref().to_owned())
+            .collect();
+        self
+    }
+
+    /// Walks `root_dir` collecting [`Match`] entries: files that match the
+    /// configured patterns plus per-directory leaf markers, while pruning at
+    /// directories whose marker hits an exclude pattern.  Ordering is not
+    /// guaranteed.
+    pub fn collect_matching(&self, root_dir: &Path) -> Result<Vec<Match>, GlobSetError> {
+        let has_patterns = !self.walk_roots.is_empty();
+        let has_markers = !self.markers.is_empty();
+        if !has_patterns && !has_markers {
+            return Ok(Vec::new());
         }
 
-        let rebased = self.walk_roots.rebase(root_dir)?;
-        walk::walk_globs(&rebased.root, &rebased.globs)
+        let (root, globs) = if has_patterns {
+            let rebased = self.walk_roots.rebase(root_dir)?;
+            (rebased.root, rebased.globs)
+        } else {
+            (root_dir.to_path_buf(), Vec::new())
+        };
+
+        walk::walk_globs(&root, &globs, &self.markers, self.exclude_hidden)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::GlobSet;
+    use super::{GlobSet, Match};
     use fs_err::{self as fs, File};
     use insta::assert_yaml_snapshot;
     use std::path::{Path, PathBuf};
@@ -79,11 +185,11 @@ mod tests {
         path.to_path_buf()
     }
 
-    fn sorted_paths(entries: Vec<ignore::DirEntry>, root: &std::path::Path) -> Vec<String> {
+    fn sorted_paths(entries: Vec<Match>, root: &std::path::Path) -> Vec<String> {
         let mut paths: Vec<_> = entries
             .into_iter()
-            .map(|entry| {
-                relative_path(entry.path(), root)
+            .map(|m| {
+                relative_path(&m.into_path(), root)
                     .display()
                     .to_string()
                     .replace('\\', "/")
@@ -386,5 +492,281 @@ mod tests {
         - link_dir/linked_file.txt
         - regular.txt
         "#);
+    }
+
+    fn workspace_root_for_marker_tests() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(Path::parent)
+            .expect("workspace root from pixi_glob manifest")
+            .join("tests")
+            .join("data")
+            .join("pixi-build")
+            .join("ros-workspace")
+    }
+
+    #[test]
+    fn leaf_marker_finds_all_package_xml_in_ros_workspace() {
+        let root = workspace_root_for_marker_tests();
+        let glob_set =
+            GlobSet::create(["**/package.xml"]).with_ignore_marker_filenames(["package.xml"]);
+        let paths = sorted_paths(glob_set.collect_matching(&root).unwrap(), &root);
+        assert_eq!(
+            paths,
+            vec![
+                "src/distro_less_package/package.xml".to_string(),
+                "src/navigator/package.xml".to_string(),
+                "src/navigator_implicit/package.xml".to_string(),
+                "src/navigator_py/package.xml".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn leaf_marker_at_root_is_returned_as_single_hit() {
+        let tmp = tempdir().unwrap();
+        File::create(tmp.path().join("package.xml")).unwrap();
+        fs::create_dir_all(tmp.path().join("nested/subdir")).unwrap();
+        File::create(tmp.path().join("nested/subdir/package.xml")).unwrap();
+
+        let glob_set =
+            GlobSet::create(["**/package.xml"]).with_ignore_marker_filenames(["package.xml"]);
+        let entries = glob_set.collect_matching(tmp.path()).unwrap();
+        // Root has the leaf; descent stops there and the nested copy is invisible.
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].path(), tmp.path().join("package.xml"));
+    }
+
+    #[test]
+    fn prune_marker_hides_subtree() {
+        let tmp = tempdir().unwrap();
+        fs::create_dir_all(tmp.path().join("a")).unwrap();
+        File::create(tmp.path().join("a/package.xml")).unwrap();
+
+        fs::create_dir_all(tmp.path().join("b")).unwrap();
+        File::create(tmp.path().join("b/package.xml")).unwrap();
+        File::create(tmp.path().join("b/COLCON_IGNORE")).unwrap();
+
+        let glob_set = GlobSet::create(["**/package.xml"])
+            .with_ignore_marker_filenames(["package.xml", "COLCON_IGNORE"]);
+        let paths = sorted_paths(glob_set.collect_matching(tmp.path()).unwrap(), tmp.path());
+        assert_eq!(paths, vec!["a/package.xml".to_string()]);
+    }
+
+    #[test]
+    fn exclude_hidden_false_yields_hidden_files() {
+        let tmp = tempdir().unwrap();
+        let hidden_dir = tmp.path().join(".hidden");
+        fs::create_dir_all(&hidden_dir).unwrap();
+        File::create(hidden_dir.join("inside.txt")).unwrap();
+        File::create(tmp.path().join("visible.txt")).unwrap();
+
+        // Default (true) hides `.hidden/inside.txt`.
+        let default_paths = sorted_paths(
+            GlobSet::create(["**/*.txt"])
+                .collect_matching(tmp.path())
+                .unwrap(),
+            tmp.path(),
+        );
+        assert_eq!(default_paths, vec!["visible.txt".to_string()]);
+
+        // Opt out via `with_exclude_hidden(false)`.
+        let inclusive_paths = sorted_paths(
+            GlobSet::create(["**/*.txt"])
+                .with_exclude_hidden(false)
+                .collect_matching(tmp.path())
+                .unwrap(),
+            tmp.path(),
+        );
+        assert_eq!(
+            inclusive_paths,
+            vec![".hidden/inside.txt".to_string(), "visible.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn missing_root_returns_empty() {
+        let tmp = tempdir().unwrap();
+        let missing = tmp.path().join("does-not-exist");
+        let glob_set =
+            GlobSet::create(["**/package.xml"]).with_ignore_marker_filenames(["package.xml"]);
+        let entries = glob_set.collect_matching(&missing).unwrap();
+        assert!(entries.is_empty());
+    }
+
+    /// Build a synthetic ROS-style workspace and compare:
+    ///   (a) today's path: `GlobSet::collect_matching` with the patterns
+    ///       pixi-build-ros currently emits, run once per package.
+    ///   (b) unified GlobSet with leaf + prune markers, run once for the
+    ///       whole workspace.
+    ///
+    /// Run with:
+    ///   cargo test -p pixi_glob --release -- --ignored bench_workspace_discovery --nocapture
+    #[test]
+    #[ignore = "manual benchmark; not deterministic enough for CI"]
+    fn bench_workspace_discovery() {
+        use std::collections::BTreeSet;
+        use std::time::Instant;
+
+        let tmp = tempdir().unwrap();
+        let workspace = tmp.path().join("ws");
+        fs::create_dir_all(&workspace).unwrap();
+
+        let pkg_count = 200usize;
+        let files_per_pkg = 50usize;
+        for i in 0..pkg_count {
+            let pkg = workspace.join("src").join(format!("pkg_{i:03}"));
+            fs::create_dir_all(pkg.join("src")).unwrap();
+            fs::create_dir_all(pkg.join("include")).unwrap();
+            File::create(pkg.join("package.xml")).unwrap();
+            File::create(pkg.join("CMakeLists.txt")).unwrap();
+            for j in 0..files_per_pkg {
+                File::create(pkg.join("src").join(format!("a_{j:03}.cpp"))).unwrap();
+                File::create(pkg.join("include").join(format!("a_{j:03}.h"))).unwrap();
+            }
+        }
+
+        eprintln!(
+            "synthetic workspace: {pkg_count} pkgs, {} files",
+            pkg_count * (files_per_pkg * 2 + 2)
+        );
+
+        let pkg_dirs: Vec<PathBuf> = (0..pkg_count)
+            .map(|i| workspace.join("src").join(format!("pkg_{i:03}")))
+            .collect();
+        let ros_globs = [
+            "../../**/package.xml",
+            "../../**/COLCON_IGNORE",
+            "../../**/AMENT_IGNORE",
+            "../../**/CATKIN_IGNORE",
+            "!../../**/.*/**",
+            "package.xml",
+            "CMakeLists.txt",
+            "setup.py",
+            "setup.cfg",
+        ];
+        let mut all_glob_hits: BTreeSet<PathBuf> = BTreeSet::new();
+        let glob_start = Instant::now();
+        for pkg in &pkg_dirs {
+            let glob_set = GlobSet::create(ros_globs.iter().copied());
+            for hit in glob_set.collect_matching(pkg).unwrap() {
+                all_glob_hits.insert(hit.into_path());
+            }
+        }
+        let glob_elapsed = glob_start.elapsed();
+        eprintln!(
+            "GlobSet x {pkg_count} packages: {:?}, unique hits = {}",
+            glob_elapsed,
+            all_glob_hits.len()
+        );
+
+        let walk_start = Instant::now();
+        let leaves = GlobSet::create(["**/package.xml"])
+            .with_ignore_marker_filenames([
+                "package.xml",
+                "COLCON_IGNORE",
+                "AMENT_IGNORE",
+                "CATKIN_IGNORE",
+            ])
+            .collect_matching(&workspace)
+            .unwrap();
+        let walk_elapsed = walk_start.elapsed();
+        eprintln!(
+            "marker walk x 1: {:?}, leaves = {}",
+            walk_elapsed,
+            leaves.len()
+        );
+
+        if walk_elapsed.as_nanos() > 0 {
+            let ratio = glob_elapsed.as_nanos() as f64 / walk_elapsed.as_nanos() as f64;
+            eprintln!("speedup: {ratio:.1}x");
+        }
+
+        assert_eq!(leaves.len(), pkg_count);
+    }
+
+    /// Same comparison against a real workspace. Set `PIXI_BENCH_WS` to the
+    /// workspace root before running.
+    ///
+    /// Run with:
+    ///   $env:PIXI_BENCH_WS = "F:/projects/issues/navigation2"; \
+    ///     cargo test -p pixi_glob --release -- --ignored bench_workspace_real --nocapture
+    #[test]
+    #[ignore = "needs PIXI_BENCH_WS env var pointing at a real workspace"]
+    fn bench_workspace_real() {
+        use std::collections::BTreeSet;
+        use std::time::Instant;
+
+        let Some(ws) = std::env::var_os("PIXI_BENCH_WS") else {
+            eprintln!("PIXI_BENCH_WS unset; skipping");
+            return;
+        };
+        let workspace = PathBuf::from(ws);
+        eprintln!("workspace: {}", workspace.display());
+
+        let marker_patterns = ["**/package.xml"];
+        let marker_names = [
+            "package.xml",
+            "COLCON_IGNORE",
+            "AMENT_IGNORE",
+            "CATKIN_IGNORE",
+        ];
+        let leaves: Vec<PathBuf> = GlobSet::create(marker_patterns)
+            .with_ignore_marker_filenames(marker_names)
+            .collect_matching(&workspace)
+            .unwrap()
+            .into_iter()
+            .map(|m| m.into_path())
+            .collect();
+        let pkg_dirs: Vec<PathBuf> = leaves
+            .iter()
+            .filter_map(|p| p.parent().map(Path::to_path_buf))
+            .collect();
+        eprintln!("packages found: {}", pkg_dirs.len());
+
+        let ros_globs = [
+            "../../**/package.xml",
+            "../../**/COLCON_IGNORE",
+            "../../**/AMENT_IGNORE",
+            "../../**/CATKIN_IGNORE",
+            "!../../**/.*/**",
+            "package.xml",
+            "CMakeLists.txt",
+            "setup.py",
+            "setup.cfg",
+        ];
+
+        let mut all_glob_hits: BTreeSet<PathBuf> = BTreeSet::new();
+        let glob_start = Instant::now();
+        for pkg in &pkg_dirs {
+            let glob_set = GlobSet::create(ros_globs.iter().copied());
+            for hit in glob_set.collect_matching(pkg).unwrap() {
+                all_glob_hits.insert(hit.into_path());
+            }
+        }
+        let glob_elapsed = glob_start.elapsed();
+        eprintln!(
+            "GlobSet x {} packages: {:?}, unique hits = {}",
+            pkg_dirs.len(),
+            glob_elapsed,
+            all_glob_hits.len()
+        );
+
+        let walk_start = Instant::now();
+        let leaves2 = GlobSet::create(marker_patterns)
+            .with_ignore_marker_filenames(marker_names)
+            .collect_matching(&workspace)
+            .unwrap();
+        let walk_elapsed = walk_start.elapsed();
+        eprintln!(
+            "marker walk x 1: {:?}, leaves = {}",
+            walk_elapsed,
+            leaves2.len()
+        );
+
+        if walk_elapsed.as_nanos() > 0 {
+            let ratio = glob_elapsed.as_nanos() as f64 / walk_elapsed.as_nanos() as f64;
+            eprintln!("speedup: {ratio:.1}x");
+        }
     }
 }

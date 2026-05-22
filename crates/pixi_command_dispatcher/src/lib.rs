@@ -51,6 +51,7 @@ pub mod environment;
 mod ephemeral_env;
 mod errors;
 mod injected_config;
+mod input_globs;
 mod input_hash;
 mod install_binary;
 mod install_pixi;

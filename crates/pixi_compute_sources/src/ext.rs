@@ -51,8 +51,15 @@ impl SourceCheckoutExt for ComputeCtx {
                 SourceLocationSpec::Path(path) => {
                     let result = self.resolve_typed_path(path.path.to_path());
                     async move {
+                        let resolved = result?;
                         Ok(SourceCheckout {
-                            path: result?,
+                            path: resolved.clone(),
+                            // Path sources have no "checkout root"
+                            // distinct from the path itself; the
+                            // caller layer (build-backend metadata
+                            // construction) is what decides whether
+                            // to widen this to a workspace root.
+                            root_dir: resolved,
                             pinned: PinnedSourceSpec::Path(PinnedPathSpec { path: path.path }),
                         })
                     }
@@ -72,8 +79,10 @@ impl SourceCheckoutExt for ComputeCtx {
             PinnedSourceSpec::Path(path_spec) => {
                 let path_result = self.resolve_typed_path(path_spec.path.to_path());
                 async move {
+                    let resolved = path_result?;
                     Ok(SourceCheckout {
-                        path: path_result?,
+                        path: resolved.clone(),
+                        root_dir: resolved,
                         pinned: PinnedSourceSpec::Path(path_spec),
                     })
                 }

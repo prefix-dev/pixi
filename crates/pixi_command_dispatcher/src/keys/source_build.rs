@@ -232,6 +232,7 @@ async fn compute_inner(
         .compute(
             &InstantiateBackendKey::new(
                 manifest_checkout.path.as_std_path(),
+                crate::build_backend_metadata::checkout_root_for(&manifest_checkout),
                 manifest_anchor.clone(),
                 build_source_dir,
                 spec.exclude_newer.clone(),

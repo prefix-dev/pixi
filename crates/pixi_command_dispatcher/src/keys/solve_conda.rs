@@ -246,7 +246,11 @@ impl Key for SolveCondaKey {
             source_derived_specs = source_repodata_fetch_specs.len(),
             dev_derived_specs = dev_source_fetch_specs.len(),
             total_fetch_specs,
-            source_records = spec.source_repodata.iter().map(|sm| sm.records.len()).sum::<usize>(),
+            source_records = spec
+                .source_repodata
+                .iter()
+                .map(|sm| sm.records.len())
+                .sum::<usize>(),
             "derived gateway match-specs from source records"
         );
 
@@ -281,13 +285,9 @@ impl Key for SolveCondaKey {
         // `binary_repodata.len()` returns the number of subdir buckets,
         // not the number of records. Sum across them to get the real
         // count the solver is about to chew through.
-        let binary_record_count: usize =
-            binary_repodata.iter().map(|r| r.iter().count()).sum();
-        let source_record_count: usize = spec
-            .source_repodata
-            .iter()
-            .map(|sm| sm.records.len())
-            .sum();
+        let binary_record_count: usize = binary_repodata.iter().map(|r| r.iter().count()).sum();
+        let source_record_count: usize =
+            spec.source_repodata.iter().map(|sm| sm.records.len()).sum();
         tracing::debug!(
             elapsed_ms = fetch_started.elapsed().as_millis() as u64,
             channels = spec.channels.len(),

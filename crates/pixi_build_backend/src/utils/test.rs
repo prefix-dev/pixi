@@ -69,6 +69,7 @@ where
     )
     .initialize(InitializeParams {
         workspace_directory: None,
+        checkout_root: None,
         source_directory: source_dir,
         manifest_path,
         project_model,
