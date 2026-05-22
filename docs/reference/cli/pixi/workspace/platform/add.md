@@ -10,12 +10,12 @@ Adds a platform(s) to the workspace file and updates the lock file
 
 ## Usage
 ```
-pixi workspace platform add [OPTIONS] <PLATFORM>...
+pixi workspace platform add [OPTIONS] <PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>...
 ```
 
 ## Arguments
-- <a id="arg-<PLATFORM>" href="#arg-<PLATFORM>">`<PLATFORM>`</a>
-:  One or more platforms to add. Each entry is either a bare conda subdir (`linux-64`) or `<name>=<subdir>` for a custom-named platform (`gpu-linux=linux-64`). When any virtual-package flag is set, exactly one positional may be given
+- <a id="arg-<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>" href="#arg-<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>">`<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>`</a>
+:  Platforms to add, optionally followed by raw virtual-package specs
 <br>May be provided more than once.
 <br>**required**: `true`
 
@@ -26,9 +26,12 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 :  Declare a `__archspec` virtual package with the given microarchitecture string, e.g. `x86_64_v3`. Valid on any subdir
 - <a id="arg---libc" href="#arg---libc">`--libc <VERSION>`</a>
 :  Declare a `__glibc` virtual package at the given version, e.g. `2.28`. Only valid on linux subdirs
-- <a id="arg---virtual-package" href="#arg---virtual-package">`--virtual-package <SPEC>`</a>
-:  Declare a virtual package using its raw conda spec (`__name[=version[=build_string]]`). Use this for virtual packages that don't have a dedicated shortcut flag. Can be repeated
-<br>May be provided more than once.
+- <a id="arg---linux" href="#arg---linux">`--linux <VERSION>`</a>
+:  Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`. Only valid on linux subdirs
+- <a id="arg---macos" href="#arg---macos">`--macos <VERSION>`</a>
+:  Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`. Only valid on osx subdirs
+- <a id="arg---windows" href="#arg---windows">`--windows <VERSION>`</a>
+:  Declare a `__win` virtual package at the given Windows version, e.g. `10`. Only valid on win subdirs
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't update the environment, only add changed packages to the lock file
 <br>**env**: `PIXI_NO_INSTALL`

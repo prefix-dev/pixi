@@ -10,13 +10,16 @@ Edit an existing workspace platform's subdir and/or virtual packages
 
 ## Usage
 ```
-pixi workspace platform edit [OPTIONS] <NAME>
+pixi workspace platform edit [OPTIONS] <NAME> [__NAME[=VERSION[=BUILD]]]...
 ```
 
 ## Arguments
 - <a id="arg-<NAME>" href="#arg-<NAME>">`<NAME>`</a>
 :  Name of the platform to edit
 <br>**required**: `true`
+- <a id="arg-<__NAME[=VERSION[=BUILD]]>" href="#arg-<__NAME[=VERSION[=BUILD]]>">`<__NAME[=VERSION[=BUILD]]>`</a>
+:  Raw virtual-package specs (`__name[=version[=build_string]]`) to declare or update on this platform. Use the friendly flags (`--cuda`, `--archspec`, ...) for virtual packages that have one; this trailing positional list is the escape hatch for everything else, mirroring the `__name = "..."` raw keys accepted in pixi.toml
+<br>May be provided more than once.
 
 ## Options
 - <a id="arg---subdir" href="#arg---subdir">`--subdir <SUBDIR>`</a>
@@ -27,9 +30,12 @@ pixi workspace platform edit [OPTIONS] <NAME>
 :  Declare a `__archspec` virtual package with the given microarchitecture string, e.g. `x86_64_v3`. Valid on any subdir
 - <a id="arg---libc" href="#arg---libc">`--libc <VERSION>`</a>
 :  Declare a `__glibc` virtual package at the given version, e.g. `2.28`. Only valid on linux subdirs
-- <a id="arg---virtual-package" href="#arg---virtual-package">`--virtual-package <SPEC>`</a>
-:  Declare a virtual package using its raw conda spec (`__name[=version[=build_string]]`). Use this for virtual packages that don't have a dedicated shortcut flag. Can be repeated
-<br>May be provided more than once.
+- <a id="arg---linux" href="#arg---linux">`--linux <VERSION>`</a>
+:  Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`. Only valid on linux subdirs
+- <a id="arg---macos" href="#arg---macos">`--macos <VERSION>`</a>
+:  Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`. Only valid on osx subdirs
+- <a id="arg---windows" href="#arg---windows">`--windows <VERSION>`</a>
+:  Declare a `__win` virtual package at the given Windows version, e.g. `10`. Only valid on win subdirs
 - <a id="arg---remove-virtual-package" href="#arg---remove-virtual-package">`--remove-virtual-package <NAME>`</a>
 :  Remove the named virtual package from this platform. Can be repeated
 <br>May be provided more than once.

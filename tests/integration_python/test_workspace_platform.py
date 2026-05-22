@@ -206,6 +206,62 @@ def test_add_libc_on_windows_rejected(pixi: Path, tmp_pixi_workspace: Path) -> N
     )
 
 
+def test_add_linux_macos_windows_friendly_flags(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """The three subdir-family flags (`--linux`, `--macos`, `--windows`) each
+    declare their `__linux`/`__osx`/`__win` virtual package and write the
+    friendly key into TOML on the right subdir family."""
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi, tmp_pixi_workspace, "add", "modern-linux=linux-64", "--linux", "5.10", "--no-install"
+    )
+    _run_platform(
+        pixi, tmp_pixi_workspace, "add", "modern-mac=osx-arm64", "--macos", "14.0", "--no-install"
+    )
+    _run_platform(
+        pixi, tmp_pixi_workspace, "add", "modern-win=win-64", "--windows", "10", "--no-install"
+    )
+    entries = {
+        p["name"]: p
+        for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
+        if isinstance(p, dict)
+    }
+    assert entries["modern-linux"]["linux"] == "5.10"
+    assert entries["modern-mac"]["macos"] == "14.0"
+    assert entries["modern-win"]["windows"] == "10"
+
+
+@pytest.mark.parametrize(
+    ("flag", "value", "wrong_subdir", "family"),
+    [
+        ("--linux", "5.10", "win-64", "linux"),
+        ("--macos", "14.0", "linux-64", "osx"),
+        ("--windows", "10", "linux-64", "win"),
+    ],
+)
+def test_add_family_flag_subdir_restriction(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    flag: str,
+    value: str,
+    wrong_subdir: str,
+    family: str,
+) -> None:
+    """Each family flag rejects subdirs outside its family, the same way
+    `--libc` already does for non-linux subdirs."""
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        f"wrong={wrong_subdir}",
+        flag,
+        value,
+        "--no-install",
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains=f"{flag} only applies to {family} subdirs",
+    )
+
+
 def test_add_archspec_build_string(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
@@ -227,15 +283,15 @@ def test_add_archspec_build_string(pixi: Path, tmp_pixi_workspace: Path) -> None
 
 
 def test_add_raw_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Raw virtual-package specs are passed as trailing `__name=value`
+    positionals, mirroring the `__name = "..."` escape hatch in pixi.toml."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "add",
         "rich-linux=linux-64",
-        "--virtual-package",
         "__cuda=12.0",
-        "--virtual-package",
         "__glibc=2.28",
         "--no-install",
     )
@@ -248,36 +304,38 @@ def test_add_raw_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) 
     assert entry["libc"] == "2.28"
 
 
-def test_add_duplicate_vp_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """`--cuda` and `--virtual-package __cuda=...` together should error."""
+def test_add_duplicate_virtual_package_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`--cuda` and a `__cuda=...` raw positional together should error."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "add",
         "gpu-linux=linux-64",
+        "__cuda=11.0",
         "--cuda",
         "12.0",
-        "--virtual-package",
-        "__cuda=11.0",
         "--no-install",
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="more than once",
     )
 
 
-def test_add_invalid_vp_name(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_add_invalid_virtual_package_name(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A trailing positional that doesn't start with `__` is treated as a
+    second platform entry, which then trips the single-platform-with-vps rule."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "add",
         "weird=linux-64",
-        "--virtual-package",
+        "--cuda",
+        "12.0",
         "cuda=12.0",
         "--no-install",
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="must start with '__'",
+        stderr_contains="exactly one platform",
     )
 
 
@@ -306,7 +364,7 @@ def test_add_bare_subdir_plus_vp_rejected(pixi: Path, tmp_pixi_workspace: Path) 
         "12.0",
         "--no-install",
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="virtual-package flags require a custom platform name",
+        stderr_contains="virtual packages require a custom platform name",
     )
 
 
@@ -322,7 +380,7 @@ def test_add_vp_with_multiple_positionals_rejected(pixi: Path, tmp_pixi_workspac
         "12.0",
         "--no-install",
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="exactly one positional",
+        stderr_contains="exactly one platform",
     )
 
 
