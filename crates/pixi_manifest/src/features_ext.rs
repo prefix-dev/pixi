@@ -10,7 +10,7 @@ use rattler_conda_types::{ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseCha
 
 use crate::{
     CondaConstraints, CondaDependencies, PixiPlatform, PixiPlatformName, PrioritizedChannel,
-    PyPiDependencies, SpecType, SystemRequirements,
+    PyPiDependencies, SpecType,
     dependencies::CondaDevDependencies,
     has_features_iter::HasFeaturesIter,
     has_manifest_ref::HasWorkspaceManifest,
@@ -188,21 +188,6 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
                 accumulated_platforms.intersection(&feat).cloned().collect()
             })
             .unwrap_or_default()
-    }
-
-    /// Returns the system requirements for this collection.
-    ///
-    /// The system requirements of the collection are the union of the system
-    /// requirements of all the features in the collection. If multiple
-    /// features specify a requirement for the same system package, the
-    /// highest is chosen.
-    fn local_system_requirements(&self) -> SystemRequirements {
-        self.features()
-            .map(|feature| &feature.system_requirements)
-            .fold(SystemRequirements::default(), |acc, req| {
-                acc.union(req)
-                    .expect("system requirements should have been validated upfront")
-            })
     }
 
     /// Returns true if any of the features has any reference to a pypi

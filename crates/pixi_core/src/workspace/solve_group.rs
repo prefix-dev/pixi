@@ -2,9 +2,7 @@ use std::{hash::Hash, path::PathBuf};
 
 use itertools::Itertools;
 use pixi_manifest as manifest;
-use pixi_manifest::{
-    FeaturesExt, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements, WorkspaceManifest,
-};
+use pixi_manifest::{HasFeaturesIter, HasWorkspaceManifest, WorkspaceManifest};
 
 use super::{Environment, HasWorkspaceRef, Workspace};
 
@@ -56,15 +54,6 @@ impl<'p> SolveGroup<'p> {
         self.solve_group.environments.iter().map(|env_idx| {
             Environment::new(self.workspace, &workspace_manifest.environments[*env_idx])
         })
-    }
-    /// Returns the system requirements for this solve group.
-    ///
-    /// The system requirements of the solve group are the union of the system
-    /// requirements of all the environments that share the same solve
-    /// group. If multiple environments specify a requirement for the same
-    /// system package, the highest is chosen.
-    pub(crate) fn system_requirements(&self) -> SystemRequirements {
-        self.local_system_requirements()
     }
 }
 
@@ -154,15 +143,6 @@ mod tests {
         assert_eq!(foo_environment.solve_group(), Some(solve_group.clone()));
         assert_eq!(bar_environment.solve_group(), Some(solve_group.clone()));
         assert_eq!(default_environment.solve_group(), None);
-
-        // Make sure that all the environments share the same system requirements,
-        // because they are in the same solve-group.
-        let foo_system_requirements = foo_environment.system_requirements();
-        let bar_system_requirements = bar_environment.system_requirements();
-        let default_system_requirements = default_environment.system_requirements();
-        assert_eq!(foo_system_requirements.cuda, "12.0".parse().ok());
-        assert_eq!(bar_system_requirements.cuda, "12.0".parse().ok());
-        assert_eq!(default_system_requirements.cuda, None);
 
         assert_eq!(
             solve_group.pypi_options().index_url.unwrap(),

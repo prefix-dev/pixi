@@ -1017,7 +1017,7 @@ mod tests {
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
     use pixi_config::{Config, DetachedEnvironments};
-    use pixi_manifest::{FeatureName, FeaturesExt};
+    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest};
     use rattler_conda_types::{Platform, Version};
     use rattler_virtual_packages::{LibC, VirtualPackage};
     use xxhash_rust::xxh3::xxh3_64;
@@ -1063,9 +1063,10 @@ mod tests {
                 version: Version::from_str("2.12").unwrap(),
             })];
 
-            let virtual_packages = workspace
-                .default_environment()
-                .system_requirements()
+            let virtual_packages = (&workspace)
+                .workspace_manifest()
+                .default_feature()
+                .system_requirements
                 .virtual_packages();
 
             assert_eq!(virtual_packages, expected_result);

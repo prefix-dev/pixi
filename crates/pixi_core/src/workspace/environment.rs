@@ -10,7 +10,7 @@ use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
-    HasWorkspaceManifest, PixiPlatform, SystemRequirements, Task, TaskName, WorkspaceManifest,
+    HasWorkspaceManifest, PixiPlatform, Task, TaskName, WorkspaceManifest,
 };
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
@@ -304,32 +304,6 @@ impl<'p> Environment<'p> {
                 )
             })
             .collect()
-    }
-
-    /// Returns the system requirements for this environment.
-    ///
-    /// The system requirements of the environment are the union of the system
-    /// requirements of all the features that make up the environment. If
-    /// multiple features specify a requirement for the same system package,
-    /// the highest is chosen.
-    ///
-    /// If an environment defines a solve group the system requirements of all
-    /// environments in the solve group are also combined. This means that
-    /// if two environments in the same solve group specify conflicting
-    /// system requirements that the highest system requirements are chosen.
-    ///
-    /// This is done to ensure that the requirements of all environments in the
-    /// same solve group are compatible with each other.
-    ///
-    /// If you want to get the system requirements for this environment without
-    /// taking the solve group into account, use the
-    /// [`FeaturesExt::local_system_requirements`] method.
-    pub fn system_requirements(&self) -> SystemRequirements {
-        if let Some(solve_group) = self.solve_group() {
-            solve_group.system_requirements()
-        } else {
-            self.local_system_requirements()
-        }
     }
 
     /// Returns the activation scripts that should be run when activating this
