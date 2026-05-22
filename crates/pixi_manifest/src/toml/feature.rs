@@ -50,12 +50,16 @@ pub struct TomlFeature {
 }
 
 impl TomlFeature {
+    /// Convert the parsed feature into a [`Feature`] plus the parsed
+    /// `[system-requirements]` table. The sysreqs stay outside `Feature` so
+    /// they only flow through the parser-time migration; nothing else holds
+    /// on to them.
     pub fn into_feature(
         self,
         name: FeatureName,
         preview: &TomlPreview,
         workspace: &TomlWorkspace,
-    ) -> Result<WithWarnings<Feature>, TomlError> {
+    ) -> Result<WithWarnings<(Feature, SystemRequirements)>, TomlError> {
         let WithWarnings {
             value: default_target,
             mut warnings,
@@ -130,7 +134,7 @@ impl TomlFeature {
             warnings.append(&mut target_warnings);
         }
 
-        Ok(WithWarnings::from(Feature {
+        let feature = Feature {
             name,
             platforms: feature_platform_names
                 .map(|spnv| spnv.value)
@@ -140,11 +144,10 @@ impl TomlFeature {
                 .map(|channels| channels.into_iter().map(|channel| channel.into()).collect()),
             channel_priority: self.channel_priority,
             solve_strategy: self.solve_strategy,
-            system_requirements: self.system_requirements,
             pypi_options: self.pypi_options,
             targets: Targets::from_default_and_user_defined(default_target, targets),
-        })
-        .with_warnings(warnings))
+        };
+        Ok(WithWarnings::from((feature, self.system_requirements)).with_warnings(warnings))
     }
 }
 

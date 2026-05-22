@@ -1019,7 +1019,6 @@ mod tests {
     use pixi_config::{Config, DetachedEnvironments};
     use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest};
     use rattler_conda_types::{Platform, Version};
-    use rattler_virtual_packages::{LibC, VirtualPackage};
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
@@ -1032,6 +1031,11 @@ mod tests {
         platforms = ["linux-64", "win-64"]
         "#;
 
+    /// Every legacy `[system-requirements]` shape parses through the
+    /// `[system-requirements]`-to-platforms migration and ends up as a
+    /// synthesised platform declaring `__glibc=2.12`. Exercises the
+    /// toml-span parser's accepted shapes by way of the observable migration
+    /// output rather than via the now-private SystemRequirements field.
     #[test]
     fn test_system_requirements_edge_cases() {
         let file_contents = [
@@ -1058,18 +1062,23 @@ mod tests {
             let file_content = format!("{PROJECT_BOILERPLATE}\n{file_content}");
 
             let workspace = Workspace::from_str(Path::new("pixi.toml"), &file_content).unwrap();
-            let expected_result = vec![VirtualPackage::LibC(LibC {
-                family: "glibc".to_string(),
-                version: Version::from_str("2.12").unwrap(),
-            })];
-
-            let virtual_packages = (&workspace)
+            let glibc_platform = (&workspace)
                 .workspace_manifest()
-                .default_feature()
-                .system_requirements
-                .virtual_packages();
-
-            assert_eq!(virtual_packages, expected_result);
+                .workspace
+                .platforms
+                .iter()
+                .find(|p| {
+                    p.declared_virtual_packages()
+                        .iter()
+                        .any(|g| g.name.as_normalized() == "__glibc")
+                })
+                .expect("the migration should synthesise a platform carrying __glibc");
+            let glibc = glibc_platform
+                .declared_virtual_packages()
+                .iter()
+                .find(|g| g.name.as_normalized() == "__glibc")
+                .unwrap();
+            assert_eq!(glibc.version, Version::from_str("2.12").unwrap());
         }
     }
 

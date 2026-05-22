@@ -1,6 +1,6 @@
 use crate::{
-    CondaConstraints, SpecType, SystemRequirements, WorkspaceTarget, channel::PrioritizedChannel,
-    consts, pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
+    CondaConstraints, SpecType, WorkspaceTarget, channel::PrioritizedChannel, consts,
+    pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
     workspace::SolveStrategy,
 };
 use crate::{PixiPlatform, PixiPlatformName};
@@ -145,9 +145,6 @@ pub struct Feature {
     /// it will be seen as unset and overwritten by a set one.
     pub solve_strategy: Option<SolveStrategy>,
 
-    /// Additional system requirements
-    pub system_requirements: SystemRequirements,
-
     /// Pypi-related options
     pub pypi_options: Option<PypiOptions>,
 
@@ -164,7 +161,6 @@ impl Feature {
             channels: None,
             channel_priority: None,
             solve_strategy: None,
-            system_requirements: SystemRequirements::default(),
             pypi_options: None,
             targets: <Targets<WorkspaceTarget> as Default>::default(),
         }

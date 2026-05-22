@@ -203,6 +203,16 @@ impl TomlManifest {
             warnings.append(&mut target_warnings);
         }
 
+        // Sysreqs flow through this local map for the per-feature compatibility
+        // check and the `[system-requirements]` migration; nothing else keeps
+        // hold of them.
+        let default_sysreqs = self
+            .system_requirements
+            .map(PixiSpanned::into_inner)
+            .unwrap_or_default();
+        let mut feature_sysreqs: HashMap<FeatureName, SystemRequirements> =
+            HashMap::from([(FeatureName::default(), default_sysreqs)]);
+
         // Construct a default feature
         let default_feature = Feature {
             name: FeatureName::default(),
@@ -214,11 +224,6 @@ impl TomlManifest {
 
             channel_priority: workspace.value.channel_priority,
             solve_strategy: workspace.value.solve_strategy,
-
-            system_requirements: self
-                .system_requirements
-                .map(PixiSpanned::into_inner)
-                .unwrap_or_default(),
 
             // Use the pypi-options from the manifest for
             // the default feature
@@ -249,10 +254,11 @@ impl TomlManifest {
                     ));
                 }
                 let WithWarnings {
-                    value: feature,
+                    value: (feature, sysreqs),
                     warnings: mut feature_warnings,
                 } = feature.into_feature(name.value.clone(), preview, &workspace.value)?;
                 warnings.append(&mut feature_warnings);
+                feature_sysreqs.insert(name.value.clone(), sysreqs);
                 feature_name_to_span
                     .entry(name.value.clone().to_string())
                     .or_insert(name.span);
@@ -357,7 +363,7 @@ impl TomlManifest {
             // Ensure that the system requirements of all the features are compatible
             if let Err(e) = used_features
                 .iter()
-                .map(|feature| &feature.system_requirements)
+                .filter_map(|feature| feature_sysreqs.get(&feature.name))
                 .try_fold(SystemRequirements::default(), |acc, req| acc.union(req))
             {
                 return Err(TomlError::from(
@@ -439,7 +445,7 @@ impl TomlManifest {
             .map(PixiSpanned::into_inner)
             .unwrap_or_default();
 
-        migrate_system_requirements_to_platforms(&mut workspace, &mut features)?;
+        migrate_system_requirements_to_platforms(&mut workspace, &mut features, &feature_sysreqs)?;
 
         let workspace_manifest = WorkspaceManifest {
             workspace,
@@ -494,6 +500,7 @@ impl TomlManifest {
 fn migrate_system_requirements_to_platforms(
     workspace: &mut crate::Workspace,
     features: &mut IndexMap<FeatureName, Feature>,
+    feature_sysreqs: &HashMap<FeatureName, SystemRequirements>,
 ) -> Result<(), TomlError> {
     let mut originals: IndexSet<PixiPlatform> = std::mem::take(&mut workspace.platforms);
     // A workspace that already declares custom names or per-platform virtual
@@ -501,18 +508,19 @@ fn migrate_system_requirements_to_platforms(
     // would be ambiguous which set of declarations wins.
     let all_simple_subdir = originals.iter().all(PixiPlatform::is_subdir_platform);
 
+    let has_any_sysreqs = feature_sysreqs.values().any(|s| !s.is_empty());
     // Any feature (incl. default) carries `[system-requirements]` and the
     // workspace is still in legacy subdir-only shape: a follow-up add/edit
     // of a non-subdir platform will commit the migration to pixi.toml.
-    workspace.must_migrate =
-        all_simple_subdir && features.values().any(|f| !f.system_requirements.is_empty());
+    workspace.must_migrate = all_simple_subdir && has_any_sysreqs;
 
     if all_simple_subdir {
         extend_originals_with_referenced_subdirs(&mut originals, features)?;
     }
 
     for feature in features.values_mut() {
-        if feature.system_requirements.is_empty() {
+        let sysreqs = feature_sysreqs.get(&feature.name);
+        if sysreqs.is_none_or(SystemRequirements::is_empty) {
             register_referenced_originals(&originals, feature, &mut workspace.platforms)?;
             continue;
         }
@@ -522,7 +530,8 @@ fn migrate_system_requirements_to_platforms(
                 feature.name,
             ))));
         }
-        synthesise_for_feature(&originals, feature, &mut workspace.platforms)?;
+        let sysreqs = sysreqs.expect("checked just above");
+        synthesise_for_feature(&originals, feature, sysreqs, &mut workspace.platforms)?;
     }
 
     append_uncovered_subdirs(&originals, &mut workspace.platforms);
@@ -586,6 +595,7 @@ fn register_referenced_originals(
 fn synthesise_for_feature(
     originals: &IndexSet<PixiPlatform>,
     feature: &mut Feature,
+    sysreqs: &SystemRequirements,
     target: &mut IndexSet<PixiPlatform>,
 ) -> Result<(), TomlError> {
     let subdirs: Vec<Platform> = match feature.platforms.as_ref() {
@@ -603,7 +613,7 @@ fn synthesise_for_feature(
         None => originals.iter().map(PixiPlatform::subdir).collect(),
     };
 
-    let candidates = feature.system_requirements.to_declared_virtual_packages();
+    let candidates = sysreqs.to_declared_virtual_packages();
     let mut synthesised_names: IndexSet<PixiPlatformName> = IndexSet::new();
     for subdir in subdirs {
         let declared: Vec<GenericVirtualPackage> = candidates

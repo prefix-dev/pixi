@@ -3128,15 +3128,6 @@ platforms = ["linux-64", "win-64"]
         );
         assert_eq!(
             cuda_feature
-                .system_requirements
-                .cuda
-                .as_ref()
-                .unwrap()
-                .to_string(),
-            "12"
-        );
-        assert_eq!(
-            cuda_feature
                 .channels
                 .as_ref()
                 .unwrap()
