@@ -502,8 +502,53 @@ impl From<Platform> for TargetSelector {
     }
 }
 
+/// Error returned when a target selector key cannot be parsed.
+///
+/// Wraps [`ParsePlatformError`] and adds a hint when the input looks like a
+/// rattler-build selector expression (contains characters outside
+/// `[a-z0-9-]`), nudging users toward the required `if(...)` wrapper.
+#[derive(Debug, thiserror::Error)]
+pub enum ParseTargetSelectorError {
+    LooksLikeExpression {
+        source: ParsePlatformError,
+        input: String,
+    },
+
+    #[error(transparent)]
+    Platform(#[from] ParsePlatformError),
+}
+
+impl std::fmt::Display for ParseTargetSelectorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Platform(source) => write!(f, "{source}"),
+            Self::LooksLikeExpression { source, input } => {
+                // Encode the help text so `TomlDiagnostic` can render it as a
+                // separate `help:` section in miette output.
+                let help = format!(
+                    "'{input}' looks like a selector expression. Wrap it in `if(...)` to pass it through to rattler-build, e.g. `if({input})`."
+                );
+                write!(
+                    f,
+                    "{}",
+                    pixi_toml::custom_error_message_with_help(&source.to_string(), &help)
+                )
+            }
+        }
+    }
+}
+
+/// Returns true if `s` cannot be a platform or family name because it contains
+/// characters outside `[a-z0-9-]`. Such strings most likely intend to be
+/// rattler-build selector expressions and should be wrapped with `if(...)`.
+fn looks_like_expression(s: &str) -> bool {
+    !s.is_empty()
+        && s.chars()
+            .any(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'))
+}
+
 impl FromStr for TargetSelector {
-    type Err = ParsePlatformError;
+    type Err = ParseTargetSelectorError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -511,7 +556,18 @@ impl FromStr for TargetSelector {
             "unix" => Ok(TargetSelector::Unix),
             "win" => Ok(TargetSelector::Win),
             "osx" => Ok(TargetSelector::MacOs),
-            _ => Platform::from_str(s).map(TargetSelector::Platform),
+            _ => Platform::from_str(s)
+                .map(TargetSelector::Platform)
+                .map_err(|e| {
+                    if looks_like_expression(s) {
+                        ParseTargetSelectorError::LooksLikeExpression {
+                            source: e,
+                            input: s.to_string(),
+                        }
+                    } else {
+                        ParseTargetSelectorError::Platform(e)
+                    }
+                }),
         }
     }
 }
@@ -524,7 +580,7 @@ impl TargetSelector {
     ///
     /// The stored expression is the bare inner string without the `if(...)`
     /// wrapper.
-    pub fn from_str_or_expression(s: &str) -> Result<Self, ParsePlatformError> {
+    pub fn from_str_or_expression(s: &str) -> Result<Self, ParseTargetSelectorError> {
         if let Some(inner) = s.strip_prefix("if(").and_then(|r| r.strip_suffix(')')) {
             return Ok(TargetSelector::Expression(inner.trim().to_string()));
         }
@@ -1052,6 +1108,58 @@ mod tests {
         // Unknown strings should fail with from_str
         assert!(TargetSelector::from_str("host_platform == build_platform").is_err());
         assert!(TargetSelector::from_str("foobar").is_err());
+    }
+
+    #[test]
+    fn test_target_selector_expression_hint_on_unknown_platform() {
+        use crate::{TargetSelector, target::ParseTargetSelectorError};
+
+        // Strings containing characters outside `[a-z0-9-]` look like
+        // selector expressions and produce a hint pointing to `if(...)`.
+        let err = TargetSelector::from_str("host_platform == build_platform").unwrap_err();
+        assert!(
+            matches!(err, ParseTargetSelectorError::LooksLikeExpression { .. }),
+            "expected LooksLikeExpression hint, got: {err:?}"
+        );
+        let message = err.to_string();
+        assert!(
+            message.contains("looks like a selector expression"),
+            "hint missing from error message: {message}"
+        );
+        assert!(
+            message.contains("if(host_platform == build_platform)"),
+            "if(...) suggestion missing from error message: {message}"
+        );
+
+        // Plain unknown strings (matching `[a-z0-9-]`) just report the
+        // platform parse error without the expression hint.
+        let err = TargetSelector::from_str("foobar").unwrap_err();
+        assert!(
+            matches!(err, ParseTargetSelectorError::Platform(_)),
+            "expected plain platform error, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_target_selector_expression_hint_triggers() {
+        use crate::TargetSelector;
+        // Anything outside `[a-z0-9-]` should trigger the expression hint.
+        let cases = [
+            "host_platform == build_platform",
+            "host_platform != 'linux-64'",
+            "matches(python, '>=3.10')",
+            "linux 64", // contains a space
+        ];
+        for case in cases {
+            let err = TargetSelector::from_str(case).unwrap_err();
+            assert!(
+                matches!(
+                    err,
+                    super::ParseTargetSelectorError::LooksLikeExpression { .. }
+                ),
+                "expected expression hint for '{case}', got: {err:?}"
+            );
+        }
     }
 
     #[test]

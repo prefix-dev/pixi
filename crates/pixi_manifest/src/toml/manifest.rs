@@ -1166,7 +1166,8 @@ mod test {
     fn test_expression_selector_rejected_in_workspace_target() {
         // Expression selectors should be rejected in the workspace target section
         // because TargetSelector::from_str doesn't accept arbitrary expressions.
-        // Only the [package.target] section accepts expression selectors.
+        // Only the [package.target] section accepts expression selectors. The
+        // error must include a hint pointing users at the `if(...)` wrapper.
         assert_snapshot!(expect_parse_failure(
             r#"
         [workspace]
@@ -1177,7 +1178,18 @@ mod test {
         [target."host_platform == build_platform".dependencies]
         foo = "*"
         "#,
-        ));
+        ), @r###"
+          × 'host_platform == build_platform' is not a known platform. Valid platforms are 'noarch', 'unknown', 'linux-32', 'linux-64', 'linux-aarch64', 'linux-armv6l', 'linux-armv7l', 'linux-loongarch64',
+          │ 'linux-ppc64le', 'linux-ppc64', 'linux-ppc', 'linux-s390x', 'linux-riscv32', 'linux-riscv64', 'freebsd-32', 'freebsd-64', 'freebsd-arm64', 'osx-64', 'osx-arm64', 'win-32', 'win-64', 'win-arm64',
+          │ 'emscripten-wasm32', 'wasi-wasm32', 'zos-z'
+           ╭─[pixi.toml:7:18]
+         6 │
+         7 │         [target."host_platform == build_platform".dependencies]
+           ·                  ───────────────────────────────
+         8 │         foo = "*"
+           ╰────
+          help: 'host_platform == build_platform' looks like a selector expression. Wrap it in `if(...)` to pass it through to rattler-build, e.g. `if(host_platform == build_platform)`.
+        "###);
     }
 
     #[test]

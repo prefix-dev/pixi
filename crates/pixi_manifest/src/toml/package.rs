@@ -27,7 +27,7 @@ use crate::{
 pub struct PackageTargetKey(pub TargetSelector);
 
 impl<'de> FromKey<'de> for PackageTargetKey {
-    type Err = rattler_conda_types::ParsePlatformError;
+    type Err = crate::target::ParseTargetSelectorError;
 
     fn from_key(key: toml_span::value::Key<'de>) -> Result<Self, Self::Err> {
         TargetSelector::from_str_or_expression(&key.name).map(PackageTargetKey)
@@ -1419,8 +1419,10 @@ mod test {
     #[test]
     fn test_bare_expression_in_package_target_is_rejected() {
         // Without the `if(...)` wrapper, an expression-like key must fail to
-        // parse as a platform.
-        let input = r#"
+        // parse as a platform. The error must include a hint pointing users
+        // at the `if(...)` wrapper.
+        assert_snapshot!(expect_parse_failure(
+            r#"
         name = "package-name"
         version = "1.0.0"
 
@@ -1429,12 +1431,19 @@ mod test {
 
         [target."host_platform == build_platform".build-dependencies]
         cmake = "*"
-        "#;
-        let result = TomlPackage::from_toml_str(input);
-        assert!(
-            result.is_err(),
-            "bare expression keys without if(...) should be rejected, got: {result:?}"
-        );
+        "#,
+        ), @r###"
+          × 'host_platform == build_platform' is not a known platform. Valid platforms are 'noarch', 'unknown', 'linux-32', 'linux-64', 'linux-aarch64', 'linux-armv6l', 'linux-armv7l', 'linux-loongarch64',
+          │ 'linux-ppc64le', 'linux-ppc64', 'linux-ppc', 'linux-s390x', 'linux-riscv32', 'linux-riscv64', 'freebsd-32', 'freebsd-64', 'freebsd-arm64', 'osx-64', 'osx-arm64', 'win-32', 'win-64', 'win-arm64',
+          │ 'emscripten-wasm32', 'wasi-wasm32', 'zos-z'
+           ╭─[pixi.toml:8:18]
+         7 │
+         8 │         [target."host_platform == build_platform".build-dependencies]
+           ·                  ───────────────────────────────
+         9 │         cmake = "*"
+           ╰────
+          help: 'host_platform == build_platform' looks like a selector expression. Wrap it in `if(...)` to pass it through to rattler-build, e.g. `if(host_platform == build_platform)`.
+        "###);
     }
 
     #[test]
