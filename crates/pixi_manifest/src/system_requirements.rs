@@ -1,14 +1,11 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
-use indexmap::IndexSet;
 use miette::Diagnostic;
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Serialize;
 use serde_value::Value;
 use thiserror::Error;
-
-use crate::{PixiPlatform, PixiPlatformName};
 
 pub const GLIBC_FAMILY: &str = "glibc";
 pub const MUSL_FAMILY: &str = "musl";
@@ -179,75 +176,14 @@ fn make_virtual_package(conda_name: &str, version: Version) -> GenericVirtualPac
     }
 }
 
-/// For each subdir present in the target set, materialise the sysreq as a
-/// `(subdir, virtual_packages)` shape. If `platforms` already has a platform
-/// with that exact shape, use it; otherwise insert a new one with an
-/// auto-derived name. Existing entries are never mutated.
-pub fn expand_system_requirements_into_platforms(
-    requirements: &SystemRequirements,
-    platforms: &mut IndexSet<PixiPlatform>,
-    target_names: Option<&IndexSet<PixiPlatformName>>,
-) {
-    let candidates = requirements.to_declared_virtual_packages();
-    if candidates.is_empty() {
-        return;
-    }
-
-    let mut seen_subdirs = HashSet::new();
-    let target_subdirs: Vec<Platform> = platforms
-        .iter()
-        .filter(|p| target_names.is_none_or(|filter| filter.contains(p.name())))
-        .map(|p| p.subdir())
-        .filter(|subdir| seen_subdirs.insert(*subdir))
-        .collect();
-
-    for subdir in target_subdirs {
-        let declared: Vec<GenericVirtualPackage> = candidates
-            .iter()
-            .filter(|c| virtual_package_applies_to_subdir(c.name.as_normalized(), subdir))
-            .cloned()
-            .collect();
-        if declared.is_empty() {
-            continue;
-        }
-        if existing_platform_matches(platforms, subdir, &declared) {
-            continue;
-        }
-        let synthesised_name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
-        let Ok(synthesised_name) = PixiPlatformName::try_from(synthesised_name_str.as_str()) else {
-            continue;
-        };
-        if platforms.iter().any(|p| p.name() == &synthesised_name) {
-            continue;
-        }
-        platforms.insert(PixiPlatform::new(synthesised_name, subdir, declared));
-    }
-}
-
-fn virtual_package_applies_to_subdir(virtual_package_name: &str, subdir: Platform) -> bool {
-    match virtual_package_name {
+/// Whether `name` is a virtual package that applies on `subdir`. Used by the
+/// `[system-requirements]` migration to filter applicable VPs per subdir.
+pub fn virtual_package_applies_to_subdir(name: &str, subdir: Platform) -> bool {
+    match name {
         "__linux" | "__glibc" | "__musl" | "__eglibc" => subdir.is_linux(),
         "__osx" => subdir.is_osx(),
         _ => true,
     }
-}
-
-fn existing_platform_matches(
-    platforms: &IndexSet<PixiPlatform>,
-    subdir: Platform,
-    declared: &[GenericVirtualPackage],
-) -> bool {
-    platforms.iter().any(|p| {
-        p.subdir() == subdir
-            && virtual_packages_match_as_sets(p.declared_virtual_packages(), declared)
-    })
-}
-
-fn virtual_packages_match_as_sets(
-    a: &[GenericVirtualPackage],
-    b: &[GenericVirtualPackage],
-) -> bool {
-    a.len() == b.len() && a.iter().all(|x| b.iter().any(|y| x == y))
 }
 
 #[derive(Debug, Clone, Error, Diagnostic)]
@@ -668,157 +604,5 @@ mod tests {
             }))
         );
         assert_eq!(e.archspec, Some("x86_64".to_string()));
-    }
-
-    fn bare_platform(subdir: Platform) -> PixiPlatform {
-        PixiPlatform::from_subdir(subdir)
-    }
-
-    fn rich_platform(
-        name: &str,
-        subdir: Platform,
-        declared: Vec<GenericVirtualPackage>,
-    ) -> PixiPlatform {
-        PixiPlatform::new(PixiPlatformName::try_from(name).unwrap(), subdir, declared)
-    }
-
-    fn version_virtual_package(name: &str, version: &str) -> GenericVirtualPackage {
-        GenericVirtualPackage {
-            name: PackageName::try_from(name).unwrap(),
-            version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
-        }
-    }
-
-    fn platform_names(platforms: &IndexSet<PixiPlatform>) -> Vec<&str> {
-        platforms.iter().map(|p| p.name().as_str()).collect()
-    }
-
-    #[test]
-    fn expand_adds_new_synthetic_platforms_alongside_bare_entries() {
-        let mut platforms: IndexSet<PixiPlatform> = [
-            bare_platform(Platform::Linux64),
-            bare_platform(Platform::Osx64),
-            bare_platform(Platform::Win64),
-        ]
-        .into_iter()
-        .collect();
-        let requirements = SystemRequirements {
-            linux: Some(Version::from_str("5.10").unwrap()),
-            macos: Some(Version::from_str("12.0").unwrap()),
-            cuda: Some(Version::from_str("12.0").unwrap()),
-            libc: Some(LibCSystemRequirement::GlibC(
-                Version::from_str("2.28").unwrap(),
-            )),
-            archspec: None,
-        };
-        expand_system_requirements_into_platforms(&requirements, &mut platforms, None);
-
-        // Bare entries untouched.
-        let bare = platforms
-            .iter()
-            .find(|p| p.name().as_str() == "linux-64")
-            .unwrap();
-        assert!(bare.declared_virtual_packages().is_empty());
-        // One new synthetic platform per subdir, with the applicable VPs.
-        let names = platform_names(&platforms);
-        assert_eq!(
-            names.len(),
-            6,
-            "expected 3 originals + 3 synthetics, got {names:?}"
-        );
-        assert!(names.iter().any(|n| n.starts_with("linux-64-")));
-        assert!(names.iter().any(|n| n.starts_with("osx-64-")));
-        assert!(names.iter().any(|n| n.starts_with("win-64-")));
-    }
-
-    #[test]
-    fn expand_reuses_existing_exact_match_instead_of_creating() {
-        let manual = rich_platform(
-            "manual-rich",
-            Platform::Linux64,
-            vec![version_virtual_package("__cuda", "12.0")],
-        );
-        let mut platforms: IndexSet<PixiPlatform> = [bare_platform(Platform::Linux64), manual]
-            .into_iter()
-            .collect();
-        let requirements = SystemRequirements {
-            cuda: Some(Version::from_str("12.0").unwrap()),
-            ..Default::default()
-        };
-        expand_system_requirements_into_platforms(&requirements, &mut platforms, None);
-        let names = platform_names(&platforms);
-        assert_eq!(names, vec!["linux-64", "manual-rich"]);
-    }
-
-    #[test]
-    fn expand_is_idempotent() {
-        let mut platforms: IndexSet<PixiPlatform> =
-            [bare_platform(Platform::Linux64)].into_iter().collect();
-        let requirements = SystemRequirements {
-            cuda: Some(Version::from_str("12.0").unwrap()),
-            ..Default::default()
-        };
-        expand_system_requirements_into_platforms(&requirements, &mut platforms, None);
-        let after_first = platforms.len();
-        expand_system_requirements_into_platforms(&requirements, &mut platforms, None);
-        assert_eq!(platforms.len(), after_first);
-    }
-
-    #[test]
-    fn expand_with_target_names_restricts_seed_subdirs() {
-        let mut platforms: IndexSet<PixiPlatform> = [
-            bare_platform(Platform::Linux64),
-            rich_platform("gpu", Platform::Osx64, Vec::new()),
-        ]
-        .into_iter()
-        .collect();
-        let requirements = SystemRequirements {
-            cuda: Some(Version::from_str("12.0").unwrap()),
-            ..Default::default()
-        };
-        let target_names: IndexSet<PixiPlatformName> = [PixiPlatformName::try_from("gpu").unwrap()]
-            .into_iter()
-            .collect();
-        expand_system_requirements_into_platforms(
-            &requirements,
-            &mut platforms,
-            Some(&target_names),
-        );
-        let names = platform_names(&platforms);
-        // gpu's subdir (osx-64) drives one new platform; linux-64's subdir is
-        // out of scope because linux-64 isn't in `target_names`.
-        assert_eq!(names.len(), 3);
-        assert!(names.iter().any(|n| n.starts_with("osx-64-")));
-        assert!(!names.iter().any(|n| n.starts_with("linux-64-")));
-    }
-
-    /// Confirm the libc-family slot synthesises `__<family>` rather than
-    /// hard-coding `__glibc`, so musl/eglibc round-trip through the shim.
-    #[test]
-    fn expand_libc_other_family_uses_family_prefixed_name() {
-        let mut platforms: IndexSet<PixiPlatform> = [bare_platform(Platform::LinuxAarch64)]
-            .into_iter()
-            .collect();
-        let requirements = SystemRequirements {
-            libc: Some(LibCSystemRequirement::OtherFamily(LibCFamilyAndVersion {
-                family: Some(MUSL_FAMILY.to_string()),
-                version: Version::from_str("1.2.0").unwrap(),
-            })),
-            ..Default::default()
-        };
-        expand_system_requirements_into_platforms(&requirements, &mut platforms, None);
-        let synthetic = platforms
-            .iter()
-            .find(|p| p.name().as_str() != "linux-aarch64")
-            .expect("a synthetic platform was added");
-        assert_eq!(
-            synthetic
-                .declared_virtual_packages()
-                .iter()
-                .map(|g| g.name.as_normalized())
-                .collect::<Vec<_>>(),
-            vec!["__musl"],
-        );
     }
 }

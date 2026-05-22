@@ -2445,11 +2445,19 @@ feature_target_dep = "*"
             p.into()
         }
 
+        // `osx-64` lands in workspace.platforms via the [system-requirements]
+        // migration's pre-scan: feature.test references it, it parses as a
+        // conda subdir, so the migration appends it to the workspace's
+        // platform set as a bare subdir-platform.
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Linux64), pp(Platform::Win64)]
-                .into_iter()
-                .collect::<IndexSet<_>>()
+            [
+                pp(Platform::Linux64),
+                pp(Platform::Win64),
+                pp(Platform::Osx64),
+            ]
+            .into_iter()
+            .collect::<IndexSet<_>>()
         );
 
         manifest
@@ -2458,7 +2466,9 @@ feature_target_dep = "*"
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Win64)].into_iter().collect::<IndexSet<_>>()
+            [pp(Platform::Win64), pp(Platform::Osx64)]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
 
         assert_eq!(

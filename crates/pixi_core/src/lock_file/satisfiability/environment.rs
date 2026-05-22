@@ -77,17 +77,32 @@ pub fn verify_environment_satisfiability(
             virtual_packages: p.virtual_packages().to_vec(),
         })
         .collect();
-    let locked_platforms: HashSet<PixiPlatformName> = locked_platform_data
+    // Subdirs the env actually targets. A lockfile platform whose subdir is
+    // covered by some env platform is treated as the same target -- this is
+    // the case for old lockfiles whose bare-subdir names no longer appear in
+    // workspace.platforms after the `[system-requirements]` migration.
+    let env_subdirs: HashSet<rattler_conda_types::Platform> = platforms
         .iter()
-        .map(|p| {
-            PixiPlatformName::try_from(p.name.as_str())
-                .expect("lockfile platform name should be a valid pixi platform name")
+        .filter_map(|name| {
+            environment
+                .workspace_manifest()
+                .workspace
+                .platform_by_name(name)
+                .map(|p| p.subdir())
         })
         .collect();
-    let additional_platforms = locked_platforms
-        .difference(&platforms)
-        .cloned()
-        .collect::<HashSet<_>>();
+    let additional_platforms: HashSet<PixiPlatformName> = locked_platform_data
+        .iter()
+        .filter_map(|lp| {
+            let name = PixiPlatformName::try_from(lp.name.as_str())
+                .expect("lockfile platform name should be a valid pixi platform name");
+            if platforms.contains(&name) || env_subdirs.contains(&lp.subdir) {
+                None
+            } else {
+                Some(name)
+            }
+        })
+        .collect();
     if !additional_platforms.is_empty() {
         return Err(EnvironmentUnsat::AdditionalPlatformsInLockFile(
             additional_platforms,
@@ -235,8 +250,21 @@ impl PypiWheelTagsCheck {
             locked_environment
                 .packages_by_platform()
                 .filter_map(|(lock_platform, packages)| {
-                    let name = PixiPlatformName::try_from(lock_platform.name().as_str()).ok()?;
-                    let pixi_platform = workspace.workspace.platform_by_name(&name)?;
+                    // Try the lockfile's platform name first; if it doesn't
+                    // appear in the workspace (post-`[system-requirements]`
+                    // migration the bare-subdir name is replaced by a
+                    // synthetic one), pick any workspace platform that shares
+                    // the subdir.
+                    let pixi_platform = PixiPlatformName::try_from(lock_platform.name().as_str())
+                        .ok()
+                        .and_then(|name| workspace.workspace.platform_by_name(&name))
+                        .or_else(|| {
+                            workspace
+                                .workspace
+                                .platforms
+                                .iter()
+                                .find(|p| p.subdir() == lock_platform.subdir())
+                        })?;
                     Some((pixi_platform, packages))
                 })
                 .flat_map(|(pixi_platform, packages)| {

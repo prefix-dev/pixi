@@ -2,14 +2,15 @@ use std::{
     collections::{HashMap, HashSet},
     ops::Range,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{PackageName, Version};
+use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -19,8 +20,8 @@ use url::Url;
 
 use crate::{
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskName,
-    TomlError, Warning, WithWarnings, WorkspaceManifest,
+    KnownPreviewFeature, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
+    TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -438,20 +439,7 @@ impl TomlManifest {
             .map(PixiSpanned::into_inner)
             .unwrap_or_default();
 
-        // Synthesise per-platform virtual packages from `[system-requirements]`.
-        // Named features only contribute when they pin an explicit `platforms`.
-        for feature in features.values() {
-            let target_names = match (feature.name.is_default(), feature.platforms.as_ref()) {
-                (true, _) => None,
-                (false, Some(set)) => Some(set),
-                (false, None) => continue,
-            };
-            crate::system_requirements::expand_system_requirements_into_platforms(
-                &feature.system_requirements,
-                &mut workspace.platforms,
-                target_names,
-            );
-        }
+        migrate_system_requirements_to_platforms(&mut workspace, &mut features)?;
 
         let workspace_manifest = WorkspaceManifest {
             workspace,
@@ -494,6 +482,162 @@ impl TomlManifest {
         };
 
         Ok((workspace_manifest, package_manifest, warnings))
+    }
+}
+
+/// Rebuild `workspace.platforms` so it owns one `PixiPlatform` per
+/// `(subdir, virtual_packages)` shape any feature actually references, and
+/// rewrite each feature's platforms list to name those entries instead of the
+/// originals + `[system-requirements]`. The original manifest list is kept in
+/// a local for the duration of this call and is what the serializer round-trips
+/// back to pixi.toml.
+fn migrate_system_requirements_to_platforms(
+    workspace: &mut crate::Workspace,
+    features: &mut IndexMap<FeatureName, Feature>,
+) -> Result<(), TomlError> {
+    let mut originals: IndexSet<PixiPlatform> = std::mem::take(&mut workspace.platforms);
+    // A workspace that already declares custom names or per-platform virtual
+    // packages can't accept the legacy `[system-requirements]` shim -- it
+    // would be ambiguous which set of declarations wins.
+    let all_simple_subdir = originals.iter().all(PixiPlatform::is_subdir_platform);
+
+    if all_simple_subdir {
+        extend_originals_with_referenced_subdirs(&mut originals, features)?;
+    }
+
+    for feature in features.values_mut() {
+        if feature.system_requirements.is_empty() {
+            register_referenced_originals(&originals, feature, &mut workspace.platforms)?;
+            continue;
+        }
+        if !all_simple_subdir {
+            return Err(TomlError::from(GenericError::new(format!(
+                "feature '{}' uses `[system-requirements]` but the workspace declares per-platform virtual packages; remove the system-requirements table and declare the constraints on the platforms instead",
+                feature.name,
+            ))));
+        }
+        synthesise_for_feature(&originals, feature, &mut workspace.platforms)?;
+    }
+
+    append_uncovered_subdirs(&originals, &mut workspace.platforms);
+    Ok(())
+}
+
+/// Pre-scan pass for the simple-subdir-only workspace case: every name in
+/// any feature's platforms list that isn't already declared in the workspace
+/// is appended to `originals` as a bare subdir-platform, provided the name
+/// parses as a conda subdir. Names that don't parse are a hard error.
+fn extend_originals_with_referenced_subdirs(
+    originals: &mut IndexSet<PixiPlatform>,
+    features: &IndexMap<FeatureName, Feature>,
+) -> Result<(), TomlError> {
+    for feature in features.values() {
+        let Some(names) = feature.platforms.as_ref() else {
+            continue;
+        };
+        for name in names {
+            if originals.iter().any(|p| p.name() == name) {
+                continue;
+            }
+            let subdir = Platform::from_str(name.as_str()).map_err(|e| {
+                TomlError::from(GenericError::new(format!(
+                    "feature '{}' references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
+                    feature.name, name,
+                )))
+            })?;
+            originals.insert(PixiPlatform::from_subdir(subdir));
+        }
+    }
+    Ok(())
+}
+
+/// Resolve every name in `feature.platforms` to an original `PixiPlatform`
+/// and copy it into `workspace.platforms`. Error if a name is missing.
+fn register_referenced_originals(
+    originals: &IndexSet<PixiPlatform>,
+    feature: &Feature,
+    target: &mut IndexSet<PixiPlatform>,
+) -> Result<(), TomlError> {
+    let Some(names) = feature.platforms.as_ref() else {
+        return Ok(());
+    };
+    for name in names {
+        let original = originals.iter().find(|p| p.name() == name).ok_or_else(|| {
+            TomlError::from(GenericError::new(format!(
+                "feature '{}' references platform '{}' which is not declared in the workspace",
+                feature.name, name,
+            )))
+        })?;
+        target.insert(original.clone());
+    }
+    Ok(())
+}
+
+/// For a feature that carries `[system-requirements]`, synthesise one
+/// `PixiPlatform` per subdir the feature targets, register it in
+/// `workspace.platforms`, and rewrite the feature's platforms list to those
+/// synthetic names (the default feature keeps `platforms = None`).
+fn synthesise_for_feature(
+    originals: &IndexSet<PixiPlatform>,
+    feature: &mut Feature,
+    target: &mut IndexSet<PixiPlatform>,
+) -> Result<(), TomlError> {
+    let subdirs: Vec<Platform> = match feature.platforms.as_ref() {
+        Some(names) => names
+            .iter()
+            .map(|name| {
+                Platform::from_str(name.as_str()).map_err(|e| {
+                    TomlError::from(GenericError::new(format!(
+                        "feature '{}' references platform '{}' which is not a conda subdir: {e}",
+                        feature.name, name,
+                    )))
+                })
+            })
+            .collect::<Result<_, _>>()?,
+        None => originals.iter().map(PixiPlatform::subdir).collect(),
+    };
+
+    let candidates = feature.system_requirements.to_declared_virtual_packages();
+    let mut synthesised_names: IndexSet<PixiPlatformName> = IndexSet::new();
+    for subdir in subdirs {
+        let declared: Vec<GenericVirtualPackage> = candidates
+            .iter()
+            .filter(|c| {
+                crate::system_requirements::virtual_package_applies_to_subdir(
+                    c.name.as_normalized(),
+                    subdir,
+                )
+            })
+            .cloned()
+            .collect();
+        let name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
+        let name = PixiPlatformName::try_from(name_str.as_str()).map_err(|e| {
+            TomlError::from(GenericError::new(format!(
+                "synthesised platform name '{name_str}' is not a valid pixi platform name: {e}",
+            )))
+        })?;
+        target.insert(PixiPlatform::new(name.clone(), subdir, declared));
+        synthesised_names.insert(name);
+    }
+
+    if !feature.name.is_default() {
+        feature.platforms = Some(synthesised_names);
+    }
+    Ok(())
+}
+
+/// Append any original platform whose subdir isn't already represented in
+/// `target`. Subdir coverage is snapshotted before the walk -- entries
+/// appended during the walk do not affect later iterations.
+fn append_uncovered_subdirs(
+    originals: &IndexSet<PixiPlatform>,
+    target: &mut IndexSet<PixiPlatform>,
+) {
+    let covered: HashSet<Platform> = target.iter().map(PixiPlatform::subdir).collect();
+    for original in originals {
+        if !covered.contains(&original.subdir()) {
+            target.insert(original.clone());
+        }
     }
 }
 
@@ -727,7 +871,7 @@ mod test {
     }
 
     #[test]
-    fn test_system_requirements_shim_adds_synthetic_platforms() {
+    fn test_system_requirements_migration_replaces_originals_with_synthetics() {
         let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
             [workspace]
@@ -744,25 +888,140 @@ mod test {
         )
         .unwrap();
 
-        let platforms = &workspace_manifest.workspace.platforms;
-        let names: Vec<&str> = platforms.iter().map(|p| p.name().as_str()).collect();
-
-        // Originals are untouched.
+        let names: Vec<&str> = workspace_manifest
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().as_str())
+            .collect();
+        // Originals are gone -- one synthetic per subdir replaces them.
+        assert_eq!(names.len(), 3, "got {names:?}");
+        assert!(names.iter().all(|n| n.contains("cuda-12-0")));
         for original in ["linux-64", "osx-64", "win-64"] {
-            let p = platforms
-                .iter()
-                .find(|p| p.name().as_str() == original)
-                .unwrap_or_else(|| panic!("missing original {original}"));
             assert!(
-                p.declared_virtual_packages().is_empty(),
-                "bare {original} should have no declarations"
+                !names.contains(&original),
+                "bare {original} should be gone after migration",
             );
         }
-        // One synthetic per subdir is added alongside.
+        // Default feature keeps platforms = None.
+        let default = workspace_manifest
+            .features
+            .get(&FeatureName::DEFAULT)
+            .unwrap();
+        assert!(default.platforms.is_none());
+    }
+
+    #[test]
+    fn test_system_requirements_migration_named_feature_rewrites_platforms() {
+        let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64", "osx-64"]
+
+            [feature.cuda]
+            platforms = ["linux-64"]
+            system-requirements = { cuda = "12.0" }
+
+            [environments]
+            cuda = ["cuda"]
+            "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let names: Vec<&str> = workspace_manifest
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().as_str())
+            .collect();
+        // synthetic `linux-64-cuda-12-0` from feature.cuda, plus the bare
+        // `osx-64` re-added by post-processing because no feature covers its
+        // subdir.
+        assert_eq!(names, vec!["linux-64-cuda-12-0", "osx-64"]);
+
+        let cuda = workspace_manifest
+            .features
+            .get(&FeatureName::from("cuda"))
+            .unwrap();
         assert_eq!(
-            names.len(),
-            6,
-            "expected 3 originals + 3 synthetics, got {names:?}"
+            cuda.platforms
+                .as_ref()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .as_str(),
+            "linux-64-cuda-12-0",
+        );
+    }
+
+    #[test]
+    fn test_system_requirements_migration_rejects_rich_workspace_platform() {
+        let result = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = [
+              "linux-64",
+              { name = "gpu", platform = "linux-64", cuda = "12.0" },
+            ]
+
+            [system-requirements]
+            cuda = "11.0"
+            "#,
+            Path::new(""),
+        );
+        let err = result.expect_err("rich platform + sysreqs must error");
+        assert!(
+            err.error
+                .to_string()
+                .contains("per-platform virtual packages"),
+            "unexpected error: {err:?}",
+        );
+    }
+
+    #[test]
+    fn test_system_requirements_migration_no_sysreqs_passes_through() {
+        let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64", "osx-64"]
+
+            [feature.dev]
+            platforms = ["linux-64"]
+            "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let names: Vec<&str> = workspace_manifest
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().as_str())
+            .collect();
+        // No sysreqs anywhere: workspace.platforms ends up matching originals.
+        assert_eq!(names, vec!["linux-64", "osx-64"]);
+
+        let dev = workspace_manifest
+            .features
+            .get(&FeatureName::from("dev"))
+            .unwrap();
+        assert_eq!(
+            dev.platforms
+                .as_ref()
+                .unwrap()
+                .iter()
+                .next()
+                .unwrap()
+                .as_str(),
+            "linux-64",
         );
     }
 
