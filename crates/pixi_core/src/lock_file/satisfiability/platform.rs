@@ -75,6 +75,32 @@ pub type PlatformSatisfiabilityResult = Result<
     CommandDispatcherError<Box<PlatformUnsat>>,
 >;
 
+/// Look up `requested` in the lockfile, falling back to the platform's subdir
+/// when the bare-subdir entry's virtual packages already cover what
+/// `requested` declares. Lets pre-shim lockfiles still satisfy newly
+/// synthesised platforms whose VPs are present under the subdir; v5 and
+/// earlier lockfiles that don't track per-platform VPs are trusted.
+fn resolve_lock_platform<'lock>(
+    lock_file: &'lock rattler_lock::LockFile,
+    requested: &PixiPlatformName,
+    workspace_manifest: &pixi_manifest::WorkspaceManifest,
+) -> Option<rattler_lock::Platform<'lock>> {
+    if let Some(platform) = lock_file.platform(requested.as_str()) {
+        return Some(platform);
+    }
+    let workspace_platform = workspace_manifest.workspace.platform_by_name(requested)?;
+    let subdir_name = workspace_platform.subdir().as_str();
+    let candidate = lock_file.platform(subdir_name)?;
+    let declared: Vec<String> = workspace_platform
+        .declared_virtual_packages()
+        .iter()
+        .map(|gvp| gvp.to_string())
+        .collect();
+    let locked: &[String] = candidate.virtual_packages();
+    let matches = locked.is_empty() || declared.iter().all(|d| locked.iter().any(|l| l == d));
+    matches.then_some(candidate)
+}
+
 fn build_platform_verification_setup(
     ctx: &VerifySatisfiabilityContext<'_>,
 ) -> Result<
@@ -137,9 +163,11 @@ pub async fn verify_platform_satisfiability(
     let mut unresolved_records: Vec<UnresolvedPixiRecord> = Vec::new();
     let mut pypi_packages: Vec<UnresolvedPypiRecord> = Vec::new();
     let resolver = ctx.resolver;
-    let lock_platform = locked_environment
-        .lock_file()
-        .platform(&ctx.platform.to_string());
+    let lock_platform = resolve_lock_platform(
+        locked_environment.lock_file(),
+        &ctx.platform,
+        ctx.environment.workspace_manifest(),
+    );
     for package in lock_platform
         .and_then(|p| locked_environment.packages(p))
         .into_iter()

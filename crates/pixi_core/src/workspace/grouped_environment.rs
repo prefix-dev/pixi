@@ -111,10 +111,10 @@ impl<'p> GroupedEnvironment<'p> {
         }
     }
 
-    /// Returns the virtual packages from the group based on the system
-    /// requirements.
+    /// Returns the virtual packages from the group, sourced from the
+    /// platform's declared virtual packages with default fillers.
     pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
-        get_minimal_virtual_packages(platform, &self.system_requirements())
+        get_minimal_virtual_packages(platform)
             .into_iter()
             .map(GenericVirtualPackage::from)
             .collect()
