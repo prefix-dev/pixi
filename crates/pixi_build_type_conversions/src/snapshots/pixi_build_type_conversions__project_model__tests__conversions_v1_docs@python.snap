@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_type_conversions/src/project_model.rs
+assertion_line: 300
 expression: project_model
 ---
 {
@@ -29,7 +30,8 @@ expression: project_model
             "md5": null,
             "sha256": null,
             "url": null,
-            "license": null
+            "license": null,
+            "condition": null
           }
         }
       },
@@ -46,7 +48,8 @@ expression: project_model
             "md5": null,
             "sha256": null,
             "url": null,
-            "license": null
+            "license": null,
+            "condition": null
           }
         }
       },

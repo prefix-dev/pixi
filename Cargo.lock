@@ -4699,9 +4699,9 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libmimalloc-sys"
-version = "0.1.47"
+version = "0.1.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d1eacfa31c33ec25e873c136ba5669f00f9866d0688bea7be4d3f7e43067df6"
+checksum = "2892ae4ea6fa2cb7acb0e236a6880d39523239cd9089de71d220910ccc806790"
 dependencies = [
  "cc",
 ]
@@ -4975,9 +4975,9 @@ dependencies = [
 
 [[package]]
 name = "mimalloc"
-version = "0.1.50"
+version = "0.1.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3627c4272df786b9260cabaa46aec1d59c93ede723d4c3ef646c503816b0640"
+checksum = "ebca48a43116bc25f18a61360f1be98412f50cc218f5e52c823086b999a4a21a"
 dependencies = [
  "libmimalloc-sys",
 ]
@@ -5955,7 +5955,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.68.1"
+version = "0.69.0"
 dependencies = [
  "astral-reqwest-middleware",
  "async-trait",
@@ -6011,7 +6011,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-cmake"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6037,7 +6037,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-mojo"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6060,7 +6060,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-python"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6114,7 +6114,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-rattler-build"
-version = "0.3.11"
+version = "0.3.12"
 dependencies = [
  "async-trait",
  "chrono",
@@ -6138,7 +6138,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-ros"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6165,7 +6165,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-rust"
-version = "0.4.9"
+version = "0.4.10"
 dependencies = [
  "async-trait",
  "cargo_toml",
@@ -7124,10 +7124,12 @@ dependencies = [
  "humantime",
  "insta",
  "itertools 0.14.0",
+ "pathdiff",
  "pixi_build_types",
  "pixi_consts",
  "pixi_git",
  "pixi_path",
+ "pixi_test_utils",
  "pixi_toml",
  "rattler_conda_types",
  "rattler_digest",

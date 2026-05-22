@@ -854,6 +854,196 @@ mod test {
         ));
     }
 
+    /// Parses a workspace manifest and returns both the workspace and (required)
+    /// package manifests, so package-side inheritance can be inspected.
+    fn parse_workspace_and_package(source: &str) -> (WorkspaceManifest, PackageManifest) {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(source).expect("parse toml");
+        let (ws, pkg, _) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("convert to workspace manifest");
+        (ws, pkg.expect("package manifest"))
+    }
+
+    #[test]
+    fn test_workspace_dependencies_pool_populates_workspace() {
+        let (ws, _pkg) = parse_workspace_and_package(
+            r#"
+            [workspace]
+            name = "monorepo"
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [package]
+            name = "lib"
+            version = "0.1.0"
+
+            [package.build]
+            backend = { name = "foobar", version = "*" }
+            "#,
+        );
+        let numpy = ws
+            .workspace
+            .dependencies
+            .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
+            .expect("numpy in workspace pool");
+        assert_eq!(numpy.version.as_ref().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_package_inherits_workspace_dependency() {
+        // The host-dependencies entry uses { workspace = true } and the
+        // workspace pool defines numpy. After parsing, the package's default
+        // target must carry the inherited version spec.
+        let (_ws, pkg) = parse_workspace_and_package(
+            r#"
+            [workspace]
+            name = "monorepo"
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            numpy = "1.*"
+
+            [package]
+            name = "lib"
+            version = "0.1.0"
+
+            [package.build]
+            backend = { name = "foobar", version = "*" }
+
+            [package.host-dependencies]
+            numpy = { workspace = true }
+            "#,
+        );
+        let host_deps = pkg
+            .targets
+            .default()
+            .dependencies
+            .get(&crate::SpecType::Host)
+            .expect("host bucket");
+        let numpy = host_deps
+            .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
+            .expect("numpy in host deps");
+        let spec = numpy.iter().next().unwrap();
+        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
+    }
+
+    #[test]
+    fn test_inherited_backend_pulls_version_from_workspace() {
+        // The build backend uses workspace inheritance; the version must come
+        // from `[workspace.dependencies]`.
+        let (_ws, pkg) = parse_workspace_and_package(
+            r#"
+            [workspace]
+            name = "monorepo"
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [workspace.dependencies]
+            pixi-build-python = "==1.2.3"
+
+            [package]
+            name = "lib"
+            version = "0.1.0"
+
+            [package.build]
+            backend = { name = "pixi-build-python", workspace = true }
+            "#,
+        );
+        let spec = &pkg.build.backend.spec;
+        // The resolved backend spec must carry the workspace-declared version.
+        match spec {
+            pixi_spec::PixiSpec::Version(v) => assert_eq!(v.to_string(), "==1.2.3"),
+            pixi_spec::PixiSpec::DetailedVersion(detailed) => {
+                assert_eq!(detailed.version.as_ref().unwrap().to_string(), "==1.2.3")
+            }
+            other => panic!("unexpected backend spec: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_inherited_entry_missing_workspace_definition_errors() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "monorepo"
+        channels = []
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [package]
+        name = "lib"
+        version = "0.1.0"
+
+        [package.build]
+        backend = { name = "foobar", version = "*" }
+
+        [package.host-dependencies]
+        ghost = { workspace = true }
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_inherited_entry_cannot_restate_version() {
+        // Restating `version` on a `{ workspace = true }` entry is rejected.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "monorepo"
+        channels = []
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [workspace.dependencies]
+        numpy = "1.*"
+
+        [package]
+        name = "lib"
+        version = "0.1.0"
+
+        [package.build]
+        backend = { name = "foobar", version = "*" }
+
+        [package.host-dependencies]
+        numpy = { workspace = true, version = "2.0" }
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_workspace_false_on_dependency_errors() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "monorepo"
+        channels = []
+        platforms = ['linux-64']
+        preview = ["pixi-build"]
+
+        [package]
+        name = "lib"
+        version = "0.1.0"
+
+        [package.build]
+        backend = { name = "foobar", version = "*" }
+
+        [package.host-dependencies]
+        numpy = { workspace = false }
+        "#,
+        ));
+    }
+
     #[test]
     fn test_target_workspace_dependencies() {
         assert_snapshot!(expect_parse_warnings(

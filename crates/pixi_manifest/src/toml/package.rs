@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
+use pixi_spec::TomlSpec;
 pub use pixi_toml::TomlFromStr;
 use pixi_toml::{DeserializeAs, FromKey, Same, TomlIndexMap, TomlWith};
-use rattler_conda_types::Version;
+use rattler_conda_types::{PackageName, Version};
 use thiserror::Error;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
@@ -15,7 +16,7 @@ use crate::{
     toml::{
         TomlPackageBuild, manifest::ExternalWorkspaceProperties, package_target::TomlPackageTarget,
     },
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    utils::{PixiSpanned, inheritable_package_map::InheritablePackageMap},
 };
 
 /// A wrapper around [`TargetSelector`] for use as a TOML key in the
@@ -147,10 +148,10 @@ pub struct TomlPackage {
 
     // Fields that are package-specific and cannot be inherited
     pub build: TomlPackageBuild,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub run_constraints: Option<PixiSpanned<UniquePackageMap>>,
+    pub host_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
+    pub build_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
+    pub run_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
+    pub run_constraints: Option<PixiSpanned<InheritablePackageMap>>,
     pub target: IndexMap<PixiSpanned<PackageTargetKey>, TomlPackageTarget>,
 
     pub span: Span,
@@ -236,6 +237,12 @@ pub struct WorkspacePackageProperties {
     pub homepage: Option<Url>,
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
+    /// `[workspace.dependencies]` pool; paths are relative to `workspace_root`.
+    pub dependencies: IndexMap<PackageName, TomlSpec>,
+
+    /// Absolute directory of the workspace manifest. Used to re-base
+    /// `dependencies` path specs against the member's directory.
+    pub workspace_root: Option<PathBuf>,
 }
 
 impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
@@ -251,6 +258,8 @@ impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
             homepage: value.homepage,
             repository: value.repository,
             documentation: value.documentation,
+            dependencies: IndexMap::new(),
+            workspace_root: None,
         }
     }
 }
@@ -333,7 +342,15 @@ impl TomlPackage {
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
         let mut warnings = Vec::new();
 
-        let build_result = self.build.into_build_system()?;
+        // Re-base workspace dependency path specs against this member's
+        // directory. The pool itself stores them relative to the workspace root.
+        let workspace_dependencies = rebase_workspace_path_specs(
+            &workspace.dependencies,
+            workspace.workspace_root.as_deref(),
+            root_directory,
+        );
+
+        let build_result = self.build.into_build_system(&workspace_dependencies)?;
         warnings.extend(build_result.warnings);
 
         // Resolve fields with 3-tier hierarchy: direct → workspace → package defaults →
@@ -357,13 +374,13 @@ impl TomlPackage {
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
         }
-        .into_package_target(preview)?;
+        .into_package_target(preview, &workspace_dependencies)?;
 
         let targets = self
             .target
             .into_iter()
             .map(|(selector, target)| {
-                let target = target.into_package_target(preview)?;
+                let target = target.into_package_target(preview, &workspace_dependencies)?;
                 let selector = PixiSpanned {
                     value: selector.value.0,
                     span: selector.span,
@@ -510,6 +527,33 @@ impl TomlPackage {
 fn workspace_cannot_be_false() -> GenericError {
     GenericError::new("`workspace` cannot be false")
         .with_help("By default no fields are inherited from the workspace")
+}
+
+/// Re-anchor `path` entries in workspace `TomlSpec`s from `workspace_root` to
+/// `member_root`. Absolute and `~/` paths are returned unchanged. Returns the
+/// input map verbatim when either root is unknown or the roots are equal.
+fn rebase_workspace_path_specs(
+    specs: &IndexMap<PackageName, TomlSpec>,
+    workspace_root: Option<&Path>,
+    member_root: &Path,
+) -> IndexMap<PackageName, TomlSpec> {
+    let Some(workspace_root) = workspace_root else {
+        return specs.clone();
+    };
+    if workspace_root == member_root
+        || workspace_root.as_os_str().is_empty()
+        || member_root.as_os_str().is_empty()
+    {
+        return specs.clone();
+    }
+    specs
+        .iter()
+        .map(|(name, spec)| {
+            let mut rebased = spec.clone();
+            rebased.rebase_path(workspace_root, member_root);
+            (name.clone(), rebased)
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -1391,5 +1435,74 @@ mod test {
             result.is_err(),
             "bare expression keys without if(...) should be rejected, got: {result:?}"
         );
+    }
+
+    #[test]
+    fn test_rebase_workspace_path_specs_relativizes_to_member() {
+        use indexmap::IndexMap;
+        let mut pool: IndexMap<rattler_conda_types::PackageName, TomlSpec> = IndexMap::new();
+        pool.insert("local".parse().unwrap(), path_spec("../shared"));
+
+        let workspace_root = Path::new("/ws");
+        let member_root = Path::new("/ws/members/foo");
+        let rebased = super::rebase_workspace_path_specs(&pool, Some(workspace_root), member_root);
+        let spec = rebased
+            .get(&rattler_conda_types::PackageName::from_str("local").unwrap())
+            .unwrap();
+        assert_eq!(
+            spec.location.as_ref().unwrap().path.as_deref(),
+            Some("../../../shared")
+        );
+    }
+
+    #[test]
+    fn test_rebase_workspace_path_specs_passes_absolute_through() {
+        use indexmap::IndexMap;
+        let mut pool: IndexMap<rattler_conda_types::PackageName, TomlSpec> = IndexMap::new();
+        pool.insert("abs".parse().unwrap(), path_spec("/abs/path"));
+
+        let rebased =
+            super::rebase_workspace_path_specs(&pool, Some(Path::new("/ws")), Path::new("/ws/m"));
+        let spec = rebased
+            .get(&rattler_conda_types::PackageName::from_str("abs").unwrap())
+            .unwrap();
+        assert_eq!(
+            spec.location.as_ref().unwrap().path.as_deref(),
+            Some("/abs/path")
+        );
+    }
+
+    #[test]
+    fn test_rebase_no_op_when_roots_match() {
+        use indexmap::IndexMap;
+        let mut pool: IndexMap<rattler_conda_types::PackageName, TomlSpec> = IndexMap::new();
+        pool.insert("local".parse().unwrap(), path_spec("../shared"));
+
+        let same = Path::new("/ws");
+        let rebased = super::rebase_workspace_path_specs(&pool, Some(same), same);
+        let spec = rebased
+            .get(&rattler_conda_types::PackageName::from_str("local").unwrap())
+            .unwrap();
+        assert_eq!(
+            spec.location.as_ref().unwrap().path.as_deref(),
+            Some("../shared")
+        );
+    }
+
+    /// Construct a [`TomlSpec`] carrying only a path location.
+    fn path_spec(path: &str) -> TomlSpec {
+        let mut spec = TomlSpec::empty();
+        spec.location = Some(pixi_spec::TomlLocationSpec {
+            url: None,
+            git: None,
+            path: Some(path.to_string()),
+            branch: None,
+            rev: None,
+            tag: None,
+            subdirectory: None,
+            md5: None,
+            sha256: None,
+        });
+        spec
     }
 }

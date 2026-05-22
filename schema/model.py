@@ -241,6 +241,16 @@ class Workspace(StrictBaseModel):
     target: dict[TargetName, WorkspaceTarget] | None = Field(
         None, description="The workspace targets"
     )
+    dependencies: Dependencies = Field(
+        None,
+        description=(
+            "Inheritable `conda` dependency pool. Members opt in by writing "
+            "`{ workspace = true }` in any `[package.*-dependencies]` table "
+            "(or in `[package.build.backend]`). Relative `path` specs resolve "
+            "against this manifest and are re-anchored per consuming member."
+        ),
+        examples=[{"numpy": "1.*", "boltons": {"version": ">=24", "channel": "conda-forge"}}],
+    )
 
 
 ########################
@@ -269,7 +279,25 @@ class MatchspecTable(StrictBaseModel):
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
     )
+    extras: list[NonEmptyStr] | None = Field(
+        None,
+        description="Optional extra dependencies to select for the package",
+    )
+    flags: list[NonEmptyStr] | None = Field(
+        None,
+        description="Plain string flags used to select package variants",
+    )
     license: NonEmptyStr | None = Field(None, description="The license of the package")
+    license_family: NonEmptyStr | None = Field(
+        None, description="The license family of the package"
+    )
+    when: When | None = Field(
+        None,
+        description="The condition under which this match spec applies. Use a package string, `{ all = [...] }`, `{ any = [...] }`, or `{ package = ..., version = ..., build = ... }`.",
+    )
+    track_features: list[NonEmptyStr] | None = Field(
+        None, description="The track features of the package"
+    )
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
@@ -300,7 +328,82 @@ class SourceSpecTable(StrictBaseModel):
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
 
+class WhenAll(StrictBaseModel):
+    """All conditions must apply."""
+
+    all: list[When] = Field(
+        ..., min_length=1, description="Conditions to combine with a logical AND"
+    )
+
+
+class WhenAny(StrictBaseModel):
+    """Any condition may apply."""
+
+    any: list[When] = Field(
+        ..., min_length=1, description="Conditions to combine with a logical OR"
+    )
+
+
+class WhenPackage(StrictBaseModel):
+    """Expanded package condition syntax.
+
+    Accepts the same matchspec fields as a regular package dependency except
+    for `when` itself, `channel`, and source-location fields (`url`, `git`,
+    `path`, `md5`, `sha256`, ...).
+    """
+
+    package: NonEmptyStr = Field(description="The package name to match")
+    version: NonEmptyStr | None = Field(None, description="Optional version constraint")
+    build: NonEmptyStr | None = Field(None, description="Optional build string matcher")
+    build_number: NonEmptyStr | None = Field(
+        None,
+        description="The build number of the package",
+    )
+    file_name: NonEmptyStr | None = Field(None, description="The file name of the package")
+    subdir: NonEmptyStr | None = Field(
+        None, description="The subdir of the package, also known as platform"
+    )
+    extras: list[NonEmptyStr] | None = Field(
+        None,
+        description="Optional extra dependencies to select for the package",
+    )
+    flags: list[NonEmptyStr] | None = Field(
+        None,
+        description="Plain string flags used to select package variants",
+    )
+    license: NonEmptyStr | None = Field(None, description="The license of the package")
+    license_family: NonEmptyStr | None = Field(
+        None, description="The license family of the package"
+    )
+    track_features: list[NonEmptyStr] | None = Field(
+        None, description="The track features of the package"
+    )
+
+
+When = NonEmptyStr | WhenAll | WhenAny | WhenPackage
+
+
+class InheritableMatchspecTable(MatchspecTable):
+    """A spec that may inherit from `[workspace.dependencies]`.
+
+    Setting `workspace = true` pulls the version (and any other unset fields)
+    from the matching `[workspace.dependencies]` entry. Members may layer any
+    non-version attribute on top; restating `version` alongside `workspace =
+    true` is an error.
+    """
+
+    workspace: Literal[True] | None = Field(
+        None,
+        description=(
+            "Inherit this spec from `[workspace.dependencies]`. Other fields on "
+            "this table layer on top of the workspace base; `version` is "
+            "mutually exclusive with `workspace`."
+        ),
+    )
+
+
 MatchSpec = NonEmptyStr | MatchspecTable
+InheritableMatchSpec = NonEmptyStr | InheritableMatchspecTable
 CondaPackageName = NonEmptyStr
 
 
@@ -401,6 +504,7 @@ RunConstraintsField = Field(
     description="The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
 )
 Dependencies = dict[CondaPackageName, MatchSpec] | None
+InheritableDependencies = dict[CondaPackageName, InheritableMatchSpec] | None
 
 
 ################
@@ -835,10 +939,10 @@ class Package(StrictBaseModel):
 
     build: Build = Field(..., description="The build configuration of the package")
 
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
-    run_dependencies: Dependencies = RunDependenciesField
-    run_constraints: Dependencies = RunConstraintsField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    run_dependencies: InheritableDependencies = RunDependenciesField
+    run_constraints: InheritableDependencies = RunConstraintsField
 
     target: dict[TargetName, PackageTarget] | None = Field(
         None,
@@ -924,13 +1028,21 @@ class BuildBackend(MatchspecTable):
     additional_dependencies: Dependencies = Field(
         None, description="Additional dependencies to install alongside the build backend"
     )
+    workspace: Literal[True] | None = Field(
+        None,
+        description=(
+            "Inherit the backend version from `[workspace.dependencies]` using "
+            "`name` as the lookup key. `version` is mutually exclusive with "
+            "`workspace`."
+        ),
+    )
 
 
 class PackageTarget(StrictBaseModel):
-    run_dependencies: Dependencies = RunDependenciesField
-    run_constraints: Dependencies = RunConstraintsField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
+    run_dependencies: InheritableDependencies = RunDependenciesField
+    run_constraints: InheritableDependencies = RunConstraintsField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
 
 
 #######################

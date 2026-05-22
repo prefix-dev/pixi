@@ -31,10 +31,13 @@ fn to_pixi_spec_v1(
                 build,
                 build_number,
                 extras: None,
+                flags: None,
                 subdir,
                 namespace: None,
                 license,
+                license_family: None,
                 condition: None,
+                track_features: None,
             } = source
             else {
                 unimplemented!(
@@ -103,7 +106,7 @@ fn to_pixi_spec_v1(
                 // These are currently explicitly ignored in the conversion
                 namespace: _,
                 extras: _,
-                condition: _,
+                condition,
                 track_features: _,
                 flags: _,
                 license_family: _,
@@ -119,6 +122,7 @@ fn to_pixi_spec_v1(
                 sha256,
                 url,
                 license,
+                condition,
             })
         }
     };

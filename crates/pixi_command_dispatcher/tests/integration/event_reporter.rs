@@ -6,10 +6,10 @@ use std::{
 use futures::{Stream, StreamExt};
 use pixi_build_discovery::JsonRpcBackendSpec;
 use pixi_command_dispatcher::{
-    BackendSourceBuildSpec, BuildBackendMetadataInner, CondaSolveReporter, GitCheckoutReporter,
-    InstallPixiEnvironmentSpec, PixiInstallReporter, PixiSolveEnvironmentSpec, PixiSolveReporter,
-    SolveCondaEnvironmentSpec, SourceMetadataReporterSpec, SourceRecordReporterSpec,
-    UrlCheckoutReporter,
+    BackendSourceBuildSpec, BuildBackendMetadataInner, CondaSolveReporter, GatewayReporter,
+    GitCheckoutReporter, InstallPixiEnvironmentSpec, PixiInstallReporter, PixiSolveEnvironmentSpec,
+    PixiSolveReporter, SolveCondaEnvironmentSpec, SourceMetadataReporterSpec,
+    SourceRecordReporterSpec, UrlCheckoutReporter,
     reporter::{
         BackendSourceBuildReporter, BuildBackendMetadataReporter, InstantiateBackendReporter,
         SourceMetadataReporter, SourceRecordReporter,
@@ -140,6 +140,15 @@ pub enum Event {
     },
     InstantiateBackendFinished {
         id: OperationId,
+    },
+
+    /// Recorded each time a gateway-query site requests a per-call
+    /// repodata reporter. `id` is a fresh op id for the query itself;
+    /// its parent in the registry is the started operation that
+    /// triggered the fetch (carried in `op_id`).
+    GatewayQuery {
+        id: OperationId,
+        op_id: OperationId,
     },
 }
 
@@ -413,6 +422,17 @@ impl InstantiateBackendReporter for EventReporter {
     }
 }
 
+impl GatewayReporter for EventReporter {
+    fn create_gateway_reporter(
+        &self,
+        op_id: OperationId,
+    ) -> Option<Box<dyn rattler_repodata_gateway::Reporter>> {
+        let id = self.alloc();
+        self.record(Event::GatewayQuery { id, op_id });
+        None
+    }
+}
+
 impl BackendSourceBuildReporter for EventReporter {
     fn on_queued(&self, spec: &BackendSourceBuildSpec) -> OperationId {
         let id = self.alloc();
@@ -462,6 +482,7 @@ impl EventReporter {
             .with_source_metadata_reporter(self.clone())
             .with_source_record_reporter(self.clone())
             .with_backend_source_build_reporter(self.clone())
+            .with_gateway_reporter(self.clone())
     }
 }
 

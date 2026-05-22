@@ -148,6 +148,7 @@ nav:
           - Advanced Building Using rattler-build: build/advanced_cpp.md
           - Cross Compilation using rattler-build: build/cross_compilation.md
       - Dependency Types: build/dependency_types.md
+      - Workspace Dependencies: build/workspace_dependencies.md
       - Build Backends:
           - Overview: build/backends.md
           - CMake: build/backends/pixi-build-cmake.md
