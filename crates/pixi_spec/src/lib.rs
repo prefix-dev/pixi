@@ -436,14 +436,18 @@ impl PixiSpec {
 ///
 /// This type only represents source packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
+///
+/// The `L` type parameter encodes the kind of source location at the type
+/// level: [`UrlSourceSpec`], [`PathSourceSpec`], [`GitSpec`], or the union
+/// [`SourceLocationSpec`].
 #[serde_as]
 #[skip_serializing_none]
 #[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct SourceSpec {
+#[serde(rename_all = "kebab-case", bound(serialize = "L: serde::Serialize"))]
+pub struct SourceSpec<L = SourceLocationSpec> {
     /// The location of the source.
     #[serde(flatten)]
-    pub location: SourceLocationSpec,
+    pub location: L,
 
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
     #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
@@ -483,10 +487,45 @@ pub struct SourceSpec {
     pub track_features: Option<Vec<String>>,
 }
 
-impl From<SourceLocationSpec> for SourceSpec {
-    fn from(value: SourceLocationSpec) -> Self {
+/// Trait implemented by every type that can appear as the `location` of a
+/// [`SourceSpec`]. Lets generic [`SourceSpec`] code answer "is the underlying
+/// archive a binary conda package?" without inspecting the variant.
+pub trait SourceLocation {
+    /// Returns true if the location is known to point to a binary conda
+    /// archive (`.conda`/`.tar.bz2`).
+    fn is_binary(&self) -> bool;
+}
+
+impl SourceLocation for UrlSourceSpec {
+    fn is_binary(&self) -> bool {
+        UrlSourceSpec::is_binary(self)
+    }
+}
+
+impl SourceLocation for PathSourceSpec {
+    fn is_binary(&self) -> bool {
+        PathSourceSpec::is_binary(self)
+    }
+}
+
+impl SourceLocation for GitSpec {
+    fn is_binary(&self) -> bool {
+        false
+    }
+}
+
+impl SourceLocation for SourceLocationSpec {
+    fn is_binary(&self) -> bool {
+        SourceLocationSpec::is_binary(self)
+    }
+}
+
+impl<L> SourceSpec<L> {
+    /// Constructs a new instance from a location with no matchspec fields
+    /// set.
+    pub fn from_location(location: L) -> Self {
         Self {
-            location: value,
+            location,
             version: None,
             build: None,
             build_number: None,
@@ -499,6 +538,66 @@ impl From<SourceLocationSpec> for SourceSpec {
             condition: None,
             track_features: None,
         }
+    }
+
+    /// Maps the underlying location while preserving the matchspec fields.
+    pub fn map_location<M>(self, f: impl FnOnce(L) -> M) -> SourceSpec<M> {
+        SourceSpec {
+            location: f(self.location),
+            version: self.version,
+            build: self.build,
+            build_number: self.build_number,
+            extras: self.extras,
+            flags: self.flags,
+            subdir: self.subdir,
+            namespace: self.namespace,
+            license: self.license,
+            license_family: self.license_family,
+            condition: self.condition,
+            track_features: self.track_features,
+        }
+    }
+}
+
+impl From<SourceLocationSpec> for SourceSpec {
+    fn from(value: SourceLocationSpec) -> Self {
+        Self::from_location(value)
+    }
+}
+
+impl From<UrlSourceSpec> for SourceSpec<UrlSourceSpec> {
+    fn from(value: UrlSourceSpec) -> Self {
+        Self::from_location(value)
+    }
+}
+
+impl From<PathSourceSpec> for SourceSpec<PathSourceSpec> {
+    fn from(value: PathSourceSpec) -> Self {
+        Self::from_location(value)
+    }
+}
+
+impl From<GitSpec> for SourceSpec<GitSpec> {
+    fn from(value: GitSpec) -> Self {
+        Self::from_location(value)
+    }
+}
+
+impl From<SourceSpec<UrlSourceSpec>> for SourceSpec {
+    fn from(value: SourceSpec<UrlSourceSpec>) -> Self {
+        value.map_location(SourceLocationSpec::Url)
+    }
+}
+
+impl From<SourceSpec<PathSourceSpec>> for SourceSpec {
+    fn from(value: SourceSpec<PathSourceSpec>) -> Self {
+        value.map_location(SourceLocationSpec::Path)
+    }
+}
+
+impl From<SourceSpec<GitSpec>> for SourceSpec {
+    fn from(value: SourceSpec<GitSpec>) -> Self {
+        value.map_location(SourceLocationSpec::Git)
     }
 }
 
