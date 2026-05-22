@@ -24,6 +24,9 @@ pub enum Command {
     Feature(feature::Args),
     Export(export::Args),
     Name(name::Args),
+    /// Deprecated: declare per-platform virtual packages via
+    /// `pixi workspace platform add/edit` instead.
+    #[clap(hide = true)]
     SystemRequirements(system_requirements::Args),
     Register(register::Args),
     RequiresPixi(requires_pixi::Args),

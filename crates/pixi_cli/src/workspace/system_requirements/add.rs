@@ -22,6 +22,9 @@ pub struct Args {
 }
 
 pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
+    eprintln!(
+        "`pixi workspace system-requirements add` is deprecated. Declare per-platform virtual packages via `pixi workspace platform add` (e.g. `--cuda 12.0`) or `pixi workspace platform edit` instead."
+    );
     let requirement = match args.requirement {
         SystemRequirementEnum::Linux => SystemRequirements {
             linux: Some(args.version),

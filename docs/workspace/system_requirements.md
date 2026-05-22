@@ -1,3 +1,13 @@
+!!! warning "`[system-requirements]` is deprecated"
+    Declare these constraints directly on `[workspace].platforms` instead --
+    see
+    [Declaring virtual packages per platform](./multi_platform_configuration.md#declaring-virtual-packages-per-platform)
+    for the inline-table syntax and the matching
+    [`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) CLI.
+    Existing `[system-requirements]` tables are still parsed and migrated
+    transparently, so older manifests keep working, but new manifests should
+    use the per-platform form.
+
 **System requirements** tell Pixi the system specifications needed to install and run your environment.
 They ensure that the dependencies match the operating system and hardware of your machine.
 

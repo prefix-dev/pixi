@@ -23,7 +23,8 @@ pub enum SystemRequirementEnum {
     // ArchSpec,
 }
 
-/// Commands to manage workspace system requirements.
+/// Deprecated: declare per-platform virtual packages via
+/// `pixi workspace platform add/edit` instead.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
@@ -39,8 +40,8 @@ pub struct Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    /// Adds an environment to the manifest file.
-    #[clap(visible_alias = "a")]
+    /// Deprecated; use `pixi workspace platform add/edit` instead.
+    #[clap(visible_alias = "a", hide = true)]
     Add(add::Args),
     /// Deprecated; use `pixi workspace platform list` instead.
     #[clap(visible_alias = "ls", hide = true)]
