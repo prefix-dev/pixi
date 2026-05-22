@@ -8,7 +8,7 @@ use ordermap::OrderSet;
 use pixi_consts::consts;
 use pixi_manifest::{
     EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, PixiPlatform,
-    SystemRequirements, WorkspaceManifest,
+    WorkspaceManifest,
 };
 use pixi_spec::SourceSpec;
 use pixi_utils::prefix::Prefix;
@@ -103,14 +103,6 @@ impl<'p> GroupedEnvironment<'p> {
             }
         }
     }
-    /// Returns the system requirements of the group.
-    pub(crate) fn system_requirements(&self) -> SystemRequirements {
-        match self {
-            GroupedEnvironment::Group(group) => group.system_requirements(),
-            GroupedEnvironment::Environment(env) => env.system_requirements(),
-        }
-    }
-
     /// Returns the virtual packages from the group, sourced from the
     /// platform's declared virtual packages with default fillers.
     pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {

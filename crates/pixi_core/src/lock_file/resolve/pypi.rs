@@ -23,7 +23,7 @@ use pixi_consts::consts;
 use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
 use pixi_manifest::{
     EnvironmentName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, SolveStrategy,
-    SystemRequirements, pypi::pypi_options::PypiOptions,
+    pypi::pypi_options::PypiOptions,
 };
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
@@ -290,7 +290,6 @@ pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
     dependencies: IndexMap<uv_normalize::PackageName, OrderSet<PixiPypiSpec>>,
-    system_requirements: SystemRequirements,
     locked_pixi_records: &[PixiRecord],
     locked_pypi_packages: &[UnresolvedPypiRecord],
     platform: PixiPlatformName,

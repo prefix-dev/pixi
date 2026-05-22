@@ -3123,9 +3123,6 @@ async fn spawn_solve_pypi_task<'p>(
 
     let exclude_newer = to_exclude_newer(&grouped_environment.pypi_exclude_newer_config_resolved());
 
-    // Get the system requirements for this environment
-    let system_requirements = grouped_environment.system_requirements();
-
     // Wait until the conda records and prefix are available.
     let (repodata_records, repodata_building_records) = match repodata_building_records {
         Ok(repodata_building_records) => {
@@ -3174,7 +3171,6 @@ async fn spawn_solve_pypi_task<'p>(
             resolution_context,
             &pypi_options,
             requirements,
-            system_requirements,
             pixi_solve_records,
             locked_pypi_records,
             platform.clone(),
