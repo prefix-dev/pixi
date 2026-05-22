@@ -7,7 +7,8 @@ use std::{
 use dunce::canonicalize;
 use pixi_spec::PathSpec;
 use rattler_conda_types::{
-    MatchSpec, PackageName, ParseStrictness, package::CondaArchiveIdentifier,
+    MatchSpec, PackageName, ParseMatchSpecOptions, RepodataRevision,
+    package::CondaArchiveIdentifier,
 };
 
 /// Represents either a regular conda MatchSpec or a filesystem path to a conda artifact.
@@ -78,7 +79,10 @@ impl FromStr for MatchSpecOrPath {
             })));
         }
 
-        match MatchSpec::from_str(value, ParseStrictness::Lenient) {
+        match MatchSpec::from_str(
+            value,
+            ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+        ) {
             Ok(spec) => Ok(Self::MatchSpec(Box::new(spec))),
             Err(parse_err) => {
                 if looks_like_path(value) {

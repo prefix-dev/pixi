@@ -7,7 +7,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.68.1"
+version = "0.69.0"
 
 [features]
 default = ["rustls"]
@@ -40,7 +40,12 @@ futures = { workspace = true }
 http = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
-insta = { workspace = true, features = ["yaml", "glob", "filters", "redactions"] }
+insta = { workspace = true, features = [
+  "yaml",
+  "glob",
+  "filters",
+  "redactions",
+] }
 pep508_rs = { workspace = true }
 pixi_build_backend_passthrough = { workspace = true }
 pixi_build_frontend = { workspace = true }

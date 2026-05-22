@@ -431,6 +431,27 @@ file that defines build variants.
 If the file is called `conda_build_config.yaml`, it will attempt to parse it with a subset of [`conda-build`'s variant syntax](https://docs.conda.io/projects/conda-build/en/stable/resources/variants.html#using-variants-with-the-conda-build-api).
 Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-build documentation](https://rattler.build/latest/variants/#variant-configuration).
 
+### `dependencies` (optional)
+
+!!! warning "Preview Feature"
+    `[workspace.dependencies]` requires the `pixi-build` preview feature to be
+    enabled and only applies to **package** dependencies — see
+    [Workspace Dependencies](../build/workspace_dependencies.md) for the
+    semantics, override rules and error cases.
+
+A pool of conda dependency specs that members of the workspace can inherit
+per entry by writing `{ workspace = true }` in any of their
+`[package.*-dependencies]` tables or `[package.build.backend]`.
+Relative `path` specs are resolved against the workspace manifest's
+directory and re-anchored per consuming member.
+
+```toml
+[workspace.dependencies]
+numpy = "1.*"
+pixi-build-cmake = "0.3.*"
+shared-lib = { path = "packages/shared-lib" }
+```
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your workspace.
@@ -1318,6 +1339,12 @@ And to extend the basics, it can also contain the following fields:
     [package]
     name = { workspace = true } # Inherit the name from the workspace
     ```
+
+    Dependency entries in `[package.*-dependencies]`, `[package.run-constraints]`,
+    their target variants, and `[package.build.backend]` can also be inherited
+    per entry from a `[workspace.dependencies]` pool defined on the workspace.
+    See [Workspace Dependencies](../build/workspace_dependencies.md) for the
+    override layering and error rules.
 
 ### `build` table
 
