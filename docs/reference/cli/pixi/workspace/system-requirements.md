@@ -17,7 +17,6 @@ pixi workspace system-requirements [OPTIONS] <COMMAND>
 | Command | Description |
 |---------|-------------|
 | [`add`](system-requirements/add.md) | Adds an environment to the manifest file |
-| [`list`](system-requirements/list.md) | List the environments in the manifest file |
 
 
 ## Config Options

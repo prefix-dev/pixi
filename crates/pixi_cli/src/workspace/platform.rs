@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::io::Write;
 use std::str::FromStr;
 
@@ -9,7 +9,6 @@ use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::{
     FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit,
-    SystemRequirements,
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 
@@ -538,15 +537,6 @@ async fn execute_list(
     let workspace = workspace_ctx.workspace();
     let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
 
-    // The list view colours each row against the environment's effective
-    // system requirements (project + feature union). Pre-compute them once
-    // per environment so we don't redo the union for every row.
-    let env_requirements: HashMap<pixi_manifest::EnvironmentName, SystemRequirements> = workspace
-        .environments()
-        .iter()
-        .map(|env| (env.name().clone(), env.system_requirements()))
-        .collect();
-
     for (env_name, env_platforms) in platforms {
         let _ = writeln!(
             std::io::stdout(),
@@ -560,26 +550,13 @@ async fn execute_list(
             }
         });
 
-        let reqs = env_requirements.get(&env_name);
         for platform in env_platforms {
             let workspace_platform = workspace_platforms.iter().find(|p| p.name() == &platform);
             let hint = workspace_platform.and_then(rich_hint);
-            // Red when a detected/declared virtual package falls below this
-            // environment's required minimum -- callers see at a glance which
-            // platforms won't satisfy the environment's `[system-requirements]`.
-            let violates = match (workspace_platform, reqs) {
-                (Some(p), Some(r)) => platform_violates_requirements(p, r),
-                _ => false,
-            };
             let name_str = platform.as_str();
-            let name_styled = if violates {
-                console::style(name_str).red().to_string()
-            } else {
-                name_str.to_string()
-            };
             let line = match hint {
-                Some(hint) => format!("- {}  {}", name_styled, console::style(hint).dim()),
-                None => format!("- {name_styled}"),
+                Some(hint) => format!("- {}  {}", name_str, console::style(hint).dim()),
+                None => format!("- {name_str}"),
             };
             let _ = writeln!(std::io::stdout(), "{line}").inspect_err(|e| {
                 if e.kind() == std::io::ErrorKind::BrokenPipe {
@@ -675,7 +652,6 @@ async fn execute_show_one(
         })?;
 
     let users = environments_and_features_using(workspace_ctx.workspace(), &platform);
-    let reqs = workspace_default_system_requirements(workspace_ctx.workspace());
 
     if json {
         let value = show_to_json(&platform, &users);
@@ -687,79 +663,8 @@ async fn execute_show_one(
         return Ok(());
     }
 
-    print_requirements_banner(&reqs);
-    print_show_human(&platform, &users, &reqs, workspace_ctx.workspace());
+    print_show_human(&platform, &users);
     Ok(())
-}
-
-/// Header printed once at the top of the human `show` output. Lists the
-/// workspace's `[system-requirements]` so the colouring on each platform
-/// has visible context; no-op when there are no requirements.
-fn print_requirements_banner(reqs: &SystemRequirements) {
-    if reqs.is_empty() {
-        return;
-    }
-    let _ = writeln!(
-        std::io::stdout(),
-        "{} {}",
-        console::style("System requirements:").bold().bright(),
-        format_sysreqs(reqs)
-    );
-    let _ = writeln!(std::io::stdout());
-}
-
-/// Workspace-wide system requirements (the default feature's `[system-requirements]`
-/// table). `show` uses this for colouring -- per-feature unions are reserved
-/// for `list`.
-fn workspace_default_system_requirements(workspace: &pixi_core::Workspace) -> SystemRequirements {
-    workspace
-        .workspace_manifest()
-        .default_feature()
-        .system_requirements
-        .clone()
-}
-
-/// Effective system requirements for a single feature: that feature's own
-/// table unioned with the workspace default. Returns `None` if no feature
-/// with this name exists.
-fn feature_system_requirements(
-    workspace: &pixi_core::Workspace,
-    name: &str,
-) -> Option<SystemRequirements> {
-    let manifest = workspace.workspace_manifest();
-    let feature = manifest
-        .features
-        .iter()
-        .find(|(fname, _)| fname.as_str() == name)
-        .map(|(_, f)| f)?;
-    let default = manifest.default_feature().system_requirements.clone();
-    Some(
-        default
-            .union(&feature.system_requirements)
-            .unwrap_or(default),
-    )
-}
-
-/// Effective system requirements for an environment (project + every feature
-/// in the env, with the solve-group merge `Environment::system_requirements`
-/// already does for us).
-fn environment_system_requirements(
-    workspace: &pixi_core::Workspace,
-    name: &str,
-) -> Option<SystemRequirements> {
-    workspace
-        .environments()
-        .iter()
-        .find(|env| env.name().as_str() == name)
-        .map(|env| env.system_requirements())
-}
-
-/// Whether the current host would fail to satisfy `reqs`. Uses the same
-/// rules as [`platform_violates_requirements`], applied to
-/// `PixiPlatform::from_subdir(Platform::current())`.
-fn current_host_violates_requirements(reqs: &SystemRequirements) -> bool {
-    let current = PixiPlatform::from_subdir(Platform::current());
-    platform_violates_requirements(&current, reqs)
 }
 
 /// Multi-platform variant of `show`. The two flags compose:
@@ -787,8 +692,6 @@ async fn execute_show_multi(
         miette::bail!("workspace declares no platforms");
     }
 
-    let reqs = workspace_default_system_requirements(workspace);
-
     if json {
         let to_json_entry = |p: &PixiPlatform| {
             let users = environments_and_features_using(workspace, p);
@@ -800,7 +703,7 @@ async fn execute_show_multi(
         // the auto-detected entry comes first.
         let mut platforms: Vec<serde_json::Value> = Vec::new();
         if current_flag {
-            platforms.push(autodetected_to_json(&reqs));
+            platforms.push(autodetected_to_json());
         }
         if all {
             platforms.extend(workspace_platforms.iter().map(to_json_entry));
@@ -819,10 +722,9 @@ async fn execute_show_multi(
     }
 
     let mut stdout = std::io::stdout();
-    print_requirements_banner(&reqs);
 
     if current_flag {
-        print_autodetected_host(&reqs);
+        print_autodetected_host();
     }
 
     if all {
@@ -834,7 +736,7 @@ async fn execute_show_multi(
                 let _ = writeln!(stdout);
             }
             let users = environments_and_features_using(workspace, p);
-            print_show_human(p, &users, &reqs, workspace);
+            print_show_human(p, &users);
         }
     }
 
@@ -845,41 +747,35 @@ async fn execute_show_multi(
 /// shape as a real platform's show block but with a distinct header so the
 /// reader doesn't mistake it for a workspace declaration. No `Used by` lines
 /// because nothing in the manifest points at this entry.
-fn print_autodetected_host(reqs: &SystemRequirements) {
+fn print_autodetected_host() {
     let host = PixiPlatform::from_subdir(Platform::current());
     let mut stdout = std::io::stdout();
 
-    let subdir = Platform::current();
-    let header_styled = if !reqs.is_empty() && platform_violates_requirements(&host, reqs) {
-        console::style("current").dim().to_string()
-    } else {
-        "current".to_string()
-    };
-
     let _ = writeln!(
         stdout,
-        "{} {}",
+        "{} current",
         console::style("Platform:").bold().bright(),
-        header_styled
     );
     let _ = writeln!(
         stdout,
         "  Subdir:   {}",
-        styled_subdir_for_current_host(subdir)
+        styled_subdir_for_current_host(Platform::current())
     );
 
-    let detected_specs: Vec<GenericVirtualPackage> = match host.virtual_packages() {
-        Ok(d) => d.into_generic_virtual_packages().collect(),
-        Err(_) => Vec::new(),
-    };
-    let detected_str = if detected_specs.is_empty() {
-        "(none)".to_string()
-    } else {
-        detected_specs
-            .iter()
-            .map(|gvp| styled_virtual_package(gvp, classify_virtual_package(gvp, reqs)))
-            .collect::<Vec<_>>()
-            .join(", ")
+    let detected_str = match host.virtual_packages() {
+        Ok(d) => {
+            let specs: Vec<GenericVirtualPackage> = d.into_generic_virtual_packages().collect();
+            if specs.is_empty() {
+                "(none)".to_string()
+            } else {
+                specs
+                    .iter()
+                    .map(format_virtual_package_short)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        }
+        Err(_) => "(none)".to_string(),
     };
     let _ = writeln!(stdout, "  Packages: {detected_str}");
 }
@@ -921,72 +817,6 @@ struct PlatformUsers {
     environments: Vec<String>,
 }
 
-/// How a single virtual package stacks up against the relevant
-/// system-requirement entry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum VpVerdict {
-    /// The virtual package is at or above the required minimum.
-    Satisfies,
-    /// The virtual package is below the required minimum.
-    Below,
-    /// The system requirements say nothing about this virtual package.
-    NotMentioned,
-}
-
-/// Compare a detected (or declared) virtual package against the workspace's
-/// system requirements. Only VPs that map to an actual sysreq slot can fail;
-/// everything else returns [`VpVerdict::NotMentioned`].
-fn classify_virtual_package(gvp: &GenericVirtualPackage, reqs: &SystemRequirements) -> VpVerdict {
-    let name = gvp.name.as_normalized();
-    let version = &gvp.version;
-    match name {
-        "__linux" => match &reqs.linux {
-            Some(min) if version < min => VpVerdict::Below,
-            Some(_) => VpVerdict::Satisfies,
-            None => VpVerdict::NotMentioned,
-        },
-        "__osx" => match &reqs.macos {
-            Some(min) if version < min => VpVerdict::Below,
-            Some(_) => VpVerdict::Satisfies,
-            None => VpVerdict::NotMentioned,
-        },
-        "__cuda" => match &reqs.cuda {
-            Some(min) if version < min => VpVerdict::Below,
-            Some(_) => VpVerdict::Satisfies,
-            None => VpVerdict::NotMentioned,
-        },
-        // glibc/musl: both detect as `__glibc=...` (rattler hardcodes glibc),
-        // but the manifest sysreq remembers the family. Only check when the
-        // requirement family matches what the platform reports.
-        other if other.starts_with("__") => match &reqs.libc {
-            Some(libc) => {
-                let (family, min_version) = libc.family_and_version();
-                let expected_name = format!("__{family}");
-                if name != expected_name {
-                    VpVerdict::NotMentioned
-                } else if version < min_version {
-                    VpVerdict::Below
-                } else {
-                    VpVerdict::Satisfies
-                }
-            }
-            None => VpVerdict::NotMentioned,
-        },
-        _ => VpVerdict::NotMentioned,
-    }
-}
-
-/// Render a virtual package with a color that reflects its verdict against
-/// the workspace's system requirements.
-fn styled_virtual_package(gvp: &GenericVirtualPackage, verdict: VpVerdict) -> String {
-    let raw = format_virtual_package_short(gvp);
-    match verdict {
-        VpVerdict::Satisfies => console::style(raw).green().to_string(),
-        VpVerdict::Below => console::style(raw).red().to_string(),
-        VpVerdict::NotMentioned => raw,
-    }
-}
-
 /// Colour a subdir string based on whether it matches the current host's
 /// subdir: green when this platform can actually run here, red otherwise.
 fn styled_subdir_for_current_host(subdir: Platform) -> String {
@@ -998,89 +828,14 @@ fn styled_subdir_for_current_host(subdir: Platform) -> String {
     }
 }
 
-/// True when the platform does not satisfy the workspace's system
-/// requirements. Two cases count as a violation:
-///   1. A declared or detected VP is below the requirement's minimum.
-///   2. A requirement that applies to this subdir has no corresponding VP
-///      at all, but only when this platform's subdir matches the current
-///      host -- otherwise we'd false-positive on foreign subdirs whose VPs
-///      we can't reliably probe.
-fn platform_violates_requirements(platform: &PixiPlatform, reqs: &SystemRequirements) -> bool {
-    if reqs.is_empty() {
-        return false;
-    }
-    let detected: Vec<GenericVirtualPackage> = match platform.virtual_packages() {
-        Ok(d) => d.into_generic_virtual_packages().collect(),
-        Err(_) => return false,
-    };
-
-    // Case 1: anything we can compare and which falls below the minimum.
-    for gvp in detected
-        .iter()
-        .chain(platform.declared_virtual_packages().iter())
-    {
-        if classify_virtual_package(gvp, reqs) == VpVerdict::Below {
-            return true;
-        }
-    }
-
-    // Case 2: required slots that apply to this subdir but have no VP at
-    // all. Only safe to check on the current host; foreign subdirs may have
-    // cuda/glibc/etc. that rattler can't see from here.
-    if platform.subdir() != Platform::current() {
-        return false;
-    }
-    let all_vps: Vec<&GenericVirtualPackage> = detected
-        .iter()
-        .chain(platform.declared_virtual_packages().iter())
-        .collect();
-    let has_vp_named = |name: &str| all_vps.iter().any(|g| g.name.as_normalized() == name);
-
-    let subdir = platform.subdir();
-    if reqs.linux.is_some() && subdir.is_linux() && !has_vp_named("__linux") {
-        return true;
-    }
-    if reqs.macos.is_some() && subdir.is_osx() && !has_vp_named("__osx") {
-        return true;
-    }
-    if reqs.cuda.is_some() && !has_vp_named("__cuda") {
-        return true;
-    }
-    if let Some(libc) = &reqs.libc
-        && subdir.is_linux()
-    {
-        let (family, _) = libc.family_and_version();
-        let expected = format!("__{family}");
-        if !has_vp_named(&expected) {
-            return true;
-        }
-    }
-
-    false
-}
-
-fn print_show_human(
-    platform: &PixiPlatform,
-    users: &PlatformUsers,
-    reqs: &SystemRequirements,
-    workspace: &pixi_core::Workspace,
-) {
+fn print_show_human(platform: &PixiPlatform, users: &PlatformUsers) {
     let mut stdout = std::io::stdout();
-
-    // Platform name is dimmed when the entry can't meet the workspace
-    // requirements; the per-VP coloring below still shows the why.
-    let name_raw = platform.name().as_str();
-    let name_styled = if !reqs.is_empty() && platform_violates_requirements(platform, reqs) {
-        console::style(name_raw).dim().to_string()
-    } else {
-        name_raw.to_string()
-    };
 
     let _ = writeln!(
         stdout,
         "{} {}",
         console::style("Platform:").bold().bright(),
-        name_styled
+        platform.name().as_str(),
     );
     let _ = writeln!(
         stdout,
@@ -1094,78 +849,17 @@ fn print_show_human(
     } else {
         declared
             .iter()
-            .map(|gvp| styled_virtual_package(gvp, classify_virtual_package(gvp, reqs)))
+            .map(format_virtual_package_short)
             .collect::<Vec<_>>()
             .join(", ")
     };
     let _ = writeln!(stdout, "  Packages: {declared_str}");
 
-    // Dim feature/environment names whose requirements cannot be satisfied
-    // by the current host. Lets the reader see at a glance which targets
-    // they actually need to care about.
-    let host_satisfies = |reqs: &SystemRequirements| !current_host_violates_requirements(reqs);
-    let workspace_default = workspace_default_system_requirements(workspace);
-
     if !users.features.is_empty() {
-        let rendered: Vec<String> = users
-            .features
-            .iter()
-            .map(|name| {
-                // A feature listed here is specifically declared for *this*
-                // platform, so the dim check is "does this platform meet the
-                // feature's requirements?" -- not the current-host check used
-                // for environments below.
-                let feature_reqs = feature_system_requirements(workspace, name)
-                    .unwrap_or_else(|| workspace_default.clone());
-                if platform_violates_requirements(platform, &feature_reqs) {
-                    console::style(name).dim().to_string()
-                } else {
-                    name.clone()
-                }
-            })
-            .collect();
-        let _ = writeln!(stdout, "  Features: {}", rendered.join(", "));
+        let _ = writeln!(stdout, "  Features: {}", users.features.join(", "));
     }
     if !users.environments.is_empty() {
-        let rendered: Vec<String> = users
-            .environments
-            .iter()
-            .map(|name| {
-                let env_reqs = environment_system_requirements(workspace, name)
-                    .unwrap_or_else(|| workspace_default.clone());
-                if host_satisfies(&env_reqs) {
-                    name.clone()
-                } else {
-                    console::style(name).dim().to_string()
-                }
-            })
-            .collect();
-        let _ = writeln!(stdout, "  Used by:  {}", rendered.join(", "));
-    }
-}
-
-/// One-line summary of the workspace's system requirements, in the same
-/// `__name=version` shape used elsewhere in the show output so the colored
-/// VP entries can be visually checked against the requirements.
-fn format_sysreqs(reqs: &SystemRequirements) -> String {
-    let mut parts = Vec::new();
-    if let Some(v) = &reqs.linux {
-        parts.push(format!("__linux>={v}"));
-    }
-    if let Some(v) = &reqs.macos {
-        parts.push(format!("__osx>={v}"));
-    }
-    if let Some(v) = &reqs.cuda {
-        parts.push(format!("__cuda>={v}"));
-    }
-    if let Some(libc) = &reqs.libc {
-        let (family, version) = libc.family_and_version();
-        parts.push(format!("__{family}>={version}"));
-    }
-    if parts.is_empty() {
-        "(none)".to_string()
-    } else {
-        parts.join(", ")
+        let _ = writeln!(stdout, "  Used by:  {}", users.environments.join(", "));
     }
 }
 
@@ -1230,7 +924,7 @@ fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::V
 /// JSON counterpart to [`print_autodetected_host`]. Carries the same data
 /// shape as a real platform entry plus an `is_autodetected: true` marker so
 /// downstream tooling can tell synthetic rows apart from declared ones.
-fn autodetected_to_json(_reqs: &SystemRequirements) -> serde_json::Value {
+fn autodetected_to_json() -> serde_json::Value {
     let host = PixiPlatform::from_subdir(Platform::current());
     let detected: Vec<String> = match host.virtual_packages() {
         Ok(d) => d
