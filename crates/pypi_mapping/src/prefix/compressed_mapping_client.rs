@@ -10,9 +10,6 @@ use crate::{
     CacheMetrics, CompressedMapping, DerivePurls, MappingError, PurlSource, is_conda_forge_record,
 };
 
-// Served from Cloudflare R2 via the `conda-mapping.prefix.dev` domain. The
-// previous `raw.githubusercontent.com` URL is blocked on some corporate
-// networks (see prefix-dev/pixi#5980 and prefix-dev/parselmouth#70).
 const COMPRESSED_MAPPING: &str =
     "https://conda-mapping.prefix.dev/compressed-v0/compressed_mapping.json";
 
