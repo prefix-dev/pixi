@@ -42,8 +42,8 @@ pub enum Command {
     /// Adds an environment to the manifest file.
     #[clap(visible_alias = "a")]
     Add(add::Args),
-    /// List the environments in the manifest file.
-    #[clap(visible_alias = "ls")]
+    /// Deprecated; use `pixi workspace platform list` instead.
+    #[clap(visible_alias = "ls", hide = true)]
     List(list::Args),
 }
 
