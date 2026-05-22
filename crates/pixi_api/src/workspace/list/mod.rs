@@ -110,7 +110,7 @@ pub async fn list(
             let record = python_record
                 .record()
                 .expect("python record should have full metadata");
-            tags = get_pypi_tags(platform, &environment.system_requirements(), record)?;
+            tags = get_pypi_tags(platform, record)?;
             Some(RegistryWheelIndex::new(
                 &uv_context.cache,
                 &tags,

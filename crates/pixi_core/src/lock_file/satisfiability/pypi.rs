@@ -621,14 +621,12 @@ async fn read_local_package_metadata(
     };
 
     // Get tags for this platform (needed for FlatIndex)
-    let system_requirements = ctx.environment.system_requirements();
-    let tags =
-        get_pypi_tags(ctx.platform, &system_requirements, python_record.as_ref()).map_err(|e| {
-            PlatformUnsat::FailedToReadLocalMetadata(
-                package_name.clone(),
-                format!("Failed to determine pypi tags: {e}"),
-            )
-        })?;
+    let tags = get_pypi_tags(ctx.platform, python_record.as_ref()).map_err(|e| {
+        PlatformUnsat::FailedToReadLocalMetadata(
+            package_name.clone(),
+            format!("Failed to determine pypi tags: {e}"),
+        )
+    })?;
 
     let flat_index = {
         let flat_index_client = FlatIndexClient::new(

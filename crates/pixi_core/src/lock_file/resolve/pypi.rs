@@ -434,7 +434,7 @@ pub async fn resolve_pypi(
         .into_diagnostic()?;
 
     // Determine the tags for this particular solve.
-    let tags = get_pypi_tags(pixi_platform, &system_requirements, python_record.as_ref())?;
+    let tags = get_pypi_tags(pixi_platform, python_record.as_ref())?;
 
     // We need to setup both an interpreter and a requires_python specifier.
     // The interpreter is used to (potentially) build the wheel, and the

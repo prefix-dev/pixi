@@ -245,7 +245,6 @@ impl PypiWheelTagsCheck {
         locked_environment: &rattler_lock::Environment<'_>,
     ) -> Self {
         let platform_wheel_tags = {
-            let system_requirements = environment.system_requirements();
             let workspace = environment.workspace_manifest();
             locked_environment
                 .packages_by_platform()
@@ -280,13 +279,9 @@ impl PypiWheelTagsCheck {
                     pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
                 })
                 .filter_map(|(pixi_platform, package)| {
-                    pypi_modifiers::pypi_tags::get_pypi_tags(
-                        pixi_platform,
-                        &system_requirements,
-                        &package.package_record,
-                    )
-                    .ok()
-                    .map(|tags| (pixi_platform.subdir(), tags))
+                    pypi_modifiers::pypi_tags::get_pypi_tags(pixi_platform, &package.package_record)
+                        .ok()
+                        .map(|tags| (pixi_platform.subdir(), tags))
                 })
                 .collect::<HashMap<_, _>>()
         };

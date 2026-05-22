@@ -512,11 +512,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .cloned()
             .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {manifest}, or run:\n\n\tpixi add python", manifest=consts::WORKSPACE_MANIFEST))?;
 
-        let tags = get_pypi_tags(
-            self.config.platform,
-            self.config.system_requirements,
-            python_record.package_record(),
-        )?;
+        let tags = get_pypi_tags(self.config.platform, python_record.package_record())?;
 
         let index_locations = self
             .context_config
