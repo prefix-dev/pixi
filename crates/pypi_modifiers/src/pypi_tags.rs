@@ -599,4 +599,96 @@ mod tests {
             .unwrap();
         assert!(!wheel.is_compatible(&res));
     }
+
+    fn rich_platform(
+        name: &str,
+        subdir: Platform,
+        declared: Vec<GenericVirtualPackage>,
+    ) -> PixiPlatform {
+        PixiPlatform::new(
+            pixi_manifest::PixiPlatformName::try_from(name).unwrap(),
+            subdir,
+            declared,
+        )
+    }
+
+    fn declared(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: PackageName::try_from(name).unwrap(),
+            version: Version::from_str(version).unwrap(),
+            build_string: String::new(),
+        }
+    }
+
+    /// A platform declaring `__musl` produces a `Musllinux` tag, with the
+    /// family and version read straight from the declaration.
+    #[test]
+    fn linux_tag_reads_musl_from_platform() {
+        let platform = rich_platform(
+            "alpine",
+            Platform::LinuxAarch64,
+            vec![declared("__musl", "1.2.4")],
+        );
+        let res = get_linux_platform_tags(&platform).unwrap();
+        assert_eq!(
+            res.os(),
+            &uv_platform_tags::Os::Musllinux { major: 1, minor: 2 }
+        );
+    }
+
+    /// A platform declaring `__glibc` produces a `Manylinux` tag at the
+    /// declared version (not the default).
+    #[test]
+    fn linux_tag_reads_glibc_from_platform() {
+        let platform = rich_platform(
+            "modern-linux",
+            Platform::Linux64,
+            vec![declared("__glibc", "2.36")],
+        );
+        let res = get_linux_platform_tags(&platform).unwrap();
+        assert_eq!(
+            res.os(),
+            &uv_platform_tags::Os::Manylinux {
+                major: 2,
+                minor: 36
+            }
+        );
+    }
+
+    /// Without a libc declaration the linux tag falls back to the project's
+    /// default glibc version.
+    #[test]
+    fn linux_tag_falls_back_to_default_glibc() {
+        let platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let res = get_linux_platform_tags(&platform).unwrap();
+        let (default_major, default_minor) = default_glibc_version()
+            .as_major_minor()
+            .expect("default glibc has major/minor");
+        assert_eq!(
+            res.os(),
+            &uv_platform_tags::Os::Manylinux {
+                major: default_major as _,
+                minor: default_minor as _
+            }
+        );
+    }
+
+    /// A platform declaring `__osx` produces a macOS tag at the declared
+    /// version (not the subdir's default).
+    #[test]
+    fn macos_tag_reads_osx_from_platform() {
+        let platform = rich_platform(
+            "modern-mac",
+            Platform::OsxArm64,
+            vec![declared("__osx", "14.0")],
+        );
+        let res = get_macos_platform_tags(&platform).unwrap();
+        assert_eq!(
+            res.os(),
+            &uv_platform_tags::Os::Macos {
+                major: 14,
+                minor: 0
+            }
+        );
+    }
 }
