@@ -3223,7 +3223,7 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table that names a workspace platform (`name`, optional `subdir`, optional `virtual-packages`).",
+          "description": "The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `libc`, `linux`, `macos`, `windows`).",
           "type": "array",
           "items": {
             "anyOf": [
@@ -3349,31 +3349,56 @@
     },
     "WorkspacePlatform": {
       "title": "WorkspacePlatform",
-      "description": "A workspace platform: a name-bound view of a conda subdir, optionally\nextended with declared virtual-package guarantees.",
+      "description": "A workspace platform: a conda subdir plus declared virtual-package\nguarantees, identified by a workspace-scoped name.",
       "type": "object",
-      "required": [
-        "name"
-      ],
-      "additionalProperties": false,
+      "additionalProperties": true,
       "properties": {
+        "archspec": {
+          "title": "Archspec",
+          "description": "Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "cuda": {
+          "title": "Cuda",
+          "description": "Declare a `__cuda` virtual package at the given version, e.g. `12.0`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "libc": {
+          "title": "Libc",
+          "description": "Declare a `__glibc` virtual package at the given version, e.g. `2.28`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "linux": {
+          "title": "Linux",
+          "description": "Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "macos": {
+          "title": "Macos",
+          "description": "Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+          "type": "string",
+          "minLength": 1
+        },
         "name": {
           "title": "Name",
-          "description": "The workspace-unique name. Alphanumeric and dashes; must start and end with an alphanumeric character.",
+          "description": "The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
           "type": "string",
           "maxLength": 64,
           "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
         },
-        "subdir": {
+        "platform": {
           "$ref": "#/$defs/Platform",
-          "description": "The conda subdir this platform targets. Defaults to `name` parsed as a subdir when omitted."
+          "description": "The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted."
         },
-        "virtual-packages": {
-          "title": "Virtual-Packages",
-          "description": "Virtual-package guarantees declared for this platform, e.g. `__cuda=12.0`.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "windows": {
+          "title": "Windows",
+          "description": "Declare a `__win` virtual package at the given Windows version, e.g. `10`.",
+          "type": "string",
+          "minLength": 1
         }
       }
     },

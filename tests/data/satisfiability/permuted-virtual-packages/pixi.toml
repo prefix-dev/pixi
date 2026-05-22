@@ -1,7 +1,9 @@
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "permuted-virtual-packages"
-platforms = [{ name = "extra", subdir = "linux-64", virtual-packages = ["__cuda=12.0", "__glibc=2.28"] }]
+platforms = [
+  { name = "extra", platform = "linux-64", cuda = "12.0", libc = "2.28" },
+]
 
 [dependencies]
 _r-mutex = "*"

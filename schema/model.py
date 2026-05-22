@@ -103,22 +103,50 @@ class StrictBaseModel(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", alias_generator=hyphenize)
 
 
-class WorkspacePlatform(StrictBaseModel):
-    """A workspace platform: a name-bound view of a conda subdir, optionally
-    extended with declared virtual-package guarantees."""
+class WorkspacePlatform(BaseModel):
+    """A workspace platform: a conda subdir plus declared virtual-package
+    guarantees, identified by a workspace-scoped name."""
 
-    name: str = Field(
+    # extra="allow" because workspace platforms accept top-level virtual-package
+    # shortcut keys (`cuda`, `archspec`, `libc`, `linux`, `macos`, `windows`)
+    # and forward-compatible raw `__name` keys whose value is `version` or
+    # `version=build_string`. Listing the fixed slots explicitly is enough for
+    # documentation; the open shape is preserved here.
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow", alias_generator=hyphenize)
+
+    name: str | None = Field(
+        None,
         pattern=r"^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$",
         max_length=64,
-        description="The workspace-unique name. Alphanumeric and dashes; must start and end with an alphanumeric character.",
+        description="The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
     )
-    subdir: Platform | None = Field(
+    platform: Platform | None = Field(
         None,
-        description="The conda subdir this platform targets. Defaults to `name` parsed as a subdir when omitted.",
+        description="The conda subdir this platform targets. Falls back to `name` parsed as a subdir when omitted.",
     )
-    virtual_packages: list[str] | None = Field(
+    cuda: NonEmptyStr | None = Field(
         None,
-        description="Virtual-package guarantees declared for this platform, e.g. `__cuda=12.0`.",
+        description="Declare a `__cuda` virtual package at the given version, e.g. `12.0`.",
+    )
+    archspec: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`.",
+    )
+    libc: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__glibc` virtual package at the given version, e.g. `2.28`.",
+    )
+    linux: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`.",
+    )
+    macos: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+    )
+    windows: NonEmptyStr | None = Field(
+        None,
+        description="Declare a `__win` virtual package at the given Windows version, e.g. `10`.",
     )
 
 
@@ -225,7 +253,7 @@ class Workspace(StrictBaseModel):
     )
     platforms: list[Platform | PlatformName | WorkspacePlatform] | None = Field(
         None,
-        description="The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table that names a workspace platform (`name`, optional `subdir`, optional `virtual-packages`).",
+        description="The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `libc`, `linux`, `macos`, `windows`).",
     )
     license: NonEmptyStr | None = Field(
         None,

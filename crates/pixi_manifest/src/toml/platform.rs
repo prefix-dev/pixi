@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 
 use pixi_toml::TomlEnum;
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
@@ -90,6 +90,32 @@ impl<'de> pixi_toml::DeserializeAs<'de, Platform> for TomlPlatform {
     }
 }
 
+/// How a friendly virtual-package key's value is mapped onto a
+/// [`GenericVirtualPackage`].
+#[derive(Debug, Clone, Copy)]
+enum VirtualPackageValueKind {
+    /// The value is a version string and lands in `GenericVirtualPackage::version`;
+    /// `build_string` is left empty.
+    Version,
+    /// The value is a microarchitecture string and lands in `build_string`;
+    /// `version` is forced to `0`. This is the shape upstream rattler expects
+    /// for `__archspec`.
+    Microarch,
+}
+
+/// Friendly TOML keys accepted inside an inline platform entry. Order is
+/// load-bearing: the auto-derived platform name concatenates these keys in
+/// this exact sequence so two manifests that declare the same packages in
+/// different key order share a name.
+const FRIENDLY_VIRTUAL_PACKAGES: &[(&str, &str, VirtualPackageValueKind)] = &[
+    ("cuda", "__cuda", VirtualPackageValueKind::Version),
+    ("archspec", "__archspec", VirtualPackageValueKind::Microarch),
+    ("libc", "__glibc", VirtualPackageValueKind::Version),
+    ("linux", "__linux", VirtualPackageValueKind::Version),
+    ("macos", "__osx", VirtualPackageValueKind::Version),
+    ("windows", "__win", VirtualPackageValueKind::Version),
+];
+
 /// TOML representation of a workspace platform entry.
 ///
 /// Supports two serializations:
@@ -98,15 +124,27 @@ impl<'de> pixi_toml::DeserializeAs<'de, Platform> for TomlPlatform {
 /// # Bare-string form (backwards-compatible): name == subdir, no virtual packages.
 /// platforms = ["linux-64"]
 ///
-/// # Inline-table form: a custom name with a subdir and virtual packages.
+/// # Inline-table form: a conda subdir plus declared virtual packages.
 /// platforms = [
-///   { name = "linux-64-cuda", subdir = "linux-64", virtual-packages = ["__cuda=12.0"] },
+///   { platform = "linux-64", cuda = "12.0", libc = "2.28" },
+///   { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8", archspec = "armv8-a" },
 /// ]
 /// ```
 ///
-/// When the table form omits `subdir`, the `name` must itself parse as a conda
-/// [`Platform`]. Each entry in `virtual-packages` is parsed as a
-/// [`GenericVirtualPackage`] (`name[=version[=build_string]]`).
+/// In the inline-table form:
+///
+/// * `platform` carries the conda subdir. It can be omitted when `name` is
+///   itself a valid conda subdir.
+/// * `name` is the workspace-scoped label features and the lockfile reference
+///   the entry by. It's optional; when omitted, it's auto-derived from
+///   `platform` and the declared virtual packages so the entry still has a
+///   stable identifier.
+/// * Each remaining key is a virtual-package shortcut: `cuda`, `archspec`,
+///   `libc`, `linux`, `macos`, `windows`. Their values are conda version
+///   strings (or, for `archspec`, a microarchitecture string). Any key
+///   starting with `__` is taken as a raw `GenericVirtualPackage` so rattler
+///   can grow new virtual packages without the TOML layer needing to learn
+///   about them.
 pub struct TomlPixiPlatform(pub PixiPlatform);
 
 impl TomlPixiPlatform {
@@ -118,8 +156,8 @@ impl TomlPixiPlatform {
 impl<'de> Deserialize<'de> for TomlPixiPlatform {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
-            ValueInner::String(name) => {
-                let subdir = Platform::from_str(&name).map_err(|e| Error {
+            ValueInner::String(s) => {
+                let subdir = Platform::from_str(&s).map_err(|e| Error {
                     kind: ErrorKind::Custom(e.to_string().into()),
                     span: value.span,
                     line_info: None,
@@ -127,55 +165,51 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                 Ok(TomlPixiPlatform(PixiPlatform::from_subdir(subdir)))
             }
             inner @ ValueInner::Table(_) => {
-                let mut th = TableHelper::new(&mut Value::with_span(inner, value.span))?;
-                let name_value: Spanned<String> = th.required("name")?;
-                let subdir_str: Option<Spanned<String>> = th.optional("subdir");
-                let virtual_packages_raw: Option<Vec<Spanned<String>>> =
-                    th.optional("virtual-packages");
+                let table_span = value.span;
+                let mut th = TableHelper::new(&mut Value::with_span(inner, table_span))?;
+
+                let name_value: Option<Spanned<String>> = th.optional("name");
+                let platform_value: Option<Spanned<String>> = th.optional("platform");
+
+                let mut declared: Vec<GenericVirtualPackage> = Vec::new();
+                for &(key, conda_name, kind) in FRIENDLY_VIRTUAL_PACKAGES {
+                    if let Some(raw) = th.optional::<Spanned<String>>(key) {
+                        declared.push(build_friendly_virtual_package(conda_name, kind, &raw)?);
+                    }
+                }
+
+                // Anything still in the table that starts with `__` is treated
+                // as a raw virtual-package declaration for forward compat with
+                // virtual packages we don't have a friendly key for yet.
+                let raw_keys: Vec<String> = th
+                    .table
+                    .keys()
+                    .filter(|k| k.name.starts_with("__"))
+                    .map(|k| k.name.as_ref().to_owned())
+                    .collect();
+                for key_name in raw_keys {
+                    let (key, mut entry_value) = th
+                        .table
+                        .remove_entry(key_name.as_str())
+                        .expect("just enumerated");
+                    declared.push(parse_raw_virtual_package(
+                        key.name.as_ref(),
+                        key.span,
+                        &mut entry_value,
+                    )?);
+                }
+
                 th.finalize(None)?;
 
-                let name = PixiPlatformName::try_from(name_value.value.as_str()).map_err(|_| {
-                    Error {
-                    kind: ErrorKind::Custom(
-                        format!(
-                            "'{}' is not a valid platform name (allowed: alphanumeric, '_', '-')",
-                            name_value.value,
-                        )
-                        .into(),
-                    ),
-                    span: name_value.span,
-                    line_info: None,
-                }
-                })?;
+                let subdir =
+                    resolve_subdir(platform_value.as_ref(), name_value.as_ref(), table_span)?;
 
-                let subdir = match subdir_str {
-                    Some(s) => Platform::from_str(&s.value).map_err(|e| Error {
-                        kind: ErrorKind::Custom(e.to_string().into()),
-                        span: s.span,
-                        line_info: None,
-                    })?,
-                    None => Platform::from_str(name.as_str()).map_err(|_| Error {
-                        kind: ErrorKind::Custom(
-                            format!(
-                                "'{}' is not a conda subdir; specify 'subdir' explicitly when using a custom platform name", name.as_str()
-                            )
-                            .into(),
-                        ),
-                        span: name_value.span,
-                        line_info: None,
-                    })?,
+                let name = match name_value {
+                    Some(n) => parse_pixi_platform_name(&n)?,
+                    None => synthesize_name(subdir, &declared, table_span)?,
                 };
 
-                let declared_virtual_packages = match virtual_packages_raw {
-                    Some(specs) => parse_virtual_packages(specs)?,
-                    None => Vec::new(),
-                };
-
-                Ok(TomlPixiPlatform(PixiPlatform::new(
-                    name,
-                    subdir,
-                    declared_virtual_packages,
-                )))
+                Ok(TomlPixiPlatform(PixiPlatform::new(name, subdir, declared)))
             }
             other => Err(expected("a string or table", other, value.span).into()),
         }
@@ -193,72 +227,107 @@ impl Serialize for TomlPixiPlatform {
         let platform = &self.0;
         let name = platform.name().as_str();
         let subdir_str = platform.subdir().to_string();
-        let virtual_packages: Vec<String> = platform
-            .declared_virtual_packages()
-            .iter()
-            .map(format_virtual_package)
-            .collect();
-        let virtual_packages_are_default = virtual_packages.is_empty();
+        let declared = platform.declared_virtual_packages();
 
-        if name == subdir_str && virtual_packages_are_default {
+        if name == subdir_str && declared.is_empty() {
             return serializer.serialize_str(name);
         }
 
-        let needs_subdir = name != subdir_str;
-        let entries = 1 + usize::from(needs_subdir) + usize::from(!virtual_packages_are_default);
+        let (friendly, raw) = classify_virtual_packages(declared);
+        let auto_name = synthesize_name_string(platform.subdir(), declared);
+        let emit_name = name != auto_name;
+
+        let entries = 1 + usize::from(emit_name) + friendly.len() + raw.len();
         let mut map = serializer.serialize_map(Some(entries))?;
-        map.serialize_entry("name", name)?;
-        if needs_subdir {
-            map.serialize_entry("subdir", &subdir_str)?;
+        if emit_name {
+            map.serialize_entry("name", name)?;
         }
-        if !virtual_packages_are_default {
-            map.serialize_entry("virtual-packages", &virtual_packages)?;
+        map.serialize_entry("platform", &subdir_str)?;
+        for (key, value) in &friendly {
+            map.serialize_entry(key, value)?;
+        }
+        for (key, value) in &raw {
+            map.serialize_entry(key, value)?;
         }
         map.end()
     }
 }
 
-fn parse_virtual_packages(
-    specs: Vec<Spanned<String>>,
-) -> Result<Vec<GenericVirtualPackage>, DeserError> {
-    let mut out = Vec::with_capacity(specs.len());
-    for spec in specs {
-        let gvp = parse_generic_virtual_package(&spec.value, spec.span)?;
-        if !gvp.name.as_normalized().starts_with("__") {
-            return Err(Error {
+fn build_friendly_virtual_package(
+    conda_name: &str,
+    kind: VirtualPackageValueKind,
+    raw: &Spanned<String>,
+) -> Result<GenericVirtualPackage, Error> {
+    let package_name =
+        PackageName::try_from(conda_name).expect("static virtual-package name is valid");
+    match kind {
+        VirtualPackageValueKind::Version => {
+            let version = Version::from_str(raw.value.as_str()).map_err(|e| Error {
                 kind: ErrorKind::Custom(
-                    format!(
-                        "'{}' is not a recognized virtual package (must start with '__')",
-                        gvp.name.as_normalized()
-                    )
-                    .into(),
+                    format!("'{}' is not a valid version: {e}", raw.value).into(),
                 ),
-                span: spec.span,
+                span: raw.span,
                 line_info: None,
-            }
-            .into());
+            })?;
+            Ok(GenericVirtualPackage {
+                name: package_name,
+                version,
+                build_string: String::new(),
+            })
         }
-        out.push(gvp);
+        VirtualPackageValueKind::Microarch => {
+            if raw.value.is_empty() {
+                return Err(Error {
+                    kind: ErrorKind::Custom(
+                        "'archspec' requires a non-empty microarchitecture string".into(),
+                    ),
+                    span: raw.span,
+                    line_info: None,
+                });
+            }
+            Ok(GenericVirtualPackage {
+                name: package_name,
+                version: Version::major(0),
+                build_string: raw.value.clone(),
+            })
+        }
     }
-    Ok(out)
 }
 
-fn parse_generic_virtual_package(s: &str, span: Span) -> Result<GenericVirtualPackage, Error> {
-    let mut parts = s.split('=');
-    let name_str = parts.next().unwrap_or("");
-    let name = PackageName::try_from(name_str).map_err(|e| Error {
-        kind: ErrorKind::Custom(
-            format!("'{name_str}' is not a valid virtual package name: {e}").into(),
-        ),
-        span,
+/// Parse a `__name = "version[=build_string]"` entry as a
+/// [`GenericVirtualPackage`]. Used for keys that don't have a friendly
+/// shortcut so the TOML layer stays forward-compatible.
+fn parse_raw_virtual_package(
+    key: &str,
+    key_span: Span,
+    value: &mut Value<'_>,
+) -> Result<GenericVirtualPackage, Error> {
+    let name = PackageName::try_from(key).map_err(|e| Error {
+        kind: ErrorKind::Custom(format!("'{key}' is not a valid virtual-package name: {e}").into()),
+        span: key_span,
         line_info: None,
     })?;
-    let version_str = parts.next().unwrap_or("0");
+    let value_span = value.span;
+    let s = match value.take() {
+        ValueInner::String(s) => s.into_owned(),
+        other => {
+            return Err(Error {
+                kind: ErrorKind::Wanted {
+                    expected: "a string",
+                    found: other.type_str(),
+                },
+                span: value_span,
+                line_info: None,
+            });
+        }
+    };
+    let mut parts = s.splitn(2, '=');
+    let version_str = parts.next().unwrap_or("");
     let version = Version::from_str(version_str).map_err(|e| Error {
         kind: ErrorKind::Custom(
-            format!("'{version_str}' is not a valid virtual package version: {e}").into(),
+            format!("'{version_str}' is not a valid virtual-package version: {e}").into(),
         ),
-        span,
+        span: value_span,
         line_info: None,
     })?;
     let build_string = parts.next().unwrap_or("").to_string();
@@ -269,6 +338,203 @@ fn parse_generic_virtual_package(s: &str, span: Span) -> Result<GenericVirtualPa
     })
 }
 
+fn resolve_subdir(
+    platform_value: Option<&Spanned<String>>,
+    name_value: Option<&Spanned<String>>,
+    table_span: Span,
+) -> Result<Platform, DeserError> {
+    if let Some(p) = platform_value {
+        return Platform::from_str(&p.value).map_err(|e| {
+            Error {
+                kind: ErrorKind::Custom(e.to_string().into()),
+                span: p.span,
+                line_info: None,
+            }
+            .into()
+        });
+    }
+    if let Some(n) = name_value {
+        return Platform::from_str(&n.value).map_err(|_| {
+            Error {
+                kind: ErrorKind::Custom(
+                    format!(
+                        "'{}' is not a conda subdir; set 'platform' explicitly when using a custom name",
+                        n.value,
+                    )
+                    .into(),
+                ),
+                span: n.span,
+                line_info: None,
+            }
+            .into()
+        });
+    }
+    Err(Error {
+        kind: ErrorKind::Custom(
+            "a platform entry must set at least one of 'name' or 'platform'".into(),
+        ),
+        span: table_span,
+        line_info: None,
+    }
+    .into())
+}
+
+fn parse_pixi_platform_name(name: &Spanned<String>) -> Result<PixiPlatformName, DeserError> {
+    PixiPlatformName::try_from(name.value.as_str()).map_err(|_| {
+        Error {
+            kind: ErrorKind::Custom(
+                format!(
+                    "'{}' is not a valid platform name (allowed: alphanumeric, '-')",
+                    name.value,
+                )
+                .into(),
+            ),
+            span: name.span,
+            line_info: None,
+        }
+        .into()
+    })
+}
+
+fn synthesize_name(
+    subdir: Platform,
+    declared: &[GenericVirtualPackage],
+    span: Span,
+) -> Result<PixiPlatformName, DeserError> {
+    let raw = synthesize_name_string(subdir, declared);
+    PixiPlatformName::try_from(raw.as_str()).map_err(|e| {
+        Error {
+            kind: ErrorKind::Custom(
+                format!(
+                    "auto-derived platform name '{raw}' is not valid ({e}); set 'name' explicitly",
+                )
+                .into(),
+            ),
+            span,
+            line_info: None,
+        }
+        .into()
+    })
+}
+
+/// Build the canonical auto-derived name for `(subdir, declared)`.
+///
+/// The form is `<subdir>[-<key>-<value>...]`, with friendly keys emitted in
+/// the order they appear in [`FRIENDLY_VIRTUAL_PACKAGES`] and any raw
+/// `__name` packages appended alphabetically. Values are sanitized so the
+/// result still passes [`PixiPlatformName::try_from`] (non-alphanumeric
+/// characters collapse to a single `-` and leading/trailing dashes are
+/// stripped).
+pub(crate) fn synthesize_name_string(
+    subdir: Platform,
+    declared: &[GenericVirtualPackage],
+) -> String {
+    let (friendly, raw) = classify_virtual_packages(declared);
+    let mut parts: Vec<String> = vec![subdir.as_str().to_string()];
+    for (key, value) in friendly {
+        parts.push(format!("{key}-{}", sanitize_name_segment(&value)));
+    }
+    for (key, value) in raw {
+        let stripped = key.trim_start_matches('_');
+        let key_seg = sanitize_name_segment(stripped);
+        let val_seg = sanitize_name_segment(&value);
+        parts.push(format!("{key_seg}-{val_seg}"));
+    }
+    parts.join("-")
+}
+
+fn sanitize_name_segment(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut last_was_dash = false;
+    for c in s.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+            last_was_dash = false;
+        } else if !last_was_dash {
+            out.push('-');
+            last_was_dash = true;
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    while out.starts_with('-') {
+        out.remove(0);
+    }
+    out
+}
+
+/// `(friendly_key, value)` pair: the friendly key is one of
+/// [`FRIENDLY_VIRTUAL_PACKAGES`] (a `&'static str`), the value is the
+/// rendered string a user would type after the `=`.
+type FriendlyEntry = (&'static str, String);
+
+/// `(conda_name, value)` pair: the conda name is the raw `__name` form, the
+/// value is `version[=build_string]`.
+type RawEntry = (String, String);
+
+/// Classify each declared virtual package into either a friendly
+/// `(key, value)` entry (using the shortcut form like `cuda = "12.0"`) or a
+/// raw entry that keeps the `__name` conda virtual-package name verbatim
+/// because its shape doesn't fit any friendly form. Friendly entries come
+/// out in canonical [`FRIENDLY_VIRTUAL_PACKAGES`] order so the serialized
+/// table and the auto-derived name are stable; raw entries are sorted
+/// alphabetically by conda name.
+fn classify_virtual_packages(
+    declared: &[GenericVirtualPackage],
+) -> (Vec<FriendlyEntry>, Vec<RawEntry>) {
+    let mut friendly = Vec::new();
+    let mut consumed: HashSet<&str> = HashSet::new();
+
+    for &(friendly_key, conda_name, kind) in FRIENDLY_VIRTUAL_PACKAGES {
+        let Some(package) = declared
+            .iter()
+            .find(|p| p.name.as_normalized() == conda_name)
+        else {
+            continue;
+        };
+        let fits = match kind {
+            VirtualPackageValueKind::Version => {
+                package.build_string.is_empty() || package.build_string == "0"
+            }
+            VirtualPackageValueKind::Microarch => {
+                package.version == Version::major(0) && !package.build_string.is_empty()
+            }
+        };
+        if !fits {
+            // Odd shape: don't take the friendly slot; fall through to raw.
+            continue;
+        }
+        let value = match kind {
+            VirtualPackageValueKind::Version => package.version.to_string(),
+            VirtualPackageValueKind::Microarch => package.build_string.clone(),
+        };
+        consumed.insert(conda_name);
+        friendly.push((friendly_key, value));
+    }
+
+    let mut leftover: Vec<&GenericVirtualPackage> = declared
+        .iter()
+        .filter(|p| !consumed.contains(p.name.as_normalized()))
+        .collect();
+    leftover.sort_by(|a, b| a.name.as_normalized().cmp(b.name.as_normalized()));
+
+    let raw: Vec<RawEntry> = leftover
+        .into_iter()
+        .map(|package| {
+            let build_is_zero = package.build_string.is_empty() || package.build_string == "0";
+            let value = if build_is_zero {
+                package.version.to_string()
+            } else {
+                format!("{}={}", package.version, package.build_string)
+            };
+            (package.name.as_normalized().to_string(), value)
+        })
+        .collect();
+
+    (friendly, raw)
+}
+
 /// Render a [`PixiPlatform`] as a [`toml_edit::Value`] using the same
 /// bare-string vs inline-table shape as the serde `Serialize` impl above.
 /// This lets the document-editor rewrite the `platforms` array without
@@ -276,45 +542,27 @@ fn parse_generic_virtual_package(s: &str, span: Span) -> Result<GenericVirtualPa
 pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit::Value {
     let name = platform.name().as_str();
     let subdir_str = platform.subdir().to_string();
-    let virtual_packages: Vec<String> = platform
-        .declared_virtual_packages()
-        .iter()
-        .map(format_virtual_package)
-        .collect();
+    let declared = platform.declared_virtual_packages();
 
-    if name == subdir_str && virtual_packages.is_empty() {
+    if name == subdir_str && declared.is_empty() {
         return toml_edit::Value::from(name);
     }
 
+    let (friendly, raw) = classify_virtual_packages(declared);
+    let auto_name = synthesize_name_string(platform.subdir(), declared);
+
     let mut table = toml_edit::InlineTable::new();
-    table.insert("name", name.into());
-    if name != subdir_str {
-        table.insert("subdir", subdir_str.into());
+    if name != auto_name {
+        table.insert("name", name.into());
     }
-    if !virtual_packages.is_empty() {
-        table.insert(
-            "virtual-packages",
-            toml_edit::Array::from_iter(virtual_packages).into(),
-        );
+    table.insert("platform", subdir_str.into());
+    for (key, value) in friendly {
+        table.insert(key, value.into());
+    }
+    for (key, value) in raw {
+        table.insert(&key, value.into());
     }
     toml_edit::Value::InlineTable(table)
-}
-
-/// Render a `GenericVirtualPackage` as the shortest conda spec that
-/// round-trips through [`parse_generic_virtual_package`]: drop a zero
-/// `build_string` and, when also zero, the version.
-pub(crate) fn format_virtual_package(gvp: &GenericVirtualPackage) -> String {
-    let name = gvp.name.as_normalized();
-    let version_is_zero = gvp.version == Version::major(0);
-    let build_is_zero = gvp.build_string.is_empty() || gvp.build_string == "0";
-
-    if version_is_zero && build_is_zero {
-        name.to_string()
-    } else if build_is_zero {
-        format!("{}={}", name, gvp.version)
-    } else {
-        gvp.to_string()
-    }
 }
 
 #[cfg(test)]
@@ -346,10 +594,23 @@ mod test {
         }
     }
 
-    fn vp_strings(p: &PixiPlatform) -> Vec<String> {
-        p.declared_virtual_packages()
+    fn virtual_package_specs(platform: &PixiPlatform) -> Vec<String> {
+        platform
+            .declared_virtual_packages()
             .iter()
-            .map(format_virtual_package)
+            .map(|package| {
+                let build_is_zero = package.build_string.is_empty() || package.build_string == "0";
+                if build_is_zero {
+                    format!("{}={}", package.name.as_normalized(), package.version)
+                } else {
+                    format!(
+                        "{}={}={}",
+                        package.name.as_normalized(),
+                        package.version,
+                        package.build_string
+                    )
+                }
+            })
             .collect()
     }
 
@@ -358,77 +619,132 @@ mod test {
         let parsed = TopLevel::from_toml_str(r#"platform = "linux-64""#).unwrap();
         assert_eq!(parsed.platform.name().as_str(), "linux-64");
         assert_eq!(parsed.platform.subdir(), Platform::Linux64);
-        assert!(vp_strings(&parsed.platform).is_empty());
+        assert!(virtual_package_specs(&parsed.platform).is_empty());
     }
 
+    /// Bare subdir as `name`: same outcome as the bare-string form -- the
+    /// platform is a subdir-platform with no declared virtual packages.
     #[test]
-    fn test_workspace_platform_table_with_subdir() {
-        let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "linux-64-cuda", subdir = "linux-64", virtual-packages = ["__cuda=12.0"] }"#,
-        )
-        .unwrap();
-        assert_eq!(parsed.platform.name().as_str(), "linux-64-cuda");
-        assert_eq!(parsed.platform.subdir(), Platform::Linux64);
-        assert_eq!(
-            vp_strings(&parsed.platform),
-            vec!["__cuda=12.0".to_string()]
-        );
-    }
-
-    #[test]
-    fn test_workspace_platform_table_inferred_subdir() {
+    fn test_workspace_platform_name_only_is_subdir() {
         let parsed = TopLevel::from_toml_str(r#"platform = { name = "osx-arm64" }"#).unwrap();
         assert_eq!(parsed.platform.name().as_str(), "osx-arm64");
         assert_eq!(parsed.platform.subdir(), Platform::OsxArm64);
-        assert!(vp_strings(&parsed.platform).is_empty());
+        assert!(virtual_package_specs(&parsed.platform).is_empty());
+        assert!(parsed.platform.is_subdir_platform());
+    }
+
+    /// `platform` alone: subdir taken from the value, name auto-derived to the
+    /// same string, no VPs.
+    #[test]
+    fn test_workspace_platform_only_platform_key() {
+        let parsed = TopLevel::from_toml_str(r#"platform = { platform = "linux-64" }"#).unwrap();
+        assert_eq!(parsed.platform.name().as_str(), "linux-64");
+        assert_eq!(parsed.platform.subdir(), Platform::Linux64);
+        assert!(parsed.platform.is_subdir_platform());
     }
 
     #[test]
-    fn test_workspace_platform_multiple_virtual_packages() {
+    fn test_workspace_platform_friendly_virtual_packages_auto_name() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "linux-64-cuda", subdir = "linux-64", virtual-packages = ["__cuda=12.0", "__glibc=2.28"] }"#,
+            r#"platform = { platform = "linux-64", cuda = "12.0", libc = "2.28" }"#,
         )
         .unwrap();
+        assert_eq!(parsed.platform.subdir(), Platform::Linux64);
         assert_eq!(
-            vp_strings(&parsed.platform),
+            virtual_package_specs(&parsed.platform),
             vec!["__cuda=12.0".to_string(), "__glibc=2.28".to_string()]
         );
+        // Auto-derived in canonical order: cuda then libc.
+        assert_eq!(
+            parsed.platform.name().as_str(),
+            "linux-64-cuda-12-0-libc-2-28"
+        );
     }
 
-    /// Unknown `__<name>` entries (those rattler has no override slot for) are
-    /// kept verbatim so the TOML layer doesn't need updating every time rattler
-    /// learns about a new virtual package.
     #[test]
-    fn test_workspace_platform_unknown_name_roundtrips() {
+    fn test_workspace_platform_archspec_goes_to_build_string() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "linux-64", virtual-packages = ["__unix", "__future_pkg=1.2"] }"#,
+            r#"platform = { platform = "linux-64", archspec = "x86-64-v3" }"#,
+        )
+        .unwrap();
+        let package = &parsed.platform.declared_virtual_packages()[0];
+        assert_eq!(package.name.as_normalized(), "__archspec");
+        assert_eq!(package.version, Version::major(0));
+        assert_eq!(package.build_string, "x86-64-v3");
+        assert_eq!(
+            parsed.platform.name().as_str(),
+            "linux-64-archspec-x86-64-v3"
+        );
+    }
+
+    /// Friendly key order in the TOML source must not affect the auto-derived
+    /// name: it follows the canonical order from `FRIENDLY_VIRTUAL_PACKAGES`.
+    #[test]
+    fn test_workspace_platform_friendly_virtual_packages_order_independent() {
+        let a = TopLevel::from_toml_str(
+            r#"platform = { platform = "linux-64", cuda = "12.0", libc = "2.28" }"#,
+        )
+        .unwrap();
+        let b = TopLevel::from_toml_str(
+            r#"platform = { platform = "linux-64", libc = "2.28", cuda = "12.0" }"#,
+        )
+        .unwrap();
+        assert_eq!(a.platform.name(), b.platform.name());
+        assert_eq!(
+            virtual_package_specs(&a.platform),
+            virtual_package_specs(&b.platform)
+        );
+    }
+
+    #[test]
+    fn test_workspace_platform_explicit_name_overrides_auto() {
+        let parsed = TopLevel::from_toml_str(
+            r#"platform = { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" }"#,
+        )
+        .unwrap();
+        assert_eq!(parsed.platform.name().as_str(), "jetson-nano");
+        assert_eq!(parsed.platform.subdir(), Platform::LinuxAarch64);
+        assert_eq!(
+            virtual_package_specs(&parsed.platform),
+            vec!["__cuda=12.8".to_string()]
+        );
+    }
+
+    /// Unknown `__<name>` entries (those we don't have a friendly shortcut
+    /// for) keep working so the TOML layer doesn't need updating every time
+    /// rattler learns about a new virtual package.
+    #[test]
+    fn test_workspace_platform_raw_virtual_package_forward_compat() {
+        let parsed = TopLevel::from_toml_str(
+            r#"platform = { platform = "linux-64", __future_pkg = "1.2" }"#,
         )
         .unwrap();
         assert_eq!(
-            vp_strings(&parsed.platform),
-            vec!["__unix".to_string(), "__future_pkg=1.2".to_string()]
+            virtual_package_specs(&parsed.platform),
+            vec!["__future_pkg=1.2".to_string()]
         );
+        assert_eq!(parsed.platform.name().as_str(), "linux-64-future-pkg-1-2");
     }
 
     #[test]
     fn test_workspace_platform_invalid_name() {
-        let input = r#"platform = { name = "linux 64" }"#;
+        let input = r#"platform = { name = "bad name", platform = "linux-64" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         assert_snapshot!(format_parse_error(input, error), @r#"
-         × 'linux 64' is not a valid platform name (allowed: alphanumeric, '_', '-')
+         × 'bad name' is not a valid platform name (allowed: alphanumeric, '-')
           ╭─[pixi.toml:1:22]
-        1 │ platform = { name = "linux 64" }
+        1 │ platform = { name = "bad name", platform = "linux-64" }
           ·                      ────────
           ╰────
         "#);
     }
 
     #[test]
-    fn test_workspace_platform_custom_name_without_subdir() {
+    fn test_workspace_platform_custom_name_without_platform() {
         let input = r#"platform = { name = "linux-64-cuda" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         assert_snapshot!(format_parse_error(input, error), @r#"
-         × 'linux-64-cuda' is not a conda subdir; specify 'subdir' explicitly when using a custom platform name
+         × 'linux-64-cuda' is not a conda subdir; set 'platform' explicitly when using a custom name
           ╭─[pixi.toml:1:22]
         1 │ platform = { name = "linux-64-cuda" }
           ·                      ─────────────
@@ -437,26 +753,61 @@ mod test {
     }
 
     #[test]
-    fn test_workspace_platform_unknown_subdir() {
-        let input = r#"platform = "bogus-platform""#;
+    fn test_workspace_platform_empty_table_rejected() {
+        let input = r#"platform = {}"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
-        // Use a contains check rather than a full snapshot because the inner
-        // rattler_conda_types error wording can drift across versions.
         let rendered = format_parse_error(input, error);
         assert!(
-            rendered.contains("bogus-platform"),
-            "expected error to mention the bad subdir, got: {rendered}"
+            rendered.contains("must set at least one of 'name' or 'platform'"),
+            "expected error to mention required keys, got: {rendered}",
         );
     }
 
     #[test]
-    fn test_workspace_platform_unknown_virtual_package() {
-        let input = r#"platform = { name = "linux-64", virtual-packages = ["bogus"] }"#;
+    fn test_workspace_platform_unknown_subdir() {
+        let input = r#"platform = "bogus-platform""#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
-            rendered.contains("'bogus' is not a recognized virtual package"),
-            "expected error to mention the bad virtual package, got: {rendered}"
+            rendered.contains("bogus-platform"),
+            "expected error to mention the bad subdir, got: {rendered}",
+        );
+    }
+
+    #[test]
+    fn test_workspace_platform_unknown_key_rejected() {
+        let input = r#"platform = { platform = "linux-64", cuda = "12.0", typo = "x" }"#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        let rendered = format_parse_error(input, error);
+        assert!(
+            rendered.contains("typo"),
+            "expected error to mention the unknown key 'typo', got: {rendered}",
+        );
+    }
+
+    #[test]
+    fn test_workspace_platform_archspec_requires_value() {
+        let input = r#"platform = { platform = "linux-64", archspec = "" }"#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        let rendered = format_parse_error(input, error);
+        assert!(
+            rendered.contains("'archspec' requires a non-empty microarchitecture string"),
+            "expected archspec emptiness error, got: {rendered}",
+        );
+    }
+
+    /// Bad version strings on a friendly key surface the conda-version parse
+    /// error (rather than dropping the cause silently or pointing at the wrong
+    /// span). Conda versions are very permissive, so the input here uses
+    /// characters that the version grammar genuinely rejects.
+    #[test]
+    fn test_workspace_platform_friendly_key_invalid_version_rejected() {
+        let input = r#"platform = { platform = "linux-64", cuda = "@@@" }"#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        let rendered = format_parse_error(input, error);
+        assert!(
+            rendered.contains("'@@@' is not a valid version"),
+            "expected friendly-key version error, got: {rendered}",
         );
     }
 
@@ -472,8 +823,20 @@ mod test {
         )
     }
 
-    fn gvp(spec: &str) -> GenericVirtualPackage {
-        parse_generic_virtual_package(spec, Span::new(0, 0)).expect("valid virtual package")
+    fn version_virtual_package(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: PackageName::try_from(name).unwrap(),
+            version: Version::from_str(version).unwrap(),
+            build_string: String::new(),
+        }
+    }
+
+    fn archspec_virtual_package(microarch: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: PackageName::try_from("__archspec").unwrap(),
+            version: Version::major(0),
+            build_string: microarch.to_string(),
+        }
     }
 
     #[test]
@@ -484,63 +847,104 @@ mod test {
     }
 
     #[test]
-    fn test_serialize_custom_name_with_subdir() {
+    fn test_serialize_auto_named_omits_name() {
+        let platform = platform_with_packages(
+            "linux-64-cuda-12-0",
+            Platform::Linux64,
+            vec![version_virtual_package("__cuda", "12.0")],
+        );
+        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "platform": "linux-64",
+                "cuda": "12.0",
+            }),
+        );
+    }
+
+    #[test]
+    fn test_serialize_explicit_name_emitted() {
+        let platform = platform_with_packages(
+            "jetson-nano",
+            Platform::LinuxAarch64,
+            vec![version_virtual_package("__cuda", "12.8")],
+        );
+        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "name": "jetson-nano",
+                "platform": "linux-aarch64",
+                "cuda": "12.8",
+            }),
+        );
+    }
+
+    #[test]
+    fn test_serialize_archspec_uses_build_string() {
+        let platform = platform_with_packages(
+            "linux-64-archspec-x86-64-v3",
+            Platform::Linux64,
+            vec![archspec_virtual_package("x86-64-v3")],
+        );
+        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "platform": "linux-64",
+                "archspec": "x86-64-v3",
+            }),
+        );
+    }
+
+    /// VPs whose shape doesn't match the friendly form (e.g. a `__cuda` with
+    /// a non-empty build string) fall through to the raw `__name = ...` form
+    /// so we never silently drop information.
+    #[test]
+    fn test_serialize_falls_back_to_raw_for_odd_shapes() {
+        let mut odd = version_virtual_package("__cuda", "12.0");
+        odd.build_string = "weird".to_string();
         let platform =
-            platform_with_packages("linux-64-cuda", Platform::Linux64, vec![gvp("__cuda=12.0")]);
+            platform_with_packages("linux-64-cuda-12-0-weird", Platform::Linux64, vec![odd]);
         let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
-                "name": "linux-64-cuda",
-                "subdir": "linux-64",
-                "virtual-packages": ["__cuda=12.0"],
-            })
+                "platform": "linux-64",
+                "__cuda": "12.0=weird",
+            }),
         );
     }
 
     #[test]
-    fn test_serialize_default_name_with_virtual_packages() {
-        let platform =
-            platform_with_packages("linux-64", Platform::Linux64, vec![gvp("__cuda=12.0")]);
-        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({
-                "name": "linux-64",
-                "virtual-packages": ["__cuda=12.0"],
-            })
-        );
-    }
-
-    #[test]
-    fn test_serialize_custom_name_default_virtual_packages() {
-        let platform = platform_with_packages("linux-64-cuda", Platform::Linux64, Vec::new());
-        let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({
-                "name": "linux-64-cuda",
-                "subdir": "linux-64",
-            })
-        );
-    }
-
-    /// Round-trip: deserialize a TOML representation, re-serialize via
-    /// `TomlPixiPlatform`, and check we get the same JSON shape back.
-    #[test]
-    fn test_roundtrip_table_form() {
-        let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "linux-64-cuda", subdir = "linux-64", virtual-packages = ["__cuda=12.0"] }"#,
-        )
-        .unwrap();
+    fn test_roundtrip_friendly_table() {
+        let original = r#"platform = { platform = "linux-64", cuda = "12.0", libc = "2.28" }"#;
+        let parsed = TopLevel::from_toml_str(original).unwrap();
         let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
-                "name": "linux-64-cuda",
-                "subdir": "linux-64",
-                "virtual-packages": ["__cuda=12.0"],
-            })
+                "platform": "linux-64",
+                "cuda": "12.0",
+                "libc": "2.28",
+            }),
+        );
+    }
+
+    #[test]
+    fn test_roundtrip_named_table() {
+        let original =
+            r#"platform = { name = "jetson", platform = "linux-aarch64", cuda = "12.8" }"#;
+        let parsed = TopLevel::from_toml_str(original).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "name": "jetson",
+                "platform": "linux-aarch64",
+                "cuda": "12.8",
+            }),
         );
     }
 
@@ -549,5 +953,15 @@ mod test {
         let parsed = TopLevel::from_toml_str(r#"platform = "linux-64""#).unwrap();
         let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
         assert_eq!(json, serde_json::Value::String("linux-64".into()));
+    }
+
+    #[test]
+    fn test_sanitize_name_segment_examples() {
+        assert_eq!(sanitize_name_segment("12.0"), "12-0");
+        assert_eq!(sanitize_name_segment("x86-64-v3"), "x86-64-v3");
+        assert_eq!(sanitize_name_segment("1.2.3"), "1-2-3");
+        assert_eq!(sanitize_name_segment("..."), "");
+        assert_eq!(sanitize_name_segment("-leading"), "leading");
+        assert_eq!(sanitize_name_segment("trailing-"), "trailing");
     }
 }

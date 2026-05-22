@@ -145,13 +145,13 @@ def test_add_alias_a_works(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 def test_add_custom_name_with_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi, tmp_pixi_workspace, "add", "gpu-linux=linux-64", "--no-install"
-    )
+    _run_platform(pixi, tmp_pixi_workspace, "add", "gpu-linux=linux-64", "--no-install")
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     entry = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
-    assert entry["subdir"] == "linux-64"
-    assert "virtual-packages" not in entry
+    assert entry["platform"] == "linux-64"
+    # No virtual-package shortcut keys should leak in when none were requested.
+    for vp_key in ("cuda", "archspec", "libc", "linux", "macos", "windows"):
+        assert vp_key not in entry
 
 
 def test_add_custom_name_with_cuda(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -167,8 +167,8 @@ def test_add_custom_name_with_cuda(pixi: Path, tmp_pixi_workspace: Path) -> None
     )
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     entry = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
-    assert entry["subdir"] == "linux-64"
-    assert entry["virtual-packages"] == ["__cuda=12.0"]
+    assert entry["platform"] == "linux-64"
+    assert entry["cuda"] == "12.0"
 
 
 def test_add_custom_name_with_libc_on_linux(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -187,8 +187,8 @@ def test_add_custom_name_with_libc_on_linux(pixi: Path, tmp_pixi_workspace: Path
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "modern-linux"
     )
-    # `--libc` shortcut writes `__glibc` (rattler's hardcoded family).
-    assert entry["virtual-packages"] == ["__glibc=2.28"]
+    # `--libc` shortcut writes the `libc` key (mapped to `__glibc` internally).
+    assert entry["libc"] == "2.28"
 
 
 def test_add_libc_on_windows_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -222,8 +222,8 @@ def test_add_archspec_build_string(pixi: Path, tmp_pixi_workspace: Path) -> None
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "v3-linux"
     )
-    # archspec writes name=0=<build_string>.
-    assert entry["virtual-packages"] == ["__archspec=0=x86_64_v3"]
+    # archspec carries the microarchitecture string.
+    assert entry["archspec"] == "x86_64_v3"
 
 
 def test_add_raw_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -244,7 +244,8 @@ def test_add_raw_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) 
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "rich-linux"
     )
-    assert sorted(entry["virtual-packages"]) == sorted(["__cuda=12.0", "__glibc=2.28"])
+    assert entry["cuda"] == "12.0"
+    assert entry["libc"] == "2.28"
 
 
 def test_add_duplicate_vp_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -309,9 +310,7 @@ def test_add_bare_subdir_plus_vp_rejected(pixi: Path, tmp_pixi_workspace: Path) 
     )
 
 
-def test_add_vp_with_multiple_positionals_rejected(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_add_vp_with_multiple_positionals_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
@@ -362,8 +361,7 @@ def test_add_to_named_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = _seed_workspace(tmp_pixi_workspace, [CURRENT_PLATFORM])
     # Seed an empty feature so the toml has a place to land.
     manifest.write_text(
-        manifest.read_text()
-        + "\n[feature.gpu]\nplatforms = []\n[environments]\ngpu = [\"gpu\"]\n"
+        manifest.read_text() + '\n[feature.gpu]\nplatforms = []\n[environments]\ngpu = ["gpu"]\n'
     )
     _run_platform(
         pixi,
@@ -378,16 +376,13 @@ def test_add_to_named_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert "linux-64" in data["feature"]["gpu"]["platforms"]
 
 
-def test_add_rich_platform_to_named_feature(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_add_rich_platform_to_named_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """`--feature` and a virtual-package flag compose: the rich platform
     lands in both the workspace's platforms list (as an inline table) and
     the feature's platforms list (as a bare name reference)."""
     manifest = _seed_workspace(tmp_pixi_workspace, [CURRENT_PLATFORM])
     manifest.write_text(
-        manifest.read_text()
-        + "\n[feature.gpu]\nplatforms = []\n[environments]\ngpu = [\"gpu\"]\n"
+        manifest.read_text() + '\n[feature.gpu]\nplatforms = []\n[environments]\ngpu = ["gpu"]\n'
     )
     _run_platform(
         pixi,
@@ -409,8 +404,8 @@ def test_add_rich_platform_to_named_feature(
         for p in _platforms_from_toml(manifest)
         if isinstance(p, dict) and p.get("name") == "gpu-linux"
     )
-    assert rich["subdir"] == "linux-64"
-    assert rich["virtual-packages"] == ["__cuda=12.0"]
+    assert rich["platform"] == "linux-64"
+    assert rich["cuda"] == "12.0"
 
 
 # ----------------------------------------------------------------------------
@@ -427,9 +422,7 @@ def test_lockfile_gets_new_platform(pixi: Path, tmp_pixi_workspace: Path) -> Non
     assert "linux-64" in names
 
 
-def test_lockfile_records_custom_platform_and_vps(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_lockfile_records_custom_platform_and_vps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
@@ -441,11 +434,7 @@ def test_lockfile_records_custom_platform_and_vps(
         "--no-install",
     )
     lock_platforms = _lockfile_platforms(tmp_pixi_workspace)
-    entry = next(
-        p
-        for p in lock_platforms
-        if isinstance(p, dict) and p.get("name") == "gpu-linux"
-    )
+    entry = next(p for p in lock_platforms if isinstance(p, dict) and p.get("name") == "gpu-linux")
     assert entry["subdir"] == "linux-64"
     assert "__cuda=12.0" in entry["virtual-packages"]
 
@@ -459,9 +448,7 @@ def test_lockfile_records_removed_platform_lazy_pruning(
     references the removed platform). The manifest must still reflect the
     removal."""
     _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install"
-    )
+    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install")
     _run_platform(pixi, tmp_pixi_workspace, "remove", "osx-64", "--no-install")
 
     # Manifest is the source of truth -- removed platform must be gone.
@@ -475,8 +462,7 @@ def test_lockfile_records_removed_platform_lazy_pruning(
     # Lockfile still lists both platforms; this is the documented lazy-prune
     # behavior also present in pixi 0.68.1, not a regression of the new CLI.
     lock_names = [
-        p if isinstance(p, str) else p["name"]
-        for p in _lockfile_platforms(tmp_pixi_workspace)
+        p if isinstance(p, str) else p["name"] for p in _lockfile_platforms(tmp_pixi_workspace)
     ]
     assert "linux-64" in lock_names
 
@@ -516,7 +502,7 @@ def test_edit_replaces_vp_version(pixi: Path, tmp_pixi_workspace: Path) -> None:
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
-    assert entry["virtual-packages"] == ["__cuda=12.4"]
+    assert entry["cuda"] == "12.4"
 
 
 def test_edit_add_second_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -535,9 +521,8 @@ def test_edit_add_second_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
-    assert sorted(entry["virtual-packages"]) == sorted(
-        ["__cuda=11.0", "__glibc=2.28"]
-    )
+    assert entry["cuda"] == "11.0"
+    assert entry["libc"] == "2.28"
 
 
 def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -565,7 +550,8 @@ def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
-    assert entry["virtual-packages"] == ["__glibc=2.28"]
+    assert entry["libc"] == "2.28"
+    assert "cuda" not in entry
 
 
 def test_edit_clear_then_upsert(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -585,7 +571,8 @@ def test_edit_clear_then_upsert(pixi: Path, tmp_pixi_workspace: Path) -> None:
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
-    assert entry["virtual-packages"] == ["__archspec=0=x86_64_v3"]
+    assert entry["archspec"] == "x86_64_v3"
+    assert "cuda" not in entry
 
 
 def test_edit_set_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -604,9 +591,9 @@ def test_edit_set_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
-    assert entry["subdir"] == "linux-aarch64"
-    # VP list survives an unrelated subdir change.
-    assert entry["virtual-packages"] == ["__cuda=11.0"]
+    assert entry["platform"] == "linux-aarch64"
+    # VP declaration survives an unrelated subdir change.
+    assert entry["cuda"] == "11.0"
 
 
 def test_edit_noop_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -662,9 +649,7 @@ def test_edit_unknown_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) ->
 
 def test_list_default_human(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install"
-    )
+    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install")
     out = _run_platform(
         pixi,
         tmp_pixi_workspace,
@@ -682,9 +667,7 @@ def test_list_alias_ls(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 def test_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi, tmp_pixi_workspace, "add", "linux-64", "osx-arm64", "--no-install"
-    )
+    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-arm64", "--no-install")
     out = _run_platform(pixi, tmp_pixi_workspace, "list", "--json")
     payload = json.loads(out.stdout)
     # Shape: {env_name: [platform_name, ...]}
@@ -718,9 +701,7 @@ def test_list_shows_rich_hint(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 def test_remove_single(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install"
-    )
+    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install")
     _run_platform(pixi, tmp_pixi_workspace, "remove", "osx-64", "--no-install")
     assert "osx-64" not in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
 
@@ -752,9 +733,7 @@ def test_remove_multiple(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 def test_remove_alias_rm(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install"
-    )
+    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install")
     _run_platform(pixi, tmp_pixi_workspace, "rm", "osx-64", "--no-install")
 
 
@@ -828,9 +807,7 @@ def test_show_all(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 def test_show_all_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install"
-    )
+    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install")
     out = _run_platform(pixi, tmp_pixi_workspace, "show", "--all", "--json")
     payload = json.loads(out.stdout)
     assert "current_subdir" in payload
@@ -838,9 +815,7 @@ def test_show_all_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert "linux-64" in names and "osx-64" in names
 
 
-def test_show_current_json_has_autodetected(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_show_current_json_has_autodetected(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "--no-install")
     out = _run_platform(pixi, tmp_pixi_workspace, "show", "--current", "--json")
@@ -855,12 +830,8 @@ def test_show_current_json_has_autodetected(
 def test_show_all_and_current_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """`--all --current`: synthetic entry first, then every workspace platform."""
     _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install"
-    )
-    out = _run_platform(
-        pixi, tmp_pixi_workspace, "show", "--all", "--current", "--json"
-    )
+    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install")
+    out = _run_platform(pixi, tmp_pixi_workspace, "show", "--all", "--current", "--json")
     payload = json.loads(out.stdout)
     assert payload["platforms"][0].get("is_autodetected") is True
     other = [p["name"] for p in payload["platforms"][1:]]
@@ -942,11 +913,9 @@ def test_round_trip_mixed_bare_and_rich(pixi: Path, tmp_pixi_workspace: Path) ->
     )
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     assert "linux-64" in platforms  # bare string survives as bare string
-    rich = next(
-        p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux"
-    )
-    assert rich["subdir"] == "linux-64"
-    assert rich["virtual-packages"] == ["__cuda=12.0"]
+    rich = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
+    assert rich["platform"] == "linux-64"
+    assert rich["cuda"] == "12.0"
 
 
 def test_round_trip_after_edit_preserves_other_entries(
@@ -974,10 +943,8 @@ def test_round_trip_after_edit_preserves_other_entries(
     )
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     assert "linux-64" in platforms
-    rich = next(
-        p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux"
-    )
-    assert rich["virtual-packages"] == ["__cuda=12.4"]
+    rich = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
+    assert rich["cuda"] == "12.4"
 
 
 if __name__ == "__main__":  # pragma: no cover - convenience entry point

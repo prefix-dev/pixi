@@ -499,7 +499,7 @@ mod test {
         channels = []
         platforms = [
           "linux-64",
-          { name = "linux-64-cuda", subdir = "linux-64", virtual-packages = ["__cuda=12.0"] },
+          { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
           { name = "osx-arm64" },
         ]
         "#;
