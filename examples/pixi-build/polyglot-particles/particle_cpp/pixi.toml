@@ -7,12 +7,12 @@ version = "0.1.0"
 [package.build.backend]
 channels = ["https://prefix.dev/conda-forge"]
 name = "pixi-build-cmake"
-version = "0.3.*"
+workspace = true
 
 [package.host-dependencies]
-particle_core = { path = "../particle_core" }
+particle_core = { workspace = true }
 
 [package.run-dependencies]
 # TODO: drop once pixi-build emits run-exports for source packages; for now we
 # have to repeat the host-deps so consumers pick up the runtime libraries.
-particle_core = { path = "../particle_core" }
+particle_core = { workspace = true }

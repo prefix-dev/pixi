@@ -210,6 +210,8 @@ impl WorkspaceManifest {
             authors: self.workspace.authors.clone(),
             documentation: self.workspace.documentation.clone(),
             homepage: self.workspace.homepage.clone(),
+            dependencies: self.workspace.dependencies.clone(),
+            workspace_root: Some(self.workspace.root_directory.clone()),
         }
     }
 }
