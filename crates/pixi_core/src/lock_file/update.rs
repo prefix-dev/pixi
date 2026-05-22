@@ -960,7 +960,6 @@ impl<'p> LockFileDerivedData<'p> {
                         prefix: &prefix,
                         platform: best_platform,
                         lock_file_dir: self.workspace.root(),
-                        system_requirements: &environment.system_requirements(),
                     };
 
                     let workspace_config = self.workspace.config();

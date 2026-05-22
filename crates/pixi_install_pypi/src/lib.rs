@@ -12,7 +12,7 @@ use miette::{IntoDiagnostic, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, PixiPlatform, SystemRequirements,
+    EnvironmentName, PixiPlatform,
     pypi::ResolvedPypiExcludeNewer,
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
 };
@@ -282,7 +282,6 @@ pub struct PyPIUpdateConfig<'a> {
     pub prefix: &'a Prefix,
     pub platform: &'a PixiPlatform,
     pub lock_file_dir: &'a Path,
-    pub system_requirements: &'a SystemRequirements,
 }
 
 /// Configuration for PyPI build options, grouping all build-related settings
