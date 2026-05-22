@@ -438,6 +438,21 @@ impl TomlManifest {
             .map(PixiSpanned::into_inner)
             .unwrap_or_default();
 
+        // Synthesise per-platform virtual packages from `[system-requirements]`.
+        // Named features only contribute when they pin an explicit `platforms`.
+        for feature in features.values() {
+            let target_names = match (feature.name.is_default(), feature.platforms.as_ref()) {
+                (true, _) => None,
+                (false, Some(set)) => Some(set),
+                (false, None) => continue,
+            };
+            crate::system_requirements::expand_system_requirements_into_platforms(
+                &feature.system_requirements,
+                &mut workspace.platforms,
+                target_names,
+            );
+        }
+
         let workspace_manifest = WorkspaceManifest {
             workspace,
             features,
@@ -709,6 +724,46 @@ mod test {
         backend = { name = "foobar", version = "*" }
         "#,
         ));
+    }
+
+    #[test]
+    fn test_system_requirements_shim_adds_synthetic_platforms() {
+        let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64", "osx-64", "win-64"]
+
+            [system-requirements]
+            linux = "5.10"
+            libc = "2.28"
+            cuda = "12.0"
+            "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let platforms = &workspace_manifest.workspace.platforms;
+        let names: Vec<&str> = platforms.iter().map(|p| p.name().as_str()).collect();
+
+        // Originals are untouched.
+        for original in ["linux-64", "osx-64", "win-64"] {
+            let p = platforms
+                .iter()
+                .find(|p| p.name().as_str() == original)
+                .unwrap_or_else(|| panic!("missing original {original}"));
+            assert!(
+                p.declared_virtual_packages().is_empty(),
+                "bare {original} should have no declarations"
+            );
+        }
+        // One synthetic per subdir is added alongside.
+        assert_eq!(
+            names.len(),
+            6,
+            "expected 3 originals + 3 synthetics, got {names:?}"
+        );
     }
 
     #[test]
