@@ -120,6 +120,10 @@ If you run `pixi run start`, the age of each person should now be accurate:
 └──────────────┴─────┴─────────────┘
 ```
 
+## Sharing Versions Across Members
+
+Once a workspace grows past a couple of members, the same build backend, language runtime, and sibling-package paths tend to repeat in every `pixi.toml`. A `[workspace.dependencies]` pool lets you declare those specs once and have each member opt in per entry with `{ workspace = true }`. See [Workspace Dependencies](../workspace_dependencies/) for the syntax, override rules, and error semantics.
+
 ## Conclusion
 
 In this tutorial, we created a Pixi workspace containing two packages. The manifest of `python_rich` describes the workspace as well as the package, with `cpp_math` only the `package` section is used. Feel free to add more packages, written in different languages to this workspace!

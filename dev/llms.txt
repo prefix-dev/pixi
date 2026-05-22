@@ -67,6 +67,7 @@ for further details on how to use the software.
 - [Building a ROS Package](https://prefix-dev.github.io/pixi/latest/build/ros/index.md)
 - [Variants](https://prefix-dev.github.io/pixi/latest/build/variants/index.md)
 - [Multiple Packages in Workspace](https://prefix-dev.github.io/pixi/latest/build/workspace/index.md)
+- [Workspace Dependencies](https://prefix-dev.github.io/pixi/latest/build/workspace_dependencies/index.md)
 - [CMake](https://prefix-dev.github.io/pixi/latest/build/backends/pixi-build-cmake/index.md)
 - [Mojo](https://prefix-dev.github.io/pixi/latest/build/backends/pixi-build-mojo/index.md)
 - [Python](https://prefix-dev.github.io/pixi/latest/build/backends/pixi-build-python/index.md)

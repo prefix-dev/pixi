@@ -10,27 +10,31 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/reference/cli/pixi/import/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/build/workspace_dependencies/">
       
       
+        <link rel="prev" href="../dependency_types/">
+      
+      
+        <link rel="next" href="../backends/">
       
       
         
       
       
-      <link rel="icon" href="../../../../assets/pixi.png">
+      <link rel="icon" href="../../assets/pixi.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
     
     
       
-        <title>pixi import - Pixi</title>
+        <title>Workspace Dependencies - Pixi</title>
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
       
         
-        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.ab4e12ef.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
       
       
 
@@ -49,9 +53,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -76,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pixi-import" class="md-skip">
+        <a href="#defining-common-dependencies" class="md-skip">
           Skip to content
         </a>
       
@@ -96,9 +100,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="Pixi" class="md-header__button md-logo" aria-label="Pixi" data-md-component="logo">
+    <a href="../.." title="Pixi" class="md-header__button md-logo" aria-label="Pixi" data-md-component="logo">
       
-  <img src="../../../../assets/pixi-logo.svg" alt="logo">
+  <img src="../../assets/pixi-logo.svg" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -115,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              pixi import
+              Workspace Dependencies
             
           </span>
         </div>
@@ -241,9 +245,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="Pixi" class="md-nav__button md-logo" aria-label="Pixi" data-md-component="logo">
+    <a href="../.." title="Pixi" class="md-nav__button md-logo" aria-label="Pixi" data-md-component="logo">
       
-  <img src="../../../../assets/pixi-logo.svg" alt="logo">
+  <img src="../../assets/pixi-logo.svg" alt="logo">
 
     </a>
     Pixi
@@ -270,7 +274,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -297,7 +301,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../robotics/" class="md-nav__link">
+      <a href="../../robotics/" class="md-nav__link">
         
   
   
@@ -381,7 +385,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../installation/" class="md-nav__link">
+      <a href="../../installation/" class="md-nav__link">
         
   
   
@@ -409,7 +413,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../first_workspace/" class="md-nav__link">
+      <a href="../../first_workspace/" class="md-nav__link">
         
   
   
@@ -437,7 +441,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../getting_started/" class="md-nav__link">
+      <a href="../../getting_started/" class="md-nav__link">
         
   
   
@@ -465,7 +469,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../conda_ecosystem/" class="md-nav__link">
+      <a href="../../conda_ecosystem/" class="md-nav__link">
         
   
   
@@ -618,7 +622,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../python/tutorial/" class="md-nav__link">
+      <a href="../../python/tutorial/" class="md-nav__link">
         
   
   
@@ -646,7 +650,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../python/pyproject_toml/" class="md-nav__link">
+      <a href="../../python/pyproject_toml/" class="md-nav__link">
         
   
   
@@ -674,7 +678,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../python/pytorch/" class="md-nav__link">
+      <a href="../../python/pytorch/" class="md-nav__link">
         
   
   
@@ -710,7 +714,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../tutorials/ros2/" class="md-nav__link">
+      <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
   
@@ -738,7 +742,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../tutorials/rust/" class="md-nav__link">
+      <a href="../../tutorials/rust/" class="md-nav__link">
         
   
   
@@ -821,7 +825,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../switching_from/uv/" class="md-nav__link">
+      <a href="../../switching_from/uv/" class="md-nav__link">
         
   
   
@@ -849,7 +853,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../switching_from/poetry/" class="md-nav__link">
+      <a href="../../switching_from/poetry/" class="md-nav__link">
         
   
   
@@ -877,7 +881,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../switching_from/conda/" class="md-nav__link">
+      <a href="../../switching_from/conda/" class="md-nav__link">
         
   
   
@@ -913,7 +917,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../tutorials/multi_environment/" class="md-nav__link">
+      <a href="../../tutorials/multi_environment/" class="md-nav__link">
         
   
   
@@ -941,7 +945,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../global_tools/introduction/" class="md-nav__link">
+      <a href="../../global_tools/introduction/" class="md-nav__link">
         
   
   
@@ -969,7 +973,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../tutorials/import/" class="md-nav__link">
+      <a href="../../tutorials/import/" class="md-nav__link">
         
   
   
@@ -1071,7 +1075,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../workspace/environment/" class="md-nav__link">
+      <a href="../../workspace/environment/" class="md-nav__link">
         
   
   
@@ -1099,7 +1103,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../workspace/advanced_tasks/" class="md-nav__link">
+      <a href="../../workspace/advanced_tasks/" class="md-nav__link">
         
   
   
@@ -1127,7 +1131,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../workspace/multi_platform_configuration/" class="md-nav__link">
+      <a href="../../workspace/multi_platform_configuration/" class="md-nav__link">
         
   
   
@@ -1155,7 +1159,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../workspace/multi_environment/" class="md-nav__link">
+      <a href="../../workspace/multi_environment/" class="md-nav__link">
         
   
   
@@ -1183,7 +1187,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../workspace/lockfile/" class="md-nav__link">
+      <a href="../../workspace/lockfile/" class="md-nav__link">
         
   
   
@@ -1211,7 +1215,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../workspace/system_requirements/" class="md-nav__link">
+      <a href="../../workspace/system_requirements/" class="md-nav__link">
         
   
   
@@ -1239,7 +1243,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../concepts/package_specifications/" class="md-nav__link">
+      <a href="../../concepts/package_specifications/" class="md-nav__link">
         
   
   
@@ -1267,7 +1271,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../concepts/conda_pypi/" class="md-nav__link">
+      <a href="../../concepts/conda_pypi/" class="md-nav__link">
         
   
   
@@ -1348,7 +1352,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../global_tools/manifest/" class="md-nav__link">
+      <a href="../../global_tools/manifest/" class="md-nav__link">
         
   
   
@@ -1376,7 +1380,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../global_tools/trampolines/" class="md-nav__link">
+      <a href="../../global_tools/trampolines/" class="md-nav__link">
         
   
   
@@ -1416,8 +1420,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -1441,11 +1447,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
           <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
@@ -1466,7 +1472,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1484,7 +1490,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/getting_started/" class="md-nav__link">
+      <a href="../getting_started/" class="md-nav__link">
         
   
   
@@ -1575,7 +1581,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/python/" class="md-nav__link">
+      <a href="../python/" class="md-nav__link">
         
   
   
@@ -1603,7 +1609,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/cpp/" class="md-nav__link">
+      <a href="../cpp/" class="md-nav__link">
         
   
   
@@ -1631,7 +1637,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/ros/" class="md-nav__link">
+      <a href="../ros/" class="md-nav__link">
         
   
   
@@ -1659,7 +1665,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/workspace/" class="md-nav__link">
+      <a href="../workspace/" class="md-nav__link">
         
   
   
@@ -1687,7 +1693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/variants/" class="md-nav__link">
+      <a href="../variants/" class="md-nav__link">
         
   
   
@@ -1715,7 +1721,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/advanced_cpp/" class="md-nav__link">
+      <a href="../advanced_cpp/" class="md-nav__link">
         
   
   
@@ -1743,7 +1749,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/cross_compilation/" class="md-nav__link">
+      <a href="../cross_compilation/" class="md-nav__link">
         
   
   
@@ -1779,7 +1785,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/dependency_types/" class="md-nav__link">
+      <a href="../dependency_types/" class="md-nav__link">
         
   
   
@@ -1804,10 +1810,35 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../../build/workspace_dependencies/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Workspace Dependencies
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1823,6 +1854,57 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#defining-common-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Defining common dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-a-workspace-dependency-in-a-package" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using a workspace dependency in a package
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layering-package-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layering package overrides
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1900,7 +1982,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/backends/" class="md-nav__link">
+      <a href="../backends/" class="md-nav__link">
         
   
   
@@ -1928,7 +2010,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/backends/pixi-build-cmake/" class="md-nav__link">
+      <a href="../backends/pixi-build-cmake/" class="md-nav__link">
         
   
   
@@ -1956,7 +2038,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/backends/pixi-build-python/" class="md-nav__link">
+      <a href="../backends/pixi-build-python/" class="md-nav__link">
         
   
   
@@ -1984,7 +2066,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/backends/pixi-build-rattler-build/" class="md-nav__link">
+      <a href="../backends/pixi-build-rattler-build/" class="md-nav__link">
         
   
   
@@ -2012,7 +2094,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/backends/pixi-build-ros/" class="md-nav__link">
+      <a href="../backends/pixi-build-ros/" class="md-nav__link">
         
   
   
@@ -2040,7 +2122,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/backends/pixi-build-r/" class="md-nav__link">
+      <a href="../backends/pixi-build-r/" class="md-nav__link">
         
   
   
@@ -2068,7 +2150,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/backends/pixi-build-rust/" class="md-nav__link">
+      <a href="../backends/pixi-build-rust/" class="md-nav__link">
         
   
   
@@ -2096,7 +2178,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/backends/pixi-build-mojo/" class="md-nav__link">
+      <a href="../backends/pixi-build-mojo/" class="md-nav__link">
         
   
   
@@ -2183,7 +2265,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/key_concepts/compilers/" class="md-nav__link">
+      <a href="../key_concepts/compilers/" class="md-nav__link">
         
   
   
@@ -2219,7 +2301,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/package_source/" class="md-nav__link">
+      <a href="../package_source/" class="md-nav__link">
         
   
   
@@ -2247,7 +2329,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../build/dev/" class="md-nav__link">
+      <a href="../dev/" class="md-nav__link">
         
   
   
@@ -2343,7 +2425,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../deployment/prefix/" class="md-nav__link">
+      <a href="../../deployment/prefix/" class="md-nav__link">
         
   
   
@@ -2371,7 +2453,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../deployment/pixi_pack/" class="md-nav__link">
+      <a href="../../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -2399,7 +2481,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../deployment/authentication/" class="md-nav__link">
+      <a href="../../deployment/authentication/" class="md-nav__link">
         
   
   
@@ -2427,7 +2509,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../deployment/container/" class="md-nav__link">
+      <a href="../../deployment/container/" class="md-nav__link">
         
   
   
@@ -2455,7 +2537,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../deployment/s3/" class="md-nav__link">
+      <a href="../../deployment/s3/" class="md-nav__link">
         
   
   
@@ -2483,7 +2565,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../deployment/artifactory/" class="md-nav__link">
+      <a href="../../deployment/artifactory/" class="md-nav__link">
         
   
   
@@ -2634,7 +2716,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/editor/vscode/" class="md-nav__link">
+      <a href="../../integration/editor/vscode/" class="md-nav__link">
         
   
   
@@ -2662,7 +2744,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/editor/jetbrains/" class="md-nav__link">
+      <a href="../../integration/editor/jetbrains/" class="md-nav__link">
         
   
   
@@ -2690,7 +2772,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/editor/zed/" class="md-nav__link">
+      <a href="../../integration/editor/zed/" class="md-nav__link">
         
   
   
@@ -2718,7 +2800,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/editor/r_studio/" class="md-nav__link">
+      <a href="../../integration/editor/r_studio/" class="md-nav__link">
         
   
   
@@ -2746,7 +2828,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/editor/jupyterlab/" class="md-nav__link">
+      <a href="../../integration/editor/jupyterlab/" class="md-nav__link">
         
   
   
@@ -2835,7 +2917,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/ci/github_actions/" class="md-nav__link">
+      <a href="../../integration/ci/github_actions/" class="md-nav__link">
         
   
   
@@ -2863,7 +2945,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/ci/updates_github_actions/" class="md-nav__link">
+      <a href="../../integration/ci/updates_github_actions/" class="md-nav__link">
         
   
   
@@ -2964,7 +3046,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/extensions/introduction/" class="md-nav__link">
+      <a href="../../integration/extensions/introduction/" class="md-nav__link">
         
   
   
@@ -2992,7 +3074,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/extensions/pixi_browse/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_browse/" class="md-nav__link">
         
   
   
@@ -3020,7 +3102,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/extensions/pixi_diff/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_diff/" class="md-nav__link">
         
   
   
@@ -3048,7 +3130,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/ci/updates_github_actions/" class="md-nav__link">
+      <a href="../../integration/ci/updates_github_actions/" class="md-nav__link">
         
   
   
@@ -3076,7 +3158,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/extensions/pixi_inject/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_inject/" class="md-nav__link">
         
   
   
@@ -3104,7 +3186,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/extensions/pixi_install_to_prefix/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_install_to_prefix/" class="md-nav__link">
         
   
   
@@ -3132,7 +3214,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../deployment/pixi_pack/" class="md-nav__link">
+      <a href="../../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -3160,7 +3242,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/extensions/pixi_skills/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_skills/" class="md-nav__link">
         
   
   
@@ -3251,7 +3333,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/third_party/conda_deny/" class="md-nav__link">
+      <a href="../../integration/third_party/conda_deny/" class="md-nav__link">
         
   
   
@@ -3279,7 +3361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/third_party/direnv/" class="md-nav__link">
+      <a href="../../integration/third_party/direnv/" class="md-nav__link">
         
   
   
@@ -3307,7 +3389,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../integration/third_party/starship/" class="md-nav__link">
+      <a href="../../integration/third_party/starship/" class="md-nav__link">
         
   
   
@@ -3411,7 +3493,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../security/" class="md-nav__link">
+      <a href="../../security/" class="md-nav__link">
         
   
   
@@ -3439,7 +3521,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../advanced/channel_logic/" class="md-nav__link">
+      <a href="../../advanced/channel_logic/" class="md-nav__link">
         
   
   
@@ -3467,7 +3549,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../../advanced/explain_info_command/" class="md-nav__link">
         
   
   
@@ -3495,7 +3577,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../advanced/override/" class="md-nav__link">
+      <a href="../../advanced/override/" class="md-nav__link">
         
   
   
@@ -3523,7 +3605,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../advanced/shebang/" class="md-nav__link">
+      <a href="../../advanced/shebang/" class="md-nav__link">
         
   
   
@@ -3551,7 +3633,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../advanced/pixi_shell/" class="md-nav__link">
+      <a href="../../advanced/pixi_shell/" class="md-nav__link">
         
   
   
@@ -3643,7 +3725,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pixi_manifest/" class="md-nav__link">
+      <a href="../../reference/pixi_manifest/" class="md-nav__link">
         
   
   
@@ -3671,7 +3753,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../pixi_configuration/" class="md-nav__link">
+      <a href="../../reference/pixi_configuration/" class="md-nav__link">
         
   
   
@@ -3699,7 +3781,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../" class="md-nav__link">
+      <a href="../../reference/cli/pixi/" class="md-nav__link">
         
   
   
@@ -3727,7 +3809,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../environment_variables/" class="md-nav__link">
+      <a href="../../reference/environment_variables/" class="md-nav__link">
         
   
   
@@ -3821,7 +3903,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../CHANGELOG/" class="md-nav__link">
+      <a href="../../CHANGELOG/" class="md-nav__link">
         
   
   
@@ -3849,7 +3931,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../misc/vision/" class="md-nav__link">
+      <a href="../../misc/vision/" class="md-nav__link">
         
   
   
@@ -3877,7 +3959,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../misc/packaging/" class="md-nav__link">
+      <a href="../../misc/packaging/" class="md-nav__link">
         
   
   
@@ -3905,7 +3987,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../misc/Community/" class="md-nav__link">
+      <a href="../../misc/Community/" class="md-nav__link">
         
   
   
@@ -3933,7 +4015,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../misc/FAQ/" class="md-nav__link">
+      <a href="../../misc/FAQ/" class="md-nav__link">
         
   
   
@@ -3978,8 +4060,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -3988,10 +4068,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#usage" class="md-nav__link">
+  <a href="#defining-common-dependencies" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Usage
+        Defining common dependencies
       
     </span>
   </a>
@@ -3999,10 +4079,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#arguments" class="md-nav__link">
+  <a href="#using-a-workspace-dependency-in-a-package" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Arguments
+        Using a workspace dependency in a package
       
     </span>
   </a>
@@ -4010,43 +4090,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#options" class="md-nav__link">
+  <a href="#layering-package-overrides" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Options
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#config-options" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Config Options
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#global-options" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Global Options
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#description" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Description
+        Layering package overrides
       
     </span>
   </a>
@@ -4070,7 +4117,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/reference/cli/pixi/import.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/build/workspace_dependencies.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -4078,159 +4125,91 @@
   
 
 
-<!--- This file is autogenerated. Do not edit manually! -->
-<h1 id="pixi-import"><a href="../">pixi</a> import<a class="headerlink" href="#pixi-import" title="Permanent link">#</a></h1>
-<p>Imports a file into an environment in an existing workspace.</p>
-<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi import [OPTIONS] &lt;FILE&gt;
+  <h1>Workspace Dependencies</h1>
+
+<p>In a monorepo, packages typically share many of the same dependency versions:
+the build backend, the language runtime, common libraries, sibling packages
+referenced by relative path.
+Bumping such a version requires editing every package's <code>pixi.toml</code>, and the
+files drift out of sync when someone forgets one.</p>
+<p><code>[workspace.dependencies]</code> solves this by letting the workspace declare a pool
+of dependency specs that packages opt into per entry.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p><code>[workspace.dependencies]</code> is part of the <code>pixi-build</code> preview and applies
+<strong>only to package dependencies</strong> (<code>[package.*-dependencies]</code>,
+<code>[package.run-constraints]</code> and <code>[package.build.backend]</code>, including their
+<code>[package.target.&lt;sel&gt;.*]</code> variants).
+The workspace-level environment tables (<code>[dependencies]</code>,
+<code>[host-dependencies]</code>, <code>[build-dependencies]</code>, <code>[pypi-dependencies]</code>,
+<code>[constraints]</code>) do <strong>not</strong> participate; entries there continue to be
+declared directly.</p>
+</div>
+<h2 id="defining-common-dependencies">Defining common dependencies<a class="headerlink" href="#defining-common-dependencies" title="Permanent link">#</a></h2>
+<p>Add a <code>[workspace.dependencies]</code> table to the workspace manifest. Entries use
+the same syntax as any other conda dependency table.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml (workspace root)</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;monorepo&quot;</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="p">]</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">preview</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;pixi-build&quot;</span><span class="p">]</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">[workspace.dependencies]</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.*&quot;</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="n">pixi-build-cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.3.*&quot;</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="n">boltons</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=24&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;conda-forge&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="n">shared-lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;packages/shared-lib&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<h2 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">#</a></h2>
+<p>Relative <code>path</code> specs are resolved against the workspace manifest's directory
+and re-anchored automatically when handed to a package in a different
+directory: from <code>packages/foo/pixi.toml</code> above, <code>shared-lib</code> will resolve to
+<code>../shared-lib</code>.</p>
+<h2 id="using-a-workspace-dependency-in-a-package">Using a workspace dependency in a package<a class="headerlink" href="#using-a-workspace-dependency-in-a-package" title="Permanent link">#</a></h2>
+<p>A package opts in per entry by writing <code>{ workspace = true }</code> instead of a
+direct spec. The dotted-key shorthand <code>name.workspace = true</code> is equivalent.</p>
+<div class="language-toml highlight"><span class="filename">packages/foo/pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[package]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;foo&quot;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">[package.build]</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-cmake&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">[package.host-dependencies]</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">shared-lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="k">[package.run-dependencies]</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="n">boltons</span><span class="p">.</span><span class="n">workspace</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span></code></pre></div>
+<p>A name without <code>{ workspace = true }</code> is unaffected: the package keeps full
+control over that entry.</p>
+<p>The inheritance marker is recognized in every package dependency table:</p>
 <ul>
-<li>
-<dl>
-<dt><a id="arg-\<FILE>" href="#arg-\<FILE>"><code>&lt;FILE&gt;</code></a></dt>
-<dd>File to import into the workspace
-<br><strong>required</strong>: <code>true</code></dd>
-</dl>
-</li>
+<li><code>[package.host-dependencies]</code></li>
+<li><code>[package.build-dependencies]</code></li>
+<li><code>[package.run-dependencies]</code></li>
+<li><code>[package.run-constraints]</code></li>
+<li><code>[package.target.&lt;selector&gt;.*]</code> variants of the above</li>
+<li><code>[package.build.backend]</code> (the lookup key is the backend's <code>name</code>)</li>
 </ul>
-<h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h2>
-<ul>
-<li>
-<dl>
-<dt><a id="arg---format" href="#arg---format"><code>--format &lt;FORMAT&gt;</code></a></dt>
-<dd>Which format to interpret the file as
-<br><strong>options</strong>: <code>conda-env</code>, <code>pypi-txt</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---platform" href="#arg---platform"><code>--platform (-p) &lt;PLATFORM&gt;</code></a></dt>
-<dd>The platforms for the imported environment
-<br>May be provided more than once.</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---environment" href="#arg---environment"><code>--environment (-e) &lt;ENVIRONMENT&gt;</code></a></dt>
-<dd>A name for the created environment</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---feature" href="#arg---feature"><code>--feature (-f) &lt;FEATURE&gt;</code></a></dt>
-<dd>A name for the created feature</dd>
-</dl>
-</li>
-</ul>
-<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
-<ul>
-<li>
-<dl>
-<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
-<dd>Path to the file containing the authentication token</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
-<dd>Max concurrent network requests, default is <code>50</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
-<dd>Max concurrent solves, default is the number of CPUs</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---pinning-strategy" href="#arg---pinning-strategy"><code>--pinning-strategy &lt;PINNING_STRATEGY&gt;</code></a></dt>
-<dd>Set pinning strategy
-<br><strong>options</strong>: <code>semver</code>, <code>minor</code>, <code>major</code>, <code>latest-up</code>, <code>exact-version</code>, <code>no-pin</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider"><code>--pypi-keyring-provider &lt;PYPI_KEYRING_PROVIDER&gt;</code></a></dt>
-<dd>Specifies whether to use the keyring to look up credentials for PyPI
-<br><strong>options</strong>: <code>disabled</code>, <code>subprocess</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts"><code>--run-post-link-scripts</code></a></dt>
-<dd>Run post-link scripts (insecure)</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---no-symbolic-links" href="#arg---no-symbolic-links"><code>--no-symbolic-links</code></a></dt>
-<dd>Disallow symbolic links during package installation
-<br><strong>env</strong>: <code>PIXI_NO_SYMBOLIC_LINKS</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---no-hard-links" href="#arg---no-hard-links"><code>--no-hard-links</code></a></dt>
-<dd>Disallow hard links during package installation
-<br><strong>env</strong>: <code>PIXI_NO_HARD_LINKS</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---no-ref-links" href="#arg---no-ref-links"><code>--no-ref-links</code></a></dt>
-<dd>Disallow ref links (copy-on-write) during package installation
-<br><strong>env</strong>: <code>PIXI_NO_REF_LINKS</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
-<dd>Do not verify the TLS certificate of the server</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---tls-root-certs" href="#arg---tls-root-certs"><code>--tls-root-certs &lt;TLS_ROOT_CERTS&gt;</code></a></dt>
-<dd>Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
-<br><strong>env</strong>: <code>PIXI_TLS_ROOT_CERTS</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache"><code>--use-environment-activation-cache</code></a></dt>
-<dd>Use environment activation cache (experimental)</dd>
-</dl>
-</li>
-</ul>
-<h2 id="global-options">Global Options<a class="headerlink" href="#global-options" title="Permanent link">#</a></h2>
-<ul>
-<li>
-<dl>
-<dt><a id="arg---manifest-path" href="#arg---manifest-path"><code>--manifest-path (-m) &lt;MANIFEST_PATH&gt;</code></a></dt>
-<dd>The path to <code>pixi.toml</code>, <code>pyproject.toml</code>, or the workspace directory</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---workspace" href="#arg---workspace"><code>--workspace (-w) &lt;WORKSPACE&gt;</code></a></dt>
-<dd>Name of the workspace</dd>
-</dl>
-</li>
-</ul>
-<h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">#</a></h2>
-<p>Imports a file into an environment in an existing workspace.</p>
-<p>If <code>--format</code> isn't provided, <code>import</code> will try each format in turn</p>
+<h2 id="layering-package-overrides">Layering package overrides<a class="headerlink" href="#layering-package-overrides" title="Permanent link">#</a></h2>
+<p>A package can add fields alongside <code>workspace = true</code> to override or extend
+the workspace entry. Any field on a
+<a href="../../reference/pixi_manifest/#dependencies">conda spec table</a> may be
+overridden, <strong>except <code>version</code></strong>, which is mutually exclusive with
+<code>workspace</code>; if the package needs a different version, drop the inheritance
+marker and write a direct spec. When both sides set the same field, the
+package's value wins.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package.host-dependencies]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Use the workspace&#39;s numpy version, but pin a specific build string here.</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">workspace</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;py311*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
 
 
 
 
 
 
-
-  
-  
 
 
 
@@ -4282,6 +4261,60 @@
     <!-- Link to previous and/or next page -->
     
       
+        
+        <nav
+          class="md-footer__inner md-grid"
+          aria-label="Footer"
+          
+        >
+
+          <!-- Link to previous page -->
+          
+            
+            <a
+              href="../dependency_types/"
+              class="md-footer__link md-footer__link--prev"
+              aria-label="Previous: Dependency Types"
+            >
+              <div class="md-footer__button md-icon">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+              </div>
+              <div class="md-footer__title">
+                <span class="md-footer__direction">
+                  Previous
+                </span>
+                <div class="md-ellipsis">
+                  Dependency Types
+                </div>
+              </div>
+            </a>
+          
+
+          <!-- Link to next page -->
+          
+            
+            <a
+              href="../backends/"
+              class="md-footer__link md-footer__link--next"
+              aria-label="Next: Overview"
+            >
+              <div class="md-footer__title">
+                <span class="md-footer__direction">
+                  Next
+                </span>
+                <div class="md-ellipsis">
+                  Overview
+                </div>
+              </div>
+              <div class="md-footer__button md-icon">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+              </div>
+            </a>
+          
+        </nav>
+      
     
 
     <!-- Further information -->
@@ -4297,8 +4330,8 @@
         <!-- prefix logo -->
         <div class="md-footer-meta__item md-footer-meta__item--prefix-logo">
           <a href="https://prefix.dev" target="_blank">
-            <img class="prefix-logo prefix-logo__dark" src="../../../../assets/prefix_logo_dark.svg" alt="">
-            <img class="prefix-logo prefix-logo__light" src="../../../../assets/prefix_logo_light.svg" alt="">
+            <img class="prefix-logo prefix-logo__dark" src="../../assets/prefix_logo_dark.svg" alt="">
+            <img class="prefix-logo prefix-logo__light" src="../../assets/prefix_logo_light.svg" alt="">
           </a>
         </div>
 
@@ -4382,12 +4415,12 @@
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "../../../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.indexes", "navigation.top", "navigation.footer"], "search": "../../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.indexes", "navigation.top", "navigation.footer"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
       
-        <script src="../../../../javascripts/extra.js"></script>
+        <script src="../../javascripts/extra.js"></script>
       
     
   </body>
