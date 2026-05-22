@@ -16,8 +16,8 @@ use toml_edit::Value;
 
 use crate::{
     DependencyOverwriteBehavior, GetFeatureError, PixiPlatform, PixiPlatformName, PlatformEdit,
-    Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, SystemRequirements,
-    TargetSelector, Task, TaskName, TomlError, WorkspaceTarget, consts,
+    Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName,
+    TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -1036,39 +1036,6 @@ impl WorkspaceManifestMut<'_> {
         );
         self.document.set_version(version);
         Ok(())
-    }
-
-    /// Add a system requirement to the project
-    ///
-    /// This function modifies both the workspace and the TOML document. Use
-    /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn add_system_requirement(
-        &mut self,
-        system_requirements: SystemRequirements,
-        feature_name: &FeatureName,
-    ) -> miette::Result<SystemRequirements> {
-        // Get the current system requirements
-        let current = if feature_name.is_default() {
-            &mut self.workspace.default_feature_mut().system_requirements
-        } else {
-            &mut self
-                .workspace
-                .get_or_insert_feature_mut(feature_name)
-                .system_requirements
-        };
-
-        // Replace the system requirements with the new ones
-        // All given requirements are replaced, all optional requirements are kept
-        let result = current.merge(&system_requirements);
-
-        *current = result.clone();
-
-        // Update the TOML document
-        self.document
-            .add_system_requirements(&result, feature_name)
-            .into_diagnostic()?;
-
-        Ok(result)
     }
 
     /// Set/Unset the pixi version requirements

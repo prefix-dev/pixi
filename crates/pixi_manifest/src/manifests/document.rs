@@ -9,9 +9,9 @@ use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 use crate::{
-    FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PixiPlatform,
-    PixiPlatformName, PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task,
-    TomlError, manifests::table_name::TableName, toml::TomlDocument, utils::WithSourceCode,
+    FeatureName, ManifestKind, ManifestProvenance, PixiPlatform, PixiPlatformName,
+    PypiDependencyLocation, SpecType, TargetSelector, Task, TomlError,
+    manifests::table_name::TableName, toml::TomlDocument, utils::WithSourceCode,
 };
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
@@ -89,27 +89,6 @@ impl ManifestDocument {
         ManifestDocument::PyProjectToml(TomlDocument::new(
             DocumentMut::from_str(empty_content.as_str()).unwrap(),
         ))
-    }
-
-    /// Converts the document into a string with provenance.
-    #[cfg(test)]
-    pub(crate) fn into_source_with_provenance(self) -> crate::WithProvenance<String> {
-        use std::path::PathBuf;
-
-        use crate::{AssociateProvenance, ManifestProvenance};
-
-        let kind = self.kind();
-        let document = match self {
-            ManifestDocument::PyProjectToml(document) => document,
-            ManifestDocument::PixiToml(document) => document,
-            ManifestDocument::MojoProjectToml(document) => document,
-        };
-        document
-            .to_string()
-            .with_provenance(ManifestProvenance::new(
-                PathBuf::from(consts::PYPROJECT_MANIFEST),
-                kind,
-            ))
     }
 
     /// Reads the contents of the manifest from a provenance.
@@ -737,94 +716,6 @@ impl ManifestDocument {
             .get_or_insert_nested_table(&table_name.as_keys())?
             .remove(consts::SYSTEM_REQUIREMENTS);
         Ok(())
-    }
-
-    pub fn add_system_requirements(
-        &mut self,
-        system_requirements: &SystemRequirements,
-        feature_name: &FeatureName,
-    ) -> Result<bool, TomlError> {
-        let system_requirements_table = TableName::new()
-            .with_prefix(self.table_prefix())
-            .with_feature_name(Some(feature_name))
-            .with_table(Some(consts::SYSTEM_REQUIREMENTS));
-
-        let mut inserted = false;
-
-        if let Some(linux) = &system_requirements.linux {
-            inserted |= self
-                .manifest_mut()
-                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
-                .insert("linux", toml_edit::Item::from(linux.to_string()))
-                .is_some();
-        }
-
-        if let Some(cuda) = &system_requirements.cuda {
-            inserted |= self
-                .manifest_mut()
-                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
-                .insert("cuda", toml_edit::Item::from(cuda.to_string()))
-                .is_some();
-        }
-
-        if let Some(macos) = &system_requirements.macos {
-            inserted |= self
-                .manifest_mut()
-                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
-                .insert("macos", toml_edit::Item::from(macos.to_string()))
-                .is_some();
-        }
-
-        if let Some(libc) = &system_requirements.libc {
-            match libc {
-                LibCSystemRequirement::GlibC(version) => {
-                    inserted |= self
-                        .manifest_mut()
-                        .get_or_insert_nested_table(&system_requirements_table.as_keys())?
-                        .insert("libc", toml_edit::Item::from(version.to_string()))
-                        .is_some();
-                }
-                LibCSystemRequirement::OtherFamily(family_and_version) => {
-                    if let Some(family) = &family_and_version.family {
-                        let mut libc_table = Table::new();
-                        libc_table.insert("family", toml_edit::value(family));
-                        libc_table.insert(
-                            "version",
-                            toml_edit::Item::from(family_and_version.version.clone().to_string()),
-                        );
-                        inserted |= self
-                            .manifest_mut()
-                            .get_or_insert_nested_table(&system_requirements_table.as_keys())?
-                            .insert(
-                                "libc",
-                                toml_edit::Item::from(libc_table.into_inline_table()),
-                            )
-                            .is_some();
-                    } else {
-                        inserted |= self
-                            .manifest_mut()
-                            .get_or_insert_nested_table(&system_requirements_table.as_keys())?
-                            .insert(
-                                "libc",
-                                toml_edit::Item::from(
-                                    family_and_version.version.clone().to_string(),
-                                ),
-                            )
-                            .is_some();
-                    }
-                }
-            }
-        }
-
-        if let Some(archspec) = &system_requirements.archspec {
-            inserted |= self
-                .manifest_mut()
-                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
-                .insert("archspec", archspec.into())
-                .is_some();
-        }
-
-        Ok(inserted)
     }
 
     /// Sets the name of the project
