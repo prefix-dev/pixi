@@ -218,11 +218,16 @@ async fn q(#[files("../../examples/**/p*.toml")] manifest_path: PathBuf) {
         }
     }
 
-    // If a pixi.toml is present check for `workspace` in the file to avoid
-    // testing of non-pixi workspace files
+    // If a pixi.toml is present check for a `[workspace]` section header in
+    // the file to avoid testing non-workspace member manifests. A bare
+    // substring match on "workspace" would false-match on members that use
+    // `{ workspace = true }` inheritance markers.
     if manifest_path.file_name().unwrap() == "pixi.toml" {
         let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
-        if !manifest_str.contains("workspace") {
+        if !manifest_str
+            .lines()
+            .any(|line| line.trim_start().starts_with("[workspace"))
+        {
             return;
         }
     }

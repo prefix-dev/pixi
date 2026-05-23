@@ -4,20 +4,84 @@ use std::{
 };
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_spec::{ExcludeNewer, TomlVersionSpecStr};
+use pixi_spec::{ExcludeNewer, TomlSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, Platform, Version, VersionSpec};
-use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, Version, VersionSpec};
+use std::str::FromStr;
+use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 use url::Url;
 
 use crate::{
-    PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
+    KnownPreviewFeature, PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError,
+    WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
     toml::{manifest::ExternalWorkspaceProperties, platform::TomlPlatform, preview::TomlPreview},
     utils::PixiSpanned,
     workspace::{BuildVariantSource, ChannelPriority, SolveStrategy},
 };
+
+/// Parses `[workspace.dependencies]` into an ordered `(name, TomlSpec)` map.
+/// Unlike `UniquePackageMap` (which materializes `PixiSpec`), this keeps the
+/// flat `TomlSpec` form so member overrides can be layered without a round
+/// trip back through `into_spec`.
+#[derive(Debug, Default, Clone)]
+pub struct WorkspaceDependencyMap {
+    pub specs: IndexMap<PackageName, TomlSpec>,
+}
+
+impl<'de> toml_span::Deserialize<'de> for WorkspaceDependencyMap {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let table = match value.take() {
+            ValueInner::Table(table) => table,
+            inner => {
+                return Err(toml_span::de_helpers::expected("a table", inner, value.span).into());
+            }
+        };
+
+        let mut errors = DeserError { errors: vec![] };
+        let mut specs: IndexMap<PackageName, TomlSpec> = IndexMap::new();
+        let mut seen: IndexMap<PackageName, Span> = IndexMap::new();
+        for (key, mut entry) in table {
+            let name = match PackageName::from_str(&key.name) {
+                Ok(name) => {
+                    if let Some(first) = seen.get(&name) {
+                        errors.errors.push(toml_span::Error {
+                            kind: toml_span::ErrorKind::DuplicateKey {
+                                key: key.name.into_owned(),
+                                first: *first,
+                            },
+                            span: key.span,
+                            line_info: None,
+                        });
+                        continue;
+                    }
+                    seen.insert(name.clone(), key.span);
+                    name
+                }
+                Err(e) => {
+                    errors.errors.push(toml_span::Error {
+                        kind: toml_span::ErrorKind::Custom(e.to_string().into()),
+                        span: key.span,
+                        line_info: None,
+                    });
+                    continue;
+                }
+            };
+            match TomlSpec::deserialize_from_value(&mut entry) {
+                Ok(spec) => {
+                    specs.insert(name, spec);
+                }
+                Err(e) => errors.merge(e),
+            }
+        }
+        if errors.errors.is_empty() {
+            Ok(Self { specs })
+        } else {
+            Err(errors)
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct TomlWorkspaceTarget {
@@ -53,6 +117,9 @@ pub struct TomlWorkspace {
     pub build_variant_files: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
     pub requires_pixi: Option<VersionSpec>,
     pub exclude_newer: Option<ExcludeNewer>,
+
+    /// `[workspace.dependencies]` pool for `{ workspace = true }` inheritance.
+    pub dependencies: Option<PixiSpanned<WorkspaceDependencyMap>>,
 
     pub span: Span,
 }
@@ -113,6 +180,29 @@ impl TomlWorkspace {
         let build_variant_files_default =
             convert_build_variant_files(self.build_variant_files, root_directory)?;
 
+        // Source specs gated on pixi-build. Path specs are left
+        // workspace-relative; members re-base them at inheritance time.
+        let dependencies = if let Some(deps) = self.dependencies {
+            let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+            let specs = deps.value.specs;
+            if !pixi_build_enabled
+                && let Some((name, _)) = specs.iter().find(|(_, s)| toml_spec_is_source(s))
+            {
+                return Err(GenericError::new(
+                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+                )
+                .with_help(
+                    "Add `preview = [\"pixi-build\"]` to the `workspace` table of your manifest",
+                )
+                .with_span_label(format!("source dependency `{}`", name.as_source()))
+                .with_opt_span(deps.span.clone())
+                .into());
+            }
+            specs
+        } else {
+            IndexMap::new()
+        };
+
         Ok(WithWarnings::from(Workspace {
             name: self.name.or(external.name),
             version: self.version.or(external.version),
@@ -148,9 +238,19 @@ impl TomlWorkspace {
             exclude_newer: self.exclude_newer,
             exclude_newer_package_overrides: IndexMap::default(),
             pypi_exclude_newer_package_overrides: IndexMap::default(),
+            dependencies,
+            root_directory: root_directory.to_path_buf(),
         })
         .with_warnings(warnings))
     }
+}
+
+/// Returns true when the spec carries a source-style location (`path` or
+/// `git`). Used to gate workspace dep entries on the `pixi-build` preview.
+fn toml_spec_is_source(spec: &TomlSpec) -> bool {
+    spec.location
+        .as_ref()
+        .is_some_and(|loc| loc.path.is_some() || loc.git.is_some())
 }
 
 fn convert_build_variant_files(
@@ -247,6 +347,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let exclude_newer = th
             .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
             .map(TomlWith::into_inner);
+        let dependencies = th.optional("dependencies");
 
         th.finalize(None)?;
 
@@ -274,6 +375,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             build_variant_files,
             requires_pixi,
             exclude_newer,
+            dependencies,
             span: value.span,
         })
     }

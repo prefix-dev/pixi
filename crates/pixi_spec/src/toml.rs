@@ -1,4 +1,8 @@
-use std::{borrow::Cow, fmt::Display, path::PathBuf};
+use std::{
+    borrow::Cow,
+    fmt::Display,
+    path::{Path, PathBuf},
+};
 
 use itertools::Either;
 use pixi_toml::{TomlDigest, TomlFromStr, TomlWith, custom_error_message_with_help};
@@ -428,6 +432,109 @@ pub enum NotBinary {
 }
 
 impl TomlSpec {
+    /// Build an empty [`TomlSpec`] with all fields unset.
+    pub fn empty() -> Self {
+        Self {
+            version: None,
+            location: None,
+            build: None,
+            build_number: None,
+            file_name: None,
+            extras: None,
+            flags: None,
+            channel: None,
+            subdir: None,
+            license: None,
+            license_family: None,
+            when: None,
+            track_features: None,
+        }
+    }
+
+    /// Layer `overrides` on top of `self`. Each non-version field is taken
+    /// from `overrides` when set, otherwise from the base. The base owns
+    /// `version` (callers must ensure `overrides.version` is `None`).
+    pub fn layer_overrides(self, overrides: Self) -> Self {
+        let merged_location = match (self.location, overrides.location) {
+            (None, m) => m,
+            (b, None) => b,
+            (Some(b), Some(m)) => Some(TomlLocationSpec {
+                url: m.url.or(b.url),
+                git: m.git.or(b.git),
+                path: m.path.or(b.path),
+                branch: m.branch.or(b.branch),
+                rev: m.rev.or(b.rev),
+                tag: m.tag.or(b.tag),
+                subdirectory: m.subdirectory.or(b.subdirectory),
+                md5: m.md5.or(b.md5),
+                sha256: m.sha256.or(b.sha256),
+            }),
+        };
+        Self {
+            version: self.version,
+            location: merged_location,
+            build: overrides.build.or(self.build),
+            build_number: overrides.build_number.or(self.build_number),
+            file_name: overrides.file_name.or(self.file_name),
+            extras: overrides.extras.or(self.extras),
+            flags: overrides.flags.or(self.flags),
+            channel: overrides.channel.or(self.channel),
+            subdir: overrides.subdir.or(self.subdir),
+            license: overrides.license.or(self.license),
+            license_family: overrides.license_family.or(self.license_family),
+            when: overrides.when.or(self.when),
+            track_features: overrides.track_features.or(self.track_features),
+        }
+    }
+
+    /// Re-base a relative `location.path` from `from_root` to `to_root`.
+    /// Absolute paths (detected via `typed_path` for cross-platform safety)
+    /// and `~/` paths pass through unchanged. The resulting path always uses
+    /// forward slashes so the serialized manifest stays portable across
+    /// platforms.
+    pub fn rebase_path(&mut self, from_root: &Path, to_root: &Path) {
+        let Some(loc) = self.location.as_mut() else {
+            return;
+        };
+        let Some(path) = loc.path.as_ref() else {
+            return;
+        };
+        let typed = typed_path::Utf8TypedPath::derive(path);
+        if typed.is_absolute() || path.starts_with("~/") || path.starts_with("~\\") {
+            return;
+        }
+        let absolute = from_root.join(path);
+        if let Some(rel) = pathdiff::diff_paths(&absolute, to_root) {
+            let s = rel.to_string_lossy().replace('\\', "/");
+            loc.path = Some(s);
+        }
+    }
+
+    /// Parse a `toml_span` value as a [`TomlSpec`]. Accepts either a bare
+    /// version string (e.g. `"1.*"`) or a table.
+    pub fn deserialize_from_value(value: &mut Value<'_>) -> Result<Self, DeserError> {
+        match value.take() {
+            ValueInner::String(s) => {
+                let version = parse_version_string(&s).map_err(|msg| {
+                    DeserError::from(toml_span::Error {
+                        kind: ErrorKind::Custom(msg.into()),
+                        span: value.span,
+                        line_info: None,
+                    })
+                })?;
+                Ok(Self {
+                    version: Some(version),
+                    ..Self::empty()
+                })
+            }
+            inner @ ValueInner::Table(_) => {
+                let mut tbl = Value::with_span(inner, value.span);
+                <Self as toml_span::Deserialize>::deserialize(&mut tbl)
+            }
+            other => Err(expected("a string or a table", other, value.span).into()),
+        }
+    }
+
     fn validate_field_combinations(&self) -> Result<(), SpecError> {
         let (is_git, is_path, is_url) = if let Some(loc) = &self.location {
             if loc.git.is_none() && (loc.branch.is_some() || loc.rev.is_some() || loc.tag.is_some())

@@ -241,6 +241,16 @@ class Workspace(StrictBaseModel):
     target: dict[TargetName, WorkspaceTarget] | None = Field(
         None, description="The workspace targets"
     )
+    dependencies: Dependencies = Field(
+        None,
+        description=(
+            "Inheritable `conda` dependency pool. Members opt in by writing "
+            "`{ workspace = true }` in any `[package.*-dependencies]` table "
+            "(or in `[package.build.backend]`). Relative `path` specs resolve "
+            "against this manifest and are re-anchored per consuming member."
+        ),
+        examples=[{"numpy": "1.*", "boltons": {"version": ">=24", "channel": "conda-forge"}}],
+    )
 
 
 ########################
@@ -371,7 +381,29 @@ class WhenPackage(StrictBaseModel):
 
 
 When = NonEmptyStr | WhenAll | WhenAny | WhenPackage
+
+
+class InheritableMatchspecTable(MatchspecTable):
+    """A spec that may inherit from `[workspace.dependencies]`.
+
+    Setting `workspace = true` pulls the version (and any other unset fields)
+    from the matching `[workspace.dependencies]` entry. Members may layer any
+    non-version attribute on top; restating `version` alongside `workspace =
+    true` is an error.
+    """
+
+    workspace: Literal[True] | None = Field(
+        None,
+        description=(
+            "Inherit this spec from `[workspace.dependencies]`. Other fields on "
+            "this table layer on top of the workspace base; `version` is "
+            "mutually exclusive with `workspace`."
+        ),
+    )
+
+
 MatchSpec = NonEmptyStr | MatchspecTable
+InheritableMatchSpec = NonEmptyStr | InheritableMatchspecTable
 CondaPackageName = NonEmptyStr
 
 
@@ -472,6 +504,7 @@ RunConstraintsField = Field(
     description="The `conda` run-time version constraints. These constrain the versions of packages that may be installed in the run environment without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints. See https://pixi.sh/latest/build/dependency_types/ for more information.",
 )
 Dependencies = dict[CondaPackageName, MatchSpec] | None
+InheritableDependencies = dict[CondaPackageName, InheritableMatchSpec] | None
 
 
 ################
@@ -906,10 +939,10 @@ class Package(StrictBaseModel):
 
     build: Build = Field(..., description="The build configuration of the package")
 
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
-    run_dependencies: Dependencies = RunDependenciesField
-    run_constraints: Dependencies = RunConstraintsField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
+    run_dependencies: InheritableDependencies = RunDependenciesField
+    run_constraints: InheritableDependencies = RunConstraintsField
 
     target: dict[TargetName, PackageTarget] | None = Field(
         None,
@@ -995,13 +1028,21 @@ class BuildBackend(MatchspecTable):
     additional_dependencies: Dependencies = Field(
         None, description="Additional dependencies to install alongside the build backend"
     )
+    workspace: Literal[True] | None = Field(
+        None,
+        description=(
+            "Inherit the backend version from `[workspace.dependencies]` using "
+            "`name` as the lookup key. `version` is mutually exclusive with "
+            "`workspace`."
+        ),
+    )
 
 
 class PackageTarget(StrictBaseModel):
-    run_dependencies: Dependencies = RunDependenciesField
-    run_constraints: Dependencies = RunConstraintsField
-    host_dependencies: Dependencies = HostDependenciesField
-    build_dependencies: Dependencies = BuildDependenciesField
+    run_dependencies: InheritableDependencies = RunDependenciesField
+    run_constraints: InheritableDependencies = RunConstraintsField
+    host_dependencies: InheritableDependencies = HostDependenciesField
+    build_dependencies: InheritableDependencies = BuildDependenciesField
 
 
 #######################

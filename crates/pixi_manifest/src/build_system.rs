@@ -73,9 +73,21 @@ pub struct BuildBackend {
 }
 
 impl PackageBuild {
-    /// Parses the specified string as a toml representation of a build system.
+    /// Parses a build system in isolation. Rejects `workspace = true` on the
+    /// backend since there is no workspace context to resolve against.
     pub fn from_toml_str(source: &str) -> Result<WithWarnings<Self>, TomlError> {
-        TomlPackageBuild::from_toml_str(source).and_then(TomlPackageBuild::into_build_system)
+        TomlPackageBuild::from_toml_str(source).and_then(|build| {
+            if let crate::toml::BackendSpec::Inherited { marker_span, .. } =
+                &build.backend.value.spec
+            {
+                return Err(crate::error::GenericError::new(
+                    "`workspace = true` on `[build.backend]` requires a workspace context",
+                )
+                .with_span(marker_span.clone())
+                .into());
+            }
+            build.into_build_system(&indexmap::IndexMap::new())
+        })
     }
 }
 
