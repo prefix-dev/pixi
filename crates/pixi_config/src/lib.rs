@@ -27,6 +27,312 @@ use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
 
+/// User-facing metadata for a single configuration key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ConfigOptionDescription {
+    pub key: &'static str,
+    pub description: &'static str,
+    pub value_type: &'static str,
+    pub default: &'static str,
+}
+
+static CONFIG_OPTION_DESCRIPTIONS: &[ConfigOptionDescription] = &[
+    ConfigOptionDescription {
+        key: "authentication-override-file",
+        description: "Path to the file containing the authentication token.",
+        value_type: "path",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "cache",
+        description: "Per-cache-directory overrides. See `cache.*` keys; can also be set as a JSON object.",
+        value_type: "table",
+        default: "(empty)",
+    },
+    ConfigOptionDescription {
+        key: "cache.build-tool-environments",
+        description: "Cache directory for build-tool environments. Inherits from `cache.root` when unset.",
+        value_type: "path",
+        default: "(inherited)",
+    },
+    ConfigOptionDescription {
+        key: "cache.conda-packages",
+        description: "Cache directory for the conda package store (`pkgs`). Inherits from `cache.root` when unset.",
+        value_type: "path",
+        default: "(inherited)",
+    },
+    ConfigOptionDescription {
+        key: "cache.detached-environments",
+        description: "Root directory for detached environments. Inherits from `cache.root` when unset.",
+        value_type: "path",
+        default: "(inherited)",
+    },
+    ConfigOptionDescription {
+        key: "cache.exec-environments",
+        description: "Cache directory for environments created by `pixi exec`. Inherits from `cache.root` when unset.",
+        value_type: "path",
+        default: "(inherited)",
+    },
+    ConfigOptionDescription {
+        key: "cache.netfs-redirect",
+        description: "How node-local caches are redirected when the resolved cache root sits on a network filesystem.",
+        value_type: "one of `auto`, `always`, `never`",
+        default: "\"auto\"",
+    },
+    ConfigOptionDescription {
+        key: "cache.pypi-mapping",
+        description: "Cache directory for the conda → PyPI name-mapping. Inherits from `cache.root` when unset.",
+        value_type: "path",
+        default: "(inherited)",
+    },
+    ConfigOptionDescription {
+        key: "cache.pypi-wheels",
+        description: "Cache directory for the uv wheel cache. Inherits from `cache.root` when unset.",
+        value_type: "path",
+        default: "(inherited)",
+    },
+    ConfigOptionDescription {
+        key: "cache.repodata",
+        description: "Cache directory for repodata. Inherits from `cache.root` when unset.",
+        value_type: "path",
+        default: "(inherited)",
+    },
+    ConfigOptionDescription {
+        key: "cache.root",
+        description: "Root directory used to derive every per-kind cache subdirectory. Overrides the `PIXI_CACHE_DIR` / `RATTLER_CACHE_DIR` / XDG lookup.",
+        value_type: "path",
+        default: "(system default)",
+    },
+    ConfigOptionDescription {
+        key: "concurrency",
+        description: "Concurrency limits. See `concurrency.*` keys; can also be set as a JSON object.",
+        value_type: "table",
+        default: "(defaults)",
+    },
+    ConfigOptionDescription {
+        key: "concurrency.downloads",
+        description: "Maximum number of concurrent downloads.",
+        value_type: "integer",
+        default: "50",
+    },
+    ConfigOptionDescription {
+        key: "concurrency.solves",
+        description: "Maximum number of concurrent solves.",
+        value_type: "integer",
+        default: "(available parallelism)",
+    },
+    ConfigOptionDescription {
+        key: "default-channels",
+        description: "Channels selected when running `pixi init` or `pixi global install`. Once a workspace exists, its manifest channels are used instead.",
+        value_type: "array of channel names or URLs",
+        default: "[]",
+    },
+    ConfigOptionDescription {
+        key: "detached-environments",
+        description: "Where to store environments. `true` keeps them in the cache directory, `false` keeps them in `.pixi/`, or set an explicit path.",
+        value_type: "bool or path",
+        default: "false",
+    },
+    ConfigOptionDescription {
+        key: "experimental",
+        description: "Opt-in experimental features. See `experimental.*` keys; can also be set as a JSON object.",
+        value_type: "table",
+        default: "(empty)",
+    },
+    ConfigOptionDescription {
+        key: "experimental.use-environment-activation-cache",
+        description: "Cache activated environment variables between commands.",
+        value_type: "bool",
+        default: "false",
+    },
+    ConfigOptionDescription {
+        key: "mirrors",
+        description: "Mirror redirects, mapping a channel URL to a list of mirror URLs.",
+        value_type: "map of URL → array of URLs",
+        default: "{}",
+    },
+    ConfigOptionDescription {
+        key: "pinning-strategy",
+        description: "Version pinning strategy used by `pixi add`.",
+        value_type: "one of `semver`, `no-pin`, `exact-version`, `latest-up`, `major`, `minor`",
+        default: "\"semver\"",
+    },
+    ConfigOptionDescription {
+        key: "proxy-config",
+        description: "HTTP/HTTPS proxy configuration. See `proxy-config.*` keys; can also be set as a JSON object.",
+        value_type: "table",
+        default: "(empty)",
+    },
+    ConfigOptionDescription {
+        key: "proxy-config.http",
+        description: "Proxy URL used for HTTP requests.",
+        value_type: "URL",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "proxy-config.https",
+        description: "Proxy URL used for HTTPS requests.",
+        value_type: "URL",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "proxy-config.non-proxy-hosts",
+        description: "Hosts that should bypass the configured proxy.",
+        value_type: "array of strings",
+        default: "[]",
+    },
+    ConfigOptionDescription {
+        key: "pypi-config",
+        description: "PyPI registry configuration. See `pypi-config.*` keys; can also be set as a JSON object.",
+        value_type: "table",
+        default: "(empty)",
+    },
+    ConfigOptionDescription {
+        key: "pypi-config.allow-insecure-host",
+        description: "PyPI hosts for which TLS verification is skipped.",
+        value_type: "array of strings",
+        default: "[]",
+    },
+    ConfigOptionDescription {
+        key: "pypi-config.extra-index-urls",
+        description: "Additional PyPI index URLs queried after the primary one.",
+        value_type: "array of URLs",
+        default: "[]",
+    },
+    ConfigOptionDescription {
+        key: "pypi-config.index-url",
+        description: "Primary PyPI index URL.",
+        value_type: "URL",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "pypi-config.keyring-provider",
+        description: "Keyring provider used to fetch PyPI credentials.",
+        value_type: "one of `disabled`, `subprocess`",
+        default: "\"disabled\"",
+    },
+    ConfigOptionDescription {
+        key: "repodata-config",
+        description: "Repodata fetch configuration. See `repodata-config.*` keys; can also be set as a JSON object.",
+        value_type: "table",
+        default: "(empty)",
+    },
+    ConfigOptionDescription {
+        key: "repodata-config.disable-bzip2",
+        description: "Skip downloading the bzip2-compressed repodata variant.",
+        value_type: "bool",
+        default: "false",
+    },
+    ConfigOptionDescription {
+        key: "repodata-config.disable-sharded",
+        description: "Skip downloading sharded repodata.",
+        value_type: "bool",
+        default: "false",
+    },
+    ConfigOptionDescription {
+        key: "repodata-config.disable-zstd",
+        description: "Skip downloading the zstd-compressed repodata variant.",
+        value_type: "bool",
+        default: "false",
+    },
+    ConfigOptionDescription {
+        key: "run-post-link-scripts",
+        description: "Whether package post-link scripts are executed. `insecure` runs them (they can execute arbitrary code).",
+        value_type: "one of `false`, `insecure`",
+        default: "\"false\"",
+    },
+    ConfigOptionDescription {
+        key: "allow-symbolic-links",
+        description: "Allow symbolic links during package installation.",
+        value_type: "bool",
+        default: "(platform default)",
+    },
+    ConfigOptionDescription {
+        key: "allow-hard-links",
+        description: "Allow hard links during package installation.",
+        value_type: "bool",
+        default: "(platform default)",
+    },
+    ConfigOptionDescription {
+        key: "allow-ref-links",
+        description: "Allow ref links (copy-on-write) during package installation.",
+        value_type: "bool",
+        default: "(platform default)",
+    },
+    ConfigOptionDescription {
+        key: "s3-options",
+        description: "Per-bucket S3 configuration. See `s3-options.<bucket>.*` keys; can also be set as a JSON object.",
+        value_type: "map of bucket name → table",
+        default: "{}",
+    },
+    ConfigOptionDescription {
+        key: "s3-options.<bucket>",
+        description: "Configuration for the S3 bucket `<bucket>`. Can be set as a JSON object covering all three subkeys.",
+        value_type: "table",
+        default: "(empty)",
+    },
+    ConfigOptionDescription {
+        key: "s3-options.<bucket>.endpoint-url",
+        description: "Endpoint URL for the S3 bucket `<bucket>`.",
+        value_type: "URL",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "s3-options.<bucket>.force-path-style",
+        description: "Use path-style addressing for the S3 bucket `<bucket>`.",
+        value_type: "bool",
+        default: "false",
+    },
+    ConfigOptionDescription {
+        key: "s3-options.<bucket>.region",
+        description: "Region for the S3 bucket `<bucket>`.",
+        value_type: "string",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "shell",
+        description: "Shell integration settings. See `shell.*` keys; can also be set as a JSON object.",
+        value_type: "table",
+        default: "(empty)",
+    },
+    ConfigOptionDescription {
+        key: "shell.change-ps1",
+        description: "Add the `(pixi)` prefix to the shell prompt when an environment is active.",
+        value_type: "bool",
+        default: "true",
+    },
+    ConfigOptionDescription {
+        key: "shell.force-activate",
+        description: "Force re-activation of the environment on every command, bypassing the activation cache.",
+        value_type: "bool",
+        default: "false",
+    },
+    ConfigOptionDescription {
+        key: "shell.source-completion-scripts",
+        description: "Source the environment's autocompletion scripts when entering `pixi shell`.",
+        value_type: "bool",
+        default: "true",
+    },
+    ConfigOptionDescription {
+        key: "tls-no-verify",
+        description: "Disable TLS certificate verification for all network connections. Use only for testing or trusted internal networks.",
+        value_type: "bool",
+        default: "false",
+    },
+    ConfigOptionDescription {
+        key: "tls-root-certs",
+        description: "Which TLS root certificate store to use. `SSL_CERT_FILE` / `SSL_CERT_DIR` take precedence when set.",
+        value_type: "one of `webpki`, `system`",
+        default: "\"system\" (or \"webpki\" on rustls builds)",
+    },
+    ConfigOptionDescription {
+        key: "tool-platform",
+        description: "Platform used when installing build backends and other tools. Useful when you want tooling for a different platform than the current one.",
+        value_type: "platform",
+        default: "(current platform)",
+    },
+];
+
 /// Controls which root certificates to use for TLS connections.
 ///
 /// Note: This setting only has an effect when pixi is built with the `rustls` feature.
@@ -2134,6 +2440,11 @@ impl Config {
             "tls-root-certs",
             "tool-platform",
         ]
+    }
+
+    /// Metadata for every configuration key, parallel to [`Self::get_keys`].
+    pub fn describe_keys(&self) -> &'static [ConfigOptionDescription] {
+        CONFIG_OPTION_DESCRIPTIONS
     }
 
     /// Merge the `other` config into `self`.
@@ -4257,5 +4568,31 @@ UNUSED = "unused"
         };
         let err = config.validate().unwrap_err();
         assert!(format!("{err}").contains("cache.conda-packages"));
+    }
+
+    #[test]
+    fn describe_keys_matches_get_keys() {
+        let config = Config::default();
+        let keys: Set<&str> = config.get_keys().iter().copied().collect();
+        let described: Set<&str> = config.describe_keys().iter().map(|opt| opt.key).collect();
+        let missing: Vec<&str> = keys.difference(&described).copied().collect();
+        let extra: Vec<&str> = described.difference(&keys).copied().collect();
+        assert!(
+            missing.is_empty() && extra.is_empty(),
+            "describe_keys() out of sync with get_keys(); missing: {missing:?}, extra: {extra:?}"
+        );
+    }
+
+    #[test]
+    fn describe_keys_have_non_empty_metadata() {
+        for opt in Config::default().describe_keys() {
+            assert!(
+                !opt.description.is_empty(),
+                "{} has no description",
+                opt.key
+            );
+            assert!(!opt.value_type.is_empty(), "{} has no value_type", opt.key);
+            assert!(!opt.default.is_empty(), "{} has no default", opt.key);
+        }
     }
 }
