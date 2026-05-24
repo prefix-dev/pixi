@@ -1243,12 +1243,16 @@ async fn lock_pypi_packages(
                                 process_uv_path_url(&dir.url, &dir.install_path, abs_project_root)
                                     .into_diagnostic()?;
 
-                            // Don't carry `dir.url.given()`: when this package was pulled in via
-                            // another package's `[tool.uv.sources]`, the given is relative to that
-                            // package, not the workspace, and the lockfile resolves relative paths
-                            // against itself. `install_path` is already relative to
-                            // `abs_project_root`.
-                            let location = Verbatim::new(UrlOrPath::Path(install_path));
+                            // Anchor `given` to `install_path`, not `dir.url.given()`: when this
+                            // package was pulled in via another package's `[tool.uv.sources]`,
+                            // the latter is relative to that package, not the workspace, and the
+                            // lockfile resolves relative paths against itself. `install_path` is
+                            // already relative to `abs_project_root`.
+                            let location_given = install_path.to_string();
+                            let location = Verbatim::new_with_given(
+                                UrlOrPath::Path(install_path),
+                                location_given,
+                            );
                             let locked_version =
                                 pep440_rs::Version::from_str(&metadata.version.to_string())
                                     .into_diagnostic()
