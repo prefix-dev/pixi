@@ -402,6 +402,21 @@ pub fn to_uv_specifiers(
 pub fn to_requirements<'req>(
     requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
+    to_requirements_relative_to(requirements, None)
+}
+
+/// Same as [`to_requirements`], but re-anchors any relative `given` on file-URL path/directory
+/// requirements to `workspace_root`.
+///
+/// uv may emit such a `given` relative to a nested package's `[tool.uv.sources]`
+/// (e.g. `../pkg-b` inside `workspace/pkg-a`). The pixi lockfile resolves relative paths against
+/// itself (== workspace root), so preserving that `given` mislocates the dep after a round-trip
+/// (#4573). Passing `Some(workspace_root)` re-derives the `given` from the URL's resolved absolute
+/// path; passing `None` keeps it as-is.
+pub fn to_requirements_relative_to<'req>(
+    requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
+    workspace_root: Option<&Path>,
+) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
     let requirements: Result<Vec<pep508_rs::Requirement>, ConversionError> = requirements
         .map(|requirement| {
             let mut verbatim_url = None;
@@ -461,7 +476,10 @@ pub fn to_requirements<'req>(
                 }
                 uv_distribution_types::RequirementSource::Path { url, .. }
                 | uv_distribution_types::RequirementSource::Directory { url, .. } => {
-                    verbatim_url = url.given().map(|g| {
+                    let given = workspace_root
+                        .and_then(|root| workspace_relative_given(url, root))
+                        .or_else(|| url.given().map(str::to_owned));
+                    verbatim_url = given.map(|g| {
                         pep508_rs::VersionOrUrl::Url(
                             pep508_rs::VerbatimUrl::from_url((*url.to_url()).clone()).with_given(g),
                         )
@@ -488,6 +506,29 @@ pub fn to_requirements<'req>(
         .collect();
 
     requirements
+}
+
+/// Build a workspace-root-relative `given` for a file URL, or `None` if the URL isn't a local file
+/// or can't be relativized. Mirrors `process_uv_path_url`'s `./` prefix convention so lockfile
+/// diffs stay stable for paths that descend into the workspace.
+fn workspace_relative_given(url: &VerbatimUrl, workspace_root: &Path) -> Option<String> {
+    let url_ref: &url::Url = url;
+    if url_ref.scheme() != "file" {
+        return None;
+    }
+    let abs_path = url_ref.to_file_path().ok()?;
+    let rel = pathdiff::diff_paths(&abs_path, workspace_root)?;
+    let rel_str = rel.to_str()?;
+    let rel_str = if cfg!(windows) {
+        rel_str.replace('\\', "/")
+    } else {
+        rel_str.to_string()
+    };
+    if rel_str.starts_with("..") {
+        Some(rel_str)
+    } else {
+        Some(format!("./{rel_str}"))
+    }
 }
 
 /// Convert uv `Requirement<VerbatimParsedUrl>` to `pep508_rs::Requirement`.
@@ -871,5 +912,98 @@ mod tests {
 
         let converted = to_requirements(std::iter::once(&uv_req)).unwrap();
         assert_eq!(converted[0].to_string(), "isaaclab");
+    }
+
+    /// Regression test for <https://github.com/prefix-dev/pixi/issues/4573>:
+    /// a requirement that bubbles up out of a nested package's `[tool.uv.sources]`
+    /// (e.g. `../pkg-b` inside `workspace/pkg-a`) carries a `given` relative to that nested
+    /// package, not the workspace. The lockfile resolves relative paths against itself, so the
+    /// writer must re-anchor against the workspace root or the dep is mislocated on load.
+    #[test]
+    fn to_requirements_re_anchors_nested_tool_uv_sources_given() {
+        use uv_distribution_types::{Requirement as UvRequirement, RequirementSource};
+        use uv_pep508::MarkerTree;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace_root = tmp.path();
+        let pkg_a = workspace_root.join("pkg-a");
+        let pkg_b = workspace_root.join("pkg-b");
+        fs_err::create_dir_all(&pkg_a).unwrap();
+        fs_err::create_dir_all(&pkg_b).unwrap();
+
+        // Mirror what uv produces when lowering pkg-a's [tool.uv.sources]:
+        // url resolved against pkg-a (absolute), given still `../pkg-b`.
+        let pkg_b_url = uv_pep508::VerbatimUrl::from_path("../pkg-b", &pkg_a)
+            .unwrap()
+            .with_given("../pkg-b");
+        assert_eq!(pkg_b_url.given(), Some("../pkg-b"));
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Directory {
+                install_path: pkg_b.clone().into_boxed_path(),
+                editable: None,
+                r#virtual: Some(false),
+                url: pkg_b_url,
+            },
+            origin: None,
+        };
+
+        // Without `workspace_root`, the wrongly-anchored `given` is preserved.
+        let preserved = to_requirements(std::iter::once(&uv_req)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &preserved[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some("../pkg-b"));
+
+        // With `workspace_root`, the `given` is re-anchored to `./pkg-b`,
+        // which the lockfile will resolve back to the same absolute path.
+        let reanchored =
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(workspace_root)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some("./pkg-b"));
+    }
+
+    /// Re-anchoring is a no-op when the `given` already resolves against the workspace root.
+    #[test]
+    fn to_requirements_leaves_workspace_relative_given_alone() {
+        use uv_distribution_types::{Requirement as UvRequirement, RequirementSource};
+        use uv_pep508::MarkerTree;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace_root = tmp.path();
+        let pkg_b = workspace_root.join("pkg-b");
+        fs_err::create_dir_all(&pkg_b).unwrap();
+
+        let pkg_b_url = uv_pep508::VerbatimUrl::from_path("./pkg-b", workspace_root)
+            .unwrap()
+            .with_given("./pkg-b");
+        assert_eq!(pkg_b_url.given(), Some("./pkg-b"));
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Directory {
+                install_path: pkg_b.clone().into_boxed_path(),
+                editable: None,
+                r#virtual: Some(false),
+                url: pkg_b_url,
+            },
+            origin: None,
+        };
+
+        let reanchored =
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(workspace_root)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some("./pkg-b"));
     }
 }

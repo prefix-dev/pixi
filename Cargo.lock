@@ -7338,6 +7338,7 @@ dependencies = [
  "fs-err",
  "jiff",
  "miette 7.6.0",
+ "pathdiff",
  "pep440_rs",
  "pep508_rs",
  "pixi_git",

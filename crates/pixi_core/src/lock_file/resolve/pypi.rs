@@ -31,8 +31,8 @@ use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
     convert_uv_requirements_to_pep508, into_pinned_git_spec, into_uv_git_reference,
     into_uv_git_sha, pypi_options_to_build_options, pypi_options_to_index_locations,
-    to_index_strategy, to_prerelease_mode, to_requirements, to_uv_normalize, to_uv_version,
-    to_version_specifiers,
+    to_index_strategy, to_prerelease_mode, to_requirements_relative_to, to_uv_normalize,
+    to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -1117,6 +1117,7 @@ async fn lock_pypi_packages(
                         location: UrlOrPath,
                         hash: Option<PackageHashes>,
                         index_url: Option<Url>,
+                        workspace_root: &Path,
                     ) -> miette::Result<LockedPypiRecord> {
                         let locked_version =
                             pep440_rs::Version::from_str(&metadata.version.to_string())
@@ -1137,8 +1138,11 @@ async fn lock_pypi_packages(
                                         .map(|r| to_version_specifiers(&r))
                                         .transpose()
                                         .into_diagnostic()?,
-                                    requires_dist: to_requirements(metadata.requires_dist.iter())
-                                        .into_diagnostic()?,
+                                    requires_dist: to_requirements_relative_to(
+                                        metadata.requires_dist.iter(),
+                                        Some(workspace_root),
+                                    )
+                                    .into_diagnostic()?,
                                 },
                             )))
                             .lock(locked_version),
@@ -1174,6 +1178,7 @@ async fn lock_pypi_packages(
                                     .context("cannot convert registry sdist")?,
                                 hash,
                                 Some((*reg.index).clone()),
+                                abs_project_root,
                             )?);
                         }
                         SourceDist::DirectUrl(direct) => {
@@ -1186,6 +1191,7 @@ async fn lock_pypi_packages(
                                     .into(),
                                 hash,
                                 None,
+                                abs_project_root,
                             )?);
                         }
                         SourceDist::Git(git) => {
@@ -1203,6 +1209,7 @@ async fn lock_pypi_packages(
                                 pinned_git_spec.into_locked_git_url().to_url().into(),
                                 hash,
                                 None,
+                                abs_project_root,
                             )?);
                         }
                         SourceDist::Path(path) => {
@@ -1222,7 +1229,13 @@ async fn lock_pypi_packages(
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
                             let url_or_path = UrlOrPath::Path(install_path);
-                            locked_packages.push(wheel(metadata, url_or_path, hash, None)?);
+                            locked_packages.push(wheel(
+                                metadata,
+                                url_or_path,
+                                hash,
+                                None,
+                                abs_project_root,
+                            )?);
                         }
                         SourceDist::Directory(dir) => {
                             // process the path or url that we get back from uv
@@ -1230,17 +1243,12 @@ async fn lock_pypi_packages(
                                 process_uv_path_url(&dir.url, &dir.install_path, abs_project_root)
                                     .into_diagnostic()?;
 
-                            // Create the url for the lock file. This is based on the passed in URL
-                            // instead of from the source path to copy the path that was passed in
-                            // from the requirement.
-                            let location = if let Some(given) = dir.url.given() {
-                                Verbatim::new_with_given(
-                                    UrlOrPath::Path(install_path),
-                                    given.to_string(),
-                                )
-                            } else {
-                                Verbatim::new(UrlOrPath::Path(install_path))
-                            };
+                            // Don't carry `dir.url.given()`: when this package was pulled in via
+                            // another package's `[tool.uv.sources]`, the given is relative to that
+                            // package, not the workspace, and the lockfile resolves relative paths
+                            // against itself. `install_path` is already relative to
+                            // `abs_project_root`.
+                            let location = Verbatim::new(UrlOrPath::Path(install_path));
                             let locked_version =
                                 pep440_rs::Version::from_str(&metadata.version.to_string())
                                     .into_diagnostic()
@@ -1259,8 +1267,9 @@ async fn lock_pypi_packages(
                                             .map(|r| to_version_specifiers(&r))
                                             .transpose()
                                             .into_diagnostic()?,
-                                        requires_dist: to_requirements(
+                                        requires_dist: to_requirements_relative_to(
                                             metadata.requires_dist.iter(),
+                                            Some(abs_project_root),
                                         )
                                         .into_diagnostic()?,
                                         source_data: SourceData::default(),
