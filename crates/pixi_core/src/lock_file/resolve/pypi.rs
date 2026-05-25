@@ -1208,14 +1208,13 @@ async fn lock_pypi_packages(
 mod tests {
     use std::path::PathBuf;
 
-    use super::*;
+    use pixi_uv_conversions::WorkspaceAnchor;
 
     // In this case we want to make the path relative to the project_root or lock
     // file path
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn process_uv_path_relative_path() {
-        use pixi_uv_conversions::WorkspaceAnchor;
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
             .unwrap()
             .with_given("./b/c");
@@ -1230,7 +1229,6 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn process_uv_path_project_root_subdir() {
-        use pixi_uv_conversions::WorkspaceAnchor;
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
             .unwrap()
             .with_given("./b/c");
@@ -1245,7 +1243,6 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn process_uv_path_relative_path() {
-        use pixi_uv_conversions::WorkspaceAnchor;
         let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
             .unwrap()
             .with_given("./b/c");
@@ -1311,7 +1308,6 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn process_uv_path_project_root_subdir() {
-        use pixi_uv_conversions::WorkspaceAnchor;
         let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
             .unwrap()
             .with_given("./b/c");
@@ -1325,7 +1321,6 @@ mod tests {
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn process_uv_path_absolute_path() {
-        use pixi_uv_conversions::WorkspaceAnchor;
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
             .unwrap()
             .with_given("/a/b/c");
@@ -1339,7 +1334,6 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn process_uv_path_absolute_path() {
-        use pixi_uv_conversions::WorkspaceAnchor;
         let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
             .unwrap()
             .with_given("C:\\a\\b\\c");
