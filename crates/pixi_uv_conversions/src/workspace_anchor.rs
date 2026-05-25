@@ -112,11 +112,10 @@ impl<'a> WorkspaceAnchor<'a> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_os = "windows")))]
 mod tests {
     use super::*;
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn relative_path_descending_gets_dot_slash() {
         let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
@@ -124,7 +123,6 @@ mod tests {
         assert_eq!(result.as_str(), "./pkg-a");
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn relative_path_ascending_keeps_dotdot() {
         let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
@@ -132,7 +130,6 @@ mod tests {
         assert_eq!(result.as_str(), "../other/pkg");
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn relative_given_for_file_url_returns_none_for_non_file() {
         let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
@@ -142,7 +139,6 @@ mod tests {
         assert!(anchor.relative_given_for_file_url(&url).is_none());
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn relative_given_for_file_url_preserves_absolute_given() {
         let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
@@ -155,7 +151,6 @@ mod tests {
         );
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn relative_given_for_file_url_reanchors_file_scheme() {
         let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
@@ -168,7 +163,6 @@ mod tests {
         );
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn given_for_location_relativizes_file_scheme_given() {
         let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
@@ -181,7 +175,6 @@ mod tests {
         assert_eq!(result.as_str(), "./pkg-b");
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn given_for_location_preserves_absolute_given() {
         let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
@@ -194,7 +187,6 @@ mod tests {
         assert_eq!(result.as_str(), "/abs/pkg");
     }
 
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn given_for_location_relativizes_relative_given() {
         let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
