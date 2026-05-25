@@ -947,6 +947,53 @@ mod tests {
         assert_eq!(url.given(), Some("./pkg-b"));
     }
 
+    /// Absolute `given` (bare `/abs/path`, not `file://`) must survive re-anchoring
+    /// for users who explicitly pin an absolute path.
+    #[test]
+    fn to_requirements_preserves_absolute_given() {
+        use uv_distribution_types::{Requirement as UvRequirement, RequirementSource};
+        use uv_pep508::MarkerTree;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace_root = tmp.path();
+        let pkg_b = tmp.path().join("other").join("pkg-b");
+        fs_err::create_dir_all(&pkg_b).unwrap();
+
+        // Simulate a user writing `pkg-b = { path = "/abs/.../pkg-b" }`
+        // uv stores an absolute bare path as the `given`, not a `file://` URL
+        let pkg_b_url = uv_pep508::VerbatimUrl::from_absolute_path(&pkg_b)
+            .unwrap()
+            .with_given(pkg_b.to_str().unwrap());
+        assert!(
+            pkg_b_url
+                .given()
+                .is_some_and(|g| std::path::Path::new(g).is_absolute())
+        );
+        let abs_given = pkg_b_url.given().unwrap().to_owned();
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Directory {
+                install_path: pkg_b.clone().into_boxed_path(),
+                editable: None,
+                r#virtual: Some(false),
+                url: pkg_b_url,
+            },
+            origin: None,
+        };
+
+        let anchor = WorkspaceAnchor::new(workspace_root);
+        let reanchored =
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(&anchor)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some(abs_given.as_str()));
+    }
+
     /// Re-anchoring is a no-op when the `given` already resolves against the workspace root.
     #[test]
     fn to_requirements_leaves_workspace_relative_given_alone() {

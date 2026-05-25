@@ -6686,7 +6686,6 @@ dependencies = [
  "miette 7.6.0",
  "once_cell",
  "ordermap",
- "pathdiff",
  "pep440_rs",
  "pep508_rs",
  "pixi_build_backend_passthrough",

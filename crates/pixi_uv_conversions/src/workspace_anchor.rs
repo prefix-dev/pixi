@@ -65,10 +65,11 @@ impl<'a> WorkspaceAnchor<'a> {
             return None;
         }
         // Preserve absolute paths the user explicitly wrote.
-        if let Some(given) = url.given() {
-            if !given.starts_with("file://") && PathBuf::from(given).is_absolute() {
-                return Some(given.to_owned());
-            }
+        if url
+            .given()
+            .is_some_and(|g| !g.starts_with("file://") && PathBuf::from(g).is_absolute())
+        {
+            return url.given().map(str::to_owned);
         }
         let abs_path = url_ref.to_file_path().ok()?;
         self.relative_path(&abs_path).ok().map(|p| p.to_string())
