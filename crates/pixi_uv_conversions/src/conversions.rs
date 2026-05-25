@@ -26,7 +26,7 @@ use uv_pep508::{VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
 use uv_redacted::DisplaySafeUrl;
 
-use crate::{ConversionError, VersionError};
+use crate::{ConversionError, VersionError, WorkspaceAnchor};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
@@ -405,17 +405,17 @@ pub fn to_requirements<'req>(
     to_requirements_relative_to(requirements, None)
 }
 
-/// Same as [`to_requirements`], but re-anchors any relative `given` on file-URL path/directory
-/// requirements to `workspace_root`.
+/// Same as [`to_requirements`], but re-anchors the `given` on file-URL path/directory
+/// requirements to the workspace root carried by `anchor`.
 ///
-/// uv may emit such a `given` relative to a nested package's `[tool.uv.sources]`
+/// uv may emit a `given` relative to a nested package's `[tool.uv.sources]`
 /// (e.g. `../pkg-b` inside `workspace/pkg-a`). The pixi lockfile resolves relative paths against
-/// itself (== workspace root), so preserving that `given` mislocates the dep after a round-trip
-/// (#4573). Passing `Some(workspace_root)` re-derives the `given` from the URL's resolved absolute
-/// path; passing `None` keeps it as-is.
+/// itself (== workspace root), so that `given` mislocates the dep after a round-trip
+/// (#4573). Passing `Some(anchor)` re-anchors the `given` to the workspace root;
+/// passing `None` keeps it as-is.
 pub fn to_requirements_relative_to<'req>(
     requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
-    workspace_root: Option<&Path>,
+    anchor: Option<&WorkspaceAnchor<'_>>,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
     let requirements: Result<Vec<pep508_rs::Requirement>, ConversionError> = requirements
         .map(|requirement| {
@@ -476,8 +476,8 @@ pub fn to_requirements_relative_to<'req>(
                 }
                 uv_distribution_types::RequirementSource::Path { url, .. }
                 | uv_distribution_types::RequirementSource::Directory { url, .. } => {
-                    let given = workspace_root
-                        .and_then(|root| workspace_relative_given(url, root))
+                    let given = anchor
+                        .and_then(|a| a.relative_given_for_file_url(url))
                         .or_else(|| url.given().map(str::to_owned));
                     verbatim_url = given.map(|g| {
                         pep508_rs::VersionOrUrl::Url(
@@ -506,29 +506,6 @@ pub fn to_requirements_relative_to<'req>(
         .collect();
 
     requirements
-}
-
-/// Build a workspace-root-relative `given` for a file URL, or `None` if the URL isn't a local file
-/// or can't be relativized. Mirrors `process_uv_path_url`'s `./` prefix convention so lockfile
-/// diffs stay stable for paths that descend into the workspace.
-fn workspace_relative_given(url: &VerbatimUrl, workspace_root: &Path) -> Option<String> {
-    let url_ref: &url::Url = url;
-    if url_ref.scheme() != "file" {
-        return None;
-    }
-    let abs_path = url_ref.to_file_path().ok()?;
-    let rel = pathdiff::diff_paths(&abs_path, workspace_root)?;
-    let rel_str = rel.to_str()?;
-    let rel_str = if cfg!(windows) {
-        rel_str.replace('\\', "/")
-    } else {
-        rel_str.to_string()
-    };
-    if rel_str.starts_with("..") {
-        Some(rel_str)
-    } else {
-        Some(format!("./{rel_str}"))
-    }
 }
 
 /// Convert uv `Requirement<VerbatimParsedUrl>` to `pep508_rs::Requirement`.
@@ -961,8 +938,9 @@ mod tests {
 
         // With `workspace_root`, the `given` is re-anchored to `./pkg-b`,
         // which the lockfile will resolve back to the same absolute path.
+        let anchor = WorkspaceAnchor::new(workspace_root);
         let reanchored =
-            to_requirements_relative_to(std::iter::once(&uv_req), Some(workspace_root)).unwrap();
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(&anchor)).unwrap();
         let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
             panic!("expected URL requirement");
         };
@@ -999,8 +977,9 @@ mod tests {
             origin: None,
         };
 
+        let anchor = WorkspaceAnchor::new(workspace_root);
         let reanchored =
-            to_requirements_relative_to(std::iter::once(&uv_req), Some(workspace_root)).unwrap();
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(&anchor)).unwrap();
         let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
             panic!("expected URL requirement");
         };
