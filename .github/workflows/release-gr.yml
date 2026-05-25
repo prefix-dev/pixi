@@ -1,0 +1,11 @@
+name: release-gr
+on:
+  push:
+    branches: [main]
+jobs:
+  release:
+    uses: greenroom-robotics/ros_semantic_release_action/.github/workflows/recipes-release.yml@main
+    with:
+      package: pixi
+      package_path: .
+    secrets: inherit
