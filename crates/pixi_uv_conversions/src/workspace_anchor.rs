@@ -112,27 +112,36 @@ impl<'a> WorkspaceAnchor<'a> {
     }
 }
 
-#[cfg(all(test, not(target_os = "windows")))]
+#[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn relative_path_descending_gets_dot_slash() {
-        let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
-        let result = anchor.relative_path(Path::new("/workspace/pkg-a")).unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let pkg_a = tmp.path().join("pkg-a");
+        fs_err::create_dir_all(&pkg_a).unwrap();
+        let anchor = WorkspaceAnchor::new(tmp.path());
+        let result = anchor.relative_path(&pkg_a).unwrap();
         assert_eq!(result.as_str(), "./pkg-a");
     }
 
     #[test]
     fn relative_path_ascending_keeps_dotdot() {
-        let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
-        let result = anchor.relative_path(Path::new("/other/pkg")).unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = tmp.path().join("workspace");
+        let other_pkg = tmp.path().join("other").join("pkg");
+        fs_err::create_dir_all(&workspace).unwrap();
+        fs_err::create_dir_all(&other_pkg).unwrap();
+        let anchor = WorkspaceAnchor::new(&workspace);
+        let result = anchor.relative_path(&other_pkg).unwrap();
         assert_eq!(result.as_str(), "../other/pkg");
     }
 
     #[test]
     fn relative_given_for_file_url_returns_none_for_non_file() {
-        let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
+        let tmp = tempfile::tempdir().unwrap();
+        let anchor = WorkspaceAnchor::new(tmp.path());
         let url = uv_pep508::VerbatimUrl::parse_url("https://example.com/pkg.whl")
             .unwrap()
             .with_given("https://example.com/pkg.whl");
@@ -141,22 +150,27 @@ mod tests {
 
     #[test]
     fn relative_given_for_file_url_preserves_absolute_given() {
-        let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
-        let url = uv_pep508::VerbatimUrl::parse_url("file:///abs/pkg")
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = tmp.path().join("workspace");
+        let abs_pkg = tmp.path().join("abs").join("pkg");
+        fs_err::create_dir_all(&abs_pkg).unwrap();
+        let abs_given = abs_pkg.to_str().unwrap().to_owned();
+        let url = uv_pep508::VerbatimUrl::from_absolute_path(&abs_pkg)
             .unwrap()
-            .with_given("/abs/pkg");
-        assert_eq!(
-            anchor.relative_given_for_file_url(&url),
-            Some("/abs/pkg".to_owned())
-        );
+            .with_given(abs_given.as_str());
+        let anchor = WorkspaceAnchor::new(&workspace);
+        assert_eq!(anchor.relative_given_for_file_url(&url), Some(abs_given));
     }
 
     #[test]
     fn relative_given_for_file_url_reanchors_file_scheme() {
-        let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
-        let url = uv_pep508::VerbatimUrl::parse_url("file:///workspace/pkg-b")
-            .unwrap()
-            .with_given("file:///workspace/pkg-b");
+        let tmp = tempfile::tempdir().unwrap();
+        let pkg_b = tmp.path().join("pkg-b");
+        fs_err::create_dir_all(&pkg_b).unwrap();
+        let file_url = uv_pep508::VerbatimUrl::from_absolute_path(&pkg_b).unwrap();
+        let file_url_string = file_url.to_url().to_string();
+        let url = file_url.with_given(file_url_string.as_str());
+        let anchor = WorkspaceAnchor::new(tmp.path());
         assert_eq!(
             anchor.relative_given_for_file_url(&url),
             Some("./pkg-b".to_owned())
@@ -165,37 +179,43 @@ mod tests {
 
     #[test]
     fn given_for_location_relativizes_file_scheme_given() {
-        let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
-        let url = uv_pep508::VerbatimUrl::parse_url("file:///workspace/pkg-b")
-            .unwrap()
-            .with_given("file:///workspace/pkg-b");
-        let result = anchor
-            .given_for_location(&url, Path::new("/workspace/pkg-b"))
-            .unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let pkg_b = tmp.path().join("pkg-b");
+        fs_err::create_dir_all(&pkg_b).unwrap();
+        let file_url = uv_pep508::VerbatimUrl::from_absolute_path(&pkg_b).unwrap();
+        let file_url_string = file_url.to_url().to_string();
+        let url = file_url.with_given(file_url_string.as_str());
+        let anchor = WorkspaceAnchor::new(tmp.path());
+        let result = anchor.given_for_location(&url, &pkg_b).unwrap();
         assert_eq!(result.as_str(), "./pkg-b");
     }
 
     #[test]
     fn given_for_location_preserves_absolute_given() {
-        let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
-        let url = uv_pep508::VerbatimUrl::parse_url("file:///abs/pkg")
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = tmp.path().join("workspace");
+        let abs_pkg = tmp.path().join("abs").join("pkg");
+        fs_err::create_dir_all(&abs_pkg).unwrap();
+        let url = uv_pep508::VerbatimUrl::from_absolute_path(&abs_pkg)
             .unwrap()
-            .with_given("/abs/pkg");
-        let result = anchor
-            .given_for_location(&url, Path::new("/abs/pkg"))
-            .unwrap();
-        assert_eq!(result.as_str(), "/abs/pkg");
+            .with_given(abs_pkg.to_str().unwrap());
+        let anchor = WorkspaceAnchor::new(&workspace);
+        let result = anchor.given_for_location(&url, &abs_pkg).unwrap();
+        // given_for_location normalizes backslashes to forward slashes
+        let expected = abs_pkg.to_str().unwrap().replace('\\', "/");
+        assert_eq!(result.as_str(), expected.as_str());
     }
 
     #[test]
     fn given_for_location_relativizes_relative_given() {
-        let anchor = WorkspaceAnchor::new(Path::new("/workspace"));
-        let url = uv_pep508::VerbatimUrl::parse_url("file:///workspace/pkg-b")
+        let tmp = tempfile::tempdir().unwrap();
+        let pkg_b = tmp.path().join("pkg-b");
+        fs_err::create_dir_all(&pkg_b).unwrap();
+        let url = uv_pep508::VerbatimUrl::from_absolute_path(&pkg_b)
             .unwrap()
             .with_given("./pkg-b");
-        let result = anchor
-            .given_for_location(&url, Path::new("/workspace/pkg-b"))
-            .unwrap();
+        let anchor = WorkspaceAnchor::new(tmp.path());
+        let result = anchor.given_for_location(&url, &pkg_b).unwrap();
         assert_eq!(result.as_str(), "./pkg-b");
     }
 }
