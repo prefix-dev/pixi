@@ -6,6 +6,6 @@ jobs:
   release:
     uses: greenroom-robotics/ros_semantic_release_action/.github/workflows/recipes-release.yml@main
     with:
-      package: pixi
-      package_path: .
+      package: pixi-build-ros-gr
+      package_path: crates/pixi_build_ros
     secrets: inherit
