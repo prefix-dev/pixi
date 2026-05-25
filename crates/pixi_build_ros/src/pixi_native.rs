@@ -196,9 +196,34 @@ pub async fn generate(
     build_items.push(template_value("${{ compiler('cxx') }}"));
 
     // ament_cargo wants the rust toolchain plus the cargo-ament-build wrapper.
+    // The C-side libs (rcl + msg packages) are also injected here because the
+    // crates.io `rclrs` crate that downstream ament_cargo packages pull in
+    // unconditionally vendors Rust bindings for the standard interface
+    // packages and emits `#[link(name = "<pkg>__rosidl_(typesupport|
+    // generator)_c")]` on the bound externs. Its build.rs additionally emits
+    // `cargo:rustc-link-lib=dylib={rcl,rcl_action,rcl_yaml_param_parser,
+    // rcutils,rmw,rmw_implementation}`. The libs must be host-visible at
+    // build time and run-visible to the produced binary. They're injected
+    // unconditionally for `ament_cargo` because the rclrs vendor module is
+    // compiled unconditionally — opting out for the rare Rust-without-rclrs
+    // case would be a future flag.
     if build_type == RosBuildType::AmentCargo {
         build_items.push(spec("rust"));
         build_items.push(spec(&format!("ros-{distro}-cargo-ament-build")));
+        for pkg in [
+            "rcl",
+            "rcl-action",
+            "action-msgs",
+            "builtin-interfaces",
+            "example-interfaces",
+            "rcl-interfaces",
+            "rosgraph-msgs",
+            "test-msgs",
+            "unique-identifier-msgs",
+        ] {
+            host_items.push(spec(&format!("ros-{distro}-{pkg}")));
+            run_items.push(spec(&format!("ros-{distro}-{pkg}")));
+        }
     }
 
     // ament_idl auto-injects every rosidl generator we know about plus the
@@ -599,9 +624,25 @@ mod tests {
         .await
         .unwrap();
 
-        let (build, _, _) = host_run_concrete(&recipe.recipe);
+        let (build, host, run) = host_run_concrete(&recipe.recipe);
         assert!(build.iter().any(|s| s == "rust"));
         assert!(build.iter().any(|s| s == "ros-kilted-cargo-ament-build"));
+        // The C-side libs that crates.io `rclrs` links against must be in host
+        // (visible to the cargo build) and run (visible to the produced binary).
+        for pkg in [
+            "ros-kilted-rcl",
+            "ros-kilted-rcl-action",
+            "ros-kilted-action-msgs",
+            "ros-kilted-builtin-interfaces",
+            "ros-kilted-example-interfaces",
+            "ros-kilted-rcl-interfaces",
+            "ros-kilted-rosgraph-msgs",
+            "ros-kilted-test-msgs",
+            "ros-kilted-unique-identifier-msgs",
+        ] {
+            assert!(host.iter().any(|s| s == pkg), "missing in host: {pkg}");
+            assert!(run.iter().any(|s| s == pkg), "missing in run: {pkg}");
+        }
     }
 
     #[tokio::test]
@@ -617,9 +658,12 @@ mod tests {
         )
         .await
         .unwrap();
-        let (build, _, _) = host_run_concrete(&recipe.recipe);
+        let (build, host, run) = host_run_concrete(&recipe.recipe);
         assert!(!build.iter().any(|s| s == "rust"));
         assert!(!build.iter().any(|s| s == "ros-kilted-cargo-ament-build"));
+        // The rclrs C-side host/run injections are ament_cargo-only.
+        assert!(!host.iter().any(|s| s == "ros-kilted-rcl"));
+        assert!(!run.iter().any(|s| s == "ros-kilted-rcl"));
     }
 
     #[tokio::test]

@@ -38,5 +38,12 @@ fi
 # and lays down the ament install layout under --install-base. Source code is
 # copied to share/<pkg>/rust/ so downstream Rust crates can resolve path
 # dependencies via AMENT_PREFIX_PATH.
-cargo ament-build --install-base "$PREFIX" --release -- --locked --offline || \
-  cargo ament-build --install-base "$PREFIX" --release --
+#
+# `--release` is passed both before and after `--`: cargo-ament-build's own
+# `--release` flag only switches where it looks for the built artifact
+# (target/release/ vs target/debug/) — it is NOT forwarded to the inner
+# `cargo build` call. Without the second `--release`, cargo builds the dev
+# profile and the post-build copy step fails with
+# `Failed to copy binary from 'target/release/<pkg>'`.
+cargo ament-build --install-base "$PREFIX" --release -- --release --locked --offline || \
+  cargo ament-build --install-base "$PREFIX" --release -- --release
