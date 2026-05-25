@@ -1,6 +1,6 @@
 [package]
 name = "pixi-build-ros-gr"
-version = "0.4.0"
+version = "0.4.1"
 
 [package.build.backend]
 channels = [
