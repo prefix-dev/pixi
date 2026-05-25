@@ -58,7 +58,7 @@ requirements:
     - "${{ compiler('c') }}"
     - "${{ compiler('cxx') }}"
   host:
-    - ros-distro-mutex 0.5.*
+    - "ros-distro-mutex 0.5.*,0.15.*"
     - ros-noetic-catkin
     - ros-noetic-ros-package <=2.0.0
     - ros-noetic-ros-package-msgs <=2.0.0
@@ -86,7 +86,7 @@ requirements:
     - xorg-libxext
     - tinyxml2 ==10.0.0
     - asio <10.0.0
-    - ros-distro-mutex
+    - ros-distro-mutex 0.15.*
 about:
   summary: Demo
   description: Demo

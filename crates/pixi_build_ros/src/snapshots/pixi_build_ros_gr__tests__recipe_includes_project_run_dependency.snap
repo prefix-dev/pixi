@@ -57,12 +57,12 @@ requirements:
     - numpy
     - pip
     - pkg-config
-    - ros-distro-mutex
+    - ros-distro-mutex 0.15.*
   run:
     - rich >=10.0
     - ros-noetic-ros-package
     - ros-noetic-multi-package
-    - ros-distro-mutex
+    - ros-distro-mutex 0.15.*
 about:
   homepage: "https://test.io/custom_ros"
   summary: Demo

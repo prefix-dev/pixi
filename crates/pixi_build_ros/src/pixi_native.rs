@@ -229,8 +229,8 @@ pub async fn generate(
     }
 
     // ROS-specific injection: distro mutex (host + run) and ros-workspace (host + run).
-    host_items.push(spec("ros2-distro-mutex"));
-    run_items.push(spec("ros2-distro-mutex"));
+    host_items.push(spec("ros2-distro-mutex 0.15.*"));
+    run_items.push(spec("ros2-distro-mutex 0.15.*"));
     host_items.push(spec(&format!("ros-{distro}-ros-workspace")));
     run_items.push(spec(&format!("ros-{distro}-ros-workspace")));
 
@@ -577,8 +577,8 @@ mod tests {
         .unwrap();
 
         let (build, host, run) = host_run_concrete(&recipe.recipe);
-        assert!(host.iter().any(|s| s == "ros2-distro-mutex"));
-        assert!(run.iter().any(|s| s == "ros2-distro-mutex"));
+        assert!(host.iter().any(|s| s == "ros2-distro-mutex 0.15.*"));
+        assert!(run.iter().any(|s| s == "ros2-distro-mutex 0.15.*"));
         assert!(host.iter().any(|s| s == "ros-kilted-ros-workspace"));
         assert!(run.iter().any(|s| s == "ros-kilted-ros-workspace"));
         assert!(build.iter().any(|s| s == "cmake"));

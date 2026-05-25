@@ -52,11 +52,11 @@ requirements:
     - numpy
     - pip
     - pkg-config
-    - ros2-distro-mutex
+    - ros2-distro-mutex 0.15.*
     - ros-kilted-ros-workspace
   run:
     - ros-kilted-rclcpp
-    - ros2-distro-mutex
+    - ros2-distro-mutex 0.15.*
     - ros-kilted-ros-workspace
 about: {}
 extra: {}
