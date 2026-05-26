@@ -34,6 +34,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
+use crate::process_exit;
 
 /// Runs task in the pixi environment.
 ///
@@ -367,7 +368,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 if code == 127 {
                     command_not_found(&workspace, explicit_environment.clone());
                 }
-                crate::process_exit::exit_with_code(code);
+                process_exit::exit_with_code(code);
             }
             Err(err) => return Err(err.into()),
         }
