@@ -916,15 +916,25 @@ mod test {
             .iter()
             .map(|p| p.name().as_str())
             .collect();
-        // Originals are gone -- one synthetic per subdir replaces them.
         assert_eq!(names.len(), 3, "got {names:?}");
-        assert!(names.iter().all(|n| n.contains("cuda-12-0")));
-        for original in ["linux-64", "osx-64", "win-64"] {
+        // linux/libc are linux-only and __cuda is filtered off osx, so the
+        // osx-64 entry stays bare while linux-64 / win-64 get cuda-bearing names.
+        for synthetic in ["linux-64", "win-64"] {
             assert!(
-                !names.contains(&original),
-                "bare {original} should be gone after migration",
+                names
+                    .iter()
+                    .any(|n| n.starts_with(synthetic) && n.contains("cuda-12-0")),
+                "expected a cuda-bearing synthetic for {synthetic}, got {names:?}",
+            );
+            assert!(
+                !names.contains(&synthetic),
+                "bare {synthetic} should be gone after migration, got {names:?}",
             );
         }
+        assert!(
+            names.contains(&"osx-64"),
+            "osx-64 must stay bare since no sysreqs apply there, got {names:?}",
+        );
         // Default feature keeps platforms = None.
         let default = workspace_manifest
             .features
