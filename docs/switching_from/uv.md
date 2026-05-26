@@ -388,7 +388,7 @@ Both tools generate lock files for reproducibility.
 | Package types      | PyPI only              | Conda + PyPI                                          |
 | Generate/update    | `uv lock`              | `pixi lock` (also automatic on `pixi add` / `pixi install`) |
 
-See [Lock File](../workspace/lock file.md).
+See [Lock File](../workspace/lock_file.md).
 
 ### Building and publishing
 
