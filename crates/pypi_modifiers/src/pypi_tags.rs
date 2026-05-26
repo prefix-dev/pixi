@@ -610,6 +610,7 @@ mod tests {
             subdir,
             declared,
         )
+        .expect("test inputs respect the subdir-platform invariant")
     }
 
     fn declared(name: &str, version: &str) -> GenericVirtualPackage {

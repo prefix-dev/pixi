@@ -632,7 +632,13 @@ fn synthesise_for_feature(
                 "synthesised platform name '{name_str}' is not a valid pixi platform name: {e}",
             )))
         })?;
-        target.insert(PixiPlatform::new(name.clone(), subdir, declared));
+        target.insert(
+            PixiPlatform::new(name.clone(), subdir, declared).map_err(|e| {
+                TomlError::from(GenericError::new(format!(
+                    "synthesised platform '{name}' is invalid: {e}",
+                )))
+            })?,
+        );
         synthesised_names.insert(name);
     }
 
@@ -996,6 +1002,30 @@ mod test {
             err.error
                 .to_string()
                 .contains("per-platform virtual packages"),
+            "unexpected error: {err:?}",
+        );
+    }
+
+    #[test]
+    fn test_system_requirements_migration_rejects_rich_workspace_platform_same_name() {
+        // Regression: rich `name == platform` entries used to be silently
+        // demoted to bare subdirs and lose their VPs to [system-requirements].
+        let result = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = [{ name = "osx-arm64", platform = "osx-arm64", macos = "14" }]
+
+            [system-requirements]
+            macos = "13.3"
+            "#,
+            Path::new(""),
+        );
+        let err = result.expect_err("rich platform + sysreqs must error");
+        let msg = err.error.to_string();
+        assert!(
+            msg.contains("special subdir platform"),
             "unexpected error: {err:?}",
         );
     }

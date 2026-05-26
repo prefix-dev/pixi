@@ -4167,7 +4167,8 @@ exclude-newer = "2015-12-02T02:07:43Z"
                 version: Version::from_str("12.4").unwrap(),
                 build_string: String::new(),
             }],
-        );
+        )
+        .expect("rich platform with name != subdir");
         editable
             .add_platforms([&rich], &FeatureName::DEFAULT)
             .unwrap();

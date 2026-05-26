@@ -189,17 +189,25 @@ impl PixiPlatform {
         self.subdir.as_str() == self.name.as_str()
     }
 
-    /// Build a new `PixiPlatform`
+    /// Build a new `PixiPlatform`.
+    ///
+    /// Enforces the workspace invariant that a subdir-platform (entry where
+    /// `name == subdir`) can never carry virtual packages: such an entry has
+    /// no syntactic shape in `pixi.toml` (bare-string form omits VPs) and the
+    /// target-selector machinery treats it as the bare subdir alias.
     pub fn new(
         name: PixiPlatformName,
         subdir: Platform,
         declared_virtual_packages: Vec<GenericVirtualPackage>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, PixiPlatformError> {
+        if name.as_str() == subdir.as_str() && !declared_virtual_packages.is_empty() {
+            return Err(PixiPlatformError::IsSubdirPlatform);
+        }
+        Ok(Self {
             name,
             subdir,
             declared_virtual_packages,
-        }
+        })
     }
 
     pub fn as_target_selector(&self) -> TargetSelector {
@@ -388,6 +396,7 @@ mod tests {
             subdir,
             vps,
         )
+        .expect("rich platform with name != subdir")
     }
 
     fn gvp(name: &str, version: &str) -> GenericVirtualPackage {
@@ -607,6 +616,65 @@ mod tests {
             matches!(err, PixiPlatformNameError::TooLong { .. }),
             "expected TooLong, got {err:?}",
         );
+    }
+
+    /// A name-equals-subdir entry carrying virtual packages has no on-disk
+    /// shape and would alias the bare subdir target selector, so
+    /// `PixiPlatform::new` must reject it for every conda subdir; the only
+    /// legal way to build `name == subdir` is via `from_subdir`. This is the
+    /// invariant the legacy-sysreqs migration relies on.
+    #[test]
+    fn new_rejects_subdir_name_with_virtual_packages() {
+        use strum::IntoEnumIterator;
+
+        for subdir in Platform::iter() {
+            if subdir == Platform::NoArch || subdir == Platform::Unknown {
+                continue;
+            }
+            let name = PixiPlatformName::try_from(subdir.as_str()).unwrap_or_else(|e| {
+                panic!(
+                    "rattler subdir '{}' must be a valid name: {e:?}",
+                    subdir.as_str()
+                )
+            });
+            let err = PixiPlatform::new(name, subdir, vec![gvp("__cuda", "12.0")]).unwrap_err();
+            assert!(
+                matches!(err, PixiPlatformError::IsSubdirPlatform),
+                "subdir '{}' + VPs should be rejected as IsSubdirPlatform, got {err:?}",
+                subdir.as_str(),
+            );
+        }
+
+        // Empty VP list is the valid bare-subdir construction and must succeed.
+        for subdir in Platform::iter() {
+            if subdir == Platform::NoArch || subdir == Platform::Unknown {
+                continue;
+            }
+            let name = PixiPlatformName::try_from(subdir.as_str()).unwrap();
+            PixiPlatform::new(name, subdir, Vec::new()).unwrap_or_else(|e| {
+                panic!("bare subdir '{}' must construct: {e:?}", subdir.as_str())
+            });
+        }
+    }
+
+    /// Family selectors (`linux`/`unix`/`win`/`osx`/`macos`) double as
+    /// `target.<family>.*` keys; a `PixiPlatformName` carrying any of them
+    /// would shadow that selector. The name validator must reject them
+    /// before we ever get a chance to call `PixiPlatform::new` with such a
+    /// name, so no rich entry can end up family-named.
+    #[test]
+    fn name_validator_blocks_target_selector_family_names() {
+        for family in ["linux", "unix", "win", "osx", "macos"] {
+            let err = PixiPlatformName::try_from(family).unwrap_err();
+            assert!(
+                matches!(err, PixiPlatformNameError::ReservedName(ref n) if n == family),
+                "family '{family}' should be rejected as ReservedName, got {err:?}",
+            );
+            assert!(
+                crate::target::family_name_to_selector(family).is_some(),
+                "family '{family}' must round-trip to a TargetSelector",
+            );
+        }
     }
 
     /// Every real conda subdir must round-trip through `PixiPlatformName`

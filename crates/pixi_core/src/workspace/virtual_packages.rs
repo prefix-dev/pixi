@@ -182,7 +182,8 @@ mod tests {
                 version: rattler_conda_types::Version::from_str("12.0").unwrap(),
                 build_string: String::new(),
             }],
-        );
+        )
+        .unwrap();
         let packages = get_minimal_virtual_packages(&pp);
         let cuda = packages
             .iter()
@@ -217,7 +218,8 @@ mod tests {
                 version: rattler_conda_types::Version::from_str("1.2.4").unwrap(),
                 build_string: String::new(),
             }],
-        );
+        )
+        .unwrap();
         let libc = get_minimal_virtual_packages(&pp)
             .into_iter()
             .find_map(|vp| match vp {

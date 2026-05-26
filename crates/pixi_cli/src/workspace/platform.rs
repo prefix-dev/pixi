@@ -448,10 +448,10 @@ async fn execute_add(
             );
         }
         let specs = args.virtual_packages.into_specs(subdir, &raw_specs)?;
-        platforms.push(PixiPlatform::new(name, subdir, specs));
+        platforms.push(PixiPlatform::new(name, subdir, specs).into_diagnostic()?);
     } else {
         for (name, subdir) in parsed {
-            platforms.push(PixiPlatform::new(name, subdir, Vec::new()));
+            platforms.push(PixiPlatform::new(name, subdir, Vec::new()).into_diagnostic()?);
         }
     }
 

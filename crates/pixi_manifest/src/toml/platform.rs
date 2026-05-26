@@ -209,7 +209,19 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                     None => synthesize_name(subdir, &declared, table_span)?,
                 };
 
-                Ok(TomlPixiPlatform(PixiPlatform::new(name, subdir, declared)))
+                let platform = PixiPlatform::new(name, subdir, declared).map_err(|e| {
+                    Error {
+                        kind: ErrorKind::Custom(
+                            format!(
+                                "platform entry rejected: {e}; either drop the virtual packages or give the entry a `name` distinct from its subdir",
+                            )
+                            .into(),
+                        ),
+                        span: table_span,
+                        line_info: None,
+                    }
+                })?;
+                Ok(TomlPixiPlatform(platform))
             }
             other => Err(expected("a string or table", other, value.span).into()),
         }
@@ -821,6 +833,7 @@ mod test {
             subdir,
             declared,
         )
+        .expect("test inputs respect the subdir-platform invariant")
     }
 
     fn version_virtual_package(name: &str, version: &str) -> GenericVirtualPackage {
