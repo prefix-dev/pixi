@@ -337,10 +337,11 @@ pub fn into_pinned_git_spec(
         reference,
     );
 
-    // uv stores the percent-encoded drive-letter form internally (see
-    // `encode_windows_drive_letter`). Decode it back here so the lock file
-    // shows `file:///D:/...` rather than `file:///D%3A/...`.
-    let repository: url::Url = (**dist.git.repository()).clone();
+    // `url()` is the original URL; `repository()` is the canonical
+    // (lowercased + `.git`-stripped) form that would corrupt the lockfile
+    // (prefix-dev/pixi#6185). `decode_windows_drive_letter` undoes uv's
+    // percent-encoded drive letters so the lockfile shows `file:///D:/...`.
+    let repository: url::Url = (**dist.git.url()).clone();
     PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
 }
 
@@ -451,7 +452,8 @@ pub fn to_requirements<'req>(
                     git,
                     subdirectory,
                 } => {
-                    write!(package_string, " @ git+{}", git.repository())?;
+                    // `url()`, not `repository()`, see #6185.
+                    write!(package_string, " @ git+{}", git.url())?;
                     if let Some(reference) = git.reference().as_str() {
                         write!(package_string, "@{reference}")?;
                     }
@@ -871,5 +873,37 @@ mod tests {
 
         let converted = to_requirements(std::iter::once(&uv_req)).unwrap();
         assert_eq!(converted[0].to_string(), "isaaclab");
+    }
+
+    /// #6185: lockfile URL must keep original casing and `.git` suffix.
+    #[test]
+    fn into_pinned_git_spec_preserves_original_url() {
+        use uv_distribution_types::GitSourceDist;
+        use uv_git_types::{GitLfs, GitOid, GitReference as UvGitReference, GitUrl as UvGitUrl};
+        use uv_normalize::PackageName;
+        use uv_pep508::VerbatimUrl;
+
+        let original = "https://github.com/VaasuDevanS/cowsay-python.git";
+        let safe_url = DisplaySafeUrl::parse(original).unwrap();
+        let commit = GitOid::from_str("dcf7236f0b5ece9ed56e91271486e560526049cf").unwrap();
+
+        let git_url = UvGitUrl::from_commit(
+            safe_url.clone(),
+            UvGitReference::DefaultBranch,
+            commit,
+            GitLfs::Disabled,
+        )
+        .unwrap();
+
+        let dist = GitSourceDist {
+            name: PackageName::from_str("cowsay").unwrap(),
+            git: Box::new(git_url),
+            subdirectory: None,
+            url: VerbatimUrl::from_url(safe_url),
+        };
+
+        let pinned = into_pinned_git_spec(dist, None);
+
+        assert_eq!(pinned.git.as_str(), original);
     }
 }
