@@ -40,7 +40,7 @@ pub async fn reinstall<I: Interface>(
         .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Update the prefixes by reinstalling all packages
+    // Update the prefixes by reinstalling `options.reinstall_packages`
     get_update_lock_file_and_prefixes(
         &environments,
         Some(pixi_reporters::TopLevelProgress::from_global()),
