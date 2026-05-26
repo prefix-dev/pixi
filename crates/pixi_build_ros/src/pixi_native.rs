@@ -13,7 +13,7 @@ use pixi_build_backend::generated_recipe::{DefaultMetadataProvider, GeneratedRec
 use pixi_build_types::{ProjectModel, Target};
 use rattler_build_jinja::JinjaTemplate;
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, NoArchType, Platform};
 use thiserror::Error;
 
 use crate::build_script::render_build_script;
@@ -148,6 +148,14 @@ pub async fn generate(
         .build_type
         .ok_or(PixiNativeError::BuildTypeRequired)?;
 
+    // Default ament_python packages to noarch unless the user explicitly opts out.
+    // Other build types remain platform-specific unless the user explicitly opts in.
+    let is_noarch = match (config.noarch, build_type) {
+        (Some(v), _) => v,
+        (None, RosBuildType::AmentPython) => true,
+        (None, _) => false,
+    };
+
     if !config.extra_package_mappings.is_empty() {
         tracing::warn!(
             "extra-package-mappings is set but mode is pixi-native; the mappings will be ignored"
@@ -178,7 +186,11 @@ pub async fn generate(
     let mut run_items: Vec<Item<SerializableMatchSpec>> = Vec::new();
 
     // Standard build deps (linux subset of existing flow).
-    for dep in [
+    // On noarch, the build runs once on the build-platform runner and produces
+    // an arch-independent artifact, so the C/C++ toolchain and OS-specific
+    // shims are irrelevant — emitting them forces a compiler-variant axis
+    // through the recipe for no reason.
+    let mut common_build_deps: Vec<&str> = vec![
         "cmake",
         "ninja",
         "python",
@@ -186,14 +198,17 @@ pub async fn generate(
         "git",
         "git-lfs",
         "cpython",
-        "patch",
-        "make",
-        "coreutils",
-    ] {
+    ];
+    if !is_noarch {
+        common_build_deps.extend(["patch", "make", "coreutils"]);
+    }
+    for dep in common_build_deps {
         build_items.push(spec(dep));
     }
-    build_items.push(template_value("${{ compiler('c') }}"));
-    build_items.push(template_value("${{ compiler('cxx') }}"));
+    if !is_noarch {
+        build_items.push(template_value("${{ compiler('c') }}"));
+        build_items.push(template_value("${{ compiler('cxx') }}"));
+    }
 
     // ament_cargo wants the rust toolchain plus the cargo-ament-build wrapper.
     // The C-side libs (rcl + msg packages) are also injected here because the
@@ -300,6 +315,11 @@ pub async fn generate(
 
     if let Some(n) = config.build_number {
         generated.recipe.build.number = Some(Value::new_concrete(n, None));
+    }
+
+    if is_noarch {
+        generated.recipe.build.noarch =
+            Some(Value::new_concrete(NoArchType::python(), None));
     }
 
     // Add input globs the cache invalidator should watch. Pixi-native mode
@@ -553,7 +573,18 @@ mod tests {
 
     use crate::config::{RosBuildType, RosMode};
     use rattler_build_recipe::stage0::Item;
+    use rattler_conda_types::NoArchType;
     use std::path::PathBuf;
+
+    fn recipe_noarch(
+        recipe: &rattler_build_recipe::stage0::SingleOutputRecipe,
+    ) -> Option<rattler_conda_types::NoArchType> {
+        recipe
+            .build
+            .noarch
+            .as_ref()
+            .and_then(|v| v.as_concrete().copied())
+    }
 
     fn cfg_pixi_native(build_type: RosBuildType) -> RosBackendConfig {
         RosBackendConfig {
@@ -664,6 +695,98 @@ mod tests {
         // The rclrs C-side host/run injections are ament_cargo-only.
         assert!(!host.iter().any(|s| s == "ros-kilted-rcl"));
         assert!(!run.iter().any(|s| s == "ros-kilted-rcl"));
+    }
+
+    #[tokio::test]
+    async fn generate_ament_python_defaults_to_noarch() {
+        let cfg = cfg_pixi_native(RosBuildType::AmentPython);
+        let model = model_with_deps(&["ros-kilted-rclpy"], &["ros-kilted-rclpy"]);
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            recipe_noarch(&recipe.recipe),
+            Some(NoArchType::python()),
+            "ament_python with no opt-out must default to noarch: python",
+        );
+
+        let (build, _host, _run) = host_run_concrete(&recipe.recipe);
+        // Concrete build deps don't include compiler templates (templates aren't
+        // emitted by host_run_concrete's `as_concrete` filter), so assert by
+        // serializing the full conditional list and string-searching the template
+        // form pixi-build-ros injects.
+        let build_yaml = serde_yaml::to_string(&recipe.recipe.requirements.build).unwrap();
+        assert!(
+            !build_yaml.contains("compiler('c')"),
+            "noarch ament_python build deps must not include compiler('c'):\n{build_yaml}"
+        );
+        assert!(
+            !build_yaml.contains("compiler('cxx')"),
+            "noarch ament_python build deps must not include compiler('cxx'):\n{build_yaml}"
+        );
+        // Sanity: ament_python should still get python/setuptools etc.
+        assert!(build.iter().any(|s| s == "python"));
+        assert!(build.iter().any(|s| s == "setuptools"));
+    }
+
+    #[tokio::test]
+    async fn generate_ament_python_noarch_false_opts_out() {
+        let mut cfg = cfg_pixi_native(RosBuildType::AmentPython);
+        cfg.noarch = Some(false);
+        let model = model_with_deps(&["ros-kilted-rclpy"], &["ros-kilted-rclpy"]);
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            recipe_noarch(&recipe.recipe),
+            None,
+            "explicit noarch=false must override the ament_python default",
+        );
+        let build_yaml = serde_yaml::to_string(&recipe.recipe.requirements.build).unwrap();
+        assert!(
+            build_yaml.contains("compiler('c')"),
+            "non-noarch ament_python must still inject compiler('c'):\n{build_yaml}"
+        );
+    }
+
+    #[tokio::test]
+    async fn generate_ament_cmake_is_not_noarch_by_default() {
+        let cfg = cfg_pixi_native(RosBuildType::AmentCmake);
+        let model = model_with_deps(&["ros-kilted-rclcpp"], &["ros-kilted-rclcpp"]);
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            recipe_noarch(&recipe.recipe),
+            None,
+            "ament_cmake must remain platform-specific",
+        );
+        let build_yaml = serde_yaml::to_string(&recipe.recipe.requirements.build).unwrap();
+        assert!(
+            build_yaml.contains("compiler('c')"),
+            "ament_cmake must still inject compiler('c'):\n{build_yaml}"
+        );
     }
 
     #[tokio::test]
