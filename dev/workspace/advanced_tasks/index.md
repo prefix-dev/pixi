@@ -764,6 +764,51 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
   - `echo *.py` will echo all filenames that end with `.py`
   - `echo **/*.py` will echo all filenames that end with `.py` in this directory and all descendant directories.
   - `echo data[0-9].csv` will echo all filenames that have a single number after `data` and before `.csv`
+- **Comments:** lines starting with `#` are comments and are ignored by the shell.
+
+### Multi-line tasks
+
+A task command can span multiple lines by using TOML's triple-quoted string syntax. Each newline is treated by `deno_task_shell` as a command separator, equivalent to `;`:
+
+pixi.toml
+
+```toml
+[tasks]
+release = """
+cargo build --release
+strip target/release/myapp
+cp target/release/myapp dist/
+"""
+```
+
+A failing command does **not** abort the task by default; the next line still runs. If you want fail-fast behavior, either chain commands with `&&` or enable it explicitly with `set -e` (also written as `set -o errexit`) at the top of the task:
+
+pixi.toml
+
+```toml
+[tasks]
+release = """
+set -e
+cargo build --release
+strip target/release/myapp
+cp target/release/myapp dist/
+"""
+```
+
+You can toggle the option on and off within a task with `set +e` / `set -e` for specific sections.
+
+Long commands can be split across multiple lines with a trailing backslash (`\`), the same line-continuation rule as bash. Use TOML's literal multi-line string (`'''...'''`) so the backslash reaches the shell verbatim. Inside a basic multi-line string (`"""..."""`) TOML itself treats a trailing backslash as a line continuation and silently drops it:
+
+pixi.toml
+
+```toml
+[tasks]
+build = '''
+cargo build \
+    --release \
+    --features fast
+'''
+```
 
 More info in [`deno_task_shell` documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner).
 

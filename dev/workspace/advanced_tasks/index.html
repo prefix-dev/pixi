@@ -1393,6 +1393,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#multi-line-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-line tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4544,6 +4555,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#multi-line-tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-line tasks
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -5272,61 +5294,93 @@ Task command lines and the values of <code>tasks.&lt;name&gt;.env</code> are par
 <li><code>echo data[0-9].csv</code> will echo all filenames that have a single number after <code>data</code> and before <code>.csv</code></li>
 </ul>
 </li>
+<li><strong>Comments:</strong> lines starting with <code>#</code> are comments and are ignored by the shell.</li>
 </ul>
+<h3 id="multi-line-tasks">Multi-line tasks<a class="headerlink" href="#multi-line-tasks" title="Permanent link">#</a></h3>
+<p>A task command can span multiple lines by using TOML's triple-quoted string syntax.
+Each newline is treated by <code>deno_task_shell</code> as a command separator, equivalent to <code>;</code>:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="n">release</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&quot;&quot;</span>
+</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="s2">cargo build --release</span>
+</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="s2">strip target/release/myapp</span>
+</span><span id="__span-42-5"><a id="__codelineno-42-5" name="__codelineno-42-5" href="#__codelineno-42-5"></a><span class="s2">cp target/release/myapp dist/</span>
+</span><span id="__span-42-6"><a id="__codelineno-42-6" name="__codelineno-42-6" href="#__codelineno-42-6"></a><span class="s2">&quot;&quot;&quot;</span>
+</span></code></pre></div>
+<p>A failing command does <strong>not</strong> abort the task by default; the next line still runs.
+If you want fail-fast behavior, either chain commands with <code>&amp;&amp;</code> or enable it explicitly with <code>set -e</code> (also written as <code>set -o errexit</code>) at the top of the task:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="n">release</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&quot;&quot;</span>
+</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="s2">set -e</span>
+</span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="s2">cargo build --release</span>
+</span><span id="__span-43-5"><a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a><span class="s2">strip target/release/myapp</span>
+</span><span id="__span-43-6"><a id="__codelineno-43-6" name="__codelineno-43-6" href="#__codelineno-43-6"></a><span class="s2">cp target/release/myapp dist/</span>
+</span><span id="__span-43-7"><a id="__codelineno-43-7" name="__codelineno-43-7" href="#__codelineno-43-7"></a><span class="s2">&quot;&quot;&quot;</span>
+</span></code></pre></div>
+<p>You can toggle the option on and off within a task with <code>set +e</code> / <code>set -e</code> for specific sections.</p>
+<p>Long commands can be split across multiple lines with a trailing backslash (<code>\</code>), the same line-continuation rule as bash.
+Use TOML's literal multi-line string (<code>'''...'''</code>) so the backslash reaches the shell verbatim.
+Inside a basic multi-line string (<code>"""..."""</code>) TOML itself treats a trailing backslash as a line continuation and silently drops it:</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-44-2"><a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;&#39;&#39;</span>
+</span><span id="__span-44-3"><a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a><span class="s1">cargo build \</span>
+</span><span id="__span-44-4"><a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a><span class="s1">    --release \</span>
+</span><span id="__span-44-5"><a id="__codelineno-44-5" name="__codelineno-44-5" href="#__codelineno-44-5"></a><span class="s1">    --features fast</span>
+</span><span id="__span-44-6"><a id="__codelineno-44-6" name="__codelineno-44-6" href="#__codelineno-44-6"></a><span class="s1">&#39;&#39;&#39;</span>
+</span></code></pre></div>
 <p>More info in <a href="https://deno.land/manual@v1.35.0/tools/task_runner#task-runner"><code>deno_task_shell</code> documentation</a>.</p>
 <h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">#</a></h2>
 <p>Task can be very handy and may even replace simple Makefiles.
 There are a few principles that can make tasks more useful.</p>
 <h3 id="use-a-description">Use a <code>description</code><a class="headerlink" href="#use-a-description" title="Permanent link">#</a></h3>
 <p>It is a good habit to add a description to your task:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-42-2"><a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo Hello Pixi user&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">description</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;Friendly greeting to a Pixi user&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-42-3"><a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;build&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">description</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;Build everything&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-42-4"><a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">description</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;Run all tests&quot;</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-45-2"><a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo Hello Pixi user&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">description</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;Friendly greeting to a Pixi user&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-45-3"><a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;build&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">description</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;Build everything&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-45-4"><a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;test&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">description</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;Run all tests&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>Now, the command <code>pixi task list</code> will not only list all task names but also
 the their descriptions.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-43-1"><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>list
-</span><span id="__span-43-2"><a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a>Tasks<span class="w"> </span>that<span class="w"> </span>can<span class="w"> </span>run<span class="w"> </span>on<span class="w"> </span>this<span class="w"> </span>machine:
-</span><span id="__span-43-3"><a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a>-----------------------------------
-</span><span id="__span-43-4"><a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a>build,<span class="w"> </span>echo,<span class="w"> </span><span class="nb">test</span>
-</span><span id="__span-43-5"><a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a>Task<span class="w">   </span>Description
-</span><span id="__span-43-6"><a id="__codelineno-43-6" name="__codelineno-43-6" href="#__codelineno-43-6"></a>build<span class="w">  </span>Build<span class="w"> </span>everything
-</span><span id="__span-43-7"><a id="__codelineno-43-7" name="__codelineno-43-7" href="#__codelineno-43-7"></a><span class="nb">echo</span><span class="w">   </span>Friendly<span class="w"> </span>greeting<span class="w"> </span>to<span class="w"> </span>a<span class="w"> </span>Pixi<span class="w"> </span>user
-</span><span id="__span-43-8"><a id="__codelineno-43-8" name="__codelineno-43-8" href="#__codelineno-43-8"></a><span class="nb">test</span><span class="w">   </span>Run<span class="w"> </span>all<span class="w"> </span>tests
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>pixi<span class="w"> </span>task<span class="w"> </span>list
+</span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a>Tasks<span class="w"> </span>that<span class="w"> </span>can<span class="w"> </span>run<span class="w"> </span>on<span class="w"> </span>this<span class="w"> </span>machine:
+</span><span id="__span-46-3"><a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a>-----------------------------------
+</span><span id="__span-46-4"><a id="__codelineno-46-4" name="__codelineno-46-4" href="#__codelineno-46-4"></a>build,<span class="w"> </span>echo,<span class="w"> </span><span class="nb">test</span>
+</span><span id="__span-46-5"><a id="__codelineno-46-5" name="__codelineno-46-5" href="#__codelineno-46-5"></a>Task<span class="w">   </span>Description
+</span><span id="__span-46-6"><a id="__codelineno-46-6" name="__codelineno-46-6" href="#__codelineno-46-6"></a>build<span class="w">  </span>Build<span class="w"> </span>everything
+</span><span id="__span-46-7"><a id="__codelineno-46-7" name="__codelineno-46-7" href="#__codelineno-46-7"></a><span class="nb">echo</span><span class="w">   </span>Friendly<span class="w"> </span>greeting<span class="w"> </span>to<span class="w"> </span>a<span class="w"> </span>Pixi<span class="w"> </span>user
+</span><span id="__span-46-8"><a id="__codelineno-46-8" name="__codelineno-46-8" href="#__codelineno-46-8"></a><span class="nb">test</span><span class="w">   </span>Run<span class="w"> </span>all<span class="w"> </span>tests
 </span></code></pre></div>
 <p>This list can be very helpful to quickly find the right tasks.</p>
 <h3 id="use-different-toml-syntax-for-long-commands">Use different TOML syntax for long commands<a class="headerlink" href="#use-different-toml-syntax-for-long-commands" title="Permanent link">#</a></h3>
 <p>Tasks can get quite long:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-44-1"><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="n">echo-arg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo {{ ARGUMENT }}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[{</span><span class="s2">&quot;arg&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="p">}],</span><span class="w"> </span><span class="n">description</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;Display the given argument&quot;</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="n">echo-arg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo {{ ARGUMENT }}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[{</span><span class="s2">&quot;arg&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="p">}],</span><span class="w"> </span><span class="n">description</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;Display the given argument&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>While it is possible to add line breaks inside the task in your <code>pixi.toml</code> to
 make the task more readable:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-45-1"><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="n">echo-arg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-45-2"><a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a><span class="w">    </span><span class="n">cmd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;echo {{ ARGUMENT }}&quot;</span><span class="err">,</span>
-</span><span id="__span-45-3"><a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="w">    </span><span class="n">args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="s2">&quot;arg&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="p">}]</span><span class="err">,</span>
-</span><span id="__span-45-4"><a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a><span class="w">    </span><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Display the given argument&quot;</span>
-</span><span id="__span-45-5"><a id="__codelineno-45-5" name="__codelineno-45-5" href="#__codelineno-45-5"></a><span class="err">}</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="n">echo-arg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-48-2"><a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="w">    </span><span class="n">cmd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;echo {{ ARGUMENT }}&quot;</span><span class="err">,</span>
+</span><span id="__span-48-3"><a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a><span class="w">    </span><span class="n">args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="s2">&quot;arg&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="p">}]</span><span class="err">,</span>
+</span><span id="__span-48-4"><a id="__codelineno-48-4" name="__codelineno-48-4" href="#__codelineno-48-4"></a><span class="w">    </span><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Display the given argument&quot;</span>
+</span><span id="__span-48-5"><a id="__codelineno-48-5" name="__codelineno-48-5" href="#__codelineno-48-5"></a><span class="err">}</span>
 </span></code></pre></div>
 <p>it will not work in <code>pyproject.toml</code> because it supports only TOML 1.0,
 that doesn't allow line breaks inside the task specification.
 Other tools can't parse the <code>pyproject.toml</code> anymore.
 So if you use an editable dependency:</p>
-<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-46-1"><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="k">[tool.pixi.pypi-dependencies]</span>
-</span><span id="__span-46-2"><a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a><span class="n">myproject</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">editable</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-49-1"><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="k">[tool.pixi.pypi-dependencies]</span>
+</span><span id="__span-49-2"><a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a><span class="n">myproject</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">editable</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>Pixi will use your build system and reports an error:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-47-1"><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>Error:<span class="w">   </span>×<span class="w"> </span>Failed<span class="w"> </span>to<span class="w"> </span>update<span class="w"> </span>PyPI<span class="w"> </span>packages<span class="w"> </span><span class="k">for</span><span class="w"> </span>environment<span class="w"> </span><span class="s1">&#39;default&#39;</span>
-</span><span id="__span-47-2"><a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="w">  </span>├─▶<span class="w"> </span>Failed<span class="w"> </span>to<span class="w"> </span>prepare<span class="w"> </span>distributions
-</span><span id="__span-47-3"><a id="__codelineno-47-3" name="__codelineno-47-3" href="#__codelineno-47-3"></a><span class="w">  </span>├─▶<span class="w"> </span>Failed<span class="w"> </span>to<span class="w"> </span>build<span class="w"> </span><span class="sb">`</span>proj1<span class="w"> </span>@<span class="w"> </span>file:///.../proj1<span class="sb">`</span>
-</span><span id="__span-47-4"><a id="__codelineno-47-4" name="__codelineno-47-4" href="#__codelineno-47-4"></a><span class="w">  </span>├─▶<span class="w"> </span>The<span class="w"> </span>build<span class="w"> </span>backend<span class="w"> </span>returned<span class="w"> </span>an<span class="w"> </span>error
-</span><span id="__span-47-5"><a id="__codelineno-47-5" name="__codelineno-47-5" href="#__codelineno-47-5"></a><span class="w">  </span>╰─▶<span class="w"> </span>Call<span class="w"> </span>to<span class="w"> </span><span class="sb">`</span>hatchling.build.build_editable<span class="sb">`</span><span class="w"> </span>failed<span class="w"> </span><span class="o">(</span><span class="nb">exit</span><span class="w"> </span>status:<span class="w"> </span><span class="m">1</span><span class="o">)</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-50-1"><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>Error:<span class="w">   </span>×<span class="w"> </span>Failed<span class="w"> </span>to<span class="w"> </span>update<span class="w"> </span>PyPI<span class="w"> </span>packages<span class="w"> </span><span class="k">for</span><span class="w"> </span>environment<span class="w"> </span><span class="s1">&#39;default&#39;</span>
+</span><span id="__span-50-2"><a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a><span class="w">  </span>├─▶<span class="w"> </span>Failed<span class="w"> </span>to<span class="w"> </span>prepare<span class="w"> </span>distributions
+</span><span id="__span-50-3"><a id="__codelineno-50-3" name="__codelineno-50-3" href="#__codelineno-50-3"></a><span class="w">  </span>├─▶<span class="w"> </span>Failed<span class="w"> </span>to<span class="w"> </span>build<span class="w"> </span><span class="sb">`</span>proj1<span class="w"> </span>@<span class="w"> </span>file:///.../proj1<span class="sb">`</span>
+</span><span id="__span-50-4"><a id="__codelineno-50-4" name="__codelineno-50-4" href="#__codelineno-50-4"></a><span class="w">  </span>├─▶<span class="w"> </span>The<span class="w"> </span>build<span class="w"> </span>backend<span class="w"> </span>returned<span class="w"> </span>an<span class="w"> </span>error
+</span><span id="__span-50-5"><a id="__codelineno-50-5" name="__codelineno-50-5" href="#__codelineno-50-5"></a><span class="w">  </span>╰─▶<span class="w"> </span>Call<span class="w"> </span>to<span class="w"> </span><span class="sb">`</span>hatchling.build.build_editable<span class="sb">`</span><span class="w"> </span>failed<span class="w"> </span><span class="o">(</span><span class="nb">exit</span><span class="w"> </span>status:<span class="w"> </span><span class="m">1</span><span class="o">)</span>
 </span></code></pre></div>
 <p>There is an alternative syntax, adding the task name to the table header:</p>
-<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-48-1"><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="k">[tool.pixi.tasks.echo-arg]</span>
-</span><span id="__span-48-2"><a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="n">cmd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;echo {{ ARGUMENT }}&quot;</span>
-</span><span id="__span-48-3"><a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a><span class="n">args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="s2">&quot;arg&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="p">}]</span>
-</span><span id="__span-48-4"><a id="__codelineno-48-4" name="__codelineno-48-4" href="#__codelineno-48-4"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Display the given argument&quot;</span>
+<div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-51-1"><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a><span class="k">[tool.pixi.tasks.echo-arg]</span>
+</span><span id="__span-51-2"><a id="__codelineno-51-2" name="__codelineno-51-2" href="#__codelineno-51-2"></a><span class="n">cmd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;echo {{ ARGUMENT }}&quot;</span>
+</span><span id="__span-51-3"><a id="__codelineno-51-3" name="__codelineno-51-3" href="#__codelineno-51-3"></a><span class="n">args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="s2">&quot;arg&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="p">}]</span>
+</span><span id="__span-51-4"><a id="__codelineno-51-4" name="__codelineno-51-4" href="#__codelineno-51-4"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Display the given argument&quot;</span>
 </span></code></pre></div>
 <p>This is valid  TOML 1.0 syntax and makes more complex task better readable.</p>
 
