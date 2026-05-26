@@ -4,9 +4,7 @@ name = "pytorch-conda-forge"
 
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = [
-  { platform = "linux-64", cuda = "12.0" },
-]
+platforms = [{ platform = "linux-64", cuda = "12.0" }]
 
 # --8<-- [start:cuda-version]
 [tool.pixi.dependencies]

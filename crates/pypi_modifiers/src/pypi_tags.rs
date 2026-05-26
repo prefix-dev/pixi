@@ -169,12 +169,12 @@ fn get_macos_platform_tags(
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let osx_version = declared_version(platform.declared_virtual_packages(), "__osx")
         .unwrap_or_else(|| default_mac_os_version(platform.subdir()));
-    let Some((major, minor)) = osx_version.as_major_minor() else {
-        return Err(PyPITagError::FailedToGetMajorMinorVersion(
-            "macos".to_string(),
-            osx_version.to_string(),
-        ));
-    };
+    let (major, minor) = osx_version
+        .as_major_minor()
+        .or_else(|| Some((major_only(&osx_version)?, 0)))
+        .ok_or_else(|| {
+            PyPITagError::FailedToGetMajorMinorVersion("macos".to_string(), osx_version.to_string())
+        })?;
 
     let arch = get_arch_tags(platform)?;
 
@@ -185,6 +185,13 @@ fn get_macos_platform_tags(
         },
         arch,
     ))
+}
+
+/// Single-segment fallback for [`Version::as_major_minor`]: returns the
+/// numeric major when the version has exactly one segment (e.g.
+/// `macos = "15"`), so the caller can default the minor to 0.
+fn major_only(version: &Version) -> Option<u64> {
+    version.segments().next()?.components().next()?.as_number()
 }
 
 /// Get the arch tag for the specified platform
@@ -688,6 +695,25 @@ mod tests {
             res.os(),
             &uv_platform_tags::Os::Macos {
                 major: 14,
+                minor: 0
+            }
+        );
+    }
+
+    /// A single-segment macOS version (`macos = "15"`) is accepted with the
+    /// minor defaulting to 0, instead of failing the pypi-tag build.
+    #[test]
+    fn macos_tag_accepts_major_only_version() {
+        let platform = rich_platform(
+            "macos-15",
+            Platform::OsxArm64,
+            vec![declared("__osx", "15")],
+        );
+        let res = get_macos_platform_tags(&platform).unwrap();
+        assert_eq!(
+            res.os(),
+            &uv_platform_tags::Os::Macos {
+                major: 15,
                 minor: 0
             }
         );
