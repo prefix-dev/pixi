@@ -191,12 +191,14 @@ pixi run run
 ### Mixing ROS with Python ML libraries
 
 ```shell
-# Tell pixi that it can install CUDA dependencies in this workspace
-pixi workspace system-requirements add cuda 12
+# Tell pixi that CUDA 12 is available on the linux-64 build target
+pixi workspace platform add linux-64 --cuda 12
 
 # (re)install ROS and your ML dependencies together
 pixi add ros-humble-desktop pytorch torchvision opencv
 ```
+
+See [`pixi workspace platform`](reference/cli/pixi/workspace/platform.md) for the full list of friendly virtual-package keys (`cuda`, `libc`, `macos`, …) and for editing or removing entries.
 
 ---
 

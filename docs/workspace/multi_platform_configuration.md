@@ -70,6 +70,13 @@ You can also describe a platform as an inline table to pin the
 the solver should treat as available -- for example a CUDA toolkit version or
 a glibc minimum.
 
+!!! info "Replaces `[system-requirements]`"
+    These inline-table entries are the recommended way to declare CUDA, glibc,
+    macOS, archspec, … constraints. The older `[system-requirements]` table
+    still parses but is deprecated; see
+    [Migrating from `[system-requirements]`](./system_requirements.md) for the
+    equivalent forms.
+
 ```toml title="pixi.toml"
 [workspace]
 platforms = [
