@@ -224,9 +224,9 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 
     lock_file_str = lock_file_str.replace(&pkg_version, "0.1.0");
 
-    let lockfile = LockFile::from_str_with_base_directory(&lock_file_str, None).unwrap();
+    let lock_file = LockFile::from_str_with_base_directory(&lock_file_str, None).unwrap();
 
-    lockfile.to_path(&workspace.lock_file_path()).unwrap();
+    lock_file.to_path(&workspace.lock_file_path()).unwrap();
 
     // now run the update command to update conda packages
     // which will invalidate also pypi packages
@@ -300,7 +300,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     let lock = pixi.lock_file().await.unwrap();
 
     // previous lock file
-    let previous_lockfile_str = lock.render_to_string().unwrap();
+    let previous_lock_file_str = lock.render_to_string().unwrap();
 
     // now run the update command to update conda packages
     // which should not trigger any update for the pinned pypi package
@@ -309,10 +309,10 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     // Get the re-locked lock file
     let lock = pixi.lock_file().await.unwrap();
 
-    let new_lockfile_str = lock.render_to_string().unwrap();
+    let new_lock_file_str = lock.render_to_string().unwrap();
 
     assert_eq!(
-        previous_lockfile_str, new_lockfile_str,
+        previous_lock_file_str, new_lock_file_str,
         "expected git pypi package to not be updated when updating conda packages"
     );
 }

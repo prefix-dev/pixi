@@ -8,7 +8,7 @@ Pixi is a **fast, modern, and reproducible** package management tool for develop
 
 ## Highlights
 
-- [🔄 **Reproducibility**](workspace/lockfile.md)  
+- [🔄 **Reproducibility**](workspace/lock_file.md)  
   Isolated, easily recreated environments with lock files built-in
 
 - [🛠️ **Tasks**](workspace/advanced_tasks.md)  

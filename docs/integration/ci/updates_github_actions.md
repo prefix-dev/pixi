@@ -1,8 +1,8 @@
 You can leverage GitHub Actions in combination with [pavelzw/pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown)
 to automatically update your lock files similar to dependabot or renovate in other ecosystems.
 
-![Update lock files](../../assets/update-lockfile-light.png#only-light)
-![Update lock files](../../assets/update-lockfile-dark.png#only-dark)
+![Update lock files](../../assets/update-lock-file-light.png#only-light)
+![Update lock files](../../assets/update-lock-file-dark.png#only-dark)
 
 !!!note "Dependabot/Renovate support for pixi"
     You can track native Dependabot support for pixi in [dependabot/dependabot-core #2227](https://github.com/dependabot/dependabot-core/issues/2227#issuecomment-1709069470).
@@ -11,7 +11,7 @@ to automatically update your lock files similar to dependabot or renovate in oth
 
 To get started, create a new GitHub Actions workflow file in your repository.
 
-```yaml title=".github/workflows/update-lockfiles.yml"
+```yaml title=".github/workflows/update-lock-files.yml"
 name: Update lock files
 
 permissions: # (1)!

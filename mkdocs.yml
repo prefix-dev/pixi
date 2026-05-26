@@ -130,7 +130,7 @@ nav:
       - Tasks: workspace/advanced_tasks.md
       - Multi Platform: workspace/multi_platform_configuration.md
       - Multi Environment: workspace/multi_environment.md
-      - Lock File: workspace/lockfile.md
+      - Lock File: workspace/lock_file.md
       - System Requirements: workspace/system_requirements.md
       - Package Specifications: concepts/package_specifications.md
       - Conda & PyPI: concepts/conda_pypi.md
@@ -238,7 +238,8 @@ plugins:
         "features/advanced_tasks.md": "workspace/advanced_tasks.md"
         "features/multi_platform_configuration.md": "workspace/multi_platform_configuration.md"
         "features/multi_environment.md": "workspace/multi_environment.md"
-        "features/lockfile.md": "workspace/lockfile.md"
+        "features/lock_file.md": "workspace/lock_file.md"
+        "workspace/lockfile.md": "workspace/lock_file.md"
         "features/system_requirements.md": "workspace/system_requirements.md"
         "features/global_tools.md": "global_tools/introduction.md"
         "features/pytorch.md": "python/pytorch.md"

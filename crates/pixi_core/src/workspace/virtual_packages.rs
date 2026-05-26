@@ -91,7 +91,7 @@ pub enum VerifyCurrentPlatformError {
 /// requirements.
 pub fn verify_current_platform_can_run_environment(
     environment: &Environment<'_>,
-    lockfile: Option<&LockFile>,
+    lock_file: Option<&LockFile>,
 ) -> Result<(), VerifyCurrentPlatformError> {
     // When overriding platform skip validation entirely.
     // The host platform wouldn't satisfy the requirements
@@ -113,9 +113,9 @@ pub fn verify_current_platform_can_run_environment(
     }
 
     // If this function is given a lock file we can also compute the ability to run in this environment on the current machine.
-    if let Some(lockfile) = lockfile {
+    if let Some(lock_file) = lock_file {
         validate_system_meets_environment_requirements(
-            lockfile,
+            lock_file,
             current_platform,
             environment.name(),
             None,

@@ -25,7 +25,7 @@ pub async fn list_tasks(
         })
         .transpose()?;
 
-    let lockfile = workspace
+    let lock_file = workspace
         .load_lock_file()
         .await
         .ok()
@@ -42,7 +42,7 @@ pub async fn list_tasks(
                 .environments()
                 .iter()
                 .filter_map(|env| {
-                    if verify_current_platform_can_run_environment(env, lockfile.as_ref()).is_ok() {
+                    if verify_current_platform_can_run_environment(env, lock_file.as_ref()).is_ok() {
                         Some((env.clone(), env.get_filtered_tasks()))
                     } else {
                         None

@@ -610,7 +610,7 @@ async fn install_conda_meta_history() {
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
     ignore
 )]
-async fn minimal_lockfile_update_pypi() {
+async fn minimal_lock_file_update_pypi() {
     setup_tracing();
 
     let pixi = PixiControl::new().unwrap();

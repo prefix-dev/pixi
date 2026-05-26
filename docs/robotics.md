@@ -39,7 +39,7 @@ Use `pixi run` or `pixi shell` to activate the environment and run ROS commands.
 
 - [x] **No system-wide ROS installation** <br>
     All dependencies live in the workspace. New team members clone the repo and run `pixi install`. No more additional setup instructions, no version incompatibilities.
-- [x] **[Reproducible environments](workspace/lockfile.md)** <br>
+- [x] **[Reproducible environments](workspace/lock_file.md)** <br>
     Pixi generates a lock file (`pixi.lock`) that pins every dependency, including transitive ones. The same environment is guaranteed on your laptop, CI, and the robot itself.
 - [x] **[Works on Linux, macOS, and Windows](workspace/multi_platform_configuration.md)** <br>
     RoboStack supports ROS packages for Linux, macOS and Windows. A single `pixi.toml` can declare support for all three platforms simultaneously.

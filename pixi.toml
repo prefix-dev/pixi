@@ -118,6 +118,7 @@ update-rattler = { cmd = "cargo upgrade --incompatible allow -p rattler -p file_
 [feature.dev.tasks.snapshot-update]
 args = [{ "arg" = "expression", "default" = "" }]
 cmd = "pytest --inline-snapshot=fix -k '{{ expression }}'"
+depends-on = ["build-workspace-release"]
 description = "Update inline snapshots for tests matching expression"
 
 [feature.dev.tasks.switch-to-local-rattler]

@@ -50,7 +50,7 @@ pub(super) fn verify_build_source_matches_manifest(
         return Ok(());
     };
 
-    let lockfile_source_location = src_record.build_source.clone();
+    let lock_file_source_location = src_record.build_source.clone();
 
     let ok = Ok(());
     let error = Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
@@ -66,7 +66,7 @@ pub(super) fn verify_build_source_matches_manifest(
 
     match (
         manifest_source_location,
-        lockfile_source_location.map(PinnedBuildSourceSpec::into_pinned),
+        lock_file_source_location.map(PinnedBuildSourceSpec::into_pinned),
     ) {
         (None, None) => ok,
         (Some(SourceLocationSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {

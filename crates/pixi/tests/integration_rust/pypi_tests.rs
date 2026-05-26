@@ -2038,7 +2038,7 @@ test-static-pkg = {{ path = ".", editable = true }}
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
     ignore
 )]
-async fn self_referential_extras_lockfile_roundtrip() {
+async fn self_referential_extras_lock_file_roundtrip() {
     setup_tracing();
 
     let platform = Platform::current();

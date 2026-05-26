@@ -381,7 +381,7 @@ mod tests {
     #[fixture]
     fn ripgrep_records() -> Vec<PackageRecord> {
         let lock = LockFile::from_str_with_base_directory(
-            include_str!("./test_data/lockfiles/ripgrep.lock"),
+            include_str!("./test_data/lock_files/ripgrep.lock"),
             None,
         )
         .unwrap();
@@ -407,7 +407,7 @@ mod tests {
     #[fixture]
     fn ripgrep_bat_records() -> Vec<PackageRecord> {
         let lock = LockFile::from_str_with_base_directory(
-            include_str!("./test_data/lockfiles/ripgrep_bat.lock"),
+            include_str!("./test_data/lock_files/ripgrep_bat.lock"),
             None,
         )
         .unwrap();

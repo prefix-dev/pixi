@@ -1192,7 +1192,7 @@ mod tests {
     }
 
     #[test]
-    fn path_source_downgrades_to_partial_in_lockfile() {
+    fn path_source_downgrades_to_partial_in_lock_file() {
         let record = make_full_record("my-pkg", path_source("./my-pkg"), None, BTreeMap::new());
         let conda_data = record.into_conda_source_data(Path::new("/workspace"));
         assert!(
@@ -1202,7 +1202,7 @@ mod tests {
     }
 
     #[test]
-    fn git_source_stays_full_in_lockfile() {
+    fn git_source_stays_full_in_lock_file() {
         let record = make_full_record("my-pkg", git_source(), None, BTreeMap::new());
         let conda_data = record.into_conda_source_data(Path::new("/workspace"));
         assert!(

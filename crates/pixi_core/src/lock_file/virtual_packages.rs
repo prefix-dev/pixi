@@ -293,12 +293,12 @@ mod test {
     #[test]
     fn test_get_minimal_virtual_packages() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let lockfile_path =
-            root_dir.join("../../tests/data/lockfiles/cuda_virtual_dependency.lock");
-        let lockfile = LockFile::from_path(&lockfile_path).unwrap();
+        let lock_file_path =
+            root_dir.join("../../tests/data/lock_files/cuda_virtual_dependency.lock");
+        let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = Platform::Linux64;
-        let env = lockfile.default_environment().unwrap();
-        let lock_platform = lockfile.platform(&platform.to_string()).unwrap();
+        let env = lock_file.default_environment().unwrap();
+        let lock_platform = lock_file.platform(&platform.to_string()).unwrap();
         let conda_packages = env
             .conda_packages(lock_platform)
             .unwrap()
@@ -322,9 +322,9 @@ mod test {
     #[test]
     fn test_validate_virtual_packages() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let lockfile_path =
-            root_dir.join("../../tests/data/lockfiles/cuda_virtual_dependency.lock");
-        let lockfile = LockFile::from_path(&lockfile_path).unwrap();
+        let lock_file_path =
+            root_dir.join("../../tests/data/lock_files/cuda_virtual_dependency.lock");
+        let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = Platform::Linux64;
 
         // Override the virtual package to a version that is not available on the system
@@ -334,7 +334,7 @@ mod test {
         };
 
         let result = validate_system_meets_environment_requirements(
-            &lockfile,
+            &lock_file,
             platform,
             &EnvironmentName::default(),
             Some(overrides),
@@ -348,7 +348,7 @@ mod test {
         };
 
         let result = validate_system_meets_environment_requirements(
-            &lockfile,
+            &lock_file,
             platform,
             &EnvironmentName::default(),
             Some(overrides),
@@ -359,8 +359,8 @@ mod test {
     #[test]
     fn test_validate_wheel_tags() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let lockfile_path = root_dir.join("../../tests/data/lockfiles/pypi-numpy.lock");
-        let lockfile = LockFile::from_path(&lockfile_path).unwrap();
+        let lock_file_path = root_dir.join("../../tests/data/lock_files/pypi-numpy.lock");
+        let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = Platform::current();
 
         let overrides = VirtualPackageOverrides {
@@ -371,7 +371,7 @@ mod test {
         };
 
         let result = validate_system_meets_environment_requirements(
-            &lockfile,
+            &lock_file,
             platform,
             &EnvironmentName::default(),
             Some(overrides),
@@ -386,7 +386,7 @@ mod test {
         };
 
         let result = validate_system_meets_environment_requirements(
-            &lockfile,
+            &lock_file,
             platform,
             &EnvironmentName::default(),
             Some(overrides),
@@ -460,8 +460,8 @@ mod test {
     #[test]
     fn test_archspec_skip() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let lockfile_path = root_dir.join("../../tests/data/lockfiles/archspec.lock");
-        let lockfile = LockFile::from_path(&lockfile_path).unwrap();
+        let lock_file_path = root_dir.join("../../tests/data/lock_files/archspec.lock");
+        let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = Platform::Linux64;
 
         let overrides = VirtualPackageOverrides {
@@ -471,7 +471,7 @@ mod test {
 
         // validate that the archspec is skipped
         validate_system_meets_environment_requirements(
-            &lockfile,
+            &lock_file,
             platform,
             &EnvironmentName::default(),
             Some(overrides),
@@ -482,9 +482,9 @@ mod test {
     #[test]
     fn test_ignored_virtual_packages() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let lockfile_path =
-            root_dir.join("../../tests/data/lockfiles/ignored_virtual_packages.lock");
-        let lockfile = LockFile::from_path(&lockfile_path).unwrap();
+        let lock_file_path =
+            root_dir.join("../../tests/data/lock_files/ignored_virtual_packages.lock");
+        let lock_file = LockFile::from_path(&lock_file_path).unwrap();
         let platform = Platform::Linux64;
 
         let overrides = VirtualPackageOverrides {
@@ -495,7 +495,7 @@ mod test {
 
         // validate that the ignored virtual packages are skipped
         validate_system_meets_environment_requirements(
-            &lockfile,
+            &lock_file,
             platform,
             &EnvironmentName::default(),
             Some(overrides),

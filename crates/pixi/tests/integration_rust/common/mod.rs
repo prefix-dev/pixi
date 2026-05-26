@@ -477,7 +477,7 @@ impl PixiControl {
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
-                    no_lockfile_update: false,
+                    no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
@@ -516,7 +516,7 @@ impl PixiControl {
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
-                    no_lockfile_update: false,
+                    no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
@@ -535,7 +535,7 @@ impl PixiControl {
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
-                    no_lockfile_update: false,
+                    no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
@@ -557,7 +557,7 @@ impl PixiControl {
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
-                    no_lockfile_update: false,
+                    no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),

@@ -117,12 +117,12 @@ fn render_env_platform(
         env_name,
     ))?;
 
-    let mut conda_packages_from_lockfile: Vec<_> = Vec::new();
+    let mut conda_packages_from_lock_file: Vec<_> = Vec::new();
 
     for package in packages {
         match package {
             LockedPackage::Conda(CondaPackageData::Binary(p)) => {
-                conda_packages_from_lockfile.push(p.clone())
+                conda_packages_from_lock_file.push(p.clone())
             }
             LockedPackage::Conda(CondaPackageData::Source(_)) => {
                 miette::bail!(
@@ -149,7 +149,7 @@ fn render_env_platform(
     }
 
     // Topologically sort packages
-    let repodata = conda_packages_from_lockfile
+    let repodata = conda_packages_from_lock_file
         .into_iter()
         .map(|p| RepoDataRecord::try_from(*p))
         .collect::<Result<Vec<_>, _>>()
@@ -176,7 +176,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config.clone());
 
-    let lockfile = workspace
+    let lock_file = workspace
         .update_lock_file(
             Some(pixi_reporters::TopLevelProgress::from_global()),
             UpdateLockFileOptions {
@@ -195,13 +195,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         for env_name in &env_names {
             environments.push((
                 env_name.to_string(),
-                lockfile
+                lock_file
                     .environment(env_name)
                     .ok_or(miette::miette!("unknown environment {}", env_name))?,
             ));
         }
     } else {
-        for (env_name, env) in lockfile.environments() {
+        for (env_name, env) in lock_file.environments() {
             environments.push((env_name.to_string(), env));
         }
     };
@@ -258,11 +258,11 @@ mod tests {
     fn test_render_conda_explicit_spec() {
         let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
             .join("tests/data/mock-projects/test-project-export/pixi.lock");
-        let lockfile = LockFile::from_path(&path).unwrap();
+        let lock_file = LockFile::from_path(&path).unwrap();
 
         let output_dir = tempdir().unwrap();
 
-        for (env_name, env) in lockfile.environments() {
+        for (env_name, env) in lock_file.environments() {
             for lock_platform in env.platforms() {
                 let platform = lock_platform.subdir();
                 // example contains pypi dependencies so should fail if `ignore_pypi_errors` is
