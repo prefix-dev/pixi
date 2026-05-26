@@ -731,9 +731,8 @@ fn test_installed_registry_required_archive_same_version() {
         InstalledDistOptions::default(),
     );
 
-    let archive_url =
-        Url::parse("https://some-other-registry.org/aiofiles-0.6.0-py3-none-any.whl")
-            .expect("could not parse archive url");
+    let archive_url = Url::parse("https://some-other-registry.org/aiofiles-0.6.0-py3-none-any.whl")
+        .expect("could not parse archive url");
     let required = RequiredPackages::new().add_archive("aiofiles", "0.6.0", archive_url);
 
     let plan = harness::install_planner();
