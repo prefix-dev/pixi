@@ -6215,6 +6215,7 @@ dependencies = [
  "pixi_install_pypi",
  "pixi_manifest",
  "pixi_pypi_spec",
+ "pixi_reporters",
  "pixi_spec",
  "pixi_utils",
  "pixi_uv_conversions",
