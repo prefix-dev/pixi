@@ -40,9 +40,7 @@ pub async fn reinstall<I: Interface>(
         .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Update the prefixes by reinstalling all packages, wiring up the top-level
-    // progress reporter so source builds and package preparation show progress
-    // bars (matching `pixi install`).
+    // Update the prefixes by reinstalling all packages
     get_update_lock_file_and_prefixes(
         &environments,
         Some(pixi_reporters::TopLevelProgress::from_global()),
@@ -58,10 +56,7 @@ pub async fn reinstall<I: Interface>(
     )
     .await?;
 
-    let installed_envs: Vec<_> = environments
-        .iter()
-        .map(|env| env.name().clone())
-        .collect();
+    let installed_envs: Vec<_> = environments.iter().map(|env| env.name().clone()).collect();
 
     // Message what's installed
     let detached_envs_message =
