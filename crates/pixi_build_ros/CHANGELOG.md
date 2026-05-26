@@ -1,3 +1,9 @@
+## [0.5.0](https://github.com/greenroom-robotics/pixi/compare/pixi-build-ros-gr@0.4.1...pixi-build-ros-gr@0.5.0) (2026-05-26)
+
+### Features
+
+* ament python builds default to noarch ([#5](https://github.com/greenroom-robotics/pixi/issues/5)) ([f4b4cda](https://github.com/greenroom-robotics/pixi/commit/f4b4cda52ec873329bc9bf19d33062d9ee3a5dbc))
+
 ## [0.4.1](https://github.com/greenroom-robotics/pixi/compare/pixi-build-ros-gr@0.4.0...pixi-build-ros-gr@0.4.1) (2026-05-25)
 
 ### Bug Fixes
