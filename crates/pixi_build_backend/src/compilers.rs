@@ -175,7 +175,10 @@ pub fn add_stdlib_to_requirements(
         .unique()
     {
         let stdlib_key = format!("{stdlib}_stdlib");
-        if !variants.contains(&NormalizedKey(stdlib_key)) {
+        let stdlib_version_key = format!("{stdlib}_stdlib_version");
+        if !variants.contains(&NormalizedKey(stdlib_key))
+            && !variants.contains(&NormalizedKey(stdlib_version_key))
+        {
             continue;
         }
 

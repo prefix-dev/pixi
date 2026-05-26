@@ -751,4 +751,51 @@ mod tests {
             "Default stdlib should be c"
         );
     }
+
+    #[tokio::test]
+    async fn test_stdlib_is_added_from_version_key() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        let generated_recipe = CMakeGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &CMakeBackendConfig {
+                    compilers: None,
+                    ..Default::default()
+                },
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::from_iter([NormalizedKey("c_stdlib_version".into())]),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let build_reqs = &generated_recipe.recipe.requirements.build;
+        let stdlib_templates: Vec<String> = build_reqs
+            .iter()
+            .filter_map(|item| match item {
+                Item::Value(value) => value
+                    .as_template()
+                    .filter(|t| t.to_string().contains("stdlib"))
+                    .map(|t| t.to_string()),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            stdlib_templates.len(),
+            1,
+            "Should have exactly one stdlib when only version key is set"
+        );
+        assert_eq!(
+            stdlib_templates[0], "${{ stdlib('c') }}",
+            "Default stdlib should be c"
+        );
+    }
 }
