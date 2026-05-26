@@ -22,7 +22,7 @@ use pixi_core::{
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
-use pixi_manifest::{FeaturesExt, TaskName};
+use pixi_manifest::TaskName;
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -158,12 +158,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // install/activate. Without installs we skip environment activation,
     // so platform doesn't matter.
     if args.lock_and_install_config.allow_installs() && best_platform.is_none() {
-        return Err(UnsupportedPlatformError {
-            environments_platforms: environment.platforms().into_iter().collect(),
-            environment: environment.name().clone(),
-            platform: rattler_conda_types::Platform::current(),
-        }
-        .into());
+        return Err(environment.unsupported_platform_error().into());
     }
 
     if args.lock_and_install_config.allow_installs() {

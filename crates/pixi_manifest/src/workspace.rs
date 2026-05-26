@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use indexmap::{IndexMap, IndexSet};
 use pixi_pypi_spec::PypiPackageName;
@@ -136,16 +139,7 @@ impl Workspace {
         current: Platform,
         system_virtual_packages: &[GenericVirtualPackage],
     ) -> Vec<&PixiPlatform> {
-        let mut candidate_subdirs: Vec<Platform> = vec![current];
-        if current.is_osx() && current != Platform::Osx64 {
-            candidate_subdirs.push(Platform::Osx64);
-        }
-        if current.is_windows() && current != Platform::Win64 {
-            candidate_subdirs.push(Platform::Win64);
-        }
-        if current == Platform::Win64 {
-            candidate_subdirs.push(Platform::Win32);
-        }
+        let candidate_subdirs = self.candidate_subdirs(current);
 
         let satisfies_system = |p: &&PixiPlatform| {
             p.declared_virtual_packages()
@@ -175,6 +169,57 @@ impl Workspace {
         }
 
         result
+    }
+
+    /// Subdirs pixi will consider when matching the host platform: `current`
+    /// plus the same architecture fallbacks used by
+    /// [`Self::possible_pixi_platforms`].
+    pub fn candidate_subdirs(&self, current: Platform) -> Vec<Platform> {
+        let mut candidate_subdirs: Vec<Platform> = vec![current];
+        if current.is_osx() && current != Platform::Osx64 {
+            candidate_subdirs.push(Platform::Osx64);
+        }
+        if current.is_windows() && current != Platform::Win64 {
+            candidate_subdirs.push(Platform::Win64);
+        }
+        if current == Platform::Win64 {
+            candidate_subdirs.push(Platform::Win32);
+        }
+        candidate_subdirs
+    }
+
+    /// Declared virtual packages from `env_platforms` whose host subdir
+    /// matches `current` but whose requirement is not provided by
+    /// `system_virtual_packages`. Powers the
+    /// [`Self::possible_pixi_platforms`]-returns-nothing diagnostic, so the
+    /// caller can tell the user which VPs to mock via `CONDA_OVERRIDE_*`.
+    pub fn unsatisfied_platform_requirements(
+        &self,
+        current: Platform,
+        system_virtual_packages: &[GenericVirtualPackage],
+        env_platforms: &HashSet<PixiPlatformName>,
+    ) -> Vec<GenericVirtualPackage> {
+        let candidate_subdirs = self.candidate_subdirs(current);
+        let mut unsatisfied: Vec<GenericVirtualPackage> = Vec::new();
+        for subdir in &candidate_subdirs {
+            for platform in self
+                .platforms
+                .iter()
+                .filter(|p| p.subdir() == *subdir)
+                .filter(|p| env_platforms.contains(p.name()))
+            {
+                for declared in platform.declared_virtual_packages() {
+                    if !satisfied_by_system(declared, system_virtual_packages)
+                        && !unsatisfied
+                            .iter()
+                            .any(|u| u.name == declared.name && u.version == declared.version)
+                    {
+                        unsatisfied.push(declared.clone());
+                    }
+                }
+            }
+        }
+        unsatisfied
     }
 }
 

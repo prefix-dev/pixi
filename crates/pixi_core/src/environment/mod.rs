@@ -15,7 +15,6 @@ pub use pixi_python_status::PythonStatus;
 use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::EnvironmentFingerprint;
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
-use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackage};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -31,10 +30,7 @@ use crate::workspace;
 use crate::{
     Workspace,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
-    workspace::{
-        Environment, HasWorkspaceRef, errors::UnsupportedPlatformError,
-        grouped_environment::GroupedEnvironment,
-    },
+    workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 
 /// Verify the location of the prefix folder is not changed so the applied
@@ -645,12 +641,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     let no_install = update_lock_file_options.no_install;
     for env in environments {
         if !no_install && env.best_platform().is_none() {
-            return Err(UnsupportedPlatformError {
-                environments_platforms: env.platforms().into_iter().collect(),
-                environment: env.name().clone(),
-                platform: Platform::current(),
-            }
-            .into());
+            return Err(env.unsupported_platform_error().into());
         }
         if !no_install {
             env.emit_emulation_warning();

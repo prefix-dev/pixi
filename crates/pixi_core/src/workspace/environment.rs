@@ -168,6 +168,26 @@ impl<'p> Environment<'p> {
             .fallback_platform(current_platform_with_override())
     }
 
+    /// Builds an [`UnsupportedPlatformError`] for the case where
+    /// [`Self::best_platform`] has just returned `None`, diagnosing which
+    /// virtual packages declared by the workspace's host-subdir platforms
+    /// this machine doesn't provide so the user can see what to mock.
+    pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
+        let current = current_platform_with_override();
+        let system_virtual_packages = detect_system_virtual_packages();
+        let env_platforms = self.platforms();
+        let unsatisfied_requirements = self
+            .workspace_manifest()
+            .workspace
+            .unsatisfied_platform_requirements(current, &system_virtual_packages, &env_platforms);
+        UnsupportedPlatformError {
+            environments_platforms: env_platforms.into_iter().collect(),
+            environment: self.name().clone(),
+            platform: current,
+            unsatisfied_requirements,
+        }
+    }
+
     /// Emits a one-time warning if this environment requires platform emulation
     /// (e.g. Rosetta on Apple Silicon Macs).
     ///
@@ -347,6 +367,7 @@ impl<'p> Environment<'p> {
                 environments_platforms: self.platforms().into_iter().collect(),
                 environment: self.name().clone(),
                 platform: platform.subdir(),
+                unsatisfied_requirements: Vec::new(),
             });
         }
 

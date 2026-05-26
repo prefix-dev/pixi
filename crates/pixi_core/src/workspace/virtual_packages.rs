@@ -2,12 +2,11 @@ use crate::lock_file::virtual_packages::{
     MachineValidationError, validate_system_meets_environment_requirements,
 };
 use crate::workspace::{Environment, errors::UnsupportedPlatformError};
-use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_default_versions::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
 };
-use pixi_manifest::{FeaturesExt, PixiPlatform};
+use pixi_manifest::PixiPlatform;
 use rattler_conda_types::{GenericVirtualPackage, Version};
 use rattler_lock::LockFile;
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
@@ -108,11 +107,7 @@ pub fn verify_current_platform_can_run_environment(
 
     let Some(current_platform) = environment.best_platform() else {
         return Err(VerifyCurrentPlatformError::from(Box::new(
-            UnsupportedPlatformError {
-                environments_platforms: environment.platforms().into_iter().collect_vec(),
-                platform: rattler_conda_types::Platform::current(),
-                environment: environment.name().clone(),
-            },
+            environment.unsupported_platform_error(),
         )));
     };
 
