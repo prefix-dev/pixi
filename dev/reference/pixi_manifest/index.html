@@ -6104,7 +6104,10 @@ Think for example of Python SDL2 bindings depending on the C library: SDL2.
 To help built these dependencies we activate the conda environment that includes these pypi dependencies before resolving.
 This way when a source distribution depends on <code>gcc</code> for example, it's used from the conda environment instead of the system.</p>
 <h2 id="the-activation-table">The <code>activation</code> table<a class="headerlink" href="#the-activation-table" title="Permanent link">#</a></h2>
-<p>The activation table is used for specialized activation operations that need to be run when the environment is activated.</p>
+<p>The activation table is used for specialized activation operations that need to be run when the environment is activated.
+As with other top level tables, <code>[activation]</code> belongs to the <code>default</code> feature.
+Therefore, every environment that doesn't set <code>no-default-feature = true</code> includes that activation script.
+To set activation scripts or variables for only some environments, put them on a feature (<code>[feature.&lt;name&gt;.activation]</code>) and add that feature to the relevant entries in <code>[environments]</code>.</p>
 <p>There are two types of activation operations a user can modify in the manifest:</p>
 <ul>
 <li><code>scripts</code>: A list of scripts that are run when the environment is activated.</li>
@@ -6123,7 +6126,8 @@ modification to the environment will be ignored.</p>
 This means that it runs as <code>cmd.exe</code> on windows and <code>bash</code> on linux and osx (Unix).
 Only <code>.sh</code>, <code>.bash</code> and <code>.bat</code> files are supported.</p>
 <p>And the environment variables are set in the shell that is running the activation script, thus take note when using e.g. <code>$</code> or <code>%</code>.</p>
-<p>If you have scripts or env variable per platform use the <a href="#the-target-table">target</a> table.</p>
+<p>If you have scripts or env variable per platform use the <a href="#the-target-table">target</a> table.
+If you need them per environment, define them on a feature and include that feature in the desired environments (see <a href="../../workspace/multi_environment/">the multi-environment guide</a>).</p>
 </div>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-60-1"><a id="__codelineno-60-1" name="__codelineno-60-1" href="#__codelineno-60-1"></a><span class="k">[activation]</span>
 </span><span id="__span-60-2"><a id="__codelineno-60-2" name="__codelineno-60-2" href="#__codelineno-60-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;env_setup.sh&quot;</span><span class="p">]</span>
