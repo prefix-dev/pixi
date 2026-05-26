@@ -13,7 +13,7 @@ use pixi_build_backend::generated_recipe::{DefaultMetadataProvider, GeneratedRec
 use pixi_build_types::{ProjectModel, Target};
 use rattler_build_jinja::JinjaTemplate;
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, NoArchType, Platform};
 use thiserror::Error;
 
 use crate::build_script::render_build_script;
@@ -148,6 +148,14 @@ pub async fn generate(
         .build_type
         .ok_or(PixiNativeError::BuildTypeRequired)?;
 
+    // Default ament_python packages to noarch unless the user explicitly opts out.
+    // Other build types remain platform-specific unless the user explicitly opts in.
+    let is_noarch = match (config.noarch, build_type) {
+        (Some(v), _) => v,
+        (None, RosBuildType::AmentPython) => true,
+        (None, _) => false,
+    };
+
     if !config.extra_package_mappings.is_empty() {
         tracing::warn!(
             "extra-package-mappings is set but mode is pixi-native; the mappings will be ignored"
@@ -178,7 +186,11 @@ pub async fn generate(
     let mut run_items: Vec<Item<SerializableMatchSpec>> = Vec::new();
 
     // Standard build deps (linux subset of existing flow).
-    for dep in [
+    // On noarch, the build runs once on the build-platform runner and produces
+    // an arch-independent artifact, so the C/C++ toolchain and OS-specific
+    // shims are irrelevant — emitting them forces a compiler-variant axis
+    // through the recipe for no reason.
+    let mut common_build_deps: Vec<&str> = vec![
         "cmake",
         "ninja",
         "python",
@@ -186,14 +198,17 @@ pub async fn generate(
         "git",
         "git-lfs",
         "cpython",
-        "patch",
-        "make",
-        "coreutils",
-    ] {
+    ];
+    if !is_noarch {
+        common_build_deps.extend(["patch", "make", "coreutils"]);
+    }
+    for dep in common_build_deps {
         build_items.push(spec(dep));
     }
-    build_items.push(template_value("${{ compiler('c') }}"));
-    build_items.push(template_value("${{ compiler('cxx') }}"));
+    if !is_noarch {
+        build_items.push(template_value("${{ compiler('c') }}"));
+        build_items.push(template_value("${{ compiler('cxx') }}"));
+    }
 
     // ament_cargo wants the rust toolchain plus the cargo-ament-build wrapper.
     // The C-side libs (rcl + msg packages) are also injected here because the
@@ -300,6 +315,11 @@ pub async fn generate(
 
     if let Some(n) = config.build_number {
         generated.recipe.build.number = Some(Value::new_concrete(n, None));
+    }
+
+    if is_noarch {
+        generated.recipe.build.noarch =
+            Some(Value::new_concrete(NoArchType::python(), None));
     }
 
     // Add input globs the cache invalidator should watch. Pixi-native mode
