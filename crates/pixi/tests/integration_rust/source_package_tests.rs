@@ -489,13 +489,13 @@ test-build-source = {{ path = "." }}
 }
 
 /// Verifies that the workspace exclude-newer cutoff propagates into
-/// the source package's build-dependency solve during lockfile
+/// the source package's build-dependency solve during lock file
 /// update.
 ///
 /// Currently ignored: with the SourceBuildKey migration, nested
 /// build/host solves are expected to happen upstream in the
 /// orchestrator (ResolveSourcePackageKey → SolvePixiEnvironmentKey),
-/// but the PassthroughBackend fixture produces a lockfile where
+/// but the PassthroughBackend fixture produces a lock file where
 /// build_packages stays empty even though the package manifest lists
 /// a build-dependency on `foo`. Re-enable once the orchestrator-side
 /// nested-solve path has been audited end-to-end for exclude_newer
@@ -1247,7 +1247,7 @@ dep-a = ">=1.0"
 ///
 /// This is the integration mirror of the unit-level
 /// `verify_locked_run_deps_detects_constrain_removal` test: same shape
-/// of drift, but driven through the real backend / build / lockfile
+/// of drift, but driven through the real backend / build / lock file
 /// pipeline instead of synthesised inputs.
 #[tokio::test]
 async fn test_host_run_export_constraint_removal_invalidates_lock_file() {
@@ -2022,7 +2022,7 @@ fn collect_source_dep_versions(
     use std::path::Path;
 
     let resolver =
-        LockFileResolver::build(lock_file, Path::new("/")).expect("lockfile must resolve cleanly");
+        LockFileResolver::build(lock_file, Path::new("/")).expect("lock file must resolve cleanly");
     let mut out = Vec::new();
     for (_env_name, env) in lock_file.environments() {
         for (_platform, packages) in env.packages_by_platform() {
@@ -2080,10 +2080,10 @@ async fn test_source_timestamp_changes_when_source_metadata_changes() {
 }
 
 /// `pixi update sdl2` must invalidate `sdl2` everywhere it appears in
-/// the lockfile, including inside source records' `host_packages`
+/// the lock file, including inside source records' `host_packages`
 /// arrays. Today only the top-level locked package is relaxed; the
 /// stale copy of `sdl2` inside `my-package.host_packages` survives
-/// the relaxation pass, leaving the lockfile in an inconsistent
+/// the relaxation pass, leaving the lock file in an inconsistent
 /// state.
 ///
 /// Setup: `sdl2` v2.26.5 is the only version in the channel; the
@@ -2555,9 +2555,9 @@ backend.version = "0.1.0"
 ///
 /// In pixi 0.68.0 the `SourceBuildKey` pipeline forwarded only the recipe's
 /// raw `output.run_dependencies` to the build backend, skipping the
-/// `extend_with_run_exports_from_build_and_host` merge step that the lockfile
+/// `extend_with_run_exports_from_build_and_host` merge step that the lock file
 /// resolution path uses. This caused the built package's `depends` to come
-/// back empty even though the lockfile recorded the correct dependencies.
+/// back empty even though the lock file recorded the correct dependencies.
 ///
 /// The test exercises the end-to-end path: it puts a mock host package with
 /// run-exports in a local channel, builds a source package that uses it as a

@@ -24,10 +24,10 @@ pixi [OPTIONS] [COMMAND]
 | [`info`](pixi/info.md) | Information about the system, workspace and environments for the current machine |
 | [`init`](pixi/init.md) | Creates a new workspace |
 | [`import`](pixi/import.md) | Imports a file into an environment in an existing workspace. |
-| [`install`](pixi/install.md) | Install an environment, both updating the lockfile and installing the environment |
+| [`install`](pixi/install.md) | Install an environment, both updating the lock file and installing the environment |
 | [`list`](pixi/list.md) | List the packages of the current workspace |
 | [`lock`](pixi/lock.md) | Solve environment and update the lock file without installing the environments |
-| [`reinstall`](pixi/reinstall.md) | Re-install an environment, both updating the lockfile and re-installing the environment |
+| [`reinstall`](pixi/reinstall.md) | Re-install an environment, both updating the lock file and re-installing the environment |
 | [`publish`](pixi/publish.md) | Build a conda package and publish it to a channel. |
 | [`remove`](pixi/remove.md) | Removes dependencies from the workspace |
 | [`run`](pixi/run.md) | Runs task in the pixi environment |
@@ -38,7 +38,7 @@ pixi [OPTIONS] [COMMAND]
 | [`task`](pixi/task.md) | Interact with tasks in the workspace |
 | [`tree`](pixi/tree.md) | Show a tree of workspace dependencies |
 | [`update`](pixi/update.md) | The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly |
-| [`upgrade`](pixi/upgrade.md) | Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file |
+| [`upgrade`](pixi/upgrade.md) | Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file |
 | [`upload`](pixi/upload.md) | Upload conda packages to various channels |
 | [`workspace`](pixi/workspace.md) | Modify the workspace configuration file through the command line |
 

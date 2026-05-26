@@ -55,7 +55,7 @@ struct CachedFile {
 /// existing serde derives directly because
 /// [`SourceRecord`](pixi_record::SourceRecord) marks
 /// `build_packages` / `host_packages` as `#[serde(skip)]` (the
-/// canonical lockfile encodes those via index references on a
+/// canonical lock file encodes those via index references on a
 /// separate side table). Our cache needs the full tree per file, so
 /// we mirror the shape with the slices included.
 #[derive(Serialize, Deserialize)]

@@ -306,7 +306,7 @@ impl UnresolvedPixiRecord {
 /// Register a source record's `build_packages` / `host_packages` into
 /// `builder` (recursively) and build a [`SourceData`] referencing the
 /// resulting handles. Leaves `source` with empty build/host package vecs —
-/// the canonical form lives in the lockfile from this point on.
+/// the canonical form lives in the lock file from this point on.
 fn register_source_deps<D>(
     builder: &mut LockFileBuilder,
     source: &mut source_record::SourceRecord<D>,

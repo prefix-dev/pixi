@@ -77,7 +77,7 @@ pub(super) fn verify_build_source_matches_manifest(
             Some(PinnedSourceSpec::Git(mut lgit_spec)),
         ) => {
             // Ignore subdirectory for comparison, they should not
-            // trigger lockfile invalidation.
+            // trigger lock file invalidation.
             mgit_spec.subdirectory = Default::default();
             lgit_spec.source.subdirectory = Default::default();
 
@@ -434,9 +434,9 @@ fn diff_dep_sequences(locked: &[String], expected: &[String]) -> Result<(), DepD
 /// sequences.
 #[derive(Debug)]
 struct DepDiff {
-    /// Specs the backend now declares but the lockfile lacks.
+    /// Specs the backend now declares but the lock file lacks.
     added: Vec<String>,
-    /// Specs the lockfile carries but the backend no longer declares.
+    /// Specs the lock file carries but the backend no longer declares.
     removed: Vec<String>,
 }
 
@@ -530,7 +530,7 @@ impl<'a> LockedConda<'a> {
     /// caller's `name` is the source of truth.
     ///
     /// Locked partial source records match by name only: their
-    /// version/build aren't materialized in the lockfile, but they
+    /// version/build aren't materialized in the lock file, but they
     /// will be re-evaluated when the solver runs, so accepting them
     /// here avoids spurious unsat for the deferred case.
     fn satisfies_binary(&self, name: &PackageName, spec: &NamelessMatchSpec) -> bool {
@@ -725,7 +725,7 @@ fn build_full_source_record_from_output(
     use rattler_conda_types::PackageRecord;
 
     // Reuse the locked record's resolved depends/constrains when
-    // available. For a partial-only record the lockfile carried
+    // available. For a partial-only record the lock file carried
     // `depends` but not `constrains`, so default constrains to empty.
     let (depends, constrains): (Vec<String>, Vec<String>) = match &record.data {
         SourceRecordData::Full(full) => (

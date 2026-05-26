@@ -128,7 +128,7 @@ fn render_env_platform(
                 miette::bail!(
                     "Conda source packages are not supported in a conda explicit spec. \
                         Specify `--ignore-source-errors` to ignore this error and create \
-                        a spec file containing only the binary conda dependencies from the lockfile."
+                        a spec file containing only the binary conda dependencies from the lock file."
                 );
             }
             LockedPackage::Pypi(pypi) => {
@@ -141,7 +141,7 @@ fn render_env_platform(
                     miette::bail!(
                         "PyPI packages are not supported in a conda explicit spec. \
                         Specify `--ignore-pypi-errors` to ignore this error and create \
-                        a spec file containing only the conda dependencies from the lockfile."
+                        a spec file containing only the conda dependencies from the lock file."
                     );
                 }
             }

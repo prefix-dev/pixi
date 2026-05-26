@@ -1,8 +1,8 @@
 You can leverage GitHub Actions in combination with [pavelzw/pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown)
-to automatically update your lockfiles similar to dependabot or renovate in other ecosystems.
+to automatically update your lock files similar to dependabot or renovate in other ecosystems.
 
-![Update lockfiles](../../assets/update-lockfile-light.png#only-light)
-![Update lockfiles](../../assets/update-lockfile-dark.png#only-dark)
+![Update lock files](../../assets/update-lockfile-light.png#only-light)
+![Update lock files](../../assets/update-lockfile-dark.png#only-dark)
 
 !!!note "Dependabot/Renovate support for pixi"
     You can track native Dependabot support for pixi in [dependabot/dependabot-core #2227](https://github.com/dependabot/dependabot-core/issues/2227#issuecomment-1709069470).
@@ -12,7 +12,7 @@ to automatically update your lockfiles similar to dependabot or renovate in othe
 To get started, create a new GitHub Actions workflow file in your repository.
 
 ```yaml title=".github/workflows/update-lockfiles.yml"
-name: Update lockfiles
+name: Update lock files
 
 permissions: # (1)!
   contents: write
@@ -32,7 +32,7 @@ jobs:
         uses: prefix-dev/setup-pixi@v0.8.3
         with:
           run-install: false
-      - name: Update lockfiles
+      - name: Update lock files
         run: |
           set -o pipefail
           pixi update --json | pixi exec pixi-diff-to-markdown >> diff.md
@@ -40,8 +40,8 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: Update pixi lockfile
-          title: Update pixi lockfile
+          commit-message: Update pixi lock file
+          title: Update pixi lock file
           body-path: diff.md
           branch: update-pixi
           base: main

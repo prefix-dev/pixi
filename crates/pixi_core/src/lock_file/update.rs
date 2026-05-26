@@ -393,7 +393,7 @@ impl Workspace {
         Ok((lock_file_derived_data, true))
     }
 
-    /// Loads the lockfile for the workspace or returns an appropriate enum variant.
+    /// Loads the lock file for the workspace or returns an appropriate enum variant.
     ///
     /// Returns:
     /// - `LockFileLoadResult::Loaded(lock_file)` if the lock file was successfully loaded
@@ -438,9 +438,9 @@ impl Workspace {
 
 #[derive(Debug, Error, Diagnostic)]
 enum UpdateError {
-    #[error("the lockfile is not up-to-date with requested environment: '{}'", .0.fancy_display())]
+    #[error("the lock file is not up-to-date with requested environment: '{}'", .0.fancy_display())]
     LockFileMissingEnv(EnvironmentName),
-    #[error("some information from the lockfile could not be parsed")]
+    #[error("some information from the lock file could not be parsed")]
     ParseLockFileError(#[from] ParseLockFileError),
 }
 
@@ -1190,7 +1190,7 @@ impl LazyEnvironmentVariables for LazyPixiEnvironmentVars<'_> {
     }
 }
 
-/// The result of applying an InstallFilter over the lockfile for a given
+/// The result of applying an InstallFilter over the lock file for a given
 /// environment, expressed as just package names.
 #[derive(Default)]
 pub struct PackageFilterNames {

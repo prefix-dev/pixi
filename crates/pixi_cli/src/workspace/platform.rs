@@ -54,13 +54,13 @@ pub struct RemoveArgs {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    /// Adds a platform(s) to the workspace file and updates the lockfile.
+    /// Adds a platform(s) to the workspace file and updates the lock file.
     #[clap(visible_alias = "a")]
     Add(AddArgs),
     /// List the platforms in the workspace file.
     #[clap(visible_alias = "ls")]
     List,
-    /// Remove platform(s) from the workspace file and updates the lockfile.
+    /// Remove platform(s) from the workspace file and updates the lock file.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
 }

@@ -116,7 +116,7 @@ impl EnvironmentHash {
     ///
     /// Used for **task** caching: a task's cached result is keyed on
     /// inputs the user can change without going through an install
-    /// (manifest, lockfile, env vars, activation scripts), so this
+    /// (manifest, lock file, env vars, activation scripts), so this
     /// flavour folds locked package URLs into the hash directly.
     ///
     /// The activation cache uses [`Self::for_activation`] instead —

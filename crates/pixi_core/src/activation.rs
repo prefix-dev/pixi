@@ -651,7 +651,7 @@ mod tests {
         );
     }
 
-    /// Test that the activation cache is created and used correctly based on the lockfile.
+    /// Test that the activation cache is created and used correctly based on the lock file.
     ///
     /// Validates that the activation cache:
     /// - is not written without an install fingerprint marker;

@@ -95,7 +95,7 @@ Pixi will always create a lock file when the dependencies are solved.
 This file will contain all the exact versions of the workspace's dependencies (and their dependencies).
 This results in a reproducible environment, which you can share with others, and use for testing and deployment.
 
-The lockfile is called `pixi.lock` and it is created in the root of the workspace.
+The lock file is called `pixi.lock` and it is created in the root of the workspace.
 To learn more about lock files, see [our detailed lock file documentation](./workspace/lockfile.md).
 
 ```yaml title="pixi.lock"

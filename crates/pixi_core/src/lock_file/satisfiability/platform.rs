@@ -192,14 +192,14 @@ pub async fn verify_platform_satisfiability(
                 let needs_backend_check = record.data.is_partial() || record.has_mutable_source();
                 if needs_backend_check {
                     // Partial records carry no version/build material in
-                    // the lockfile, so they must be resolved from the
+                    // the lock file, so they must be resolved from the
                     // backend. Mutable sources (path-based, or with a
                     // path-based build source) must also re-evaluate via
                     // the backend because the manifest can change without
-                    // any lockfile-visible signal — there is no
+                    // any lock file-visible signal — there is no
                     // content-pinned identifier we can use to detect
                     // edits to e.g. host-dependencies. Skipping the
-                    // backend here would silently accept stale lockfiles.
+                    // backend here would silently accept stale lock files.
                     let resolved =
                         verify_partial_source_record_against_backend(ctx, &platform_setup, &record)
                             .await?;
@@ -519,7 +519,7 @@ async fn verify_package_platform_satisfiability(
     // Indexes the lock file was resolved against. Authoritative because
     // `verify_pypi_indexes` already confirmed they match the manifest. A
     // locked package URL must be one of these to satisfy a requirement
-    // with no per-package `index`. None for pre-v7 lockfiles.
+    // with no per-package `index`. None for pre-v7 lock files.
     let locked_indexes: &[url::Url] = locked_pypi_indexes
         .map(|i| i.indexes.as_slice())
         .unwrap_or(&[]);

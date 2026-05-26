@@ -104,10 +104,10 @@ pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<
 }
 
 pub trait LockFileExt {
-    /// Check if this package is contained in the lockfile
+    /// Check if this package is contained in the lock file
     fn contains_conda_package(&self, environment: &str, platform: Platform, name: &str) -> bool;
     fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool;
-    /// Check if this matchspec is contained in the lockfile
+    /// Check if this matchspec is contained in the lock file
     fn contains_match_spec(
         &self,
         environment: &str,
@@ -115,7 +115,7 @@ pub trait LockFileExt {
         match_spec: impl IntoMatchSpec,
     ) -> bool;
 
-    /// Check if the pep508 requirement is contained in the lockfile for this
+    /// Check if the pep508 requirement is contained in the lock file for this
     /// platform
     fn contains_pep508_requirement(
         &self,

@@ -24,7 +24,7 @@ use xxhash_rust::xxh3::Xxh3;
 /// Content fingerprint of every record installed into a prefix.
 ///
 /// Computed from the installed records' per-record sha256s
-/// (binaries from the lockfile + built source-build artifacts whose
+/// (binaries from the lock file + built source-build artifacts whose
 /// sha256 is recorded in the artifact-cache sidecar). The names are
 /// folded in too so two distinct packages that happen to share a
 /// sha256 don't collide, and inputs are sorted so insertion order

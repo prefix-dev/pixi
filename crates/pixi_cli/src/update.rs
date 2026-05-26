@@ -34,7 +34,7 @@ pub struct Args {
     #[arg(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
-    /// Don't actually write the lockfile or update any environment.
+    /// Don't actually write the lock file or update any environment.
     #[clap(short = 'n', long)]
     pub dry_run: bool,
 

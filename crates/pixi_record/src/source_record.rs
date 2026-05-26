@@ -821,7 +821,7 @@ mod tests {
 
     /// Round-trip a lock file whose conda source package carries build and
     /// host package handles. Uses [`LockFileResolver`] to rebuild records
-    /// with their build/host packages populated from the lockfile's package
+    /// with their build/host packages populated from the lock file's package
     /// table, then writes them back via [`UnresolvedPixiRecord::into_conda_package_data`]
     /// — the path that should serialize the handles again. A diff against
     /// the fixture fails if the round-trip drops build/host information.

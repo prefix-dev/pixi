@@ -112,7 +112,7 @@ pub fn verify_current_platform_can_run_environment(
         )));
     }
 
-    // If this function is given a lockfile we can also compute the ability to run in this environment on the current machine.
+    // If this function is given a lock file we can also compute the ability to run in this environment on the current machine.
     if let Some(lockfile) = lockfile {
         validate_system_meets_environment_requirements(
             lockfile,

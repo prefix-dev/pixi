@@ -299,7 +299,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     // Get the created lock file
     let lock = pixi.lock_file().await.unwrap();
 
-    // previous lockfile
+    // previous lock file
     let previous_lockfile_str = lock.render_to_string().unwrap();
 
     // now run the update command to update conda packages

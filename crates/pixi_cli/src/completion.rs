@@ -299,7 +299,7 @@ _arguments "${_arguments_options[@]}" \
 '--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
 '--color=[Whether the log needs to be colored]:COLOR:(always never auto)' \
 '(--frozen)--locked[Require pixi.lock is up-to-date]' \
-'(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lockfile states]' \
+'(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lock file states]' \
 '*-v[More output per occurrence]' \
 '*--verbose[More output per occurrence]' \
 '(-v --verbose)*-q[Less output per occurrence]' \
@@ -401,8 +401,8 @@ _arguments "${_arguments_options[@]}" \
     ...task: string@"nu-complete pixi run"           # The pixi task or a task shell command you want to run in the project's environment, which can be an executable in the environment's PATH
     --manifest-path: string   # The path to `pixi.toml`, `pyproject.toml`, or the project directory
     --no-lockfile-update      # Legacy flag, do not use, will be removed in subsequent version
-    --frozen                  # Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-    --locked                  # Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+    --frozen                  # Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
+    --locked                  # Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
     --no-install              # Don't modify the environment, only modify the lock file
     --tls-no-verify           # Do not verify the TLS certificate of the server
     --auth-file: string       # Path to the file containing the authentication token

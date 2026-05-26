@@ -75,10 +75,10 @@ pixi run [OPTIONS] [TASK]...
 :  Don't modify the environment, only modify the lock file
 <br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
-:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+:  Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
-:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+:  Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
 - <a id="arg---as-is" href="#arg---as-is">`--as-is`</a>
 :  Shorthand for the combination of --no-install and --frozen
@@ -94,7 +94,7 @@ Runs task in the pixi environment.
 
 This command is used to run tasks in the pixi environment. It will activate the environment and run the task in the environment. It is using the deno_task_shell to run the task.
 
-`pixi run` will also update the lockfile and install the environment if it is required.
+`pixi run` will also update the lock file and install the environment if it is required.
 
 
 --8<-- "docs/reference/cli/pixi/run_extender:example"

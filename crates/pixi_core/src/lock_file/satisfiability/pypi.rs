@@ -123,7 +123,7 @@ pub(crate) fn pypi_satisfies_editable(
 /// `locked_indexes` are the env-level indexes recorded in the lock file
 /// (already verified against the manifest); a requirement with no
 /// per-package `index` is satisfied by any of them. Empty slice falls back
-/// to the default PyPI URL (pre-v7 lockfiles).
+/// to the default PyPI URL (pre-v7 lock files).
 pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
     locked_record: &LockedPypiRecord,
@@ -174,7 +174,7 @@ pub(crate) fn pypi_satisfies_requirement(
             }
 
             // Verify the index in the requirement matches the lock file.
-            // Pre-v7 lockfiles don't store per-package index URLs, so
+            // Pre-v7 lock files don't store per-package index URLs, so
             // index_url is None — skip the comparison in that case.
             match (
                 index,
@@ -211,7 +211,7 @@ pub(crate) fn pypi_satisfies_requirement(
                         .into());
                     }
                 }
-                // Either the locked index is missing (pre-v7 lockfile) or the
+                // Either the locked index is missing (pre-v7 lock file) or the
                 // requirement comes from a parent's `requires_dist` (pep508
                 // carries no index info, so we trust the lock file's
                 // recorded index).
@@ -316,10 +316,10 @@ pub(crate) fn pypi_satisfies_requirement(
                             }
                             .into());
                         }
-                        // v6 lockfiles encode git deps as
+                        // v6 lock files encode git deps as
                         //   git+https://repo.git#<sha>
                         // without any ref information — no ?tag=/?branch=/?rev=
-                        // query params and no @ref in the URL path. v7 lockfiles
+                        // query params and no @ref in the URL path. v7 lock files
                         // always include the ref as a query param. When the
                         // locked URL carries no ref information the original ref
                         // was not recorded and the commit SHA is the only
@@ -761,7 +761,7 @@ async fn read_local_package_metadata(
         }
     };
 
-    // Match the lockfile-write serializer so both sides of
+    // Match the lock file-write serializer so both sides of
     // `compare_metadata` agree on `[tool.uv.sources]` requirements
     // (#6049 follow-up).
     let requires_dist_vec: Vec<pep508_rs::Requirement> =
@@ -932,7 +932,7 @@ mod tests {
     /// `pyproject.toml`-style PEP 508 string roundtrips through pixi's manifest
     /// types (PixiPypiSpec) and through `as_uv_req` -- which is the path
     /// actually exercised by the satisfiability check -- and must satisfy a
-    /// lockfile entry that pixi just wrote for the same dependency.
+    /// lock file entry that pixi just wrote for the same dependency.
     #[test]
     fn test_pypi_git_full_commit_via_as_uv_req() {
         use pixi_pypi_spec::PixiPypiSpec;
@@ -965,7 +965,7 @@ mod tests {
             None,
         ));
 
-        // The manifest spec must satisfy the lockfile entry pixi wrote for
+        // The manifest spec must satisfy the lock file entry pixi wrote for
         // the very same dependency.
         pypi_satisfies_requirement(
             &uv_req,
@@ -978,7 +978,7 @@ mod tests {
     }
 
     // Do not use unix paths on windows: The path gets normalized to something
-    // unix-y, and the lockfile keeps the "pretty" path the user filled in at
+    // unix-y, and the lock file keeps the "pretty" path the user filled in at
     // all times. So on windows the test fails.
 
     #[cfg(not(target_os = "windows"))]
@@ -1515,14 +1515,14 @@ mod tests {
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
     }
 
-    /// V6 lockfiles don't store per-package PyPI index URLs, so
+    /// V6 lock files don't store per-package PyPI index URLs, so
     /// `index_url` is `None` after parsing. When the manifest specifies a
     /// per-package `index`, the satisfiability check must not treat the
     /// missing locked index as a mismatch — it is simply absent from the
     /// older format.
     ///
     /// This is a regression test for a bug observed in crater runs where
-    /// `pixi install --all` upgraded v6 lockfiles to v7.
+    /// `pixi install --all` upgraded v6 lock files to v7.
     #[test]
     fn test_v6_missing_index_url_should_not_invalidate() {
         let index_url = "https://custom.example.com/simple";
@@ -1553,7 +1553,7 @@ mod tests {
         );
         assert!(
             result.is_ok(),
-            "v6 lockfile with missing index_url should still satisfy a \
+            "v6 lock file with missing index_url should still satisfy a \
              requirement with an explicit index, got: {:?}",
             result.unwrap_err()
         );

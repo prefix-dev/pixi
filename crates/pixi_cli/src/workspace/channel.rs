@@ -73,13 +73,13 @@ impl TryFrom<&AddRemoveArgs> for ChannelOptions {
 
 #[derive(Parser, Debug, Clone)]
 pub enum Command {
-    /// Adds a channel to the manifest and updates the lockfile.
+    /// Adds a channel to the manifest and updates the lock file.
     #[clap(visible_alias = "a")]
     Add(AddRemoveArgs),
     /// List the channels in the manifest.
     #[clap(visible_alias = "ls")]
     List(ListArgs),
-    /// Remove channel(s) from the manifest and updates the lockfile.
+    /// Remove channel(s) from the manifest and updates the lock file.
     #[clap(visible_alias = "rm")]
     Remove(AddRemoveArgs),
 }

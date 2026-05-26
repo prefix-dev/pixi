@@ -20,7 +20,7 @@ use rattler_conda_types::{MatchSpec, Platform, StringMatcher};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
-/// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
+/// Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file.
 ///
 /// `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
 /// By default, all features are upgraded.
@@ -217,7 +217,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.json {
         if args.dry_run {
             // Compute a combined diff by solving once against the final in-memory manifest
-            // without writing to disk, then revert. Reuse the already-loaded original lockfile.
+            // without writing to disk, then revert. Reuse the already-loaded original lock file.
             let progress = pixi_reporters::TopLevelProgress::from_global();
             let dispatcher = progress
                 .clone()

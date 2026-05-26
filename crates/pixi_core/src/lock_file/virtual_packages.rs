@@ -92,7 +92,7 @@ pub enum MachineValidationError {
     #[error("Wheel: {0} doesn't match this systems virtual capabilities for tags: {1}")]
     WheelTagsMismatch(String, String),
 
-    #[error("No Python record found in the lockfile for platform: {0}.")]
+    #[error("No Python record found in the lock file for platform: {0}.")]
     #[diagnostic(
         help = "Please make sure that 'python' is added in conda dependencies. Otherwise , please report this issue to the developers."
     )]
@@ -112,7 +112,7 @@ pub(crate) fn get_required_virtual_packages_from_depends(
         .map_err(MachineValidationError::DependencyParsingError)
 }
 
-/// Get the wheel filenames from the lockfile pypi package data
+/// Get the wheel filenames from the lock file pypi package data
 fn get_wheels_from_pypi_package_data(pypi_packages: Vec<PypiPackageData>) -> Vec<WheelFilename> {
     pypi_packages
         .into_iter()
@@ -135,9 +135,9 @@ pub(crate) fn validate_system_meets_environment_requirements(
     environment_name: &EnvironmentName,
     virtual_package_overrides: Option<VirtualPackageOverrides>,
 ) -> Result<bool, MachineValidationError> {
-    // Early out if there are no packages in the lockfile
+    // Early out if there are no packages in the lock file
     if lock_file.is_empty() {
-        tracing::debug!("No packages in the lockfile, skipping virtual package validation");
+        tracing::debug!("No packages in the lock file, skipping virtual package validation");
         return Ok(true);
     }
 

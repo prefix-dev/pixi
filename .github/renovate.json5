@@ -35,7 +35,7 @@
       "enabled": false
     },
     {
-      "groupName": "cargo lockfile maintenance",
+      "groupName": "cargo lock file maintenance",
       "matchManagers": ["cargo"],
       "matchUpdateTypes": ["lockFileMaintenance"],
       "enabled": false

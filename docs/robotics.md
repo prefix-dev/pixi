@@ -40,7 +40,7 @@ Use `pixi run` or `pixi shell` to activate the environment and run ROS commands.
 - [x] **No system-wide ROS installation** <br>
     All dependencies live in the workspace. New team members clone the repo and run `pixi install`. No more additional setup instructions, no version incompatibilities.
 - [x] **[Reproducible environments](workspace/lockfile.md)** <br>
-    Pixi generates a lockfile (`pixi.lock`) that pins every dependency, including transitive ones. The same environment is guaranteed on your laptop, CI, and the robot itself.
+    Pixi generates a lock file (`pixi.lock`) that pins every dependency, including transitive ones. The same environment is guaranteed on your laptop, CI, and the robot itself.
 - [x] **[Works on Linux, macOS, and Windows](workspace/multi_platform_configuration.md)** <br>
     RoboStack supports ROS packages for Linux, macOS and Windows. A single `pixi.toml` can declare support for all three platforms simultaneously.
 - [x] **[Built-in task runner](workspace/advanced_tasks.md)** <br>
@@ -58,7 +58,7 @@ Use `pixi run` or `pixi shell` to activate the environment and run ROS commands.
 |--------------------------------------|-------|----------|----------------------|----------|
 | Installs ROS                         | ✅     | ❌        | ✅                    | ✅        |
 | Works on macOS & Windows             | ❌     | ✅        | ✅                    | ✅        |
-| Reproducible lockfile                | ❌     | ❌        | ⚠️(pre-baked images) | ✅        |
+| Reproducible lock file               | ❌     | ❌        | ⚠️(pre-baked images) | ✅        |
 | Per-project isolation                | ❌     | ⚠️ venvs | ✅                    | ✅        |
 | Mix C++, Python, system libs         | ✅     | ❌        | ✅                    | ✅        |
 | Native performance (no VM/container) | ✅     | ✅        | ❌                    | ✅        |
