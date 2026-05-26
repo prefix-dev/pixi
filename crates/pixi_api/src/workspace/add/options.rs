@@ -11,7 +11,7 @@ pub struct DependencyOptions {
     pub feature: FeatureName,
     /// The platform for which the dependency should be modified.
     pub platforms: Vec<Platform>,
-    /// Don't modify the environment, only modify the lock-file.
+    /// Don't modify the environment, only modify the lock file.
     pub no_install: bool,
     pub lock_file_usage: LockFileUsage,
 }

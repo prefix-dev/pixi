@@ -171,7 +171,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Top-level progress, kept here so we can clear it between phases.
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
-    // Ensure that the lock-file is up-to-date.
+    // Ensure that the lock file is up-to-date.
     let lock_file = workspace
         .update_lock_file(
             Some(progress.clone()),

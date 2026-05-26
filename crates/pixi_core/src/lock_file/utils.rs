@@ -49,7 +49,7 @@ impl<'a> From<&'a LockedPackage> for LockedPackageKind<'a> {
     }
 }
 
-/// Constructs a new lock-file where some of the packages have been removed.
+/// Constructs a new lock file where some of the packages have been removed.
 ///
 /// `should_keep` is consulted for every package, both at the top level of an
 /// environment and (for conda) for each entry inside a kept source record's

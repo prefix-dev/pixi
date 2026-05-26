@@ -603,7 +603,7 @@ impl PixiControl {
             })
             .transpose()?;
 
-        // Ensure the lock-file is up-to-date
+        // Ensure the lock file is up-to-date
         let lock_file = project
             .update_lock_file(
                 None,
@@ -731,16 +731,16 @@ impl PixiControl {
         }
     }
 
-    /// Load the current lock-file.
+    /// Load the current lock file.
     ///
-    /// If you want to lock-file to be up-to-date with the project call
+    /// If you want to lock file to be up-to-date with the project call
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
         let workspace = Workspace::from_path(&self.manifest_path())?;
         workspace.load_lock_file().await?.into_lock_file()
     }
 
-    /// Load the current lock-file and makes sure that its up to date with the
+    /// Load the current lock file and makes sure that its up to date with the
     /// project.
     pub async fn update_lock_file(&self) -> miette::Result<LockFile> {
         let project = self.workspace()?;

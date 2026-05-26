@@ -117,10 +117,10 @@ pub(crate) fn pypi_satisfies_editable(
 /// Also does an additional check for git urls when using direct url references.
 ///
 /// `origin` disambiguates an absent `index`: `Manifest` triggers the strict
-/// "removed the index" check; `RequiresDist` trusts the lock-file (pep508
+/// "removed the index" check; `RequiresDist` trusts the lock file (pep508
 /// carries no index info).
 ///
-/// `locked_indexes` are the env-level indexes recorded in the lock-file
+/// `locked_indexes` are the env-level indexes recorded in the lock file
 /// (already verified against the manifest); a requirement with no
 /// per-package `index` is satisfied by any of them. Empty slice falls back
 /// to the default PyPI URL (pre-v7 lockfiles).
@@ -173,7 +173,7 @@ pub(crate) fn pypi_satisfies_requirement(
                 .into());
             }
 
-            // Verify the index in the requirement matches the lock-file.
+            // Verify the index in the requirement matches the lock file.
             // Pre-v7 lockfiles don't store per-package index URLs, so
             // index_url is None — skip the comparison in that case.
             match (
@@ -213,7 +213,7 @@ pub(crate) fn pypi_satisfies_requirement(
                 }
                 // Either the locked index is missing (pre-v7 lockfile) or the
                 // requirement comes from a parent's `requires_dist` (pep508
-                // carries no index info, so we trust the lock-file's
+                // carries no index info, so we trust the lock file's
                 // recorded index).
                 (_, None) | (None, _) => {}
             }
@@ -293,7 +293,7 @@ pub(crate) fn pypi_satisfies_requirement(
                         }
 
                         // Normalize the input requirement subdirectory the same way we do in our
-                        // lock-file. We convert to string to ensure we have a valid fallback if
+                        // lock file. We convert to string to ensure we have a valid fallback if
                         // `Subdirectory` validation fails.
                         let spec_subdir_str = subdirectory
                             .as_deref()
@@ -1152,11 +1152,11 @@ mod tests {
     }
 
     /// Regression test: removing a PyPI `index` from the manifest should
-    /// invalidate the lock-file when the locked package was resolved from that
+    /// invalidate the lock file when the locked package was resolved from that
     /// index.
     ///
     /// Verify that removing an explicit index from a PyPI requirement
-    /// invalidates the lock-file entry that was resolved from that index.
+    /// invalidates the lock file entry that was resolved from that index.
     #[test]
     fn test_pypi_index_removed_should_invalidate() {
         // Locked data: package was resolved from a custom index.
@@ -1239,7 +1239,7 @@ mod tests {
         )
         .expect_err("direct requirement without index must not satisfy custom-index lock");
 
-        // Transitive check must accept the lock-file's recorded index.
+        // Transitive check must accept the lock file's recorded index.
         pypi_satisfies_requirement(
             &spec,
             &locked_data,
@@ -1321,7 +1321,7 @@ mod tests {
     }
 
     /// Verify that changing a PyPI index to a different non-default index
-    /// invalidates the lock-file.
+    /// invalidates the lock file.
     #[test]
     fn test_pypi_index_changed_should_invalidate() {
         let locked_data = lock_for_test(make_wheel_package_with(
@@ -1390,7 +1390,7 @@ mod tests {
     }
 
     /// Verify that adding an index to a requirement that was locked with the
-    /// default index invalidates the lock-file.
+    /// default index invalidates the lock file.
     #[test]
     fn test_pypi_index_added_should_invalidate() {
         let locked_data = lock_for_test(make_wheel_package_with(
@@ -1423,7 +1423,7 @@ mod tests {
     }
 
     /// Regression for #6060: a feature-level `index-url` plus a manifest
-    /// requirement with no per-package `index` must satisfy a lock-file
+    /// requirement with no per-package `index` must satisfy a lock file
     /// recorded against that custom URL.
     #[test]
     fn test_pypi_feature_level_index_should_satisfy() {

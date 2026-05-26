@@ -139,7 +139,7 @@ pub trait HasNoInstallConfig: Sized {
 pub trait HasLockFileUpdateConfig: Sized {
     fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig;
 
-    /// Set the frozen flag to skip lock-file updates
+    /// Set the frozen flag to skip lock file updates
     fn with_frozen(mut self, frozen: bool) -> Self {
         self.lock_file_update_config().lock_file_usage.frozen = frozen;
         self

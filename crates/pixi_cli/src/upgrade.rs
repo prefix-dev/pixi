@@ -140,7 +140,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
 
-    // Capture original lock-file for combined JSON output (non-dry-run).
+    // Capture original lock file for combined JSON output (non-dry-run).
     let original_lock_file = workspace
         .workspace()
         .load_lock_file()
@@ -175,7 +175,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if !args.json {
                 diff.print()
                     .into_diagnostic()
-                    .context("failed to print lock-file diff")?;
+                    .context("failed to print lock file diff")?;
             }
             printed_any = true;
         }
@@ -206,7 +206,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     }
                     diff.print()
                         .into_diagnostic()
-                        .context("failed to print lock-file diff")?;
+                        .context("failed to print lock file diff")?;
                 }
                 printed_any = true;
             }
@@ -238,7 +238,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // Revert changes after computing the diff in dry-run mode.
             let _ = workspace.revert().await.into_diagnostic()?;
         } else {
-            // Reload the resulting lock-file and compute a combined diff against the original.
+            // Reload the resulting lock file and compute a combined diff against the original.
             // Use the silent version here since we already warned on the first load (line 144).
             let saved_workspace = workspace.save().await.into_diagnostic()?;
             let updated_lock_file = saved_workspace

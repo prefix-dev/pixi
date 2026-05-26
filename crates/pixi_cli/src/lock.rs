@@ -46,7 +46,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         workspace = workspace.with_backend_override(backend_override);
     }
 
-    // Update the lock-file, and extract it from the derived data to drop additional resources
+    // Update the lock file, and extract it from the derived data to drop additional resources
     // created for the solve.
     // Use the silent version here since update_lock_file() will display the warning.
     let original_lock_file = workspace.load_lock_file().await?.into_lock_file_or_empty();
@@ -67,7 +67,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?;
 
-    // Determine the diff between the old and new lock-file.
+    // Determine the diff between the old and new lock file.
     let diff = LockFileDiff::from_lock_files(&original_lock_file, &lock_file);
 
     // Format as json?
@@ -79,12 +79,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else if args.dry_run {
         if !diff.is_empty() {
             eprintln!(
-                "{}Dry-run: lock-file would be updated (not written to disk)",
+                "{}Dry-run: lock file would be updated (not written to disk)",
                 console::style(console::Emoji("i ", "i ")).blue()
             );
             diff.print()
                 .into_diagnostic()
-                .context("failed to print lock-file diff")?;
+                .context("failed to print lock file diff")?;
         } else {
             eprintln!(
                 "{}Dry-run:lock file would not change",
@@ -93,12 +93,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     } else if lock_updated {
         eprintln!(
-            "{}Updated lock-file",
+            "{}Updated lock file",
             console::style(console::Emoji("✔ ", "")).green()
         );
         diff.print()
             .into_diagnostic()
-            .context("failed to print lock-file diff")?;
+            .context("failed to print lock file diff")?;
     } else {
         eprintln!(
             "{}Lock-file was already up-to-date",

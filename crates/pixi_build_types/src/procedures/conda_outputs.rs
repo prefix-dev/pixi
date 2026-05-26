@@ -68,8 +68,8 @@ pub struct CondaOutputsResult {
     pub outputs: Vec<CondaOutput>,
 
     /// The files that were read as part of the computation. These files are
-    /// hashed and stored in the lock-file. If the files change, the
-    /// lock-file will be invalidated.
+    /// hashed and stored in the lock file. If the files change, the
+    /// lock file will be invalidated.
     pub input_globs: BTreeSet<String>,
 }
 

@@ -129,7 +129,7 @@ async fn test_incremental_lock_file() {
     // Add a dependency on `foo`
     pixi.add("foo").await.unwrap();
 
-    // Get the created lock-file
+    // Get the created lock file
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
@@ -1617,7 +1617,7 @@ async fn test_exclude_newer() {
     ))
     .unwrap();
 
-    // Create the lock-file
+    // Create the lock file
     pixi.lock().await.unwrap();
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
@@ -1815,7 +1815,7 @@ async fn test_exclude_newer_pypi() {
     ))
     .unwrap();
 
-    // Create the lock-file
+    // Create the lock file
     pixi.lock().await.unwrap();
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(

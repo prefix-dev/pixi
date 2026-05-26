@@ -1,9 +1,9 @@
 #
-# This lock-file should not satisfy the accompanying pixi.toml file.
+# This lock file should not satisfy the accompanying pixi.toml file.
 #
-# my-dep is requested as a versioned pypi package (>=1.0) but the lock-file
+# my-dep is requested as a versioned pypi package (>=1.0) but the lock file
 # entry has no version. A registry dependency always requires a version
-# in the lock-file to verify that it matches the requested specifier.
+# in the lock file to verify that it matches the requested specifier.
 
 version: 7
 platforms:

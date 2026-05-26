@@ -807,7 +807,7 @@ impl Workspace {
         })
     }
 
-    /// Constructs a new lock-file where some of the constraints have been
+    /// Constructs a new lock file where some of the constraints have been
     /// removed.
     fn unlock_packages(
         &self,

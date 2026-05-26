@@ -27,7 +27,7 @@ pub struct AddArgs {
     pub platform: Vec<String>,
 
     /// Don't update the environment, only add changed packages to the
-    /// lock-file.
+    /// lock file.
     #[clap(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
@@ -43,7 +43,7 @@ pub struct RemoveArgs {
     pub platforms: Vec<Platform>,
 
     /// Don't update the environment, only remove the platform(s) from the
-    /// lock-file.
+    /// lock file.
     #[clap(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 

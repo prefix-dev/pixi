@@ -391,7 +391,7 @@ fn collect_direct_run_exports(
 /// meaningful for `depends` / `constrains`: the solver consumes the
 /// list as a set of specs, and the order in the locked record only
 /// reflects the iteration order of the producing `DependencyMap` at
-/// solve time. Two paths (live solve vs lock-file readback) can land
+/// solve time. Two paths (live solve vs lock file readback) can land
 /// on different iteration orders for the same set of run-exports,
 /// so requiring an exact sequence match would surface spurious drift
 /// every time a record-source iterator returned a different order.

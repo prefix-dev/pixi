@@ -72,7 +72,7 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock-file
+:  Don't modify the environment, only modify the lock file
 <br>**env**: `PIXI_NO_INSTALL`
 
 ## Global Options

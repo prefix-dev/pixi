@@ -59,7 +59,7 @@ enum LockfileUnsat {
     )]
     SolveGroupUnsat(String, Platform, #[source] SolveGroupUnsat),
 
-    #[error("failed to build the lock-file resolver: {0}")]
+    #[error("failed to build the lock file resolver: {0}")]
     ResolverBuild(String),
 }
 

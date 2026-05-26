@@ -379,7 +379,7 @@ async fn assemble_source_record_inner(
         build_source: source.build_source().cloned(),
         identifier_hash: None,
         // Carry the resolved build / host env package sets forward.
-        // Downstream consumers (lock-file writer, installer) need
+        // Downstream consumers (lock file writer, installer) need
         // the exact packages this source was built against, not just
         // their aggregated run-exports.
         build_packages: build_records
