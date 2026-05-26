@@ -553,7 +553,18 @@ mod tests {
 
     use crate::config::{RosBuildType, RosMode};
     use rattler_build_recipe::stage0::Item;
+    use rattler_conda_types::NoArchType;
     use std::path::PathBuf;
+
+    fn recipe_noarch(
+        recipe: &rattler_build_recipe::stage0::SingleOutputRecipe,
+    ) -> Option<rattler_conda_types::NoArchType> {
+        recipe
+            .build
+            .noarch
+            .as_ref()
+            .and_then(|v| v.as_concrete().copied())
+    }
 
     fn cfg_pixi_native(build_type: RosBuildType) -> RosBackendConfig {
         RosBackendConfig {
@@ -664,6 +675,98 @@ mod tests {
         // The rclrs C-side host/run injections are ament_cargo-only.
         assert!(!host.iter().any(|s| s == "ros-kilted-rcl"));
         assert!(!run.iter().any(|s| s == "ros-kilted-rcl"));
+    }
+
+    #[tokio::test]
+    async fn generate_ament_python_defaults_to_noarch() {
+        let cfg = cfg_pixi_native(RosBuildType::AmentPython);
+        let model = model_with_deps(&["ros-kilted-rclpy"], &["ros-kilted-rclpy"]);
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            recipe_noarch(&recipe.recipe),
+            Some(NoArchType::python()),
+            "ament_python with no opt-out must default to noarch: python",
+        );
+
+        let (build, _host, _run) = host_run_concrete(&recipe.recipe);
+        // Concrete build deps don't include compiler templates (templates aren't
+        // emitted by host_run_concrete's `as_concrete` filter), so assert by
+        // serializing the full conditional list and string-searching the template
+        // form pixi-build-ros injects.
+        let build_yaml = serde_yaml::to_string(&recipe.recipe.requirements.build).unwrap();
+        assert!(
+            !build_yaml.contains("compiler('c')"),
+            "noarch ament_python build deps must not include compiler('c'):\n{build_yaml}"
+        );
+        assert!(
+            !build_yaml.contains("compiler('cxx')"),
+            "noarch ament_python build deps must not include compiler('cxx'):\n{build_yaml}"
+        );
+        // Sanity: ament_python should still get python/setuptools etc.
+        assert!(build.iter().any(|s| s == "python"));
+        assert!(build.iter().any(|s| s == "setuptools"));
+    }
+
+    #[tokio::test]
+    async fn generate_ament_python_noarch_false_opts_out() {
+        let mut cfg = cfg_pixi_native(RosBuildType::AmentPython);
+        cfg.noarch = Some(false);
+        let model = model_with_deps(&["ros-kilted-rclpy"], &["ros-kilted-rclpy"]);
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            recipe_noarch(&recipe.recipe),
+            None,
+            "explicit noarch=false must override the ament_python default",
+        );
+        let build_yaml = serde_yaml::to_string(&recipe.recipe.requirements.build).unwrap();
+        assert!(
+            build_yaml.contains("compiler('c')"),
+            "non-noarch ament_python must still inject compiler('c'):\n{build_yaml}"
+        );
+    }
+
+    #[tokio::test]
+    async fn generate_ament_cmake_is_not_noarch_by_default() {
+        let cfg = cfg_pixi_native(RosBuildType::AmentCmake);
+        let model = model_with_deps(&["ros-kilted-rclcpp"], &["ros-kilted-rclcpp"]);
+        let recipe = generate(
+            &model,
+            &cfg,
+            PathBuf::from("/tmp/fake"),
+            rattler_conda_types::Platform::Linux64,
+            vec![],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            recipe_noarch(&recipe.recipe),
+            None,
+            "ament_cmake must remain platform-specific",
+        );
+        let build_yaml = serde_yaml::to_string(&recipe.recipe.requirements.build).unwrap();
+        assert!(
+            build_yaml.contains("compiler('c')"),
+            "ament_cmake must still inject compiler('c'):\n{build_yaml}"
+        );
     }
 
     #[tokio::test]
