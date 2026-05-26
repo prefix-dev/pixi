@@ -1033,6 +1033,9 @@ This way when a source distribution depends on `gcc` for example, it's used from
 ## The `activation` table
 
 The activation table is used for specialized activation operations that need to be run when the environment is activated.
+As with other top level tables, `[activation]` belongs to the `default` feature.
+Therefore, every environment that doesn't set `no-default-feature = true` includes that activation script.
+To set activation scripts or variables for only some environments, put them on a feature (`[feature.<name>.activation]`) and add that feature to the relevant entries in `[environments]`.
 
 There are two types of activation operations a user can modify in the manifest:
 
@@ -1054,6 +1057,7 @@ These activation operations will be run before the `pixi run` and `pixi shell` c
     And the environment variables are set in the shell that is running the activation script, thus take note when using e.g. `$` or `%`.
 
     If you have scripts or env variable per platform use the [target](#the-target-table) table.
+    If you need them per environment, define them on a feature and include that feature in the desired environments (see [the multi-environment guide](../workspace/multi_environment.md)).
 
 ```toml
 [activation]
