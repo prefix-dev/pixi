@@ -22,4 +22,6 @@ pub use provenance::{
     AssociateProvenance, ManifestKind, ManifestProvenance, ProvenanceError, WithProvenance,
 };
 pub use source::ManifestSource;
-pub use workspace::{WorkspaceManifest, WorkspaceManifestMut};
+pub use workspace::{
+    MissingTargetError, RemoveDependencyError, WorkspaceManifest, WorkspaceManifestMut,
+};
