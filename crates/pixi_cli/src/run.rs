@@ -367,7 +367,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 if code == 127 {
                     command_not_found(&workspace, explicit_environment.clone());
                 }
-                std::process::exit(code);
+                crate::process_exit::exit_with_code(code);
             }
             Err(err) => return Err(err.into()),
         }
