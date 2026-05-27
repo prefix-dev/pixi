@@ -22,7 +22,7 @@
 //! memory for the lifetime of the process.
 
 use std::{
-    collections::{BTreeMap, BinaryHeap},
+    collections::BTreeMap,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
     sync::Arc,
@@ -138,8 +138,12 @@ pub fn compute_artifact_cache_key(
 pub struct ArtifactSidecar {
     /// Glob patterns that match the set of files the build reads. Used at
     /// lookup time to detect newly-added matching files.
-    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
-    pub input_globs: BinaryHeap<String>,
+    ///
+    /// Order is preserved: pixi's `GlobSet` is gitignore last-match-wins, so
+    /// inclusion patterns must precede any negated exclusions that should
+    /// override them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub input_globs: Vec<String>,
 
     /// Paths of the files actually read by the build, relative to the source
     /// directory, paired with their mtime at build time.

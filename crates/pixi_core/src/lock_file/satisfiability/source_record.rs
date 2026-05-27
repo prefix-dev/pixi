@@ -947,6 +947,7 @@ mod tests {
             ignore_run_exports: CondaOutputIgnoreRunExports::default(),
             run_exports: CondaOutputRunExports::default(),
             input_globs: None,
+            input_glob_sets: None,
         }
     }
 

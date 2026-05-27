@@ -140,6 +140,7 @@ pub static KNOWN_MANIFEST_FILES: LazyLock<Vec<&'static str>> = LazyLock::new(|| 
     v.push(PYPROJECT_MANIFEST);
     v.push(MOJOPROJECT_MANIFEST);
     v.extend(RATTLER_BUILD_FILE_NAMES);
+    v.extend(ROS_BACKEND_FILE_NAMES);
     v
 });
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());

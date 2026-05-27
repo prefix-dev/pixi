@@ -101,6 +101,8 @@ pub struct IntermediateBackend<T: GenerateRecipe> {
     pub(crate) target_config: OrderMap<TargetSelector, T::Config>,
     pub(crate) cache_dir: Option<PathBuf>,
     pub(crate) workspace_scratch_directory: Option<PathBuf>,
+    pub(crate) workspace_directory: Option<PathBuf>,
+    pub(crate) checkout_root: Option<PathBuf>,
 }
 impl<T: GenerateRecipe> IntermediateBackend<T> {
     #[allow(clippy::too_many_arguments)]
@@ -115,6 +117,8 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
         workspace_scratch_directory: Option<PathBuf>,
+        workspace_directory: Option<PathBuf>,
+        checkout_root: Option<PathBuf>,
     ) -> miette::Result<Self> {
         // Determine the root directory of the manifest
         let (source_dir, manifest_rel_path) = match source_dir {
@@ -179,6 +183,8 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
             logging_output_handler,
             cache_dir,
             workspace_scratch_directory,
+            workspace_directory,
+            checkout_root,
         })
     }
 }
@@ -216,6 +222,8 @@ where
             self.logging_output_handler.clone(),
             params.cache_directory,
             params.workspace_scratch_directory,
+            params.workspace_directory,
+            params.checkout_root,
         )?;
 
         Ok((Box::new(instance), InitializeResult {}))
@@ -283,6 +291,8 @@ where
                 params.channels,
                 self.cache_dir.clone(),
                 self.workspace_scratch_directory.clone(),
+                self.workspace_directory.clone(),
+                self.checkout_root.clone(),
             )
             .await?;
 
@@ -566,13 +576,21 @@ where
 
                 // The input globs are the same for all outputs
                 input_globs: None,
+                input_glob_sets: None,
                 // TODO: Implement caching
             });
         }
 
+        let metadata_input_glob_sets = if generated_recipe.metadata_input_glob_sets.is_empty() {
+            None
+        } else {
+            Some(generated_recipe.metadata_input_glob_sets)
+        };
+
         Ok(CondaOutputsResult {
             outputs,
             input_globs: generated_recipe.metadata_input_globs,
+            input_glob_sets: metadata_input_glob_sets,
         })
     }
 
@@ -626,6 +644,8 @@ where
                 params.channels,
                 self.cache_dir.clone(),
                 self.workspace_scratch_directory.clone(),
+                self.workspace_directory.clone(),
+                self.checkout_root.clone(),
             )
             .await?;
 
@@ -843,9 +863,16 @@ where
         )?;
         input_globs.append(&mut recipe.build_input_globs);
 
+        let build_input_glob_sets = if recipe.build_input_glob_sets.is_empty() {
+            None
+        } else {
+            Some(std::mem::take(&mut recipe.build_input_glob_sets))
+        };
+
         Ok(CondaBuildV1Result {
             output_file: output_path,
             input_globs,
+            input_glob_sets: build_input_glob_sets,
             name: output.name().as_normalized().to_string(),
             version: output.version().clone(),
             build: output.build_string().into_owned(),

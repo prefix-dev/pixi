@@ -15,8 +15,18 @@ use thiserror::Error;
 /// on `pinned` for cache identity.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SourceCheckout {
-    /// Local path to the source.
+    /// Local path to the source.  Includes any `subdirectory` applied
+    /// on top of the checkout root, so this is the directory containing
+    /// the manifest.
     pub path: AbsPathBuf,
+
+    /// Local path to the root of the checkout, BEFORE any
+    /// `subdirectory` is applied.  Equal to [`Self::path`] when there
+    /// is no subdirectory (e.g. for a local path source).  Backends
+    /// that need to reason about siblings inside the same checkout
+    /// (e.g. ROS sibling-package discovery) anchor their search here
+    /// instead of at [`Self::path`].
+    pub root_dir: AbsPathBuf,
 
     /// The exact source specification.
     pub pinned: PinnedSourceSpec,
@@ -37,14 +47,16 @@ impl SourceCheckout {
 
         let path = if !pinned.source.subdirectory.is_empty() {
             root_dir
+                .clone()
                 .join(pinned.source.subdirectory.as_path())
                 .into_assume_dir()
         } else {
-            root_dir
+            root_dir.clone()
         };
 
         Self {
             path: path.into(),
+            root_dir: root_dir.into(),
             pinned: PinnedSourceSpec::Git(pinned),
         }
     }

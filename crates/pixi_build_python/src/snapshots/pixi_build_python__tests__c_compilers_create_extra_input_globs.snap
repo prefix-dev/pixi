@@ -3,16 +3,16 @@ source: crates/pixi_build_python/src/main.rs
 expression: result
 ---
 Ok(
-    {
-        "**/*.py",
-        "**/*.{c,h}",
+    [
+        "setup.py",
+        "setup.cfg",
+        "pyproject.toml",
+        "requirements*.txt",
         "Pipfile",
         "Pipfile.lock",
         "poetry.lock",
-        "pyproject.toml",
-        "requirements*.txt",
-        "setup.cfg",
-        "setup.py",
         "tox.ini",
-    },
+        "**/*.py",
+        "**/*.{c,h}",
+    ],
 )

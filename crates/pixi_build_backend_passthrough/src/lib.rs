@@ -101,6 +101,7 @@ impl InMemoryBackend for PassthroughBackend {
         Ok(CondaOutputsResult {
             outputs,
             input_globs: Default::default(),
+            input_glob_sets: None,
         })
     }
 
@@ -205,6 +206,7 @@ impl InMemoryBackend for PassthroughBackend {
         Ok(CondaBuildV1Result {
             output_file,
             input_globs: self.config.build_globs.clone().unwrap_or_default(),
+            input_glob_sets: None,
             name: self.index_json.name.as_normalized().to_owned(),
             version: self.index_json.version.clone(),
             build: build_string,
@@ -612,6 +614,7 @@ fn create_output(
             .map(convert_run_exports_json)
             .unwrap_or_default(),
         input_globs: None,
+        input_glob_sets: None,
     }
 }
 
@@ -919,7 +922,7 @@ pub struct PassthroughBackendConfig {
     pub noarch: Option<bool>,
 
     /// Build globs
-    pub build_globs: Option<BTreeSet<String>>,
+    pub build_globs: Option<Vec<String>>,
 }
 
 /// Observer that allows collecting backend events from an ObservableBackend.

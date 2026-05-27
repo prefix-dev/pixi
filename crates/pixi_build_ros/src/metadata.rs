@@ -3,8 +3,6 @@
 //! Implements the `MetadataProvider` trait to extract package metadata from
 //! package.xml and format names according to ROS conventions.
 
-use std::collections::BTreeSet;
-
 use miette::IntoDiagnostic;
 use pixi_build_backend::generated_recipe::{GeneratedRecipe, MetadataProvider};
 use pixi_build_types::ProjectModel;
@@ -47,19 +45,15 @@ struct RosPackageXmlMetadataProvider {
 }
 
 impl RosPackageXmlMetadataProvider {
-    fn input_globs(&self) -> BTreeSet<String> {
-        let mut globs: BTreeSet<String> = BTreeSet::from([
+    fn input_globs(&self) -> Vec<String> {
+        let mut globs: Vec<String> = vec![
             "package.xml".to_string(),
             "CMakeLists.txt".to_string(),
             "setup.py".to_string(),
             "setup.cfg".to_string(),
-        ]);
-        for g in &self.extra_input_globs {
-            globs.insert(g.clone());
-        }
-        for f in &self.package_mapping_files {
-            globs.insert(f.clone());
-        }
+        ];
+        globs.extend(self.extra_input_globs.iter().cloned());
+        globs.extend(self.package_mapping_files.iter().cloned());
         globs
     }
 }
@@ -194,8 +188,8 @@ mod tests {
         };
 
         let globs = provider.input_globs();
-        assert!(globs.contains("package.xml"));
-        assert!(globs.contains("CMakeLists.txt"));
-        assert!(globs.contains("/tmp/custom_mapping.yaml"));
+        assert!(globs.iter().any(|g| g == "package.xml"));
+        assert!(globs.iter().any(|g| g == "CMakeLists.txt"));
+        assert!(globs.iter().any(|g| g == "/tmp/custom_mapping.yaml"));
     }
 }
