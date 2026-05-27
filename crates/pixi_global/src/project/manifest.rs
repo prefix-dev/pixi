@@ -242,6 +242,41 @@ impl Manifest {
         Ok(())
     }
 
+    pub fn set_ignore_conda_prefix(
+        &mut self,
+        env_name: &EnvironmentName,
+        value: bool,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
+        }
+
+        // Update self.parsed
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| {
+                miette::miette!("Can't find environment {} yet", env_name.fancy_display())
+            })?
+            .ignore_conda_prefix = value;
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&["envs", env_name.as_str()])?
+            .insert(
+                "ignore-conda-prefix",
+                Item::Value(toml_edit::Value::from(value)),
+            );
+
+        tracing::debug!(
+            "Set ignore-conda-prefix {} for environment {} in toml document",
+            value,
+            env_name
+        );
+        Ok(())
+    }
+
     #[allow(dead_code)]
     /// Adds a channel to the manifest
     pub fn add_channel(

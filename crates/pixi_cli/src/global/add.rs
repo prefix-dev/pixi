@@ -31,6 +31,10 @@ pub struct Args {
 
     #[clap(flatten)]
     config: ConfigCli,
+
+    /// Don't set CONDA_PREFIX in trampoline
+    #[arg(action, long)]
+    ignore_conda_prefix: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -51,6 +55,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         specs: &[GlobalSpec],
         expose: &[Mapping],
         project: &mut Project,
+        ignore_conda_prefix: &bool,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
@@ -64,6 +69,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             project.manifest.add_exposed_mapping(env_name, mapping)?;
         }
 
+        if *ignore_conda_prefix {
+            project.manifest.set_ignore_conda_prefix(env_name, true)?;
+        }
         // Sync environment
         let sync_changes = project.sync_environment(env_name, None).await?;
 
@@ -117,6 +125,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &specs,
         args.expose.as_slice(),
         &mut project_modified,
+        &args.ignore_conda_prefix,
     )
     .await
     {
