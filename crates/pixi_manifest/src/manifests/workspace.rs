@@ -11,7 +11,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, SourceCode, miette};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ParseStrictness::Strict, Version, VersionSpec};
+use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
 use toml_edit::Value;
 
 use crate::{
@@ -451,20 +451,73 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: &IndexSet<PixiPlatform>,
     ) -> miette::Result<()> {
-        // Only newly-added rich platforms count toward the legacy-syntax
-        // migration trigger; re-adding an existing platform must not rewrite
-        // `[system-requirements]`.
-        let added_rich = platforms
+        // Only platforms that aren't already declared cause a change. Re-adding
+        // an existing platform (e.g. `pixi add <dep> --platform linux-64` when
+        // linux-64 is already declared) must leave the document untouched.
+        let mut new_platforms: IndexSet<PixiPlatform> = platforms
             .iter()
-            .any(|p| !p.is_subdir_platform() && !self.workspace.workspace.platforms.contains(p));
+            .filter(|p| !self.workspace.workspace.platforms.contains(*p))
+            .cloned()
+            .collect();
 
+        // While the legacy migration is pending a re-added bare subdir (e.g.
+        // `--platform linux-64`) won't match by identity above: the in-memory
+        // entry for that subdir has been extended with the synthesised virtual
+        // packages. Its bare form being absent from the list is the signal that
+        // it got extended, so drop subdir-platforms whose subdir is already
+        // declared.
+        if self.workspace.workspace.must_migrate {
+            let declared_subdirs: HashSet<Platform> = self
+                .workspace
+                .workspace
+                .platforms
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect();
+            new_platforms
+                .retain(|p| !(p.is_subdir_platform() && declared_subdirs.contains(&p.subdir())));
+        }
+
+        if new_platforms.is_empty() {
+            return Ok(());
+        }
+
+        // A newly-added non-subdir platform is the only edit that commits the
+        // legacy `[system-requirements]` migration to disk.
+        let added_rich = new_platforms.iter().any(|p| !p.is_subdir_platform());
         self.workspace
             .workspace
             .platforms
-            .extend(platforms.iter().cloned());
+            .extend(new_platforms.iter().cloned());
 
         migrate_to_rich_platforms::commit_if_needed(self, added_rich)?;
-        self.rewrite_workspace_platforms_toml()
+
+        if self.workspace.workspace.must_migrate {
+            // Still in legacy shape (only subdir platforms were added): append
+            // them as bare strings so the on-disk `[system-requirements]` stays
+            // authoritative and the in-memory migration isn't leaked into
+            // `platforms`.
+            self.append_subdir_platforms_toml(&new_platforms)
+        } else {
+            self.rewrite_workspace_platforms_toml()
+        }
+    }
+
+    /// Append `new_platforms` to the `platforms` array as bare subdir strings,
+    /// leaving the existing entries untouched. Used while the legacy
+    /// `[system-requirements]` migration is still pending, where every added
+    /// platform is a subdir-platform.
+    fn append_subdir_platforms_toml(
+        &mut self,
+        new_platforms: &IndexSet<PixiPlatform>,
+    ) -> miette::Result<()> {
+        let array = self
+            .document
+            .get_array_mut("platforms", &Default::default())?;
+        for platform in new_platforms {
+            array.push(platform.subdir().to_string());
+        }
+        Ok(())
     }
 
     /// Rewrite the `platforms` array in the TOML document from the current
@@ -517,8 +570,11 @@ impl WorkspaceManifestMut<'_> {
     }
 
     /// Apply a [`PlatformEdit`] to the workspace platform identified by
-    /// `name`. Fails if the platform is unknown or is a subdir-platform
-    /// (where name == subdir).
+    /// `name`. Fails if the platform is unknown, or if the edit would violate
+    /// the subdir-platform invariant (see [`PixiPlatform::apply_edit`]). An
+    /// edit that renames the platform (collapsing to a bare subdir or
+    /// recomputing the synthesised name) is propagated to every feature that
+    /// references it.
     pub fn edit_workspace_platform(
         &mut self,
         name: &PixiPlatformName,
@@ -538,19 +594,91 @@ impl WorkspaceManifestMut<'_> {
                 )
             })?;
 
-        // Track the poor→rich transition before mutating; that's the only
-        // shape of edit that introduces new richness and so the only one that
-        // should trigger the legacy-syntax migration.
-        let was_subdir = updated.is_subdir_platform();
+        // The edit only matters if it actually changes the platform; a no-op
+        // edit (e.g. removing an absent VP) must leave the document untouched.
+        // `PixiPlatform`'s `Eq` is by name alone, so compare the fields an edit
+        // can change explicitly. The name only changes as a consequence of a
+        // VP/subdir change, so it needs no separate comparison here.
+        let before = updated.clone();
         updated.apply_edit(edit).map_err(|e| miette!(e))?;
-        let poor_to_rich = was_subdir && !updated.is_subdir_platform();
+        if updated.subdir() == before.subdir()
+            && updated.declared_virtual_packages() == before.declared_virtual_packages()
+        {
+            return Ok(());
+        }
 
-        // IndexSet::replace preserves the position of the existing entry; we
-        // rely on this so the on-disk ordering stays stable across edits.
-        self.workspace.workspace.platforms.replace(updated);
+        // The edit may rename the platform (collapsing to a bare subdir or
+        // recomputing the synthesised name), and the set is keyed by name, so
+        // drop the original entry before inserting the edited one. The document
+        // is re-rendered from a sorted view below, so set order is irrelevant.
+        let new_name = updated.name().clone();
+        self.workspace
+            .workspace
+            .platforms
+            .retain(|p| p.name() != name);
+        self.workspace.workspace.platforms.insert(updated);
 
-        migrate_to_rich_platforms::commit_if_needed(self, poor_to_rich)?;
+        if &new_name != name {
+            self.rename_feature_platform_references(name, &new_name)?;
+        }
+
+        // A real edit of a rich platform commits a pending legacy migration:
+        // the on-disk subdir entry becomes its rich form and the
+        // `[system-requirements]` tables drop out. Outside a migration this is
+        // a no-op and the rewrite below just re-renders the edited entry.
+        migrate_to_rich_platforms::commit_if_needed(self, true)?;
         self.rewrite_workspace_platforms_toml()
+    }
+
+    /// Rename every feature's `platforms` reference from `old` to `new`, in the
+    /// in-memory model and the TOML document. The default feature is skipped:
+    /// its platforms are the workspace-level definitions, re-rendered elsewhere.
+    fn rename_feature_platform_references(
+        &mut self,
+        old: &PixiPlatformName,
+        new: &PixiPlatformName,
+    ) -> miette::Result<()> {
+        let affected: Vec<FeatureName> = self
+            .workspace
+            .features
+            .iter()
+            .filter(|(feature_name, feature)| {
+                !feature_name.is_default()
+                    && feature
+                        .platforms
+                        .as_ref()
+                        .is_some_and(|platforms| platforms.contains(old))
+            })
+            .map(|(feature_name, _)| feature_name.clone())
+            .collect();
+
+        for feature_name in affected {
+            if let Some(platforms) = self
+                .workspace
+                .features
+                .get_mut(&feature_name)
+                .and_then(|feature| feature.platforms.as_mut())
+            {
+                *platforms = platforms
+                    .iter()
+                    .map(|name| {
+                        if name == old {
+                            new.clone()
+                        } else {
+                            name.clone()
+                        }
+                    })
+                    .collect();
+            }
+
+            let array = self.document.get_array_mut("platforms", &feature_name)?;
+            for item in array.iter_mut() {
+                if item.as_str() == Some(old.as_str()) {
+                    *item = toml_edit::Value::from(new.as_str());
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Add platforms to the workspace and, optionally, to a non-default
@@ -564,6 +692,13 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
     ) -> miette::Result<()> {
         let pixi_platforms: IndexSet<PixiPlatform> = platforms.into_iter().cloned().collect();
+        // Nothing to add (e.g. `pixi add <dep>` with no `--platform`): leave the
+        // document untouched. Rewriting it here would flush the in-memory
+        // `[system-requirements]` migration into `platforms` while leaving the
+        // legacy table behind, yielding a manifest that no longer parses.
+        if pixi_platforms.is_empty() {
+            return Ok(());
+        }
         let platform_names: IndexSet<PixiPlatformName> =
             pixi_platforms.iter().map(|p| p.name().clone()).collect();
         self.add_workspace_platforms(&pixi_platforms)?;
@@ -4228,13 +4363,80 @@ exclude-newer = "2015-12-02T02:07:43Z"
         assert!(editable.workspace.workspace.must_migrate);
         let after = editable.document.to_string();
         assert!(after.contains("[system-requirements]"));
+        // The new subdir is appended in bare form; the existing entry must not
+        // leak the in-memory migration into the `platforms` array.
+        assert!(
+            after.contains(r#"platforms = ["linux-64", "osx-64"]"#),
+            "platforms should stay bare after a subdir-only add:\n{after}",
+        );
     }
 
     #[test]
-    fn test_legacy_sysreqs_migration_skipped_for_edit_of_existing_rich_platform() {
-        // The parse-time shim synthesises a rich platform from the legacy
-        // `[system-requirements]` table. Editing that synthesised platform
-        // must not rewrite the manifest: nothing new became rich.
+    fn test_legacy_sysreqs_readd_existing_subdir_is_noop() {
+        // Reproduces the `pixi add <dep> --platform linux-64` path: the subdir
+        // is already declared (the parse-time shim extended it with the
+        // synthesised VPs), so re-adding it must touch neither the `platforms`
+        // array nor the `[system-requirements]` table -- otherwise the file
+        // ends up with a rich platform alongside the legacy table and no longer
+        // parses.
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = ["linux-64"]
+
+            [system-requirements]
+            libc = { family = "glibc", version = "2.31" }
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(workspace.manifest.workspace.must_migrate);
+        let before = workspace.editable().document.to_string();
+
+        let mut editable = workspace.editable();
+        editable
+            .add_platforms(
+                [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        assert!(editable.workspace.workspace.must_migrate);
+        assert_eq!(
+            editable.document.to_string(),
+            before,
+            "re-adding an already-declared subdir must leave the manifest untouched",
+        );
+    }
+
+    fn gvp(name: &str, version: &str) -> rattler_conda_types::GenericVirtualPackage {
+        rattler_conda_types::GenericVirtualPackage {
+            name: rattler_conda_types::PackageName::try_from(name).unwrap(),
+            version: Version::from_str(version).unwrap(),
+            build_string: String::new(),
+        }
+    }
+
+    /// The migration invariant: any document upgrade drops `[system-requirements]`.
+    fn assert_no_sysreqs(document: &str) {
+        assert!(
+            !document.contains("system-requirements"),
+            "an upgraded manifest must not keep any `system-requirements`:\n{document}",
+        );
+    }
+
+    fn assert_has_sysreqs(document: &str) {
+        assert!(
+            document.contains("system-requirements"),
+            "a non-upgraded legacy manifest must keep `[system-requirements]`:\n{document}",
+        );
+    }
+
+    #[test]
+    fn test_legacy_sysreqs_migration_commits_on_rich_edit() {
+        // Editing the virtual packages of the rich platform the parse-time shim
+        // synthesised from `[system-requirements]` upgrades the manifest: the
+        // on-disk subdir entry becomes rich and the legacy table drops out.
         let file_contents = r#"
             [workspace]
             name = "foo"
@@ -4262,26 +4464,251 @@ exclude-newer = "2015-12-02T02:07:43Z"
             .edit_workspace_platform(
                 &synthesised,
                 PlatformEdit {
-                    insert_or_update_virtual_packages: vec![
-                        rattler_conda_types::GenericVirtualPackage {
-                            name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
-                            version: Version::from_str("12.5").unwrap(),
-                            build_string: String::new(),
-                        },
+                    insert_or_update_virtual_packages: vec![gvp("__cuda", "12.5")],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        // The migration committed: flag cleared, legacy table gone, the edited
+        // VP version landed in the rich entry.
+        assert!(!editable.workspace.workspace.must_migrate);
+        let after = editable.document.to_string();
+        assert_no_sysreqs(&after);
+        assert!(
+            after.contains("cuda = \"12.5\""),
+            "edited cuda version should be in the rich platform entry:\n{after}",
+        );
+    }
+
+    #[test]
+    fn test_edit_noop_leaves_toml_unchanged() {
+        // Removing a virtual package the platform doesn't have changes nothing,
+        // so the document must be byte-identical afterwards.
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(!workspace.manifest.workspace.must_migrate);
+        let before = workspace.editable().document.to_string();
+
+        let mut editable = workspace.editable();
+        editable
+            .edit_workspace_platform(
+                &PixiPlatformName::try_from("gpu").unwrap(),
+                PlatformEdit {
+                    remove_virtual_packages: vec![
+                        rattler_conda_types::PackageName::try_from("__glibc").unwrap(),
                     ],
                     ..Default::default()
                 },
             )
             .unwrap();
 
-        // Edit of an existing rich platform must not trigger the migration:
-        // legacy tables stay put and the flag remains set for a future rich
-        // add.
-        assert!(editable.workspace.workspace.must_migrate);
+        assert_eq!(
+            editable.document.to_string(),
+            before,
+            "a no-op edit must leave the manifest untouched",
+        );
+    }
+
+    #[test]
+    fn test_edit_rich_vp_change_rewrites_toml() {
+        // Editing the VPs of an already-rich platform (no legacy migration in
+        // play) rewrites just that entry.
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(!workspace.manifest.workspace.must_migrate);
+
+        let mut editable = workspace.editable();
+        editable
+            .edit_workspace_platform(
+                &PixiPlatformName::try_from("gpu").unwrap(),
+                PlatformEdit {
+                    insert_or_update_virtual_packages: vec![gvp("__cuda", "12.5")],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
         let after = editable.document.to_string();
         assert!(
-            after.contains("[system-requirements]"),
-            "legacy sysreqs should stay on disk after editing an already-rich platform:\n{after}",
+            after.contains("cuda = \"12.5\""),
+            "edited cuda version should land in the document:\n{after}",
+        );
+    }
+
+    #[test]
+    fn test_add_existing_platform_noop_no_migrate() {
+        // Re-adding an already-declared platform in a non-legacy workspace must
+        // not touch the document.
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = ["linux-64", "win-64"]
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(!workspace.manifest.workspace.must_migrate);
+        let before = workspace.editable().document.to_string();
+
+        let mut editable = workspace.editable();
+        editable
+            .add_platforms(
+                [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        assert_eq!(
+            editable.document.to_string(),
+            before,
+            "re-adding an already-declared platform must leave the manifest untouched",
+        );
+    }
+
+    #[test]
+    fn test_remove_platform_modifies_toml_without_upgrade() {
+        // Removal must edit the array but never enrich the surviving entries or
+        // commit a pending migration.
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = ["linux-64", "osx-64"]
+
+            [system-requirements]
+            libc = { family = "glibc", version = "2.31" }
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(workspace.manifest.workspace.must_migrate);
+
+        let mut editable = workspace.editable();
+        editable
+            .remove_platforms(
+                [PixiPlatform::from_subdir(Platform::Osx64)].iter(),
+                &FeatureName::DEFAULT,
+            )
+            .unwrap();
+
+        // Still legacy: the table stays, the flag stays, and the surviving
+        // entry keeps its bare on-disk form.
+        assert!(editable.workspace.workspace.must_migrate);
+        let after = editable.document.to_string();
+        assert_has_sysreqs(&after);
+        assert!(!after.contains("osx-64"), "osx-64 should be gone:\n{after}");
+        assert!(
+            after.contains(r#""linux-64""#),
+            "linux-64 should survive in bare form:\n{after}",
+        );
+    }
+
+    #[test]
+    fn test_platform_rename_propagates_to_features() {
+        // Editing the VPs of an auto-named platform recomputes its name; every
+        // feature that referenced the old name must follow, in memory and on
+        // disk.
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = [{ platform = "linux-64", cuda = "12.0" }]
+
+            [feature.gpu]
+            platforms = ["linux-64-cuda-12-0"]
+
+            [environments]
+            gpu = ["gpu"]
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(!workspace.manifest.workspace.must_migrate);
+
+        let mut editable = workspace.editable();
+        editable
+            .edit_workspace_platform(
+                &PixiPlatformName::try_from("linux-64-cuda-12-0").unwrap(),
+                PlatformEdit {
+                    insert_or_update_virtual_packages: vec![gvp("__cuda", "12.5")],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        let gpu_platforms = editable
+            .workspace
+            .feature(&FeatureName::from("gpu"))
+            .unwrap()
+            .platforms
+            .clone()
+            .unwrap();
+        assert!(
+            gpu_platforms
+                .iter()
+                .all(|p| p.as_str() == "linux-64-cuda-12-5"),
+            "feature platforms should track the rename, got {gpu_platforms:?}",
+        );
+
+        let after = editable.document.to_string();
+        assert!(after.contains("linux-64-cuda-12-5"), "{after}");
+        assert!(!after.contains("linux-64-cuda-12-0"), "{after}");
+    }
+
+    #[test]
+    fn test_edit_adds_vp_to_subdir_platform_and_renames_references() {
+        // Adding a VP to a bare subdir-platform renames it; the feature that
+        // pointed at the bare name must be updated to the new rich name.
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = ["linux-64"]
+
+            [feature.gpu]
+            platforms = ["linux-64"]
+
+            [environments]
+            gpu = ["gpu"]
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(!workspace.manifest.workspace.must_migrate);
+
+        let mut editable = workspace.editable();
+        editable
+            .edit_workspace_platform(
+                &PixiPlatformName::try_from("linux-64").unwrap(),
+                PlatformEdit {
+                    insert_or_update_virtual_packages: vec![gvp("__cuda", "12.0")],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        let gpu_platforms = editable
+            .workspace
+            .feature(&FeatureName::from("gpu"))
+            .unwrap()
+            .platforms
+            .clone()
+            .unwrap();
+        assert!(
+            gpu_platforms
+                .iter()
+                .all(|p| p.as_str() == "linux-64-cuda-12-0"),
+            "feature should reference the renamed platform, got {gpu_platforms:?}",
         );
     }
 }

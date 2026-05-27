@@ -6,6 +6,7 @@ use std::{
 };
 
 use crate::lock_file::SolveCondaEnvironmentError;
+use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
@@ -459,14 +460,27 @@ impl WorkspaceMut {
             && self.workspace().environments().len() == 1
             && default_environment_is_affected
         {
-            updated_lock_file
-                .prefix(
-                    &self.workspace().default_environment(),
-                    UpdateMode::Revalidate,
-                    &ReinstallPackages::default(),
-                    &crate::environment::InstallFilter::default(),
-                )
-                .await?;
+            let default_environment = self.workspace().default_environment();
+            // The lock file is solved for every declared platform, but a prefix
+            // can only be materialised for the current system. When none of the
+            // environment's platforms match this machine (e.g. a `__cuda`
+            // platform on a GPU-less host) just skip the install -- the add
+            // still succeeds and the lock file is up to date.
+            if default_environment.best_platform().is_some() {
+                updated_lock_file
+                    .prefix(
+                        &default_environment,
+                        UpdateMode::Revalidate,
+                        &ReinstallPackages::default(),
+                        &crate::environment::InstallFilter::default(),
+                    )
+                    .await?;
+            } else {
+                tracing::info!(
+                    "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
+                    default_environment.name().fancy_display()
+                );
+            }
         }
 
         let lock_file_diff =

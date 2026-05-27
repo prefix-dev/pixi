@@ -667,8 +667,9 @@ def test_edit_noop_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-def test_edit_subdir_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Bare `linux-64` entries are not editable; the model rejects mutation."""
+def test_edit_subdir_platform_transitions_to_rich(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Editing a bare subdir platform to add a virtual package transitions it
+    into a rich platform, auto-renamed away from the bare subdir form."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "--no-install")
     _run_platform(
@@ -679,10 +680,13 @@ def test_edit_subdir_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) -> 
         "--cuda",
         "12.0",
         "--no-install",
-        expected_exit_code=ExitCode.FAILURE,
-        # The model's own error wording -- the CLI surfaces this verbatim.
-        stderr_contains="subdir platform",
     )
+    platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
+    # The bare `linux-64` string entry is gone; it is now a rich linux-64
+    # platform carrying the requested `__cuda`.
+    assert "linux-64" not in platforms
+    entry = next(p for p in platforms if isinstance(p, dict) and p["platform"] == "linux-64")
+    assert entry["cuda"] == "12.0"
 
 
 def test_edit_unknown_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:

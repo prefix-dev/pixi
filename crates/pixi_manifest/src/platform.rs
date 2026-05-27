@@ -164,7 +164,12 @@ impl PixiPlatform {
     }
 
     pub fn set_name(&mut self, name: PixiPlatformName) -> Result<(), PixiPlatformError> {
-        if self.is_subdir_platform() {
+        // A platform without virtual packages must always be named after its
+        // subdir, so a bare subdir-platform can't be renamed, and a VP-bearing
+        // one can't be renamed onto its own subdir name.
+        if self.is_subdir_platform()
+            || (name.as_str() == self.subdir.as_str() && !self.declared_virtual_packages.is_empty())
+        {
             Err(PixiPlatformError::IsSubdirPlatform)
         } else {
             self.name = name;
@@ -239,20 +244,35 @@ impl PixiPlatform {
         &self.declared_virtual_packages
     }
 
-    /// Apply an in-place edit to this platform. Returns
-    /// [`PixiPlatformError::IsSubdirPlatform`] when called on a subdir-platform
-    /// (where `name == subdir`), because those entries are required to remain
-    /// exact aliases for the underlying conda subdir.
+    /// Apply an in-place edit to this platform.
     ///
     /// Operations are applied in this order so the result is independent of
     /// argument ordering: clear the VP list (if requested), then for each entry
     /// in `insert_or_update_virtual_packages` replace an existing VP with the
     /// same name or push it if absent, then remove any VPs whose name is in
     /// `remove_virtual_packages`, then set the subdir if provided.
+    ///
+    /// The name then follows the subdir-platform invariant -- a platform
+    /// without virtual packages is always named after its subdir:
+    /// - a bare subdir-platform may only be edited into a richer one; an edit
+    ///   that would leave it without virtual packages is rejected with
+    ///   [`PixiPlatformError::IsSubdirPlatform`];
+    /// - adding a VP to a bare subdir-platform, or any edit of an auto-named
+    ///   platform, recomputes the synthesised name;
+    /// - dropping the last VP of a rich platform resets the name to the subdir;
+    /// - a custom name is preserved across VP edits, but
+    ///   [`PixiPlatformError::IsSubdirPlatform`] is returned if the edit would
+    ///   leave a VP-bearing platform named after its own subdir.
     pub fn apply_edit(&mut self, edit: PlatformEdit) -> Result<(), PixiPlatformError> {
-        if self.is_subdir_platform() {
-            return Err(PixiPlatformError::IsSubdirPlatform);
-        }
+        let was_subdir = self.is_subdir_platform();
+        // A bare subdir-platform and a synthesised platform both carry the
+        // auto-derived name; only an explicit custom name differs from it, and
+        // such a name is preserved across the edit.
+        let was_auto = self.name.as_str()
+            == crate::toml::platform::synthesize_name_string(
+                self.subdir,
+                &self.declared_virtual_packages,
+            );
 
         if edit.clear_virtual_packages {
             self.declared_virtual_packages.clear();
@@ -277,6 +297,30 @@ impl PixiPlatform {
 
         if let Some(subdir) = edit.set_subdir {
             self.subdir = subdir;
+        }
+
+        if self.declared_virtual_packages.is_empty() {
+            if was_subdir {
+                // A bare subdir-platform can only be edited into a richer one;
+                // an edit that leaves it bare is rejected to keep bare entries
+                // pristine.
+                return Err(PixiPlatformError::IsSubdirPlatform);
+            }
+            // Dropping the last virtual package collapses a rich platform back
+            // to a bare subdir-platform: the name must equal the subdir.
+            self.name = self.subdir.into();
+        } else if was_auto {
+            // Recompute the synthesised name from the new subdir + VPs. The
+            // synthesiser only emits valid names (subdir prefix, sanitised
+            // segments), so it needs no validation.
+            self.name = PixiPlatformName(crate::toml::platform::synthesize_name_string(
+                self.subdir,
+                &self.declared_virtual_packages,
+            ));
+        } else if self.name.as_str() == self.subdir.as_str() {
+            // A preserved custom name that now equals the subdir while VPs
+            // remain would forge an illegal subdir-platform.
+            return Err(PixiPlatformError::IsSubdirPlatform);
         }
 
         Ok(())
@@ -477,17 +521,19 @@ mod tests {
     }
 
     #[test]
-    fn apply_edit_rejected_on_subdir_platform() {
-        // A subdir-platform (name == subdir) refuses any mutation. This is the
-        // invariant the CLI relies on to keep bare-string entries pristine.
+    fn apply_edit_adding_vp_to_subdir_platform_renames_it() {
+        // Adding a VP to a bare subdir-platform must move it off the subdir
+        // name: a platform with VPs can never be named after its subdir.
         let mut p = PixiPlatform::from_subdir(Platform::Linux64);
-        let err = p
-            .apply_edit(PlatformEdit {
-                insert_or_update_virtual_packages: vec![gvp("__cuda", "12.0")],
-                ..Default::default()
-            })
-            .unwrap_err();
-        assert!(matches!(err, PixiPlatformError::IsSubdirPlatform));
+        assert!(p.is_subdir_platform());
+        p.apply_edit(PlatformEdit {
+            insert_or_update_virtual_packages: vec![gvp("__cuda", "12.0")],
+            ..Default::default()
+        })
+        .unwrap();
+        assert!(!p.is_subdir_platform());
+        assert_eq!(p.name().as_str(), "linux-64-cuda-12-0");
+        assert_eq!(p.subdir(), Platform::Linux64);
     }
 
     /// Combine all four ops in one `PlatformEdit`. Documented order is
@@ -542,6 +588,35 @@ mod tests {
     }
 
     #[test]
+    fn apply_edit_dropping_last_vp_collapses_to_subdir() {
+        // Removing the only virtual package leaves nothing to distinguish the
+        // platform from its subdir, so it must become a bare subdir-platform.
+        let mut p = rich("gpu-linux", Platform::Linux64, vec![gvp("__cuda", "12.0")]);
+        p.apply_edit(PlatformEdit {
+            remove_virtual_packages: vec![PackageName::try_from("__cuda").unwrap()],
+            ..Default::default()
+        })
+        .unwrap();
+        assert!(p.is_subdir_platform());
+        assert_eq!(p.name().as_str(), "linux-64");
+        assert!(p.declared_virtual_packages().is_empty());
+    }
+
+    #[test]
+    fn apply_edit_rejected_when_subdir_starts_matching_name() {
+        // Renaming the subdir onto the platform's own name while it still
+        // carries virtual packages would forge an illegal subdir-platform.
+        let mut p = rich("linux-64", Platform::Win64, vec![gvp("__cuda", "12.0")]);
+        let err = p
+            .apply_edit(PlatformEdit {
+                set_subdir: Some(Platform::Linux64),
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert!(matches!(err, PixiPlatformError::IsSubdirPlatform));
+    }
+
+    #[test]
     fn apply_edit_set_subdir_changes_only_subdir() {
         let mut p = rich("gpu-linux", Platform::Linux64, vec![gvp("__cuda", "12.0")]);
         p.apply_edit(PlatformEdit {
@@ -552,6 +627,26 @@ mod tests {
         assert_eq!(p.subdir(), Platform::LinuxAarch64);
         assert_eq!(p.name().as_str(), "gpu-linux");
         assert_eq!(p.declared_virtual_packages().len(), 1);
+    }
+
+    #[test]
+    fn set_name_rejected_on_subdir_platform() {
+        // A bare subdir-platform is an alias for its subdir and can't be renamed.
+        let mut p = PixiPlatform::from_subdir(Platform::Linux64);
+        let err = p
+            .set_name(PixiPlatformName::try_from("custom").unwrap())
+            .unwrap_err();
+        assert!(matches!(err, PixiPlatformError::IsSubdirPlatform));
+    }
+
+    #[test]
+    fn set_name_to_subdir_name_rejected_when_vps_present() {
+        // A VP-bearing platform may not be renamed onto its own subdir name.
+        let mut p = rich("gpu", Platform::Linux64, vec![gvp("__cuda", "12.0")]);
+        let err = p
+            .set_name(PixiPlatformName::try_from("linux-64").unwrap())
+            .unwrap_err();
+        assert!(matches!(err, PixiPlatformError::IsSubdirPlatform));
     }
 
     #[test]
