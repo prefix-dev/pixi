@@ -7247,6 +7247,7 @@ dependencies = [
  "fs-err",
  "futures",
  "indicatif",
+ "lzma-rust2",
  "pixi_record",
  "pixi_spec",
  "pixi_utils",
@@ -7260,7 +7261,6 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
- "xz2",
  "zip",
  "zstd",
 ]
