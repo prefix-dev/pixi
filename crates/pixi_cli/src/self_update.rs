@@ -72,20 +72,25 @@ async fn send_update_ping(target_version: Option<&Version>) {
         .map(|v| v.to_string())
         .unwrap_or_else(|| "latest".to_string());
 
-    let url = format!(
-        "{}?x-pxid={}&event=self-update&os={}&arch={}&version={}",
-        consts::INSTALL_PING_URL,
-        consts::INSTALL_PING_PXID,
+    // Encode the metadata as a synthetic page URL. Scarf reports on the `Page`
+    // dimension (normally inferred from the referrer), so each event/version/
+    // platform combination shows up as its own page in the dashboard.
+    let page = format!(
+        "https://pixi.sh/ping/self-update/{}/{}-{}",
+        version,
         std::env::consts::OS,
         std::env::consts::ARCH,
-        version,
     );
 
     let Ok((_, client)) = build_reqwest_clients(None, None) else {
         return;
     };
     let _ = client
-        .get(url)
+        .get(consts::INSTALL_PING_URL)
+        .query(&[
+            ("x-pxid", consts::INSTALL_PING_PXID),
+            ("Page", page.as_str()),
+        ])
         .header("User-Agent", user_agent())
         .timeout(std::time::Duration::from_secs(3))
         .send()

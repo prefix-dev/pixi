@@ -215,7 +215,12 @@ try {
 # Opt out by setting PIXI_NO_TELEMETRY or DO_NOT_TRACK.
 if (-not $Env:PIXI_NO_TELEMETRY -and -not $Env:DO_NOT_TRACK) {
     try {
-        $PingUrl = 'https://installation-ping.prefix.dev/a.png?x-pxid=21354c5b-2936-42bc-9d4b-9d6253815afd'
+        $PingArch = if ($ARCH -like 'aarch64*') { 'aarch64' } elseif ($ARCH -like 'i686*') { 'i686' } else { 'x86_64' }
+        # Metadata is encoded into the `Page` query parameter so it shows up as a
+        # distinct page in Scarf. Invoke-WebRequest URL-encodes the parameter value.
+        $Page = "https://pixi.sh/ping/install/$PixiVersion/windows-$PingArch"
+        $PingBase = 'https://installation-ping.prefix.dev/a.png'
+        $PingUrl = "$PingBase`?x-pxid=21354c5b-2936-42bc-9d4b-9d6253815afd&Page=$([uri]::EscapeDataString($Page))"
         Invoke-WebRequest -Uri $PingUrl -UseBasicParsing -TimeoutSec 3 | Out-Null
     } catch {
         # Ignore telemetry errors
