@@ -131,6 +131,8 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [linux-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-unknown-linux-musl.tar.gz)       |
     | `NETRC`              | Path to a custom `.netrc` file for authentication with private repositories.          |                       |
     | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from.    | `/tmp`                |
+    | `PIXI_NO_TELEMETRY`  | If set, the script will not send the anonymous installation ping (see note below).    |                       |
+    | `DO_NOT_TRACK`       | Same as `PIXI_NO_TELEMETRY`; honors the [Console Do Not Track](https://consoledonottrack.com/) standard. |                       |
 
     For example, on Apple Silicon, you can force the installation of the x86 version:
     ```shell
@@ -185,6 +187,8 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     | `PIXI_HOME`          | The location of the installation.                                                 | `$Env:USERPROFILE\.pixi`    |
     | `PIXI_NO_PATH_UPDATE`| If set, the `$PATH` will not be updated to add `pixi` to it.                      | `false`                     |
     | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [win-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.zip)           |
+    | `PIXI_NO_TELEMETRY`  | If set, the script will not send the anonymous installation ping (see note below).    |                             |
+    | `DO_NOT_TRACK`       | Same as `PIXI_NO_TELEMETRY`; honors the [Console Do Not Track](https://consoledonottrack.com/) standard. |           |
 
     For example, set the version:
     ```powershell
@@ -201,6 +205,12 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
     !!! tip "Security Note"
         The PowerShell install script automatically masks any credentials embedded in the download URL when displaying messages, replacing them with `***:***@` to prevent credentials from appearing in logs or console output.
+
+!!! note "Anonymous installation ping"
+    After a successful install, the script sends a single anonymous request that helps us estimate how many installations happen. It contains no personal data and is best-effort: it has a short timeout and never blocks or fails the installation. To disable it, set `PIXI_NO_TELEMETRY=1` or `DO_NOT_TRACK=1` before running the script:
+    ```shell
+    curl -fsSL https://pixi.sh/install.sh | PIXI_NO_TELEMETRY=1 bash
+    ```
 
 ## Autocompletion
 
