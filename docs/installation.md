@@ -132,7 +132,7 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     | `NETRC`              | Path to a custom `.netrc` file for authentication with private repositories.          |                       |
     | `TMP_DIR`            | The temporary directory the script uses to download to and unpack the binary from.    | `/tmp`                |
     | `PIXI_NO_TELEMETRY`  | If set, the script will not send the anonymous installation ping (see note below).    |                       |
-    | `DO_NOT_TRACK`       | Same as `PIXI_NO_TELEMETRY`; honors the [Console Do Not Track](https://consoledonottrack.com/) standard. |                       |
+    | `DO_NOT_TRACK`       | Same as `PIXI_NO_TELEMETRY`; honors the common `DO_NOT_TRACK` convention.              |                       |
 
     For example, on Apple Silicon, you can force the installation of the x86 version:
     ```shell
@@ -188,7 +188,7 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
     | `PIXI_NO_PATH_UPDATE`| If set, the `$PATH` will not be updated to add `pixi` to it.                      | `false`                     |
     | `PIXI_DOWNLOAD_URL`  | Overrides the download URL for the Pixi binary (useful for mirrors or custom builds). | GitHub releases, e.g. [win-64](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.zip)           |
     | `PIXI_NO_TELEMETRY`  | If set, the script will not send the anonymous installation ping (see note below).    |                             |
-    | `DO_NOT_TRACK`       | Same as `PIXI_NO_TELEMETRY`; honors the [Console Do Not Track](https://consoledonottrack.com/) standard. |           |
+    | `DO_NOT_TRACK`       | Same as `PIXI_NO_TELEMETRY`; honors the common `DO_NOT_TRACK` convention.              |                             |
 
     For example, set the version:
     ```powershell
