@@ -324,7 +324,7 @@ impl CommandDispatcherBuilder {
 
     /// Sets the default compiler cache to use for all builds dispatched
     /// through this instance. Injected into the compute engine as
-    /// [`CompilerCacheKey`] and merged into each backend's configuration as a
+    /// `CompilerCacheKey` and merged into each backend's configuration as a
     /// default, which the package's own `pixi.toml` config can override.
     pub fn with_compiler_cache(self, compiler_cache: Option<CompilerCache>) -> Self {
         Self {
