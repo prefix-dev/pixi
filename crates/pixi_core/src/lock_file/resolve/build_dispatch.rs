@@ -43,13 +43,13 @@ use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
 use uv_distribution_types::{
     CachedDist, ConfigSettings, DependencyMetadata, ExtraBuildRequires, IndexLocations,
-    IsBuildBackendError, PackageConfigSettings, Resolution, SourceDist,
+    IsBuildBackendError, PackageConfigSettings, SourceDist,
 };
 use uv_distribution_types::{ExtraBuildVariables, Requirement};
 use uv_install_wheel::LinkMode;
 use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
-use uv_types::{BuildArena, BuildContext, BuildStack, HashStrategy};
+use uv_types::{BuildArena, BuildContext, BuildStack, HashStrategy, ResolvedRequirements};
 use uv_workspace::WorkspaceCache;
 
 /// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
@@ -425,6 +425,7 @@ impl<'a> LazyBuildDispatch<'a> {
                     self.params.hasher,
                     self.params.exclude_newer.clone().unwrap_or_default(),
                     self.params.sources.clone(),
+                    uv_types::SourceTreeEditablePolicy::default(),
                     self.params.workspace_cache.clone(),
                     self.params.concurrency.clone(),
                     self.params.preview,
@@ -490,23 +491,25 @@ impl BuildContext for LazyBuildDispatch<'_> {
         &'a self,
         requirements: &'a [Requirement],
         build_stack: &'a BuildStack,
-    ) -> Result<Resolution, impl IsBuildBackendError> {
+    ) -> Result<ResolvedRequirements, impl IsBuildBackendError> {
+        // Box the inner uv future. uv re-enters this trait recursively when an
+        // sdist needs its build backend resolved (`process_request → setup_build
+        // → resolve → install → process_request`), so flattening the
+        // state machine here keeps the cumulative stack frame bounded.
         let dispatch = self.get_or_try_init().await?;
-        dispatch
-            .resolve(requirements, build_stack)
+        Box::pin(dispatch.resolve(requirements, build_stack))
             .await
             .map_err(LazyBuildDispatchError::Uv)
     }
 
     async fn install<'a>(
         &'a self,
-        resolution: &'a Resolution,
+        resolution: &'a ResolvedRequirements,
         venv: &'a PythonEnvironment,
         build_stack: &'a BuildStack,
     ) -> Result<Vec<CachedDist>, impl IsBuildBackendError> {
         let dispatch = self.get_or_try_init().await?;
-        dispatch
-            .install(resolution, venv, build_stack)
+        Box::pin(dispatch.install(resolution, venv, build_stack))
             .await
             .map_err(LazyBuildDispatchError::Uv)
     }
@@ -524,20 +527,19 @@ impl BuildContext for LazyBuildDispatch<'_> {
         build_stack: BuildStack,
     ) -> Result<Self::SourceDistBuilder, impl IsBuildBackendError> {
         let dispatch = self.get_or_try_init().await?;
-        dispatch
-            .setup_build(
-                source,
-                subdirectory,
-                install_path,
-                version_id,
-                dist,
-                sources,
-                build_kind,
-                build_output,
-                build_stack,
-            )
-            .await
-            .map_err(LazyBuildDispatchError::from)
+        Box::pin(dispatch.setup_build(
+            source,
+            subdirectory,
+            install_path,
+            version_id,
+            dist,
+            sources,
+            build_kind,
+            build_output,
+            build_stack,
+        ))
+        .await
+        .map_err(LazyBuildDispatchError::from)
     }
 
     async fn direct_build<'a>(
@@ -550,17 +552,16 @@ impl BuildContext for LazyBuildDispatch<'_> {
         version_id: Option<&'a str>,
     ) -> Result<Option<DistFilename>, impl IsBuildBackendError> {
         let dispatch = self.get_or_try_init().await?;
-        dispatch
-            .direct_build(
-                source,
-                subdirectory,
-                output_dir,
-                sources,
-                build_kind,
-                version_id,
-            )
-            .await
-            .map_err(LazyBuildDispatchError::from)
+        Box::pin(dispatch.direct_build(
+            source,
+            subdirectory,
+            output_dir,
+            sources,
+            build_kind,
+            version_id,
+        ))
+        .await
+        .map_err(LazyBuildDispatchError::from)
     }
 
     /// Workspace discovery caching.

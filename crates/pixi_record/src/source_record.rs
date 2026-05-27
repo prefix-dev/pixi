@@ -120,8 +120,8 @@ pub struct SourceRecord<D> {
     /// The short hash that was originally parsed from the lock file (e.g.
     /// the `9f3c2a7b` part of `numba-cuda[9f3c2a7b] @ .`).
     ///
-    /// It's useful to reuse this identifier to avoid unnecessary lock-file
-    /// updates. If this field is None when serializing to the lock-file, it
+    /// It's useful to reuse this identifier to avoid unnecessary lock file
+    /// updates. If this field is None when serializing to the lock file, it
     /// will be regenerated based on the contents of this struct itself.
     pub identifier_hash: Option<String>,
 
@@ -155,7 +155,7 @@ pub type FullSourceRecord = SourceRecord<FullSourceRecordData>;
 /// Not used directly outside this crate; see [`UnresolvedSourceRecord`].
 pub type PartialSourceRecord = SourceRecord<PartialSourceRecordData>;
 
-/// A source record that may be either full or partial. This is the lock-file
+/// A source record that may be either full or partial. This is the lock file
 /// boundary type.
 ///
 /// Use [`UnresolvedPixiRecord::try_into_resolved`](crate::UnresolvedPixiRecord::try_into_resolved)
@@ -217,7 +217,7 @@ pub struct FullSourceRecordData {
     pub sources: BTreeMap<String, SourceLocationSpec>,
 }
 
-/// Runtime-checked variant used at the lock-file boundary.
+/// Runtime-checked variant used at the lock file boundary.
 ///
 /// After reading a lock file, source records may be either full (immutable
 /// sources like git) or partial (mutable sources like local paths). This enum
@@ -366,14 +366,14 @@ impl SourceRecord<FullSourceRecordData> {
         &self.data.sources
     }
 
-    /// Convert into lock-file compatible `CondaSourceData`.
+    /// Convert into lock file compatible `CondaSourceData`.
     ///
     /// If either source (manifest or build) is mutable (path-based), the
     /// record is downgraded to partial metadata. This is intentional: mutable
     /// sources can change between runs, so storing full metadata (version,
     /// build string, hashes) would be misleading because it would appear locked
     /// but could silently become stale. By keeping only name, depends, and
-    /// sources, we force re-evaluation at the next lock-file read.
+    /// sources, we force re-evaluation at the next lock file read.
     pub fn into_conda_source_data(self, workspace_root: &Path) -> CondaSourceData {
         let has_mutable = self.has_mutable_source();
         let mut unresolved = SourceRecord::<SourceRecordData>::from(self);
@@ -504,7 +504,7 @@ impl SourceRecord<SourceRecordData> {
         }
     }
 
-    /// Convert into lock-file compatible `CondaSourceData<SourceMetadata>`.
+    /// Convert into lock file compatible `CondaSourceData<SourceMetadata>`.
     ///
     /// If the source is mutable (path-based), full metadata is downgraded to
     /// partial so the lock file does not store stale version/build data.
@@ -574,7 +574,7 @@ impl SourceRecord<SourceRecordData> {
         }
     }
 
-    /// Create from lock-file `CondaSourceData<SourceMetadata>`.
+    /// Create from lock file `CondaSourceData<SourceMetadata>`.
     ///
     /// `build_packages` and `host_packages` must be resolved by the caller
     /// from the lock file's package table, since `CondaSourceData` only
@@ -821,7 +821,7 @@ mod tests {
 
     /// Round-trip a lock file whose conda source package carries build and
     /// host package handles. Uses [`LockFileResolver`] to rebuild records
-    /// with their build/host packages populated from the lockfile's package
+    /// with their build/host packages populated from the lock file's package
     /// table, then writes them back via [`UnresolvedPixiRecord::into_conda_package_data`]
     /// — the path that should serialize the handles again. A diff against
     /// the fixture fails if the round-trip drops build/host information.
@@ -1192,7 +1192,7 @@ mod tests {
     }
 
     #[test]
-    fn path_source_downgrades_to_partial_in_lockfile() {
+    fn path_source_downgrades_to_partial_in_lock_file() {
         let record = make_full_record("my-pkg", path_source("./my-pkg"), None, BTreeMap::new());
         let conda_data = record.into_conda_source_data(Path::new("/workspace"));
         assert!(
@@ -1202,7 +1202,7 @@ mod tests {
     }
 
     #[test]
-    fn git_source_stays_full_in_lockfile() {
+    fn git_source_stays_full_in_lock_file() {
         let record = make_full_record("my-pkg", git_source(), None, BTreeMap::new());
         let conda_data = record.into_conda_source_data(Path::new("/workspace"));
         assert!(

@@ -59,6 +59,7 @@ impl GenerateRecipe for CMakeGenerator {
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root, because `manifest_path` can be
         // either a direct file path or a directory path.
@@ -267,6 +268,7 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -310,6 +312,7 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -347,6 +350,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
             )
             .await
@@ -398,6 +402,7 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -428,6 +433,7 @@ mod tests {
             configuration: None,
             target_configuration: None,
             cache_directory: None,
+            workspace_scratch_directory: None,
         })
         .await
         .unwrap();
@@ -474,6 +480,7 @@ mod tests {
                 configuration: Some(serde_json::json!({ "compilers": ["cuda"] })),
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -619,6 +626,7 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -678,6 +686,7 @@ mod tests {
                 &HashSet::default(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -726,6 +735,7 @@ mod tests {
                 None,
                 &HashSet::from_iter([NormalizedKey("c_stdlib".into())]),
                 vec![],
+                None,
                 None,
             )
             .await

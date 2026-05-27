@@ -34,6 +34,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
+use crate::process_exit;
 
 /// Runs task in the pixi environment.
 ///
@@ -41,7 +42,7 @@ use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 /// It will activate the environment and run the task in the environment.
 /// It is using the deno_task_shell to run the task.
 ///
-/// `pixi run` will also update the lockfile and install the environment if it
+/// `pixi run` will also update the lock file and install the environment if it
 /// is required.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, disable_help_flag = true)]
@@ -170,7 +171,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Top-level progress, kept here so we can clear it between phases.
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
-    // Ensure that the lock-file is up-to-date.
+    // Ensure that the lock file is up-to-date.
     let lock_file = workspace
         .update_lock_file(
             Some(progress.clone()),
@@ -367,7 +368,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 if code == 127 {
                     command_not_found(&workspace, explicit_environment.clone());
                 }
-                std::process::exit(code);
+                process_exit::exit_with_code(code);
             }
             Err(err) => return Err(err.into()),
         }

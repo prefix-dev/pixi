@@ -47,6 +47,7 @@ impl GenerateRecipe for RosGenerator {
         _variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root
         let manifest_root = if manifest_path.is_file() {
@@ -77,7 +78,14 @@ impl GenerateRecipe for RosGenerator {
                 )
             })?;
 
-        let distro = Distro::fetch(&distro_name).await?;
+        // Subdirectory inside the workspace scratch dir owned exclusively by this
+        // backend. `pixi-build-ros-v0` lets us bump the cache layout without
+        // colliding with concurrent backends or older cached entries.
+        let http_cache_dir = workspace_scratch_directory
+            .as_deref()
+            .map(|root| root.join("pixi-build-ros-v0").join("http-cache"));
+
+        let distro = Distro::fetch(&distro_name, http_cache_dir.as_deref()).await?;
 
         // Parse package.xml
         let package_xml_path = manifest_root.join("package.xml");
@@ -439,6 +447,7 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -567,6 +576,7 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe")
@@ -655,6 +665,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
             )
             .await
@@ -881,6 +892,7 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe with explicit package.xml path");
@@ -917,6 +929,7 @@ mod tests {
                 vec![ChannelUrl::from(
                     url::Url::parse("https://prefix.dev/robostack-jazzy").unwrap(),
                 )],
+                None,
                 None,
             )
             .await
@@ -964,6 +977,7 @@ mod tests {
                     url::Url::parse("https://prefix.dev/robostack-jazzy").unwrap(),
                 )],
                 None,
+                None,
             )
             .await
             .expect("Explicit distro should override channel");
@@ -1006,6 +1020,7 @@ mod tests {
                     url::Url::parse("https://prefix.dev/conda-forge").unwrap(),
                 )],
                 None,
+                None,
             )
             .await;
 
@@ -1041,6 +1056,7 @@ mod tests {
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
             )
             .await;

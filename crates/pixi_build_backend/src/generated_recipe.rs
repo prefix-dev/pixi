@@ -57,6 +57,11 @@ pub trait GenerateRecipe {
     /// * `channels` - The channels that are being used for this build. This can be
     ///   used for backend-specific logic that depends on which channels are available.
     /// * `cache_dir` - Optional cache directory for storing cached data (e.g., HTTP responses).
+    /// * `workspace_scratch_directory` - Optional per-workspace scratch directory the backend
+    ///   may use to persist derived state across runs and across multiple backend instances.
+    ///   The backend picks its own subdirectory inside and owns invalidation. See
+    ///   `pixi_build_types::procedures::initialize::InitializeParams::workspace_scratch_directory`
+    ///   for the convention.
     #[allow(clippy::too_many_arguments)]
     async fn generate_recipe(
         &self,
@@ -68,6 +73,7 @@ pub trait GenerateRecipe {
         variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
         cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe>;
 
     /// Returns a list of globs that should be used to find the input files

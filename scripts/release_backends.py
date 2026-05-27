@@ -70,7 +70,7 @@ BACKEND_DEFS: list[dict[str, Any]] = [
 
 STEPS = [
     "Choose version bumps",
-    "Apply version bumps and update lockfiles",
+    "Apply version bumps and update lock files",
     "Run linting",
     "Commit and push changes",
     "Create and merge PR",
@@ -414,7 +414,7 @@ def main() -> None:
 
             completed.append("Chose version bumps")
 
-        # Step 2: Apply version bumps and update lockfiles
+        # Step 2: Apply version bumps and update lock files
         step += 1
         if start_step <= step and updated:
             console.print(f"\n[bold]Step {step}. {STEPS[step - 1]}[/bold]\n")
@@ -432,7 +432,7 @@ def main() -> None:
                     pkgs.extend(["--package", b.cargo_name])
                 run(["cargo", "update", *pkgs])
 
-            completed.append("Applied version bumps and updated lockfiles")
+            completed.append("Applied version bumps and updated lock files")
 
         # Step 3: Run linting
         step += 1

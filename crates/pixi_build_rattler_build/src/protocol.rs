@@ -437,8 +437,14 @@ impl Protocol for RattlerBuildBackend {
                 timestamp: chrono::Utc::now(),
                 subpackages: BTreeMap::new(),
                 packaging_settings: PackagingSettings::from_args(
-                    CondaArchiveType::Conda,
-                    CompressionLevel::default(),
+                    params
+                        .package_format
+                        .map(|pf| pf.archive_type)
+                        .unwrap_or(CondaArchiveType::Conda),
+                    params
+                        .package_format
+                        .map(|pf| CompressionLevel::from(pf.compression_level))
+                        .unwrap_or_default(),
                 ),
                 store_recipe: false,
                 force_colors: true,
@@ -723,6 +729,7 @@ mod tests {
                         configuration: None,
                         target_configuration: None,
                         cache_directory: None,
+                        workspace_scratch_directory: None,
                     })
                     .await
                     .unwrap();
@@ -788,6 +795,7 @@ mod tests {
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -834,6 +842,7 @@ mod tests {
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -899,6 +908,7 @@ numpy:
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -972,6 +982,7 @@ numpy:
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();

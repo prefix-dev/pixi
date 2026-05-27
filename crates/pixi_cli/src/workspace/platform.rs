@@ -27,7 +27,7 @@ pub struct AddArgs {
     pub platform: Vec<String>,
 
     /// Don't update the environment, only add changed packages to the
-    /// lock-file.
+    /// lock file.
     #[clap(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
@@ -43,7 +43,7 @@ pub struct RemoveArgs {
     pub platforms: Vec<Platform>,
 
     /// Don't update the environment, only remove the platform(s) from the
-    /// lock-file.
+    /// lock file.
     #[clap(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
@@ -54,13 +54,13 @@ pub struct RemoveArgs {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    /// Adds a platform(s) to the workspace file and updates the lockfile.
+    /// Adds a platform(s) to the workspace file and updates the lock file.
     #[clap(visible_alias = "a")]
     Add(AddArgs),
     /// List the platforms in the workspace file.
     #[clap(visible_alias = "ls")]
     List,
-    /// Remove platform(s) from the workspace file and updates the lockfile.
+    /// Remove platform(s) from the workspace file and updates the lock file.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
 }

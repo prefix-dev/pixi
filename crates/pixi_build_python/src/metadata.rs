@@ -955,6 +955,7 @@ Documentation = "https://docs.example.com"
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -1002,6 +1003,7 @@ requires-python = ">=3.13"
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
             )
             .await

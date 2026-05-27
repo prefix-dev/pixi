@@ -139,7 +139,7 @@ pub trait HasNoInstallConfig: Sized {
 pub trait HasLockFileUpdateConfig: Sized {
     fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig;
 
-    /// Set the frozen flag to skip lock-file updates
+    /// Set the frozen flag to skip lock file updates
     fn with_frozen(mut self, frozen: bool) -> Self {
         self.lock_file_update_config().lock_file_usage.frozen = frozen;
         self
@@ -245,9 +245,9 @@ impl AddBuilder {
     }
 
     /// Deprecated: Use .with_frozen(true).with_install(false) instead
-    pub fn with_no_lockfile_update(mut self, no_lockfile_update: bool) -> Self {
-        if no_lockfile_update {
-            // Since no_lockfile_update is deprecated, we simulate the behavior by setting frozen=true and no_install=true
+    pub fn with_no_lock_file_update(mut self, no_lock_file_update: bool) -> Self {
+        if no_lock_file_update {
+            // Since no_lock_file_update is deprecated, we simulate the behavior by setting frozen=true and no_install=true
             self.args.lock_file_update_config.lock_file_usage.frozen = true;
             self.args.no_install_config.no_install = true;
         }

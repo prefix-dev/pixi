@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_manifest/src/toml/build_backend.rs
+assertion_line: 379
 expression: parsed
 ---
 TomlPackageBuild {
@@ -17,30 +18,37 @@ TomlPackageBuild {
                     source: "foobar",
                 },
             },
-            spec: TomlSpec {
-                version: Some(
-                    Any,
-                ),
-                location: Some(
-                    TomlLocationSpec {
-                        url: None,
-                        git: None,
-                        path: None,
-                        branch: None,
-                        rev: None,
-                        tag: None,
-                        subdirectory: None,
-                        md5: None,
-                        sha256: None,
-                    },
-                ),
-                build: None,
-                build_number: None,
-                file_name: None,
-                channel: None,
-                subdir: None,
-                license: None,
-            },
+            spec: Direct(
+                TomlSpec {
+                    version: Some(
+                        Any,
+                    ),
+                    location: Some(
+                        TomlLocationSpec {
+                            url: None,
+                            git: None,
+                            path: None,
+                            branch: None,
+                            rev: None,
+                            tag: None,
+                            subdirectory: None,
+                            md5: None,
+                            sha256: None,
+                        },
+                    ),
+                    build: None,
+                    build_number: None,
+                    file_name: None,
+                    extras: None,
+                    flags: None,
+                    channel: None,
+                    subdir: None,
+                    license: None,
+                    license_family: None,
+                    when: None,
+                    track_features: None,
+                },
+            ),
             channels: None,
             additional_dependencies: UniquePackageMap {
                 specs: {},

@@ -11,12 +11,12 @@ import yaml
 
 def start():
     # Give relative path or default to local pixi.lock
-    lockfile_path = sys.argv[1] if len(sys.argv) > 1 else "pixi.lock"
+    lock_file_path = sys.argv[1] if len(sys.argv) > 1 else "pixi.lock"
 
-    with open(lockfile_path) as file:
-        lockfile_data = yaml.safe_load(file)
+    with open(lock_file_path) as file:
+        lock_file_data = yaml.safe_load(file)
 
-    package_data = lockfile_data["packages"]
+    package_data = lock_file_data["packages"]
 
     graph = nx.DiGraph()
     for package in package_data:

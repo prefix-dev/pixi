@@ -70,6 +70,9 @@ pub enum SourceBuildError {
     #[diagnostic(transparent)]
     BackendBuildError(#[from] BackendSourceBuildError),
 
+    #[error("failed to amend run exports for {0} environment")]
+    RunExportsExtraction(String, #[source] Arc<RunExportExtractorError>),
+
     #[error("failed to read metadata from the output package")]
     ReadIndexJson(#[source] Arc<rattler_package_streaming::ExtractError>),
 

@@ -2518,7 +2518,7 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
 
 /// When the environment contains both a top-level source package `foo`
 /// and another source package `bar` whose host environment also resolves
-/// `foo`, lockfile-derived installed hints can currently carry two
+/// `foo`, lock file-derived installed hints can currently carry two
 /// different locked instances of `foo` in the same environment.
 ///
 /// The solve should normalize those hints so the final environment does

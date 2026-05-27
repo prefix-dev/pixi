@@ -29,7 +29,7 @@ use pixi_uv_conversions::{
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::{
     GenericVirtualPackage, MatchSpec, Matches, PackageName, ParseChannelError, ParseMatchSpecError,
-    ParseStrictness::Lenient, Platform,
+    ParseMatchSpecOptions, Platform, RepodataRevision,
 };
 use rattler_lock::{LockedPackage, UrlOrPath};
 use uv_distribution_types::{RequirementSource, RequiresPython};
@@ -64,7 +64,7 @@ pub struct VerifySatisfiabilityContext<'a> {
     /// Cache for static metadata extracted from pyproject.toml files.
     /// This is shared across platforms since static metadata is platform-independent.
     pub static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
-    /// Resolver for the lock-file being verified. Built once at the top of
+    /// Resolver for the lock file being verified. Built once at the top of
     /// `find_unsatisfiable_targets` and shared across all per-platform
     /// contexts.
     pub resolver: &'a LockFileResolver,
@@ -95,7 +95,7 @@ fn build_platform_verification_setup(
 }
 
 /// Verifies that the package requirements of the specified `environment` can be
-/// satisfied with the packages present in the lock-file.
+/// satisfied with the packages present in the lock file.
 ///
 /// Both Conda and pypi packages are verified by this function. First all the
 /// conda package are verified and then all the pypi packages are verified. This
@@ -192,14 +192,14 @@ pub async fn verify_platform_satisfiability(
                 let needs_backend_check = record.data.is_partial() || record.has_mutable_source();
                 if needs_backend_check {
                     // Partial records carry no version/build material in
-                    // the lockfile, so they must be resolved from the
+                    // the lock file, so they must be resolved from the
                     // backend. Mutable sources (path-based, or with a
                     // path-based build source) must also re-evaluate via
                     // the backend because the manifest can change without
-                    // any lockfile-visible signal — there is no
+                    // any lock file-visible signal — there is no
                     // content-pinned identifier we can use to detect
                     // edits to e.g. host-dependencies. Skipping the
-                    // backend here would silently accept stale lockfiles.
+                    // backend here would silently accept stale lock files.
                     let resolved =
                         verify_partial_source_record_against_backend(ctx, &platform_setup, &record)
                             .await?;
@@ -516,10 +516,10 @@ async fn verify_package_platform_satisfiability(
         .into_specs()
         .collect_vec();
 
-    // Indexes the lock-file was resolved against. Authoritative because
+    // Indexes the lock file was resolved against. Authoritative because
     // `verify_pypi_indexes` already confirmed they match the manifest. A
     // locked package URL must be one of these to satisfy a requirement
-    // with no per-package `index`. None for pre-v7 lockfiles.
+    // with no per-package `index`. None for pre-v7 lock files.
     let locked_indexes: &[url::Url] = locked_pypi_indexes
         .map(|i| i.indexes.as_slice())
         .unwrap_or(&[]);
@@ -809,7 +809,7 @@ async fn verify_package_platform_satisfiability(
                         .satisfies(&requirement_to_check)
                         .map_err(CommandDispatcherError::Failed)?
                     {
-                        // The record does not match the spec, the lock-file is inconsistent.
+                        // The record does not match the spec, the lock file is inconsistent.
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::CondaUnsatisfiableRequirement(
                                 Box::new(requirement.clone()),
@@ -857,7 +857,7 @@ async fn verify_package_platform_satisfiability(
                             }
                         }
                         Ok(None) => {
-                            // The record does not match the spec, the lock-file is inconsistent.
+                            // The record does not match the spec, the lock file is inconsistent.
                             delayed_pypi_error.get_or_insert_with(|| {
                                 Box::new(PlatformUnsat::UnsatisfiableRequirement(
                                     Box::new(requirement),
@@ -889,7 +889,12 @@ async fn verify_package_platform_satisfiability(
 
                 let record = &locked_pixi_records.records[idx.0];
                 for depends in &record.package_record().depends {
-                    let spec = MatchSpec::from_str(depends.as_str(), Lenient).map_err(|e| {
+                    let spec = MatchSpec::from_str(
+                        depends.as_str(),
+                        ParseMatchSpecOptions::lenient()
+                            .with_repodata_revision(RepodataRevision::V3),
+                    )
+                    .map_err(|e| {
                         CommandDispatcherError::Failed(Box::new(
                             PlatformUnsat::FailedToParseMatchSpec(depends.clone(), e),
                         ))
@@ -1172,7 +1177,7 @@ fn find_matching_package(
             {
                 Some((idx, record)) if spec.matches(record) => idx,
                 Some(_) => {
-                    // The record does not match the spec, the lock-file is
+                    // The record does not match the spec, the lock file is
                     // inconsistent.
                     return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
                         Box::new(spec),
@@ -1187,7 +1192,7 @@ fn find_matching_package(
                             // propagate the dependencies.
                             return Ok(None);
                         } else {
-                            // The record does not match the spec, the lock-file is
+                            // The record does not match the spec, the lock file is
                             // inconsistent.
                             return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
                                 Box::new(spec),
@@ -1195,7 +1200,7 @@ fn find_matching_package(
                             )));
                         }
                     } else {
-                        // The record does not match the spec, the lock-file is
+                        // The record does not match the spec, the lock file is
                         // inconsistent.
                         return Err(Box::new(PlatformUnsat::UnsatisfiableMatchSpec(
                             Box::new(spec),
@@ -1221,7 +1226,7 @@ fn find_matching_source_package(
         .index_by_name(&name)
         .map(|idx| (idx, &locked_pixi_records.records[idx]))
     else {
-        // The record does not match the spec, the lock-file is
+        // The record does not match the spec, the lock file is
         // inconsistent.
         return Err(Box::new(PlatformUnsat::SourcePackageMissing(
             name.as_source().to_string(),

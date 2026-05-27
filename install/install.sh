@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# Version: v0.68.1
+# Version: v0.69.0
 
 __wrap__() {
     # Function to mask username and password in URLs for safe printing
@@ -39,7 +39,11 @@ __wrap__() {
     if [ "${PLATFORM-}" = "Darwin" ]; then
         PLATFORM="apple-darwin"
     elif [ "${PLATFORM-}" = "Linux" ]; then
-        PLATFORM="unknown-linux-musl"
+        if [ "${ARCH-}" = "riscv64" ]; then
+            PLATFORM="unknown-linux-gnu"
+        else
+            PLATFORM="unknown-linux-musl"
+        fi
     elif [ "$(uname -o)" = "Msys" ]; then
         IS_MSYS=true
         PLATFORM="pc-windows-msvc"

@@ -145,7 +145,7 @@ impl From<Arc<RepoDataRecord>> for PixiRecord {
 
 /// A record that may contain partial source metadata (not yet resolved).
 ///
-/// Lifecycle: lock-file read produces `UnresolvedPixiRecord` values. Binary
+/// Lifecycle: lock file read produces `UnresolvedPixiRecord` values. Binary
 /// records and immutable source records are already resolved; mutable source
 /// records are partial and must be resolved by re-evaluating source metadata
 /// before the record can be used for solving or installing.
@@ -221,7 +221,7 @@ impl UnresolvedPixiRecord {
         )
     }
 
-    /// Create from lock-file `CondaPackageData`.
+    /// Create from lock file `CondaPackageData`.
     pub fn from_conda_package_data(
         data: CondaPackageData,
         workspace_root: &std::path::Path,
@@ -253,7 +253,7 @@ impl UnresolvedPixiRecord {
         }
     }
 
-    /// Convert to `CondaPackageData` for lock-file write. For source records,
+    /// Convert to `CondaPackageData` for lock file write. For source records,
     /// `build_packages` / `host_packages` are registered into `builder`
     /// (recursively) so the returned source data's `source_data` references
     /// them by handle.
@@ -306,7 +306,7 @@ impl UnresolvedPixiRecord {
 /// Register a source record's `build_packages` / `host_packages` into
 /// `builder` (recursively) and build a [`SourceData`] referencing the
 /// resulting handles. Leaves `source` with empty build/host package vecs —
-/// the canonical form lives in the lockfile from this point on.
+/// the canonical form lives in the lock file from this point on.
 fn register_source_deps<D>(
     builder: &mut LockFileBuilder,
     source: &mut source_record::SourceRecord<D>,

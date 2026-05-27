@@ -25,31 +25,32 @@ pub async fn list_tasks(
         })
         .transpose()?;
 
-    let lockfile = workspace
+    let lock_file = workspace
         .load_lock_file()
         .await
         .ok()
         .map(|r| r.into_lock_file_or_empty_with_warning());
 
-    let env_task_map: HashMap<Environment, HashSet<TaskName>> =
-        if let Some(explicit_environment) = explicit_environment {
-            HashMap::from([(
-                explicit_environment.clone(),
-                explicit_environment.get_filtered_tasks(),
-            )])
-        } else {
-            workspace
-                .environments()
-                .iter()
-                .filter_map(|env| {
-                    if verify_current_platform_can_run_environment(env, lockfile.as_ref()).is_ok() {
-                        Some((env.clone(), env.get_filtered_tasks()))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        };
+    let env_task_map: HashMap<Environment, HashSet<TaskName>> = if let Some(explicit_environment) =
+        explicit_environment
+    {
+        HashMap::from([(
+            explicit_environment.clone(),
+            explicit_environment.get_filtered_tasks(),
+        )])
+    } else {
+        workspace
+            .environments()
+            .iter()
+            .filter_map(|env| {
+                if verify_current_platform_can_run_environment(env, lock_file.as_ref()).is_ok() {
+                    Some((env.clone(), env.get_filtered_tasks()))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    };
 
     Ok(env_task_map
         .into_iter()

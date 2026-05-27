@@ -31,18 +31,26 @@ pixi publish [OPTIONS]
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
 :  The path to a directory containing a package manifest, or to a specific manifest file
 - <a id="arg---target-channel" href="#arg---target-channel">`--target-channel <TARGET_CHANNEL>`</a>
-:  The target channel URL to publish packages to
+:  The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
 <br>**aliases**: to
 - <a id="arg---target-dir" href="#arg---target-dir">`--target-dir <TARGET_DIR>`</a>
-:  The target local directory to copy packages into (no channel indexing)
+:  The local filesystem path to copy the built package(s) into (no channel indexing)
 - <a id="arg---force" href="#arg---force">`--force`</a>
 :  Force overwrite existing packages
 - <a id="arg---skip-existing" href="#arg---skip-existing">`--skip-existing <SKIP_EXISTING>`</a>
-:  Skip uploading packages that already exist on the target channel. This is enabled by default. Use `--no-skip-existing` to disable
+:  Skip uploading packages that already exist at the target. This is enabled by default. Use `--no-skip-existing` to disable
 <br>**default**: `true`
 <br>**options**: `true`, `false`
 - <a id="arg---generate-attestation" href="#arg---generate-attestation">`--generate-attestation`</a>
 :  Generate sigstore attestation (prefix.dev only)
+- <a id="arg---variant" href="#arg---variant">`--variant <KEY=VALUES>`</a>
+:  Override a build variant key with one or more values
+<br>May be provided more than once.
+- <a id="arg---variant-config" href="#arg---variant-config">`--variant-config (-m) <FILE>`</a>
+:  Path to an additional variant configuration YAML file
+<br>May be provided more than once.
+- <a id="arg---package-format" href="#arg---package-format">`--package-format <PACKAGE_FORMAT>`</a>
+:  Archive format and optional compression level, e.g. `conda`, `tar-bz2`, `conda:max`, `conda:15`, `tar-bz2:9`. Numeric ranges match rattler-build: -7..=22 for `.conda`, 1..=9 for `.tar.bz2`
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
@@ -79,17 +87,22 @@ pixi publish [OPTIONS]
 ## Description
 Build a conda package and publish it to a channel.
 
-This is a convenience command that combines `pixi build` and `pixi upload`.
+Builds the package from your workspace and either uploads it to a channel
+(`--target-channel`) or copies the artifact into a local directory
+(`--target-dir`).
 
-Supported target URLs (--target-channel / --to):
+Supported destinations for `--target-channel` (alias `--to`):
   - prefix.dev: `https://prefix.dev/<channel-name>`
   - anaconda.org: `https://anaconda.org/<owner>/<label>`
   - Cloudsmith: `https://conda.cloudsmith.io/<owner>/<repository>/`
   - S3: `s3://bucket-name`
-  - Local channel (with indexing): `channel:///path/to/channel`
-  - Local path (copy only): `file:///path/to/output`
   - Quetz: `quetz://server/<channel>`
   - Artifactory: `artifactory://server/<channel>`
+  - Local filesystem channel (with indexing):
+    `file:///path/to/channel` or a bare path
+
+Use `--target-dir <PATH>` instead to copy the built package(s) into a
+directory without creating a channel structure.
 
 
 --8<-- "docs/reference/cli/pixi/publish_extender:example"

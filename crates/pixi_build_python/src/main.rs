@@ -129,6 +129,7 @@ impl GenerateRecipe for PythonGenerator {
         variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
         cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         let params = python_params.unwrap_or_default();
 
@@ -376,6 +377,13 @@ impl GenerateRecipe for PythonGenerator {
         };
 
         // Construct python specific settings
+        let skip_pyc_globs = config.skip_pyc_compilation.globs();
+        let skip_pyc_compilation = ConditionalList::new(
+            skip_pyc_globs
+                .into_iter()
+                .map(|g| Item::Value(Value::new_concrete(g, None)))
+                .collect(),
+        );
         let python = PythonBuild {
             entry_points: PythonGenerator::entry_points(pyproject_manifest),
             version_independent: if config.abi3 == Some(true) {
@@ -383,6 +391,7 @@ impl GenerateRecipe for PythonGenerator {
             } else {
                 None
             },
+            skip_pyc_compilation,
             ..PythonBuild::default()
         };
 
@@ -697,6 +706,7 @@ version = "0.1.0"
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -742,6 +752,7 @@ version = "0.1.0"
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -786,6 +797,7 @@ version = "0.1.0"
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -827,6 +839,7 @@ version = "0.1.0"
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
             )
             .await
@@ -899,6 +912,7 @@ version = "0.1.0"
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -948,6 +962,7 @@ version = "0.1.0"
                 None,
                 &std::collections::HashSet::<pixi_build_backend::variants::NormalizedKey>::new(),
                 vec![],
+                None,
                 None,
             )
             .await?)
@@ -1066,6 +1081,7 @@ version = "0.1.0"
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -1103,6 +1119,7 @@ version = "0.1.0"
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
             )
             .await
@@ -1205,6 +1222,7 @@ build-backend = "hatchling.build"
                 vec![ChannelUrl::from(
                     url::Url::parse("https://prefix.dev/conda-forge").unwrap(),
                 )],
+                None,
                 None,
             )
             .await
@@ -1319,6 +1337,7 @@ build-backend = "setuptools.build_meta"
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
                 None,
             )
             .await

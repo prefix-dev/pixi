@@ -131,7 +131,7 @@ async fn add_with_channel() {
     );
 }
 
-/// Test that we get the union of all packages in the lockfile for the run,
+/// Test that we get the union of all packages in the lock file for the run,
 /// build and host
 #[tokio::test]
 async fn add_functionality_union() {

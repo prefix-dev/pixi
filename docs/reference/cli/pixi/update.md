@@ -23,7 +23,7 @@ pixi update [OPTIONS] [PACKAGES]...
 :  Don't install the (solve) environments needed for pypi-dependencies solving
 <br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
-:  Don't actually write the lockfile or update any environment
+:  Don't actually write the lock file or update any environment
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENTS>`</a>
 :  The environments to update. If none is specified, all environments are updated
 <br>May be provided more than once.

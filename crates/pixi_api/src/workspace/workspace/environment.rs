@@ -33,7 +33,7 @@ pub async fn add<I: Interface>(
         }
     }
 
-    // Add the platforms to the lock-file
+    // Add the platforms to the lock file
     workspace.manifest().add_environment(
         name.as_str().to_string(),
         features,
