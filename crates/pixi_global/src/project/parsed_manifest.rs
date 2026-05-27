@@ -417,9 +417,11 @@ impl AsRef<str> for ExposedName {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use insta::assert_snapshot;
 
-    use super::ParsedManifest;
+    use super::{ParsedManifest, super::environment::EnvironmentName};
 
     #[test]
     fn test_invalid_key() {
@@ -546,5 +548,61 @@ mod tests {
         "python3.10" = "python"
         "#;
         let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
+    }
+
+    #[test]
+    fn test_ignore_conda_prefix_defaults_to_false() {
+        let contents = r#"
+        [envs.test]
+        channels = ["conda-forge"]
+        [envs.test.dependencies]
+        python = "*"
+        [envs.test.exposed]
+        python = "python"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents).unwrap();
+        let env = manifest
+            .envs
+            .get(&EnvironmentName::from_str("test").unwrap())
+            .unwrap();
+        assert!(!env.ignore_conda_prefix);
+    }
+
+    #[test]
+    fn test_ignore_conda_prefix_true() {
+        let contents = r#"
+        [envs.test]
+        channels = ["conda-forge"]
+        ignore-conda-prefix = true
+        [envs.test.dependencies]
+        python = "*"
+        [envs.test.exposed]
+        python = "python"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents).unwrap();
+        let env = manifest
+            .envs
+            .get(&EnvironmentName::from_str("test").unwrap())
+            .unwrap();
+        assert!(env.ignore_conda_prefix);
+    }
+
+    #[test]
+    fn test_ignore_conda_prefix_false_explicit() {
+        let contents = r#"
+        [envs.test]
+        channels = ["conda-forge"]
+        ignore-conda-prefix = false
+        [envs.test.dependencies]
+        python = "*"
+        [envs.test.exposed]
+        python = "python"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents).unwrap();
+        let env = manifest
+            .envs
+            .get(&EnvironmentName::from_str("test").unwrap())
+            .unwrap();
+        assert!(!env.ignore_conda_prefix);
     }
 }

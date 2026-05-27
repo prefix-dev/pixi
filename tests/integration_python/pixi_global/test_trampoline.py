@@ -514,3 +514,57 @@ def test_trampoline_considers_global_config_json(
     env = current_env | env
     exposed_executable = tmp_path / "bin" / exec_extension(f"{executable_name}")
     verify_cli_command([exposed_executable], stdout_contains="NOT_PRESENT", env=env, reset_env=True)
+
+
+def test_trampoline_manifest_ignore_conda_prefix(
+    pixi: Path, tmp_path: Path, trampoline_channel: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    manifests = tmp_path / "manifests"
+    manifests.mkdir()
+    manifest = manifests / "pixi-global.toml"
+    manifest.write_text(f"""
+[envs.dummy-trampoline]
+channels = ["{trampoline_channel}"]
+dependencies = {{ "dummy-trampoline" = "0.1.0" }}
+exposed = {{ "dummy-trampoline" = "dummy-trampoline" }}
+ignore-conda-prefix = true
+""")
+
+    verify_cli_command([pixi, "global", "sync"], env=env)
+
+    trampoline_configuration = (
+        tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
+    )
+    trampoline_metadata = json.loads(trampoline_configuration.read_text())
+    trampoline_env = trampoline_metadata["env"]
+
+    assert "CONDA_PREFIX" not in trampoline_env
+
+
+def test_trampoline_manifest_ignore_conda_prefix_false(
+    pixi: Path, tmp_path: Path, trampoline_channel: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    manifests = tmp_path / "manifests"
+    manifests.mkdir()
+    manifest = manifests / "pixi-global.toml"
+    manifest.write_text(f"""
+[envs.dummy-trampoline]
+channels = ["{trampoline_channel}"]
+dependencies = {{ "dummy-trampoline" = "0.1.0" }}
+exposed = {{ "dummy-trampoline" = "dummy-trampoline" }}
+ignore-conda-prefix = false
+""")
+
+    verify_cli_command([pixi, "global", "sync"], env=env)
+
+    trampoline_configuration = (
+        tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
+    )
+    trampoline_metadata = json.loads(trampoline_configuration.read_text())
+    trampoline_env = trampoline_metadata["env"]
+
+    assert "CONDA_PREFIX" in trampoline_env
