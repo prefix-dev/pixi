@@ -17,7 +17,7 @@ impl SkipPycCompilation {
     pub fn globs(&self) -> Vec<String> {
         match self {
             SkipPycCompilation::None => vec![],
-            SkipPycCompilation::All => vec!["**/*.pyc".to_string()],
+            SkipPycCompilation::All => vec!["**/*.py".to_string()],
             SkipPycCompilation::Globs(g) => g.clone(),
         }
     }
