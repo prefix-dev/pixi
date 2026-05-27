@@ -3,6 +3,73 @@ use pixi_build_backend::generated_recipe::BackendConfig;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+/// Represents skip-pyc-compilation config: either `true` (skip all) or a list
+/// of glob patterns.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum SkipPycCompilation {
+    #[default]
+    None,
+    All,
+    Globs(Vec<String>),
+}
+
+impl SkipPycCompilation {
+    pub fn globs(&self) -> Vec<String> {
+        match self {
+            SkipPycCompilation::None => vec![],
+            SkipPycCompilation::All => vec!["**/*.pyc".to_string()],
+            SkipPycCompilation::Globs(g) => g.clone(),
+        }
+    }
+
+    pub fn is_none(&self) -> bool {
+        matches!(self, SkipPycCompilation::None)
+    }
+}
+
+impl Serialize for SkipPycCompilation {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            SkipPycCompilation::None => serializer.serialize_none(),
+            SkipPycCompilation::All => serializer.serialize_bool(true),
+            SkipPycCompilation::Globs(g) => g.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for SkipPycCompilation {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        use serde::de;
+
+        struct Visitor;
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = SkipPycCompilation;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("true or a list of glob patterns")
+            }
+            fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                if v {
+                    Ok(SkipPycCompilation::All)
+                } else {
+                    Ok(SkipPycCompilation::None)
+                }
+            }
+            fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                let mut globs = Vec::new();
+                while let Some(g) = seq.next_element::<String>()? {
+                    globs.push(g);
+                }
+                if globs.is_empty() {
+                    Ok(SkipPycCompilation::None)
+                } else {
+                    Ok(SkipPycCompilation::Globs(globs))
+                }
+            }
+        }
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct PythonBackendConfig {
@@ -39,6 +106,10 @@ pub struct PythonBackendConfig {
     /// Only meaningful for packages with compiled extensions (non-noarch).
     #[serde(default)]
     pub abi3: Option<bool>,
+    /// Skip .pyc compilation for matching files. Accepts `true` to skip all
+    /// .pyc compilation, or a list of glob patterns (e.g. `["tests/**"]`).
+    #[serde(default)]
+    pub skip_pyc_compilation: SkipPycCompilation,
 }
 
 impl PythonBackendConfig {
@@ -105,13 +176,18 @@ impl BackendConfig for PythonBackendConfig {
                 .ignore_pypi_mapping
                 .or(self.ignore_pypi_mapping),
             abi3: target_config.abi3.or(self.abi3),
+            skip_pyc_compilation: if target_config.skip_pyc_compilation.is_none() {
+                self.skip_pyc_compilation.clone()
+            } else {
+                target_config.skip_pyc_compilation.clone()
+            },
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::PythonBackendConfig;
+    use super::{PythonBackendConfig, SkipPycCompilation};
     use pixi_build_backend::generated_recipe::BackendConfig;
     use serde_json::json;
     use std::path::PathBuf;
@@ -138,6 +214,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: Some(true),
+            skip_pyc_compilation: SkipPycCompilation::All,
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -154,6 +231,7 @@ mod tests {
             ignore_pyproject_manifest: Some(false),
             ignore_pypi_mapping: Some(false),
             abi3: Some(false),
+            skip_pyc_compilation: SkipPycCompilation::Globs(vec!["tests/**".to_string()]),
         };
 
         let merged = base_config
@@ -191,6 +269,11 @@ mod tests {
         assert_eq!(merged.ignore_pypi_mapping, Some(false));
         // abi3 should use target value
         assert_eq!(merged.abi3, Some(false));
+        // skip_pyc_compilation should use target value
+        assert_eq!(
+            merged.skip_pyc_compilation,
+            SkipPycCompilation::Globs(vec!["tests/**".to_string()])
+        );
     }
 
     #[test]
@@ -208,6 +291,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: None,
+            skip_pyc_compilation: SkipPycCompilation::All,
         };
 
         let empty_target_config = PythonBackendConfig::default();
