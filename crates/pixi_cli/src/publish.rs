@@ -1288,39 +1288,6 @@ async fn upload_to_s3(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{parse_cloudsmith_repository, parse_target};
-    use std::path::Path;
-
-    #[test]
-    fn parse_cloudsmith_conda_channel_target() {
-        let url = url::Url::parse("https://conda.cloudsmith.io/my-owner/my-repo/").unwrap();
-        let (owner, repo) = parse_cloudsmith_repository(&url).unwrap();
-
-        assert_eq!(owner, "my-owner");
-        assert_eq!(repo, "my-repo");
-    }
-
-    #[test]
-    fn reject_cloudsmith_conda_channel_without_repo() {
-        let url = url::Url::parse("https://conda.cloudsmith.io/my-owner/").unwrap();
-
-        assert!(parse_cloudsmith_repository(&url).is_err());
-    }
-
-    #[test]
-    fn parse_target_accepts_cloudsmith_url() {
-        let url = parse_target(
-            "https://conda.cloudsmith.io/my-owner/my-repo/",
-            Path::new("/tmp"),
-        )
-        .unwrap();
-
-        assert_eq!(url.host_str(), Some("conda.cloudsmith.io"));
-    }
-}
-
 /// Upload packages to local filesystem and run indexing.
 async fn upload_to_local_filesystem_channel(
     target_dir: &std::path::Path,
@@ -1403,6 +1370,33 @@ mod tests {
 
     use super::*;
     use rattler_conda_types::{compression_level::CompressionLevel, package::CondaArchiveType};
+
+    #[test]
+    fn parse_cloudsmith_conda_channel_target() {
+        let url = url::Url::parse("https://conda.cloudsmith.io/my-owner/my-repo/").unwrap();
+        let (owner, repo) = parse_cloudsmith_repository(&url).unwrap();
+
+        assert_eq!(owner, "my-owner");
+        assert_eq!(repo, "my-repo");
+    }
+
+    #[test]
+    fn reject_cloudsmith_conda_channel_without_repo() {
+        let url = url::Url::parse("https://conda.cloudsmith.io/my-owner/").unwrap();
+
+        assert!(parse_cloudsmith_repository(&url).is_err());
+    }
+
+    #[test]
+    fn parse_target_accepts_cloudsmith_url() {
+        let url = parse_target(
+            "https://conda.cloudsmith.io/my-owner/my-repo/",
+            Path::new("/tmp"),
+        )
+        .unwrap();
+
+        assert_eq!(url.host_str(), Some("conda.cloudsmith.io"));
+    }
 
     #[test]
     fn parse_variant_accepts_single_and_comma_list() {
