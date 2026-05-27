@@ -11,7 +11,7 @@ use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
-use crate::{consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
+use crate::{FeatureName, consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
 
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error(
@@ -163,7 +163,7 @@ pub struct Environment {
     ///
     /// Note that the default feature is always added to the set of features
     /// that make up the environment.
-    pub features: Vec<String>,
+    pub features: Vec<EnvironmentFeature>,
 
     /// An optional solver-group. Multiple environments can share the same
     /// solve-group. All the dependencies of the environment that share the
@@ -172,6 +172,112 @@ pub struct Environment {
 
     /// Whether to include the default feature in that environment
     pub no_default_feature: bool,
+}
+
+/// Describes how a feature is referenced by an environment.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EnvironmentFeature {
+    /// An inline feature defined directly on the environment.
+    /// Resolves using the parent environment's name.
+    Inline,
+
+    /// A named feature defined in a `[feature.*]` section.
+    Named(String),
+}
+
+impl EnvironmentFeature {
+    /// Returns `true` if this is an inline feature.
+    pub fn is_inline(&self) -> bool {
+        matches!(self, EnvironmentFeature::Inline)
+    }
+
+    /// Returns the feature name if this is a named feature.
+    pub fn as_named(&self) -> Option<&str> {
+        match self {
+            EnvironmentFeature::Named(name) => Some(name),
+            EnvironmentFeature::Inline => None,
+        }
+    }
+
+    /// Returns the key used to store/lookup the feature in the features map.
+    /// Inline features use a dot-prefix to avoid collisions with named features.
+    pub fn to_feature_name(&self, environment_name: &EnvironmentName) -> String {
+        match self {
+            EnvironmentFeature::Inline => {
+                FeatureName::inline(environment_name.as_str()).to_string()
+            }
+            EnvironmentFeature::Named(name) => name.clone(),
+        }
+    }
+}
+
+impl fmt::Display for EnvironmentFeature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            EnvironmentFeature::Inline => write!(f, "<inline>"),
+            EnvironmentFeature::Named(name) => write!(f, "{name}"),
+        }
+    }
+}
+
+impl Serialize for EnvironmentFeature {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            EnvironmentFeature::Inline => serializer.serialize_none(),
+            EnvironmentFeature::Named(name) => serializer.serialize_str(name),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for EnvironmentFeature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = EnvironmentFeature;
+
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "null or a feature name string")
+            }
+
+            fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(EnvironmentFeature::Inline)
+            }
+
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(EnvironmentFeature::Inline)
+            }
+
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                if v.starts_with('.') {
+                    return Err(E::custom(format!(
+                        "feature name '{v}' is not allowed; names starting with '.' are reserved"
+                    )));
+                }
+                Ok(EnvironmentFeature::Named(v.to_string()))
+            }
+
+            fn visit_string<E: serde::de::Error>(self, v: String) -> Result<Self::Value, E> {
+                if v.starts_with('.') {
+                    return Err(E::custom(format!(
+                        "feature name '{v}' is not allowed; names starting with '.' are reserved"
+                    )));
+                }
+                Ok(EnvironmentFeature::Named(v))
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
+impl From<String> for EnvironmentFeature {
+    fn from(name: String) -> Self {
+        EnvironmentFeature::Named(name)
+    }
 }
 
 #[cfg(test)]
@@ -234,6 +340,52 @@ mod tests {
             serde_json::from_str::<EnvironmentName>("\"foo\"").unwrap(),
             EnvironmentName::Named("foo".to_string())
         );
+    }
+
+    #[test]
+    fn test_environment_feature_serialization() {
+        let inline = EnvironmentFeature::Inline;
+        let named = EnvironmentFeature::Named("test".to_string());
+
+        // Round-trip through JSON
+        let inline_json = serde_json::to_string(&inline).unwrap();
+        let named_json = serde_json::to_string(&named).unwrap();
+
+        assert_eq!(inline_json, "null");
+        assert_eq!(named_json, "\"test\"");
+
+        let inline_back: EnvironmentFeature = serde_json::from_str(&inline_json).unwrap();
+        let named_back: EnvironmentFeature = serde_json::from_str(&named_json).unwrap();
+
+        assert_eq!(inline_back, EnvironmentFeature::Inline);
+        assert_eq!(named_back, EnvironmentFeature::Named("test".to_string()));
+    }
+
+    #[test]
+    fn test_deserialize_dot_prefixed_feature_rejected() {
+        let result = serde_json::from_str::<EnvironmentFeature>("\".dev\"");
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("reserved"),
+            "Error should mention reserved: {err}"
+        );
+    }
+
+    #[test]
+    fn test_environment_feature_helpers() {
+        let inline = EnvironmentFeature::Inline;
+        let named = EnvironmentFeature::Named("foo".to_string());
+
+        assert!(inline.is_inline());
+        assert!(!named.is_inline());
+
+        assert_eq!(inline.as_named(), None);
+        assert_eq!(named.as_named(), Some("foo"));
+
+        let env_name = EnvironmentName::Named("dev".to_string());
+        assert_eq!(inline.to_feature_name(&env_name), ".dev");
+        assert_eq!(named.to_feature_name(&env_name), "foo");
     }
 }
 

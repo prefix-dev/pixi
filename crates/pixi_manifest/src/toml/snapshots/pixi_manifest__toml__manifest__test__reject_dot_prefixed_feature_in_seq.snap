@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n\n        [environments.dev.dependencies]\n        x = \"*\"\n\n        [environments]\n        test = [\".dev\"]\n        \"#,)"
+---
+  × The feature name '.dev' is not allowed. Feature names starting with '.' are reserved for internal use.
+    ╭─[pixi.toml:11:18]
+ 10 │         [environments]
+ 11 │         test = [".dev"]
+    ·                  ────
+ 12 │
+    ╰────
+  help: Use the inline environment syntax instead: [environments.<name>.dependencies]
