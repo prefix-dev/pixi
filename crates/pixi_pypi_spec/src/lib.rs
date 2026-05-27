@@ -654,7 +654,7 @@ mod tests {
     fn test_pep508_relative_path_preserves_given() {
         // Counterpart to `test_pep508_file_url_serializes_as_path`: when the
         // user writes a *bare relative path* (pep508_rs's non-PEP-508 extension),
-        // we must keep their original spelling as `given` so the lockfile and
+        // we must keep their original spelling as `given` so the lock file and
         // manifest stay portable. Only the `file://` URL form should be discarded.
         let working_dir = std::env::temp_dir();
         let pypi: pep508_rs::Requirement =

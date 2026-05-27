@@ -872,7 +872,7 @@ jobs:
           path: nerfstudio
           persist-credentials: false
       - name: "Install nerfstudio-project/nerfstudio"
-        # Not using locked as their lockfile is not in sync
+        # Not using locked as their lock file is not in sync
         run: pixi install -vvv
         working-directory: nerfstudio
 

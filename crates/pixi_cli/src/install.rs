@@ -12,10 +12,10 @@ use std::fmt::Write;
 
 use crate::cli_config::WorkspaceConfig;
 
-/// Install an environment, both updating the lockfile and installing the
+/// Install an environment, both updating the lock file and installing the
 /// environment.
 ///
-/// This command installs an environment, if the lockfile is not up-to-date it
+/// This command installs an environment, if the lock file is not up-to-date it
 /// will be updated.
 ///
 /// `pixi install` only installs one environment at a time,
@@ -50,7 +50,7 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
-    /// Skip installation of specific packages present in the lockfile. This
+    /// Skip installation of specific packages present in the lock file. This
     /// uses a soft exclusion: the package will be skipped but its dependencies
     /// are installed.
     #[arg(long)]

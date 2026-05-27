@@ -51,7 +51,7 @@ use uv_resolver::{ExcludeNewer, FlatIndex};
 
 use crate::plan::{CachedWheels, RequiredDists};
 
-/// Extra data available from the manifest, not the lockfile
+/// Extra data available from the manifest, not the lock file
 #[derive(Clone)]
 pub struct ManifestData {
     pub editable: bool,

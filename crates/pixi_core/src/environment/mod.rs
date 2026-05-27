@@ -82,7 +82,7 @@ async fn prefix_location_changed(
 
     let user_value = dialoguer::Confirm::with_theme(&theme)
         .with_prompt(format!(
-            "The environment directory seems have to moved! Environments are non-relocatable, moving them can cause issues.\n\n\t{} -> {}\n\nThis can be fixed by reinstall the environment from the lock-file in the new location.\n\nDo you want to automatically recreate the environment?",
+            "The environment directory seems have to moved! Environments are non-relocatable, moving them can cause issues.\n\n\t{} -> {}\n\nThis can be fixed by reinstall the environment from the lock file in the new location.\n\nDo you want to automatically recreate the environment?",
             previous_dir.display(),
             environment_dir.display()
         ))
@@ -116,7 +116,7 @@ impl EnvironmentHash {
     ///
     /// Used for **task** caching: a task's cached result is keyed on
     /// inputs the user can change without going through an install
-    /// (manifest, lockfile, env vars, activation scripts), so this
+    /// (manifest, lock file, env vars, activation scripts), so this
     /// flavour folds locked package URLs into the hash directly.
     ///
     /// The activation cache uses [`Self::for_activation`] instead —
@@ -510,27 +510,27 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
     Ok(())
 }
 
-/// Specifies how the lock-file should be updated.
+/// Specifies how the lock file should be updated.
 #[derive(Debug, Default, PartialEq, Eq, Copy, Clone, Deserialize, Serialize)]
 pub enum LockFileUsage {
-    /// Update the lock-file if it is out of date.
+    /// Update the lock file if it is out of date.
     #[default]
     Update,
-    /// Don't update the lock-file, but do check if it is out of date
+    /// Don't update the lock file, but do check if it is out of date
     Locked,
-    /// Don't update the lock-file and don't check if it is out of date
+    /// Don't update the lock file and don't check if it is out of date
     Frozen,
-    /// Don't update the lock-file, but don't check if it is out of date
+    /// Don't update the lock file, but don't check if it is out of date
     DryRun,
 }
 
 impl LockFileUsage {
-    /// Returns true if the process should error when the lock-file
+    /// Returns true if the process should error when the lock file
     pub(crate) fn allow_updates(self) -> bool {
         !matches!(self, LockFileUsage::Locked)
     }
 
-    /// Returns true if the lock-file should be checked if it is out of date.
+    /// Returns true if the lock file should be checked if it is out of date.
     pub(crate) fn should_check_if_out_of_date(self) -> bool {
         match self {
             LockFileUsage::Update | LockFileUsage::Locked | LockFileUsage::DryRun => true,
@@ -646,7 +646,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     let requirements = extract_git_requirements_from_workspace(workspace);
     store_credentials_from_requirements(requirements);
 
-    // Ensure that the lock-file is up-to-date
+    // Ensure that the lock file is up-to-date
     let lock_file = workspace
         .update_lock_file(
             progress.clone(),
@@ -660,7 +660,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
         .await?
         .0;
 
-    // Get the prefix from the lock-file.
+    // Get the prefix from the lock file.
     let lock_file_ref = &lock_file;
     let reinstall_packages = &reinstall_packages;
     let prefixes = stream::iter(environments.iter())

@@ -31,12 +31,12 @@ pub async fn add<I: Interface>(
 ) -> miette::Result<()> {
     let feature_name = feature.map_or_else(FeatureName::default, FeatureName::from);
 
-    // Add the platforms to the lock-file
+    // Add the platforms to the lock file
     workspace
         .manifest()
         .add_platforms(platforms.iter(), &feature_name)?;
 
-    // Try to update the lock-file with the new channels
+    // Try to update the lock file with the new channels
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
         None,

@@ -579,7 +579,7 @@ index-url = "{index_url}"
     let lock = pixi.update_lock_file().await.unwrap();
 
     let nccl_req = Requirement::from_str("nvidia-nccl-cu12; sys_platform == 'linux'").unwrap();
-    // Check that the requirement is present in the lockfile for linux-64
+    // Check that the requirement is present in the lock file for linux-64
     assert!(
         lock.contains_pep508_requirement("default", platform1, nccl_req.clone()),
         "default environment should include nccl for linux-64"
@@ -2038,7 +2038,7 @@ test-static-pkg = {{ path = ".", editable = true }}
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
     ignore
 )]
-async fn self_referential_extras_lockfile_roundtrip() {
+async fn self_referential_extras_lock_file_roundtrip() {
     setup_tracing();
 
     let platform = Platform::current();
@@ -2085,7 +2085,7 @@ dev = {{ features = ["dev"] }}
     fs_err::create_dir_all(&src_dir).unwrap();
     fs_err::write(src_dir.join("__init__.py"), "__version__ = '0.1.0'\n").unwrap();
 
-    // Resolve and write the lockfile, then re-check it under
+    // Resolve and write the lock file, then re-check it under
     // `LockFileUsage::Locked` (the `--locked` satisfiability path,
     // skipping the conda-prefix install).
     pixi.update_lock_file().await.unwrap();
@@ -2099,7 +2099,7 @@ dev = {{ features = ["dev"] }}
             },
         )
         .await
-        .expect("`--locked` satisfiability check must accept the lockfile that was just written");
+        .expect("`--locked` satisfiability check must accept the lock file that was just written");
 }
 
 /// Find all sdist cache directories under uv-cache/sdists-v*/path/

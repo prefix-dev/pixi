@@ -388,7 +388,7 @@ my-package = {{ path = "./my-package" }}
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Build the lock-file and ensure that it contains our package.
+    // Build the lock file and ensure that it contains our package.
     let lock_file = pixi.update_lock_file().await.unwrap();
     assert!(lock_file.contains_conda_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
@@ -489,13 +489,13 @@ test-build-source = {{ path = "." }}
 }
 
 /// Verifies that the workspace exclude-newer cutoff propagates into
-/// the source package's build-dependency solve during lockfile
+/// the source package's build-dependency solve during lock file
 /// update.
 ///
 /// Currently ignored: with the SourceBuildKey migration, nested
 /// build/host solves are expected to happen upstream in the
 /// orchestrator (ResolveSourcePackageKey → SolvePixiEnvironmentKey),
-/// but the PassthroughBackend fixture produces a lockfile where
+/// but the PassthroughBackend fixture produces a lock file where
 /// build_packages stays empty even though the package manifest lists
 /// a build-dependency on `foo`. Re-enable once the orchestrator-side
 /// nested-solve path has been audited end-to-end for exclude_newer
@@ -906,8 +906,8 @@ my-package = {{ path = "./my-package" }}
     assert_eq!(events.len(), 1, "Expected another build for sdl2-32");
 }
 
-/// Test that verifies when we generate a lock-file with a source package,
-/// a second invocation of generating the lock-file should report it's already up to date.
+/// Test that verifies when we generate a lock file with a source package,
+/// a second invocation of generating the lock file should report it's already up to date.
 ///
 /// This test creates a noarch: generic package with all fields that are compared
 /// in `package_records_are_equal`:
@@ -1005,17 +1005,17 @@ test-source-pkg = {{ path = "./source-package" }}
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // First invocation: Generate the lock-file
+    // First invocation: Generate the lock file
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
 
-    // Verify the lock-file was actually created/updated
-    assert!(was_updated, "First invocation should update the lock-file");
+    // Verify the lock file was actually created/updated
+    assert!(was_updated, "First invocation should update the lock file");
 
-    // Verify the package is in the lock-file
+    // Verify the package is in the lock file
     let lock_file = lock_file_data.into_lock_file();
     assert!(
         lock_file.contains_conda_package(
@@ -1036,22 +1036,22 @@ test-source-pkg = {{ path = "./source-package" }}
         "Lock file should contain test-source-pkg"
     );
 
-    // Second invocation: Load the workspace again and check if lock-file is up to date
+    // Second invocation: Load the workspace again and check if lock file is up to date
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_second) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Second lock file check should succeed");
 
-    // The second invocation should NOT update the lock-file since it's already up to date
+    // The second invocation should NOT update the lock file since it's already up to date
     assert!(
         !was_updated_second,
-        "Second invocation should report lock-file is already up to date"
+        "Second invocation should report lock file is already up to date"
     );
 }
 
 /// Adding a `[package.run-dependencies]` entry to a path-based source
-/// package must invalidate the lock-file on the next resolve.
+/// package must invalidate the lock file on the next resolve.
 ///
 /// The locked source record's `depends` field is the union of the
 /// manifest's run-dependencies and any run-exports contributed by the
@@ -1059,12 +1059,12 @@ test-source-pkg = {{ path = "./source-package" }}
 /// locked depends" check can't tell which side an entry came from. The
 /// only reliable signal is the backend's `run_dependencies`
 /// declaration: satisfiability must consult the backend and reject the
-/// lock-file when its declarations no longer match what's locked.
+/// lock file when its declarations no longer match what's locked.
 ///
 /// `PassthroughBackend` reads `run-dependencies` straight from the
 /// source manifest, so editing the manifest changes what the backend
 /// declares on the next satisfiability call. The first solve produces
-/// a lock-file with `dep-a` only; after adding `dep-b`, the lock-file
+/// a lock file with `dep-a` only; after adding `dep-b`, the lock file
 /// must be rewritten.
 #[tokio::test]
 async fn test_source_run_dependency_addition_invalidates_lock_file() {
@@ -1114,8 +1114,8 @@ my-package = {{ path = "./my-package" }}
     let (_, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("initial lock-file generation should succeed");
-    assert!(was_updated, "initial solve must create the lock-file");
+        .expect("initial lock file generation should succeed");
+    assert!(was_updated, "initial solve must create the lock file");
 
     // Add a new run-dependency. The locked record's `depends` does not
     // contain `dep-b`, so satisfiability must detect the mismatch
@@ -1138,15 +1138,15 @@ dep-b = ">=1.0"
     let (_, was_updated_after_add) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("second lock-file check should succeed");
+        .expect("second lock file check should succeed");
     assert!(
         was_updated_after_add,
-        "adding a run-dependency to a source package must invalidate the lock-file",
+        "adding a run-dependency to a source package must invalidate the lock file",
     );
 }
 
 /// Removing a `[package.run-dependencies]` entry from a path-based
-/// source package must invalidate the lock-file.
+/// source package must invalidate the lock file.
 ///
 /// Counterpart to `test_source_run_dependency_addition_invalidates_lock_file`.
 /// The "every backend-declared dep is satisfied by the locked record"
@@ -1204,11 +1204,11 @@ my-package = {{ path = "./my-package" }}
     let (_, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("initial lock-file generation should succeed");
-    assert!(was_updated, "initial solve must create the lock-file");
+        .expect("initial lock file generation should succeed");
+    assert!(was_updated, "initial solve must create the lock file");
 
     // Drop `dep-b`. The locked record still carries it in `depends`,
-    // but the backend no longer declares it, and the lock-file must be
+    // but the backend no longer declares it, and the lock file must be
     // rewritten so the resolved environment shrinks accordingly.
     let updated_source_manifest = r#"
 [package]
@@ -1227,15 +1227,15 @@ dep-a = ">=1.0"
     let (_, was_updated_after_remove) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("second lock-file check should succeed");
+        .expect("second lock file check should succeed");
     assert!(
         was_updated_after_remove,
-        "removing a run-dependency from a source package must invalidate the lock-file",
+        "removing a run-dependency from a source package must invalidate the lock file",
     );
 }
 
 /// Removing a host-dependency that contributes a `weak_constrains`
-/// run-export must invalidate the lock-file, even though pixi's manifest
+/// run-export must invalidate the lock file, even though pixi's manifest
 /// schema doesn't currently expose `[package.run-constraints]` directly.
 ///
 /// The locked source record's `constrains` field is the union of any
@@ -1247,7 +1247,7 @@ dep-a = ">=1.0"
 ///
 /// This is the integration mirror of the unit-level
 /// `verify_locked_run_deps_detects_constrain_removal` test: same shape
-/// of drift, but driven through the real backend / build / lockfile
+/// of drift, but driven through the real backend / build / lock file
 /// pipeline instead of synthesised inputs.
 #[tokio::test]
 async fn test_host_run_export_constraint_removal_invalidates_lock_file() {
@@ -1318,8 +1318,8 @@ my-package = {{ path = "./my-package" }}
     let (_, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("initial lock-file generation should succeed");
-    assert!(was_updated, "initial solve must create the lock-file");
+        .expect("initial lock file generation should succeed");
+    assert!(was_updated, "initial solve must create the lock file");
 
     // Drop the host-dependency. The backend now declares no host deps,
     // so no run-export contributes to the built record's `constrains`,
@@ -1342,10 +1342,10 @@ noarch = false
     let (_, was_updated_after_drop) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("second lock-file check should succeed");
+        .expect("second lock file check should succeed");
     assert!(
         was_updated_after_drop,
-        "removing a host-dep that contributed a weak_constrains run-export must invalidate the lock-file",
+        "removing a host-dep that contributed a weak_constrains run-export must invalidate the lock file",
     );
 }
 
@@ -1409,16 +1409,16 @@ my-package = {{ path = "./my-package" }}
             .count()
     }
 
-    // First invocation: Generate the lock-file (no config section)
+    // First invocation: Generate the lock file (no config section)
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
 
-    assert!(was_updated, "First invocation should create the lock-file");
+    assert!(was_updated, "First invocation should create the lock file");
 
-    // Verify the package is in the lock-file
+    // Verify the package is in the lock file
     let lock_file = lock_file_data.into_lock_file();
     assert!(
         lock_file.contains_conda_package(
@@ -1460,7 +1460,7 @@ backend = { name = "in-memory", version = "0.1.0" }
 
     assert!(
         !was_updated_empty_config,
-        "Adding empty [package.build.config] should NOT update lock-file"
+        "Adding empty [package.build.config] should NOT update lock file"
     );
 
     // Verify no additional conda_outputs calls
@@ -1509,7 +1509,7 @@ noarch = true
 
     assert!(
         !was_updated_no_change,
-        "Fourth invocation without changes should NOT update lock-file"
+        "Fourth invocation without changes should NOT update lock file"
     );
 
     // Verify no additional conda_outputs calls
@@ -1562,7 +1562,7 @@ noarch = false
 
     assert!(
         !was_updated_sixth,
-        "Sixth invocation should NOT update lock-file (cache is now fresh)"
+        "Sixth invocation should NOT update lock file (cache is now fresh)"
     );
 
     // Verify no additional conda_outputs calls
@@ -1576,13 +1576,13 @@ noarch = false
 
 /// Test that demonstrates a bug with unresolvable partial source records.
 ///
-/// When a lock-file contains partial source records (from mutable path sources)
+/// When a lock file contains partial source records (from mutable path sources)
 /// and the source package changes in a way that makes the partial record
 /// unresolvable (e.g., the package is renamed), the update flow should gracefully
 /// re-solve instead of erroring out.
 ///
 /// The bug: `UpdateContext::finish()` tries to resolve ALL partial records from
-/// the lock-file (including from environments already marked as out-of-date).
+/// the lock file (including from environments already marked as out-of-date).
 /// If resolution fails, it produces a hard error instead of proceeding with
 /// the re-solve.
 #[tokio::test]
@@ -1624,17 +1624,17 @@ my-package = {{ path = "./my-package" }}
     );
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // First invocation: Generate the lock-file.
-    // This creates a lock-file where path source records are stored as partial
+    // First invocation: Generate the lock file.
+    // This creates a lock file where path source records are stored as partial
     // (mutable sources are downgraded to partial on write).
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
-    assert!(was_updated, "First invocation should create the lock-file");
+    assert!(was_updated, "First invocation should create the lock file");
 
-    // Now rename the package in the child manifest. The lock-file on disk still
+    // Now rename the package in the child manifest. The lock file on disk still
     // has a partial record for "my-package", but the source now produces
     // metadata for "renamed-package". This makes the old partial record
     // unresolvable (name mismatch).
@@ -1663,16 +1663,16 @@ renamed-package = {{ path = "./my-package" }}
     );
     fs::write(pixi.manifest_path(), updated_manifest).unwrap();
 
-    // Second invocation: Update the lock-file.
+    // Second invocation: Update the lock file.
     //
-    // The satisfiability check correctly identifies the lock-file as out-of-date
+    // The satisfiability check correctly identifies the lock file as out-of-date
     // (the old "my-package" partial record can't be resolved because the source
     // now produces "renamed-package"). However, `UpdateContext::finish()` also
-    // tries to resolve ALL partial records from the old lock-file (including
+    // tries to resolve ALL partial records from the old lock file (including
     // the unresolvable one) and fails with a hard error.
     //
     // This SHOULD succeed — the system should re-solve and produce a new
-    // lock-file with "renamed-package".
+    // lock file with "renamed-package".
     let workspace = pixi.workspace().unwrap();
     let result = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
@@ -1681,25 +1681,25 @@ renamed-package = {{ path = "./my-package" }}
     match result {
         Ok(_) => {
             // This is the expected behavior — the system should gracefully
-            // re-solve and produce a new lock-file with "renamed-package".
+            // re-solve and produce a new lock file with "renamed-package".
         }
         Err(e) => {
             panic!(
-                "Updating the lock-file after renaming a source package should succeed, \
+                "Updating the lock file after renaming a source package should succeed, \
                  but it failed with: {e}"
             );
         }
     }
 }
 
-/// Test that source records (including their metadata) survive a lock-file
+/// Test that source records (including their metadata) survive a lock file
 /// roundtrip through `UnresolvedPixiRecord`.
 ///
 /// On the first lock, the solver produces a full source record. On write, path-
 /// based sources are downgraded to partial. On the second lock, the partial
 /// record is read back as `UnresolvedPixiRecord`, the satisfiability check
-/// re-evaluates it, and the lock-file is written again. The source package
-/// should be present and equivalent in both lock-files.
+/// re-evaluates it, and the lock file is written again. The source package
+/// should be present and equivalent in both lock files.
 #[tokio::test]
 async fn test_source_record_roundtrips_through_lock_file() {
     setup_tracing();
@@ -1747,7 +1747,7 @@ my-package = {{ path = "./my-package" }}
 
     let lock_file = lock_file_data.into_lock_file();
 
-    // Find the source package in the lock-file.
+    // Find the source package in the lock file.
     let env = lock_file
         .environment(consts::DEFAULT_ENVIRONMENT_NAME)
         .expect("default environment should exist");
@@ -1764,7 +1764,7 @@ my-package = {{ path = "./my-package" }}
 
     assert!(
         !source_packages.is_empty(),
-        "Expected at least one source package in the lock-file"
+        "Expected at least one source package in the lock file"
     );
 
     // Verify the source package location and metadata are present
@@ -1796,7 +1796,7 @@ my-package = {{ path = "./my-package" }}
 
     assert!(
         !was_updated,
-        "Second lock invocation should not update the lock-file"
+        "Second lock invocation should not update the lock file"
     );
 
     let lock_file_2 = lock_file_data_2.into_lock_file();
@@ -2022,7 +2022,7 @@ fn collect_source_dep_versions(
     use std::path::Path;
 
     let resolver =
-        LockFileResolver::build(lock_file, Path::new("/")).expect("lockfile must resolve cleanly");
+        LockFileResolver::build(lock_file, Path::new("/")).expect("lock file must resolve cleanly");
     let mut out = Vec::new();
     for (_env_name, env) in lock_file.environments() {
         for (_platform, packages) in env.packages_by_platform() {
@@ -2080,10 +2080,10 @@ async fn test_source_timestamp_changes_when_source_metadata_changes() {
 }
 
 /// `pixi update sdl2` must invalidate `sdl2` everywhere it appears in
-/// the lockfile, including inside source records' `host_packages`
+/// the lock file, including inside source records' `host_packages`
 /// arrays. Today only the top-level locked package is relaxed; the
 /// stale copy of `sdl2` inside `my-package.host_packages` survives
-/// the relaxation pass, leaving the lockfile in an inconsistent
+/// the relaxation pass, leaving the lock file in an inconsistent
 /// state.
 ///
 /// Setup: `sdl2` v2.26.5 is the only version in the channel; the
@@ -2555,9 +2555,9 @@ backend.version = "0.1.0"
 ///
 /// In pixi 0.68.0 the `SourceBuildKey` pipeline forwarded only the recipe's
 /// raw `output.run_dependencies` to the build backend, skipping the
-/// `extend_with_run_exports_from_build_and_host` merge step that the lockfile
+/// `extend_with_run_exports_from_build_and_host` merge step that the lock file
 /// resolution path uses. This caused the built package's `depends` to come
-/// back empty even though the lockfile recorded the correct dependencies.
+/// back empty even though the lock file recorded the correct dependencies.
 ///
 /// The test exercises the end-to-end path: it puts a mock host package with
 /// run-exports in a local channel, builds a source package that uses it as a

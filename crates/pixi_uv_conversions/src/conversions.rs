@@ -308,7 +308,7 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 /// If no original reference is provided, which happens for git deps that
 /// aren't top-level workspace deps (e.g. transitive deps coming in through an
 /// editable self-package's `requires_dist`, issue #5661), fall back to
-/// whatever reference uv resolved. That keeps the lock-file
+/// whatever reference uv resolved. That keeps the lock file
 /// `?branch=/?tag=/?rev=` in sync with what the manifest's PEP 508 string
 /// actually says, so the satisfiability check matches without relying on the
 /// no-ref fallback.

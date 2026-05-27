@@ -379,7 +379,7 @@ async fn assemble_source_record_inner(
         build_source: source.build_source().cloned(),
         identifier_hash: None,
         // Carry the resolved build / host env package sets forward.
-        // Downstream consumers (lock-file writer, installer) need
+        // Downstream consumers (lock file writer, installer) need
         // the exact packages this source was built against, not just
         // their aggregated run-exports.
         build_packages: build_records
@@ -400,7 +400,7 @@ async fn assemble_source_record_inner(
 /// Constructs a [`Derived`](EnvironmentRef::Derived) env_ref off of
 /// `env_ref` and delegates to [`SolvePixiEnvironmentKey`]. `installed`
 /// is the per-source build/host package set from the outer record
-/// (lockfile state), used as the solver's pinning hint so previously
+/// (lock file state), used as the solver's pinning hint so previously
 /// recorded versions stay stable across re-resolutions.
 ///
 /// `preferred_build_source` is the full pin map (propagated verbatim

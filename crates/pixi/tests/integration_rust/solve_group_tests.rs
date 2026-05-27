@@ -69,7 +69,7 @@ async fn conda_solve_group_functionality() {
     ))
     .unwrap();
 
-    // Get an up-to-date lockfile
+    // Get an up-to-date lock file
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     assert!(
@@ -200,7 +200,7 @@ async fn test_purl_are_added_for_pypi() {
 
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
-    // Add and update lockfile with this version of python
+    // Add and update lock file with this version of python
     pixi.add("boltons").await.unwrap();
     let lock_file = pixi.update_lock_file().await.unwrap();
 

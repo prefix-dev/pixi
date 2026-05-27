@@ -230,7 +230,7 @@ impl CondaPrefixUpdater {
     }
 }
 
-/// Updates the environment to contain the packages from the specified lock-file
+/// Updates the environment to contain the packages from the specified lock file
 #[allow(clippy::too_many_arguments)]
 pub async fn update_prefix_conda(
     name: String,

@@ -49,7 +49,7 @@ impl<'a> From<&'a LockedPackage> for LockedPackageKind<'a> {
     }
 }
 
-/// Constructs a new lock-file where some of the packages have been removed.
+/// Constructs a new lock file where some of the packages have been removed.
 ///
 /// `should_keep` is consulted for every package, both at the top level of an
 /// environment and (for conda) for each entry inside a kept source record's
@@ -74,7 +74,7 @@ pub fn filter_lock_file<
 ) -> LockFile {
     let workspace_root = workspace.root();
     let resolver = LockFileResolver::build(lock_file, workspace_root)
-        .expect("input lockfile should resolve cleanly");
+        .expect("input lock file should resolve cleanly");
 
     let platforms: Vec<rattler_lock::PlatformData> = lock_file
         .platforms()
@@ -114,7 +114,7 @@ pub fn filter_lock_file<
                     LockedPackage::Conda(_) => {
                         let Some(mut record) = resolver.get_for_package(package) else {
                             // Pointer-identity lookup miss should not happen
-                            // for a conda package from the same lockfile; skip
+                            // for a conda package from the same lock file; skip
                             // defensively.
                             continue;
                         };

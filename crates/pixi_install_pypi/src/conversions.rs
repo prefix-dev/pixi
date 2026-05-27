@@ -20,8 +20,8 @@ use crate::InstallablePypiRecord;
 
 use super::utils::{is_direct_url, strip_direct_scheme};
 
-/// Build an [`IndexUrl`] from the lock-file's optional `index_url`.
-/// Falls back to `DEFAULT_PYPI_INDEX_URL` when the lock-file has no stored index.
+/// Build an [`IndexUrl`] from the lock file's optional `index_url`.
+/// Falls back to `DEFAULT_PYPI_INDEX_URL` when the lock file has no stored index.
 fn index_url_from_lock(index: Option<&Url>) -> IndexUrl {
     let url = index
         .cloned()

@@ -59,11 +59,11 @@ enum LockfileUnsat {
     )]
     SolveGroupUnsat(String, Platform, #[source] SolveGroupUnsat),
 
-    #[error("failed to build the lock-file resolver: {0}")]
+    #[error("failed to build the lock file resolver: {0}")]
     ResolverBuild(String),
 }
 
-async fn verify_lockfile_satisfiability(
+async fn verify_lock_file_satisfiability(
     project: &Workspace,
     lock_file: &LockFile,
     backend_override: Option<BackendOverride>,
@@ -190,7 +190,7 @@ async fn test_good_satisfiability(
 
     let project = Workspace::from_path(&manifest_path).unwrap();
     let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-    match verify_lockfile_satisfiability(
+    match verify_lock_file_satisfiability(
         &project,
         &lock_file,
         Some(BackendOverride::from_memory(
@@ -234,7 +234,7 @@ async fn q(#[files("../../examples/**/p*.toml")] manifest_path: PathBuf) {
 
     let project = Workspace::from_path(&manifest_path).unwrap();
     let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-    match verify_lockfile_satisfiability(&project, &lock_file, None)
+    match verify_lock_file_satisfiability(&project, &lock_file, None)
         .await
         .into_diagnostic()
     {
@@ -253,7 +253,7 @@ async fn test_failing_satisfiability(
 
     let project = Workspace::from_path(&manifest_path).unwrap();
     let lock_file = LockFile::from_path(&project.lock_file_path()).unwrap();
-    let err = verify_lockfile_satisfiability(
+    let err = verify_lock_file_satisfiability(
         &project,
         &lock_file,
         Some(BackendOverride::from_memory(

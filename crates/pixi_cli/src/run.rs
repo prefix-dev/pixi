@@ -42,7 +42,7 @@ use crate::process_exit;
 /// It will activate the environment and run the task in the environment.
 /// It is using the deno_task_shell to run the task.
 ///
-/// `pixi run` will also update the lockfile and install the environment if it
+/// `pixi run` will also update the lock file and install the environment if it
 /// is required.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, disable_help_flag = true)]
@@ -171,7 +171,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Top-level progress, kept here so we can clear it between phases.
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
-    // Ensure that the lock-file is up-to-date.
+    // Ensure that the lock file is up-to-date.
     let lock_file = workspace
         .update_lock_file(
             Some(progress.clone()),

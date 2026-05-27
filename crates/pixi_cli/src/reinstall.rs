@@ -8,9 +8,9 @@ use pixi_core::lock_file::{ReinstallEnvironment, ReinstallPackages};
 use crate::cli_config::WorkspaceConfig;
 use crate::cli_interface::CliInterface;
 
-/// Re-install an environment, both updating the lockfile and re-installing the environment.
+/// Re-install an environment, both updating the lock file and re-installing the environment.
 ///
-/// This command reinstalls an environment, if the lockfile is not up-to-date it will be updated.
+/// This command reinstalls an environment, if the lock file is not up-to-date it will be updated.
 /// If packages are specified, only those packages will be reinstalled.
 /// Otherwise the whole environment will be reinstalled.
 ///
