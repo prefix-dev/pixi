@@ -5,68 +5,30 @@ use std::path::{Path, PathBuf};
 
 /// Represents skip-pyc-compilation config: either `true` (skip all) or a list
 /// of glob patterns.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum SkipPycCompilation {
-    #[default]
-    None,
-    All,
+    All(bool),
     Globs(Vec<String>),
+}
+
+impl Default for SkipPycCompilation {
+    fn default() -> Self {
+        SkipPycCompilation::All(false)
+    }
 }
 
 impl SkipPycCompilation {
     pub fn globs(&self) -> Vec<String> {
         match self {
-            SkipPycCompilation::None => vec![],
-            SkipPycCompilation::All => vec!["**/*.py".to_string()],
+            SkipPycCompilation::All(true) => vec!["**/*.py".to_string()],
+            SkipPycCompilation::All(false) => vec![],
             SkipPycCompilation::Globs(g) => g.clone(),
         }
     }
 
     pub fn is_none(&self) -> bool {
-        matches!(self, SkipPycCompilation::None)
-    }
-}
-
-impl Serialize for SkipPycCompilation {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        match self {
-            SkipPycCompilation::None => serializer.serialize_none(),
-            SkipPycCompilation::All => serializer.serialize_bool(true),
-            SkipPycCompilation::Globs(g) => g.serialize(serializer),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for SkipPycCompilation {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        use serde::de;
-
-        struct Visitor;
-        impl<'de> de::Visitor<'de> for Visitor {
-            type Value = SkipPycCompilation;
-            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                f.write_str("true or a list of glob patterns")
-            }
-            fn visit_bool<E: de::Error>(self, v: bool) -> Result<Self::Value, E> {
-                if v {
-                    Ok(SkipPycCompilation::All)
-                } else {
-                    Ok(SkipPycCompilation::None)
-                }
-            }
-            fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
-                let mut globs = Vec::new();
-                while let Some(g) = seq.next_element::<String>()? {
-                    globs.push(g);
-                }
-                if globs.is_empty() {
-                    Ok(SkipPycCompilation::None)
-                } else {
-                    Ok(SkipPycCompilation::Globs(globs))
-                }
-            }
-        }
-        deserializer.deserialize_any(Visitor)
+        self.globs().is_empty()
     }
 }
 
@@ -214,7 +176,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: Some(true),
-            skip_pyc_compilation: SkipPycCompilation::All,
+            skip_pyc_compilation: SkipPycCompilation::All(true),
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -291,7 +253,7 @@ mod tests {
             ignore_pyproject_manifest: Some(true),
             ignore_pypi_mapping: Some(true),
             abi3: None,
-            skip_pyc_compilation: SkipPycCompilation::All,
+            skip_pyc_compilation: SkipPycCompilation::All(true),
         };
 
         let empty_target_config = PythonBackendConfig::default();
