@@ -31,7 +31,7 @@ pixi publish [OPTIONS]
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
 :  The path to a directory containing a package manifest, or to a specific manifest file
 - <a id="arg---target-channel" href="#arg---target-channel">`--target-channel <TARGET_CHANNEL>`</a>
-:  The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
+:  The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, conda.cloudsmith.io, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
 <br>**aliases**: to
 - <a id="arg---target-dir" href="#arg---target-dir">`--target-dir <TARGET_DIR>`</a>
 :  The local filesystem path to copy the built package(s) into (no channel indexing)
