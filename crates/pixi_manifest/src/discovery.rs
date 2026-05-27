@@ -202,7 +202,9 @@ pub enum WorkspaceDiscoveryError {
     "this project requires pixi '{requires_pixi}', but you have pixi {}",
     consts::PIXI_VERSION
 )]
-#[diagnostic(help("update pixi to a version that satisfies '{requires_pixi}'"))]
+#[diagnostic(help(
+    "update pixi to a version that satisfies '{requires_pixi}' with `pixi self-update`"
+))]
 pub struct PixiVersionMismatchError {
     pub requires_pixi: VersionSpec,
     #[source_code]
