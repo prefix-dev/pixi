@@ -100,6 +100,7 @@ pub struct IntermediateBackend<T: GenerateRecipe> {
     pub(crate) config: T::Config,
     pub(crate) target_config: OrderMap<TargetSelector, T::Config>,
     pub(crate) cache_dir: Option<PathBuf>,
+    pub(crate) workspace_scratch_directory: Option<PathBuf>,
 }
 impl<T: GenerateRecipe> IntermediateBackend<T> {
     #[allow(clippy::too_many_arguments)]
@@ -113,6 +114,7 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
         target_config: OrderMap<TargetSelector, serde_json::Value>,
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
     ) -> miette::Result<Self> {
         // Determine the root directory of the manifest
         let (source_dir, manifest_rel_path) = match source_dir {
@@ -176,6 +178,7 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
             target_config,
             logging_output_handler,
             cache_dir,
+            workspace_scratch_directory,
         })
     }
 }
@@ -212,6 +215,7 @@ where
             target_config,
             self.logging_output_handler.clone(),
             params.cache_directory,
+            params.workspace_scratch_directory,
         )?;
 
         Ok((Box::new(instance), InitializeResult {}))
@@ -278,6 +282,7 @@ where
                 &variant_config.variants.keys().cloned().collect(),
                 params.channels,
                 self.cache_dir.clone(),
+                self.workspace_scratch_directory.clone(),
             )
             .await?;
 
@@ -620,6 +625,7 @@ where
                 &variants.keys().cloned().collect(),
                 params.channels,
                 self.cache_dir.clone(),
+                self.workspace_scratch_directory.clone(),
             )
             .await?;
 

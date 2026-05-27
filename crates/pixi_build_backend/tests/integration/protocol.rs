@@ -64,6 +64,7 @@ mod imp {
             _variants: &HashSet<pixi_build_backend::variants::NormalizedKey>,
             _channels: Vec<ChannelUrl>,
             _cache_dir: Option<PathBuf>,
+            _workspace_scratch_directory: Option<PathBuf>,
         ) -> miette::Result<GeneratedRecipe> {
             GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
                 .into_diagnostic()
@@ -129,6 +130,7 @@ async fn test_conda_build_v1() {
         some_config,
         target_config,
         LoggingOutputHandler::default(),
+        None,
         None,
     )
     .unwrap();

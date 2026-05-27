@@ -6140,8 +6140,10 @@ dependencies = [
 name = "pixi-build-ros"
 version = "0.4.2"
 dependencies = [
+ "astral-reqwest-middleware",
  "async-trait",
  "fs-err",
+ "http-cache-reqwest",
  "indexmap 2.14.0",
  "insta",
  "miette 7.6.0",

@@ -150,6 +150,7 @@ impl JsonRpcBackend {
         configuration: Option<serde_json::Value>,
         target_configuration: Option<OrderMap<TargetSelector, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
         debug_assert!(source_dir.is_absolute());
@@ -200,6 +201,7 @@ impl JsonRpcBackend {
             configuration,
             target_configuration,
             cache_dir,
+            workspace_scratch_directory,
             tx,
             rx,
             Some(stderr),
@@ -219,6 +221,7 @@ impl JsonRpcBackend {
         configuration: Option<serde_json::Value>,
         target_configuration: Option<OrderMap<TargetSelector, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
         stderr: Option<Lines<BufReader<ChildStderr>>>,
@@ -259,6 +262,7 @@ impl JsonRpcBackend {
                     source_directory: Some(source_dir),
                     workspace_directory: Some(workspace_root),
                     cache_directory: cache_dir,
+                    workspace_scratch_directory,
                 }),
             )
             .await

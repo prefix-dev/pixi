@@ -45,6 +45,23 @@ pub struct InitializeParams {
     /// Optionally the cache directory to use for any caching activity.
     pub cache_directory: Option<PathBuf>,
 
+    /// Optional per-workspace scratch directory the backend may use to
+    /// persist its own derived state across runs and across multiple
+    /// backend instances within the same workspace. Pixi creates this
+    /// directory and guarantees it survives across `pixi lock` and
+    /// `pixi install` runs; it is removed by `pixi clean`.
+    ///
+    /// Convention: the backend creates one or more subdirectories
+    /// inside, choosing names that avoid colliding with other
+    /// backends. The name does not have to match the backend's own
+    /// name; for example a backend may version its own cache layout
+    /// by suffixing (`my-cache-v2/`). The backend owns invalidation;
+    /// pixi will not stat or otherwise reason about anything stored
+    /// here. Concurrent backend instances may run simultaneously
+    /// against the same path, so writes should be atomic
+    /// (write-tempfile-then-rename style).
+    pub workspace_scratch_directory: Option<PathBuf>,
+
     /// Project model that the backend should use even though it is an option
     /// it is highly recommended to use this field. Otherwise, it will be very
     /// easy to break backwards compatibility.
