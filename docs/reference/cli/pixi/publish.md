@@ -84,6 +84,7 @@ This is a convenience command that combines `pixi build` and `pixi upload`.
 Supported target URLs (--target-channel / --to):
   - prefix.dev: `https://prefix.dev/<channel-name>`
   - anaconda.org: `https://anaconda.org/<owner>/<label>`
+  - Cloudsmith: `https://conda.cloudsmith.io/<owner>/<repository>/`
   - S3: `s3://bucket-name`
   - Local channel (with indexing): `channel:///path/to/channel`
   - Local path (copy only): `file:///path/to/output`

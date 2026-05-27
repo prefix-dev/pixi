@@ -12,6 +12,7 @@ The target URL determines the upload backend:
 |-------------|---------|
 | `https://prefix.dev/<channel>` | [prefix.dev](https://prefix.dev) |
 | `https://anaconda.org/<owner>` | [Anaconda.org](https://anaconda.org) |
+| `https://conda.cloudsmith.io/<owner>/<repository>/` | [Cloudsmith](https://cloudsmith.com) |
 | `s3://bucket-name/channel` | S3-compatible storage |
 | `channel:///path/to/channel` | Local filesystem channel |
 | `file:///path/to/dir` | Copy to local directory |
@@ -73,6 +74,17 @@ pixi publish https://anaconda.org/my-username
 # Publish to a specific label/channel
 pixi publish https://anaconda.org/my-username/dev
 ```
+
+### Publishing to Cloudsmith
+
+Pass the Cloudsmith Conda channel URL as the target. Pixi derives the owner and repository from that URL and uses Cloudsmith's API for the upload.
+
+```shell
+# Build and publish to a Cloudsmith Conda repository
+pixi publish --to https://conda.cloudsmith.io/my-org/my-repository/
+```
+
+For authentication, set `CLOUDSMITH_API_KEY` or store credentials for the Cloudsmith API URL. Set `CLOUDSMITH_API_URL` only when targeting a custom Cloudsmith API endpoint.
 
 ### Publishing to S3
 
@@ -143,6 +155,7 @@ pixi publish https://prefix.dev/my-channel --clean
 3. **Environment variables**:
    - `PREFIX_API_KEY` for prefix.dev
    - `ANACONDA_API_KEY` for Anaconda.org
+   - `CLOUDSMITH_API_KEY` for Cloudsmith
    - `QUETZ_API_KEY` for Quetz
    - `ARTIFACTORY_TOKEN` for Artifactory
    - Standard AWS environment variables for S3
