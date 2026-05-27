@@ -2135,6 +2135,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#workspace-source-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workspace Source Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2190,6 +2201,17 @@
     <span class="md-ellipsis">
       
         extra-input-globs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ignore-workspace-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ignore-workspace-sources
       
     </span>
   </a>
@@ -4325,6 +4347,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#workspace-source-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workspace Source Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -4380,6 +4413,17 @@
     <span class="md-ellipsis">
       
         extra-input-globs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ignore-workspace-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ignore-workspace-sources
       
     </span>
   </a>
@@ -4628,11 +4672,22 @@ If a <code>distro</code> is not specified in the <code>pixi.toml</code>, it will
 <h3 id="automatic-dependency-resolution">Automatic Dependency Resolution<a class="headerlink" href="#automatic-dependency-resolution" title="Permanent link">#</a></h3>
 <p>Because the definition of a dependency in a <code>package.xml</code> file is not similar to a conda package name, the backend needs to map ROS dependencies to conda packages.</p>
 <ul>
+<li><strong>Workspace siblings</strong>: Other ROS packages in the same workspace are discovered automatically and resolved as <strong>source</strong> dependencies, built from their sibling directory. See <a href="#workspace-source-discovery">Workspace Source Discovery</a>.</li>
 <li><strong>Known dependencies</strong>: Mapped using the <a href="https://github.com/prefix-dev/pixi-build-backends/blob/main/backends/pixi-build-ros/robostack.yaml"><code>robostack.yaml</code></a>.</li>
 <li><strong>Custom mappings</strong>: You can provide additional mappings in your <code>pixi.toml</code> under <a href="#extra-package-mappings"><code>[package.build.config.extra-package-mappings]</code></a></li>
 <li><strong>Other packages</strong>: Mapped to <code>ros-&lt;distro&gt;-&lt;package-name&gt;</code> format.</li>
 </ul>
 <p>The <code>&lt;distro&gt;</code> part of the package name is automatically generated based on the <code>distro</code> configuration.</p>
+<h3 id="workspace-source-discovery">Workspace Source Discovery<a class="headerlink" href="#workspace-source-discovery" title="Permanent link">#</a></h3>
+<p>When a <code>package.xml</code> declares a <code>&lt;depend&gt;</code> (or <code>build_depend</code> / <code>run_depend</code> / <code>exec_depend</code>) on another ROS package that lives in the same workspace, the backend automatically resolves it as a source dependency. There is no need to hand-write <code>path = "..."</code> entries in <code>pixi.toml</code> for every sibling reference.</p>
+<p>Concretely, the backend walks the workspace root looking for every <code>package.xml</code>, and for each declared dependency in the current package whose <code>&lt;name&gt;</code> matches a sibling's <code>&lt;name&gt;</code>, it emits <code>ros-&lt;distro&gt;-&lt;sibling-name&gt;</code> as a source dep pointing at the sibling's <code>package.xml</code> instead of mapping it through RoboStack as a binary.</p>
+<p>Discovery follows colcon conventions: directories that contain a <code>COLCON_IGNORE</code>, <code>AMENT_IGNORE</code>, or <code>CATKIN_IGNORE</code> marker file are pruned from the walk. Colcon writes these markers into its own <code>build/</code>, <code>install/</code>, and <code>log/</code> directories on first use, so those are skipped automatically once a colcon build has run.</p>
+<p>Two <code>package.xml</code> files declaring the same <code>&lt;name&gt;</code> is an error.</p>
+<p>A manual entry in <code>pixi.toml</code> always wins over discovery, per requirement class. For example, if you declare:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[package.run-dependencies]</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">ros-jazzy-pkg-b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">binary</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;==1.2.3&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
+<p>then <code>ros-jazzy-pkg-b</code> stays a pinned binary in the <code>run</code> class, while discovery still applies in <code>build</code> and <code>host</code> if the same sibling is referenced there. Use this to pin a single sibling against a stability baseline while still iterating on the rest of the workspace. To skip discovery entirely for a single package, set <a href="#ignore-workspace-sources"><code>ignore-workspace-sources = true</code></a> on that package.</p>
 <h2 id="configuration-options">Configuration Options<a class="headerlink" href="#configuration-options" title="Permanent link">#</a></h2>
 <p>You can customize the ROS backend behavior using the <code>[package.build.config]</code> section in your <code>pixi.toml</code>. The backend supports the following configuration options:</p>
 <h3 id="distro-optional"><code>distro</code> (Optional)<a class="headerlink" href="#distro-optional" title="Permanent link">#</a></h3>
@@ -4643,8 +4698,8 @@ If a <code>distro</code> is not specified in the <code>pixi.toml</code>, it will
 </ul>
 <p>The ROS distribution to build for. This affects dependency mapping and build configuration.
 If set the package name will be prefixed with <code>ros-&lt;distro&gt;-</code> automatically, otherwise the package name from <code>pixi.toml</code> or <code>package.xml</code> is used.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">distro</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;jazzy&quot;</span><span class="w">  </span><span class="c1"># or &quot;humble&quot;, &quot;noetic&quot;, &quot;iron&quot;, etc.</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">distro</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;jazzy&quot;</span><span class="w">  </span><span class="c1"># or &quot;humble&quot;, &quot;noetic&quot;, &quot;iron&quot;, etc.</span>
 </span></code></pre></div>
 <h3 id="env"><code>env</code><a class="headerlink" href="#env" title="Permanent link">#</a></h3>
 <ul>
@@ -4653,8 +4708,8 @@ If set the package name will be prefixed with <code>ros-&lt;distro&gt;-</code> a
 <li><strong>Target Merge Behavior</strong>: <code>Merge</code> - Platform environment variables override base variables with same name, others are merged</li>
 </ul>
 <p>Environment variables to set during the build process. These variables are available during compilation.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">AMENT_CMAKE_ENVIRONMENT_HOOKS_ENABLED</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;1&quot;</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">AMENT_CMAKE_ENVIRONMENT_HOOKS_ENABLED</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;1&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <h4 id="automatically-injected-environment-variables">Automatically injected environment variables<a class="headerlink" href="#automatically-injected-environment-variables" title="Permanent link">#</a></h4>
 <p>The ROS backend keeps the following variables in sync with the selected distro, so you do not need to set them manually in <code>env</code>:</p>
@@ -4673,11 +4728,11 @@ If you explicitly set <code>ROS_DISTRO</code> or <code>ROS_VERSION</code> in <co
 <li><strong>Target Merge Behavior</strong>: <code>Overwrite</code> - Platform-specific globs completely replace base globs</li>
 </ul>
 <p>Additional glob patterns to include as input files for the build process. These patterns are added to the default input globs that include ROS-specific files.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="s2">&quot;urdf/**/*.urdf&quot;</span><span class="p">,</span>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="s2">&quot;worlds/**/*.sdf&quot;</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">extra-input-globs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="s2">&quot;urdf/**/*.urdf&quot;</span><span class="p">,</span>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="s2">&quot;worlds/**/*.sdf&quot;</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>Default input globs include:</p>
 <ul>
@@ -4690,6 +4745,16 @@ If you explicitly set <code>ROS_DISTRO</code> or <code>ROS_VERSION</code> in <co
 <li>Service definitions: <code>srv/**/*.srv</code></li>
 <li>Action definitions: <code>action/**/*.action</code></li>
 </ul>
+<h3 id="ignore-workspace-sources"><code>ignore-workspace-sources</code><a class="headerlink" href="#ignore-workspace-sources" title="Permanent link">#</a></h3>
+<ul>
+<li><strong>Type</strong>: <code>Boolean</code></li>
+<li><strong>Default</strong>: <code>false</code></li>
+<li><strong>Target Merge Behavior</strong>: <code>Or</code> &mdash; if either the base or platform-specific value is <code>true</code>, discovery is skipped</li>
+</ul>
+<p>When set to <code>true</code>, <a href="#workspace-source-discovery">workspace source discovery</a> is skipped for this package: every dependency declared in <code>package.xml</code> is resolved through RoboStack as a binary, even if a sibling with the same name exists in the workspace. Useful to pin a single package against a stability baseline while iterating on the rest of the workspace.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">ignore-workspace-sources</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span></code></pre></div>
 <h3 id="extra-package-mappings"><code>extra-package-mappings</code><a class="headerlink" href="#extra-package-mappings" title="Permanent link">#</a></h3>
 <ul>
 <li><strong>Type</strong>: <code>List&lt;Map&lt;String, Map&lt;String, List&lt;String&gt; | RelativeFileName&gt;&gt;&gt;</code></li>
@@ -4697,27 +4762,27 @@ If you explicitly set <code>ROS_DISTRO</code> or <code>ROS_VERSION</code> in <co
 </ul>
 <p>Additional dependency mappings to apply to the dependency mapping process.
 These mappings are used to extend the usage of the dependencies in the <code>package.xml</code> file.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">extra-package-mappings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="p">{</span><span class="s2">&quot;ros-custom&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ros</span><span class="w"> </span><span class="p">=</span><span class="w">  </span><span class="p">[</span><span class="s2">&quot;ros-custom-msgs&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}},</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="s2">&quot;mapping.yml&quot;</span>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">extra-package-mappings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="p">{</span><span class="s2">&quot;ros-custom&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ros</span><span class="w"> </span><span class="p">=</span><span class="w">  </span><span class="p">[</span><span class="s2">&quot;ros-custom-msgs&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}},</span>
+</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="s2">&quot;mapping.yml&quot;</span>
+</span><span id="__span-13-5"><a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>Or using a toml array of tables:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[[package.build.config.extra-package-mappings]]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">custom_msgs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ros</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;custom-messages&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[[package.build.config.extra-package-mappings]]</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">custom_msgs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ros</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;custom-messages&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>Or you can use a file directly in the list:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[package.build.config]</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">extra-package-mappings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;mapping.yml&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[package.build.config]</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">extra-package-mappings</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;mapping.yml&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>The mapping file can contain the following:</p>
-<div class="language-yaml highlight"><span class="filename">mapping.yml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">package_name</span><span class="p">:</span><span class="w">  </span><span class="c1"># The name of the package in the package.xml</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">conda-package-name</span><span class="w"> </span><span class="c1"># Maps to a conda package, e.g. from `conda-forge`</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="nt">package_name2</span><span class="p">:</span><span class="w"> </span><span class="c1"># The name of the package in the package.xml</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">  </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">package1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">package2</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># Maps to a list of conda packages</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="nt">ros_package</span><span class="p">:</span><span class="w">   </span><span class="c1"># The name of the package in the package.xml</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">  </span><span class="nt">ros</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ros_package</span><span class="w"> </span><span class="c1"># Maps to a RoboStack style package name, e.g. `ros-&lt;distro&gt;-ros-package`</span>
+<div class="language-yaml highlight"><span class="filename">mapping.yml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">package_name</span><span class="p">:</span><span class="w">  </span><span class="c1"># The name of the package in the package.xml</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">conda-package-name</span><span class="w"> </span><span class="c1"># Maps to a conda package, e.g. from `conda-forge`</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="nt">package_name2</span><span class="p">:</span><span class="w"> </span><span class="c1"># The name of the package in the package.xml</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">  </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">package1</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">package2</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># Maps to a list of conda packages</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="nt">ros_package</span><span class="p">:</span><span class="w">   </span><span class="c1"># The name of the package in the package.xml</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span><span class="nt">ros</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ros_package</span><span class="w"> </span><span class="c1"># Maps to a RoboStack style package name, e.g. `ros-&lt;distro&gt;-ros-package`</span>
 </span></code></pre></div>
 <h2 id="default-variants">Default Variants<a class="headerlink" href="#default-variants" title="Permanent link">#</a></h2>
 <p>On Windows platforms, the backend automatically sets the following default variants:</p>
@@ -4728,9 +4793,9 @@ These mappings are used to extend the usage of the dependencies in the <code>pac
 <p>This default is set to align with conda-forge's switch to Visual Studio 2022 and because <a href="https://learn.microsoft.com/en-us/lifecycle/products/visual-studio-2019">mainstream support for Visual Studio 2019 ended in 2024</a>.
 The <code>vs2022</code> compiler is more widely supported on modern GitHub runners and build environments.</p>
 <p>You can override these defaults by explicitly setting variants using <a href="https://pixi.sh/latest/reference/pixi_manifest/#build-variants-optional"><code>[workspace.build-variants]</code></a> in your <code>pixi.toml</code>:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[workspace.build-variants]</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[workspace.build-variants]</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">cxx_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h2 id="build-process">Build Process<a class="headerlink" href="#build-process" title="Permanent link">#</a></h2>
 <p>The ROS backend follows this build process:</p>
@@ -4745,21 +4810,21 @@ The <code>vs2022</code> compiler is more widely supported on modern GitHub runne
 <p>The backend supports different ROS package build types:</p>
 <h3 id="ament_cmake-ros2">ament_cmake (ROS2)<a class="headerlink" href="#ament_cmake-ros2" title="Permanent link">#</a></h3>
 <p>For C++ packages using ament build system:
-<div class="language-xml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">&lt;export&gt;</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">&lt;build_type&gt;</span>ament_cmake<span class="nt">&lt;/build_type&gt;</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="nt">&lt;/export&gt;</span>
+<div class="language-xml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">&lt;export&gt;</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">&lt;build_type&gt;</span>ament_cmake<span class="nt">&lt;/build_type&gt;</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="nt">&lt;/export&gt;</span>
 </span></code></pre></div></p>
 <h3 id="ament_python-ros2">ament_python (ROS2)<a class="headerlink" href="#ament_python-ros2" title="Permanent link">#</a></h3>
 <p>For Python packages using ament build system:
-<div class="language-xml highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nt">&lt;export&gt;</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">&lt;build_type&gt;</span>ament_python<span class="nt">&lt;/build_type&gt;</span>
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="nt">&lt;/export&gt;</span>
+<div class="language-xml highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nt">&lt;export&gt;</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">&lt;build_type&gt;</span>ament_python<span class="nt">&lt;/build_type&gt;</span>
+</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="nt">&lt;/export&gt;</span>
 </span></code></pre></div></p>
 <h3 id="catkin-ros1">catkin (ROS1)<a class="headerlink" href="#catkin-ros1" title="Permanent link">#</a></h3>
 <p>For ROS1 packages using catkin build system:
-<div class="language-xml highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nt">&lt;export&gt;</span>
-</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">&lt;build_type&gt;</span>catkin<span class="nt">&lt;/build_type&gt;</span>
-</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="nt">&lt;/export&gt;</span>
+<div class="language-xml highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="nt">&lt;export&gt;</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">&lt;build_type&gt;</span>catkin<span class="nt">&lt;/build_type&gt;</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="nt">&lt;/export&gt;</span>
 </span></code></pre></div></p>
 <h2 id="limitations">Limitations<a class="headerlink" href="#limitations" title="Permanent link">#</a></h2>
 <ul>
