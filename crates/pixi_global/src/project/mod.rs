@@ -505,6 +505,13 @@ impl Project {
         self
     }
 
+    /// Reset the command dispatcher and progress reporter.
+    pub fn with_fresh_progress(mut self) -> Self {
+        self.command_dispatcher = OnceCell::new();
+        self.top_level_progress = OnceCell::new();
+        self
+    }
+
     /// Returns the environments in this project.
     pub fn environments(&self) -> &IndexMap<EnvironmentName, ParsedEnvironment> {
         &self.manifest.parsed.envs
