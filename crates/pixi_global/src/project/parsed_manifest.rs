@@ -300,6 +300,8 @@ pub struct ParsedEnvironment {
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub exposed: IndexSet<Mapping>,
     pub shortcuts: Option<IndexSet<PackageName>>,
+    #[serde(default)]
+    pub ignore_conda_prefix: bool,
 }
 
 impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
@@ -319,6 +321,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
         let shortcuts = th
             .optional_s::<TomlWith<_, TomlIndexSet<TomlFromStr<PackageName>>>>("shortcuts")
             .map(|s| s.value.into_inner());
+        let ignore_conda_prefix = th.optional("ignore-conda-prefix").unwrap_or(false);
 
         th.finalize(None)?;
 
@@ -328,6 +331,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             dependencies,
             exposed,
             shortcuts,
+            ignore_conda_prefix,
         })
     }
 }
