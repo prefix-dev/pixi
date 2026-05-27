@@ -63,11 +63,9 @@ fn ext_to_compression<'a>(
         Some("bz2" | "tbz" | "tbz2" | "tz2") => {
             Ok(TarCompression::Bzip2(bzip2::read::BzDecoder::new(file)))
         }
-        Some("lzma" | "tlz" | "xz" | "txz") => {
-            Ok(TarCompression::Xz2(Box::new(lzma_rust2::XzReader::new(
-                file, false,
-            ))))
-        }
+        Some("lzma" | "tlz" | "xz" | "txz") => Ok(TarCompression::Xz2(Box::new(
+            lzma_rust2::XzReader::new(file, false),
+        ))),
         Some("zst" | "tzst") => Ok(TarCompression::Zstd(
             zstd::stream::read::Decoder::new(file)
                 .map_err(|err| ExtractError::TarExtractionError(err.to_string()))?,
