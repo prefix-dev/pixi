@@ -120,12 +120,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let project_ref = &project_original;
     let install_results: Vec<miette::Result<EnvInstallResult>> =
-        futures::future::join_all(env_names.iter().map(|env_name| async move {
-            install_and_determine_expose_type(project_ref, env_name).await
+        futures::future::join_all(env_names.iter().map(|env_name| {
+            let project = project_original.clone().with_fresh_progress();
+            async move { install_and_determine_expose_type(&project, env_name).await }
         }))
         .await;
 
-    let mut project = project_original.clone();
+    let mut project = project_original;
     for result in install_results {
         match result {
             Ok(env_result) => {
@@ -133,7 +134,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 match apply_manifest_changes(&mut project, env_result).await {
                     Ok(state_changes) => state_changes.report(),
                     Err(err) => {
-                        revert_environment_after_error(&env_name, &project_original).await?;
+                        revert_environment_after_error(&env_name, &project).await?;
                         return Err(err);
                     }
                 }
