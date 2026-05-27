@@ -1,6 +1,6 @@
 # [pixi](../) reinstall
 
-Re-install an environment, both updating the lockfile and re-installing the environment
+Re-install an environment, both updating the lock file and re-installing the environment
 
 ## Usage
 
@@ -78,13 +78,13 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -97,9 +97,9 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 ## Description
 
-Re-install an environment, both updating the lockfile and re-installing the environment.
+Re-install an environment, both updating the lock file and re-installing the environment.
 
-This command reinstalls an environment, if the lockfile is not up-to-date it will be updated. If packages are specified, only those packages will be reinstalled. Otherwise the whole environment will be reinstalled.
+This command reinstalls an environment, if the lock file is not up-to-date it will be updated. If packages are specified, only those packages will be reinstalled. Otherwise the whole environment will be reinstalled.
 
 `pixi reinstall` only re-installs one environment at a time, if you have multiple environments you can select the right one with the `--environment` flag. If you don't provide an environment, the `default` environment will be re-installed.
 

@@ -44,7 +44,7 @@ As `pixi.toml` has a JSON schema, it is possible to use IDEs like VSCode to edit
 
 ## Managing dependencies
 
-After creating the workspace, you can start adding dependencies. Pixi uses the `pixi add` command to add dependencies to a workspace. This command will, by default, add the [**conda**](https://prefix.dev/blog/what-is-a-conda-package) dependency to the `pixi.toml`, solve the dependencies, write the [lock file](../workspace/lockfile/), and install the package into an environment. For example, let's add `numpy` and `pytest` to the workspace.
+After creating the workspace, you can start adding dependencies. Pixi uses the `pixi add` command to add dependencies to a workspace. This command will, by default, add the [**conda**](https://prefix.dev/blog/what-is-a-conda-package) dependency to the `pixi.toml`, solve the dependencies, write the [lock file](../workspace/lock_file/), and install the package into an environment. For example, let's add `numpy` and `pytest` to the workspace.
 
 ```shell
 pixi add numpy pytest
@@ -91,7 +91,7 @@ To learn more about the differences between `conda` and PyPI, see [our Conda & P
 
 Pixi will always create a lock file when the dependencies are solved. This file will contain all the exact versions of the workspace's dependencies (and their dependencies). This results in a reproducible environment, which you can share with others, and use for testing and deployment.
 
-The lockfile is called `pixi.lock` and it is created in the root of the workspace. To learn more about lock files, see [our detailed lock file documentation](../workspace/lockfile/).
+The lock file is called `pixi.lock` and it is created in the root of the workspace. To learn more about lock files, see [our detailed lock file documentation](../workspace/lock_file/).
 
 pixi.lock
 

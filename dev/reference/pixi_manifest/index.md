@@ -295,9 +295,9 @@ This is especially useful when a package is pinned to a separate `channel` or `i
 
 Satisfiability checks with `exclude-newer`
 
-For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during lock-file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve when a locked conda package is newer than the configured cutoff.
+For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during lock file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve when a locked conda package is newer than the configured cutoff.
 
-For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same lock-file satisfiability check for already locked PyPI packages. Run `pixi update` to re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
+For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same lock file satisfiability check for already locked PyPI packages. Run `pixi update` to re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
 
 ```toml
 [workspace]

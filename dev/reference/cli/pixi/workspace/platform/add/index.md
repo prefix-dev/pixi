@@ -1,6 +1,6 @@
 # [pixi](../../../) [workspace](../../) [platform](../) add
 
-Adds a platform(s) to the workspace file and updates the lockfile
+Adds a platform(s) to the workspace file and updates the lock file
 
 ## Usage
 
@@ -20,7 +20,7 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 
 ## Options
 
-- [`--no-install`](#arg---no-install) : Don't update the environment, only add changed packages to the lock-file
+- [`--no-install`](#arg---no-install) : Don't update the environment, only add changed packages to the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`

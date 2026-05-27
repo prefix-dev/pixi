@@ -8,7 +8,7 @@ uv is a fast Python package manager, but it's limited to the PyPI ecosystem. Pix
 - **Multi-language support.** A single Pixi workspace can manage Python, R, C/C++, Rust, Node.js, and more, while uv only handles Python.
 - **Binary-first distribution.** Conda packages are pre-compiled, so you rarely need a build toolchain on your machine. No waiting for source builds or debugging missing C headers.
 - **Complete environment modeling.** Conda environments contain everything (interpreters, libraries, headers, compilers, CLI tools), all managed by the solver. With uv, your Python environment depends on whatever your system happens to provide.
-- **True cross-platform lockfiles.** Pixi solves for all target platforms in a single lockfile, even platforms you're not currently running on.
+- **True cross-platform lock files.** Pixi solves for all target platforms in a single lock file, even platforms you're not currently running on.
 - **Built-in task runner.** Define and run tasks directly in your manifest, no need for `Makefile`, `just`, or shell scripts.
 
 You can still use PyPI packages
@@ -32,7 +32,7 @@ Pixi fully supports PyPI packages alongside conda packages, powered by uv under 
 | Global tool install         | `uv tool install ruff`       | `pixi global install ruff`                                           |
 | Building a package          | `uv build`                   | Supported via [pixi-build backends](../../build/getting_started/)    |
 | Publishing a package        | `uv publish`                 | Upload to a [prefix.dev channel](../../deployment/prefix/)           |
-| Exporting a lockfile        | `uv export`                  | `pixi workspace export conda-environment`                            |
+| Exporting a lock file       | `uv export`                  | `pixi workspace export conda-environment`                            |
 | Virtual environments        | `.venv/` (automatic)         | `.pixi/envs/` (automatic, supports multiple environments)            |
 | Cache management            | `uv cache clean`             | `pixi clean cache`                                                   |
 | Updating dependencies       | `uv lock --upgrade`          | `pixi update`                                                        |
@@ -107,7 +107,7 @@ uv manages Python installations separately with `uv python install`. In Pixi, Py
 pixi add python=3.12    # add Python as a conda dependency
 ```
 
-Python gets version-locked in your lockfile alongside everything else, so there's no separate `.python-version` file to manage.
+Python gets version-locked in your lock file alongside everything else, so there's no separate `.python-version` file to manage.
 
 ### Virtual environments
 
@@ -125,7 +125,7 @@ cuda = ["cuda"]
 
 Each environment can have completely different (even conflicting) dependencies, and Pixi keeps them all installed side by side. For example, you can have one environment with `numpy 1.x` and another with `numpy 2.x`, both ready to use without reinstalling anything.
 
-uv can resolve conflicting dependency groups separately in the lockfile via `tool.uv.conflicts`, but it still uses a single `.venv/` that you swap between with `uv sync --group <name>`. Pixi environments are independent directories, so switching is instant.
+uv can resolve conflicting dependency groups separately in the lock file via `tool.uv.conflicts`, but it still uses a single `.venv/` that you swap between with `uv sync --group <name>`. Pixi environments are independent directories, so switching is instant.
 
 See [Multi Environment](../../workspace/multi_environment/).
 
@@ -166,7 +166,7 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 my_lib = { path = "packages/my_lib" }
 ```
 
-Both tools share a single lockfile across the workspace. See [Building Multiple Packages](../../build/workspace/).
+Both tools share a single lock file across the workspace. See [Building Multiple Packages](../../build/workspace/).
 
 ### Standalone scripts
 
@@ -367,7 +367,7 @@ channels = [
 
 ### Lockfiles
 
-Both tools generate lockfiles for reproducibility.
+Both tools generate lock files for reproducibility.
 
 | Aspect            | uv (`uv.lock`)       | Pixi (`pixi.lock`)                                          |
 | ----------------- | -------------------- | ----------------------------------------------------------- |
@@ -377,7 +377,7 @@ Both tools generate lockfiles for reproducibility.
 | Package types     | PyPI only            | Conda + PyPI                                                |
 | Generate/update   | `uv lock`            | `pixi lock` (also automatic on `pixi add` / `pixi install`) |
 
-See [Lock File](../../workspace/lockfile/).
+See [Lock File](../../workspace/lock_file/).
 
 ### Building and publishing
 
@@ -409,7 +409,7 @@ pixi run pip install <some-package>
 
 Prefer `pixi add --pypi`
 
-Using `pip` inside a Pixi environment bypasses the solver and lockfile. Always prefer `pixi add --pypi <package>` to keep dependencies tracked and reproducible.
+Using `pip` inside a Pixi environment bypasses the solver and lock file. Always prefer `pixi add --pypi <package>` to keep dependencies tracked and reproducible.
 
 ## Why the conda ecosystem matters
 
@@ -434,11 +434,11 @@ pixi add pytorch-gpu
 
 ### No Docker needed for environment isolation
 
-A common pattern with uv is using Docker to get a reproducible environment with the right system dependencies. Pixi environments achieve the same isolation without containers: no root privileges required, dramatically smaller than container images, instant creation, and the same reproducibility guarantees via the lockfile.
+A common pattern with uv is using Docker to get a reproducible environment with the right system dependencies. Pixi environments achieve the same isolation without containers: no root privileges required, dramatically smaller than container images, instant creation, and the same reproducibility guarantees via the lock file.
 
 ### Forward-compatible
 
-Conda packages compile against the oldest supported system baseline, so they work on newer OS versions too. Your lockfile from today will still install correctly on next year's OS release.
+Conda packages compile against the oldest supported system baseline, so they work on newer OS versions too. Your lock file from today will still install correctly on next year's OS release.
 
 For a deeper dive into the differences between the conda and PyPI ecosystems, see the [Conda != PyPI](https://conda.org/blog/conda-is-not-pypi) blog post series.
 

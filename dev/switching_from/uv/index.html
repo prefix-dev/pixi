@@ -1510,7 +1510,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../workspace/lockfile/" class="md-nav__link">
+      <a href="../../workspace/lock_file/" class="md-nav__link">
         
   
   
@@ -4624,7 +4624,7 @@ It compares commands and concepts between the two tools, and explains what Pixi 
 <li><strong>Multi-language support.</strong> A single Pixi workspace can manage Python, R, C/C++, Rust, Node.js, and more, while uv only handles Python.</li>
 <li><strong>Binary-first distribution.</strong> Conda packages are pre-compiled, so you rarely need a build toolchain on your machine. No waiting for source builds or debugging missing C headers.</li>
 <li><strong>Complete environment modeling.</strong> Conda environments contain everything (interpreters, libraries, headers, compilers, CLI tools), all managed by the solver. With uv, your Python environment depends on whatever your system happens to provide.</li>
-<li><strong>True cross-platform lockfiles.</strong> Pixi solves for all target platforms in a single lockfile, even platforms you're not currently running on.</li>
+<li><strong>True cross-platform lock files.</strong> Pixi solves for all target platforms in a single lock file, even platforms you're not currently running on.</li>
 <li><strong>Built-in task runner.</strong> Define and run tasks directly in your manifest, no need for <code>Makefile</code>, <code>just</code>, or shell scripts.</li>
 </ul>
 <div class="admonition tip">
@@ -4709,7 +4709,7 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 <td>Upload to a <a href="../../deployment/prefix/">prefix.dev channel</a></td>
 </tr>
 <tr>
-<td>Exporting a lockfile</td>
+<td>Exporting a lock file</td>
 <td><code>uv export</code></td>
 <td><code>pixi workspace export conda-environment</code></td>
 </tr>
@@ -4800,7 +4800,7 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 <p>uv manages Python installations separately with <code>uv python install</code>. In Pixi, Python is just another package:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12<span class="w">    </span><span class="c1"># add Python as a conda dependency</span>
 </span></code></pre></div>
-<p>Python gets version-locked in your lockfile alongside everything else, so there's no separate <code>.python-version</code> file to manage.</p>
+<p>Python gets version-locked in your lock file alongside everything else, so there's no separate <code>.python-version</code> file to manage.</p>
 <h3 id="virtual-environments">Virtual environments<a class="headerlink" href="#virtual-environments" title="Permanent link">#</a></h3>
 <p>uv creates a single <code>.venv/</code> directory per project. Pixi creates environments under <code>.pixi/envs/</code>, and supports <strong>multiple named environments</strong> that exist simultaneously in one workspace:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[environments]</span>
@@ -4810,7 +4810,7 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 </span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cuda&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>Each environment can have completely different (even conflicting) dependencies, and Pixi keeps them all installed side by side. For example, you can have one environment with <code>numpy 1.x</code> and another with <code>numpy 2.x</code>, both ready to use without reinstalling anything.</p>
-<p>uv can resolve conflicting dependency groups separately in the lockfile via <code>tool.uv.conflicts</code>, but it still uses a single <code>.venv/</code> that you swap between with <code>uv sync --group &lt;name&gt;</code>. Pixi environments are independent directories, so switching is instant.</p>
+<p>uv can resolve conflicting dependency groups separately in the lock file via <code>tool.uv.conflicts</code>, but it still uses a single <code>.venv/</code> that you swap between with <code>uv sync --group &lt;name&gt;</code>. Pixi environments are independent directories, so switching is instant.</p>
 <p>See <a href="../../workspace/multi_environment/">Multi Environment</a>.</p>
 <h3 id="dependency-groups-and-extras">Dependency groups and extras<a class="headerlink" href="#dependency-groups-and-extras" title="Permanent link">#</a></h3>
 <p>uv uses <a href="https://peps.python.org/pep-0735/">PEP 735 dependency groups</a> and optional dependencies (extras) to organize dependencies. Pixi uses <strong>features</strong>, composable sets of dependencies that map to environments:</p>
@@ -4854,7 +4854,7 @@ See <a href="../../concepts/conda_pypi/">Conda &amp; PyPI</a> for how the two ec
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="k">[dependencies]</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="n">my_lib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;packages/my_lib&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>Both tools share a single lockfile across the workspace. See <a href="../../build/workspace/">Building Multiple Packages</a>.</p>
+<p>Both tools share a single lock file across the workspace. See <a href="../../build/workspace/">Building Multiple Packages</a>.</p>
 <h3 id="standalone-scripts">Standalone scripts<a class="headerlink" href="#standalone-scripts" title="Permanent link">#</a></h3>
 <p>uv supports <a href="https://peps.python.org/pep-0723/">PEP 723 inline script metadata</a> for standalone scripts that declare their own dependencies:</p>
 <div class="language-python highlight"><span class="filename">uv script</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># /// script</span>
@@ -5056,7 +5056,7 @@ override:</p>
 </div>
 </div>
 <h3 id="lockfiles">Lockfiles<a class="headerlink" href="#lockfiles" title="Permanent link">#</a></h3>
-<p>Both tools generate lockfiles for reproducibility.</p>
+<p>Both tools generate lock files for reproducibility.</p>
 <table>
 <thead>
 <tr>
@@ -5093,7 +5093,7 @@ override:</p>
 </tr>
 </tbody>
 </table>
-<p>See <a href="../../workspace/lockfile/">Lock File</a>.</p>
+<p>See <a href="../../workspace/lock_file/">Lock File</a>.</p>
 <h3 id="building-and-publishing">Building and publishing<a class="headerlink" href="#building-and-publishing" title="Permanent link">#</a></h3>
 <p>uv builds Python packages with <code>uv build</code> (PEP 517 backends) and publishes to PyPI with <code>uv publish</code>.</p>
 <p>Pixi builds packages via <a href="../../build/getting_started/">pixi-build</a>, which produces conda packages from Python, C++, Rust, ROS, and more. You can publish them to a <a href="../../deployment/prefix/">prefix.dev channel</a> or any conda channel.</p>
@@ -5111,7 +5111,7 @@ override:</p>
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Prefer <code>pixi add --pypi</code></p>
-<p>Using <code>pip</code> inside a Pixi environment bypasses the solver and lockfile.
+<p>Using <code>pip</code> inside a Pixi environment bypasses the solver and lock file.
 Always prefer <code>pixi add --pypi &lt;package&gt;</code> to keep dependencies tracked and reproducible.</p>
 </div>
 <h2 id="why-the-conda-ecosystem-matters">Why the conda ecosystem matters<a class="headerlink" href="#why-the-conda-ecosystem-matters" title="Permanent link">#</a></h2>
@@ -5126,9 +5126,9 @@ Always prefer <code>pixi add --pypi &lt;package&gt;</code> to keep dependencies 
 <p><code>uv.lock</code> captures your Python dependencies precisely, but your project also depends on the system's C compiler, CUDA version, OpenSSL build, and more, none of which are tracked.</p>
 <p><code>pixi.lock</code> captures <strong>everything</strong>: the Python interpreter, system libraries, compilers, and CLI tools. When a colleague clones your project and runs <code>pixi install</code>, they get the exact same environment. No "works on my machine" surprises.</p>
 <h3 id="no-docker-needed-for-environment-isolation">No Docker needed for environment isolation<a class="headerlink" href="#no-docker-needed-for-environment-isolation" title="Permanent link">#</a></h3>
-<p>A common pattern with uv is using Docker to get a reproducible environment with the right system dependencies. Pixi environments achieve the same isolation without containers: no root privileges required, dramatically smaller than container images, instant creation, and the same reproducibility guarantees via the lockfile.</p>
+<p>A common pattern with uv is using Docker to get a reproducible environment with the right system dependencies. Pixi environments achieve the same isolation without containers: no root privileges required, dramatically smaller than container images, instant creation, and the same reproducibility guarantees via the lock file.</p>
 <h3 id="forward-compatible">Forward-compatible<a class="headerlink" href="#forward-compatible" title="Permanent link">#</a></h3>
-<p>Conda packages compile against the oldest supported system baseline, so they work on newer OS versions too. Your lockfile from today will still install correctly on next year's OS release.</p>
+<p>Conda packages compile against the oldest supported system baseline, so they work on newer OS versions too. Your lock file from today will still install correctly on next year's OS release.</p>
 <p>For a deeper dive into the differences between the conda and PyPI ecosystems, see the <a href="https://conda.org/blog/conda-is-not-pypi">Conda != PyPI</a> blog post series.</p>
 <h2 id="migrating-a-project">Migrating a project<a class="headerlink" href="#migrating-a-project" title="Permanent link">#</a></h2>
 <p>To migrate an existing uv project to Pixi, start by initializing Pixi in your project directory:</p>

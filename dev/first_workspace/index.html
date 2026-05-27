@@ -1308,7 +1308,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../workspace/lockfile/" class="md-nav__link">
+      <a href="../workspace/lock_file/" class="md-nav__link">
         
   
   
@@ -4248,7 +4248,7 @@ Or use the integrated schema support in PyCharm.</p>
 <p>After creating the workspace, you can start adding dependencies.
 Pixi uses the <code>pixi add</code> command to add dependencies to a workspace.
 This command will, by default, add the <a href="https://prefix.dev/blog/what-is-a-conda-package"><strong>conda</strong></a>
-dependency to the <code>pixi.toml</code>, solve the dependencies, write the <a href="../workspace/lockfile/">lock file</a>,
+dependency to the <code>pixi.toml</code>, solve the dependencies, write the <a href="../workspace/lock_file/">lock file</a>,
 and install the package into an environment. For example, let's add <code>numpy</code> and <code>pytest</code>
 to the workspace.</p>
 <p><div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>numpy<span class="w"> </span>pytest
@@ -4276,8 +4276,8 @@ This will add the <code>httpx</code> package from PyPI to the workspace:</p>
 <p>Pixi will always create a lock file when the dependencies are solved.
 This file will contain all the exact versions of the workspace's dependencies (and their dependencies).
 This results in a reproducible environment, which you can share with others, and use for testing and deployment.</p>
-<p>The lockfile is called <code>pixi.lock</code> and it is created in the root of the workspace.
-To learn more about lock files, see <a href="../workspace/lockfile/">our detailed lock file documentation</a>.</p>
+<p>The lock file is called <code>pixi.lock</code> and it is created in the root of the workspace.
+To learn more about lock files, see <a href="../workspace/lock_file/">our detailed lock file documentation</a>.</p>
 <div class="language-yaml highlight"><span class="filename">pixi.lock</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="nt">environments</span><span class="p">:</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span><span class="nt">default</span><span class="p">:</span>

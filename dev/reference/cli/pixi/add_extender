@@ -42,8 +42,8 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 5. This will add the `python` package as a host dependency. There is currently no different behavior for host dependencies.
 6. This will add the `cmake` package as a build dependency. There is currently no different behavior for build dependencies.
 7. This will add the `clang` package only for the `osx-64` platform.
-8. This will add the `numpy` package to the manifest and lockfile, without installing it in an environment.
-9. This will add the `numpy` package to the manifest without updating the lockfile or installing it in the environment.
+8. This will add the `numpy` package to the manifest and lock file, without installing it in an environment.
+9. This will add the `numpy` package to the manifest without updating the lock file or installing it in the environment.
 10. This will add the `numpy` package in the feature `featurex`.
 11. This will install a pre-built `.conda` or `.tar.bz2` package directly from the local filesystem using an absolute path. The package name is extracted from the archive filename.
 12. This will add the `boost-check` source package to the dependencies from the git repository.

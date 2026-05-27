@@ -10,11 +10,11 @@ pixi workspace channel [OPTIONS] <COMMAND>
 
 ## Subcommands
 
-| Command             | Description                                                  |
-| ------------------- | ------------------------------------------------------------ |
-| [`add`](add/)       | Adds a channel to the manifest and updates the lockfile      |
-| [`list`](list/)     | List the channels in the manifest                            |
-| [`remove`](remove/) | Remove channel(s) from the manifest and updates the lockfile |
+| Command             | Description                                                   |
+| ------------------- | ------------------------------------------------------------- |
+| [`add`](add/)       | Adds a channel to the manifest and updates the lock file      |
+| [`list`](list/)     | List the channels in the manifest                             |
+| [`remove`](remove/) | Remove channel(s) from the manifest and updates the lock file |
 
 ## Global Options
 

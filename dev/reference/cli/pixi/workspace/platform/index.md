@@ -10,11 +10,11 @@ pixi workspace platform [OPTIONS] <COMMAND>
 
 ## Subcommands
 
-| Command             | Description                                                         |
-| ------------------- | ------------------------------------------------------------------- |
-| [`add`](add/)       | Adds a platform(s) to the workspace file and updates the lockfile   |
-| [`list`](list/)     | List the platforms in the workspace file                            |
-| [`remove`](remove/) | Remove platform(s) from the workspace file and updates the lockfile |
+| Command             | Description                                                          |
+| ------------------- | -------------------------------------------------------------------- |
+| [`add`](add/)       | Adds a platform(s) to the workspace file and updates the lock file   |
+| [`list`](list/)     | List the platforms in the workspace file                             |
+| [`remove`](remove/) | Remove platform(s) from the workspace file and updates the lock file |
 
 ## Global Options
 

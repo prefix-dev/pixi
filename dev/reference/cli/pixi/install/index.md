@@ -1,6 +1,6 @@
 # [pixi](../) install
 
-Install an environment, both updating the lockfile and installing the environment
+Install an environment, both updating the lock file and installing the environment
 
 ## Usage
 
@@ -18,7 +18,7 @@ pixi install [OPTIONS]
 
 - [`--all (-a)`](#arg---all) : Install all environments
 
-- [`--skip <SKIP>`](#arg---skip) : Skip installation of specific packages present in the lockfile. This uses a soft exclusion: the package will be skipped but its dependencies are installed
+- [`--skip <SKIP>`](#arg---skip) : Skip installation of specific packages present in the lock file. This uses a soft exclusion: the package will be skipped but its dependencies are installed
 
   ```
   May be provided more than once.
@@ -88,13 +88,13 @@ pixi install [OPTIONS]
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -107,9 +107,9 @@ pixi install [OPTIONS]
 
 ## Description
 
-Install an environment, both updating the lockfile and installing the environment.
+Install an environment, both updating the lock file and installing the environment.
 
-This command installs an environment, if the lockfile is not up-to-date it will be updated.
+This command installs an environment, if the lock file is not up-to-date it will be updated.
 
 `pixi install` only installs one environment at a time, if you have multiple environments you can select the right one with the `--environment` flag. If you don't provide an environment, the `default` environment will be installed.
 
@@ -132,6 +132,6 @@ pixi install -e lint # (5)!
 
 1. This will install the default environment.
 1. This will install the default environment from the manifest file at the given path.
-1. This will install the environment from the lockfile without updating the lockfile.
-1. This will install the environment from the lockfile without updating the lockfile and ensuring the environment is locked correctly.
+1. This will install the environment from the lock file without updating the lock file.
+1. This will install the environment from the lock file without updating the lock file and ensuring the environment is locked correctly.
 1. This will install the `lint` environment.

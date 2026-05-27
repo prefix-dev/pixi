@@ -82,19 +82,19 @@ pixi shell-hook [OPTIONS]
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`

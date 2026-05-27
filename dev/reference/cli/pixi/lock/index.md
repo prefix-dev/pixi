@@ -16,7 +16,7 @@ pixi lock [OPTIONS]
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`

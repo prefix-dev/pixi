@@ -1182,7 +1182,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../workspace/lockfile/" class="md-nav__link">
+      <a href="../../../workspace/lock_file/" class="md-nav__link">
         
   
   
@@ -4017,8 +4017,8 @@
 
 <p><img alt="pixi-diff demo" src="https://raw.githubusercontent.com/pavelzw/pixi-diff/refs/heads/main/.github/assets/demo/demo-light.gif#only-light" />
 <img alt="pixi-diff demo" src="https://raw.githubusercontent.com/pavelzw/pixi-diff/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark" /></p>
-<p>It can happen that you want to know what changed in your lockfile after repeatedly adding and removing dependencies within a pull request.
-For this, you can use <a href="https://github.com/pavelzw/pixi-diff">pavelzw/pixi-diff</a> to calculate the differences between two lockfiles.
+<p>It can happen that you want to know what changed in your lock file after repeatedly adding and removing dependencies within a pull request.
+For this, you can use <a href="https://github.com/pavelzw/pixi-diff">pavelzw/pixi-diff</a> to calculate the differences between two lock files.
 This can be leveraged in combination with <a href="https://github.com/pavelzw/pixi-diff-to-markdown">pavelzw/pixi-diff-to-markdown</a> to generate a markdown file that shows the diff in a human-readable format.
 With <a href="https://github.com/charmbracelet/glow">charmbracelet/glow</a>, you can even render the markdown file in the terminal.</p>
 <div class="admonition tip">
@@ -4027,7 +4027,7 @@ With <a href="https://github.com/charmbracelet/glow">charmbracelet/glow</a>, you
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-diff<span class="w"> </span>pixi-diff-to-markdown<span class="w"> </span>glow-md
 </span></code></pre></div>
 </div>
-<p><code>pixi diff --before pixi.lock.old --after pixi.lock.new</code> will output a JSON object that contains the differences between the two lockfiles similar to <a href="../../../reference/cli/pixi/update/"><code>pixi update --json</code></a>.</p>
+<p><code>pixi diff --before pixi.lock.old --after pixi.lock.new</code> will output a JSON object that contains the differences between the two lock files similar to <a href="../../../reference/cli/pixi/update/"><code>pixi update --json</code></a>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>$<span class="w"> </span>pixi<span class="w"> </span>diff<span class="w"> </span>--before<span class="w"> </span>pixi.lock.old<span class="w"> </span>--after<span class="w"> </span>pixi.lock.new
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="o">{</span>
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="s2">&quot;version&quot;</span>:<span class="w"> </span><span class="m">1</span>,
@@ -4053,14 +4053,14 @@ With <a href="https://github.com/charmbracelet/glow">charmbracelet/glow</a>, you
 </span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">        </span><span class="o">}</span>,
 </span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>//<span class="w"> </span>...
 </span></code></pre></div>
-<p>Named pipes can be handy for comparing lockfiles from different states in your git history:</p>
+<p>Named pipes can be handy for comparing lock files from different states in your git history:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># bash / zsh</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pixi<span class="w"> </span>diff<span class="w"> </span>--before<span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>HEAD~20:pixi.lock<span class="o">)</span><span class="w"> </span>--after<span class="w"> </span>pixi.lock
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
 </span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># fish</span>
 </span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>pixi<span class="w"> </span>diff<span class="w"> </span>--before<span class="w"> </span><span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>HEAD~20:pixi.lock<span class="w"> </span><span class="p">|</span><span class="w"> </span>psub<span class="o">)</span><span class="w"> </span>--after<span class="w"> </span>pixi.lock
 </span></code></pre></div>
-<p>Or specify either the "before" or "after" lockfile via stdin:</p>
+<p>Or specify either the "before" or "after" lock file via stdin:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>git<span class="w"> </span>show<span class="w"> </span>HEAD~20:pixi.lock<span class="w"> </span><span class="p">|</span><span class="w"> </span>pixi<span class="w"> </span>diff<span class="w"> </span>--before<span class="w"> </span>-<span class="w"> </span>--after<span class="w"> </span>pixi.lock
 </span></code></pre></div>
 <p>This can be integrated with <a href="https://github.com/pavelzw/pixi-diff-to-markdown"><code>pixi-diff-to-markdown</code></a> to generate a markdown file that shows the diff in a human-readable format:</p>
@@ -4068,7 +4068,7 @@ With <a href="https://github.com/charmbracelet/glow">charmbracelet/glow</a>, you
 </span></code></pre></div>
 <div class="admonition tip">
 <p class="admonition-title">pixi-diff-to-markdown in GitHub Actions updates</p>
-<p>For other usages of <a href="https://github.com/pavelzw/pixi-diff-to-markdown"><code>pixi-diff-to-markdown</code></a>, see also our page about <a href="../../ci/updates_github_actions/">updating lockfiles using GitHub Actions</a>.</p>
+<p>For other usages of <a href="https://github.com/pavelzw/pixi-diff-to-markdown"><code>pixi-diff-to-markdown</code></a>, see also our page about <a href="../../ci/updates_github_actions/">updating lock files using GitHub Actions</a>.</p>
 </div>
 <p>You can view this generated markdown file in your terminal using <a href="https://github.com/charmbracelet/glow"><code>glow</code></a>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>glow<span class="w"> </span>diff.md<span class="w"> </span>--tui

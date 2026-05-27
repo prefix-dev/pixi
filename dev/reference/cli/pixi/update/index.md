@@ -24,7 +24,7 @@ pixi update [OPTIONS] [PACKAGES]...
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--dry-run (-n)`](#arg---dry-run) : Don't actually write the lockfile or update any environment
+- [`--dry-run (-n)`](#arg---dry-run) : Don't actually write the lock file or update any environment
 
 - [`--environment (-e) <ENVIRONMENTS>`](#arg---environment) : The environments to update. If none is specified, all environments are updated
 
@@ -122,5 +122,5 @@ pixi update --no-install boto3 # (9)!
 1. This will update the `pre-commit` package in the `lint`, `schema`, and `docs` environments.
 1. This will update the `mlx` package in the `osx-arm64` platform.
 1. This will update the `numpy` package in the `linux-64` and `osx-64` platforms.
-1. This will show the packages that would be updated without actually updating them in the lockfile
-1. This will update the `boto3` package in the manifest and lockfile, without installing it in an environment.
+1. This will show the packages that would be updated without actually updating them in the lock file
+1. This will update the `boto3` package in the manifest and lock file, without installing it in an environment.

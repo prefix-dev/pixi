@@ -96,19 +96,19 @@ pixi add [OPTIONS] <SPEC>...
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -199,8 +199,8 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 1. This will add the `python` package as a host dependency. There is currently no different behavior for host dependencies.
 1. This will add the `cmake` package as a build dependency. There is currently no different behavior for build dependencies.
 1. This will add the `clang` package only for the `osx-64` platform.
-1. This will add the `numpy` package to the manifest and lockfile, without installing it in an environment.
-1. This will add the `numpy` package to the manifest without updating the lockfile or installing it in the environment.
+1. This will add the `numpy` package to the manifest and lock file, without installing it in an environment.
+1. This will add the `numpy` package to the manifest without updating the lock file or installing it in the environment.
 1. This will add the `numpy` package in the feature `featurex`.
 1. This will install a pre-built `.conda` or `.tar.bz2` package directly from the local filesystem using an absolute path. The package name is extracted from the archive filename.
 1. This will add the `boost-check` source package to the dependencies from the git repository.

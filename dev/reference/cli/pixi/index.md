@@ -22,10 +22,10 @@ pixi [OPTIONS] [COMMAND]
 | [`info`](info/)               | Information about the system, workspace and environments for the current machine                                                          |
 | [`init`](init/)               | Creates a new workspace                                                                                                                   |
 | [`import`](import/)           | Imports a file into an environment in an existing workspace.                                                                              |
-| [`install`](install/)         | Install an environment, both updating the lockfile and installing the environment                                                         |
+| [`install`](install/)         | Install an environment, both updating the lock file and installing the environment                                                        |
 | [`list`](list/)               | List the packages of the current workspace                                                                                                |
 | [`lock`](lock/)               | Solve environment and update the lock file without installing the environments                                                            |
-| [`reinstall`](reinstall/)     | Re-install an environment, both updating the lockfile and re-installing the environment                                                   |
+| [`reinstall`](reinstall/)     | Re-install an environment, both updating the lock file and re-installing the environment                                                  |
 | [`publish`](publish/)         | Build a conda package and publish it to a channel.                                                                                        |
 | [`remove`](remove/)           | Removes dependencies from the workspace                                                                                                   |
 | [`run`](run/)                 | Runs task in the pixi environment                                                                                                         |
@@ -36,7 +36,7 @@ pixi [OPTIONS] [COMMAND]
 | [`task`](task/)               | Interact with tasks in the workspace                                                                                                      |
 | [`tree`](tree/)               | Show a tree of workspace dependencies                                                                                                     |
 | [`update`](update/)           | The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly |
-| [`upgrade`](upgrade/)         | Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file                                |
+| [`upgrade`](upgrade/)         | Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file                               |
 | [`upload`](upload/)           | Upload conda packages to various channels                                                                                                 |
 | [`workspace`](workspace/)     | Modify the workspace configuration file through the command line                                                                          |
 

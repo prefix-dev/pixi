@@ -50,20 +50,20 @@ You may want to have more control over the interplay between the manifest, the l
 
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../../reference/pixi_manifest/). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../../reference/pixi_manifest/). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--no-install`: don't modify the environment, only modify the lock-file. It can also be controlled by the `PIXI_NO_INSTALL` environment variable (example: `PIXI_NO_INSTALL=true`).
+- `--no-install`: don't modify the environment, only modify the lock file. It can also be controlled by the `PIXI_NO_INSTALL` environment variable (example: `PIXI_NO_INSTALL=true`).
 
-## Committing your lockfile
+## Committing your lock file
 
 Reproducibility is very important in a range of projects (e.g., deploying software services, working on research projects, data analysis). Reproducibility of environments helps with reproducibility of results - it ensures your developers, and deployment machines are all using the same packages.
 
-Hesitant to commit the lockfile? Consider this:
+Hesitant to commit the lock file? Consider this:
 
 - Docker images for reproducible environments are **always larger**.
 - Git works well with YAML.
 - It serves as a cache for the dependency resolution, giving **faster installation and CI**.
 - You don't need it... until you do. Deleting or ignoring is easier than recreating one under pressure.
 
-There is, however, a class of projects where one does not simply just commit the lockfile - there are additional considerations at play. Namely, this is when developing *libraries*.
+There is, however, a class of projects where one does not simply just commit the lock file - there are additional considerations at play. Namely, this is when developing *libraries*.
 
 ______________________________________________________________________
 
@@ -73,7 +73,7 @@ Libraries have an evolving nature and need to be tested against environments cov
 
 If you commit the lock file in your library project, you will want to also consider the following:
 
-- **Upgrading the lockfile:** How often do you want to upgrade the lockfile used by your developers? Do you want to do these upgrades in the main repo history? Do you want to manage this lockfile via (e.g.,) [the Renovate Bot](https://docs.renovatebot.com/modules/manager/pixi/) or via a custom CI job?
+- **Upgrading the lock file:** How often do you want to upgrade the lock file used by your developers? Do you want to do these upgrades in the main repo history? Do you want to manage this lock file via (e.g.,) [the Renovate Bot](https://docs.renovatebot.com/modules/manager/pixi/) or via a custom CI job?
 - **Custom CI workflow to test against latest versions:** Do you want to have a workflow to test against the latest dependency versions? If so - you likely want to have the following CI workflow on a cron schedule:
   - Remove the `pixi.lock` before running the `setup-pixi` action
   - Run your tests

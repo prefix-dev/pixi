@@ -1,6 +1,6 @@
 # [pixi](../) upgrade
 
-Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file
+Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file
 
 Note
 
@@ -98,19 +98,19 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -123,7 +123,7 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 
 ## Description
 
-Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
+Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file.
 
 `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly. By default, all features are upgraded.
 
@@ -145,4 +145,4 @@ pixi upgrade --dry-run # (7)!
 1. This will upgrade the `numpy` package to the latest version in the manifest file at the given path.
 1. This will upgrade the `python` package in the `lint` feature.
 1. This will upgrade all packages and output the result in JSON format.
-1. This will show the packages that would be upgraded without actually upgrading them in the lockfile or manifest.
+1. This will show the packages that would be upgraded without actually upgrading them in the lock file or manifest.

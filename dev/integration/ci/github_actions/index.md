@@ -45,7 +45,7 @@ To see all available input arguments, see the [`action.yml`](https://github.com/
 
 The action supports caching of the project and global pixi environments. By default, project environment caching is enabled if a `pixi.lock` file is present. It will then use the `pixi.lock` file to generate a hash of the environment and cache it. If the cache is hit, the action will skip the installation and use the cached environment. You can specify the behavior by setting the `cache` input argument.
 
-Global environment caching is disabled by default and can be enabled by setting the `global-cache` input to `true`. As there is no lockfile for global environments, the cache will expire at the end of every month to ensure it does not go stale.
+Global environment caching is disabled by default and can be enabled by setting the `global-cache` input to `true`. As there is no lock file for global environments, the cache will expire at the end of every month to ensure it does not go stale.
 
 Customize your cache key
 

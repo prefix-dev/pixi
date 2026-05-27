@@ -36,7 +36,7 @@ FROM ghcr.io/prefix-dev/pixi:0.69.0 AS build
 WORKDIR /app
 COPY . .
 # install dependencies to `/app/.pixi/envs/prod`
-# use `--locked` to ensure the lockfile is up to date with pixi.toml
+# use `--locked` to ensure the lock file is up to date with pixi.toml
 RUN pixi install --locked -e prod
 # create the shell-hook bash script to activate the environment
 RUN pixi shell-hook -e prod -s bash > /shell-hook

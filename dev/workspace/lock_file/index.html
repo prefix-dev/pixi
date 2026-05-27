@@ -10,13 +10,13 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/build/variants/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/latest/workspace/lock_file/">
       
       
-        <link rel="prev" href="../workspace/">
+        <link rel="prev" href="../multi_environment/">
       
       
-        <link rel="next" href="../advanced_cpp/">
+        <link rel="next" href="../system_requirements/">
       
       
         
@@ -27,7 +27,7 @@
     
     
       
-        <title>Variants - Pixi</title>
+        <title>Lock File - Pixi</title>
       
     
     
@@ -80,7 +80,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#why-is-this-useful" class="md-skip">
+        <a href="#what-is-a-lock-file" class="md-skip">
           Skip to content
         </a>
       
@@ -119,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Variants
+              Lock File
             
           </span>
         </div>
@@ -1005,8 +1005,10 @@
       
   
   
+    
   
   
+  
     
     
       
@@ -1032,11 +1034,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
           <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
@@ -1057,7 +1059,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1075,7 +1077,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../workspace/environment/" class="md-nav__link">
+      <a href="../environment/" class="md-nav__link">
         
   
   
@@ -1103,7 +1105,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../workspace/advanced_tasks/" class="md-nav__link">
+      <a href="../advanced_tasks/" class="md-nav__link">
         
   
   
@@ -1131,7 +1133,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../workspace/multi_platform_configuration/" class="md-nav__link">
+      <a href="../multi_platform_configuration/" class="md-nav__link">
         
   
   
@@ -1159,7 +1161,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../workspace/multi_environment/" class="md-nav__link">
+      <a href="../multi_environment/" class="md-nav__link">
         
   
   
@@ -1184,10 +1186,35 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../workspace/lock_file/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Lock File
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -1203,6 +1230,118 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-a-lock-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is a lock file?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lock-files-in-pixi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lock files in Pixi
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lock-file-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lock file changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#committing-your-lock-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Committing your lock file
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Committing your lock file">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#additional-considerations-for-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additional considerations for libraries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-version-of-the-lock-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The version of the lock file
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lock-file-satisfiability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lock file satisfiability
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1215,7 +1354,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../workspace/system_requirements/" class="md-nav__link">
+      <a href="../system_requirements/" class="md-nav__link">
         
   
   
@@ -1420,10 +1559,8 @@
       
   
   
-    
   
   
-  
     
     
       
@@ -1447,11 +1584,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
           <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
@@ -1472,7 +1609,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1490,7 +1627,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../getting_started/" class="md-nav__link">
+      <a href="../../build/getting_started/" class="md-nav__link">
         
   
   
@@ -1515,10 +1652,8 @@
                 
   
   
-    
   
   
-  
     
     
       
@@ -1540,11 +1675,11 @@
     
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6_2" >
         
           
           <label class="md-nav__link" for="__nav_6_2" id="__nav_6_2_label" tabindex="0">
@@ -1565,7 +1700,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_6_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_6_2">
             <span class="md-nav__icon md-icon"></span>
             
@@ -1583,7 +1718,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../python/" class="md-nav__link">
+      <a href="../../build/python/" class="md-nav__link">
         
   
   
@@ -1611,7 +1746,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cpp/" class="md-nav__link">
+      <a href="../../build/cpp/" class="md-nav__link">
         
   
   
@@ -1639,7 +1774,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../ros/" class="md-nav__link">
+      <a href="../../build/ros/" class="md-nav__link">
         
   
   
@@ -1667,7 +1802,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../workspace/" class="md-nav__link">
+      <a href="../../build/workspace/" class="md-nav__link">
         
   
   
@@ -1692,35 +1827,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    
-  
-    Variants
-  
-
-    
-  </span>
-  
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../build/variants/" class="md-nav__link">
         
   
   
@@ -1736,57 +1846,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#why-is-this-useful" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Why is This Useful?
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#lets-get-started" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Let's Get Started
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Conclusion
-      
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1799,7 +1858,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../advanced_cpp/" class="md-nav__link">
+      <a href="../../build/advanced_cpp/" class="md-nav__link">
         
   
   
@@ -1827,7 +1886,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../cross_compilation/" class="md-nav__link">
+      <a href="../../build/cross_compilation/" class="md-nav__link">
         
   
   
@@ -1863,7 +1922,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../dependency_types/" class="md-nav__link">
+      <a href="../../build/dependency_types/" class="md-nav__link">
         
   
   
@@ -1891,7 +1950,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../workspace_dependencies/" class="md-nav__link">
+      <a href="../../build/workspace_dependencies/" class="md-nav__link">
         
   
   
@@ -1984,7 +2043,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backends/" class="md-nav__link">
+      <a href="../../build/backends/" class="md-nav__link">
         
   
   
@@ -2012,7 +2071,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backends/pixi-build-cmake/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-cmake/" class="md-nav__link">
         
   
   
@@ -2040,7 +2099,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backends/pixi-build-python/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-python/" class="md-nav__link">
         
   
   
@@ -2068,7 +2127,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backends/pixi-build-rattler-build/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-rattler-build/" class="md-nav__link">
         
   
   
@@ -2096,7 +2155,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backends/pixi-build-ros/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-ros/" class="md-nav__link">
         
   
   
@@ -2124,7 +2183,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backends/pixi-build-r/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-r/" class="md-nav__link">
         
   
   
@@ -2152,7 +2211,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backends/pixi-build-rust/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-rust/" class="md-nav__link">
         
   
   
@@ -2180,7 +2239,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../backends/pixi-build-mojo/" class="md-nav__link">
+      <a href="../../build/backends/pixi-build-mojo/" class="md-nav__link">
         
   
   
@@ -2267,7 +2326,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../key_concepts/compilers/" class="md-nav__link">
+      <a href="../../build/key_concepts/compilers/" class="md-nav__link">
         
   
   
@@ -2303,7 +2362,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../package_source/" class="md-nav__link">
+      <a href="../../build/package_source/" class="md-nav__link">
         
   
   
@@ -2331,7 +2390,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../dev/" class="md-nav__link">
+      <a href="../../build/dev/" class="md-nav__link">
         
   
   
@@ -4070,10 +4129,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#why-is-this-useful" class="md-nav__link">
+  <a href="#what-is-a-lock-file" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Why is This Useful?
+        What is a lock file?
       
     </span>
   </a>
@@ -4081,10 +4140,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lets-get-started" class="md-nav__link">
+  <a href="#lock-files-in-pixi" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Let's Get Started
+        Lock files in Pixi
       
     </span>
   </a>
@@ -4092,10 +4151,71 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#conclusion" class="md-nav__link">
+  <a href="#lock-file-changes" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Conclusion
+        Lock file changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#committing-your-lock-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Committing your lock file
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Committing your lock file">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#additional-considerations-for-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Additional considerations for libraries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-version-of-the-lock-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The version of the lock file
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lock-file-satisfiability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lock file satisfiability
       
     </span>
   </a>
@@ -4119,7 +4239,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/build/variants.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/workspace/lock_file.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -4127,95 +4247,158 @@
   
 
 
-  <h1>Variants</h1>
+  <h1>Lock File</h1>
 
-<p>In this tutorial, we will show you how to use variants in order to build a Pixi package against different versions of a dependency.
-Some might call this functionality, build matrix, build configurations or parameterized builds, in the conda ecosystem this is referred to as a variant.</p>
+<blockquote>
+<p>A lock file is the protector of the environments, and Pixi is the key to unlock it.</p>
+</blockquote>
+<h2 id="what-is-a-lock-file">What is a lock file?<a class="headerlink" href="#what-is-a-lock-file" title="Permanent link">#</a></h2>
+<p>To answer this question, we first need to highlight the difference between the manifest and the lock file.</p>
+<p>The manifest lists the direct dependencies of your project.
+When you install your environment, this manifest goes through "dependency resolution": all the dependencies of your requested dependencies are found, et cetera all the way down.
+During the resolution process, it is ensured that resolved versions are compatible with each other.</p>
+<p>A lock file lists the exact dependencies that were resolved during this resolution process - the packages, their versions, and other metadata useful for package management.</p>
+<p>A lock file improves reproducibility through a relatively small file.
+Installers can create exactly the same environment without needing to manage the actual package contents itself. </p>
 <div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p><code>pixi-build</code> is a preview feature, and will change until it is stabilized.
-Please keep that in mind when you use it for your projects.</p>
+<p class="admonition-title">Do not edit the lock file</p>
+<p>A lock file is built for machines, and made human readable for easy inspection. It's not meant to be edited by hand.</p>
 </div>
-<h2 id="why-is-this-useful">Why is This Useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
-<p>When we depend on a Pixi package, the dependency versions of the package itself are already set.
-For example, in the <a href="../cpp/">C++ tutorial</a> the <code>cpp_math</code> package we built depended on Python 3.12.
-Pixi would report a version conflict, if we'd add use both Python 3.11 and <code>cpp_math</code> to our workspace.
-By using variants, we can add a set of allowed versions for a specific dependency.
-Pixi will then resolve the package with all the different variants.</p>
-<h2 id="lets-get-started">Let's Get Started<a class="headerlink" href="#lets-get-started" title="Permanent link">#</a></h2>
-<p>In this tutorial we will continue with the result of the <a href="../workspace/">workspace tutorial</a> so we can test it against multiple Python versions.
-As a reminder, we ended up with a top-level <code>pixi.toml</code> containing the workspace and the Python package <code>python_rich</code>.
-Our workspace then depended on <code>python_rich</code> and <code>cpp_math</code>.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[dependencies]</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">python_rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;.&quot;</span><span class="w"> </span><span class="p">}</span>
-</span></code></pre></div>
-<p>The file tree looks like this:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>.
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├──<span class="w"> </span>packages
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>│<span class="w">   </span>└──<span class="w"> </span>cpp_math
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>│<span class="w">       </span>├──<span class="w"> </span>CMakeLists.txt
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>│<span class="w">       </span>├──<span class="w"> </span>pixi.toml
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>│<span class="w">       </span>└──<span class="w"> </span>src
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>│<span class="w">           </span>└──<span class="w"> </span>math.cpp
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>├──<span class="w"> </span>pixi.lock
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>├──<span class="w"> </span>pixi.toml
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>├──<span class="w"> </span>pyproject.toml
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>└──<span class="w"> </span>src
-</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span>└──<span class="w"> </span>python_rich
-</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">        </span>└──<span class="w"> </span>__init__.py
-</span></code></pre></div>
-<p>In order to allow multiple Python versions we first have to change the Python version requirement of <code>cpp_math</code> from <code>3.12.*</code> to <code>*</code>.</p>
-<div class="language-toml highlight"><span class="filename">packages/cpp_math/pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[package.host-dependencies]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.20, &lt;3.27&quot;</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">nanobind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.4.0, &lt;2.5.0&quot;</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="hll"><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w">                 </span><span class="c1"># (1)!</span>
-</span></span></code></pre></div>
+<h2 id="lock-files-in-pixi">Lock files in Pixi<a class="headerlink" href="#lock-files-in-pixi" title="Permanent link">#</a></h2>
+<p>Pixi - like many other modern package managers - has native support for lock files. This file is named <code>pixi.lock</code> .</p>
+<p>During the creation of the lock file, Pixi resolves the packages - for all environments and platforms listed in the manifest.
+This greatly increases the reproducibility of your project making it easy to use on different OSs or CPU architectures - in fact, for a lot of cases, sharing a lock file can be done instead of sharing a Docker container!
+This make recreating your local development environment in CI very easy.</p>
+<p>The Pixi lock file is also human readable, so you can take a look at which packages are listed without extra tools - as well as easily track changes to the file (don't make edits to it - you did read the warning block above right?). </p>
+<h2 id="lock-file-changes">Lock file changes<a class="headerlink" href="#lock-file-changes" title="Permanent link">#</a></h2>
+<p>Many Pixi commands will create a lock file if one doesn't already exist, or update it if needed. For example, when you install a package, Pixi goes through the following process:</p>
 <ol>
-<li>Used to be "3.12.*"</li>
+<li>User requests a package to be installed</li>
+<li>Dependency resolution</li>
+<li>Generating and writing of lock file</li>
+<li>Install resulting packages</li>
 </ol>
-<p>Now, we have to specify the Python versions we want to allow.
-We do that in <code>workspace.build-variants</code>:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[workspace.build-variants]</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;3.11.*&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;3.12.*&quot;</span><span class="p">]</span>
+<p>Additionally - Pixi ensures that the lock file remains in sync with both your manifest, as well as your installed environment.
+If it detects that they aren't in sync, it will regenerate the lock file. You can read more about this in the <a href="#lock-file-satisfiability">Lock file satisfiability</a> section.</p>
+<p>The following commands will check and automatically update the lock file if needed:</p>
+<ul>
+<li><a href="../../reference/cli/pixi/install/"><code>pixi install</code></a></li>
+<li><a href="../../reference/cli/pixi/run/"><code>pixi run</code></a></li>
+<li><a href="../../reference/cli/pixi/shell/"><code>pixi shell</code></a></li>
+<li><a href="../../reference/cli/pixi/shell-hook/"><code>pixi shell-hook</code></a></li>
+<li><a href="../../reference/cli/pixi/tree/"><code>pixi tree</code></a></li>
+<li><a href="../../reference/cli/pixi/list/"><code>pixi list</code></a></li>
+<li><a href="../../reference/cli/pixi/add/"><code>pixi add</code></a></li>
+<li><a href="../../reference/cli/pixi/remove/"><code>pixi remove</code></a></li>
+</ul>
+<p>If you want to remove the lock file, you can simply delete it - ready for it to be generated again with the latest package versions when one of the above commands are run.</p>
+<p>You may want to have more control over the interplay between the manifest, the lock file, and the created environment. There are additional command line options to help with this:</p>
+<ul>
+<li><code>--frozen</code>: install the environment as defined in the lock file, doesn't update <code>pixi.lock</code> if it isn't up-to-date with <a href="../../reference/pixi_manifest/">manifest file</a>. It can also be controlled by the <code>PIXI_FROZEN</code> environment variable (example: <code>PIXI_FROZEN=true</code>).</li>
+<li><code>--locked</code>: only install if the <code>pixi.lock</code> is up-to-date with the <a href="../../reference/pixi_manifest/">manifest file</a>. It can also be controlled by the <code>PIXI_LOCKED</code> environment variable (example: <code>PIXI_LOCKED=true</code>). Conflicts with <code>--frozen</code>.</li>
+<li><code>--no-install</code>: don't modify the environment, only modify the lock file. It can also be controlled by the <code>PIXI_NO_INSTALL</code> environment variable (example: <code>PIXI_NO_INSTALL=true</code>).</li>
+</ul>
+<h2 id="committing-your-lock-file">Committing your lock file<a class="headerlink" href="#committing-your-lock-file" title="Permanent link">#</a></h2>
+<p>Reproducibility is very important in a range of projects (e.g., deploying software services, working on research projects, data analysis).
+Reproducibility of environments helps with reproducibility of results - it ensures your developers, and deployment machines are all using the same packages.</p>
+<p>Hesitant to commit the lock file? Consider this:</p>
+<ul>
+<li>Docker images for reproducible environments are <strong>always larger</strong>.</li>
+<li>Git works well with YAML.</li>
+<li>It serves as a cache for the dependency resolution, giving  <strong>faster installation and CI</strong>.</li>
+<li>You don't need it... until you do. Deleting or ignoring is easier than recreating one under pressure.</li>
+</ul>
+<p>There is, however, a class of projects where one does not simply just commit the lock file - there are additional considerations at play.
+Namely, this is when developing <em>libraries</em>.</p>
+<hr />
+<p>Libraries have an evolving nature and need to be tested against environments covering a wide range of package versions to ensure compatibility.
+This includes an environment with the latest available versions of packages.</p>
+<h3 id="additional-considerations-for-libraries">Additional considerations for libraries<a class="headerlink" href="#additional-considerations-for-libraries" title="Permanent link">#</a></h3>
+<p>If you commit the lock file in your library project, you will want to also consider the following:</p>
+<ul>
+<li><strong>Upgrading the lock file:</strong> How often do you want to upgrade the lock file used by your developers? Do you want to do these upgrades in the main repo history? Do you want to manage this lock file via (e.g.,) <a href="https://docs.renovatebot.com/modules/manager/pixi/">the Renovate Bot</a> or via a custom CI job?</li>
+<li><strong>Custom CI workflow to test against latest versions:</strong> Do you want to have a workflow to test against the latest dependency versions? If so - you likely want to have the following CI workflow on a cron schedule:
+    - Remove the <code>pixi.lock</code> before running the <code>setup-pixi</code> action
+    - Run your tests
+    - If the tests fail:
+        - See how the generated <code>pixi.lock</code> differs from that in <code>main</code> by using <code>pixi-diff</code> and <code>pixi-diff-to-markdown</code>
+        - Automatically file an issue so that its tracked in the project repo</li>
+</ul>
+<p>You can see how these considerations above have been explored by the following projects:
+- Scipy (being explored - will update with PR link once available. <a href="https://github.com/scipy/scipy/issues/23637">Issue</a>)</p>
+<hr />
+<p>If you decide in the end not to commit the lock file, forgoing its benefits, you may want to use an action such as <a href="https://github.com/parcels-code/pixi-lock">Parcels-code/pixi-lock</a> to cache generated lock files and speed up your CI.</p>
+<h3 id="file-structure">File structure<a class="headerlink" href="#file-structure" title="Permanent link">#</a></h3>
+<p>The Pixi lock file is structured into two parts.</p>
+<ul>
+<li>The environments that are used in the workspace - listing the packages contained. e.g.:</li>
+</ul>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">environments</span><span class="p">:</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">    </span><span class="nt">default</span><span class="p">:</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">        </span><span class="nt">channels</span><span class="p">:</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://conda.anaconda.org/conda-forge/</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">        </span><span class="nt">packages</span><span class="p">:</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">            </span><span class="nt">linux-64</span><span class="p">:</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="w">            </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://conda.anaconda.org/conda-forge/linux-64/python-3.12.2-hab00c5b_0_cpython.conda</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="w">            </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="w">            </span><span class="nt">osx-64</span><span class="p">:</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">            </span><span class="l l-Scalar l-Scalar-Plain">...</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">conda</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">            </span><span class="l l-Scalar l-Scalar-Plain">...</span>
 </span></code></pre></div>
-<p>If we'd run <code>pixi install</code> now, we'd leave it up to Pixi whether to use Python 3.11 or 3.12.
-In practice, you'll want to create multiple environments specifying a different dependency version.
-In our case this allows us to test our setup against both Python 3.11 and 3.12.</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[feature.py311.dependencies]</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.11.*&quot;</span>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">[feature.py312.dependencies]</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.12.*&quot;</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="k">[environments]</span>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="n">py311</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;py311&quot;</span><span class="p">]</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="n">py312</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;py312&quot;</span><span class="p">]</span>
+<ul>
+<li>The definition of the packages themselves. e.g.:</li>
+</ul>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">conda</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">  </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3.12.2</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">  </span><span class="nt">build</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">h9f0c242_0_cpython</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="nt">subdir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">osx-64</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://conda.anaconda.org/conda-forge/osx-64/python-3.12.2-h9f0c242_0_cpython.conda</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="w">  </span><span class="nt">sha256</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">7647ac06c3798a182a4bcb1ff58864f1ef81eb3acea6971295304c23e43252fb</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="w">  </span><span class="nt">md5</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0179b8007ba008cf5bec11f3b3853902</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">  </span><span class="nt">depends</span><span class="p">:</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">bzip2 &gt;=1.0.8,&lt;2.0a0</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libexpat &gt;=2.5.0,&lt;3.0a0</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libffi &gt;=3.4,&lt;4.0a0</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libsqlite &gt;=3.45.1,&lt;4.0a0</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">libzlib &gt;=1.2.13,&lt;1.3.0a0</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ncurses &gt;=6.4,&lt;7.0a0</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openssl &gt;=3.2.1,&lt;4.0a0</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">readline &gt;=8.2,&lt;9.0a0</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tk &gt;=8.6.13,&lt;8.7.0a0</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tzdata</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">xz &gt;=5.2.6,&lt;6.0a0</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="w">  </span><span class="nt">constrains</span><span class="p">:</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">python_abi 3.12.* *_cp312</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="w">  </span><span class="nt">license</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Python-2.0</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="w">  </span><span class="nt">size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">14596811</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="w">  </span><span class="nt">timestamp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1708118065292</span>
 </span></code></pre></div>
-<p>By running <code>pixi list</code> we can see the Python version used in each environment.
-You can also see that the <code>Build</code> string of <code>cpp_math</code> differ between <code>py311</code> and <code>py312</code>.
-That means that a different package has been built for each variant.
-Since <code>python_rich</code> only contains Python source code, a single build can be used for multiple Python versions.
-The package is <code>noarch</code>.
-Therefore, the build string is the same.</p>
-<div class="language-pwsh highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">$</span> <span class="n">pixi</span> <span class="n">list</span> <span class="p">-</span><span class="n">-environment</span> <span class="n">py311</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">Package</span>            <span class="n">Version</span>     <span class="n">Build</span>               <span class="n">Size</span>       <span class="n">Kind</span>   <span class="n">Source</span>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">python</span>             <span class="n">3</span><span class="p">.</span><span class="n">11</span><span class="p">.</span><span class="n">11</span>     <span class="n">h9e4cc4f_1_cpython</span>  <span class="n">29</span><span class="p">.</span><span class="n">2</span> <span class="n">MiB</span>   <span class="n">conda</span>  <span class="n">python</span>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">cpp_math</span>           <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">py311h43a39b2_0</span>                <span class="n">conda</span>  <span class="n">cpp_math</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">python_rich</span>        <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">pyhbf21a9e_0</span>                   <span class="n">conda</span>  <span class="n">python_rich</span>
+<h3 id="the-version-of-the-lock-file">The version of the lock file<a class="headerlink" href="#the-version-of-the-lock-file" title="Permanent link">#</a></h3>
+<p>The lock file also has a version number, this is to ensure that the lock file is compatible with the local version of <code>pixi</code>.</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6</span>
 </span></code></pre></div>
-<div class="language-pwsh highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">$</span> <span class="n">pixi</span> <span class="n">list</span> <span class="p">-</span><span class="n">-environment</span> <span class="n">py312</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">Package</span>            <span class="n">Version</span>     <span class="n">Build</span>               <span class="n">Size</span>       <span class="n">Kind</span>   <span class="n">Source</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">python</span>             <span class="n">3</span><span class="p">.</span><span class="n">12</span><span class="p">.</span><span class="n">8</span>      <span class="n">h9e4cc4f_1_cpython</span>  <span class="n">30</span><span class="p">.</span><span class="n">1</span> <span class="n">MiB</span>   <span class="n">conda</span>  <span class="n">python</span>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="n">cpp_math</span>           <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">py312h2078e5b_0</span>                <span class="n">conda</span>  <span class="n">cpp_math</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">python_rich</span>        <span class="n">0</span><span class="p">.</span><span class="n">1</span><span class="p">.</span><span class="n">0</span>       <span class="n">pyhbf21a9e_0</span>                   <span class="n">conda</span>  <span class="n">python_rich</span>
-</span></code></pre></div>
-<h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
-<p>In this tutorial, we showed how to use variants to build multiple versions of a single package.
-We built <code>cpp_math</code> for Python 3.12 and 3.13, which allows us to test whether it works properly on both Python versions.
-Variants are not limited to a single dependency, you could for example try to test multiple versions of <code>nanobind</code>.</p>
-<p>On top of adding variants inline, they can also be included as files. Check out the <a href="../../reference/pixi_manifest/#build-variants-files-optional">reference</a> to learn more!</p>
-<p>Thanks for reading! Happy Coding 🚀</p>
-<p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, send us an <a href="mailto:hi@prefix.dev">e-mail</a> or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>
+<p>Pixi is backward compatible with the lock file, but not forward compatible.
+This means that you can use an older lock file with a newer version of <code>pixi</code>, but not the other way around.</p>
+<h2 id="lock-file-satisfiability">Lock file satisfiability<a class="headerlink" href="#lock-file-satisfiability" title="Permanent link">#</a></h2>
+<p>The lock file is a description of the environment, and it should always be satisfiable.
+Satisfiable means that the given manifest file and the created environment are in sync with the lock file.
+If the lock file is not satisfiable, Pixi will generate a new lock file automatically.</p>
+<p>Steps to check if the lock file is satisfiable:</p>
+<ul>
+<li>All <code>environments</code> in the manifest file are in the lock file</li>
+<li>All <code>channels</code> in the manifest file are in the lock file</li>
+<li>All <code>packages</code> in the manifest file are in the lock file, and the versions in the lock file are compatible with the requirements in the manifest file, for both <code>conda</code> and <code>pypi</code> packages.<ul>
+<li>Conda packages use a <code>matchspec</code> which can match on all the information we store in the lock file, even <code>timestamp</code>, <code>subdir</code> and <code>license</code>.</li>
+</ul>
+</li>
+<li>If <code>pypi-dependencies</code> are added, all <code>conda</code> package that are python packages in the lock file have a <code>purls</code> field.</li>
+<li>All hashes for the <code>pypi</code> editable packages are correct.</li>
+<li>There is only a single entry for every package in the lock file.</li>
+</ul>
+<p>If you want to get more details checkout the <a href="https://github.com/prefix-dev/pixi/blob/main/crates/pixi_core/src/lock_file/satisfiability/mod.rs">actual code</a> as this is a simplification of the actual code.</p>
 
 
 
@@ -4284,9 +4467,9 @@ Variants are not limited to a single dependency, you could for example try to te
           
             
             <a
-              href="../workspace/"
+              href="../multi_environment/"
               class="md-footer__link md-footer__link--prev"
-              aria-label="Previous: Multiple Packages in Workspace"
+              aria-label="Previous: Multi Environment"
             >
               <div class="md-footer__button md-icon">
                 
@@ -4297,7 +4480,7 @@ Variants are not limited to a single dependency, you could for example try to te
                   Previous
                 </span>
                 <div class="md-ellipsis">
-                  Multiple Packages in Workspace
+                  Multi Environment
                 </div>
               </div>
             </a>
@@ -4307,16 +4490,16 @@ Variants are not limited to a single dependency, you could for example try to te
           
             
             <a
-              href="../advanced_cpp/"
+              href="../system_requirements/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Advanced Building Using rattler-build"
+              aria-label="Next: System Requirements"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Advanced Building Using rattler-build
+                  System Requirements
                 </div>
               </div>
               <div class="md-footer__button md-icon">

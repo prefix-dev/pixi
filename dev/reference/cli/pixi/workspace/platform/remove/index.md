@@ -1,6 +1,6 @@
 # [pixi](../../../) [workspace](../../) [platform](../) remove
 
-Remove platform(s) from the workspace file and updates the lockfile
+Remove platform(s) from the workspace file and updates the lock file
 
 ## Usage
 
@@ -20,7 +20,7 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
 
 ## Options
 
-- [`--no-install`](#arg---no-install) : Don't update the environment, only remove the platform(s) from the lock-file
+- [`--no-install`](#arg---no-install) : Don't update the environment, only remove the platform(s) from the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`

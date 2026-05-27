@@ -8,7 +8,7 @@ and project management tool that creates reproducible environments using conda a
 
 To use Pixi, start by running `pixi init my_project` to create a new project with a `pixi.toml` manifest file,
 then add dependencies using `pixi add package1 package2 ...` for conda packages
-or `pixi add --pypi python_package ...` for PyPI packages. Pixi automatically generates a lockfile (`pixi.lock`)
+or `pixi add --pypi python_package ...` for PyPI packages. Pixi automatically generates a lock file (`pixi.lock`)
 to ensure reproducible environments across different systems.
 You can define and run tasks using `pixi task add task_name "command arg1 arg2"` and `pixi run task_name`,
 and work within the project's virtual environment using `pixi run` for single commands
@@ -26,8 +26,8 @@ Pixi is a **fast, modern, and reproducible** package management tool for develop
 
 ## Highlights
 
-- [🔄 **Reproducibility**](workspace/lockfile/)\
-  Isolated, easily recreated environments with lockfiles built-in
+- [🔄 **Reproducibility**](workspace/lock_file/)\
+  Isolated, easily recreated environments with lock files built-in
 
 - [🛠️ **Tasks**](workspace/advanced_tasks/)\
   Manage complex pipelines effortlessly.
@@ -615,7 +615,7 @@ A workspace is a self-contained project that defines its dependencies, tasks, an
 - [`pixi remove`](../reference/cli/pixi/remove/) - remove a dependency from the workspace
 - [`pixi update`](../reference/cli/pixi/update/) - update dependencies in the workspace
 - [`pixi upgrade`](../reference/cli/pixi/upgrade/) - upgrade the dependencies in workspace to the latest versions, even if you pinned them to a specific version
-- [`pixi lock`](../reference/cli/pixi/lock/) - create or update the lockfile for your workspace
+- [`pixi lock`](../reference/cli/pixi/lock/) - create or update the lock file for your workspace
 - [`pixi info`](../reference/cli/pixi/info/) - show information about your workspace
 - [`pixi run`](../reference/cli/pixi/run/) - run a task defined in your manifest or any command in the current environment
 - [`pixi shell`](../reference/cli/pixi/shell/) - start a shell in the current environment
@@ -764,7 +764,7 @@ As `pixi.toml` has a JSON schema, it is possible to use IDEs like VSCode to edit
 
 ## Managing dependencies
 
-After creating the workspace, you can start adding dependencies. Pixi uses the `pixi add` command to add dependencies to a workspace. This command will, by default, add the [**conda**](https://prefix.dev/blog/what-is-a-conda-package) dependency to the `pixi.toml`, solve the dependencies, write the [lock file](../workspace/lockfile/), and install the package into an environment. For example, let's add `numpy` and `pytest` to the workspace.
+After creating the workspace, you can start adding dependencies. Pixi uses the `pixi add` command to add dependencies to a workspace. This command will, by default, add the [**conda**](https://prefix.dev/blog/what-is-a-conda-package) dependency to the `pixi.toml`, solve the dependencies, write the [lock file](../workspace/lock_file/), and install the package into an environment. For example, let's add `numpy` and `pytest` to the workspace.
 
 ```shell
 pixi add numpy pytest
@@ -811,7 +811,7 @@ To learn more about the differences between `conda` and PyPI, see [our Conda & P
 
 Pixi will always create a lock file when the dependencies are solved. This file will contain all the exact versions of the workspace's dependencies (and their dependencies). This results in a reproducible environment, which you can share with others, and use for testing and deployment.
 
-The lockfile is called `pixi.lock` and it is created in the root of the workspace. To learn more about lock files, see [our detailed lock file documentation](../workspace/lockfile/).
+The lock file is called `pixi.lock` and it is created in the root of the workspace. To learn more about lock files, see [our detailed lock file documentation](../workspace/lock_file/).
 
 pixi.lock
 
@@ -949,8 +949,8 @@ ______________________________________________________________________
 
 - **No system-wide ROS installation**\
   All dependencies live in the workspace. New team members clone the repo and run `pixi install`. No more additional setup instructions, no version incompatibilities.
-- **[Reproducible environments](../workspace/lockfile/)**\
-  Pixi generates a lockfile (`pixi.lock`) that pins every dependency, including transitive ones. The same environment is guaranteed on your laptop, CI, and the robot itself.
+- **[Reproducible environments](../workspace/lock_file/)**\
+  Pixi generates a lock file (`pixi.lock`) that pins every dependency, including transitive ones. The same environment is guaranteed on your laptop, CI, and the robot itself.
 - **[Works on Linux, macOS, and Windows](../workspace/multi_platform_configuration/)**\
   RoboStack supports ROS packages for Linux, macOS and Windows. A single `pixi.toml` can declare support for all three platforms simultaneously.
 - **[Built-in task runner](../workspace/advanced_tasks/)**\
@@ -968,7 +968,7 @@ ______________________________________________________________________
 | ------------------------------------ | ----- | -------- | -------------------- | -------- |
 | Installs ROS                         | ✅    | ❌       | ✅                   | ✅       |
 | Works on macOS & Windows             | ❌    | ✅       | ✅                   | ✅       |
-| Reproducible lockfile                | ❌    | ❌       | ⚠️(pre-baked images) | ✅       |
+| Reproducible lock file               | ❌    | ❌       | ⚠️(pre-baked images) | ✅       |
 | Per-project isolation                | ❌    | ⚠️ venvs | ✅                   | ✅       |
 | Mix C++, Python, system libs         | ✅    | ❌       | ✅                   | ✅       |
 | Native performance (no VM/container) | ✅    | ✅       | ❌                   | ✅       |
@@ -3266,7 +3266,7 @@ For some advanced use-cases, you can activate the environment in the current she
 
 ## Environment vs Workspace
 
-`Conda` and `mamba` focus on managing environments, while `pixi` emphasizes workspaces. In `pixi`, a workspace is a folder containing a [manifest](../../reference/pixi_manifest/)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
+`Conda` and `mamba` focus on managing environments, while `pixi` emphasizes workspaces. In `pixi`, a workspace is a folder containing a [manifest](../../reference/pixi_manifest/)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
 
 This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the environment. It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple environments](../../workspace/multi_environment/))
 
@@ -3397,7 +3397,7 @@ uv is a fast Python package manager, but it's limited to the PyPI ecosystem. Pix
 - **Multi-language support.** A single Pixi workspace can manage Python, R, C/C++, Rust, Node.js, and more, while uv only handles Python.
 - **Binary-first distribution.** Conda packages are pre-compiled, so you rarely need a build toolchain on your machine. No waiting for source builds or debugging missing C headers.
 - **Complete environment modeling.** Conda environments contain everything (interpreters, libraries, headers, compilers, CLI tools), all managed by the solver. With uv, your Python environment depends on whatever your system happens to provide.
-- **True cross-platform lockfiles.** Pixi solves for all target platforms in a single lockfile, even platforms you're not currently running on.
+- **True cross-platform lock files.** Pixi solves for all target platforms in a single lock file, even platforms you're not currently running on.
 - **Built-in task runner.** Define and run tasks directly in your manifest, no need for `Makefile`, `just`, or shell scripts.
 
 You can still use PyPI packages
@@ -3421,7 +3421,7 @@ Pixi fully supports PyPI packages alongside conda packages, powered by uv under 
 | Global tool install         | `uv tool install ruff`       | `pixi global install ruff`                                           |
 | Building a package          | `uv build`                   | Supported via [pixi-build backends](../../build/getting_started/)    |
 | Publishing a package        | `uv publish`                 | Upload to a [prefix.dev channel](../../deployment/prefix/)           |
-| Exporting a lockfile        | `uv export`                  | `pixi workspace export conda-environment`                            |
+| Exporting a lock file       | `uv export`                  | `pixi workspace export conda-environment`                            |
 | Virtual environments        | `.venv/` (automatic)         | `.pixi/envs/` (automatic, supports multiple environments)            |
 | Cache management            | `uv cache clean`             | `pixi clean cache`                                                   |
 | Updating dependencies       | `uv lock --upgrade`          | `pixi update`                                                        |
@@ -3496,7 +3496,7 @@ uv manages Python installations separately with `uv python install`. In Pixi, Py
 pixi add python=3.12    # add Python as a conda dependency
 ```
 
-Python gets version-locked in your lockfile alongside everything else, so there's no separate `.python-version` file to manage.
+Python gets version-locked in your lock file alongside everything else, so there's no separate `.python-version` file to manage.
 
 ### Virtual environments
 
@@ -3514,7 +3514,7 @@ cuda = ["cuda"]
 
 Each environment can have completely different (even conflicting) dependencies, and Pixi keeps them all installed side by side. For example, you can have one environment with `numpy 1.x` and another with `numpy 2.x`, both ready to use without reinstalling anything.
 
-uv can resolve conflicting dependency groups separately in the lockfile via `tool.uv.conflicts`, but it still uses a single `.venv/` that you swap between with `uv sync --group <name>`. Pixi environments are independent directories, so switching is instant.
+uv can resolve conflicting dependency groups separately in the lock file via `tool.uv.conflicts`, but it still uses a single `.venv/` that you swap between with `uv sync --group <name>`. Pixi environments are independent directories, so switching is instant.
 
 See [Multi Environment](../../workspace/multi_environment/).
 
@@ -3555,7 +3555,7 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 my_lib = { path = "packages/my_lib" }
 ```
 
-Both tools share a single lockfile across the workspace. See [Building Multiple Packages](../../build/workspace/).
+Both tools share a single lock file across the workspace. See [Building Multiple Packages](../../build/workspace/).
 
 ### Standalone scripts
 
@@ -3756,7 +3756,7 @@ channels = [
 
 ### Lockfiles
 
-Both tools generate lockfiles for reproducibility.
+Both tools generate lock files for reproducibility.
 
 | Aspect            | uv (`uv.lock`)       | Pixi (`pixi.lock`)                                          |
 | ----------------- | -------------------- | ----------------------------------------------------------- |
@@ -3766,7 +3766,7 @@ Both tools generate lockfiles for reproducibility.
 | Package types     | PyPI only            | Conda + PyPI                                                |
 | Generate/update   | `uv lock`            | `pixi lock` (also automatic on `pixi add` / `pixi install`) |
 
-See [Lock File](../../workspace/lockfile/).
+See [Lock File](../../workspace/lock_file/).
 
 ### Building and publishing
 
@@ -3798,7 +3798,7 @@ pixi run pip install <some-package>
 
 Prefer `pixi add --pypi`
 
-Using `pip` inside a Pixi environment bypasses the solver and lockfile. Always prefer `pixi add --pypi <package>` to keep dependencies tracked and reproducible.
+Using `pip` inside a Pixi environment bypasses the solver and lock file. Always prefer `pixi add --pypi <package>` to keep dependencies tracked and reproducible.
 
 ## Why the conda ecosystem matters
 
@@ -3823,11 +3823,11 @@ pixi add pytorch-gpu
 
 ### No Docker needed for environment isolation
 
-A common pattern with uv is using Docker to get a reproducible environment with the right system dependencies. Pixi environments achieve the same isolation without containers: no root privileges required, dramatically smaller than container images, instant creation, and the same reproducibility guarantees via the lockfile.
+A common pattern with uv is using Docker to get a reproducible environment with the right system dependencies. Pixi environments achieve the same isolation without containers: no root privileges required, dramatically smaller than container images, instant creation, and the same reproducibility guarantees via the lock file.
 
 ### Forward-compatible
 
-Conda packages compile against the oldest supported system baseline, so they work on newer OS versions too. Your lockfile from today will still install correctly on next year's OS release.
+Conda packages compile against the oldest supported system baseline, so they work on newer OS versions too. Your lock file from today will still install correctly on next year's OS release.
 
 For a deeper dive into the differences between the conda and PyPI ecosystems, see the [Conda != PyPI](https://conda.org/blog/conda-is-not-pypi) blog post series.
 
@@ -5329,20 +5329,20 @@ You may want to have more control over the interplay between the manifest, the l
 
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../../reference/pixi_manifest/). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../../reference/pixi_manifest/). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
-- `--no-install`: don't modify the environment, only modify the lock-file. It can also be controlled by the `PIXI_NO_INSTALL` environment variable (example: `PIXI_NO_INSTALL=true`).
+- `--no-install`: don't modify the environment, only modify the lock file. It can also be controlled by the `PIXI_NO_INSTALL` environment variable (example: `PIXI_NO_INSTALL=true`).
 
-## Committing your lockfile
+## Committing your lock file
 
 Reproducibility is very important in a range of projects (e.g., deploying software services, working on research projects, data analysis). Reproducibility of environments helps with reproducibility of results - it ensures your developers, and deployment machines are all using the same packages.
 
-Hesitant to commit the lockfile? Consider this:
+Hesitant to commit the lock file? Consider this:
 
 - Docker images for reproducible environments are **always larger**.
 - Git works well with YAML.
 - It serves as a cache for the dependency resolution, giving **faster installation and CI**.
 - You don't need it... until you do. Deleting or ignoring is easier than recreating one under pressure.
 
-There is, however, a class of projects where one does not simply just commit the lockfile - there are additional considerations at play. Namely, this is when developing *libraries*.
+There is, however, a class of projects where one does not simply just commit the lock file - there are additional considerations at play. Namely, this is when developing *libraries*.
 
 ______________________________________________________________________
 
@@ -5352,7 +5352,7 @@ Libraries have an evolving nature and need to be tested against environments cov
 
 If you commit the lock file in your library project, you will want to also consider the following:
 
-- **Upgrading the lockfile:** How often do you want to upgrade the lockfile used by your developers? Do you want to do these upgrades in the main repo history? Do you want to manage this lockfile via (e.g.,) [the Renovate Bot](https://docs.renovatebot.com/modules/manager/pixi/) or via a custom CI job?
+- **Upgrading the lock file:** How often do you want to upgrade the lock file used by your developers? Do you want to do these upgrades in the main repo history? Do you want to manage this lock file via (e.g.,) [the Renovate Bot](https://docs.renovatebot.com/modules/manager/pixi/) or via a custom CI job?
 - **Custom CI workflow to test against latest versions:** Do you want to have a workflow to test against the latest dependency versions? If so - you likely want to have the following CI workflow on a cron schedule:
   - Remove the `pixi.lock` before running the `setup-pixi` action
   - Run your tests
@@ -11655,7 +11655,7 @@ FROM ghcr.io/prefix-dev/pixi:0.69.0 AS build
 WORKDIR /app
 COPY . .
 # install dependencies to `/app/.pixi/envs/prod`
-# use `--locked` to ensure the lockfile is up to date with pixi.toml
+# use `--locked` to ensure the lock file is up to date with pixi.toml
 RUN pixi install --locked -e prod
 # create the shell-hook bash script to activate the environment
 RUN pixi shell-hook -e prod -s bash > /shell-hook
@@ -12342,7 +12342,7 @@ To see all available input arguments, see the [`action.yml`](https://github.com/
 
 The action supports caching of the project and global pixi environments. By default, project environment caching is enabled if a `pixi.lock` file is present. It will then use the `pixi.lock` file to generate a hash of the environment and cache it. If the cache is hit, the action will skip the installation and use the cached environment. You can specify the behavior by setting the `cache` input argument.
 
-Global environment caching is disabled by default and can be enabled by setting the `global-cache` input to `true`. As there is no lockfile for global environments, the cache will expire at the end of every month to ensure it does not go stale.
+Global environment caching is disabled by default and can be enabled by setting the `global-cache` input to `true`. As there is no lock file for global environments, the cache will expire at the end of every month to ensure it does not go stale.
 
 Customize your cache key
 
@@ -12776,7 +12776,7 @@ Inputs always take precedence over environment variables.
 
 If you want to see more examples, you can take a look at the [GitHub Workflows of the `setup-pixi` repository](https://github.com/prefix-dev/setup-pixi/blob/main/.github/workflows/test.yml).
 
-You can leverage GitHub Actions in combination with [pavelzw/pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown) to automatically update your lockfiles similar to dependabot or renovate in other ecosystems.
+You can leverage GitHub Actions in combination with [pavelzw/pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown) to automatically update your lock files similar to dependabot or renovate in other ecosystems.
 
 Dependabot/Renovate support for pixi
 
@@ -12786,10 +12786,10 @@ You can track native Dependabot support for pixi in [dependabot/dependabot-core 
 
 To get started, create a new GitHub Actions workflow file in your repository.
 
-.github/workflows/update-lockfiles.yml
+.github/workflows/update-lock-files.yml
 
 ```yaml
-name: Update lockfiles
+name: Update lock files
 
 permissions: # (1)!
   contents: write
@@ -12809,7 +12809,7 @@ jobs:
         uses: prefix-dev/setup-pixi@v0.8.3
         with:
           run-install: false
-      - name: Update lockfiles
+      - name: Update lock files
         run: |
           set -o pipefail
           pixi update --json | pixi exec pixi-diff-to-markdown >> diff.md
@@ -12817,8 +12817,8 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: Update pixi lockfile
-          title: Update pixi lockfile
+          commit-message: Update pixi lock file
+          title: Update pixi lock file
           body-path: diff.md
           branch: update-pixi
           base: main
@@ -13358,7 +13358,7 @@ pixi browse -c prefix.dev/conda-forge
 pixi browse -p linux-64 -p osx-arm64
 ```
 
-It can happen that you want to know what changed in your lockfile after repeatedly adding and removing dependencies within a pull request. For this, you can use [pavelzw/pixi-diff](https://github.com/pavelzw/pixi-diff) to calculate the differences between two lockfiles. This can be leveraged in combination with [pavelzw/pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown) to generate a markdown file that shows the diff in a human-readable format. With [charmbracelet/glow](https://github.com/charmbracelet/glow), you can even render the markdown file in the terminal.
+It can happen that you want to know what changed in your lock file after repeatedly adding and removing dependencies within a pull request. For this, you can use [pavelzw/pixi-diff](https://github.com/pavelzw/pixi-diff) to calculate the differences between two lock files. This can be leveraged in combination with [pavelzw/pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown) to generate a markdown file that shows the diff in a human-readable format. With [charmbracelet/glow](https://github.com/charmbracelet/glow), you can even render the markdown file in the terminal.
 
 Install the tools globally
 
@@ -13368,7 +13368,7 @@ All of the above-mentioned tools are available on conda-forge and can be install
 pixi global install pixi-diff pixi-diff-to-markdown glow-md
 ```
 
-`pixi diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lockfiles similar to [`pixi update --json`](../../../reference/cli/pixi/update/).
+`pixi diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lock files similar to [`pixi update --json`](../../../reference/cli/pixi/update/).
 
 ```bash
 $ pixi diff --before pixi.lock.old --after pixi.lock.new
@@ -13397,7 +13397,7 @@ $ pixi diff --before pixi.lock.old --after pixi.lock.new
 // ...
 ```
 
-Named pipes can be handy for comparing lockfiles from different states in your git history:
+Named pipes can be handy for comparing lock files from different states in your git history:
 
 ```bash
 # bash / zsh
@@ -13407,7 +13407,7 @@ pixi diff --before <(git show HEAD~20:pixi.lock) --after pixi.lock
 pixi diff --before (git show HEAD~20:pixi.lock | psub) --after pixi.lock
 ```
 
-Or specify either the "before" or "after" lockfile via stdin:
+Or specify either the "before" or "after" lock file via stdin:
 
 ```bash
 git show HEAD~20:pixi.lock | pixi diff --before - --after pixi.lock
@@ -13421,7 +13421,7 @@ pixi diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi diff-to-markdown > diff
 
 pixi-diff-to-markdown in GitHub Actions updates
 
-For other usages of [`pixi-diff-to-markdown`](https://github.com/pavelzw/pixi-diff-to-markdown), see also our page about [updating lockfiles using GitHub Actions](../../ci/updates_github_actions/).
+For other usages of [`pixi-diff-to-markdown`](https://github.com/pavelzw/pixi-diff-to-markdown), see also our page about [updating lock files using GitHub Actions](../../ci/updates_github_actions/).
 
 You can view this generated markdown file in your terminal using [`glow`](https://github.com/charmbracelet/glow).
 
@@ -13468,7 +13468,7 @@ Arguments:
   <PREFIX>  The path to the prefix where you want to install the environment
 
 Options:
-  -l, --lockfile <LOCKFILE>        The path to the pixi lockfile [default: pixi.lock]
+  -l, --lockfile <LOCKFILE>        The path to the pixi lock file [default: pixi.lock]
   -e, --environment <ENVIRONMENT>  The name of the pixi environment to install [default: default]
   -p, --platform <PLATFORM>        The platform you want to install for [default: <your-system-platform>]
   -c, --config <CONFIG>            The path to the pixi config file. By default, no config file is used
@@ -15341,9 +15341,9 @@ This is especially useful when a package is pinned to a separate `channel` or `i
 
 Satisfiability checks with `exclude-newer`
 
-For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during lock-file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve when a locked conda package is newer than the configured cutoff.
+For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during lock file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve when a locked conda package is newer than the configured cutoff.
 
-For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same lock-file satisfiability check for already locked PyPI packages. Run `pixi update` to re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
+For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same lock file satisfiability check for already locked PyPI packages. Run `pixi update` to re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
 
 ```toml
 [workspace]
@@ -16467,10 +16467,10 @@ pixi [OPTIONS] [COMMAND]
 | [`info`](info/)               | Information about the system, workspace and environments for the current machine                                                          |
 | [`init`](init/)               | Creates a new workspace                                                                                                                   |
 | [`import`](import/)           | Imports a file into an environment in an existing workspace.                                                                              |
-| [`install`](install/)         | Install an environment, both updating the lockfile and installing the environment                                                         |
+| [`install`](install/)         | Install an environment, both updating the lock file and installing the environment                                                        |
 | [`list`](list/)               | List the packages of the current workspace                                                                                                |
 | [`lock`](lock/)               | Solve environment and update the lock file without installing the environments                                                            |
-| [`reinstall`](reinstall/)     | Re-install an environment, both updating the lockfile and re-installing the environment                                                   |
+| [`reinstall`](reinstall/)     | Re-install an environment, both updating the lock file and re-installing the environment                                                  |
 | [`publish`](publish/)         | Build a conda package and publish it to a channel.                                                                                        |
 | [`remove`](remove/)           | Removes dependencies from the workspace                                                                                                   |
 | [`run`](run/)                 | Runs task in the pixi environment                                                                                                         |
@@ -16481,7 +16481,7 @@ pixi [OPTIONS] [COMMAND]
 | [`task`](task/)               | Interact with tasks in the workspace                                                                                                      |
 | [`tree`](tree/)               | Show a tree of workspace dependencies                                                                                                     |
 | [`update`](update/)           | The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly |
-| [`upgrade`](upgrade/)         | Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file                                |
+| [`upgrade`](upgrade/)         | Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file                               |
 | [`upload`](upload/)           | Upload conda packages to various channels                                                                                                 |
 | [`workspace`](workspace/)     | Modify the workspace configuration file through the command line                                                                          |
 
@@ -16611,19 +16611,19 @@ pixi add [OPTIONS] <SPEC>...
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -16714,8 +16714,8 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 1. This will add the `python` package as a host dependency. There is currently no different behavior for host dependencies.
 1. This will add the `cmake` package as a build dependency. There is currently no different behavior for build dependencies.
 1. This will add the `clang` package only for the `osx-64` platform.
-1. This will add the `numpy` package to the manifest and lockfile, without installing it in an environment.
-1. This will add the `numpy` package to the manifest without updating the lockfile or installing it in the environment.
+1. This will add the `numpy` package to the manifest and lock file, without installing it in an environment.
+1. This will add the `numpy` package to the manifest without updating the lock file or installing it in the environment.
 1. This will add the `numpy` package in the feature `featurex`.
 1. This will install a pre-built `.conda` or `.tar.bz2` package directly from the local filesystem using an absolute path. The package name is extracted from the archive filename.
 1. This will add the `boost-check` source package to the dependencies from the git repository.
@@ -17239,7 +17239,7 @@ pixi init --format pixi --scm gitlab  # (8)!
 
 # [pixi](../) install
 
-Install an environment, both updating the lockfile and installing the environment
+Install an environment, both updating the lock file and installing the environment
 
 ## Usage
 
@@ -17257,7 +17257,7 @@ pixi install [OPTIONS]
 
 - [`--all (-a)`](#arg---all) : Install all environments
 
-- [`--skip <SKIP>`](#arg---skip) : Skip installation of specific packages present in the lockfile. This uses a soft exclusion: the package will be skipped but its dependencies are installed
+- [`--skip <SKIP>`](#arg---skip) : Skip installation of specific packages present in the lock file. This uses a soft exclusion: the package will be skipped but its dependencies are installed
 
   ```
   May be provided more than once.
@@ -17327,13 +17327,13 @@ pixi install [OPTIONS]
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -17346,9 +17346,9 @@ pixi install [OPTIONS]
 
 ## Description
 
-Install an environment, both updating the lockfile and installing the environment.
+Install an environment, both updating the lock file and installing the environment.
 
-This command installs an environment, if the lockfile is not up-to-date it will be updated.
+This command installs an environment, if the lock file is not up-to-date it will be updated.
 
 `pixi install` only installs one environment at a time, if you have multiple environments you can select the right one with the `--environment` flag. If you don't provide an environment, the `default` environment will be installed.
 
@@ -17371,8 +17371,8 @@ pixi install -e lint # (5)!
 
 1. This will install the default environment.
 1. This will install the default environment from the manifest file at the given path.
-1. This will install the environment from the lockfile without updating the lockfile.
-1. This will install the environment from the lockfile without updating the lockfile and ensuring the environment is locked correctly.
+1. This will install the environment from the lock file without updating the lock file.
+1. This will install the environment from the lock file without updating the lock file and ensuring the environment is locked correctly.
 1. This will install the `lint` environment.
 
 # [pixi](../) list
@@ -17419,19 +17419,19 @@ pixi list [OPTIONS] [REGEX]
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
   ```
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
@@ -17509,7 +17509,7 @@ pixi lock [OPTIONS]
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
@@ -17827,7 +17827,7 @@ pixi publish -m variants.yaml --variant python=3.12
 
 # [pixi](../) reinstall
 
-Re-install an environment, both updating the lockfile and re-installing the environment
+Re-install an environment, both updating the lock file and re-installing the environment
 
 ## Usage
 
@@ -17905,13 +17905,13 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -17924,9 +17924,9 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 ## Description
 
-Re-install an environment, both updating the lockfile and re-installing the environment.
+Re-install an environment, both updating the lock file and re-installing the environment.
 
-This command reinstalls an environment, if the lockfile is not up-to-date it will be updated. If packages are specified, only those packages will be reinstalled. Otherwise the whole environment will be reinstalled.
+This command reinstalls an environment, if the lock file is not up-to-date it will be updated. If packages are specified, only those packages will be reinstalled. Otherwise the whole environment will be reinstalled.
 
 `pixi reinstall` only re-installs one environment at a time, if you have multiple environments you can select the right one with the `--environment` flag. If you don't provide an environment, the `default` environment will be re-installed.
 
@@ -18033,19 +18033,19 @@ pixi remove [OPTIONS] <SPEC>...
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -18166,19 +18166,19 @@ pixi run [OPTIONS] [TASK]...
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -18197,7 +18197,7 @@ Runs task in the pixi environment.
 
 This command is used to run tasks in the pixi environment. It will activate the environment and run the task in the environment. It is using the deno_task_shell to run the task.
 
-`pixi run` will also update the lockfile and install the environment if it is required.
+`pixi run` will also update the lock file and install the environment if it is required.
 
 ## Examples
 
@@ -18447,19 +18447,19 @@ pixi shell-hook [OPTIONS]
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -18599,19 +18599,19 @@ pixi shell [OPTIONS]
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -18681,19 +18681,19 @@ pixi tree [OPTIONS] [REGEX]
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
   ```
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
@@ -18835,7 +18835,7 @@ pixi update [OPTIONS] [PACKAGES]...
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--dry-run (-n)`](#arg---dry-run) : Don't actually write the lockfile or update any environment
+- [`--dry-run (-n)`](#arg---dry-run) : Don't actually write the lock file or update any environment
 
 - [`--environment (-e) <ENVIRONMENTS>`](#arg---environment) : The environments to update. If none is specified, all environments are updated
 
@@ -18933,12 +18933,12 @@ pixi update --no-install boto3 # (9)!
 1. This will update the `pre-commit` package in the `lint`, `schema`, and `docs` environments.
 1. This will update the `mlx` package in the `osx-arm64` platform.
 1. This will update the `numpy` package in the `linux-64` and `osx-64` platforms.
-1. This will show the packages that would be updated without actually updating them in the lockfile
-1. This will update the `boto3` package in the manifest and lockfile, without installing it in an environment.
+1. This will show the packages that would be updated without actually updating them in the lock file
+1. This will update the `boto3` package in the manifest and lock file, without installing it in an environment.
 
 # [pixi](../) upgrade
 
-Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file
+Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file
 
 Note
 
@@ -19036,19 +19036,19 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -19061,7 +19061,7 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 
 ## Description
 
-Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
+Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file.
 
 `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly. By default, all features are upgraded.
 
@@ -19083,7 +19083,7 @@ pixi upgrade --dry-run # (7)!
 1. This will upgrade the `numpy` package to the latest version in the manifest file at the given path.
 1. This will upgrade the `python` package in the `lint` feature.
 1. This will upgrade all packages and output the result in JSON format.
-1. This will show the packages that would be upgraded without actually upgrading them in the lockfile or manifest.
+1. This will show the packages that would be upgraded without actually upgrading them in the lock file or manifest.
 
 # [pixi](../) upload
 
@@ -21347,11 +21347,11 @@ pixi workspace channel [OPTIONS] <COMMAND>
 
 ## Subcommands
 
-| Command             | Description                                                  |
-| ------------------- | ------------------------------------------------------------ |
-| [`add`](add/)       | Adds a channel to the manifest and updates the lockfile      |
-| [`list`](list/)     | List the channels in the manifest                            |
-| [`remove`](remove/) | Remove channel(s) from the manifest and updates the lockfile |
+| Command             | Description                                                   |
+| ------------------- | ------------------------------------------------------------- |
+| [`add`](add/)       | Adds a channel to the manifest and updates the lock file      |
+| [`list`](list/)     | List the channels in the manifest                             |
+| [`remove`](remove/) | Remove channel(s) from the manifest and updates the lock file |
 
 ## Global Options
 
@@ -21476,11 +21476,11 @@ pixi workspace platform [OPTIONS] <COMMAND>
 
 ## Subcommands
 
-| Command             | Description                                                         |
-| ------------------- | ------------------------------------------------------------------- |
-| [`add`](add/)       | Adds a platform(s) to the workspace file and updates the lockfile   |
-| [`list`](list/)     | List the platforms in the workspace file                            |
-| [`remove`](remove/) | Remove platform(s) from the workspace file and updates the lockfile |
+| Command             | Description                                                          |
+| ------------------- | -------------------------------------------------------------------- |
+| [`add`](add/)       | Adds a platform(s) to the workspace file and updates the lock file   |
+| [`list`](list/)     | List the platforms in the workspace file                             |
+| [`remove`](remove/) | Remove platform(s) from the workspace file and updates the lock file |
 
 ## Global Options
 
@@ -21589,7 +21589,7 @@ pixi workspace version [OPTIONS] <COMMAND>
 
 # [pixi](../../../) [workspace](../../) [channel](../) add
 
-Adds a channel to the manifest and updates the lockfile
+Adds a channel to the manifest and updates the lock file
 
 ## Usage
 
@@ -21665,19 +21665,19 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -21699,7 +21699,7 @@ pixi workspace channel list [OPTIONS]
 
 # [pixi](../../../) [workspace](../../) [channel](../) remove
 
-Remove channel(s) from the manifest and updates the lockfile
+Remove channel(s) from the manifest and updates the lock file
 
 ## Usage
 
@@ -21775,19 +21775,19 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 
 ## Update Options
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
   ```
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
@@ -21920,7 +21920,7 @@ pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
 - [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to render the environment file for. Defaults to the current platform
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to render the environment file for. Defaults to the default environment
 - [`--name (-n) <NAME>`](#arg---name) : The name to use for the rendered conda environment. Defaults to the environment name
-- [`--from-lockfile`](#arg---from-lockfile) : Render the environment with packages pinned to the versions resolved in the lock file instead of the manifest specs
+- [`--from-lock-file`](#arg---from-lock-file) : Render the environment with packages pinned to the versions resolved in the lock file instead of the manifest specs
 
 ## Global Options
 
@@ -22023,19 +22023,19 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) : Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_FROZEN`
   ```
 
-- [`--locked`](#arg---locked) : Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) : Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 
   ```
   **env**: `PIXI_LOCKED`
   ```
 
-- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock-file
+- [`--no-install`](#arg---no-install) : Don't modify the environment, only modify the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
@@ -22110,7 +22110,7 @@ Example: `pixi workspace name set "my-workspace"`
 
 # [pixi](../../../) [workspace](../../) [platform](../) add
 
-Adds a platform(s) to the workspace file and updates the lockfile
+Adds a platform(s) to the workspace file and updates the lock file
 
 ## Usage
 
@@ -22130,7 +22130,7 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 
 ## Options
 
-- [`--no-install`](#arg---no-install) : Don't update the environment, only add changed packages to the lock-file
+- [`--no-install`](#arg---no-install) : Don't update the environment, only add changed packages to the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`
@@ -22150,7 +22150,7 @@ pixi workspace platform list
 
 # [pixi](../../../) [workspace](../../) [platform](../) remove
 
-Remove platform(s) from the workspace file and updates the lockfile
+Remove platform(s) from the workspace file and updates the lock file
 
 ## Usage
 
@@ -22170,7 +22170,7 @@ pixi workspace platform remove [OPTIONS] <PLATFORM>...
 
 ## Options
 
-- [`--no-install`](#arg---no-install) : Don't update the environment, only remove the platform(s) from the lock-file
+- [`--no-install`](#arg---no-install) : Don't update the environment, only remove the platform(s) from the lock file
 
   ```
   **env**: `PIXI_NO_INSTALL`

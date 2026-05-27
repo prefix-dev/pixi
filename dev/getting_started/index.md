@@ -11,7 +11,7 @@ A workspace is a self-contained project that defines its dependencies, tasks, an
 - [`pixi remove`](../reference/cli/pixi/remove/) - remove a dependency from the workspace
 - [`pixi update`](../reference/cli/pixi/update/) - update dependencies in the workspace
 - [`pixi upgrade`](../reference/cli/pixi/upgrade/) - upgrade the dependencies in workspace to the latest versions, even if you pinned them to a specific version
-- [`pixi lock`](../reference/cli/pixi/lock/) - create or update the lockfile for your workspace
+- [`pixi lock`](../reference/cli/pixi/lock/) - create or update the lock file for your workspace
 - [`pixi info`](../reference/cli/pixi/info/) - show information about your workspace
 - [`pixi run`](../reference/cli/pixi/run/) - run a task defined in your manifest or any command in the current environment
 - [`pixi shell`](../reference/cli/pixi/shell/) - start a shell in the current environment

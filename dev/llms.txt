@@ -8,7 +8,7 @@ and project management tool that creates reproducible environments using conda a
 
 To use Pixi, start by running `pixi init my_project` to create a new project with a `pixi.toml` manifest file,
 then add dependencies using `pixi add package1 package2 ...` for conda packages
-or `pixi add --pypi python_package ...` for PyPI packages. Pixi automatically generates a lockfile (`pixi.lock`)
+or `pixi add --pypi python_package ...` for PyPI packages. Pixi automatically generates a lock file (`pixi.lock`)
 to ensure reproducible environments across different systems.
 You can define and run tasks using `pixi task add task_name "command arg1 arg2"` and `pixi run task_name`,
 and work within the project's virtual environment using `pixi run` for single commands
@@ -44,7 +44,7 @@ for further details on how to use the software.
 
 - [Tasks](https://prefix-dev.github.io/pixi/latest/workspace/advanced_tasks/index.md)
 - [Environments](https://prefix-dev.github.io/pixi/latest/workspace/environment/index.md)
-- [Lock File](https://prefix-dev.github.io/pixi/latest/workspace/lockfile/index.md)
+- [Lock File](https://prefix-dev.github.io/pixi/latest/workspace/lock_file/index.md)
 - [Multi Environment](https://prefix-dev.github.io/pixi/latest/workspace/multi_environment/index.md)
 - [Multi Platform](https://prefix-dev.github.io/pixi/latest/workspace/multi_platform_configuration/index.md)
 - [System Requirements](https://prefix-dev.github.io/pixi/latest/workspace/system_requirements/index.md)
