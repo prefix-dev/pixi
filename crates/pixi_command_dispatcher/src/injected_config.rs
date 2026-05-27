@@ -12,6 +12,7 @@ use derive_more::Display;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::BackendOverride;
 use pixi_compute_engine::InjectedKey;
+use pixi_config::CompilerCache;
 use rattler_conda_types::ChannelConfig;
 
 use crate::BuildEnvironment;
@@ -51,4 +52,15 @@ pub struct BackendOverrideKey;
 
 impl InjectedKey for BackendOverrideKey {
     type Value = Arc<BackendOverride>;
+}
+
+/// Injected default [`CompilerCache`] for the dispatcher's engine. Merged into
+/// each backend's configuration as a default unless the package already sets
+/// `compiler-cache` itself.
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("CompilerCache")]
+pub struct CompilerCacheKey;
+
+impl InjectedKey for CompilerCacheKey {
+    type Value = Arc<Option<CompilerCache>>;
 }

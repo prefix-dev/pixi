@@ -165,6 +165,11 @@ pub(crate) struct CommandDispatcherData {
     /// projection compute bodies can resolve refs via
     /// `ctx.global_data().workspace_env_registry().get(id)`.
     pub workspace_env_registry: Arc<WorkspaceEnvRegistry>,
+
+    /// The default compiler cache injected into backend configurations. If
+    /// set, this is merged into the backend configuration as a default (a
+    /// package's own `pixi.toml` config takes precedence).
+    pub compiler_cache: Option<pixi_config::CompilerCache>,
 }
 
 impl Default for CommandDispatcher {

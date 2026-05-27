@@ -668,6 +668,7 @@ impl Workspace {
             .with_pixi_install_reporter(rayon_primer.clone())
             .with_pixi_solve_reporter(rayon_primer.clone())
             .with_instantiate_backend_reporter(rayon_primer)
+            .with_compiler_cache(self.config.build.compiler_cache.clone())
             .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 

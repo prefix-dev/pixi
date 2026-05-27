@@ -10,7 +10,8 @@ use crate::compute_data::{
 };
 use crate::environment::WorkspaceEnvRegistry;
 use crate::injected_config::{
-    BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
+    BackendOverrideKey, ChannelConfigKey, CompilerCacheKey, EnabledProtocolsKey,
+    ToolBuildEnvironmentKey,
 };
 use crate::reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter, GatewayReporter,
@@ -30,6 +31,7 @@ use pixi_compute_env_vars::EnvVarsKey;
 use pixi_compute_sources::{
     GitCheckoutReporter, GitCheckoutSemaphore, RootDir, UrlCheckoutReporter, UrlCheckoutSemaphore,
 };
+use pixi_config::CompilerCache;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
@@ -57,6 +59,8 @@ pub struct CommandDispatcherBuilder {
     execute_link_scripts: bool,
     channel_config: Option<ChannelConfig>,
     enabled_protocols: Option<EnabledProtocols>,
+    /// Default compiler cache injected into backend configurations.
+    compiler_cache: Option<CompilerCache>,
     /// Allow symbolic links during package installation.
     allow_symbolic_links: Option<bool>,
     /// Allow hard links during package installation.
@@ -318,6 +322,17 @@ impl CommandDispatcherBuilder {
         }
     }
 
+    /// Sets the default compiler cache to use for all builds dispatched
+    /// through this instance. Injected into the compute engine as
+    /// [`CompilerCacheKey`] and merged into each backend's configuration as a
+    /// default, which the package's own `pixi.toml` config can override.
+    pub fn with_compiler_cache(self, compiler_cache: Option<CompilerCache>) -> Self {
+        Self {
+            compiler_cache,
+            ..self
+        }
+    }
+
     /// Sets whether symbolic links are allowed during package installation.
     pub fn with_allow_symbolic_links(self, allow: Option<bool>) -> Self {
         Self {
@@ -411,6 +426,7 @@ impl CommandDispatcherBuilder {
             ChannelConfig::default_with_root_dir(path.to_path_buf())
         });
         let enabled_protocols = self.enabled_protocols.unwrap_or_default();
+        let compiler_cache = self.compiler_cache;
 
         let workspace_env_registry = Arc::new(WorkspaceEnvRegistry::new());
 
@@ -435,6 +451,7 @@ impl CommandDispatcherBuilder {
             conda_solve_semaphore,
             backend_source_build_semaphore,
             workspace_env_registry,
+            compiler_cache,
         });
 
         // Build the compute engine, populating its global data store with
@@ -529,6 +546,7 @@ impl CommandDispatcherBuilder {
             BackendOverrideKey,
             Arc::new(data.build_backend_overrides.clone()),
         );
+        engine.inject(CompilerCacheKey, Arc::new(data.compiler_cache.clone()));
 
         CommandDispatcher {
             _dump_guard: Arc::new(DepGraphDumpGuard {

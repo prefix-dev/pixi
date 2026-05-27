@@ -3,7 +3,7 @@ mod config;
 mod metadata;
 
 use build_script::BuildScriptContext;
-use config::RustBackendConfig;
+use config::{CompilerCache, RustBackendConfig};
 use metadata::CargoMetadataProvider;
 use miette::IntoDiagnostic;
 use pixi_build_backend::variants::NormalizedKey;
@@ -118,16 +118,12 @@ impl GenerateRecipe for RustGenerator {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<HashMap<_, _>>();
 
-        let all_env_vars = config_env
-            .clone()
-            .into_iter()
-            .chain(system_env_vars.clone())
-            .collect();
-
         let mut sccache_secrets: BTreeSet<String> = BTreeSet::new();
 
-        // Verify if user has set any sccache environment variables
-        if sccache_envs(&all_env_vars).is_some() {
+        // Enable sccache when the resolved configuration requests it. The
+        // `compiler-cache` setting can come from the package's own config or
+        // be injected as a default from the pixi config.
+        if matches!(config.compiler_cache, Some(CompilerCache::Sccache)) {
             // check if we set some sccache in system env vars
             if let Some(system_sccache_keys) = sccache_envs(&system_env_vars) {
                 // If sccache_envs are used in the system environment variables,
@@ -487,6 +483,7 @@ mod tests {
                     env,
                     system_env,
                     ignore_cargo_manifest: Some(true),
+                    compiler_cache: Some(CompilerCache::Sccache),
                     ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
@@ -498,13 +495,6 @@ mod tests {
             )
             .await
             .expect("Failed to generate recipe");
-
-        // Clean up environment variables
-        // SAFETY: We're in a test and cleaning up the environment after the test
-        unsafe {
-            std::env::remove_var("SCCACHE_SYSTEM");
-            std::env::remove_var("SCCACHE_BUCKET");
-        }
 
         // Verify that sccache is added to the build requirements
         // when some env variables are set

@@ -26,6 +26,14 @@
 ] -%}
 {% endif -%}
 
+{# Add sccache compiler launchers if available -#}
+{%- if has_sccache -%}
+{%- set cmake_args = cmake_args + [
+    "-DCMAKE_C_COMPILER_LAUNCHER=sccache",
+    "-DCMAKE_CXX_COMPILER_LAUNCHER=sccache",
+] -%}
+{% endif -%}
+
 {#- Output version information -#}
 ninja --version
 cmake --version
@@ -56,3 +64,6 @@ fi
 
 cmake --build . --target install
 {% endif -%}
+{%- if has_sccache %}
+sccache --show-stats
+{%- endif %}

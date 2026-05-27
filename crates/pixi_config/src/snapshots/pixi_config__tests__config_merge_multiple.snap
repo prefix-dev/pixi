@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_config/src/lib.rs
-assertion_line: 2831
 expression: debug
 ---
 Config {
@@ -148,6 +147,7 @@ Config {
                 compression_level: Highest,
             },
         ),
+        compiler_cache: None,
     },
     tool_platform: None,
     cache: CacheConfig {
