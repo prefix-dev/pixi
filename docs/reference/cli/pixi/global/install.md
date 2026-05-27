@@ -38,6 +38,8 @@ pixi global install [OPTIONS] [PACKAGE]...
 :  Specifies that the environment should be reinstalled
 - <a id="arg---no-shortcuts" href="#arg---no-shortcuts">`--no-shortcuts`</a>
 :  Specifies that no shortcuts should be created for the installed packages
+- <a id="arg---ignore-conda-prefix" href="#arg---ignore-conda-prefix">`--ignore-conda-prefix`</a>
+:  Don't set CONDA_PREFIX environment variable when running executables from this environment
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>

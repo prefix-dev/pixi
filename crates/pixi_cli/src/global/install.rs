@@ -79,7 +79,7 @@ pub struct Args {
     #[clap(skip)]
     pub backend_override: Option<pixi_build_frontend::BackendOverride>,
 
-    /// Don't set CONDA_PREFIX in trampoline
+    /// Don't set CONDA_PREFIX environment variable when running executables from this environment.
     #[arg(action, long)]
     ignore_conda_prefix: bool,
 }

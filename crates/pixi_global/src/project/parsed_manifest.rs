@@ -421,7 +421,7 @@ mod tests {
 
     use insta::assert_snapshot;
 
-    use super::{ParsedManifest, super::environment::EnvironmentName};
+    use super::{super::environment::EnvironmentName, ParsedManifest};
 
     #[test]
     fn test_invalid_key() {

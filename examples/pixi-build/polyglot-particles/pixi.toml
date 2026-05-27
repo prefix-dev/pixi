@@ -11,13 +11,13 @@ preview = ["pixi-build"]
 # Centralized versions every member inherits via `{ workspace = true }`.
 # Path specs are resolved relative to this manifest and re-anchored per member.
 [workspace.dependencies]
-pixi-build-cmake = "0.3.*"
-python = ">=3.11"
-pybind11 = ">=2.13"
-sdl2 = ">=2.26.5,<3.0"
-uv = "*"
 particle_core = { path = "particle_core" }
 particle_cpp = { path = "particle_cpp" }
+pixi-build-cmake = "0.3.*"
+pybind11 = ">=2.13"
+python = ">=3.11"
+sdl2 = ">=2.26.5,<3.0"
+uv = "*"
 
 # A single dep on the high-level Python kit pulls in the entire graph:
 #   particle_kit -> particle_view, particle_cpp_py, particle_rs_py

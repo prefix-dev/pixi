@@ -32,7 +32,7 @@ pub struct Args {
     #[clap(flatten)]
     config: ConfigCli,
 
-    /// Don't set CONDA_PREFIX in trampoline
+    /// Don't set CONDA_PREFIX environment variable when running executables from this environment.
     #[arg(action, long)]
     ignore_conda_prefix: bool,
 }

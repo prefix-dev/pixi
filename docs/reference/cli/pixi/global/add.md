@@ -27,6 +27,8 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 - <a id="arg---expose" href="#arg---expose">`--expose <EXPOSE>`</a>
 :  Add one or more mapping which describe which executables are exposed. The syntax is `exposed_name=executable_name`, so for example `python3.10=python`. Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed
 <br>May be provided more than once.
+- <a id="arg---ignore-conda-prefix" href="#arg---ignore-conda-prefix">`--ignore-conda-prefix`</a>
+:  Don't set CONDA_PREFIX environment variable when running executables from this environment
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
