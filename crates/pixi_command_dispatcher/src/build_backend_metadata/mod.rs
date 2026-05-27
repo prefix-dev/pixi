@@ -3,7 +3,6 @@ use miette::Diagnostic;
 use once_cell::sync::Lazy;
 use pixi_build_discovery::CommandSpec;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
-use pixi_glob::GlobSet;
 use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::ChannelUrl;
@@ -15,6 +14,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 use thiserror::Error;
+use tracing::instrument;
 
 use crate::build::CanonicalSourceCodeLocation;
 use crate::cache::markers::BackendMetadataDir;
@@ -47,6 +47,23 @@ fn warn_once_per_backend(backend_name: &str) {
             "metadata cache disabled for build backend '{}' (system/path-based backends always regenerate metadata)",
             backend_name
         );
+    }
+}
+
+/// Return the checkout root sent to the backend as `checkout_root`,
+/// or `None` for local-path sources.  Git and url checkouts have a
+/// well-defined unpack root that may differ from the manifest's own
+/// directory when a `subdirectory` is configured; path sources have
+/// no separate root concept and use `workspace_directory` as their
+/// cross-package discovery anchor instead.
+pub(crate) fn checkout_root_for(
+    checkout: &pixi_compute_sources::SourceCheckout,
+) -> Option<&std::path::Path> {
+    match &checkout.pinned {
+        pixi_record::PinnedSourceSpec::Path(_) => None,
+        pixi_record::PinnedSourceSpec::Git(_) | pixi_record::PinnedSourceSpec::Url(_) => {
+            Some(checkout.root_dir.as_std_path())
+        }
     }
 }
 
@@ -267,6 +284,7 @@ impl BuildBackendMetadataInner {
     ///   returned for comparison (e.g. to reuse the ID if outputs match).
     /// - `Ok(Err(None))` if no cache entry exists.
     async fn verify_cache_freshness(
+        ctx: &mut ComputeCtx,
         cache_entry: Option<CacheEntry<BuildBackendMetadataCache>>,
         build_source_checkout: &SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
@@ -358,16 +376,36 @@ impl BuildBackendMetadataInner {
             };
         }
 
-        let glob_set = GlobSet::create(cache_entry.input_globs.iter().map(String::as_str));
-        for matching_file in glob_set
-            .collect_matching(build_source_dir.as_std_path())
-            .map_err(BuildBackendMetadataError::from)?
-        {
-            let path = matching_file.into_path();
-            if cache_entry.input_files.contains(&path) {
+        // Invalidate when the walk picks up a file the cache entry never
+        // recorded (i.e. one that was added since the last run). The
+        // existing entries in `input_files` were freshness-checked above;
+        // this second pass only catches newcomers.
+        //
+        // `input_files` stores paths relative to `build_source_dir` (see
+        // the `strip_prefix` at the write site), so the absolute paths
+        // returned by the walker must be relativized before the membership
+        // check or every path looks "new".  When the cache entry carries
+        // the structured `input_glob_sets` we use that instead of the flat
+        // `input_globs`; this is what unlocks the marker-driven workspace
+        // walk for ROS-style backends.
+        let globs_root = build_source_dir.as_std_path();
+        let new_file_candidates = crate::input_globs::collect_input_files_via_engine(
+            ctx,
+            &cache_entry.input_globs,
+            cache_entry.input_glob_sets.as_deref(),
+            globs_root,
+        )
+        .await
+        .map_err(BuildBackendMetadataError::GlobSet)?;
+        for abs_path in new_file_candidates {
+            let key_path = abs_path
+                .strip_prefix(globs_root)
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|_| abs_path.clone());
+            if !cache_entry.input_files.contains(&key_path) {
                 tracing::info!(
                     "found cached outputs but a new matching file at '{}' has been detected, invalidating cache.",
-                    path.display()
+                    abs_path.display()
                 );
                 return Ok(Err(Some(cache_entry)));
             }
@@ -425,6 +463,7 @@ impl BuildBackendMetadataInner {
     /// checkout.
     async fn call_conda_outputs(
         &self,
+        ctx: &mut ComputeCtx,
         metadata_dir: &pixi_path::AbsPresumedDirPath,
         build_source_checkout: &SourceCheckout,
         source_unique_key: &str,
@@ -499,24 +538,28 @@ impl BuildBackendMetadataInner {
 
         // Determine the files that match the input globs.
         let globs_root = build_source_checkout.path.as_dir_or_file_parent();
-        let input_glob_set = GlobSet::create(outputs.input_globs.iter().map(String::as_str));
         let globs_root_path = globs_root.as_std_path();
-        let input_glob_files = input_glob_set
-            .collect_matching(globs_root_path)
-            .map_err(BuildBackendMetadataError::from)?
-            .into_iter()
-            .map(|entry| {
-                let path = entry.into_path();
-                path.strip_prefix(globs_root_path)
-                    .ok()
-                    .unwrap_or(&path)
-                    .to_path_buf()
-            })
-            .collect();
+        let input_glob_files = crate::input_globs::collect_input_files_via_engine(
+            ctx,
+            &outputs.input_globs,
+            outputs.input_glob_sets.as_deref(),
+            globs_root_path,
+        )
+        .await
+        .map_err(BuildBackendMetadataError::GlobSet)?
+        .into_iter()
+        .map(|path| {
+            path.strip_prefix(globs_root_path)
+                .ok()
+                .unwrap_or(&path)
+                .to_path_buf()
+        })
+        .collect();
 
         Ok(RawCondaOutputs {
             outputs: outputs.outputs,
             input_globs: outputs.input_globs.into_iter().collect(),
+            input_glob_sets: outputs.input_glob_sets,
             input_files: input_glob_files,
             timestamp,
         })
@@ -543,6 +586,14 @@ impl BuildBackendMetadataInnerKey {
 impl Key for BuildBackendMetadataInnerKey {
     type Value = Result<Arc<BuildBackendMetadata>, BuildBackendMetadataError>;
 
+    #[instrument(
+        skip_all,
+        name = "build-backend-metadata",
+        fields(
+            source = %self.0.manifest_source,
+            host_platform = %self.0.build_environment.host_platform,
+        )
+    )]
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         // Reporter lifecycle: queue up-front so the reporter can count
         // us before any real work starts. The `on_started` event carries
@@ -771,6 +822,7 @@ impl BuildBackendMetadataInner {
         }
 
         match Self::verify_cache_freshness(
+            ctx,
             cache_read_result,
             &checkouts.build_source_checkout,
             project_model_hash,
@@ -842,6 +894,7 @@ impl BuildBackendMetadataInner {
             .compute(
                 &InstantiateBackendKey::new(
                     checkouts.manifest_source_checkout.path.as_std_path(),
+                    checkout_root_for(&checkouts.manifest_source_checkout),
                     checkouts.manifest_source_anchor.clone(),
                     checkouts
                         .build_source_checkout
@@ -894,6 +947,7 @@ impl BuildBackendMetadataInner {
 
         let raw = self
             .call_conda_outputs(
+                ctx,
                 &metadata_dir,
                 &checkouts.build_source_checkout,
                 &source_unique_key,
@@ -917,6 +971,7 @@ impl BuildBackendMetadataInner {
             build_variants: self.variant_configuration.clone(),
             build_variant_files: self.variant_files.iter().cloned().collect(),
             input_globs: raw.input_globs,
+            input_glob_sets: raw.input_glob_sets,
             input_files: raw.input_files,
             source: canonical_source,
             project_model_hash,
@@ -960,8 +1015,12 @@ impl BuildBackendMetadataInner {
 struct RawCondaOutputs {
     /// The outputs as reported by the build backend.
     outputs: Vec<pixi_build_types::procedures::conda_outputs::CondaOutput>,
-    /// Globs of files from which the metadata was derived.
-    input_globs: std::collections::BinaryHeap<String>,
+    /// Globs of files from which the metadata was derived. Order matters:
+    /// pixi's `GlobSet` is gitignore last-match-wins.
+    input_globs: Vec<String>,
+    /// Structured form of [`Self::input_globs`].  Some only when the
+    /// backend's response carried `inputGlobSets`.
+    input_glob_sets: Option<Vec<pixi_build_types::InputGlobSet>>,
     /// Paths of files that match the input globs.
     input_files: std::collections::BTreeSet<PathBuf>,
     /// The timestamp of when the metadata was computed.
@@ -1075,6 +1134,7 @@ mod tests {
             ignore_run_exports: CondaOutputIgnoreRunExports::default(),
             run_exports: CondaOutputRunExports::default(),
             input_globs: None,
+            input_glob_sets: None,
         }
     }
 

@@ -2,6 +2,7 @@
 mod capabilities;
 mod channel_configuration;
 mod conda_package_metadata;
+mod input_glob_set;
 pub mod procedures;
 mod project_model;
 mod variant;
@@ -11,6 +12,7 @@ use std::{fmt::Display, sync::LazyLock};
 pub use capabilities::{BackendCapabilities, FrontendCapabilities};
 pub use channel_configuration::ChannelConfiguration;
 pub use conda_package_metadata::CondaPackageMetadata;
+pub use input_glob_set::InputGlobSet;
 pub use project_model::{
     BinaryPackageSpec, ConstraintSpec, GitReference, GitSpec, NamedSpec, PackageSpec, PathSpec,
     PinBound, PinCompatibleSpec, PinExpression, ProjectModel, SourcePackageLocationSpec,

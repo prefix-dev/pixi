@@ -1,11 +1,11 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use miette::Diagnostic;
-use pixi_build_types::ProjectModel;
+use pixi_build_types::{InputGlobSet, ProjectModel};
 use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage0::{
     About, ConditionalList, Item, License, Package, SingleOutputRecipe, Value,
@@ -62,6 +62,17 @@ pub trait GenerateRecipe {
     ///   The backend picks its own subdirectory inside and owns invalidation. See
     ///   `pixi_build_types::procedures::initialize::InitializeParams::workspace_scratch_directory`
     ///   for the convention.
+    /// * `workspace_directory` - Absolute path to the root of the workspace that owns this
+    ///   package, if any. Backends can use it to inspect sibling packages (e.g. the ROS
+    ///   backend uses it to discover sibling `package.xml` files and emit them as source
+    ///   dependencies). `None` when the package is built outside of a workspace context.
+    /// * `checkout_root` - Absolute path to the root of this package's source checkout.
+    ///   For a git or url source dependency this is the directory pixi unpacked the
+    ///   checkout into, BEFORE any `subdirectory` is applied — distinct from
+    ///   `workspace_directory` (a pixi-workspace concept) and from `manifest_path`
+    ///   (the package's own dir). Backends that need to reason about siblings inside
+    ///   the same checkout (e.g. ROS workspace sibling-package discovery) anchor their
+    ///   search here when no pixi workspace is available.
     #[allow(clippy::too_many_arguments)]
     async fn generate_recipe(
         &self,
@@ -74,6 +85,8 @@ pub trait GenerateRecipe {
         channels: Vec<ChannelUrl>,
         cache_dir: Option<PathBuf>,
         workspace_scratch_directory: Option<PathBuf>,
+        workspace_directory: Option<PathBuf>,
+        checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe>;
 
     /// Returns a list of globs that should be used to find the input files
@@ -85,8 +98,8 @@ pub trait GenerateRecipe {
         _config: &Self::Config,
         _workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
-        Ok(BTreeSet::new())
+    ) -> miette::Result<Vec<String>> {
+        Ok(Vec::new())
     }
 
     /// Returns "default" variants for the given host platform. This allows
@@ -143,8 +156,22 @@ pub enum GenerateRecipeError<MetadataProviderError: Diagnostic + 'static> {
 #[derive(Clone)]
 pub struct GeneratedRecipe {
     pub recipe: SingleOutputRecipe,
-    pub metadata_input_globs: BTreeSet<String>,
-    pub build_input_globs: BTreeSet<String>,
+    /// Globs whose matched files contribute to the metadata-cache fingerprint.
+    /// Pixi evaluates them with gitignore "last match wins" semantics, so
+    /// backends MUST emit inclusion patterns before any `!`-prefixed
+    /// exclusions that should override them.
+    pub metadata_input_globs: Vec<String>,
+    /// Optional structured form of [`Self::metadata_input_globs`].  Backends
+    /// that can describe their inputs precisely (e.g. workspace discovery
+    /// with markers) populate this; pixi prefers it over the flat list when
+    /// it is non-empty and falls back otherwise.
+    pub metadata_input_glob_sets: Vec<InputGlobSet>,
+    /// Globs whose matched files trigger a rebuild. Same ordering rule as
+    /// [`Self::metadata_input_globs`].
+    pub build_input_globs: Vec<String>,
+    /// Optional structured form of [`Self::build_input_globs`].  See
+    /// [`Self::metadata_input_glob_sets`] for semantics.
+    pub build_input_glob_sets: Vec<InputGlobSet>,
 }
 
 /// Helper to create a concrete `Value<Url>` from an optional string
@@ -276,8 +303,10 @@ impl GeneratedRecipe {
 
         Ok(GeneratedRecipe {
             recipe,
-            metadata_input_globs: BTreeSet::new(),
-            build_input_globs: BTreeSet::new(),
+            metadata_input_globs: Vec::new(),
+            metadata_input_glob_sets: Vec::new(),
+            build_input_globs: Vec::new(),
+            build_input_glob_sets: Vec::new(),
         })
     }
 }

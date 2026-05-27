@@ -42,6 +42,21 @@ pub struct InitializeParams {
     /// This is an absolute path.
     pub workspace_directory: Option<PathBuf>,
 
+    /// Root of the git or url checkout this package was unpacked
+    /// into, BEFORE any `subdirectory` is applied.  `None` for
+    /// local-path sources (there is no checkout in that case;
+    /// backends fall back to [`Self::workspace_directory`] for
+    /// cross-package discovery).
+    ///
+    /// Distinct from [`Self::workspace_directory`] (which is anchored
+    /// at a discovered pixi workspace) and from
+    /// [`Self::source_directory`] (the package's own directory).
+    /// Backends that need to reason about siblings inside the same
+    /// remote checkout (e.g. ROS workspace sibling-package discovery)
+    /// anchor their search here when it is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checkout_root: Option<PathBuf>,
+
     /// Optionally the cache directory to use for any caching activity.
     pub cache_directory: Option<PathBuf>,
 

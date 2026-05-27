@@ -46,20 +46,22 @@ impl GlobHash {
         }
 
         let glob_set = GlobSet::create(globs);
-        // Collect matching entries and convert to concrete DirEntry list, propagating errors.
-        let mut entries = glob_set.collect_matching(root_dir)?;
-
-        // Sort deterministically by path
-        entries.sort_by_key(|e| e.path().to_path_buf());
+        // Collect matching paths and sort deterministically before hashing.
+        let mut paths: Vec<PathBuf> = glob_set
+            .collect_matching(root_dir)?
+            .into_iter()
+            .map(|m| m.into_path())
+            .collect();
+        paths.sort();
 
         #[cfg(test)]
         let mut matching_files = Vec::new();
 
         let mut hasher = Sha256::default();
-        for entry in entries {
+        for path in paths {
             // Construct a normalized file path to ensure consistent hashing across
             // platforms. And add it to the hash.
-            let relative_path = entry.path().strip_prefix(root_dir).unwrap_or(entry.path());
+            let relative_path = path.strip_prefix(root_dir).unwrap_or(&path);
             let normalized_file_path = relative_path.to_string_lossy().replace("\\", "/");
             rattler_digest::digest::Update::update(&mut hasher, normalized_file_path.as_bytes());
 
@@ -67,11 +69,9 @@ impl GlobHash {
             matching_files.push(normalized_file_path);
 
             // Concatenate the contents of the file to the hash.
-            File::open(entry.path())
+            File::open(&path)
                 .and_then(|mut file| normalize_line_endings(&mut file, &mut hasher))
-                .map_err(move |e| {
-                    GlobHashError::NormalizeLineEnds(entry.path().to_path_buf(), e)
-                })?;
+                .map_err(move |e| GlobHashError::NormalizeLineEnds(path, e))?;
         }
 
         let hash = hasher.finalize();

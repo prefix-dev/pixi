@@ -177,8 +177,13 @@ impl UrlSourceCheckoutExt for ComputeCtx {
         let fut = self.compute(&CheckoutUrl(url_spec));
         async move {
             let UrlCheckout { pinned_url, dir } = fut.await.as_ref().clone()?;
+            // `CheckoutUrl` already strips the archive root and
+            // returns the unpacked directory; for the non-subdirectory
+            // case `dir` IS the checkout root.
+            let dir: AbsPathBuf = dir.into();
             Ok(SourceCheckout {
-                path: dir.into(),
+                path: dir.clone(),
+                root_dir: dir,
                 pinned: PinnedSourceSpec::Url(pinned_url),
             })
         }
@@ -197,6 +202,7 @@ impl UrlSourceCheckoutExt for ComputeCtx {
         let fut = self.compute(&CheckoutUrl(url_spec));
         async move {
             let fetch = fut.await.as_ref().clone()?;
+            let root_dir = fetch.dir.clone();
             let path = if !pinned_url_spec.subdirectory.is_empty() {
                 fetch
                     .dir
@@ -207,6 +213,7 @@ impl UrlSourceCheckoutExt for ComputeCtx {
             };
             Ok(SourceCheckout {
                 path: path.into(),
+                root_dir: root_dir.into(),
                 pinned: PinnedSourceSpec::Url(pinned_url_spec),
             })
         }

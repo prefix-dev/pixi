@@ -189,9 +189,18 @@ pub struct BuildBackendMetadataCacheEntry {
     /// we prefer to store direct file paths instead. However, this does not
     /// work for all backends so we also support globs.
     ///
-    /// If the source itself is immutable this is None.
-    #[serde(default, skip_serializing_if = "BinaryHeap::is_empty")]
-    pub input_globs: BinaryHeap<String>,
+    /// Order is preserved: pixi's `GlobSet` is gitignore last-match-wins, so
+    /// inclusion patterns must precede any negated exclusions that should
+    /// override them. If the source itself is immutable this is empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub input_globs: Vec<String>,
+
+    /// Structured form of [`Self::input_globs`].  Populated when the
+    /// backend response carried `input_glob_sets`; pixi prefers this when
+    /// re-walking for new-file detection because it can express
+    /// marker-driven pruning that the flat list cannot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<pixi_build_types::InputGlobSet>>,
 
     /// Paths relative to the source checkout of files that were used to
     /// determine the metadata. This is the result of the matching the globs

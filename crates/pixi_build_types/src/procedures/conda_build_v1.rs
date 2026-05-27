@@ -5,10 +5,7 @@
 //! source dependencies and other build steps before the backend is invoked to
 //! build the package.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use rattler_conda_types::{
     ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, VersionWithSource,
@@ -17,7 +14,7 @@ use rattler_conda_types::{
 use serde::{Deserialize, Serialize};
 use serde_with::{DefaultOnError, DisplayFromStr, serde_as};
 
-use crate::VariantValue;
+use crate::{InputGlobSet, VariantValue};
 
 pub const METHOD_NAME: &str = "conda/build_v1";
 
@@ -271,7 +268,18 @@ pub struct CondaBuildV1Result {
     /// The globs that were used as input to the build. If any of the files that
     /// match these globs changes, the package should be considered
     /// "out-of-date".
-    pub input_globs: BTreeSet<String>,
+    ///
+    /// Order is significant: pixi feeds these into a gitignore-style matcher,
+    /// so inclusion patterns must precede any `!`-prefixed exclusions that
+    /// should override them.
+    pub input_globs: Vec<String>,
+
+    /// Optional structured description of the same inputs.  When present,
+    /// pixi uses this in preference to [`Self::input_globs`]; older clients
+    /// fall back to the flat list above.  Backends migrating to this field
+    /// SHOULD populate both for compatibility during the transition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_glob_sets: Option<Vec<InputGlobSet>>,
 
     /// The normalized name of the package.
     pub name: String,
