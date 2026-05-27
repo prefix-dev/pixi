@@ -146,11 +146,16 @@ impl PixiSpec {
         } else if spec.build.is_none()
             && spec.build_number.is_none()
             && spec.file_name.is_none()
+            && spec.extras.is_none()
+            && spec.flags.is_none()
             && spec.channel.is_none()
             && spec.subdir.is_none()
             && spec.md5.is_none()
             && spec.sha256.is_none()
             && spec.license.is_none()
+            && spec.license_family.is_none()
+            && spec.condition.is_none()
+            && spec.track_features.is_none()
         {
             Self::Version(spec.version.unwrap_or(VersionSpec::Any))
         } else {
@@ -159,6 +164,8 @@ impl PixiSpec {
                 build: spec.build,
                 build_number: spec.build_number,
                 file_name: spec.file_name,
+                extras: spec.extras,
+                flags: spec.flags,
                 channel: spec.channel.map(|c| {
                     NamedChannelOrUrl::from_str(&channel_config.canonical_name(c.base_url.url()))
                         .unwrap()
@@ -167,6 +174,9 @@ impl PixiSpec {
                 md5: spec.md5,
                 sha256: spec.sha256,
                 license: spec.license,
+                license_family: spec.license_family,
+                condition: spec.condition,
+                track_features: spec.track_features,
             }))
         }
     }
@@ -415,6 +425,9 @@ pub struct SourceSpec {
     /// Optional extra dependencies to select for the package
     pub extras: Option<Vec<String>>,
 
+    /// Plain string flags used to select package variants.
+    pub flags: Option<Vec<StringMatcher>>,
+
     /// The subdir of the channel
     pub subdir: Option<String>,
 
@@ -424,8 +437,14 @@ pub struct SourceSpec {
     /// The license of the package
     pub license: Option<String>,
 
+    /// The license family of the package
+    pub license_family: Option<String>,
+
     /// The condition under which this match spec applies.
     pub condition: Option<MatchSpecCondition>,
+
+    /// The track features of the package
+    pub track_features: Option<Vec<String>>,
 }
 
 impl From<SourceLocationSpec> for SourceSpec {
@@ -436,10 +455,13 @@ impl From<SourceLocationSpec> for SourceSpec {
             build: None,
             build_number: None,
             extras: None,
+            flags: None,
             subdir: None,
             namespace: None,
             license: None,
+            license_family: None,
             condition: None,
+            track_features: None,
         }
     }
 }
@@ -484,6 +506,7 @@ impl SourceSpec {
             build_number,
             file_name: _,
             extras,
+            flags,
             channel: _,
             subdir,
             namespace,
@@ -492,9 +515,8 @@ impl SourceSpec {
             url: _,
             license,
             condition,
-            track_features: _,
-            flags: _,
-            license_family: _,
+            track_features,
+            license_family,
         } = spec;
         Self {
             location,
@@ -502,10 +524,13 @@ impl SourceSpec {
             build,
             build_number,
             extras,
+            flags,
             subdir,
             namespace,
             license,
+            license_family,
             condition,
+            track_features,
         }
     }
 
@@ -517,20 +542,26 @@ impl SourceSpec {
             build,
             build_number,
             extras,
+            flags,
             subdir,
             namespace,
             license,
+            license_family,
             condition,
+            track_features,
         } = self;
         NamelessMatchSpec {
             version: version.clone(),
             build: build.clone(),
             build_number: build_number.clone(),
             extras: extras.clone(),
+            flags: flags.clone(),
             subdir: subdir.clone(),
             namespace: namespace.clone(),
             license: license.clone(),
+            license_family: license_family.clone(),
             condition: condition.clone(),
+            track_features: track_features.clone(),
             ..NamelessMatchSpec::default()
         }
     }
@@ -801,7 +832,13 @@ impl From<PathSourceSpec> for rattler_lock::source::PathSourceLocation {
 
 #[cfg(test)]
 mod test {
-    use rattler_conda_types::{ChannelConfig, PackageName, ParseStrictness::Lenient, VersionSpec};
+    use std::str::FromStr;
+
+    use rattler_conda_types::{
+        ChannelConfig, MatchSpec, MatchSpecCondition, NamelessMatchSpec, PackageName,
+        ParseMatchSpecOptions, ParseStrictness::Lenient, RepodataRevision, StringMatcher,
+        VersionSpec,
+    };
     use serde::Serialize;
     use serde_json::{Value, json};
     use url::Url;
@@ -911,6 +948,46 @@ mod test {
             Some("numpy")
         );
         assert_eq!(match_spec.to_string(), "numpy >=1.0");
+    }
+
+    #[test]
+    fn test_v3_nameless_match_spec_fields_roundtrip() {
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let condition = MatchSpecCondition::MatchSpec(Box::new(
+            MatchSpec::from_str(
+                "python >=3.12",
+                ParseMatchSpecOptions::lenient()
+                    .with_repodata_revision(RepodataRevision::V3)
+                    .with_experimental_conditionals(true),
+            )
+            .unwrap(),
+        ));
+        let spec = NamelessMatchSpec {
+            version: Some(VersionSpec::from_str(">=1.0", Lenient).unwrap()),
+            extras: Some(vec!["cuda".to_string(), "mkl".to_string()]),
+            flags: Some(vec![
+                StringMatcher::from_str("cuda").unwrap(),
+                StringMatcher::from_str("blas:*").unwrap(),
+            ]),
+            license_family: Some("BSD".to_string()),
+            condition: Some(condition.clone()),
+            track_features: Some(vec!["legacy".to_string()]),
+            ..NamelessMatchSpec::default()
+        };
+
+        let pixi_spec = PixiSpec::from_nameless_matchspec(spec.clone(), &channel_config);
+        assert!(matches!(pixi_spec, PixiSpec::DetailedVersion(_)));
+
+        let roundtrip = pixi_spec
+            .try_into_nameless_match_spec(&channel_config)
+            .unwrap()
+            .unwrap();
+        assert_eq!(roundtrip.version, spec.version);
+        assert_eq!(roundtrip.extras, spec.extras);
+        assert_eq!(roundtrip.flags, spec.flags);
+        assert_eq!(roundtrip.license_family, spec.license_family);
+        assert_eq!(roundtrip.condition, spec.condition);
+        assert_eq!(roundtrip.track_features, spec.track_features);
     }
 
     #[test]

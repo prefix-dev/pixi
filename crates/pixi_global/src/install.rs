@@ -11,10 +11,11 @@ use pixi_utils::{
     prefix::{Executable, Prefix},
 };
 use rattler_conda_types::{
-    MatchSpec, Matches, PackageName, PackageRecord, ParseStrictness, Platform,
+    MatchSpec, Matches, PackageName, PackageRecord, ParseMatchSpecOptions, Platform,
+    RepodataRevision,
 };
 use rattler_shell::activation::prefix_path_entries;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::{env, path::PathBuf, str::FromStr};
 
 use fs_err::tokio as tokio_fs;
@@ -137,7 +138,7 @@ pub(crate) async fn create_executable_trampolines(
             .join(IGNORE_CONDA_PREFIX_MARKER)
             .is_file()
         {
-            env_for_trampoline.remove("CONDA_PREFIX");
+            remove_incomplete_conda_activation_stack(&mut env_for_trampoline);
         }
         let metadata = Configuration::new(exe, path_diff.clone(), env_for_trampoline);
 
@@ -195,6 +196,14 @@ pub(crate) async fn create_executable_trampolines(
         }
     }
     Ok(state_changes)
+}
+
+fn remove_incomplete_conda_activation_stack(env: &mut HashMap<String, String>) {
+    env.remove("CONDA_PREFIX");
+    env.remove("CONDA_SHLVL");
+    env.remove("CONDA_DEFAULT_ENV");
+    env.remove("CONDA_PROMPT_MODIFIER");
+    env.retain(|key, _| !key.starts_with("CONDA_ENV_SHLVL_"));
 }
 
 /// Compute the difference between two PATH variables (the entries split by `;` or `:`)
@@ -277,8 +286,10 @@ pub(crate) fn local_environment_matches_spec(
         while let Some(current_record) = work_queue.pop() {
             let dependencies = &current_record.depends;
             for dependency in dependencies {
-                let Ok(match_spec) = MatchSpec::from_str(dependency, ParseStrictness::Lenient)
-                else {
+                let Ok(match_spec) = MatchSpec::from_str(
+                    dependency,
+                    ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+                ) else {
                     continue;
                 };
                 let Some(index) = remaining_prefix_records
@@ -541,6 +552,31 @@ mod tests {
         assert_eq!(
             actual.original_executable, expected.original_executable,
             "testing original_executable"
+        );
+    }
+
+    #[test]
+    fn test_global_ignore_conda_prefix_removes_incomplete_conda_stack() {
+        let mut env = HashMap::from([
+            (
+                "CONDA_PREFIX".to_string(),
+                "/tmp/pixi/envs/fish".to_string(),
+            ),
+            ("CONDA_SHLVL".to_string(), "1".to_string()),
+            ("CONDA_DEFAULT_ENV".to_string(), "fish".to_string()),
+            ("CONDA_PROMPT_MODIFIER".to_string(), "(fish) ".to_string()),
+            (
+                "CONDA_ENV_SHLVL_0".to_string(),
+                "/tmp/pixi/envs/base".to_string(),
+            ),
+            ("KEEP_ME".to_string(), "present".to_string()),
+        ]);
+
+        remove_incomplete_conda_activation_stack(&mut env);
+
+        assert_eq!(
+            env,
+            HashMap::from([("KEEP_ME".to_string(), "present".to_string())])
         );
     }
 

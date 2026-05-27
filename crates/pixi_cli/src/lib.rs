@@ -37,6 +37,7 @@ pub mod install;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
+mod process_exit;
 pub mod publish;
 pub mod reinstall;
 pub mod remove;

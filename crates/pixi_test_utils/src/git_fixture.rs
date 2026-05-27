@@ -183,15 +183,18 @@ impl GitRepoFixture {
             .current_dir(&repo_path)
             .output()
             .expect("failed to configure git name");
-        // Defeat any global commit/tag signing config so the fixture is
-        // self-contained on hosts that mandate signed commits.
-        for key in ["commit.gpgsign", "tag.gpgsign"] {
-            std::process::Command::new("git")
-                .args(["config", key, "false"])
-                .current_dir(&repo_path)
-                .output()
-                .unwrap_or_else(|err| panic!("failed to unset {key}: {err}"));
-        }
+        // Disable signing so a global `tag.gpgSign = true` does not launch
+        // $EDITOR for a tag message.
+        std::process::Command::new("git")
+            .args(["config", "commit.gpgsign", "false"])
+            .current_dir(&repo_path)
+            .output()
+            .expect("failed to disable commit signing");
+        std::process::Command::new("git")
+            .args(["config", "tag.gpgsign", "false"])
+            .current_dir(&repo_path)
+            .output()
+            .expect("failed to disable tag signing");
 
         // Get commit directories sorted by name
         let mut commit_dirs: Vec<_> = fs_err::read_dir(fixture_base)

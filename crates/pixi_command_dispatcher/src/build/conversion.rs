@@ -21,8 +21,11 @@ pub fn from_source_spec_v1(source: SourcePackageSpec) -> pixi_spec::SourceSpec {
         subdir,
         license,
         extras: None,
+        flags: None,
         namespace: None,
+        license_family: None,
         condition: None,
+        track_features: None,
     }
 }
 
@@ -93,6 +96,7 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpec) -> pixi_spec::BinarySpec {
             md5: None,
             sha256: None,
             license: None,
+            condition: None,
             url: _,
         } => BinarySpec::Version(version),
         BinaryPackageSpec {
@@ -105,15 +109,21 @@ pub fn from_binary_spec_v1(spec: BinaryPackageSpec) -> pixi_spec::BinarySpec {
             md5,
             sha256,
             license,
+            condition,
             url: _,
         } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
             version,
             build,
             build_number,
             file_name,
+            extras: None,
+            flags: None,
             channel: channel.map(NamedChannelOrUrl::Url),
             subdir,
             license,
+            license_family: None,
+            condition,
+            track_features: None,
             md5,
             sha256,
         })),

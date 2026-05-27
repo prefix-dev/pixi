@@ -409,10 +409,25 @@ impl MetadataProvider for DescriptionMetadataProvider {
     }
 
     fn license_files(&mut self) -> Result<Option<Vec<String>>, Self::Error> {
+        // Resolve the license file path to an absolute path under the package
+        // source root. rattler-build's license-copying step reads from the work
+        // directory populated by the recipe's `source:` block; since this backend
+        // does not emit one (the build script runs `R CMD INSTALL` directly
+        // against the source root), relative names like `LICENSE` would never be
+        // found. An absolute path bypasses the work-directory lookup.
+        let manifest_root = self.manifest_root.clone();
         let data = self.ensure_data()?;
         Ok(data.license.as_ref().and_then(|l| {
             let parsed = parse_r_license(l);
-            parsed.license_file.map(|f| vec![f])
+            parsed.license_file.map(|f| {
+                let p = std::path::Path::new(&f);
+                let resolved = if p.is_absolute() {
+                    f
+                } else {
+                    manifest_root.join(p).to_string_lossy().into_owned()
+                };
+                vec![resolved]
+            })
         }))
     }
 
@@ -530,7 +545,73 @@ License: MIT + file LICENSE
         assert_eq!(provider.license().unwrap(), Some("MIT".to_string()));
         assert_eq!(
             provider.license_files().unwrap(),
-            Some(vec!["LICENSE".to_string()])
+            Some(vec![
+                temp_dir
+                    .path()
+                    .join("LICENSE")
+                    .to_string_lossy()
+                    .into_owned()
+            ])
+        );
+    }
+
+    #[test]
+    fn test_license_file_is_absolute_under_source_root() {
+        // The recipe omits a `source:` block, so rattler-build has no work
+        // directory in which to find a bare `LICENSE`. The returned path must
+        // be absolute and rooted at the package source so the file is copied.
+        let content = r#"Package: testpkg
+Version: 1.0.0
+License: GPL-3 + file LICENSE
+"#;
+        let temp_dir = create_test_description(content);
+        let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
+
+        let files = provider.license_files().unwrap().unwrap();
+        assert_eq!(files.len(), 1);
+        let p = std::path::Path::new(&files[0]);
+        assert!(
+            p.is_absolute(),
+            "license file path must be absolute, got: {}",
+            files[0]
+        );
+        assert_eq!(p, temp_dir.path().join("LICENSE"));
+    }
+
+    #[test]
+    fn test_license_file_only_resolves_to_absolute() {
+        // `License: file LICENSE` (no SPDX part) must also produce an absolute
+        // path so out-of-source git builds find it.
+        let content = r#"Package: testpkg
+Version: 1.0.0
+License: file LICENSE
+"#;
+        let temp_dir = create_test_description(content);
+        let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
+
+        let files = provider.license_files().unwrap().unwrap();
+        assert_eq!(files.len(), 1);
+        assert_eq!(
+            std::path::Path::new(&files[0]),
+            temp_dir.path().join("LICENSE")
+        );
+    }
+
+    #[test]
+    fn test_license_file_preserves_custom_name() {
+        // The DESCRIPTION may reference e.g. `LICENCE`, `LICENSE.md`, `COPYING`;
+        // we must use exactly what was declared rather than normalising it.
+        let content = r#"Package: testpkg
+Version: 1.0.0
+License: MIT + file LICENCE
+"#;
+        let temp_dir = create_test_description(content);
+        let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
+
+        let files = provider.license_files().unwrap().unwrap();
+        assert_eq!(
+            std::path::Path::new(&files[0]),
+            temp_dir.path().join("LICENCE")
         );
     }
 

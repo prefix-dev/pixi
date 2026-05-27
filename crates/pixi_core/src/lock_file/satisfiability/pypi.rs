@@ -144,6 +144,23 @@ pub(crate) fn pypi_satisfies_requirement(
         RequirementSource::Registry {
             specifier, index, ..
         } => {
+            // A transitive pep508 requirement (from a wheel's `requires_dist`)
+            // pointing to a name that is locked as a local path / editable
+            // install has been intentionally overridden by the user. The
+            // local package's version may be dynamic (e.g. hatch-vcs,
+            // setuptools-scm) and not statically determinable — in which
+            // case `lock_pypi_packages` falls back to `MIN_VERSION`
+            // ("0a0.dev0") and the specifier check would otherwise fail on
+            // every check, marking the environment perpetually outdated
+            // (issue #6167). Trust the path-based override here; the
+            // path/editable consistency is verified elsewhere via the
+            // dedicated path/editable matching arms.
+            if origin == RequirementOrigin::RequiresDist
+                && matches!(&**locked_data.location(), UrlOrPath::Path(_))
+            {
+                return Ok(());
+            }
+
             let version_string = locked_record.locked_version.to_string();
             if !specifier.contains(
                 &uv_pep440::Version::from_str(&version_string).expect("could not parse version"),
@@ -1231,6 +1248,49 @@ mod tests {
             &[],
         )
         .expect("transitive requirement with no pep508 index must satisfy a custom-index lock");
+    }
+
+    /// Regression test for issue #6167: a path-based (e.g. editable) package
+    /// with a dynamic version that cannot be statically determined gets locked
+    /// with `MIN_VERSION` ("0a0.dev0") as a fallback. When another wheel
+    /// declares it as a `requires_dist` constraint with a normal version
+    /// specifier (creating a circular reference), the transitive specifier
+    /// check used to fail every time, marking the environment as perpetually
+    /// outdated. Path-based overrides must satisfy transitive registry-style
+    /// constraints.
+    #[test]
+    fn test_pypi_path_override_satisfies_transitive_registry_spec() {
+        // Locked path-based source package with no determinable version —
+        // simulates an editable install whose version is dynamic (e.g.
+        // hatch-vcs) and could not be extracted statically.
+        let data = make_source_package_with(
+            "synth",
+            Verbatim::new(UrlOrPath::Path(".".into())),
+            vec![],
+            None,
+        );
+        let locked_data = UnresolvedPypiRecord::from(data).lock(pep440_rs::MIN_VERSION.clone());
+
+        // Transitive requirement from another wheel's `requires_dist`:
+        // pep508 with a registry-style specifier.
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("synth>=1.6.0").unwrap(),
+        )
+        .unwrap();
+
+        let project_root = PathBuf::from_str("/").unwrap();
+
+        pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::RequiresDist,
+            &[],
+        )
+        .expect(
+            "a path-locked package must satisfy a transitive registry constraint \
+             even when its locked version is the MIN_VERSION fallback",
+        );
     }
 
     /// Helper to build a `uv_distribution_types::Requirement` with an explicit index.

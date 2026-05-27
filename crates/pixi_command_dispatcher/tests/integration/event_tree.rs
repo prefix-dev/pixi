@@ -113,6 +113,9 @@ impl EventTree {
                 }
                 Event::InstantiateBackendStarted { id } => builder.alloc_pending(*id),
                 Event::InstantiateBackendFinished { .. } => {}
+                Event::GatewayQuery { id, .. } => {
+                    builder.alloc_node(*id, "Repodata fetch".to_owned());
+                }
                 Event::UrlCheckoutQueued { .. }
                 | Event::UrlCheckoutStarted { .. }
                 | Event::UrlCheckoutFinished { .. } => {

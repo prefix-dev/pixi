@@ -108,3 +108,11 @@ Constraints that apply to the package's run environment, but only when the const
 They never cause a package to be installed on their own. To do that, use run-dependencies (#dependencies-run-dependencies).
 
 This corresponds to conda's `run_constrained` package metadata.
+
+## Inheriting Versions From the Workspace
+
+When several packages in the same workspace share dependency versions you can
+declare them once in `[workspace.dependencies]` and inherit per entry from
+every member's package tables (and from `[package.build.backend]`).
+See [Workspace Dependencies](workspace_dependencies.md) for the full rules
+around overrides and errors.
