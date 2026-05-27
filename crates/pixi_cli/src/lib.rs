@@ -276,7 +276,13 @@ pub async fn execute() -> miette::Result<()> {
     };
 
     // Execute the command
-    execute_command(command, &global_options).await
+    let result = execute_command(command, &global_options).await;
+
+    // Let the user know all operations finished, in case they switched away
+    // while pixi was working.
+    pixi_progress::osc::notify_done(result.is_ok());
+
+    result
 }
 
 #[cfg(feature = "console-subscriber")]

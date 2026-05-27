@@ -152,7 +152,7 @@ pub enum ContinuePyPIPrefixUpdate<'a> {
 /// Remove site-packages installed for an outdated interpreter so the next run
 /// starts from a clean slate.
 ///
-/// `layout` describes the old interpreter's install scheme — uv needs it to
+/// `layout` describes the old interpreter's install scheme -- uv needs it to
 /// resolve and validate the paths recorded in each wheel's `RECORD`. The
 /// caller builds it from the old [`PythonInfo`] plus the env prefix.
 async fn uninstall_outdated_site_packages(
@@ -474,7 +474,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .create_installation_plan(pypi_records, &planner_config)
             .await?;
 
-        // Early exit if nothing to do — skip expensive network setup
+        // Early exit if nothing to do -- skip expensive network setup
         if installation_plan.is_noop() {
             tracing::info!("Nothing to do");
             return Ok(());
@@ -488,7 +488,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .await
     }
 
-    /// Cheap planning setup — no network I/O.
+    /// Cheap planning setup -- no network I/O.
     async fn setup_planner_config(
         &self,
         pixi_records: &[PixiRecord],
@@ -542,7 +542,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         })
     }
 
-    /// Expensive setup — builds HTTP client, fetches flat indexes.
+    /// Expensive setup -- builds HTTP client, fetches flat indexes.
     /// Only called when the installation plan has real work to do.
     async fn upgrade_to_full_config(
         &self,
@@ -740,7 +740,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             duplicates,
         } = installation_plan;
 
-        // Defensive guard — caller should have checked is_noop() already.
+        // Defensive guard -- caller should have checked is_noop() already.
         if installation_plan.is_noop() {
             tracing::info!(
                 "{}",
@@ -1048,6 +1048,13 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         if extraneous.is_empty() && reinstalls.is_empty() {
             return Ok(());
         }
+
+        // Record true removals for the completion notification. Reinstalls are
+        // left out here since they reappear under installs.
+        for dist in extraneous {
+            pixi_progress::osc::record_removal(dist.name().as_ref());
+        }
+
         let start = std::time::Instant::now();
         let layout = setup.venv.interpreter().layout();
         for dist_info in extraneous.iter().chain(reinstalls.iter().map(|(d, _)| d)) {
@@ -1182,6 +1189,11 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     ) -> miette::Result<()> {
         if all_dists.is_empty() {
             return Ok(());
+        }
+
+        // Record the installs for the completion notification.
+        for dist in &all_dists {
+            pixi_progress::osc::record_install(dist.name().as_ref());
         }
 
         let options = UvReporterOptions::new()

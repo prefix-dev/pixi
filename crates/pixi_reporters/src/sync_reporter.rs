@@ -223,14 +223,20 @@ impl CombinedInstallReporterInner {
         transaction: &Transaction<PrefixRecord, RepoDataRecord>,
     ) {
         for (operation_id, operation) in transaction.operations.iter().enumerate() {
-            if let Some(record) = operation
-                .record_to_install()
-                .or_else(|| operation.record_to_remove().map(|r| &r.repodata_record))
+            let install_record = operation.record_to_install();
+            if let Some(record) =
+                install_record.or_else(|| operation.record_to_remove().map(|r| &r.repodata_record))
             {
+                let name = record.package_record.name.as_normalized();
+                if install_record.is_some() {
+                    pixi_progress::osc::record_install(name);
+                } else {
+                    pixi_progress::osc::record_removal(name);
+                }
                 self.operation_link_id.insert(
                     (id, operation_id),
                     self.install_progress_bar.queued(PackageWithSize {
-                        name: record.package_record.name.as_normalized().to_string(),
+                        name: name.to_string(),
                         size: record.package_record.size.unwrap_or(1),
                     }),
                 );
