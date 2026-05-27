@@ -376,6 +376,13 @@ impl GenerateRecipe for PythonGenerator {
         };
 
         // Construct python specific settings
+        let skip_pyc_globs = config.skip_pyc_compilation.globs();
+        let skip_pyc_compilation = ConditionalList::new(
+            skip_pyc_globs
+                .into_iter()
+                .map(|g| Item::Value(Value::new_concrete(g, None)))
+                .collect(),
+        );
         let python = PythonBuild {
             entry_points: PythonGenerator::entry_points(pyproject_manifest),
             version_independent: if config.abi3 == Some(true) {
@@ -383,6 +390,7 @@ impl GenerateRecipe for PythonGenerator {
             } else {
                 None
             },
+            skip_pyc_compilation,
             ..PythonBuild::default()
         };
 
