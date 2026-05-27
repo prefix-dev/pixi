@@ -300,7 +300,7 @@ pub struct ParsedEnvironment {
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub exposed: IndexSet<Mapping>,
     pub shortcuts: Option<IndexSet<PackageName>>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub ignore_conda_prefix: bool,
 }
 
