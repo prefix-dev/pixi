@@ -54,9 +54,11 @@ impl InjectedKey for BackendOverrideKey {
     type Value = Arc<BackendOverride>;
 }
 
-/// Injected default [`CompilerCache`] for the dispatcher's engine. Merged into
-/// each backend's configuration as a default unless the package already sets
-/// `compiler-cache` itself.
+/// Injected default [`CompilerCache`] for the dispatcher's engine. Injected
+/// into each backend's `compiler-cache` configuration in the tagged
+/// `{ "default": <cache> }` form, so backends can tell a global preference
+/// apart from a package-local setting (a bare string) and avoid locking the
+/// per-machine default into the build requirements.
 #[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
 #[display("CompilerCache")]
 pub struct CompilerCacheKey;

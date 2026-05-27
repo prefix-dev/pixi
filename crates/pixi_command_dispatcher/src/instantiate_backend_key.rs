@@ -346,7 +346,7 @@ impl InstantiateBackendKey {
                 workspace_directory: Some(init_params.workspace_root.clone()),
                 cache_directory: Some(cache_dir_root),
                 project_model,
-                configuration: merge_compiler_cache(
+                configuration: inject_compiler_cache_default(
                     init_params.configuration.clone(),
                     compiler_cache,
                 ),
@@ -587,7 +587,7 @@ async fn spawn_json_rpc(
         init_params.manifest_path.clone(),
         init_params.workspace_root.clone(),
         project_model,
-        merge_compiler_cache(init_params.configuration.clone(), compiler_cache),
+        inject_compiler_cache_default(init_params.configuration.clone(), compiler_cache),
         init_params.target_configuration.clone(),
         Some(cache_dir_root),
         tool,
@@ -600,12 +600,18 @@ async fn spawn_json_rpc(
     ))))
 }
 
-/// Merge the dispatcher-wide default `compiler_cache` into the backend
-/// `configuration` JSON. If `compiler_cache` is `None`, the configuration is
-/// returned unchanged. The default is only inserted when the configuration
-/// does not already contain a `compiler-cache` key, so a package's own
-/// `pixi.toml` value always wins.
-fn merge_compiler_cache(
+/// Inject the dispatcher-wide default `compiler_cache` into the backend
+/// `configuration` JSON. If `compiler_cache` is `None`, or the package already
+/// set `compiler-cache` itself, the configuration is returned unchanged.
+///
+/// The default originates from the user's global pixi config (a per-machine
+/// preference), so it is injected under the same `compiler-cache` key but in
+/// the tagged `{ "default": <cache> }` form rather than the bare-string form a
+/// package writes. Backends use that shape to tell the two apart: only a
+/// package-local `compiler-cache` adds a compiler cache to the locked build
+/// requirements; a globally-injected default is a launcher only, or the
+/// lockfile would flip-flop depending on who runs the resolve.
+fn inject_compiler_cache_default(
     configuration: Option<serde_json::Value>,
     compiler_cache: &Option<CompilerCache>,
 ) -> Option<serde_json::Value> {
@@ -618,7 +624,8 @@ fn merge_compiler_cache(
 
     let mut config = configuration.unwrap_or_else(|| serde_json::Value::Object(Default::default()));
     if let Some(obj) = config.as_object_mut() {
-        obj.entry("compiler-cache").or_insert(compiler_cache_value);
+        obj.entry("compiler-cache")
+            .or_insert(serde_json::json!({ "default": compiler_cache_value }));
     }
     Some(config)
 }

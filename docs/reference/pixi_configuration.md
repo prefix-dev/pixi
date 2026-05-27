@@ -374,6 +374,15 @@ which takes precedence over the global and project-local config:
 compiler-cache = "sccache"
 ```
 
+!!! note "Global config does not lock the cache tool"
+    When `compiler-cache` is set here (globally or project-local) rather than per-package, the
+    cache tool is **not** added to a package's build dependencies — doing so would make the
+    lockfile change depending on whether the machine running the resolve has the cache configured.
+    The tool is used as a compiler launcher only and must already be available on `PATH`; install
+    it with `pixi global install sccache`. A per-package `compiler-cache` instead adds the tool to
+    the build dependencies so it is captured in the lockfile. The build fails with an install hint
+    if a globally-configured cache tool is not found.
+
 !!! tip "sccache credentials"
     `SCCACHE_*` environment variables (e.g. `SCCACHE_BUCKET`, `SCCACHE_S3_KEY_ID`) are still
     read from the environment for remote cache configuration. They are automatically treated

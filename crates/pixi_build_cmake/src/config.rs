@@ -12,6 +12,47 @@ pub enum CompilerCache {
     Sccache,
 }
 
+/// A `compiler-cache` setting together with where it came from.
+///
+/// The two forms are deserialized from the same `compiler-cache` key but carry
+/// different consequences, so the build can keep the lockfile deterministic:
+///
+/// - [`Self::Package`] — written by the package itself as a bare string
+///   (`compiler-cache = "sccache"`). The cache tool is added to the build
+///   requirements and therefore captured in the lockfile.
+/// - [`Self::Default`] — injected by the command dispatcher as
+///   `{ "default": "sccache" }` from the user's global/project pixi config. As
+///   a per-machine preference it is used as a compiler launcher only and is
+///   never added to the locked build requirements, so the tool must already be
+///   on `PATH`.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum CompilerCacheConfig {
+    /// Set in the package manifest; locked as a build dependency.
+    Package(CompilerCache),
+    /// Injected default from pixi config; launcher only, not locked.
+    Default {
+        /// The cache requested by the global/project config.
+        default: CompilerCache,
+    },
+}
+
+impl CompilerCacheConfig {
+    /// The requested cache tool, regardless of where the setting came from.
+    pub fn cache(&self) -> &CompilerCache {
+        match self {
+            Self::Package(cache) | Self::Default { default: cache } => cache,
+        }
+    }
+
+    /// Whether the cache tool should be added to the locked build
+    /// requirements. Only a package-local setting is locked; an injected
+    /// per-machine default is used as a launcher only.
+    pub fn lock_as_dependency(&self) -> bool {
+        matches!(self, Self::Package(_))
+    }
+}
+
 #[derive(Debug, Default, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct CMakeBackendConfig {
@@ -34,10 +75,11 @@ pub struct CMakeBackendConfig {
     /// List of compilers to use (e.g., ["c", "cxx", "cuda"])
     /// If not specified, a default will be used
     pub compilers: Option<Vec<String>>,
-    /// The compiler cache to use. If set, the build uses the specified compiler
-    /// cache. Can also be set globally in `~/.config/pixi/config.toml` or
-    /// per-project in `.pixi/config.toml`.
-    pub compiler_cache: Option<CompilerCache>,
+    /// The compiler cache to use. A bare `compiler-cache = "sccache"` in the
+    /// package manifest is locked as a build dependency; a value injected from
+    /// the user's pixi config is used as a launcher only. See
+    /// [`CompilerCacheConfig`].
+    pub compiler_cache: Option<CompilerCacheConfig>,
 }
 
 fn collect_system_env() -> IndexMap<String, String> {
@@ -102,12 +144,44 @@ mod tests {
     use serde_json::json;
     use std::path::PathBuf;
 
-    use super::CMakeBackendConfig;
+    use super::{CMakeBackendConfig, CompilerCache, CompilerCacheConfig};
 
     #[test]
     fn test_ensure_deserialize_from_empty() {
         let json_data = json!({});
         serde_json::from_value::<CMakeBackendConfig>(json_data).unwrap();
+    }
+
+    #[test]
+    fn test_compiler_cache_distinguishes_package_from_injected_default() {
+        // A bare string is what a package writes in its manifest: locked.
+        let package = serde_json::from_value::<CMakeBackendConfig>(json!({
+            "compiler-cache": "sccache"
+        }))
+        .unwrap()
+        .compiler_cache
+        .unwrap();
+        assert_eq!(package, CompilerCacheConfig::Package(CompilerCache::Sccache));
+        assert!(package.lock_as_dependency());
+
+        // The tagged form is what the command dispatcher injects from global
+        // config: a launcher only, never locked.
+        let injected = serde_json::from_value::<CMakeBackendConfig>(json!({
+            "compiler-cache": { "default": "sccache" }
+        }))
+        .unwrap()
+        .compiler_cache
+        .unwrap();
+        assert_eq!(
+            injected,
+            CompilerCacheConfig::Default {
+                default: CompilerCache::Sccache
+            }
+        );
+        assert!(!injected.lock_as_dependency());
+
+        // Both still resolve to the same underlying cache tool.
+        assert_eq!(package.cache(), injected.cache());
     }
 
     #[test]

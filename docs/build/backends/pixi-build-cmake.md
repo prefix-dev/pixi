@@ -201,9 +201,16 @@ Or per-package in `pixi.toml`:
 compiler-cache = "sccache"
 ```
 
-When enabled, `sccache` is added to the build dependencies automatically and the C/C++ compiler
-launchers are set to `sccache`. Any `SCCACHE_*` environment variables (e.g. for remote S3 cache
-configuration) are picked up from the environment and treated as secrets.
+In both cases the C/C++ compiler launchers are set to `sccache` and any `SCCACHE_*` environment
+variables (e.g. for remote S3 cache configuration) are picked up from the environment and treated
+as secrets. The two scopes differ in how `sccache` itself is provided:
+
+- **Per-package** (`pixi.toml`): `sccache` is added to the build dependencies automatically, so it
+  is recorded in the lockfile and resolves the same way on every machine.
+- **Global / per-project** (`config.toml`): this is a per-machine preference, so it is *not* added
+  to the build dependencies — that would make the lockfile depend on who runs the resolve. Instead
+  `sccache` must already be on `PATH`; install it with `pixi global install sccache`. The build
+  fails with that hint if it is missing.
 
 ## Input tracking
 

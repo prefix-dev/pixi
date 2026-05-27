@@ -265,15 +265,23 @@ binaries = ["my-cli"]
 - **Type**: `String`
 - **Default**: unset
 
-The compiler cache to use. When set to `"sccache"`, the backend adds `sccache` to the build
-dependencies and sets it up as `RUSTC_WRAPPER`. It can also be set globally in
-`~/.config/pixi/config.toml` or per-project in `.pixi/config.toml` under `[build]`; the
-per-package value takes precedence.
+The compiler cache to use. When set to `"sccache"`, the backend sets up `sccache` as
+`RUSTC_WRAPPER`. It can also be set globally in `~/.config/pixi/config.toml` or per-project in
+`.pixi/config.toml` under `[build]`; the per-package value takes precedence.
 
 ```toml title="pixi.toml"
 [package.build.config]
 compiler-cache = "sccache"
 ```
+
+How `sccache` is provided depends on where the setting comes from:
+
+- **Per-package** (`pixi.toml`): `sccache` is added to the build dependencies automatically, so it
+  is recorded in the lockfile and resolves the same way on every machine.
+- **Global / per-project** (`config.toml`): this is a per-machine preference, so it is *not* added
+  to the build dependencies — that would make the lockfile depend on who runs the resolve. Instead
+  `sccache` must already be on `PATH`; install it with `pixi global install sccache`. The build
+  fails with that hint if it is missing.
 
 Any `SCCACHE_*` environment variables (e.g. for remote S3 cache configuration) are picked up from
 the environment and treated as secrets.

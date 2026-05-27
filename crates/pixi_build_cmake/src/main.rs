@@ -3,10 +3,10 @@ mod config;
 mod inputs;
 
 use build_script::{BuildPlatform, BuildScriptContext};
-use config::{CMakeBackendConfig, CompilerCache};
+use config::{CMakeBackendConfig, CompilerCache, CompilerCacheConfig};
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
-    cache::{sccache_envs, sccache_tools},
+    cache::{ensure_compiler_cache_on_path, sccache_envs, sccache_tools},
     compilers::default_compiler_variants,
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
@@ -130,13 +130,21 @@ impl GenerateRecipe for CMakeGenerator {
                 "python",
             )));
 
-        // Enable sccache when the resolved configuration requests it. The
-        // `compiler-cache` setting can come from the package's own config or
-        // be injected as a default from the pixi config.
-        let has_sccache = matches!(config.compiler_cache, Some(CompilerCache::Sccache));
+        // Enable sccache when the resolved configuration requests it. Where the
+        // setting came from decides how the tool is provided: a package-local
+        // `compiler-cache` is added to the build requirements (and therefore
+        // the lockfile) so the build is reproducible everywhere, while a
+        // globally-injected default is a per-machine preference used as a
+        // launcher only — adding it to the requirements would make the lockfile
+        // flip-flop depending on who runs the resolve, so the tool must already
+        // be on `PATH` instead.
+        let has_sccache = matches!(
+            config.compiler_cache.as_ref().map(CompilerCacheConfig::cache),
+            Some(CompilerCache::Sccache)
+        );
         let mut sccache_secrets: BTreeSet<String> = BTreeSet::new();
 
-        if has_sccache {
+        if let Some(compiler_cache) = &config.compiler_cache {
             // Mark any `SCCACHE_*` variables present in the system environment
             // (but not explicitly set in the backend config `env`) as secrets so
             // they are not leaked into the build recipe.
@@ -157,22 +165,28 @@ impl GenerateRecipe for CMakeGenerator {
                     .collect();
             }
 
-            // Add sccache to the build requirements if not already present.
-            let sccache_dep: Vec<Item<SerializableMatchSpec>> = sccache_tools()
-                .iter()
-                .map(|tool| {
-                    Item::Value(Value::new_concrete(
-                        SerializableMatchSpec::from(tool.as_str()),
-                        None,
-                    ))
-                })
-                .collect();
-            let existing_reqs: Vec<_> = requirements.build.clone().into_iter().collect();
-            requirements.build.extend(
-                sccache_dep
-                    .into_iter()
-                    .filter(|dep| !existing_reqs.contains(dep)),
-            );
+            if compiler_cache.lock_as_dependency() {
+                // Add sccache to the build requirements if not already present.
+                let sccache_dep: Vec<Item<SerializableMatchSpec>> = sccache_tools()
+                    .iter()
+                    .map(|tool| {
+                        Item::Value(Value::new_concrete(
+                            SerializableMatchSpec::from(tool.as_str()),
+                            None,
+                        ))
+                    })
+                    .collect();
+                let existing_reqs: Vec<_> = requirements.build.clone().into_iter().collect();
+                requirements.build.extend(
+                    sccache_dep
+                        .into_iter()
+                        .filter(|dep| !existing_reqs.contains(dep)),
+                );
+            } else {
+                // Globally configured: leave the locked build requirements
+                // untouched and require the tool to be installed on the machine.
+                ensure_compiler_cache_on_path(&sccache_tools())?;
+            }
         }
 
         let build_script = BuildScriptContext {
@@ -833,7 +847,7 @@ mod tests {
                 &CMakeBackendConfig {
                     env,
                     system_env,
-                    compiler_cache: Some(CompilerCache::Sccache),
+                    compiler_cache: Some(CompilerCacheConfig::Package(CompilerCache::Sccache)),
                     ..CMakeBackendConfig::default()
                 },
                 PathBuf::from("."),
