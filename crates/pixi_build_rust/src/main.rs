@@ -9,7 +9,7 @@ use miette::IntoDiagnostic;
 use pixi_build_backend::variants::NormalizedKey;
 use pixi_build_backend::{
     Variable,
-    cache::{sccache_envs, sccache_tools},
+    cache::{ensure_compiler_cache_on_path, sccache_envs, sccache_tools},
     compilers::default_compiler_variants,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
@@ -118,16 +118,17 @@ impl GenerateRecipe for RustGenerator {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<HashMap<_, _>>();
 
-        let all_env_vars = config_env
-            .clone()
-            .into_iter()
-            .chain(system_env_vars.clone())
-            .collect();
-
         let mut sccache_secrets: BTreeSet<String> = BTreeSet::new();
 
-        // Verify if user has set any sccache environment variables
-        if sccache_envs(&all_env_vars).is_some() {
+        // Enable sccache when the resolved configuration requests it. Where the
+        // setting came from decides how the tool is provided: a package-local
+        // `compiler-cache` is added to the build requirements (and therefore
+        // the lockfile) so the build is reproducible everywhere, while a
+        // globally-injected default is a per-machine preference used as a
+        // launcher only — adding it to the requirements would make the lockfile
+        // flip-flop depending on who runs the resolve, so the tool must already
+        // be on `PATH` instead.
+        if let Some(compiler_cache) = &config.compiler_cache {
             // check if we set some sccache in system env vars
             if let Some(system_sccache_keys) = sccache_envs(&system_env_vars) {
                 // If sccache_envs are used in the system environment variables,
@@ -146,25 +147,31 @@ impl GenerateRecipe for RustGenerator {
                 sccache_secrets = system_sccache_keys;
             };
 
-            let sccache_dep: Vec<Item<SerializableMatchSpec>> = sccache_tools()
-                .iter()
-                .map(|tool| {
-                    Item::Value(Value::new_concrete(
-                        SerializableMatchSpec::from(tool.as_str()),
-                        None,
-                    ))
-                })
-                .collect();
+            if compiler_cache.lock_as_dependency() {
+                let sccache_dep: Vec<Item<SerializableMatchSpec>> = sccache_tools()
+                    .iter()
+                    .map(|tool| {
+                        Item::Value(Value::new_concrete(
+                            SerializableMatchSpec::from(tool.as_str()),
+                            None,
+                        ))
+                    })
+                    .collect();
 
-            // Add sccache tools to the build requirements
-            // only if they are not already present
-            let existing_reqs: Vec<_> = requirements.build.clone().into_iter().collect();
+                // Add sccache tools to the build requirements
+                // only if they are not already present
+                let existing_reqs: Vec<_> = requirements.build.clone().into_iter().collect();
 
-            requirements.build.extend(
-                sccache_dep
-                    .into_iter()
-                    .filter(|dep| !existing_reqs.contains(dep)),
-            );
+                requirements.build.extend(
+                    sccache_dep
+                        .into_iter()
+                        .filter(|dep| !existing_reqs.contains(dep)),
+                );
+            } else {
+                // Globally configured: leave the locked build requirements
+                // untouched and require the tool to be installed on the machine.
+                ensure_compiler_cache_on_path(&sccache_tools())?;
+            }
 
             has_sccache = true;
         }
@@ -258,6 +265,7 @@ mod tests {
     use rattler_conda_types::PackageName;
 
     use super::*;
+    use config::{CompilerCache, CompilerCacheConfig};
 
     #[tokio::test]
     async fn test_binaries_flag_is_rendered() {
@@ -487,6 +495,7 @@ mod tests {
                     env,
                     system_env,
                     ignore_cargo_manifest: Some(true),
+                    compiler_cache: Some(CompilerCacheConfig::Package(CompilerCache::Sccache)),
                     ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
@@ -498,13 +507,6 @@ mod tests {
             )
             .await
             .expect("Failed to generate recipe");
-
-        // Clean up environment variables
-        // SAFETY: We're in a test and cleaning up the environment after the test
-        unsafe {
-            std::env::remove_var("SCCACHE_SYSTEM");
-            std::env::remove_var("SCCACHE_BUCKET");
-        }
 
         // Verify that sccache is added to the build requirements
         // when some env variables are set

@@ -3,9 +3,10 @@ mod config;
 mod inputs;
 
 use build_script::{BuildPlatform, BuildScriptContext};
-use config::CMakeBackendConfig;
+use config::{CMakeBackendConfig, CompilerCache, CompilerCacheConfig};
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
+    cache::{ensure_compiler_cache_on_path, sccache_envs, sccache_tools},
     compilers::default_compiler_variants,
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
@@ -18,7 +19,7 @@ use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::PackageName;
 use rattler_conda_types::{ChannelUrl, Platform};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -129,6 +130,65 @@ impl GenerateRecipe for CMakeGenerator {
                 "python",
             )));
 
+        // Enable sccache when the resolved configuration requests it. Where the
+        // setting came from decides how the tool is provided: a package-local
+        // `compiler-cache` is added to the build requirements (and therefore
+        // the lockfile) so the build is reproducible everywhere, while a
+        // globally-injected default is a per-machine preference used as a
+        // launcher only — adding it to the requirements would make the lockfile
+        // flip-flop depending on who runs the resolve, so the tool must already
+        // be on `PATH` instead.
+        let has_sccache = matches!(
+            config.compiler_cache.as_ref().map(CompilerCacheConfig::cache),
+            Some(CompilerCache::Sccache)
+        );
+        let mut sccache_secrets: BTreeSet<String> = BTreeSet::new();
+
+        if let Some(compiler_cache) = &config.compiler_cache {
+            // Mark any `SCCACHE_*` variables present in the system environment
+            // (but not explicitly set in the backend config `env`) as secrets so
+            // they are not leaked into the build recipe.
+            let system_env_vars: HashMap<String, String> = config
+                .system_env
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            if let Some(system_sccache_keys) = sccache_envs(&system_env_vars) {
+                sccache_secrets = config
+                    .system_env
+                    .keys()
+                    .filter(|key| {
+                        system_sccache_keys.contains(&key.as_str())
+                            && !config.env.contains_key(*key)
+                    })
+                    .cloned()
+                    .collect();
+            }
+
+            if compiler_cache.lock_as_dependency() {
+                // Add sccache to the build requirements if not already present.
+                let sccache_dep: Vec<Item<SerializableMatchSpec>> = sccache_tools()
+                    .iter()
+                    .map(|tool| {
+                        Item::Value(Value::new_concrete(
+                            SerializableMatchSpec::from(tool.as_str()),
+                            None,
+                        ))
+                    })
+                    .collect();
+                let existing_reqs: Vec<_> = requirements.build.clone().into_iter().collect();
+                requirements.build.extend(
+                    sccache_dep
+                        .into_iter()
+                        .filter(|dep| !existing_reqs.contains(dep)),
+                );
+            } else {
+                // Globally configured: leave the locked build requirements
+                // untouched and require the tool to be installed on the machine.
+                ensure_compiler_cache_on_path(&sccache_tools())?;
+            }
+        }
+
         let build_script = BuildScriptContext {
             build_platform: if Platform::current().is_windows() {
                 BuildPlatform::Windows
@@ -138,8 +198,11 @@ impl GenerateRecipe for CMakeGenerator {
             source_dir: manifest_root.display().to_string(),
             extra_args: config.extra_args.clone(),
             has_host_python,
+            has_sccache,
         }
         .render();
+
+        sccache_secrets.extend(model.secrets.iter().cloned());
 
         generated_recipe.recipe.build.script = Script::from_content(build_script)
             .with_env(
@@ -149,7 +212,7 @@ impl GenerateRecipe for CMakeGenerator {
                     .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
                     .collect(),
             )
-            .with_secrets(model.secrets.iter().cloned().collect());
+            .with_secrets(sccache_secrets.into_iter().collect());
 
         Ok(generated_recipe)
     }
@@ -750,5 +813,59 @@ mod tests {
             stdlib_templates[0], "${{ stdlib('c') }}",
             "Default stdlib should be c"
         );
+    }
+
+    #[tokio::test]
+    async fn test_sccache_is_enabled() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+            "targets": {
+                "defaultTarget": {
+                    "runDependencies": {
+                        "boltons": {
+                            "binary": {
+                                "version": "*"
+                            }
+                        }
+                    }
+                },
+            }
+        });
+
+        // SCCACHE_* env vars in system_env should be marked as secrets when
+        // compiler_cache is set to sccache.
+        let env = IndexMap::from([("SCCACHE_BUCKET".to_string(), "my-bucket".to_string())]);
+        let system_env = IndexMap::from([
+            ("SCCACHE_SYSTEM".to_string(), "SOME_VALUE".to_string()),
+            ("SCCACHE_BUCKET".to_string(), "system-bucket".to_string()),
+        ]);
+
+        let generated_recipe = CMakeGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &CMakeBackendConfig {
+                    env,
+                    system_env,
+                    compiler_cache: Some(CompilerCacheConfig::Package(CompilerCache::Sccache)),
+                    ..CMakeBackendConfig::default()
+                },
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        // Verify that sccache is added to the build requirements and the
+        // system SCCACHE_* variables are recorded as secrets when
+        // compiler_cache = "sccache" is set.
+        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
+        ".source[0].path" => "[ ... path ... ]",
+        ".build.script.content" => "[ ... script ... ]",
+        });
     }
 }

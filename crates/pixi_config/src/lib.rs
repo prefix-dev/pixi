@@ -1685,6 +1685,14 @@ impl Serialize for PackageFormatAndCompression {
     }
 }
 
+/// The compiler cache to use during builds.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompilerCache {
+    /// Use sccache as the compiler cache.
+    Sccache,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct BuildConfig {
@@ -1692,11 +1700,21 @@ pub struct BuildConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub package_format: Option<PackageFormatAndCompression>,
+
+    /// The compiler cache to use during builds. If set, the specified cache is
+    /// used in all build backends that support it (e.g. cmake, rust). Can be
+    /// set globally in `~/.config/pixi/config.toml` or per-project in
+    /// `.pixi/config.toml`.
+    ///
+    /// Example: `compiler-cache = "sccache"`
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compiler_cache: Option<CompilerCache>,
 }
 
 impl BuildConfig {
     pub fn is_default(&self) -> bool {
-        self.package_format.is_none()
+        self.package_format.is_none() && self.compiler_cache.is_none()
     }
     pub fn merge(&self, other: Self) -> Self {
         Self {
@@ -1704,6 +1722,11 @@ impl BuildConfig {
                 .package_format
                 .as_ref()
                 .or(self.package_format.as_ref())
+                .cloned(),
+            compiler_cache: other
+                .compiler_cache
+                .as_ref()
+                .or(self.compiler_cache.as_ref())
                 .cloned(),
         }
     }
@@ -1990,6 +2013,9 @@ impl Config {
     pub fn get_keys(&self) -> &[&str] {
         &[
             "authentication-override-file",
+            "build",
+            "build.compiler-cache",
+            "build.package-format",
             "cache",
             "cache.build-tool-environments",
             "cache.conda-packages",
@@ -2601,6 +2627,37 @@ impl Config {
                 }
                 self.cache.expand_paths()?;
                 self.cache.validate()?;
+            }
+            key if key.starts_with("build") => {
+                if key == "build" {
+                    if let Some(value) = value {
+                        self.build = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.build = BuildConfig::default();
+                    }
+                    return Ok(());
+                } else if !key.starts_with("build.") {
+                    return Err(err);
+                }
+                let subkey = key.strip_prefix("build.").unwrap();
+                match subkey {
+                    "compiler-cache" => {
+                        self.build.compiler_cache = value
+                            .map(|v| match v.as_str() {
+                                "sccache" => Ok(CompilerCache::Sccache),
+                                _ => Err(miette!("invalid compiler cache: {v}")),
+                            })
+                            .transpose()?;
+                    }
+                    "package-format" => {
+                        self.build.package_format = value
+                            .map(|v| {
+                                PackageFormatAndCompression::from_str(&v).map_err(|e| miette!(e))
+                            })
+                            .transpose()?;
+                    }
+                    _ => return Err(err),
+                }
             }
             _ => return Err(err),
         }

@@ -24,6 +24,7 @@ use pixi_build_types::{
     procedures::initialize::InitializeParams,
 };
 use pixi_compute_engine::{ComputeCtx, Key};
+use pixi_config::CompilerCache;
 use pixi_path::AbsPresumedDirPathBuf;
 use pixi_record::PixiRecord;
 use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceAnchor, SpecConversionError};
@@ -39,7 +40,7 @@ use tokio::sync::Mutex;
 use crate::compute_data::HasInstantiateBackendReporter;
 use crate::discovered_backend::DiscoveredBackendKey;
 use crate::ephemeral_env::{EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec};
-use crate::injected_config::ToolBuildEnvironmentKey;
+use crate::injected_config::{CompilerCacheKey, ToolBuildEnvironmentKey};
 use crate::reporter::InstantiateBackendReporter;
 use crate::resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use pixi_compute_cache_dirs::CacheDirsKey;
@@ -258,6 +259,10 @@ impl InstantiateBackendKey {
             .to_owned()
             .into_std_path_buf();
 
+        // Default compiler cache, merged into the backend configuration
+        // below unless the package already sets `compiler-cache` itself.
+        let compiler_cache = ctx.compute(&CompilerCacheKey).await;
+
         // Apply the engine's backend override to the resolved spec.
         let resolved_command = ctx
             .compute(&ResolvedBackendCommandKey::new(resolved_spec.clone()))
@@ -272,6 +277,7 @@ impl InstantiateBackendKey {
                     &source_dir,
                     &discovered.init_params,
                     cache_dir_root,
+                    &compiler_cache,
                 );
             }
             ResolvedBackendCommand::Spec(CommandSpec::System(system_spec)) => (
@@ -305,6 +311,7 @@ impl InstantiateBackendKey {
             tool,
             api_version,
             cache_dir_root,
+            &compiler_cache,
         )
         .await
     }
@@ -327,6 +334,7 @@ impl InstantiateBackendKey {
         source_dir: &std::path::Path,
         init_params: &BackendInitializationParams,
         cache_dir_root: PathBuf,
+        compiler_cache: &Option<CompilerCache>,
     ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
         let project_model = self
             .project_model_overrides
@@ -338,7 +346,10 @@ impl InstantiateBackendKey {
                 workspace_directory: Some(init_params.workspace_root.clone()),
                 cache_directory: Some(cache_dir_root),
                 project_model,
-                configuration: init_params.configuration.clone(),
+                configuration: inject_compiler_cache_default(
+                    init_params.configuration.clone(),
+                    compiler_cache,
+                ),
                 target_configuration: init_params.target_configuration.clone(),
             })
             .map_err(|e| Arc::new(InstantiateBackendError::InMemory(Arc::new(*e))))?;
@@ -568,6 +579,7 @@ async fn spawn_json_rpc(
     tool: Tool,
     api_version: PixiBuildApiVersion,
     cache_dir_root: PathBuf,
+    compiler_cache: &Option<CompilerCache>,
 ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
     let project_model = project_model_overrides.apply(init_params.project_model.clone());
     let backend = JsonRpcBackend::setup(
@@ -575,7 +587,7 @@ async fn spawn_json_rpc(
         init_params.manifest_path.clone(),
         init_params.workspace_root.clone(),
         project_model,
-        init_params.configuration.clone(),
+        inject_compiler_cache_default(init_params.configuration.clone(), compiler_cache),
         init_params.target_configuration.clone(),
         Some(cache_dir_root),
         tool,
@@ -586,6 +598,36 @@ async fn spawn_json_rpc(
         backend.into(),
         api_version,
     ))))
+}
+
+/// Inject the dispatcher-wide default `compiler_cache` into the backend
+/// `configuration` JSON. If `compiler_cache` is `None`, or the package already
+/// set `compiler-cache` itself, the configuration is returned unchanged.
+///
+/// The default originates from the user's global pixi config (a per-machine
+/// preference), so it is injected under the same `compiler-cache` key but in
+/// the tagged `{ "default": <cache> }` form rather than the bare-string form a
+/// package writes. Backends use that shape to tell the two apart: only a
+/// package-local `compiler-cache` adds a compiler cache to the locked build
+/// requirements; a globally-injected default is a launcher only, or the
+/// lockfile would flip-flop depending on who runs the resolve.
+fn inject_compiler_cache_default(
+    configuration: Option<serde_json::Value>,
+    compiler_cache: &Option<CompilerCache>,
+) -> Option<serde_json::Value> {
+    let Some(compiler_cache) = compiler_cache else {
+        return configuration;
+    };
+
+    let compiler_cache_value =
+        serde_json::to_value(compiler_cache).expect("CompilerCache serialization cannot fail");
+
+    let mut config = configuration.unwrap_or_else(|| serde_json::Value::Object(Default::default()));
+    if let Some(obj) = config.as_object_mut() {
+        obj.entry("compiler-cache")
+            .or_insert(serde_json::json!({ "default": compiler_cache_value }));
+    }
+    Some(config)
 }
 
 #[cfg(test)]

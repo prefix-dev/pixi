@@ -12,6 +12,7 @@ use derive_more::Display;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::BackendOverride;
 use pixi_compute_engine::InjectedKey;
+use pixi_config::CompilerCache;
 use rattler_conda_types::ChannelConfig;
 
 use crate::BuildEnvironment;
@@ -51,4 +52,17 @@ pub struct BackendOverrideKey;
 
 impl InjectedKey for BackendOverrideKey {
     type Value = Arc<BackendOverride>;
+}
+
+/// Injected default [`CompilerCache`] for the dispatcher's engine. Injected
+/// into each backend's `compiler-cache` configuration in the tagged
+/// `{ "default": <cache> }` form, so backends can tell a global preference
+/// apart from a package-local setting (a bare string) and avoid locking the
+/// per-machine default into the build requirements.
+#[derive(Clone, Debug, Display, Hash, PartialEq, Eq)]
+#[display("CompilerCache")]
+pub struct CompilerCacheKey;
+
+impl InjectedKey for CompilerCacheKey {
+    type Value = Arc<Option<CompilerCache>>;
 }

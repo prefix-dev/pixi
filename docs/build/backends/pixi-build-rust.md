@@ -19,7 +19,7 @@ This backend automatically generates conda packages from Rust projects by:
 - **Using Cargo**: Leverages Rust's native build system for compilation and installation
 - **Cargo.toml Integration**: Automatically reads package metadata (name, version, description, license, etc.) from your `Cargo.toml` file when not specified in `pixi.toml`
 - **Cross-platform support**: Works consistently across Linux, macOS, and Windows
-- **Optimization support**: Automatically detects and integrates with `sccache` for faster compilation
+- **Optimization support**: Integrates with `sccache` for faster compilation when `compiler-cache = "sccache"` is configured
 - **OpenSSL integration**: Handles OpenSSL linking when available in the environment
 
 ## Basic Usage
@@ -260,13 +260,39 @@ binaries = ["my-cli"]
 # Result for linux-64: only ["my-cli"]
 ```
 
+### `compiler-cache`
+
+- **Type**: `String`
+- **Default**: unset
+
+The compiler cache to use. When set to `"sccache"`, the backend sets up `sccache` as
+`RUSTC_WRAPPER`. It can also be set globally in `~/.config/pixi/config.toml` or per-project in
+`.pixi/config.toml` under `[build]`; the per-package value takes precedence.
+
+```toml title="pixi.toml"
+[package.build.config]
+compiler-cache = "sccache"
+```
+
+How `sccache` is provided depends on where the setting comes from:
+
+- **Per-package** (`pixi.toml`): `sccache` is added to the build dependencies automatically, so it
+  is recorded in the lockfile and resolves the same way on every machine.
+- **Global / per-project** (`config.toml`): this is a per-machine preference, so it is *not* added
+  to the build dependencies — that would make the lockfile depend on who runs the resolve. Instead
+  `sccache` must already be on `PATH`; install it with `pixi global install sccache`. The build
+  fails with that hint if it is missing.
+
+Any `SCCACHE_*` environment variables (e.g. for remote S3 cache configuration) are picked up from
+the environment and treated as secrets.
+
 
 ## Build Process
 
 The Rust backend follows this build process:
 
 1. **Environment Setup**: Configures OpenSSL paths if available in the environment
-2. **Compiler Caching**: Sets up `sccache` as `RUSTC_WRAPPER` if available for faster compilation
+2. **Compiler Caching**: Sets up `sccache` as `RUSTC_WRAPPER` when `compiler-cache = "sccache"` is configured (see below)
 3. **Build and Install**: Executes `cargo install` with the following default options:
    - `--locked`: Use the exact versions from `Cargo.lock`
    - `--root "$PREFIX"`: Install to the conda package prefix

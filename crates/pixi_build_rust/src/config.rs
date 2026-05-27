@@ -4,6 +4,55 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+/// The compiler cache to use during builds.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompilerCache {
+    /// Use sccache as the compiler cache.
+    Sccache,
+}
+
+/// A `compiler-cache` setting together with where it came from.
+///
+/// The two forms are deserialized from the same `compiler-cache` key but carry
+/// different consequences, so the build can keep the lockfile deterministic:
+///
+/// - [`Self::Package`] — written by the package itself as a bare string
+///   (`compiler-cache = "sccache"`). The cache tool is added to the build
+///   requirements and therefore captured in the lockfile.
+/// - [`Self::Default`] — injected by the command dispatcher as
+///   `{ "default": "sccache" }` from the user's global/project pixi config. As
+///   a per-machine preference it is used as a compiler launcher only and is
+///   never added to the locked build requirements, so the tool must already be
+///   on `PATH`.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum CompilerCacheConfig {
+    /// Set in the package manifest; locked as a build dependency.
+    Package(CompilerCache),
+    /// Injected default from pixi config; launcher only, not locked.
+    Default {
+        /// The cache requested by the global/project config.
+        default: CompilerCache,
+    },
+}
+
+impl CompilerCacheConfig {
+    /// The requested cache tool, regardless of where the setting came from.
+    pub fn cache(&self) -> &CompilerCache {
+        match self {
+            Self::Package(cache) | Self::Default { default: cache } => cache,
+        }
+    }
+
+    /// Whether the cache tool should be added to the locked build
+    /// requirements. Only a package-local setting is locked; an injected
+    /// per-machine default is used as a launcher only.
+    pub fn lock_as_dependency(&self) -> bool {
+        matches!(self, Self::Package(_))
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub struct RustBackendConfig {
@@ -34,6 +83,11 @@ pub struct RustBackendConfig {
     /// Example: `binaries = ["rattler-build"]`
     #[serde(default)]
     pub binaries: Vec<String>,
+    /// The compiler cache to use. A bare `compiler-cache = "sccache"` in the
+    /// package manifest is locked as a build dependency; a value injected from
+    /// the user's pixi config is used as a launcher only. See
+    /// [`CompilerCacheConfig`].
+    pub compiler_cache: Option<CompilerCacheConfig>,
 }
 
 fn collect_system_env() -> IndexMap<String, String> {
@@ -60,6 +114,7 @@ impl RustBackendConfig {
             ignore_cargo_manifest: Default::default(),
             compilers: Default::default(),
             binaries: Default::default(),
+            compiler_cache: Default::default(),
         }
     }
 
@@ -115,6 +170,10 @@ impl BackendConfig for RustBackendConfig {
                 .compilers
                 .clone()
                 .or_else(|| self.compilers.clone()),
+            compiler_cache: target_config
+                .compiler_cache
+                .clone()
+                .or_else(|| self.compiler_cache.clone()),
         })
     }
 }
@@ -183,6 +242,7 @@ mod tests {
             ignore_cargo_manifest: None,
             compilers: Some(vec!["rust".to_string()]),
             binaries: vec![],
+            compiler_cache: None,
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -198,6 +258,7 @@ mod tests {
             ignore_cargo_manifest: Some(true),
             compilers: Some(vec!["c".to_string(), "rust".to_string()]),
             binaries: vec![],
+            compiler_cache: None,
         };
 
         let merged = base_config
@@ -245,6 +306,7 @@ mod tests {
             ignore_cargo_manifest: None,
             compilers: Some(vec!["rust".to_string()]),
             binaries: vec![],
+            compiler_cache: None,
         };
 
         let empty_target_config = RustBackendConfig::new_with_clean_environment();
