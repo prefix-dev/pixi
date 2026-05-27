@@ -18,7 +18,7 @@ use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::initialize_rayon_once;
 
-use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath};
+use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
 
 /// Run a command and install it in a temporary environment.
 ///
@@ -155,8 +155,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()
         .with_context(|| format!("failed to execute '{}'", command))?;
 
-    // Return the exit code of the command
-    std::process::exit(status.code().unwrap_or(1));
+    // Mirror the child's exit (including signal deaths like SIGSEGV) so the
+    // parent shell sees the same outcome it would if the child had run
+    // directly.
+    process_exit::exit_with_status(status);
 }
 
 /// Creates a prefix for the `pixi exec` command.
