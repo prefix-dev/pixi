@@ -62,7 +62,10 @@ fn user_agent() -> String {
 /// the OS, architecture and target version. It never blocks or fails the
 /// update (short timeout, all errors ignored) and is skipped when
 /// `PIXI_NO_TELEMETRY` or `DO_NOT_TRACK` is set.
-async fn send_update_ping(target_version: Option<&Version>) {
+async fn send_update_ping(
+    client: &reqwest_middleware::ClientWithMiddleware,
+    target_version: Option<&Version>,
+) {
     if std::env::var_os("PIXI_NO_TELEMETRY").is_some() || std::env::var_os("DO_NOT_TRACK").is_some()
     {
         return;
@@ -82,9 +85,6 @@ async fn send_update_ping(target_version: Option<&Version>) {
         std::env::consts::ARCH,
     );
 
-    let Ok((_, client)) = build_reqwest_clients(None, None) else {
-        return;
-    };
     let _ = client
         .get(consts::INSTALL_PING_URL)
         .query(&[
@@ -450,7 +450,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     }
 
     // Best-effort anonymous ping; must not affect the update result.
-    send_update_ping(target_version.as_ref()).await;
+    send_update_ping(&client, target_version.as_ref()).await;
 
     Ok(())
 }
