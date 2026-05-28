@@ -9,7 +9,7 @@ use toml_span::{
     value::ValueInner,
 };
 
-use crate::{PixiPlatform, PixiPlatformName};
+use crate::{PixiPlatform, PixiPlatformName, platform::is_subdir_default};
 
 /// This type is used to represent the platform in the manifest file. The
 /// [`Platform`] type from rattler contains more platforms than we actually
@@ -209,18 +209,19 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                     None => synthesize_name(subdir, &declared, table_span)?,
                 };
 
-                let platform = PixiPlatform::new(name, subdir, declared).map_err(|e| {
-                    Error {
-                        kind: ErrorKind::Custom(
-                            format!(
-                                "platform entry rejected: {e}; either drop the virtual packages or give the entry a `name` distinct from its subdir",
-                            )
-                            .into(),
-                        ),
-                        span: table_span,
-                        line_info: None,
-                    }
-                })?;
+                let platform =
+                    PixiPlatform::new_with_defaults(name, subdir, declared).map_err(|e| {
+                        Error {
+                            kind: ErrorKind::Custom(
+                                format!(
+                                    "platform entry rejected: {e}; either drop the virtual packages or give the entry a `name` distinct from its subdir",
+                                )
+                                .into(),
+                            ),
+                            span: table_span,
+                            line_info: None,
+                        }
+                    })?;
                 Ok(TomlPixiPlatform(platform))
             }
             other => Err(expected("a string or table", other, value.span).into()),
@@ -241,11 +242,16 @@ impl Serialize for TomlPixiPlatform {
         let subdir_str = platform.subdir().to_string();
         let declared = platform.declared_virtual_packages();
 
-        if name == subdir_str && declared.is_empty() {
+        let (friendly, raw) = classify_virtual_packages(platform.subdir(), declared);
+        // Subdir platforms (`name == subdir`) carry the subdir defaults, but
+        // the defaults are filtered out by `classify_virtual_packages` so
+        // `friendly` and `raw` end up empty -- the bare-string shape covers
+        // them exactly. Falls through to the inline-table shape as soon as
+        // there is a non-default virtual package or a custom name.
+        if name == subdir_str && friendly.is_empty() && raw.is_empty() {
             return serializer.serialize_str(name);
         }
 
-        let (friendly, raw) = classify_virtual_packages(declared);
         let auto_name = synthesize_name_string(platform.subdir(), declared);
         let emit_name = name != auto_name;
 
@@ -441,7 +447,7 @@ pub(crate) fn synthesize_name_string(
     subdir: Platform,
     declared: &[GenericVirtualPackage],
 ) -> String {
-    let (friendly, raw) = classify_virtual_packages(declared);
+    let (friendly, raw) = classify_virtual_packages(subdir, declared);
     let mut parts: Vec<String> = vec![subdir.as_str().to_string()];
     for (key, value) in friendly {
         parts.push(format!("{key}-{}", sanitize_name_segment(&value)));
@@ -492,14 +498,24 @@ type RawEntry = (String, String);
 /// out in canonical [`FRIENDLY_VIRTUAL_PACKAGES`] order so the serialized
 /// table and the auto-derived name are stable; raw entries are sorted
 /// alphabetically by conda name.
+///
+/// Virtual packages whose value matches the subdir default
+/// (`is_subdir_default`) are filtered out so that materialised defaults
+/// don't leak into the on-disk shape or the synthesised platform name.
 fn classify_virtual_packages(
+    subdir: Platform,
     declared: &[GenericVirtualPackage],
 ) -> (Vec<FriendlyEntry>, Vec<RawEntry>) {
+    let customised: Vec<&GenericVirtualPackage> = declared
+        .iter()
+        .filter(|gvp| !is_subdir_default(gvp, subdir))
+        .collect();
+
     let mut friendly = Vec::new();
     let mut consumed: HashSet<&str> = HashSet::new();
 
     for &(friendly_key, conda_name, kind) in FRIENDLY_VIRTUAL_PACKAGES {
-        let Some(package) = declared
+        let Some(package) = customised
             .iter()
             .find(|p| p.name.as_normalized() == conda_name)
         else {
@@ -525,9 +541,10 @@ fn classify_virtual_packages(
         friendly.push((friendly_key, value));
     }
 
-    let mut leftover: Vec<&GenericVirtualPackage> = declared
+    let mut leftover: Vec<&GenericVirtualPackage> = customised
         .iter()
         .filter(|p| !consumed.contains(p.name.as_normalized()))
+        .copied()
         .collect();
     leftover.sort_by(|a, b| a.name.as_normalized().cmp(b.name.as_normalized()));
 
@@ -556,11 +573,11 @@ pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit:
     let subdir_str = platform.subdir().to_string();
     let declared = platform.declared_virtual_packages();
 
-    if name == subdir_str && declared.is_empty() {
+    let (friendly, raw) = classify_virtual_packages(platform.subdir(), declared);
+    if name == subdir_str && friendly.is_empty() && raw.is_empty() {
         return toml_edit::Value::from(name);
     }
 
-    let (friendly, raw) = classify_virtual_packages(declared);
     let auto_name = synthesize_name_string(platform.subdir(), declared);
 
     let mut table = toml_edit::InlineTable::new();
@@ -628,21 +645,30 @@ mod test {
 
     #[test]
     fn test_workspace_platform_bare_string() {
+        // The bare-string form parses to a subdir platform with the subdir
+        // defaults materialised.
         let parsed = TopLevel::from_toml_str(r#"platform = "linux-64""#).unwrap();
         assert_eq!(parsed.platform.name().as_str(), "linux-64");
         assert_eq!(parsed.platform.subdir(), Platform::Linux64);
-        assert!(virtual_package_specs(&parsed.platform).is_empty());
+        assert!(parsed.platform.is_subdir_platform());
+        assert_eq!(
+            parsed.platform.declared_virtual_packages(),
+            crate::PixiPlatform::from_subdir(Platform::Linux64).declared_virtual_packages(),
+        );
     }
 
     /// Bare subdir as `name`: same outcome as the bare-string form -- the
-    /// platform is a subdir-platform with no declared virtual packages.
+    /// platform is a subdir platform carrying the materialised defaults.
     #[test]
     fn test_workspace_platform_name_only_is_subdir() {
         let parsed = TopLevel::from_toml_str(r#"platform = { name = "osx-arm64" }"#).unwrap();
         assert_eq!(parsed.platform.name().as_str(), "osx-arm64");
         assert_eq!(parsed.platform.subdir(), Platform::OsxArm64);
-        assert!(virtual_package_specs(&parsed.platform).is_empty());
         assert!(parsed.platform.is_subdir_platform());
+        assert_eq!(
+            parsed.platform.declared_virtual_packages(),
+            crate::PixiPlatform::from_subdir(Platform::OsxArm64).declared_virtual_packages(),
+        );
     }
 
     /// `platform` alone: subdir taken from the value, name auto-derived to the
@@ -664,13 +690,17 @@ mod test {
         assert_eq!(parsed.platform.subdir(), Platform::Linux64);
         assert_eq!(
             virtual_package_specs(&parsed.platform),
-            vec!["__cuda=12.0".to_string(), "__glibc=2.28".to_string()]
+            vec![
+                "__cuda=12.0".to_string(),
+                "__glibc=2.28".to_string(),
+                "__unix=0".to_string(),
+                "__linux=4.18".to_string(),
+                "__archspec=0=x86_64".to_string(),
+            ]
         );
-        // Auto-derived in canonical order: cuda then libc.
-        assert_eq!(
-            parsed.platform.name().as_str(),
-            "linux-64-cuda-12-0-libc-2-28"
-        );
+        // `libc = "2.28"` matches the linux-64 default and is elided from the
+        // synthesised name, leaving only the truly customised `cuda`.
+        assert_eq!(parsed.platform.name().as_str(), "linux-64-cuda-12-0");
     }
 
     #[test]
@@ -718,7 +748,13 @@ mod test {
         assert_eq!(parsed.platform.subdir(), Platform::LinuxAarch64);
         assert_eq!(
             virtual_package_specs(&parsed.platform),
-            vec!["__cuda=12.8".to_string()]
+            vec![
+                "__cuda=12.8".to_string(),
+                "__unix=0".to_string(),
+                "__linux=4.18".to_string(),
+                "__glibc=2.28".to_string(),
+                "__archspec=0=aarch64".to_string(),
+            ]
         );
     }
 
@@ -733,7 +769,13 @@ mod test {
         .unwrap();
         assert_eq!(
             virtual_package_specs(&parsed.platform),
-            vec!["__future_pkg=1.2".to_string()]
+            vec![
+                "__future_pkg=1.2".to_string(),
+                "__unix=0".to_string(),
+                "__linux=4.18".to_string(),
+                "__glibc=2.28".to_string(),
+                "__archspec=0=x86_64".to_string(),
+            ]
         );
         assert_eq!(parsed.platform.name().as_str(), "linux-64-future-pkg-1-2");
     }
@@ -828,6 +870,12 @@ mod test {
         subdir: Platform,
         declared: Vec<GenericVirtualPackage>,
     ) -> PixiPlatform {
+        // A subdir-named entry with no user declarations is the
+        // subdir-platform shape; construct it via `from_subdir` so the
+        // materialised defaults end up in the declared list.
+        if name == subdir.as_str() && declared.is_empty() {
+            return PixiPlatform::from_subdir(subdir);
+        }
         PixiPlatform::new(
             PixiPlatformName::try_from(name).expect("valid platform name"),
             subdir,
@@ -932,6 +980,9 @@ mod test {
 
     #[test]
     fn test_roundtrip_friendly_table() {
+        // `libc = "2.28"` is exactly the linux-64 default, so it's elided
+        // from the serialised shape (the next parse will re-materialise it
+        // from defaults). `cuda` has no default and survives the round-trip.
         let original = r#"platform = { platform = "linux-64", cuda = "12.0", libc = "2.28" }"#;
         let parsed = TopLevel::from_toml_str(original).unwrap();
         let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
@@ -940,7 +991,6 @@ mod test {
             serde_json::json!({
                 "platform": "linux-64",
                 "cuda": "12.0",
-                "libc": "2.28",
             }),
         );
     }

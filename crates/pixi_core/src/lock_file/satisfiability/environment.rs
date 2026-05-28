@@ -126,17 +126,38 @@ pub fn verify_environment_satisfiability(
         let Some(workspace_platform) = workspace_manifest.workspace.platform_by_name(&name) else {
             continue;
         };
+        // Compare only the user-customised virtual packages. The subdir
+        // defaults (`__unix`, `__linux`, `__glibc`, `__win`, `__osx`,
+        // `__archspec`) are materialised into the workspace platform at
+        // parse/edit time, but they are pixi's baseline assumption rather
+        // than user intent. Filtering them on both sides keeps lock files
+        // produced before the defaults-materialisation change satisfying,
+        // and keeps the comparison focused on what the user actually
+        // changed (e.g. adding/removing `__cuda` or pinning `__glibc` to
+        // a non-default version).
+        let workspace_subdir = workspace_platform.subdir();
         let expected_vps: Vec<String> = workspace_platform
             .declared_virtual_packages()
             .iter()
+            .filter(|gvp| !pixi_manifest::platform::is_subdir_default(gvp, workspace_subdir))
             .map(|vp| vp.to_string())
             .collect();
-        let same_subdir = workspace_platform.subdir() == locked.subdir;
+        let locked_vps: Vec<String> = locked
+            .virtual_packages
+            .iter()
+            .filter(|raw| {
+                pixi_manifest::platform::parse_locked_virtual_package(raw)
+                    .map(|gvp| !pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
+                    .unwrap_or(true)
+            })
+            .cloned()
+            .collect();
+        let same_subdir = workspace_subdir == locked.subdir;
         // Compare VPs as multisets: lockfile ordering is not part of the
         // platform's identity for satisfiability purposes.
         let same_vps = {
             let mut a = expected_vps.clone();
-            let mut b = locked.virtual_packages.clone();
+            let mut b = locked_vps.clone();
             a.sort();
             b.sort();
             a == b
@@ -145,10 +166,10 @@ pub fn verify_environment_satisfiability(
             return Err(EnvironmentUnsat::PlatformDefinitionChanged(
                 PlatformDefinitionChanged {
                     name,
-                    expected_subdir: workspace_platform.subdir(),
+                    expected_subdir: workspace_subdir,
                     found_subdir: locked.subdir,
                     expected_virtual_packages: expected_vps,
-                    found_virtual_packages: locked.virtual_packages.clone(),
+                    found_virtual_packages: locked_vps,
                 },
             ));
         }

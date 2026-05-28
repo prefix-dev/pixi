@@ -529,21 +529,33 @@ mod test {
             .iter()
             .map(|vp| vp.to_string())
             .collect();
-        assert_eq!(declared, vec!["__cuda=12.0".to_string()]);
+        assert_eq!(
+            declared,
+            vec![
+                "__cuda=12.0".to_string(),
+                "__unix=0=0".to_string(),
+                "__linux=4.18".to_string(),
+                "__glibc=2.28".to_string(),
+                "__archspec=0=x86_64".to_string(),
+            ],
+            "rich platforms materialise the subdir defaults alongside the declared __cuda; \
+             `__unix=0=0` reflects rattler's version=0, build_string=\"0\" shape",
+        );
 
-        // Projecting workspace platforms to conda subdirs drops the
-        // workspace platform name and virtual-package metadata.
+        // Subdir entries (`linux-64`, `osx-arm64` with name == subdir)
+        // are still recognisable by `is_subdir_platform`. Their declared
+        // virtual-package list is the subdir defaults rather than empty.
         let subdirs: Vec<_> = workspace
             .platforms
             .iter()
-            .filter(|wp| wp.declared_virtual_packages().is_empty())
+            .filter(|wp| wp.is_subdir_platform())
             .map(|wp| wp.subdir())
             .collect();
         assert_eq!(
             subdirs,
             vec![
                 rattler_conda_types::Platform::Linux64,
-                rattler_conda_types::Platform::OsxArm64
+                rattler_conda_types::Platform::OsxArm64,
             ]
         );
     }

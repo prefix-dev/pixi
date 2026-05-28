@@ -448,10 +448,11 @@ async fn execute_add(
             );
         }
         let specs = args.virtual_packages.into_specs(subdir, &raw_specs)?;
-        platforms.push(PixiPlatform::new(name, subdir, specs).into_diagnostic()?);
+        platforms.push(PixiPlatform::new_with_defaults(name, subdir, specs).into_diagnostic()?);
     } else {
         for (name, subdir) in parsed {
-            platforms.push(PixiPlatform::new(name, subdir, Vec::new()).into_diagnostic()?);
+            platforms
+                .push(PixiPlatform::new_with_defaults(name, subdir, Vec::new()).into_diagnostic()?);
         }
     }
 
@@ -748,7 +749,7 @@ async fn execute_show_multi(
 /// reader doesn't mistake it for a workspace declaration. No `Used by` lines
 /// because nothing in the manifest points at this entry.
 fn print_autodetected_host() {
-    let host = PixiPlatform::from_subdir(Platform::current());
+    let host = PixiPlatform::auto_detected(Platform::current());
     let mut stdout = std::io::stdout();
 
     let _ = writeln!(
@@ -925,7 +926,7 @@ fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::V
 /// shape as a real platform entry plus an `is_autodetected: true` marker so
 /// downstream tooling can tell synthetic rows apart from declared ones.
 fn autodetected_to_json() -> serde_json::Value {
-    let host = PixiPlatform::from_subdir(Platform::current());
+    let host = PixiPlatform::auto_detected(Platform::current());
     let detected: Vec<String> = match host.virtual_packages() {
         Ok(d) => d
             .into_generic_virtual_packages()

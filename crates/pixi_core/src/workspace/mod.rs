@@ -714,6 +714,11 @@ impl Workspace {
     /// is intentionally implicit: within a single workspace lifetime the host
     /// subdir and `PIXI_OVERRIDE_PLATFORM` are assumed to be stable.
     pub(crate) fn fallback_platform(&self, current: Platform) -> &PixiPlatform {
+        // The fallback stands in for a workspace that declares no platforms;
+        // solve-time code paths read its `declared_virtual_packages()` as
+        // their source of truth (no more separate "compute defaults for the
+        // subdir" step). `from_subdir` materialises the subdir defaults so
+        // the fallback behaves like any other subdir platform.
         self.fallback_platform
             .get_or_init(|| PixiPlatform::from_subdir(current))
     }

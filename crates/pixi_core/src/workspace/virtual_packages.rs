@@ -3,83 +3,69 @@ use crate::lock_file::virtual_packages::{
 };
 use crate::workspace::{Environment, errors::UnsupportedPlatformError};
 use miette::Diagnostic;
-use pixi_default_versions::{
-    default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
-};
 use pixi_manifest::PixiPlatform;
-use rattler_conda_types::{GenericVirtualPackage, Version};
+use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::LockFile;
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
 use thiserror::Error;
 
-/// Returns a reasonable modern set of virtual packages that should be safe
-/// enough to assume. At the time of writing, this is in sync with the
-/// conda-lock set of minimal virtual packages. <https://github.com/conda/conda-lock/blob/3d36688278ebf4f65281de0846701d61d6017ed2/conda_lock/virtual_package.py#L175>
+/// Convert a [`PixiPlatform`]'s declared virtual packages into the typed
+/// [`VirtualPackage`] form rattler's solver wants.
 ///
-/// Virtual packages declared on `platform` win; otherwise the defaults from
-/// `pixi_default_versions` fill in linux/libc/win/osx. `__cuda` is only
-/// included when the platform declares it.
+/// The subdir baseline is no longer recomputed here: every real subdir or
+/// rich platform already carries the materialised defaults via
+/// [`PixiPlatform::from_subdir`] / [`PixiPlatform::new_with_defaults`], and
+/// the only platform that intentionally has an empty declared list is the
+/// `auto_detected` host-display placeholder, which never reaches this path.
+/// The result mirrors what the conda-lock minimal-virtual-package set used
+/// to spell out by hand. <https://github.com/conda/conda-lock/blob/3d36688278ebf4f65281de0846701d61d6017ed2/conda_lock/virtual_package.py#L175>
+///
+/// Unknown conda virtual-package names (those rattler has no typed slot for)
+/// are dropped -- they round-trip through the manifest but never influence
+/// solving directly, the same behavior the previous implementation had.
 pub(crate) fn get_minimal_virtual_packages(platform: &PixiPlatform) -> Vec<VirtualPackage> {
-    let subdir = platform.subdir();
-    let declared = platform.declared_virtual_packages();
-    let mut virtual_packages: Vec<VirtualPackage> = vec![];
-
-    if subdir.is_unix() {
-        virtual_packages.push(VirtualPackage::Unix);
-    }
-    if subdir.is_linux() {
-        let version = declared_version(declared, "__linux").unwrap_or_else(default_linux_version);
-        virtual_packages.push(VirtualPackage::Linux(Linux { version }));
-
-        let (family, version) = declared_libc(declared)
-            .unwrap_or_else(|| ("glibc".to_string(), default_glibc_version()));
-        virtual_packages.push(VirtualPackage::LibC(LibC { family, version }));
-    }
-
-    if subdir.is_windows() {
-        let version =
-            declared_version(declared, "__win").or_else(|| Some(default_windows_version()));
-        virtual_packages.push(VirtualPackage::Win(rattler_virtual_packages::Windows {
-            version,
-        }));
-    }
-
-    if subdir.is_osx() {
-        let version =
-            declared_version(declared, "__osx").unwrap_or_else(|| default_mac_os_version(subdir));
-        virtual_packages.push(VirtualPackage::Osx(Osx { version }));
-    }
-
-    if let Some(version) = declared_version(declared, "__cuda") {
-        virtual_packages.push(VirtualPackage::Cuda(Cuda { version }));
-    }
-
-    // Archspec is still subdir-derived: rattler's Archspec needs a microarch
-    // database lookup, not just a string from the manifest.
-    if let Some(spec) = Archspec::from_platform(subdir) {
-        virtual_packages.push(VirtualPackage::Archspec(spec));
-    }
-
-    virtual_packages
-}
-
-fn declared_version(declared: &[GenericVirtualPackage], name: &str) -> Option<Version> {
-    declared
+    platform
+        .declared_virtual_packages()
         .iter()
-        .find(|gvp| gvp.name.as_normalized() == name)
-        .map(|gvp| gvp.version.clone())
+        .filter_map(generic_to_virtual_package)
+        .collect()
 }
 
-fn declared_libc(declared: &[GenericVirtualPackage]) -> Option<(String, Version)> {
-    declared.iter().find_map(|gvp| {
-        let family = match gvp.name.as_normalized() {
-            "__glibc" => "glibc",
-            "__musl" => "musl",
-            "__eglibc" => "eglibc",
-            _ => return None,
-        };
-        Some((family.to_string(), gvp.version.clone()))
-    })
+/// Translate a single [`GenericVirtualPackage`] into the typed
+/// [`VirtualPackage`] variant rattler expects. Returns `None` for entries
+/// that don't have a typed counterpart (rattler-unknown `__*` names).
+fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPackage> {
+    match gvp.name.as_normalized() {
+        "__unix" => Some(VirtualPackage::Unix),
+        "__linux" => Some(VirtualPackage::Linux(Linux {
+            version: gvp.version.clone(),
+        })),
+        family @ ("__glibc" | "__musl" | "__eglibc") => Some(VirtualPackage::LibC(LibC {
+            family: family.trim_start_matches('_').to_string(),
+            version: gvp.version.clone(),
+        })),
+        "__win" => Some(VirtualPackage::Win(rattler_virtual_packages::Windows {
+            version: Some(gvp.version.clone()),
+        })),
+        "__osx" => Some(VirtualPackage::Osx(Osx {
+            version: gvp.version.clone(),
+        })),
+        "__cuda" => Some(VirtualPackage::Cuda(Cuda {
+            version: gvp.version.clone(),
+        })),
+        "__archspec" => {
+            // Rattler maps an archspec string through a microarch database
+            // lookup; an empty/"0" build-string means "unknown microarch"
+            // and `from_name` returns the generic catch-all in that case.
+            let name = if gvp.build_string.is_empty() || gvp.build_string == "0" {
+                return Some(VirtualPackage::Archspec(Archspec::Unknown));
+            } else {
+                gvp.build_string.as_str()
+            };
+            Some(VirtualPackage::Archspec(Archspec::from_name(name)))
+        }
+        _ => None,
+    }
 }
 
 /// An error that occurs when the current platform does not satisfy the minimal virtual package
@@ -125,8 +111,9 @@ pub fn verify_current_platform_can_run_environment(
 }
 impl Environment<'_> {
     /// Returns the set of virtual packages to use for the specified platform.
-    /// Virtual-package versions are taken from `platform`'s declarations,
-    /// with `pixi_default_versions` filling in linux/libc/win/osx defaults.
+    /// Reads them straight off `platform.declared_virtual_packages()`: the
+    /// subdir baseline is materialised by [`PixiPlatform::from_subdir`], so
+    /// there is no separate "compute defaults" step.
     pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<VirtualPackage> {
         get_minimal_virtual_packages(platform)
     }

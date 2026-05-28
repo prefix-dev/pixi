@@ -626,14 +626,21 @@ fn synthesise_for_feature(
             })
             .cloned()
             .collect();
-        let name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
+        let mut name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
+        // A sysreq that matches the subdir defaults collapses the name to the
+        // bare subdir, a reserved name a platform entry can't carry. Keep the
+        // declaration under a distinct `-generic` name instead of failing the
+        // subdir-platform invariant.
+        if !declared.is_empty() && name_str == subdir.as_str() {
+            name_str = format!("{name_str}-generic");
+        }
         let name = PixiPlatformName::try_from(name_str.as_str()).map_err(|e| {
             TomlError::from(GenericError::new(format!(
                 "synthesised platform name '{name_str}' is not a valid pixi platform name: {e}",
             )))
         })?;
         target.insert(
-            PixiPlatform::new(name.clone(), subdir, declared).map_err(|e| {
+            PixiPlatform::new_with_defaults(name.clone(), subdir, declared).map_err(|e| {
                 TomlError::from(GenericError::new(format!(
                     "synthesised platform '{name}' is invalid: {e}",
                 )))
@@ -941,6 +948,39 @@ mod test {
             .get(&FeatureName::DEFAULT)
             .unwrap();
         assert!(default.platforms.is_none());
+    }
+
+    /// A legacy sysreq that exactly matches the subdir defaults (glibc on
+    /// linux-64) collapses the synthesised name to the bare subdir, a reserved
+    /// name a platform entry can't carry. The migration must fall back to
+    /// `-generic` rather than failing with `IsSubdirPlatform`. Regression for
+    /// a real `pixi install` failure on such manifests.
+    #[test]
+    fn test_system_requirements_migration_default_matching_sysreq_uses_generic_name() {
+        let glibc = pixi_default_versions::default_glibc_version();
+        let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            format!(
+                r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64"]
+
+            [system-requirements]
+            libc = "{glibc}"
+            "#
+            ),
+            Path::new(""),
+        )
+        .unwrap();
+
+        let names: Vec<&str> = workspace_manifest
+            .workspace
+            .platforms
+            .iter()
+            .map(|p| p.name().as_str())
+            .collect();
+        assert_eq!(names, vec!["linux-64-generic"], "got {names:?}");
     }
 
     #[test]

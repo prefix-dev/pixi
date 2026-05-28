@@ -179,7 +179,7 @@ def test_add_custom_name_with_libc_on_linux(pixi: Path, tmp_pixi_workspace: Path
         "add",
         "modern-linux=linux-64",
         "--libc",
-        "2.28",
+        "2.40",
         "--no-install",
     )
     entry = next(
@@ -188,7 +188,8 @@ def test_add_custom_name_with_libc_on_linux(pixi: Path, tmp_pixi_workspace: Path
         if isinstance(p, dict) and p["name"] == "modern-linux"
     )
     # `--libc` shortcut writes the `libc` key (mapped to `__glibc` internally).
-    assert entry["libc"] == "2.28"
+    # Use a non-default value (the linux-64 default `__glibc` is elided).
+    assert entry["libc"] == "2.40"
 
 
 def test_add_libc_on_windows_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -218,7 +219,7 @@ def test_add_linux_macos_windows_friendly_flags(pixi: Path, tmp_pixi_workspace: 
         pixi, tmp_pixi_workspace, "add", "modern-mac=osx-arm64", "--macos", "14.0", "--no-install"
     )
     _run_platform(
-        pixi, tmp_pixi_workspace, "add", "modern-win=win-64", "--windows", "10", "--no-install"
+        pixi, tmp_pixi_workspace, "add", "modern-win=win-64", "--windows", "11", "--no-install"
     )
     entries = {
         p["name"]: p
@@ -227,7 +228,7 @@ def test_add_linux_macos_windows_friendly_flags(pixi: Path, tmp_pixi_workspace: 
     }
     assert entries["modern-linux"]["linux"] == "5.10"
     assert entries["modern-mac"]["macos"] == "14.0"
-    assert entries["modern-win"]["windows"] == "10"
+    assert entries["modern-win"]["windows"] == "11"
 
 
 @pytest.mark.parametrize(
@@ -292,7 +293,7 @@ def test_add_raw_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) 
         "add",
         "rich-linux=linux-64",
         "__cuda=12.0",
-        "__glibc=2.28",
+        "__glibc=2.40",
         "--no-install",
     )
     entry = next(
@@ -301,7 +302,7 @@ def test_add_raw_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) 
         if isinstance(p, dict) and p["name"] == "rich-linux"
     )
     assert entry["cuda"] == "12.0"
-    assert entry["libc"] == "2.28"
+    assert entry["libc"] == "2.40"
 
 
 def test_add_duplicate_virtual_package_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -571,7 +572,7 @@ def test_edit_add_second_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         "edit",
         "gpu-linux",
         "--libc",
-        "2.28",
+        "2.40",
         "--no-install",
     )
     entry = next(
@@ -580,7 +581,7 @@ def test_edit_add_second_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
     assert entry["cuda"] == "11.0"
-    assert entry["libc"] == "2.28"
+    assert entry["libc"] == "2.40"
 
 
 def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -591,7 +592,7 @@ def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         "edit",
         "gpu-linux",
         "--libc",
-        "2.28",
+        "2.40",
         "--no-install",
     )
     _run_platform(
@@ -608,7 +609,7 @@ def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
-    assert entry["libc"] == "2.28"
+    assert entry["libc"] == "2.40"
     assert "cuda" not in entry
 
 

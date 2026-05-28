@@ -141,9 +141,16 @@ impl Workspace {
     ) -> Vec<&PixiPlatform> {
         let candidate_subdirs = self.candidate_subdirs(current);
 
+        // Subdir-default virtual packages are pixi's assumed baseline for
+        // the target subdir, not a host requirement -- a `win-64` entry's
+        // materialised `__win` would otherwise rule out matching when this
+        // process happens to run on linux (cross-platform `pixi info`,
+        // CI on a different host, etc.). Only the user-customised VPs
+        // need to be satisfied by the host.
         let satisfies_system = |p: &&PixiPlatform| {
             p.declared_virtual_packages()
                 .iter()
+                .filter(|declared| !crate::platform::is_subdir_default(declared, p.subdir()))
                 .all(|declared| satisfied_by_system(declared, system_virtual_packages))
         };
 
@@ -209,6 +216,11 @@ impl Workspace {
                 .filter(|p| env_platforms.contains(p.name()))
             {
                 for declared in platform.declared_virtual_packages() {
+                    // Skip materialised subdir defaults: they're not a host
+                    // requirement, see `possible_pixi_platforms`.
+                    if crate::platform::is_subdir_default(declared, platform.subdir()) {
+                        continue;
+                    }
                     if !satisfied_by_system(declared, system_virtual_packages)
                         && !unsatisfied
                             .iter()

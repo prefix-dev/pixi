@@ -12,7 +12,7 @@ mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
 mod package;
-mod platform;
+pub mod platform;
 mod preview;
 pub mod pypi;
 pub mod pyproject;
