@@ -8,7 +8,7 @@ pub use canonical_spec::{CanonicalGit, CanonicalPath, CanonicalSourceLocation, C
 pub use dev_source_record::DevSourceRecord;
 pub use lock_file_resolver::{LockFileResolver, LockFileResolverError};
 
-use std::{path::Path, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 pub use pinned_source::{
     LockedGitUrl, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout, PinnedGitSpec,
@@ -55,18 +55,20 @@ impl PixiRecord {
 
     /// Convert to `CondaPackageData` with paths made relative to
     /// `workspace_root`. For source records, each entry of `build_packages` /
-    /// `host_packages` is registered into `builder` first (recursively) so
-    /// the returned source data's `source_data` references them by handle.
+    /// `host_packages` is registered into the writer's builder first
+    /// (recursively) so the returned source data's `source_data` references
+    /// them by handle. The writer's cache memoizes shared build/host
+    /// subtrees across calls; see [`LockFileWriter`].
     pub fn into_conda_package_data(
         self,
-        builder: &mut LockFileBuilder,
+        writer: &mut LockFileWriter<'_>,
         workspace_root: &Path,
     ) -> CondaPackageData {
         match self {
             PixiRecord::Binary(record) => Arc::unwrap_or_clone(record).into(),
             PixiRecord::Source(record) => {
                 let mut source = Arc::unwrap_or_clone(record);
-                let source_data = register_source_deps(builder, &mut source, workspace_root);
+                let source_data = register_source_deps(writer, &mut source, workspace_root);
                 let mut data = source.into_conda_source_data(workspace_root);
                 data.source_data = source_data;
                 CondaPackageData::Source(Box::new(data))
@@ -152,11 +154,52 @@ impl From<Arc<RepoDataRecord>> for PixiRecord {
 ///
 /// Call [`try_into_resolved`](Self::try_into_resolved) to attempt the
 /// conversion to a fully-resolved [`PixiRecord`].
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone)]
 pub enum UnresolvedPixiRecord {
     Binary(Arc<RepoDataRecord>),
     Source(Arc<UnresolvedSourceRecord>),
 }
+
+/// Identity-based hashing and equality.
+///
+/// Binary records are identified by their URL; source records by their
+/// `(name, manifest_source, identifier_hash)` tuple. The default derive
+/// would recurse through `Source(_)`'s `build_packages` / `host_packages`,
+/// which is exponential on deeply-shared ROS graphs. Each child's
+/// identifier already encapsulates its content, so identity equality is
+/// content-equivalent.
+impl std::hash::Hash for UnresolvedPixiRecord {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            UnresolvedPixiRecord::Binary(binary) => {
+                0u8.hash(state);
+                binary.url.as_str().hash(state);
+            }
+            UnresolvedPixiRecord::Source(source) => {
+                1u8.hash(state);
+                source.name().as_source().hash(state);
+                source.manifest_source.hash(state);
+                source.identifier_hash.hash(state);
+            }
+        }
+    }
+}
+
+impl PartialEq for UnresolvedPixiRecord {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (UnresolvedPixiRecord::Binary(a), UnresolvedPixiRecord::Binary(b)) => a.url == b.url,
+            (UnresolvedPixiRecord::Source(a), UnresolvedPixiRecord::Source(b)) => {
+                a.name() == b.name()
+                    && a.manifest_source == b.manifest_source
+                    && a.identifier_hash == b.identifier_hash
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Eq for UnresolvedPixiRecord {}
 
 impl UnresolvedPixiRecord {
     /// The name of the package.
@@ -253,20 +296,20 @@ impl UnresolvedPixiRecord {
         }
     }
 
-    /// Convert to `CondaPackageData` for lock file write. For source records,
-    /// `build_packages` / `host_packages` are registered into `builder`
-    /// (recursively) so the returned source data's `source_data` references
-    /// them by handle.
+    /// Convert to `CondaPackageData` for lock file write. Source records'
+    /// `build_packages` / `host_packages` are registered into the writer's
+    /// builder recursively, with the writer's cache deduping shared
+    /// subtrees. See [`LockFileWriter`].
     pub fn into_conda_package_data(
         self,
-        builder: &mut LockFileBuilder,
+        writer: &mut LockFileWriter<'_>,
         workspace_root: &Path,
     ) -> CondaPackageData {
         match self {
             UnresolvedPixiRecord::Binary(record) => Arc::unwrap_or_clone(record).into(),
             UnresolvedPixiRecord::Source(record) => {
                 let mut source = Arc::unwrap_or_clone(record);
-                let source_data = register_source_deps(builder, &mut source, workspace_root);
+                let source_data = register_source_deps(writer, &mut source, workspace_root);
                 let mut data = source.into_conda_source_data(workspace_root);
                 data.source_data = source_data;
                 CondaPackageData::Source(Box::new(data))
@@ -303,22 +346,65 @@ impl UnresolvedPixiRecord {
     }
 }
 
-/// Register a source record's `build_packages` / `host_packages` into
-/// `builder` (recursively) and build a [`SourceData`] referencing the
-/// resulting handles. Leaves `source` with empty build/host package vecs —
-/// the canonical form lives in the lock file from this point on.
+#[derive(Debug, Hash, Eq, PartialEq, Clone)]
+struct SourceCacheKey {
+    name: PackageName,
+    hash: String,
+    location: UrlOrPath,
+}
+
+/// Memoizes registrations of shared source subtrees so a record reached
+/// under multiple parents is descended once. Source records are the only
+/// recursive case; binary records are leaves and must keep flowing through
+/// `LockFileBuilder::register_conda_package` so its per-URL `merge` can
+/// layer run_exports / purls / hashes from later registrations onto an
+/// earlier one.
+///
+/// Keyed on the same identity rattler_lock uses to dedupe source records
+/// (`(name, identifier_hash, location)`). Pointer-identity keys would miss
+/// because `From<PixiRecord> for UnresolvedPixiRecord` rewraps source Arcs
+/// at the dispatcher boundary.
+#[derive(Default)]
+struct RegistrationCache {
+    sources: HashMap<SourceCacheKey, PackageHandle>,
+}
+
+/// Pairs a [`LockFileBuilder`] with a private registration cache so they
+/// flow through the lock file write path as one argument.
+///
+/// Construct one at the start of a rebuild and pass it to every
+/// `into_conda_package_data` call against the same builder. The cache lives
+/// for as long as the writer does, so dedup spans the whole rebuild. Use
+/// `writer.builder` directly for non-registration builder calls.
+pub struct LockFileWriter<'b> {
+    pub builder: &'b mut LockFileBuilder,
+    cache: RegistrationCache,
+}
+
+impl<'b> LockFileWriter<'b> {
+    pub fn new(builder: &'b mut LockFileBuilder) -> Self {
+        Self {
+            builder,
+            cache: RegistrationCache::default(),
+        }
+    }
+}
+
+/// Register a source record's `build_packages` / `host_packages` recursively
+/// and build a [`SourceData`] referencing the resulting handles. Drains
+/// `source`'s build/host vecs; canonical form lives in the lock file after.
 fn register_source_deps<D>(
-    builder: &mut LockFileBuilder,
+    writer: &mut LockFileWriter<'_>,
     source: &mut source_record::SourceRecord<D>,
     workspace_root: &Path,
 ) -> SourceData {
     let build_handles = register_handles(
-        builder,
+        writer,
         std::mem::take(&mut source.build_packages),
         workspace_root,
     );
     let host_handles = register_handles(
-        builder,
+        writer,
         std::mem::take(&mut source.host_packages),
         workspace_root,
     );
@@ -331,16 +417,50 @@ fn register_source_deps<D>(
 }
 
 fn register_handles(
-    builder: &mut LockFileBuilder,
+    writer: &mut LockFileWriter<'_>,
     deps: Vec<UnresolvedPixiRecord>,
     workspace_root: &Path,
 ) -> Vec<PackageHandle> {
     deps.into_iter()
-        .map(|dep| {
-            let data = dep.into_conda_package_data(builder, workspace_root);
-            builder.register_conda_package(data)
-        })
+        .map(|dep| register_dep(writer, dep, workspace_root))
         .collect()
+}
+
+/// Register a single build/host dependency, hitting the cache first.
+fn register_dep(
+    writer: &mut LockFileWriter<'_>,
+    dep: UnresolvedPixiRecord,
+    workspace_root: &Path,
+) -> PackageHandle {
+    match dep {
+        UnresolvedPixiRecord::Binary(record) => {
+            // Binaries are leaves: no recursive walk to skip. Always go
+            // through `register_conda_package` so its per-URL merge can
+            // layer run_exports / purls / hashes onto an earlier
+            // registration that lacked them.
+            let data: CondaPackageData = Arc::unwrap_or_clone(record).into();
+            writer.builder.register_conda_package(data)
+        }
+        UnresolvedPixiRecord::Source(record) => {
+            let key = SourceCacheKey {
+                name: record.name().clone(),
+                hash: record.identifier_hash.clone(),
+                location: record.manifest_source.clone().into(),
+            };
+            if let Some(handle) = writer.cache.sources.get(&key) {
+                return handle.clone();
+            }
+            let mut source = Arc::unwrap_or_clone(record);
+            let source_data = register_source_deps(writer, &mut source, workspace_root);
+            let mut data = source.into_conda_source_data(workspace_root);
+            data.source_data = source_data;
+            let handle = writer
+                .builder
+                .register_conda_package(CondaPackageData::Source(Box::new(data)));
+            writer.cache.sources.insert(key, handle.clone());
+            handle
+        }
+    }
 }
 
 impl From<PixiRecord> for UnresolvedPixiRecord {

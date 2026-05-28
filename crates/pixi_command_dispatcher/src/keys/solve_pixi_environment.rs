@@ -375,7 +375,6 @@ async fn compute_inner(
     // these split halves.
     let _ = dev_source_binary_specs;
 
-    let started = Instant::now();
     let result = ctx
         .compute(&SolveCondaKey::new(SolveCondaSpec {
             source_specs,
@@ -408,7 +407,6 @@ async fn compute_inner(
             }
             SolveCondaKeyError::Gateway(a) => SolvePixiEnvironmentError::QueryError(a),
         })?;
-    tracing::debug!("top-level solve completed in {:?}", started.elapsed());
     tracing::debug!(
         elapsed_ms = compute_started.elapsed().as_millis() as u64,
         env = %spec.env_ref,

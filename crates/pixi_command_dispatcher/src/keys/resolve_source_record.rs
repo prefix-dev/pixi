@@ -364,33 +364,36 @@ async fn assemble_source_record_inner(
         .map(|(name, source)| (name.as_source().to_string(), source))
         .collect();
 
-    let record = SourceRecord {
-        data: FullSourceRecordData {
+    // `SourceRecord::new` derives `identifier_hash` from the contents.
+    // Source deps in build/host_packages were assembled by earlier
+    // recursive invocations of this function, so their own hashes are
+    // already filled — the bottom-up invariant holds.
+    let record = SourceRecord::new(
+        FullSourceRecordData {
             package_record,
             sources: sources_by_str,
         },
-        variants: output
+        source.manifest_source().clone(),
+        source.build_source().cloned(),
+        output
             .metadata
             .variant
             .iter()
             .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
             .collect(),
-        manifest_source: source.manifest_source().clone(),
-        build_source: source.build_source().cloned(),
-        identifier_hash: None,
         // Carry the resolved build / host env package sets forward.
         // Downstream consumers (lock file writer, installer) need
         // the exact packages this source was built against, not just
         // their aggregated run-exports.
-        build_packages: build_records
+        build_records
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
-        host_packages: host_records
+        host_records
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
-    };
+    );
 
     Ok(Arc::new(record))
 }
