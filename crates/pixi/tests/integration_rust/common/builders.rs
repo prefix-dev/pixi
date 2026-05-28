@@ -615,7 +615,7 @@ impl UpdateBuilder {
             .specs
             .platforms
             .get_or_insert_with(Vec::new)
-            .push(platform);
+            .push(platform.into());
         self
     }
 

@@ -2,12 +2,15 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::{Parser, ValueEnum};
+use indexmap::IndexSet;
+use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
-use pixi_manifest::{EnvironmentName, FeatureName, HasFeaturesIter, PrioritizedChannel};
+use pixi_manifest::{
+    EnvironmentName, FeatureName, HasFeaturesIter, PixiPlatformName, PrioritizedChannel,
+};
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use pixi_uv_conversions::convert_uv_requirements_to_pep508;
-use rattler_conda_types::Platform;
 
 use tracing::warn;
 use uv_requirements_txt::RequirementsTxt;
@@ -41,9 +44,12 @@ pub struct Args {
     #[arg(long, ignore_case = true)]
     pub format: Option<ImportFileFormat>,
 
-    /// The platforms for the imported environment
+    /// The platforms for the imported environment. Accepts a workspace
+    /// platform name; a bare conda subdir (e.g. `linux-64`) is also
+    /// accepted. Names that aren't yet declared get auto-added as subdir
+    /// platforms.
     #[arg(long = "platform", short, value_name = "PLATFORM")]
-    pub platforms: Vec<Platform>,
+    pub platforms: Vec<PixiPlatformName>,
 
     /// A name for the created environment
     #[clap(long, short)]
@@ -177,14 +183,11 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         }
     };
 
-    // Add the platforms if they are not already present. Import-derived
-    // platforms come from external env files as bare subdirs, so we construct
-    // subdir-bound PixiPlatforms; the user can promote them to custom-named
-    // platforms with virtual-package overrides later.
-    let pixi_platforms: Vec<pixi_manifest::PixiPlatform> = platforms
-        .iter()
-        .map(|p| pixi_manifest::PixiPlatform::from_subdir(*p))
-        .collect();
+    // Resolve the platform names. Import doesn't have a target workspace
+    // yet (or at least, doesn't read its platforms here), so each name has
+    // to parse as a conda subdir. The user can rename the resulting
+    // entries afterwards via `workspace platform edit`.
+    let pixi_platforms = resolve_platforms(&IndexSet::default(), &platforms)?;
     let platform_names: Vec<pixi_manifest::PixiPlatformName> =
         pixi_platforms.iter().map(|p| p.name().clone()).collect();
     if !pixi_platforms.is_empty() {

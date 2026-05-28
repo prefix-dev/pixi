@@ -1,40 +1,18 @@
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pixi_core::{
     environment::sanity_check_workspace,
     workspace::{PypiDeps, UpdateDeps, WorkspaceMut},
 };
-use pixi_manifest::{
-    FeatureName, HasWorkspaceManifest, KnownPreviewFeature, PixiPlatform, PixiPlatformName,
-    SpecType,
-};
+use pixi_manifest::{FeatureName, HasWorkspaceManifest, KnownPreviewFeature, SpecType};
 use pixi_spec::{GitSpec, SourceLocationSpec, Subdirectory};
-use rattler_conda_types::{MatchSpec, PackageName, Platform};
+use rattler_conda_types::{MatchSpec, PackageName};
+
+use crate::workspace::platforms::resolve_platforms;
 
 mod options;
 
 pub use options::{DependencyOptions, GitOptions};
-
-/// Resolve each requested platform name against the workspace's declared
-/// platforms. A name that is not a declared workspace platform but parses as a
-/// bare conda subdir is accepted and added as a subdir platform.
-fn resolve_dependency_platforms(
-    workspace_platforms: &IndexSet<PixiPlatform>,
-    names: &[PixiPlatformName],
-) -> miette::Result<Vec<PixiPlatform>> {
-    names
-        .iter()
-        .map(|name| {
-            if let Some(platform) = workspace_platforms.iter().find(|p| p.name() == name) {
-                return Ok(platform.clone());
-            }
-            name.as_str()
-                .parse::<Platform>()
-                .map(PixiPlatform::from_subdir)
-                .map_err(|_| miette::miette!("workspace does not define a platform named '{name}'"))
-        })
-        .collect()
-}
 
 pub async fn add_conda_dep(
     mut workspace: WorkspaceMut,
@@ -53,8 +31,7 @@ pub async fn add_conda_dep(
         .workspace
         .platforms
         .clone();
-    let pixi_platforms =
-        resolve_dependency_platforms(&workspace_platforms, &dep_options.platforms)?;
+    let pixi_platforms = resolve_platforms(&workspace_platforms, &dep_options.platforms)?;
     workspace
         .manifest()
         .add_platforms(pixi_platforms.iter(), &FeatureName::DEFAULT)?;
@@ -156,7 +133,7 @@ pub async fn add_pypi_dep(
         .workspace
         .platforms
         .clone();
-    let pixi_platforms = resolve_dependency_platforms(&workspace_platforms, &options.platforms)?;
+    let pixi_platforms = resolve_platforms(&workspace_platforms, &options.platforms)?;
     workspace
         .manifest()
         .add_platforms(pixi_platforms.iter(), &FeatureName::DEFAULT)?;

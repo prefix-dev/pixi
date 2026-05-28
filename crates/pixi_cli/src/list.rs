@@ -11,6 +11,7 @@ use pixi_api::{
 };
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
+use pixi_manifest::PixiPlatformName;
 use rattler_conda_types::Platform;
 use serde::Serialize;
 
@@ -163,9 +164,11 @@ pub struct Args {
     #[arg()]
     pub regex: Option<String>,
 
-    /// The platform to list packages for. Defaults to the current platform.
+    /// The platform to list packages for. Defaults to the platform best
+    /// matching this machine. Accepts a workspace platform name; a bare
+    /// conda subdir (e.g. `linux-64`) is also accepted.
     #[arg(long)]
-    pub platform: Option<Platform>,
+    pub platform: Option<PixiPlatformName>,
 
     /// Whether to output in json format
     #[arg(long, alias = "json-pretty")]
@@ -206,7 +209,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
     let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
-    let platform_display: String = match args.platform {
+    let platform_display: String = match &args.platform {
         Some(p) => p.to_string(),
         None => environment
             .best_platform()

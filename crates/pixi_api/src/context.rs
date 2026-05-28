@@ -220,7 +220,7 @@ impl<I: Interface> WorkspaceContext<I> {
     pub async fn list_packages(
         &self,
         regex: Option<String>,
-        platform: Option<Platform>,
+        platform: Option<PixiPlatformName>,
         environment: Option<String>,
         explicit: bool,
         no_install: bool,

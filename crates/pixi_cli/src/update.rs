@@ -13,7 +13,6 @@ use pixi_core::{
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use pixi_manifest::{EnvironmentName, PixiPlatformName};
-use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
 
 use crate::cli_config::WorkspaceConfig;
@@ -61,9 +60,11 @@ pub struct UpdateSpecsArgs {
     pub environments: Option<Vec<EnvironmentName>>,
 
     /// The platforms to update. If none is specified, all platforms are
-    /// updated.
+    /// updated. Accepts a workspace platform name; a bare conda subdir
+    /// (e.g. `linux-64`) is also accepted so users don't have to declare
+    /// a platform before targeting it.
     #[clap(long = "platform", short = 'p')]
-    pub platforms: Option<Vec<Platform>>,
+    pub platforms: Option<Vec<PixiPlatformName>>,
 }
 
 /// A distilled version of `UpdateSpecsArgs`.
@@ -80,9 +81,7 @@ impl From<UpdateSpecsArgs> for UpdateSpecs {
         Self {
             packages: args.packages.map(|args| args.into_iter().collect()),
             environments: args.environments.map(|args| args.into_iter().collect()),
-            platforms: args
-                .platforms
-                .map(|args| args.into_iter().map(Into::into).collect()),
+            platforms: args.platforms.map(|args| args.into_iter().collect()),
         }
     }
 }

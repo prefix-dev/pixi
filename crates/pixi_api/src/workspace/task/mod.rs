@@ -14,21 +14,26 @@ use pixi_manifest::{
 };
 
 use crate::interface::Interface;
+use crate::workspace::platforms::resolve_platforms;
 
-/// Look up a [`PixiPlatform`] from the workspace by name. Returns `Ok(None)`
-/// when `name` is `None`, the looked-up platform when known, or an error if
-/// the workspace does not define a platform with that name.
-fn lookup_platform<'p>(
-    workspace: &'p pixi_core::Workspace,
+/// Resolve `name` the same way the dependency CLI does: look it up in the
+/// workspace; if it's not declared, accept it as a bare conda subdir and
+/// return a fresh [`PixiPlatform::from_subdir`]. Returns `Ok(None)` for an
+/// unset flag and an error only when neither the lookup nor the subdir
+/// parse succeeds. The returned platform is *not* added to the workspace
+/// here -- the caller decides whether to auto-declare it (the way
+/// `task add` / `task alias` do) or leave the manifest alone (`task remove`).
+fn resolve_task_platform(
+    workspace: &Workspace,
     name: Option<&PixiPlatformName>,
-) -> miette::Result<Option<&'p PixiPlatform>> {
+) -> miette::Result<Option<PixiPlatform>> {
     let Some(name) = name else { return Ok(None) };
-    workspace
-        .workspace_manifest()
-        .workspace
-        .platform_by_name(name)
-        .map(Some)
-        .ok_or_else(|| miette::miette!("workspace does not define a platform named '{name}'"))
+    let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
+    Ok(
+        resolve_platforms(&workspace_platforms, std::slice::from_ref(name))?
+            .into_iter()
+            .next(),
+    )
 }
 
 pub async fn list_tasks(
@@ -96,7 +101,15 @@ pub async fn add_task<I: Interface>(
     feature: FeatureName,
     platform: Option<PixiPlatformName>,
 ) -> miette::Result<()> {
-    let pixi_platform = lookup_platform(workspace.workspace(), platform.as_ref())?.cloned();
+    let pixi_platform = resolve_task_platform(workspace.workspace(), platform.as_ref())?;
+    // Auto-declare the subdir-platform when the user passed a name pixi
+    // hasn't seen yet (matches `pixi add --platform <subdir>`). The
+    // mutation is idempotent on already-declared entries.
+    if let Some(p) = &pixi_platform {
+        workspace
+            .manifest()
+            .add_platforms(std::slice::from_ref(p).iter(), &FeatureName::DEFAULT)?;
+    }
     workspace
         .manifest()
         .add_task(name.clone(), task.clone(), pixi_platform.as_ref(), &feature)?;
@@ -120,7 +133,12 @@ pub async fn alias_task<I: Interface>(
     task: Task,
     platform: Option<PixiPlatformName>,
 ) -> miette::Result<()> {
-    let pixi_platform = lookup_platform(workspace.workspace(), platform.as_ref())?.cloned();
+    let pixi_platform = resolve_task_platform(workspace.workspace(), platform.as_ref())?;
+    if let Some(p) = &pixi_platform {
+        workspace
+            .manifest()
+            .add_platforms(std::slice::from_ref(p).iter(), &FeatureName::DEFAULT)?;
+    }
     workspace.manifest().add_task(
         name.clone(),
         task.clone(),
@@ -149,7 +167,12 @@ pub async fn remove_tasks<I: Interface>(
 ) -> miette::Result<()> {
     let mut to_remove = Vec::new();
 
-    let pixi_platform = lookup_platform(workspace.workspace(), platform.as_ref())?.cloned();
+    // No auto-declare on removal: if the name doesn't match a declared
+    // platform we still try the subdir fallback so users can target a
+    // dep that lives under an as-yet-undeclared subdir, but we don't
+    // mutate `[workspace].platforms` here. A miss surfaces as "Task '...'
+    // does not exist on <name>" below.
+    let pixi_platform = resolve_task_platform(workspace.workspace(), platform.as_ref())?;
 
     for name in names.iter() {
         if let Some(pixi_platform) = pixi_platform.as_ref() {
