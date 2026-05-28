@@ -334,6 +334,15 @@ impl DependencyConfig {
         operation: &str,
         implicit_constraints: HashMap<String, String>,
     ) {
+        self.display_success_with_type(operation, implicit_constraints, self.dependency_type());
+    }
+
+    pub(crate) fn display_success_with_type(
+        &self,
+        operation: &str,
+        implicit_constraints: HashMap<String, String>,
+        dependency_type: DependencyType,
+    ) {
         for package in self.specs.clone() {
             eprintln!(
                 "{}{operation} {}{}",
@@ -348,7 +357,6 @@ impl DependencyConfig {
         }
 
         // Print if it is something different from host and dep
-        let dependency_type = self.dependency_type();
         if !matches!(
             dependency_type,
             DependencyType::CondaDependency(SpecType::Run)
