@@ -17,7 +17,7 @@ use itertools::Either;
 use miette::Diagnostic;
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::PixiRecord;
-use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec, SpecConversionError};
+use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName,
@@ -42,7 +42,7 @@ use pixi_compute_reporters::OperationId;
 #[derive(Debug, Clone)]
 pub struct SolveCondaSpec {
     /// Source package requirements.
-    pub source_specs: DependencyMap<PackageName, SourceSpec>,
+    pub source_specs: DependencyMap<PackageName, SourceLocationSpec>,
     /// Binary package requirements.
     pub binary_specs: DependencyMap<PackageName, BinarySpec>,
     /// Constraints (binary-only).

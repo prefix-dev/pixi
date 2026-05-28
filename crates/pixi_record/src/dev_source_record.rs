@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use pixi_spec::{BinarySpec, PixiSpec, SourceSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
 use rattler_conda_types::PackageName;
@@ -68,7 +68,7 @@ impl DevSourceRecord {
     pub fn split_into_source_and_binary_requirements(
         specs: impl IntoIterator<Item = (rattler_conda_types::PackageName, PixiSpec)>,
     ) -> (
-        DependencyMap<rattler_conda_types::PackageName, SourceSpec>,
+        DependencyMap<rattler_conda_types::PackageName, SourceLocationSpec>,
         DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
     ) {
         specs.into_iter().partition_map(|(name, constraint)| {

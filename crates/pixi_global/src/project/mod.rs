@@ -1455,15 +1455,15 @@ impl Project {
         })
     }
 
-    /// Infer the package name from a SourceSpec by examining build outputs
+    /// Infer the package name from a SourceLocationSpec by examining build outputs
     async fn infer_package_name_from_source_spec(
         &self,
-        source_spec: pixi_spec::SourceSpec,
+        source_spec: pixi_spec::SourceLocationSpec,
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
             .engine()
-            .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec.location).await)
+            .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec).await)
             .await
             .map_err_into_dispatcher(std::convert::identity)
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;

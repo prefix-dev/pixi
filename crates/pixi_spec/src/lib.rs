@@ -7,11 +7,31 @@
 //! represent both source and binary packages. The `PixiSpec` type can
 //! optionally be converted to a `NamelessMatchSpec` which is used to match
 //! binary packages.
+//!
+//! # Variants
+//!
+//! [`PixiSpec`] has six variants, encoding the binary-vs-source distinction
+//! at the type level rather than via runtime URL/path inspection:
+//!
+//! * [`PixiSpec::Detailed`] — bare version string or detailed channel-based
+//!   binary spec.
+//! * [`PixiSpec::UrlBinary`] — URL pointing at a binary conda archive.
+//! * [`PixiSpec::PathBinary`] — local path pointing at a binary conda archive.
+//! * [`PixiSpec::UrlSource`] — URL pointing at a source archive, with optional
+//!   matchspec selectors used to pick which built output to use.
+//! * [`PixiSpec::PathSource`] — local directory or source path, with optional
+//!   matchspec selectors.
+//! * [`PixiSpec::Git`] — git repository, with optional matchspec selectors.
+//!
+//! The binary variants do not carry matchspec selectors: a `.conda` archive
+//! is already a fully-specified package, so `version`, `build`, etc. would be
+//! meaningless.
 
 mod detailed;
 mod dev_source;
 mod exclude_newer;
 mod git;
+mod matchspec_fields;
 mod path;
 mod pin;
 mod source_anchor;
@@ -26,11 +46,12 @@ pub use dev_source::DevSourceSpec;
 pub use exclude_newer::{ExcludeNewer, ResolvedExcludeNewer};
 pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
+pub use matchspec_fields::MatchspecFields;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 pub use pin::{Pin, PinBound, PinError, PinExpression};
 use rattler_conda_types::{
-    BuildNumberSpec, ChannelConfig, MatchSpec, MatchSpecCondition, NamedChannelOrUrl,
-    NamelessMatchSpec, PackageName, ParseChannelError, StringMatcher, VersionSpec,
+    ChannelConfig, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName, ParseChannelError,
+    VersionSpec, package::CondaArchiveType,
 };
 #[cfg(feature = "rattler_lock")]
 pub use rattler_lock::Verbatim;
@@ -38,6 +59,7 @@ pub use source_anchor::SourceAnchor;
 pub use subdirectory::{Subdirectory, SubdirectoryError};
 use thiserror::Error;
 pub use toml::{TomlLocationSpec, TomlSpec, TomlVersionSpecStr};
+use url::url_is_binary;
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 
 /// An error that is returned when a spec cannot be converted into another spec
@@ -67,67 +89,132 @@ pub enum SpecConversionError {
 
 /// A package specification for pixi.
 ///
-/// This type can represent both source and binary packages. Use the
-/// [`Self::try_into_nameless_match_spec`] method to convert this type into a
-/// type that only represents binary packages.
-#[derive(Debug, Clone, Hash, ::serde::Serialize, PartialEq, Eq)]
-#[serde(untagged)]
+/// See the crate-level docs for the meaning of each variant.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum PixiSpec {
-    /// The spec is represented solely by a version string. The package should
-    /// be retrieved from a channel.
-    ///
-    /// This is similar to the `DetailedVersion` variant but with a simplified
-    /// version spec.
-    Version(VersionSpec),
+    /// A bare version string or a detailed channel-based binary spec.
+    Detailed(Box<DetailedSpec>),
 
-    /// The spec is represented by a detailed version spec. The package should
-    /// be retrieved from a channel.
-    DetailedVersion(Box<DetailedSpec>),
+    /// URL pointing at a binary conda archive (`.conda` / `.tar.bz2`).
+    UrlBinary(UrlBinarySpec),
 
-    /// The spec is represented as an archive that can be downloaded from the
-    /// specified URL. The package should be retrieved from the URL and can
-    /// either represent a source or binary package depending on the archive
-    /// type.
-    Url(UrlSpec),
+    /// Local path pointing at a binary conda archive (`.conda` / `.tar.bz2`).
+    PathBinary(PathBinarySpec),
 
-    /// The spec is represented as a git repository. The package represents a
-    /// source distribution of some kind.
-    Git(GitSpec),
+    /// URL pointing at a source archive (e.g. `.zip`, `.tar.gz`), with
+    /// optional matchspec selectors used to pick which built output to use.
+    UrlSource(Box<UrlSourceSpec>),
 
-    /// The spec is represented as a local path. The package should be retrieved
-    /// from the local filesystem. The package can be either a source or binary
-    /// package.
-    Path(PathSpec),
+    /// Local directory or source path, with optional matchspec selectors.
+    PathSource(Box<PathSourceSpec>),
+
+    /// Git repository, with optional matchspec selectors.
+    Git(Box<GitSpec>),
 }
 
 impl Default for PixiSpec {
     fn default() -> Self {
-        PixiSpec::Version(VersionSpec::Any)
+        PixiSpec::any()
+    }
+}
+
+impl ::serde::Serialize for PixiSpec {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: ::serde::Serializer,
+    {
+        match self {
+            PixiSpec::Detailed(detailed) => {
+                // Collapse a Detailed spec whose only field is `version` back
+                // into a bare version string so the on-disk round-trip stays
+                // `foo = ">=1"` instead of the table form
+                // `foo = { version = ">=1" }`. A fully-empty Detailed
+                // (no version either) collapses to `"*"` for the same reason
+                // — that matches the pre-refactor `PixiSpec::Version(Any)`
+                // form, instead of an empty table `{}`.
+                if detailed.build.is_none()
+                    && detailed.build_number.is_none()
+                    && detailed.file_name.is_none()
+                    && detailed.extras.is_none()
+                    && detailed.flags.is_none()
+                    && detailed.channel.is_none()
+                    && detailed.subdir.is_none()
+                    && detailed.md5.is_none()
+                    && detailed.sha256.is_none()
+                    && detailed.license.is_none()
+                    && detailed.license_family.is_none()
+                    && detailed.condition.is_none()
+                    && detailed.track_features.is_none()
+                {
+                    let version = detailed
+                        .version
+                        .clone()
+                        .unwrap_or(VersionSpec::Any)
+                        .to_string();
+                    return serializer.serialize_str(&version);
+                }
+                detailed.serialize(serializer)
+            }
+            PixiSpec::UrlBinary(spec) => spec.serialize(serializer),
+            PixiSpec::PathBinary(spec) => spec.serialize(serializer),
+            PixiSpec::UrlSource(spec) => spec.serialize(serializer),
+            PixiSpec::PathSource(spec) => spec.serialize(serializer),
+            PixiSpec::Git(spec) => spec.serialize(serializer),
+        }
     }
 }
 
 impl Display for PixiSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PixiSpec::Version(version) => write!(f, "{version}"),
-            PixiSpec::DetailedVersion(detailed) => write!(f, "{detailed}"),
-            PixiSpec::Url(url) => write!(f, "{url}"),
+            PixiSpec::Detailed(detailed) => {
+                // A Detailed spec carrying only a `version` was previously a
+                // `PixiSpec::Version(_)` and rendered as just the version
+                // string. Preserve that shorter form for error messages.
+                if detailed.build.is_none()
+                    && detailed.build_number.is_none()
+                    && detailed.file_name.is_none()
+                    && detailed.extras.is_none()
+                    && detailed.flags.is_none()
+                    && detailed.channel.is_none()
+                    && detailed.subdir.is_none()
+                    && detailed.md5.is_none()
+                    && detailed.sha256.is_none()
+                    && detailed.license.is_none()
+                    && detailed.license_family.is_none()
+                    && detailed.condition.is_none()
+                    && detailed.track_features.is_none()
+                {
+                    let version = detailed.version.clone().unwrap_or(VersionSpec::Any);
+                    return write!(f, "{version}");
+                }
+                write!(f, "{detailed}")
+            }
+            PixiSpec::UrlBinary(url) => write!(f, "{url}"),
+            PixiSpec::PathBinary(path) => write!(f, "{path}"),
+            PixiSpec::UrlSource(url) => write!(f, "{url}"),
+            PixiSpec::PathSource(path) => write!(f, "{path}"),
             PixiSpec::Git(git) => write!(f, "{git}"),
-            PixiSpec::Path(path) => write!(f, "{path}"),
         }
     }
 }
 
 impl From<VersionSpec> for PixiSpec {
     fn from(value: VersionSpec) -> Self {
-        Self::Version(value)
+        Self::Detailed(Box::new(DetailedSpec {
+            version: Some(value),
+            ..DetailedSpec::default()
+        }))
     }
 }
 
 impl PixiSpec {
     /// Creates a new instance that matches any version.
-    pub const fn any() -> Self {
-        Self::Version(VersionSpec::Any)
+    pub fn any() -> Self {
+        Self::Detailed(Box::new(DetailedSpec {
+            version: Some(VersionSpec::Any),
+            ..DetailedSpec::default()
+        }))
     }
 
     /// Convert a [`NamelessMatchSpec`] into a [`PixiSpec`].
@@ -136,32 +223,57 @@ impl PixiSpec {
         channel_config: &ChannelConfig,
     ) -> Self {
         if let Some(url) = spec.url {
-            Self::Url(UrlSpec {
-                url,
-                md5: spec.md5,
-                sha256: spec.sha256,
-                // A nameless matchspec always describes a binary spec which cannot have a
-                // subdirectory
-                subdirectory: Subdirectory::default(),
-            })
-        } else if spec.build.is_none()
-            && spec.build_number.is_none()
-            && spec.file_name.is_none()
-            && spec.extras.is_none()
-            && spec.flags.is_none()
-            && spec.channel.is_none()
-            && spec.subdir.is_none()
-            && spec.md5.is_none()
-            && spec.sha256.is_none()
-            && spec.license.is_none()
-            && spec.license_family.is_none()
-            && spec.condition.is_none()
-            && spec.track_features.is_none()
-        {
-            Self::Version(spec.version.unwrap_or(VersionSpec::Any))
+            // Detect whether the URL points to a binary archive.
+            if url_is_binary(&url) {
+                Self::UrlBinary(UrlBinarySpec {
+                    url,
+                    md5: spec.md5,
+                    sha256: spec.sha256,
+                })
+            } else {
+                Self::UrlSource(Box::new(UrlSourceSpec {
+                    url,
+                    md5: spec.md5,
+                    sha256: spec.sha256,
+                    subdirectory: Subdirectory::default(),
+                    matchspec: MatchspecFields {
+                        version: spec.version,
+                        build: spec.build,
+                        build_number: spec.build_number,
+                        extras: spec.extras,
+                        flags: spec.flags,
+                        subdir: spec.subdir,
+                        license: spec.license,
+                        license_family: spec.license_family,
+                        condition: spec.condition,
+                        track_features: spec.track_features,
+                    },
+                }))
+            }
         } else {
-            Self::DetailedVersion(Box::new(DetailedSpec {
-                version: spec.version,
+            // A bare nameless spec (no fields other than possibly `version`)
+            // should default `version` to `Any` so it serializes as the
+            // bare string `"*"` instead of an empty table `{}`. This matches
+            // the pre-refactor `PixiSpec::Version(VersionSpec::Any)` form.
+            let is_bare = spec.build.is_none()
+                && spec.build_number.is_none()
+                && spec.file_name.is_none()
+                && spec.extras.is_none()
+                && spec.flags.is_none()
+                && spec.channel.is_none()
+                && spec.subdir.is_none()
+                && spec.md5.is_none()
+                && spec.sha256.is_none()
+                && spec.license.is_none()
+                && spec.license_family.is_none()
+                && spec.condition.is_none()
+                && spec.track_features.is_none();
+            Self::Detailed(Box::new(DetailedSpec {
+                version: if is_bare {
+                    Some(spec.version.unwrap_or(VersionSpec::Any))
+                } else {
+                    spec.version
+                },
                 build: spec.build,
                 build_number: spec.build_number,
                 file_name: spec.file_name,
@@ -186,34 +298,73 @@ impl PixiSpec {
     /// valid version spec.
     pub fn has_version_spec(&self) -> bool {
         match self {
-            Self::Version(v) => v != &VersionSpec::Any,
-            Self::DetailedVersion(v) => v.version.as_ref().is_some_and(|v| v != &VersionSpec::Any),
+            Self::Detailed(d) => d.version.as_ref().is_some_and(|v| v != &VersionSpec::Any),
+            Self::UrlSource(u) => u
+                .matchspec
+                .version
+                .as_ref()
+                .is_some_and(|v| v != &VersionSpec::Any),
+            Self::PathSource(p) => p
+                .matchspec
+                .version
+                .as_ref()
+                .is_some_and(|v| v != &VersionSpec::Any),
+            Self::Git(g) => g
+                .matchspec
+                .version
+                .as_ref()
+                .is_some_and(|v| v != &VersionSpec::Any),
             _ => false,
         }
     }
 
-    /// Returns a [`VersionSpec`] if this instance is a version spec.
+    /// Returns a [`VersionSpec`] if this instance carries one.
     pub fn as_version_spec(&self) -> Option<&VersionSpec> {
         match self {
-            Self::Version(v) => Some(v),
-            Self::DetailedVersion(v) => v.version.as_ref(),
+            Self::Detailed(d) => d.version.as_ref(),
+            Self::UrlSource(u) => u.matchspec.version.as_ref(),
+            Self::PathSource(p) => p.matchspec.version.as_ref(),
+            Self::Git(g) => g.matchspec.version.as_ref(),
             _ => None,
         }
     }
 
-    /// Returns a [`DetailedSpec`] if this instance is a detailed version
-    /// spec.
+    /// Returns a [`DetailedSpec`] if this instance is a detailed spec.
     pub fn as_detailed(&self) -> Option<&DetailedSpec> {
         match self {
-            Self::DetailedVersion(v) => Some(v),
+            Self::Detailed(d) => Some(d),
             _ => None,
         }
     }
 
-    /// Returns a [`UrlSpec`] if this instance is a detailed version spec.
-    pub fn as_url(&self) -> Option<&UrlSpec> {
+    /// Returns a [`UrlSourceSpec`] if this instance is a URL source spec.
+    pub fn as_url_source(&self) -> Option<&UrlSourceSpec> {
         match self {
-            Self::Url(v) => Some(v),
+            Self::UrlSource(u) => Some(u),
+            _ => None,
+        }
+    }
+
+    /// Returns a [`UrlBinarySpec`] if this instance is a URL binary spec.
+    pub fn as_url_binary(&self) -> Option<&UrlBinarySpec> {
+        match self {
+            Self::UrlBinary(u) => Some(u),
+            _ => None,
+        }
+    }
+
+    /// Returns a [`PathSourceSpec`] if this instance is a path source spec.
+    pub fn as_path_source(&self) -> Option<&PathSourceSpec> {
+        match self {
+            Self::PathSource(p) => Some(p),
+            _ => None,
+        }
+    }
+
+    /// Returns a [`PathBinarySpec`] if this instance is a path binary spec.
+    pub fn as_path_binary(&self) -> Option<&PathBinarySpec> {
+        match self {
+            Self::PathBinary(p) => Some(p),
             _ => None,
         }
     }
@@ -221,15 +372,39 @@ impl PixiSpec {
     /// Returns a [`GitSpec`] if this instance is a git spec.
     pub fn as_git(&self) -> Option<&GitSpec> {
         match self {
-            Self::Git(v) => Some(v),
+            Self::Git(g) => Some(g),
             _ => None,
         }
     }
 
-    /// Returns a [`PathSpec`] if this instance is a path spec.
-    pub fn as_path(&self) -> Option<&PathSpec> {
+    /// Returns a [`UrlSpec`] reconstructed from a URL-typed variant.
+    pub fn as_url(&self) -> Option<UrlSpec> {
         match self {
-            Self::Path(v) => Some(v),
+            Self::UrlBinary(u) => Some(UrlSpec {
+                url: u.url.clone(),
+                md5: u.md5,
+                sha256: u.sha256,
+                subdirectory: Subdirectory::default(),
+            }),
+            Self::UrlSource(u) => Some(UrlSpec {
+                url: u.url.clone(),
+                md5: u.md5,
+                sha256: u.sha256,
+                subdirectory: u.subdirectory.clone(),
+            }),
+            _ => None,
+        }
+    }
+
+    /// Returns a [`PathSpec`] reconstructed from a path-typed variant.
+    pub fn as_path(&self) -> Option<PathSpec> {
+        match self {
+            Self::PathBinary(p) => Some(PathSpec {
+                path: p.path.clone(),
+            }),
+            Self::PathSource(p) => Some(PathSpec {
+                path: p.path.clone(),
+            }),
             _ => None,
         }
     }
@@ -237,8 +412,10 @@ impl PixiSpec {
     /// Converts this instance into a [`VersionSpec`] if possible.
     pub fn into_version(self) -> Option<VersionSpec> {
         match self {
-            Self::Version(v) => Some(v),
-            Self::DetailedVersion(v) => v.version,
+            Self::Detailed(d) => d.version,
+            Self::UrlSource(u) => u.matchspec.version,
+            Self::PathSource(p) => p.matchspec.version,
+            Self::Git(g) => g.matchspec.version,
             _ => None,
         }
     }
@@ -246,11 +423,7 @@ impl PixiSpec {
     /// Converts this instance into a [`DetailedSpec`] if possible.
     pub fn into_detailed(self) -> Option<DetailedSpec> {
         match self {
-            Self::DetailedVersion(v) => Some(*v),
-            Self::Version(v) => Some(DetailedSpec {
-                version: Some(v),
-                ..DetailedSpec::default()
-            }),
+            Self::Detailed(d) => Some(*d),
             _ => None,
         }
     }
@@ -258,7 +431,18 @@ impl PixiSpec {
     /// Converts this instance into a [`UrlSpec`] if possible.
     pub fn into_url(self) -> Option<UrlSpec> {
         match self {
-            Self::Url(v) => Some(v),
+            Self::UrlBinary(u) => Some(UrlSpec {
+                url: u.url,
+                md5: u.md5,
+                sha256: u.sha256,
+                subdirectory: Subdirectory::default(),
+            }),
+            Self::UrlSource(u) => Some(UrlSpec {
+                url: u.url,
+                md5: u.md5,
+                sha256: u.sha256,
+                subdirectory: u.subdirectory,
+            }),
             _ => None,
         }
     }
@@ -266,7 +450,7 @@ impl PixiSpec {
     /// Converts this instance into a [`GitSpec`] if possible.
     pub fn into_git(self) -> Option<GitSpec> {
         match self {
-            Self::Git(v) => Some(v),
+            Self::Git(g) => Some(*g),
             _ => None,
         }
     }
@@ -274,7 +458,8 @@ impl PixiSpec {
     /// Converts this instance into a [`PathSpec`] if possible.
     pub fn into_path(self) -> Option<PathSpec> {
         match self {
-            Self::Path(v) => Some(v),
+            Self::PathBinary(p) => Some(PathSpec { path: p.path }),
+            Self::PathSource(p) => Some(PathSpec { path: p.path }),
             _ => None,
         }
     }
@@ -287,67 +472,47 @@ impl PixiSpec {
         channel_config: &ChannelConfig,
     ) -> Result<Option<NamelessMatchSpec>, SpecConversionError> {
         let spec = match self {
-            PixiSpec::Version(version) => Some(NamelessMatchSpec {
-                version: Some(version),
-                ..NamelessMatchSpec::default()
-            }),
-            PixiSpec::DetailedVersion(spec) => {
-                Some(spec.try_into_nameless_match_spec(channel_config)?)
+            PixiSpec::Detailed(spec) => Some(spec.try_into_nameless_match_spec(channel_config)?),
+            PixiSpec::UrlBinary(url) => Some(url.into()),
+            PixiSpec::PathBinary(path) => {
+                Some(path.try_into_nameless_match_spec(&channel_config.root_dir)?)
             }
-            PixiSpec::Url(url) => url.try_into_nameless_match_spec().ok(),
-            PixiSpec::Git(_) => None,
-            PixiSpec::Path(path) => path.try_into_nameless_match_spec(&channel_config.root_dir)?,
+            PixiSpec::UrlSource(_) | PixiSpec::PathSource(_) | PixiSpec::Git(_) => None,
         };
 
         Ok(spec)
     }
 
-    /// Converts this instance in a source or binary spec.
-    pub fn into_source_or_binary(self) -> Either<SourceSpec, BinarySpec> {
+    /// Converts this instance into a source or binary spec.
+    pub fn into_source_or_binary(self) -> Either<SourceLocationSpec, BinarySpec> {
         match self {
-            PixiSpec::Version(version) => Either::Right(BinarySpec::Version(version)),
-            PixiSpec::DetailedVersion(detailed) => {
-                Either::Right(BinarySpec::DetailedVersion(detailed))
-            }
-            PixiSpec::Url(url) => url
-                .into_source_or_binary()
-                .map_left(|url| SourceLocationSpec::Url(url).into())
-                .map_right(BinarySpec::Url),
-            PixiSpec::Git(git) => Either::Left(SourceLocationSpec::Git(git).into()),
-            PixiSpec::Path(path) => path
-                .into_source_or_binary()
-                .map_left(|path| SourceLocationSpec::Path(path).into())
-                .map_right(BinarySpec::Path),
+            PixiSpec::Detailed(detailed) => Either::Right(BinarySpec::DetailedVersion(detailed)),
+            PixiSpec::UrlBinary(url) => Either::Right(BinarySpec::Url(url)),
+            PixiSpec::PathBinary(path) => Either::Right(BinarySpec::Path(path)),
+            PixiSpec::UrlSource(url) => Either::Left(SourceLocationSpec::Url(*url)),
+            PixiSpec::PathSource(path) => Either::Left(SourceLocationSpec::Path(*path)),
+            PixiSpec::Git(git) => Either::Left(SourceLocationSpec::Git(*git)),
         }
     }
 
     /// Converts this instance into a source spec if this instance represents a
     /// source package.
     #[allow(clippy::result_large_err)]
-    pub fn try_into_source_spec(self) -> Result<SourceSpec, Self> {
+    pub fn try_into_source_spec(self) -> Result<SourceLocationSpec, Self> {
         match self {
-            PixiSpec::Url(url) => url
-                .try_into_source_url()
-                .map(SourceSpec::from)
-                .map_err(PixiSpec::from),
-            PixiSpec::Git(git) => Ok(SourceLocationSpec::Git(git).into()),
-            PixiSpec::Path(path) => path
-                .try_into_source_path()
-                .map(SourceSpec::from)
-                .map_err(PixiSpec::from),
+            PixiSpec::UrlSource(url) => Ok(SourceLocationSpec::Url(*url)),
+            PixiSpec::PathSource(path) => Ok(SourceLocationSpec::Path(*path)),
+            PixiSpec::Git(git) => Ok(SourceLocationSpec::Git(*git)),
             _ => Err(self),
         }
     }
 
     /// Returns true if this spec represents a binary package.
     pub fn is_binary(&self) -> bool {
-        match self {
-            Self::Version(_) => true,
-            Self::DetailedVersion(_) => true,
-            Self::Url(url) => url.is_binary(),
-            Self::Git(_) => false,
-            Self::Path(path) => path.is_binary(),
-        }
+        matches!(
+            self,
+            Self::Detailed(_) | Self::UrlBinary(_) | Self::PathBinary(_)
+        )
     }
 
     /// Returns true if this spec represents a source package.
@@ -359,13 +524,7 @@ impl PixiSpec {
     /// A spec is mutable if it points to a local path-based source
     /// (non-binary).
     pub fn is_mutable(&self) -> bool {
-        match self {
-            Self::Version(_) => false,
-            Self::DetailedVersion(_) => false,
-            Self::Url(_) => false,
-            Self::Git(_) => false,
-            Self::Path(path) => !path.is_binary(),
-        }
+        matches!(self, Self::PathSource(_))
     }
 
     /// Converts this instance into a [`toml_edit::Value`].
@@ -381,16 +540,13 @@ impl PixiSpec {
         channel_config: &ChannelConfig,
     ) -> Result<NamelessMatchSpec, SpecConversionError> {
         match self.into_source_or_binary() {
-            Either::Left(_source) => Ok(NamelessMatchSpec::default()),
+            Either::Left(source) => Ok(source.to_nameless_match_spec()),
             Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config),
         }
     }
 
     /// Convert this spec into a fully-named [`MatchSpec`] for the given
-    /// package `name`. Source-typed specs round-trip through
-    /// [`SourceSpec::to_nameless_match_spec`], binary-typed specs through
-    /// [`BinarySpec::try_into_nameless_match_spec`]; the result is wrapped
-    /// in a `MatchSpec` carrying `name`.
+    /// package `name`.
     pub fn to_match_spec(
         self,
         name: &PackageName,
@@ -404,70 +560,11 @@ impl PixiSpec {
     }
 }
 
-/// A specification for a source package.
-///
-/// This type only represents source packages. Use [`PixiSpec`] to represent
-/// both binary and source packages.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
-pub struct SourceSpec {
-    /// The location of the source.
-    #[serde(flatten)]
-    pub location: SourceLocationSpec,
-
-    /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
-    pub version: Option<VersionSpec>,
-
-    /// The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)
-    pub build: Option<StringMatcher>,
-
-    /// The build number of the package
-    pub build_number: Option<BuildNumberSpec>,
-
-    /// Optional extra dependencies to select for the package
-    pub extras: Option<Vec<String>>,
-
-    /// Plain string flags used to select package variants.
-    pub flags: Option<Vec<StringMatcher>>,
-
-    /// The subdir of the channel
-    pub subdir: Option<String>,
-
-    /// The namespace of the package (currently not used)
-    pub namespace: Option<String>,
-
-    /// The license of the package
-    pub license: Option<String>,
-
-    /// The license family of the package
-    pub license_family: Option<String>,
-
-    /// The condition under which this match spec applies.
-    pub condition: Option<MatchSpecCondition>,
-
-    /// The track features of the package
-    pub track_features: Option<Vec<String>>,
-}
-
-impl From<SourceLocationSpec> for SourceSpec {
-    fn from(value: SourceLocationSpec) -> Self {
-        Self {
-            location: value,
-            version: None,
-            build: None,
-            build_number: None,
-            extras: None,
-            flags: None,
-            subdir: None,
-            namespace: None,
-            license: None,
-            license_family: None,
-            condition: None,
-            track_features: None,
-        }
-    }
-}
-
 /// A specification for a source location.
+///
+/// Each variant inner type optionally carries [`MatchspecFields`] selectors,
+/// so a `SourceLocationSpec` carries both the location and any match
+/// constraints that apply to the built output transitively.
 #[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum SourceLocationSpec {
@@ -492,146 +589,155 @@ impl Display for SourceLocationSpec {
     }
 }
 
-impl Display for SourceSpec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.location.fmt(f)
-    }
-}
-
-impl SourceSpec {
-    /// Constructs a new instance from a location and a nameless match spec.
-    pub fn new(location: SourceLocationSpec, spec: NamelessMatchSpec) -> Self {
-        let NamelessMatchSpec {
-            version,
-            build,
-            build_number,
-            file_name: _,
-            extras,
-            flags,
-            channel: _,
-            subdir,
-            namespace,
-            md5: _,
-            sha256: _,
-            url: _,
-            license,
-            condition,
-            track_features,
-            license_family,
-        } = spec;
-        Self {
-            location,
-            version,
-            build,
-            build_number,
-            extras,
-            flags,
-            subdir,
-            namespace,
-            license,
-            license_family,
-            condition,
-            track_features,
-        }
-    }
-
-    /// Convert this instance into a nameless match spec.
-    pub fn to_nameless_match_spec(&self) -> NamelessMatchSpec {
-        let Self {
-            location: _,
-            version,
-            build,
-            build_number,
-            extras,
-            flags,
-            subdir,
-            namespace,
-            license,
-            license_family,
-            condition,
-            track_features,
-        } = self;
-        NamelessMatchSpec {
-            version: version.clone(),
-            build: build.clone(),
-            build_number: build_number.clone(),
-            extras: extras.clone(),
-            flags: flags.clone(),
-            subdir: subdir.clone(),
-            namespace: namespace.clone(),
-            license: license.clone(),
-            license_family: license_family.clone(),
-            condition: condition.clone(),
-            track_features: track_features.clone(),
-            ..NamelessMatchSpec::default()
-        }
-    }
-
-    /// Converts this instance into a [`toml_edit::Value`].
-    pub fn to_toml_value(&self) -> toml_edit::Value {
-        ::serde::Serialize::serialize(&self.location, toml_edit::ser::ValueSerializer::new())
-            .expect("conversion to toml cannot fail")
-    }
-
-    /// Resolves the source location using the provided source anchor.
-    pub fn resolve(self, source_anchor: &SourceAnchor) -> Self {
-        Self {
-            location: source_anchor.resolve(self.location),
-            ..self
-        }
-    }
-}
-
 impl SourceLocationSpec {
     /// Returns true if this spec represents a git repository.
     pub fn is_git(&self) -> bool {
         matches!(self, SourceLocationSpec::Git(_))
     }
+
+    /// Returns true if this spec represents a local path.
+    pub fn is_path(&self) -> bool {
+        matches!(self, SourceLocationSpec::Path(_))
+    }
+
+    /// Returns true if this spec represents a URL archive.
+    pub fn is_url(&self) -> bool {
+        matches!(self, SourceLocationSpec::Url(_))
+    }
+
+    /// Returns the matchspec selectors carried by this source location.
+    pub fn matchspec(&self) -> &MatchspecFields {
+        match self {
+            SourceLocationSpec::Url(u) => &u.matchspec,
+            SourceLocationSpec::Git(g) => &g.matchspec,
+            SourceLocationSpec::Path(p) => &p.matchspec,
+        }
+    }
+
+    /// Mutable access to the matchspec selectors carried by this location.
+    pub fn matchspec_mut(&mut self) -> &mut MatchspecFields {
+        match self {
+            SourceLocationSpec::Url(u) => &mut u.matchspec,
+            SourceLocationSpec::Git(g) => &mut g.matchspec,
+            SourceLocationSpec::Path(p) => &mut p.matchspec,
+        }
+    }
+
+    /// Convert this source location into a [`NamelessMatchSpec`] containing
+    /// only the matchspec selectors (the location itself is not encoded).
+    pub fn to_nameless_match_spec(&self) -> NamelessMatchSpec {
+        self.matchspec().to_nameless_match_spec()
+    }
+
+    /// Converts this instance into a [`toml_edit::Value`].
+    pub fn to_toml_value(&self) -> toml_edit::Value {
+        ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
+            .expect("conversion to toml cannot fail")
+    }
+
+    /// Resolves the source location using the provided source anchor.
+    pub fn resolve(self, source_anchor: &SourceAnchor) -> Self {
+        source_anchor.resolve(self)
+    }
 }
 
-impl From<SourceSpec> for PixiSpec {
-    fn from(value: SourceSpec) -> Self {
-        match value.location {
-            SourceLocationSpec::Url(url) => Self::Url(url.into()),
-            SourceLocationSpec::Git(git) => Self::Git(git),
-            SourceLocationSpec::Path(path) => Self::Path(path.into()),
+impl From<UrlSourceSpec> for SourceLocationSpec {
+    fn from(value: UrlSourceSpec) -> Self {
+        SourceLocationSpec::Url(value)
+    }
+}
+
+impl From<PathSourceSpec> for SourceLocationSpec {
+    fn from(value: PathSourceSpec) -> Self {
+        SourceLocationSpec::Path(value)
+    }
+}
+
+impl From<GitSpec> for SourceLocationSpec {
+    fn from(value: GitSpec) -> Self {
+        SourceLocationSpec::Git(value)
+    }
+}
+
+impl From<SourceLocationSpec> for PixiSpec {
+    fn from(value: SourceLocationSpec) -> Self {
+        match value {
+            SourceLocationSpec::Url(url) => Self::UrlSource(Box::new(url)),
+            SourceLocationSpec::Git(git) => Self::Git(Box::new(git)),
+            SourceLocationSpec::Path(path) => Self::PathSource(Box::new(path)),
         }
     }
 }
 
 impl From<DetailedSpec> for PixiSpec {
     fn from(value: DetailedSpec) -> Self {
-        Self::DetailedVersion(Box::new(value))
+        Self::Detailed(Box::new(value))
     }
 }
 
 impl From<UrlSpec> for PixiSpec {
     fn from(value: UrlSpec) -> Self {
-        Self::Url(value)
+        // A bare `UrlSpec` doesn't pre-commit to source-or-binary, so we
+        // inspect the URL to decide which typed variant to produce.
+        if url_is_binary(&value.url) {
+            Self::UrlBinary(UrlBinarySpec {
+                url: value.url,
+                md5: value.md5,
+                sha256: value.sha256,
+            })
+        } else {
+            Self::UrlSource(Box::new(UrlSourceSpec {
+                url: value.url,
+                md5: value.md5,
+                sha256: value.sha256,
+                subdirectory: value.subdirectory,
+                matchspec: MatchspecFields::default(),
+            }))
+        }
     }
 }
 
-impl From<UrlSourceSpec> for SourceSpec {
+impl From<UrlSourceSpec> for PixiSpec {
     fn from(value: UrlSourceSpec) -> Self {
-        SourceLocationSpec::Url(value).into()
+        Self::UrlSource(Box::new(value))
+    }
+}
+
+impl From<UrlBinarySpec> for PixiSpec {
+    fn from(value: UrlBinarySpec) -> Self {
+        Self::UrlBinary(value)
     }
 }
 
 impl From<GitSpec> for PixiSpec {
     fn from(value: GitSpec) -> Self {
-        Self::Git(value)
+        Self::Git(Box::new(value))
     }
 }
 
 impl From<PathSpec> for PixiSpec {
     fn from(value: PathSpec) -> Self {
-        Self::Path(value)
+        // Inspect the path extension to decide source-or-binary.
+        if CondaArchiveType::try_from(std::path::Path::new(value.path.as_str())).is_some() {
+            Self::PathBinary(PathBinarySpec { path: value.path })
+        } else {
+            Self::PathSource(Box::new(PathSourceSpec {
+                path: value.path,
+                matchspec: MatchspecFields::default(),
+            }))
+        }
     }
 }
 
-impl From<PathSourceSpec> for SourceSpec {
+impl From<PathSourceSpec> for PixiSpec {
     fn from(value: PathSourceSpec) -> Self {
-        SourceLocationSpec::Path(value).into()
+        Self::PathSource(Box::new(value))
+    }
+}
+
+impl From<PathBinarySpec> for PixiSpec {
+    fn from(value: PathBinarySpec) -> Self {
+        Self::PathBinary(value)
     }
 }
 
@@ -642,7 +748,7 @@ impl From<PixiSpec> for toml_edit::Value {
     }
 }
 
-/// A specification for a source package.
+/// A specification for a binary package.
 ///
 /// This type only represents binary packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
@@ -651,9 +757,6 @@ impl From<PixiSpec> for toml_edit::Value {
 pub enum BinarySpec {
     /// The spec is represented solely by a version string. The package should
     /// be retrieved from a channel.
-    ///
-    /// This is similar to the `DetailedVersion` variant but with a simplified
-    /// version spec.
     Version(VersionSpec),
 
     /// The spec is represented by a detailed version spec. The package should
@@ -661,12 +764,11 @@ pub enum BinarySpec {
     DetailedVersion(Box<DetailedSpec>),
 
     /// The spec is represented as an archive that can be downloaded from the
-    /// specified URL. The package should be retrieved from the URL and can
-    /// only represent an archive.
+    /// specified URL.
     Url(UrlBinarySpec),
 
     /// The spec is represented as a local path. The package should be retrieved
-    /// from the local filesystem. The package can only be a binary package.
+    /// from the local filesystem.
     Path(PathBinarySpec),
 }
 
@@ -709,10 +811,13 @@ impl BinarySpec {
 impl From<BinarySpec> for PixiSpec {
     fn from(value: BinarySpec) -> Self {
         match value {
-            BinarySpec::Version(version) => Self::Version(version),
-            BinarySpec::DetailedVersion(detailed) => Self::DetailedVersion(detailed),
-            BinarySpec::Url(url) => Self::Url(url.into()),
-            BinarySpec::Path(path) => Self::Path(path.into()),
+            BinarySpec::Version(version) => Self::Detailed(Box::new(DetailedSpec {
+                version: Some(version),
+                ..DetailedSpec::default()
+            })),
+            BinarySpec::DetailedVersion(detailed) => Self::Detailed(detailed),
+            BinarySpec::Url(url) => Self::UrlBinary(url),
+            BinarySpec::Path(path) => Self::PathBinary(path),
         }
     }
 }
@@ -762,6 +867,7 @@ impl From<rattler_lock::source::UrlSourceLocation> for UrlSourceSpec {
             subdirectory: subdirectory
                 .and_then(|s| Subdirectory::try_from(s).ok())
                 .unwrap_or_default(),
+            matchspec: MatchspecFields::default(),
         }
     }
 }
@@ -795,6 +901,7 @@ impl From<rattler_lock::source::GitSourceLocation> for GitSpec {
                 .subdirectory
                 .and_then(|s| Subdirectory::try_from(s).ok())
                 .unwrap_or_default(),
+            matchspec: MatchspecFields::default(),
         }
     }
 }
@@ -820,7 +927,10 @@ impl From<GitSpec> for rattler_lock::source::GitSourceLocation {
 #[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::PathSourceLocation> for PathSourceSpec {
     fn from(value: rattler_lock::source::PathSourceLocation) -> Self {
-        Self { path: value.path }
+        Self {
+            path: value.path,
+            matchspec: MatchspecFields::default(),
+        }
     }
 }
 
@@ -844,7 +954,7 @@ mod test {
     use serde_json::{Value, json};
     use url::Url;
 
-    use crate::{BinarySpec, PixiSpec};
+    use crate::{BinarySpec, MatchspecFields, PixiSpec};
 
     #[test]
     fn test_is_binary() {
@@ -977,7 +1087,7 @@ mod test {
         };
 
         let pixi_spec = PixiSpec::from_nameless_matchspec(spec.clone(), &channel_config);
-        assert!(matches!(pixi_spec, PixiSpec::DetailedVersion(_)));
+        assert!(matches!(pixi_spec, PixiSpec::Detailed(_)));
 
         let roundtrip = pixi_spec
             .try_into_nameless_match_spec(&channel_config)
@@ -1014,5 +1124,118 @@ mod test {
         let name = PackageName::new_unchecked("openssl");
         let match_spec = spec.to_match_spec(&name, &channel_config).unwrap();
         assert_eq!(match_spec.to_string(), "openssl >=2.0");
+    }
+
+    /// A path source spec carrying matchspec selectors should turn into a
+    /// `MatchSpec` carrying those same selectors (the location itself
+    /// is dropped — `to_match_spec` returns a *binary-shaped* matchspec
+    /// that the solver uses to pick which built output of the source
+    /// satisfies the constraint).
+    #[test]
+    fn test_path_source_with_matchspec_to_match_spec() {
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let spec: PixiSpec = serde_json::from_value(json!({
+            "path": "../my-pkg",
+            "version": ">=1.0",
+            "build": "py310_*",
+            "subdir": "linux-64",
+        }))
+        .unwrap();
+
+        let name = PackageName::new_unchecked("my-pkg");
+        let match_spec = spec.to_match_spec(&name, &channel_config).unwrap();
+
+        assert_eq!(
+            match_spec.name.as_exact().map(PackageName::as_normalized),
+            Some("my-pkg")
+        );
+        assert_eq!(match_spec.version.unwrap().to_string(), ">=1.0");
+        assert_eq!(match_spec.subdir.as_deref(), Some("linux-64"));
+        assert!(match_spec.build.is_some());
+    }
+
+    /// `try_into_nameless_match_spec` on a source variant returns `None`
+    /// (sources don't have a fully-resolved nameless matchspec); use
+    /// `to_match_spec` or read `matchspec()` instead.
+    #[test]
+    fn test_try_into_nameless_match_spec_source_returns_none() {
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+
+        let spec: PixiSpec = serde_json::from_value(json!({
+            "git": "https://example.com/foo.git",
+            "version": ">=1.0",
+        }))
+        .unwrap();
+        assert!(matches!(spec, PixiSpec::Git(_)));
+        let result = spec.try_into_nameless_match_spec(&channel_config).unwrap();
+        assert!(result.is_none());
+    }
+
+    /// `MatchspecFields::from_nameless_match_spec` extracts only the
+    /// matchspec subset; binary-only fields (`url`, `md5`, `sha256`,
+    /// `file_name`, `channel`, `namespace`) are dropped.
+    #[test]
+    fn test_matchspec_fields_extraction_drops_binary_fields() {
+        use rattler_conda_types::NamelessMatchSpec;
+        let nameless = NamelessMatchSpec {
+            version: Some(VersionSpec::from_str(">=1.0", Lenient).unwrap()),
+            build_number: Some(">=3".parse().unwrap()),
+            file_name: Some("foo.conda".to_string()),
+            md5: Some(Default::default()),
+            ..NamelessMatchSpec::default()
+        };
+        let fields = MatchspecFields::from_nameless_match_spec(&nameless);
+        assert_eq!(fields.version.as_ref().unwrap().to_string(), ">=1.0");
+        assert!(fields.build_number.is_some());
+        // Re-encoding to NamelessMatchSpec must NOT carry the binary-only
+        // fields back.
+        let round_tripped = fields.to_nameless_match_spec();
+        assert!(round_tripped.file_name.is_none());
+        assert!(round_tripped.md5.is_none());
+        assert!(round_tripped.url.is_none());
+    }
+
+    /// A bare-version `PixiSpec::Detailed` should serialize as a plain
+    /// string `"==1.2.3"` (not a `{ version = "==1.2.3" }` table), and
+    /// `Display` must mirror that shorter form.
+    #[test]
+    fn test_bare_version_serializes_as_string() {
+        let spec: PixiSpec = serde_json::from_value(json!({ "version": "1.2.3" })).unwrap();
+        let json = serde_json::to_value(&spec).unwrap();
+        assert_eq!(json, json!("==1.2.3"));
+        assert_eq!(spec.to_string(), "==1.2.3");
+    }
+
+    /// A fully-empty Detailed (no `version` and no other fields) is
+    /// semantically `*`. It must serialize as the bare string `"*"` (and
+    /// `Display` the same way) — not as an empty TOML table `{}`. This
+    /// matches the pre-refactor `PixiSpec::Version(VersionSpec::Any)` form.
+    #[test]
+    fn test_empty_detailed_serializes_as_star() {
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        // The `from_nameless_matchspec` path: a bare name with no version
+        // produces a fully-empty Detailed.
+        let nameless = MatchSpec::from_str("any-spec", ParseMatchSpecOptions::lenient())
+            .unwrap()
+            .into_nameless()
+            .1;
+        let spec = PixiSpec::from_nameless_matchspec(nameless, &channel_config);
+        let json = serde_json::to_value(&spec).unwrap();
+        assert_eq!(json, json!("*"));
+        assert_eq!(spec.to_string(), "*");
+    }
+
+    /// A `Detailed` spec with *any* extra field present must serialize
+    /// as a table — the bare-string collapse only applies when only
+    /// `version` is set.
+    #[test]
+    fn test_detailed_with_extra_field_serializes_as_table() {
+        let spec: PixiSpec = serde_json::from_value(json!({
+            "version": "1.2.3",
+            "build": "py37_*",
+        }))
+        .unwrap();
+        let value = serde_json::to_value(&spec).unwrap();
+        assert!(value.is_object(), "expected a JSON object, got {value}");
     }
 }

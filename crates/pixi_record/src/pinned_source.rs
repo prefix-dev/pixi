@@ -148,7 +148,7 @@ impl PinnedSourceSpec {
     ///
     /// ```
     /// use pixi_record::{PinnedSourceSpec, PinnedGitSpec, PinnedGitCheckout};
-    /// use pixi_spec::{SourceSpec, SourceLocationSpec, GitSpec, GitReference};
+    /// use pixi_spec::{GitReference, GitSpec, SourceLocationSpec};
     /// use pixi_git::sha::GitSha;
     /// use url::Url;
     /// use std::str::FromStr;
@@ -164,11 +164,11 @@ impl PinnedSourceSpec {
     ///     },
     /// });
     ///
-    /// let source_spec = SourceLocationSpec::Git(GitSpec {
-    ///     git: Url::parse("https://github.com/user/repo.git")?,
-    ///     rev: None,
-    ///     subdirectory: Default::default(),
-    /// });
+    /// let source_spec = SourceLocationSpec::Git(GitSpec::new(
+    ///     Url::parse("https://github.com/user/repo.git")?,
+    ///     None,
+    ///     Default::default(),
+    /// ));
     ///
     /// assert!(pinned_git.matches_source_spec(&source_spec));
     /// # Ok(())
@@ -930,28 +930,23 @@ impl From<PinnedSourceSpec> for SourceLocationSpec {
 
 impl From<PinnedPathSpec> for PathSourceSpec {
     fn from(value: PinnedPathSpec) -> Self {
-        Self { path: value.path }
+        Self::new(value.path)
     }
 }
 
 impl From<PinnedUrlSpec> for UrlSourceSpec {
     fn from(value: PinnedUrlSpec) -> Self {
-        Self {
-            url: value.url,
-            sha256: Some(value.sha256),
-            md5: value.md5,
-            subdirectory: value.subdirectory,
-        }
+        Self::new(value.url, value.md5, Some(value.sha256), value.subdirectory)
     }
 }
 
 impl From<PinnedGitSpec> for GitSpec {
     fn from(value: PinnedGitSpec) -> Self {
-        Self {
-            git: value.git,
-            subdirectory: value.source.subdirectory,
-            rev: Some(value.source.reference),
-        }
+        Self::new(
+            value.git,
+            Some(value.source.reference),
+            value.source.subdirectory,
+        )
     }
 }
 
@@ -982,6 +977,7 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec);
@@ -1001,6 +997,7 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
         let result = locked_git_spec_without_git_suffix.satisfies(&requested_git_spec);
@@ -1020,6 +1017,7 @@ mod tests {
             git: Url::parse("https://github.com/example/repo").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec_without_suffix);
@@ -1039,6 +1037,7 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec);
@@ -1058,6 +1057,7 @@ mod tests {
             git: Url::parse("git+https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec_with_prefix);
@@ -1082,6 +1082,7 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("d2e32".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
@@ -1103,6 +1104,7 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
@@ -1126,6 +1128,7 @@ mod tests {
             // we are not specifying the rev
             // and request the default branch
             rev: None,
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec);
@@ -1149,6 +1152,7 @@ mod tests {
             // we are not specifying the rev
             // and request the default branch
             rev: None,
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
@@ -1173,6 +1177,7 @@ mod tests {
             // we are not specifying the rev
             // and request the default branch
             rev: None,
+            matchspec: pixi_spec::MatchspecFields::default(),
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
@@ -1193,6 +1198,7 @@ mod tests {
 
         let spec = SourceLocationSpec::Path(PathSourceSpec {
             path: Utf8TypedPathBuf::from("/path/to/source"),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(pinned.matches_source_spec(&spec));
@@ -1206,6 +1212,7 @@ mod tests {
 
         let spec = SourceLocationSpec::Path(PathSourceSpec {
             path: Utf8TypedPathBuf::from("/different/path"),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1226,6 +1233,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo.git").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         // Should match despite .git suffix difference
@@ -1247,6 +1255,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         // Should match despite .git suffix difference
@@ -1268,6 +1277,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo2").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1288,6 +1298,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         // Should match - spec doesn't care about subdirectory
@@ -1309,6 +1320,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Subdirectory::try_from("subdir").unwrap(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(pinned.matches_source_spec(&spec));
@@ -1329,6 +1341,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Subdirectory::try_from("subdir2").unwrap(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1349,6 +1362,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Subdirectory::try_from("subdir").unwrap(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         // Should not match - spec requires a subdirectory that pinned doesn't have
@@ -1372,6 +1386,7 @@ mod tests {
             sha256: None,
             md5: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(pinned.matches_source_spec(&spec));
@@ -1394,6 +1409,7 @@ mod tests {
             sha256: None,
             md5: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1409,6 +1425,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1430,6 +1447,7 @@ mod tests {
             sha256: None,
             md5: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1449,6 +1467,7 @@ mod tests {
 
         let spec = SourceLocationSpec::Path(PathSourceSpec {
             path: Utf8TypedPathBuf::from("/path/to/source"),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1473,6 +1492,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: Some(GitReference::Rev("v2.0.0".to_string())),
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1495,6 +1515,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: Some(GitReference::Branch("main".to_string())),
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         assert!(pinned.matches_source_spec(&spec));
@@ -1515,6 +1536,7 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            matchspec: pixi_spec::MatchspecFields::default(),
         });
 
         // Should match - GitHub URLs are case-insensitive

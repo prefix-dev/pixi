@@ -400,8 +400,29 @@ pub fn parse_specs_for_platform(
         })
         // Only upgrade version specs
         .filter_map(|(name, req)| match req {
-            PixiSpec::DetailedVersion(version_spec) => {
-                let mut nameless_match_spec = version_spec
+            PixiSpec::Detailed(detailed) => {
+                // A bare version with no other fields collapses to "upgrade to
+                // anything"; preserve the old `PixiSpec::Version(_)` shortcut so
+                // we don't carry over a single `version` constraint as if it
+                // were a detailed selector.
+                let is_bare_version_only = detailed.build.is_none()
+                    && detailed.build_number.is_none()
+                    && detailed.file_name.is_none()
+                    && detailed.extras.is_none()
+                    && detailed.flags.is_none()
+                    && detailed.channel.is_none()
+                    && detailed.subdir.is_none()
+                    && detailed.md5.is_none()
+                    && detailed.sha256.is_none()
+                    && detailed.license.is_none()
+                    && detailed.license_family.is_none()
+                    && detailed.condition.is_none()
+                    && detailed.track_features.is_none();
+                if is_bare_version_only {
+                    return Some((name.clone(), (MatchSpec::from(name), spec_type)));
+                }
+
+                let mut nameless_match_spec = detailed
                     .try_into_nameless_match_spec(&workspace.workspace().channel_config())
                     .ok()?;
                 // If it is a detailed spec, always unset version
@@ -437,7 +458,6 @@ pub fn parse_specs_for_platform(
                     ),
                 ))
             }
-            PixiSpec::Version(_) => Some((name.clone(), (MatchSpec::from(name), spec_type))),
             _ => {
                 tracing::debug!("skipping non-version spec {:?}", req);
                 None

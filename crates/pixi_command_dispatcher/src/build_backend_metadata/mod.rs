@@ -150,7 +150,7 @@ pub struct BuildBackendMetadataInner {
     /// The optional pinned location of the source code. If not provided, the
     /// location in the manifest is resolved.
     ///
-    /// This is passed as a hint. If the [`pixi_spec::SourceSpec`] in the
+    /// This is passed as a hint. If the [`pixi_spec::SourceLocationSpec`] in the
     /// discovered manifest does not match with the pinned source provided
     /// here, the one in the manifest takes precedence and it is reresolved.
     ///

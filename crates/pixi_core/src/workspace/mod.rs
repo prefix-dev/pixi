@@ -46,7 +46,7 @@ use pixi_manifest::{
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_spec::SourceSpec;
+use pixi_spec::SourceLocationSpec;
 use pixi_utils::reqwest::build_lazy_reqwest_clients;
 use pixi_utils::{
     reqwest::LazyReqwestClient,
@@ -204,7 +204,7 @@ pub type PypiDeps = indexmap::IndexMap<
 >;
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
-pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
+pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceLocationSpec, SpecType)>;
 
 impl Workspace {
     /// Constructs a new instance from an internal manifest representation

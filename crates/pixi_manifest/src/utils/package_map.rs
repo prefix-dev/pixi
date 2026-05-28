@@ -2,7 +2,7 @@ use std::{fmt, marker::PhantomData, ops::Range, str::FromStr};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
-use pixi_spec::{BinarySpec, PixiSpec, SourceSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceLocationSpec};
 use rattler_conda_types::PackageName;
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -68,8 +68,8 @@ impl Extend<(rattler_conda_types::PackageName, PixiSpec)> for UniquePackageMap {
     }
 }
 
-impl Extend<(rattler_conda_types::PackageName, SourceSpec)> for UniquePackageMap {
-    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, SourceSpec)>>(
+impl Extend<(rattler_conda_types::PackageName, SourceLocationSpec)> for UniquePackageMap {
+    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, SourceLocationSpec)>>(
         &mut self,
         iter: T,
     ) {

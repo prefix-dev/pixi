@@ -632,12 +632,12 @@ fn verify_locked_against_backend_specs(
             }
             PackageSpec::Source(source) => {
                 let resolved = from_source_spec_v1(source.clone()).resolve(source_anchor);
-                if !locked_view.satisfies_source(&dep_name, &resolved.location) {
+                if !locked_view.satisfies_source(&dep_name, &resolved) {
                     return Err(Box::new(PlatformUnsat::SourceBuildHostSourceMissing {
                         package: package.as_source().to_string(),
                         env,
                         name: dep_name.as_source().to_string(),
-                        location: resolved.location.to_string(),
+                        location: resolved.to_string(),
                     }));
                 }
             }

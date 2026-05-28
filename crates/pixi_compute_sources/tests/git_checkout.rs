@@ -25,11 +25,7 @@ async fn pin_and_checkout_git_default_branch() {
         ..Default::default()
     });
 
-    let spec = GitSpec {
-        git: repo.base_url.clone(),
-        rev: None,
-        subdirectory: Subdirectory::default(),
-    };
+    let spec = GitSpec::new(repo.base_url.clone(), None, Subdirectory::default());
 
     let checkout = engine
         .with_ctx(async |ctx| ctx.pin_and_checkout_git(spec).await)
@@ -72,11 +68,11 @@ async fn git_checkout_fires_full_reporter_lifecycle() {
 
     engine
         .with_ctx(async |ctx| {
-            ctx.pin_and_checkout_git(GitSpec {
-                git: repo.base_url.clone(),
-                rev: None,
-                subdirectory: Subdirectory::default(),
-            })
+            ctx.pin_and_checkout_git(GitSpec::new(
+                repo.base_url.clone(),
+                None,
+                Subdirectory::default(),
+            ))
             .await
         })
         .await

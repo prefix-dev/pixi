@@ -233,16 +233,16 @@ async fn assemble_source_record_inner(
         if let Either::Left(source) = spec.clone().into_source_or_binary() {
             match sources.entry(name.clone()) {
                 std::collections::hash_map::Entry::Occupied(entry) => {
-                    if entry.get() == &source.location {
+                    if entry.get() == &source {
                         return Err(SourceRecordError::DuplicateSourceDependency {
                             package: name.clone(),
                             source1: Box::new(entry.get().clone()),
-                            source2: Box::new(source.location.clone()),
+                            source2: Box::new(source.clone()),
                         });
                     }
                 }
                 std::collections::hash_map::Entry::Vacant(entry) => {
-                    entry.insert(source.location.clone());
+                    entry.insert(source.clone());
                 }
             }
         }

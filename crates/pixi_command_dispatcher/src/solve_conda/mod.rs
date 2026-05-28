@@ -5,7 +5,7 @@ use std::{
 
 use itertools::Itertools;
 use pixi_record::{PixiRecord, SourceRecord};
-use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
+use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
@@ -35,7 +35,7 @@ pub struct SolveCondaEnvironmentSpec {
 
     /// Requirements on source packages.
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
-    pub source_specs: DependencyMap<rattler_conda_types::PackageName, SourceSpec>,
+    pub source_specs: DependencyMap<rattler_conda_types::PackageName, SourceLocationSpec>,
 
     /// Requirements on binary packages.
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]

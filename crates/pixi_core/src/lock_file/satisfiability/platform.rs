@@ -21,7 +21,7 @@ use pixi_manifest::{EnvironmentName, FeaturesExt};
 use pixi_record::{
     DevSourceRecord, LockFileResolver, PixiRecord, SourceRecordData, UnresolvedPixiRecord,
 };
-use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
+use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     as_uv_req, pep508_requirement_to_uv_requirement, to_normalize, to_uv_specifiers, to_uv_version,
@@ -332,7 +332,7 @@ pub enum RequirementOrigin {
 pub enum Dependency {
     Input(PackageName, PixiSpec, Cow<'static, str>),
     Conda(MatchSpec, Cow<'static, str>),
-    CondaSource(PackageName, SourceSpec, Cow<'static, str>),
+    CondaSource(PackageName, SourceLocationSpec, Cow<'static, str>),
     PyPi(
         uv_distribution_types::Requirement,
         Cow<'static, str>,
@@ -370,7 +370,7 @@ pub struct VerifiedIndividualEnvironment {
 
 /// Resolve dev dependencies and get all their dependencies
 pub async fn resolve_dev_dependencies(
-    dev_dependencies: Vec<(PackageName, SourceSpec)>,
+    dev_dependencies: Vec<(PackageName, SourceLocationSpec)>,
     command_dispatcher: &CommandDispatcher,
     channel_config: &rattler_conda_types::ChannelConfig,
     workspace_env_ref: WorkspaceEnvRef,
@@ -414,7 +414,7 @@ pub async fn resolve_dev_dependencies(
 /// Resolves all dependencies of a single dev dependency
 async fn resolve_single_dev_dependency(
     package_name: PackageName,
-    source_spec: SourceSpec,
+    source_spec: SourceLocationSpec,
     command_dispatcher: CommandDispatcher,
     channel_config: rattler_conda_types::ChannelConfig,
     workspace_env_ref: WorkspaceEnvRef,
@@ -422,7 +422,7 @@ async fn resolve_single_dev_dependency(
 ) -> Result<Vec<Dependency>, CommandDispatcherError<PlatformUnsat>> {
     let pinned_source = command_dispatcher
         .engine()
-        .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec.location).await)
+        .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec).await)
         .await
         .map_err_into_dispatcher(PlatformUnsat::from)?;
 
@@ -926,7 +926,9 @@ async fn verify_package_platform_satisfiability(
                         ))
                     }) {
                         let anchored_location = anchor.resolve(source.clone());
-                        let source_spec = SourceSpec::new(anchored_location, spec);
+                        let mut source_spec = anchored_location;
+                        *source_spec.matchspec_mut() =
+                            pixi_spec::MatchspecFields::from_nameless_match_spec(&spec);
                         conda_stack.push(Dependency::CondaSource(
                             package_name.clone(),
                             source_spec,
@@ -1218,7 +1220,7 @@ fn find_matching_package(
 fn find_matching_source_package(
     locked_pixi_records: &PixiRecordsByName,
     name: PackageName,
-    source_spec: SourceSpec,
+    source_spec: SourceLocationSpec,
     source: Cow<str>,
 ) -> Result<CondaPackageIdx, Box<PlatformUnsat>> {
     // Find the package that matches the source spec.
@@ -1243,7 +1245,7 @@ fn find_matching_source_package(
 
     source_package
         .manifest_source
-        .satisfies(&source_spec.location)
+        .satisfies(&source_spec)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
 
     let match_spec = source_spec.to_nameless_match_spec();

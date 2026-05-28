@@ -8,7 +8,7 @@ use rattler_conda_types::{NamelessMatchSpec, package::CondaArchiveType};
 use serde_with::serde_as;
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
-use crate::{BinarySpec, SpecConversionError};
+use crate::{BinarySpec, MatchspecFields, SpecConversionError};
 
 /// A specification of a package from a path.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -51,7 +51,10 @@ impl PathSpec {
         if self.is_binary() {
             Err(self)
         } else {
-            Ok(PathSourceSpec { path: self.path })
+            Ok(PathSourceSpec {
+                path: self.path,
+                matchspec: MatchspecFields::default(),
+            })
         }
     }
 
@@ -69,7 +72,10 @@ impl PathSpec {
         if self.is_binary() {
             Either::Right(PathBinarySpec { path: self.path })
         } else {
-            Either::Left(PathSourceSpec { path: self.path })
+            Either::Left(PathSourceSpec {
+                path: self.path,
+                matchspec: MatchspecFields::default(),
+            })
         }
     }
 }
@@ -85,12 +91,26 @@ impl Display for PathSpec {
 // serialization and deserialization below. See git blame history
 // right before this line was added.
 
-/// Path to a source package. Different from [`PathSpec`] in that this type only
+/// Path to a source package, optionally constrained by match-spec
+/// selectors. Different from [`PathSpec`] in that this type only
 /// refers to source packages.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PathSourceSpec {
     /// The path to the package. Either a directory or an archive.
     pub path: Utf8TypedPathBuf,
+
+    /// Match-spec selectors applied to the built output.
+    pub matchspec: MatchspecFields,
+}
+
+impl PathSourceSpec {
+    /// Constructs a new [`PathSourceSpec`] with no matchspec selectors.
+    pub fn new(path: impl Into<Utf8TypedPathBuf>) -> Self {
+        Self {
+            path: path.into(),
+            matchspec: MatchspecFields::default(),
+        }
+    }
 }
 
 impl Display for PathSourceSpec {
@@ -105,12 +125,15 @@ impl serde::Serialize for PathSourceSpec {
         S: serde::Serializer,
     {
         #[derive(serde::Serialize)]
-        struct Raw {
+        struct Raw<'a> {
             path: String,
+            #[serde(flatten)]
+            matchspec: &'a MatchspecFields,
         }
 
         Raw {
             path: self.path.to_string(),
+            matchspec: &self.matchspec,
         }
         .serialize(serializer)
     }
@@ -124,10 +147,13 @@ impl<'de> serde::Deserialize<'de> for PathSourceSpec {
         #[derive(serde::Deserialize)]
         struct Raw {
             path: String,
+            #[serde(flatten)]
+            matchspec: MatchspecFields,
         }
 
         Raw::deserialize(deserializer).map(|raw| PathSourceSpec {
             path: raw.path.into(),
+            matchspec: raw.matchspec,
         })
     }
 }
@@ -149,14 +175,20 @@ impl PathSourceSpec {
     }
 }
 
-/// Path to a source package. Different from [`PathSpec`] in that this type only
-/// refers to source packages.
+/// Path to a binary conda archive. Different from [`PathSpec`] in that
+/// this type only refers to binary packages.
 #[serde_as]
 #[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize)]
 pub struct PathBinarySpec {
     /// The path to the package. Either a directory or an archive.
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub path: Utf8TypedPathBuf,
+}
+
+impl Display for PathBinarySpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path)
+    }
 }
 
 impl From<PathBinarySpec> for PathSpec {

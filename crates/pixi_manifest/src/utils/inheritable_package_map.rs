@@ -431,7 +431,7 @@ mod test {
             .get(&PackageName::from_str("numpy").unwrap())
             .unwrap();
         match spec {
-            PixiSpec::DetailedVersion(detailed) => {
+            PixiSpec::Detailed(detailed) => {
                 assert_eq!(detailed.version.as_ref().unwrap().to_string(), "1.*");
                 assert!(detailed.channel.is_some());
             }
@@ -454,7 +454,7 @@ mod test {
             .get(&PackageName::from_str("boltons").unwrap())
             .unwrap();
         match spec {
-            PixiSpec::DetailedVersion(detailed) => {
+            PixiSpec::Detailed(detailed) => {
                 assert_eq!(detailed.version.as_ref().unwrap().to_string(), ">=24");
                 assert!(
                     detailed.channel.is_some(),

@@ -154,7 +154,7 @@ impl Pin {
             let build_matcher = build_string
                 .parse()
                 .map_err(|e| PinError::BuildStringParse(format!("{e}")))?;
-            return Ok(PixiSpec::DetailedVersion(Box::new(DetailedSpec {
+            return Ok(PixiSpec::Detailed(Box::new(DetailedSpec {
                 version: Some(version_spec),
                 build: Some(build_matcher),
                 ..Default::default()
@@ -183,14 +183,17 @@ impl Pin {
             let build_matcher = build
                 .parse()
                 .map_err(|e| PinError::BuildStringParse(format!("{e}")))?;
-            return Ok(PixiSpec::DetailedVersion(Box::new(DetailedSpec {
+            return Ok(PixiSpec::Detailed(Box::new(DetailedSpec {
                 version: Some(version_spec),
                 build: Some(build_matcher),
                 ..Default::default()
             })));
         }
 
-        Ok(PixiSpec::Version(version_spec))
+        Ok(PixiSpec::Detailed(Box::new(DetailedSpec {
+            version: Some(version_spec),
+            ..Default::default()
+        })))
     }
 }
 
@@ -330,8 +333,8 @@ mod tests {
         };
         let v = Version::from_str("3.11.5").unwrap();
         let spec = pin.resolve(&v, "h12345").unwrap();
-        let PixiSpec::DetailedVersion(detailed) = spec else {
-            panic!("expected DetailedVersion");
+        let PixiSpec::Detailed(detailed) = spec else {
+            panic!("expected Detailed");
         };
         assert_eq!(detailed.version.unwrap().to_string(), "==3.11.5");
         assert!(detailed.build.is_some());
@@ -347,10 +350,10 @@ mod tests {
         };
         let v = Version::from_str("3.11.5").unwrap();
         let spec = pin.resolve(&v, "h12345").unwrap();
-        let PixiSpec::Version(vs) = spec else {
-            panic!("expected Version");
+        let PixiSpec::Detailed(detailed) = spec else {
+            panic!("expected Detailed");
         };
-        assert_eq!(vs.to_string(), ">=3.11,<3.12.0a0");
+        assert_eq!(detailed.version.unwrap().to_string(), ">=3.11,<3.12.0a0");
     }
 
     #[test]
@@ -363,7 +366,10 @@ mod tests {
         };
         let v = Version::from_str("1.0.0").unwrap();
         let spec = pin.resolve(&v, "h0").unwrap();
-        assert!(matches!(spec, PixiSpec::Version(VersionSpec::Any)));
+        let PixiSpec::Detailed(detailed) = spec else {
+            panic!("expected Detailed");
+        };
+        assert!(matches!(detailed.version, Some(VersionSpec::Any)));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_manifest/src/toml/build_backend.rs
-assertion_line: 333
+assertion_line: 389
 expression: parsed.value
 ---
 PackageBuild {
@@ -9,7 +9,7 @@ PackageBuild {
             normalized: None,
             source: "foobar",
         },
-        spec: DetailedVersion(
+        spec: Detailed(
             DetailedSpec {
                 version: Some(
                     Any,

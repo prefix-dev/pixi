@@ -10,7 +10,7 @@ use pixi_manifest::{
     EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements,
     WorkspaceManifest,
 };
-use pixi_spec::SourceSpec;
+use pixi_spec::SourceLocationSpec;
 use pixi_utils::prefix::Prefix;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, PackageName, Platform};
 
@@ -133,7 +133,7 @@ impl<'p> GroupedEnvironment<'p> {
     pub fn combined_dev_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> IndexMap<PackageName, OrderSet<SourceSpec>> {
+    ) -> IndexMap<PackageName, OrderSet<SourceLocationSpec>> {
         let mut result = IndexMap::new();
         for feature in self.features().rev() {
             if let Some(deps) = feature.dev_dependencies(platform) {

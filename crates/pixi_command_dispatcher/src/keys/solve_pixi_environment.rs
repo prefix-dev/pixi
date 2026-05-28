@@ -24,7 +24,6 @@ use pixi_compute_reporters::OperationId;
 use pixi_record::{DevSourceRecord, PinnedSourceSpec, PixiRecord, UnresolvedPixiRecord};
 use pixi_spec::{
     BinarySpec, DevSourceSpec, PixiSpec, ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec,
-    SourceSpec,
 };
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
@@ -296,7 +295,7 @@ async fn compute_inner(
     // assembled records (not raw `CondaOutput.run_dependencies`) is
     // essential: source deps introduced purely via build-env or host-env
     // run-exports only appear on the assembled record.
-    let seeds: Vec<(PackageName, SourceSpec)> = source_specs
+    let seeds: Vec<(PackageName, SourceLocationSpec)> = source_specs
         .iter_specs()
         .map(|(n, s)| (n.clone(), s.clone()))
         .chain(dev_source_source_specs.into_specs())
@@ -418,9 +417,10 @@ async fn compute_inner(
 /// the seeds. Binary match specs are NOT collected here; they're
 /// derived downstream inside [`SolveCondaKey`] from the same
 /// assembled records (see `derive_fetch_specs_from_source_repodata`).
+#[allow(clippy::mutable_key_type)]
 async fn walk_and_resolve(
     ctx: &mut ComputeCtx,
-    seeds: Vec<(PackageName, SourceSpec)>,
+    seeds: Vec<(PackageName, SourceLocationSpec)>,
     env_ref: &EnvironmentRef,
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
@@ -506,14 +506,7 @@ async fn walk_and_resolve(
     };
 
     for (name, spec) in seeds {
-        push(
-            &mut p,
-            &mut pending,
-            &mut seen_sources,
-            name,
-            spec.location,
-            None,
-        );
+        push(&mut p, &mut pending, &mut seen_sources, name, spec, None);
     }
 
     while let Some(result) = pending.next().await {
@@ -572,7 +565,7 @@ async fn process_dev_sources(
             let name = name.clone();
             let env_ref = spec.env_ref.clone();
             let preferred_build_source = spec.preferred_build_source.get(&name).cloned();
-            let fut = ctx.pin_and_checkout(dev_spec.source.location.clone());
+            let fut = ctx.pin_and_checkout(dev_spec.source.clone());
             async move {
                 let checkout = fut
                     .await

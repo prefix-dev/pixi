@@ -1,9 +1,14 @@
 use pixi_build_types::{BinaryPackageSpec, SourcePackageLocationSpec, SourcePackageSpec};
-use pixi_spec::{BinarySpec, DetailedSpec, UrlBinarySpec};
+use pixi_spec::{BinarySpec, DetailedSpec, MatchspecFields, UrlBinarySpec};
 use rattler_conda_types::NamedChannelOrUrl;
 
-/// Converts a [`SourcePackageSpec`] to a [`pixi_spec::SourceSpec`].
-pub fn from_source_spec_v1(source: SourcePackageSpec) -> pixi_spec::SourceSpec {
+/// Converts a [`SourcePackageSpec`] to a [`pixi_spec::SourceLocationSpec`].
+///
+/// The [`SourcePackageSpec`] carries match-spec selectors (`version`, `build`,
+/// `build_number`, `subdir`, `license`) alongside the source location. After
+/// the six-variant `PixiSpec` refactor those selectors live in
+/// [`MatchspecFields`] on the inner source-location variant.
+pub fn from_source_spec_v1(source: SourcePackageSpec) -> pixi_spec::SourceLocationSpec {
     let SourcePackageSpec {
         location,
         version,
@@ -12,21 +17,17 @@ pub fn from_source_spec_v1(source: SourcePackageSpec) -> pixi_spec::SourceSpec {
         subdir,
         license,
     } = source;
-    let location = from_source_package_location_spec(location);
-    pixi_spec::SourceSpec {
-        location,
+    let matchspec = MatchspecFields {
         version,
         build,
         build_number,
         subdir,
         license,
-        extras: None,
-        flags: None,
-        namespace: None,
-        license_family: None,
-        condition: None,
-        track_features: None,
-    }
+        ..MatchspecFields::default()
+    };
+    let mut location = from_source_package_location_spec(location);
+    *location.matchspec_mut() = matchspec;
+    location
 }
 
 pub fn from_source_package_location_spec(
@@ -42,6 +43,7 @@ pub fn from_source_package_location_spec(
                     .subdirectory
                     .and_then(|s| pixi_spec::Subdirectory::try_from(s).ok())
                     .unwrap_or_default(),
+                matchspec: MatchspecFields::default(),
             })
         }
 
@@ -66,12 +68,14 @@ pub fn from_source_package_location_spec(
                     .subdirectory
                     .and_then(|s| pixi_spec::Subdirectory::try_from(s).ok())
                     .unwrap_or_default(),
+                matchspec: MatchspecFields::default(),
             })
         }
 
         SourcePackageLocationSpec::Path(path) => {
             pixi_spec::SourceLocationSpec::Path(pixi_spec::PathSourceSpec {
                 path: path.path.into(),
+                matchspec: MatchspecFields::default(),
             })
         }
     }

@@ -5,9 +5,10 @@ use serde::{Serialize, Serializer};
 use thiserror::Error;
 use url::Url;
 
-use crate::Subdirectory;
+use crate::{MatchspecFields, Subdirectory};
 
-/// A specification of a package from a git repository.
+/// A specification of a package from a git repository, optionally
+/// constrained by match-spec selectors (`version`, `build`, `extras`, …).
 #[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct GitSpec {
@@ -21,6 +22,22 @@ pub struct GitSpec {
     /// The git subdirectory of the package
     #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
     pub subdirectory: Subdirectory,
+
+    /// Match-spec selectors applied to the built output (flattened).
+    #[serde(flatten)]
+    pub matchspec: MatchspecFields,
+}
+
+impl GitSpec {
+    /// Constructs a new [`GitSpec`] with no matchspec selectors.
+    pub fn new(git: Url, rev: Option<GitReference>, subdirectory: Subdirectory) -> Self {
+        Self {
+            git,
+            rev,
+            subdirectory,
+            matchspec: MatchspecFields::default(),
+        }
+    }
 }
 
 impl Display for GitSpec {
