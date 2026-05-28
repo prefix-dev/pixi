@@ -14,7 +14,7 @@ The `--target-channel` value determines the upload backend:
 |-------------|---------|
 | `https://prefix.dev/<channel>` | [prefix.dev](https://prefix.dev) |
 | `https://anaconda.org/<owner>` | [Anaconda.org](https://anaconda.org) |
-| `https://conda.cloudsmith.io/<owner>/<repository>/` | [Cloudsmith](https://cloudsmith.com) |
+| `cloudsmith://<owner>/<repository>/` | [Cloudsmith](https://cloudsmith.com) |
 | `s3://bucket-name/channel` | S3-compatible storage |
 | `quetz://server/<channel>` | [Quetz](https://github.com/mamba-org/quetz) |
 | `artifactory://server/<channel>` | [JFrog Artifactory](https://jfrog.com/artifactory/) |
@@ -69,11 +69,11 @@ pixi publish --target-channel https://anaconda.org/my-username/dev
 
 ### Publishing to Cloudsmith
 
-Pass the Cloudsmith Conda channel URL as the target. Pixi derives the owner and repository from that URL and uses Cloudsmith's API for the upload.
+Pass the Cloudsmith channel URL as the target. Pixi derives the owner and repository from that URL and uses Cloudsmith's API for the upload.
 
 ```shell
 # Build and publish to a Cloudsmith Conda repository
-pixi publish --to https://conda.cloudsmith.io/my-org/my-repository/
+pixi publish --to cloudsmith://my-org/my-repository/
 ```
 
 For authentication, set `CLOUDSMITH_API_KEY` or store credentials for the Cloudsmith API URL. Set `CLOUDSMITH_API_URL` only when targeting a custom Cloudsmith API endpoint.

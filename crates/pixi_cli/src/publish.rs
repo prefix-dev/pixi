@@ -46,7 +46,7 @@ use rattler_package_streaming::seek::read_package_file;
 /// Supported destinations for `--target-channel` (alias `--to`):
 ///   - prefix.dev: `https://prefix.dev/<channel-name>`
 ///   - anaconda.org: `https://anaconda.org/<owner>/<label>`
-///   - Cloudsmith: `https://conda.cloudsmith.io/<owner>/<repository>/`
+///   - Cloudsmith: `cloudsmith://<owner>/<repository>`
 ///   - S3: `s3://bucket-name`
 ///   - Quetz: `quetz://server/<channel>`
 ///   - Artifactory: `artifactory://server/<channel>`
@@ -95,7 +95,7 @@ pub struct Args {
     #[arg(long)]
     pub path: Option<PathBuf>,
 
-    /// The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, conda.cloudsmith.io, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel.
+    /// The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, cloudsmith://, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel.
     ///
     /// Mutually exclusive with `--target-dir`.
     #[arg(long, visible_alias = "to", conflicts_with = "target_dir")]
@@ -321,7 +321,7 @@ pub struct PublishContext {
     pub s3_options: HashMap<String, s3_middleware::S3Config>,
 
     /// Credential lookup used by every non-S3 backend (prefix.dev, anaconda,
-    /// quetz, artifactory) and as the access-key source when S3 credentials
+    /// quetz, artifactory, cloudsmith) and as the access-key source when S3 credentials
     /// are not provided directly.
     pub auth_storage: AuthenticationStorage,
 
@@ -886,6 +886,7 @@ async fn upload_packages_to_channel(
         "quetz" => upload_to_quetz(url, package_paths, ctx).await,
         "artifactory" => upload_to_artifactory(url, package_paths, ctx).await,
         "prefix" => upload_to_prefix(url, package_paths, ctx).await,
+        "cloudsmith" => upload_to_cloudsmith(url, package_paths, ctx).await,
         "file" => {
             let destination = url
                 .to_file_path()
@@ -899,20 +900,18 @@ async fn upload_packages_to_channel(
                 upload_to_prefix(url, package_paths, ctx).await
             } else if host.contains("anaconda.org") {
                 upload_to_anaconda(url, package_paths, ctx).await
-            } else if host.contains("conda.cloudsmith.io") {
-                upload_to_cloudsmith(url, package_paths, ctx).await
             } else if host.contains("quetz") {
                 upload_to_quetz(url, package_paths, ctx).await
             } else {
                 Err(miette::miette!(
                     "Cannot determine upload backend from URL '{}'. \n\
-                    Supported hosts: prefix.dev, anaconda.org, conda.cloudsmith.io, or use explicit schemes: s3://, quetz://, artifactory://, prefix://",
+                    Supported hosts: prefix.dev, anaconda.org, or use explicit schemes: s3://, quetz://, artifactory://, prefix://, cloudsmith://",
                     url
                 ))
             }
         }
         _ => Err(miette::miette!(
-            "Unsupported URL scheme '{}'. Supported schemes: file://, s3://, quetz://, artifactory://, prefix://, http://, https://",
+            "Unsupported URL scheme '{}'. Supported schemes: file://, s3://, quetz://, artifactory://, prefix://, cloudsmith://, http://, https://",
             scheme
         )),
     }
@@ -1073,32 +1072,6 @@ async fn upload_to_anaconda(
         .into_diagnostic()
 }
 
-fn parse_cloudsmith_repository(url: &Url) -> miette::Result<(String, String)> {
-    let host = url.host_str().unwrap_or("");
-    if !matches!(url.scheme(), "http" | "https") || !host.contains("conda.cloudsmith.io") {
-        return Err(miette::miette!(
-            "Invalid Cloudsmith URL: expected https://conda.cloudsmith.io/owner/repo/"
-        ));
-    }
-
-    let mut segments = url
-        .path_segments()
-        .ok_or_else(|| miette::miette!("Invalid Cloudsmith URL: missing path"))?
-        .filter(|segment| !segment.is_empty());
-    let owner = segments.next().ok_or_else(|| {
-        miette::miette!(
-            "Invalid Cloudsmith Conda URL: missing owner. Expected https://conda.cloudsmith.io/owner/repo/"
-        )
-    })?;
-    let repo = segments.next().ok_or_else(|| {
-        miette::miette!(
-            "Invalid Cloudsmith Conda URL: missing repository. Expected https://conda.cloudsmith.io/owner/repo/"
-        )
-    })?;
-
-    Ok((owner.to_string(), repo.to_string()))
-}
-
 /// Upload packages to Cloudsmith.
 async fn upload_to_cloudsmith(
     url: &Url,
@@ -1110,7 +1083,27 @@ async fn upload_to_cloudsmith(
 
     tracing::info!("Uploading packages to Cloudsmith: {}", url);
 
-    let (owner, repo) = parse_cloudsmith_repository(url)?;
+    let owner = url
+        .host_str()
+        .ok_or_else(|| miette::miette!("Invalid Cloudsmith URL: missing owner"))?
+        .to_string();
+
+    let mut segments = url
+        .path_segments()
+        .ok_or_else(|| miette::miette!("Invalid Cloudsmith URL: missing repo"))?
+        .filter(|s| !s.is_empty());
+
+    let repo = segments
+        .next()
+        .ok_or_else(|| miette::miette!("Invalid Cloudsmith URL: missing repo"))?
+        .to_string();
+
+    if segments.next().is_some() {
+        return Err(miette::miette!(
+            "Invalid Cloudsmith URL: expected cloudsmith://owner/repo"
+        ));
+    }
+
     let api_key = std::env::var("CLOUDSMITH_API_KEY").ok();
     let api_url = std::env::var("CLOUDSMITH_API_URL")
         .ok()
@@ -1370,33 +1363,6 @@ mod tests {
 
     use super::*;
     use rattler_conda_types::{compression_level::CompressionLevel, package::CondaArchiveType};
-
-    #[test]
-    fn parse_cloudsmith_conda_channel_target() {
-        let url = url::Url::parse("https://conda.cloudsmith.io/my-owner/my-repo/").unwrap();
-        let (owner, repo) = parse_cloudsmith_repository(&url).unwrap();
-
-        assert_eq!(owner, "my-owner");
-        assert_eq!(repo, "my-repo");
-    }
-
-    #[test]
-    fn reject_cloudsmith_conda_channel_without_repo() {
-        let url = url::Url::parse("https://conda.cloudsmith.io/my-owner/").unwrap();
-
-        assert!(parse_cloudsmith_repository(&url).is_err());
-    }
-
-    #[test]
-    fn parse_target_accepts_cloudsmith_url() {
-        let url = parse_target(
-            "https://conda.cloudsmith.io/my-owner/my-repo/",
-            Path::new("/tmp"),
-        )
-        .unwrap();
-
-        assert_eq!(url.host_str(), Some("conda.cloudsmith.io"));
-    }
 
     #[test]
     fn parse_variant_accepts_single_and_comma_list() {
