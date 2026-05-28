@@ -138,6 +138,10 @@ pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 
 bzip2 = "0.6.1"
+lzma-rust2 = { version = "0.16", default-features = false, features = [
+  "xz",
+  "std",
+] }
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.13", default-features = false }
@@ -182,7 +186,6 @@ toml = "1.0.0"
 toml-span = "0.7.0"
 toml_edit = "0.23.0"
 tracing = "0.1.41"
-lzma-rust2 = { version = "0.16", default-features = false, features = ["xz", "std"] }
 # Forcing the version due to this PR https://github.com/tokio-rs/tracing/pull/3368
 tracing-subscriber = "=0.3.19"
 tracing-test = "0.2"
