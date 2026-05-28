@@ -3,7 +3,6 @@ use std::io::Write;
 use std::str::FromStr;
 
 use clap::Parser;
-use fancy_display::FancyDisplay;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
@@ -11,6 +10,7 @@ use pixi_manifest::{
     FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit,
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
@@ -354,30 +354,6 @@ pub struct ListArgs {
 }
 
 #[derive(Parser, Debug)]
-pub struct ShowArgs {
-    /// Name of the platform to inspect. Mutually exclusive with `--all` and
-    /// `--current`.
-    pub name: Option<PixiPlatformName>,
-
-    /// Show every workspace platform. When combined with `--current`, the
-    /// platforms matching the auto-detected current subdir come first,
-    /// followed by a separator, then the rest.
-    #[clap(long)]
-    pub all: bool,
-
-    /// Show platforms matching the auto-detected current subdir (the one
-    /// best describing this machine). When combined with `--all`, the
-    /// current-subdir entries appear first; on their own, only those
-    /// entries are printed.
-    #[clap(long)]
-    pub current: bool,
-
-    /// Emit machine-readable JSON instead of the human view.
-    #[clap(long)]
-    pub json: bool,
-}
-
-#[derive(Parser, Debug)]
 pub enum Command {
     /// Adds a platform(s) to the workspace file and updates the lock file.
     #[clap(visible_alias = "a")]
@@ -385,14 +361,13 @@ pub enum Command {
     /// Edit an existing workspace platform's subdir and/or virtual packages.
     #[clap(visible_alias = "e")]
     Edit(EditArgs),
-    /// List the platforms in the workspace file.
+    /// List every workspace platform with full detail, preceded by the
+    /// auto-detected host as a separate entry.
     #[clap(visible_alias = "ls")]
     List(ListArgs),
     /// Remove platform(s) from the workspace file and updates the lock file.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
-    /// Show full detail for a single workspace platform.
-    Show(ShowArgs),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -408,7 +383,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Edit(args) => execute_edit(&workspace_ctx, args).await,
         Command::List(args) => execute_list(&workspace_ctx, args).await,
         Command::Remove(args) => execute_remove(&workspace, &workspace_ctx, args).await,
-        Command::Show(args) => execute_show(&workspace_ctx, args).await,
     }
 }
 
@@ -517,14 +491,37 @@ async fn execute_edit(
         .await
 }
 
+/// Print every workspace platform in full detail, preceded by the
+/// auto-detected host as a separate (synthetic) entry. The host comes first
+/// so users see what their machine reports before the manifest's declared
+/// view. Workspace platforms are emitted in declaration order, separated
+/// from the host entry by a dim `---` line in the human view.
 async fn execute_list(
     workspace_ctx: &WorkspaceContext<CliInterface>,
     args: ListArgs,
 ) -> miette::Result<()> {
-    let platforms = workspace_ctx.list_platforms().await;
+    let workspace = workspace_ctx.workspace();
+    let workspace_platforms: Vec<PixiPlatform> = workspace
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .iter()
+        .cloned()
+        .collect();
 
     if args.json {
-        let value = list_to_json(&platforms);
+        let mut platforms: Vec<serde_json::Value> =
+            Vec::with_capacity(workspace_platforms.len() + 1);
+        platforms.push(autodetected_to_json());
+        for p in &workspace_platforms {
+            let users = environments_and_features_using(workspace, p);
+            platforms.push(show_to_json(p, &users));
+        }
+
+        let value = serde_json::json!({
+            "current_subdir": Platform::current().as_str(),
+            "platforms": platforms,
+        });
         let _ = writeln!(
             std::io::stdout(),
             "{}",
@@ -533,63 +530,20 @@ async fn execute_list(
         return Ok(());
     }
 
-    // Pull the rich PixiPlatform entries from the workspace so the human
-    // listing can show subdir/virtual-package hints for non-trivial entries.
-    let workspace = workspace_ctx.workspace();
-    let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
+    let mut stdout = std::io::stdout();
+    print_autodetected_host();
 
-    for (env_name, env_platforms) in platforms {
-        let _ = writeln!(
-            std::io::stdout(),
-            "{} {}",
-            console::style("Environment:").bold().bright(),
-            env_name.fancy_display()
-        )
-        .inspect_err(|e| {
-            if e.kind() == std::io::ErrorKind::BrokenPipe {
-                std::process::exit(0);
-            }
-        });
-
-        for platform in env_platforms {
-            let workspace_platform = workspace_platforms.iter().find(|p| p.name() == &platform);
-            let hint = workspace_platform.and_then(rich_hint);
-            let name_str = platform.as_str();
-            let line = match hint {
-                Some(hint) => format!("- {}  {}", name_str, console::style(hint).dim()),
-                None => format!("- {name_str}"),
-            };
-            let _ = writeln!(std::io::stdout(), "{line}").inspect_err(|e| {
-                if e.kind() == std::io::ErrorKind::BrokenPipe {
-                    std::process::exit(0);
-                }
-            });
-        }
+    if !workspace_platforms.is_empty() {
+        let _ = writeln!(stdout, "\n{}", console::style("Platforms:").bold().bright());
+    }
+    let machine = HostMachine::detect(workspace);
+    let reachability = MachineReachability::compute(workspace, &machine);
+    for p in workspace_platforms.iter() {
+        let users = environments_and_features_using(workspace, p);
+        print_workspace_platform_row(p, &machine, &users, &reachability);
     }
 
     Ok(())
-}
-
-/// Build the inline parenthetical hint shown next to a rich platform in the
-/// human `list` output. Returns `None` for plain subdir-platforms with no
-/// declared virtual packages.
-fn rich_hint(platform: &PixiPlatform) -> Option<String> {
-    let custom_name = !platform.is_subdir_platform();
-    let vp_count = platform.declared_virtual_packages().len();
-    if !custom_name && vp_count == 0 {
-        return None;
-    }
-    let mut parts = Vec::new();
-    if custom_name {
-        parts.push(platform.subdir().to_string());
-    }
-    if vp_count > 0 {
-        parts.push(format!(
-            "{vp_count} virtual package{}",
-            if vp_count == 1 { "" } else { "s" }
-        ));
-    }
-    Some(format!("({})", parts.join(", ")))
 }
 
 async fn execute_remove(
@@ -619,166 +573,35 @@ async fn execute_remove(
         .await
 }
 
-async fn execute_show(
-    workspace_ctx: &WorkspaceContext<CliInterface>,
-    args: ShowArgs,
-) -> miette::Result<()> {
-    match (args.name, args.all, args.current) {
-        (Some(_), true, _) | (Some(_), _, true) => {
-            miette::bail!("a positional NAME cannot be combined with --all or --current");
-        }
-        (None, false, false) => {
-            miette::bail!(
-                "missing platform name; pass a name, `--all`, or `--current` to use the auto-detected subdir"
-            );
-        }
-        (Some(name), false, false) => execute_show_one(workspace_ctx, name, args.json).await,
-        (None, all, current) => execute_show_multi(workspace_ctx, all, current, args.json).await,
-    }
+/// Resolve the subdir `list` should treat as "current": the host's real
+/// subdir unless the user has set `PIXI_OVERRIDE_PLATFORM`. Pixi's other
+/// CLI paths use the same env var to cross-target a different platform
+/// (see `pixi_core::workspace::environment::current_platform_with_override`),
+/// and `list` should agree with them.
+fn current_platform_with_override() -> Platform {
+    std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM)
+        .ok()
+        .and_then(|val| val.parse::<Platform>().ok())
+        .unwrap_or_else(Platform::current)
 }
 
-async fn execute_show_one(
-    workspace_ctx: &WorkspaceContext<CliInterface>,
-    name: PixiPlatformName,
-    json: bool,
-) -> miette::Result<()> {
-    let platform = workspace_ctx
-        .get_workspace_platform(&name)
-        .await
-        .ok_or_else(|| {
-            miette::miette!(
-                "workspace does not define a platform named '{}'",
-                name.as_str()
-            )
-        })?;
-
-    let users = environments_and_features_using(workspace_ctx.workspace(), &platform);
-
-    if json {
-        let value = show_to_json(&platform, &users);
-        let _ = writeln!(
-            std::io::stdout(),
-            "{}",
-            serde_json::to_string_pretty(&value).into_diagnostic()?
-        );
-        return Ok(());
-    }
-
-    print_show_human(&platform, &users);
-    Ok(())
-}
-
-/// Multi-platform variant of `show`. The two flags compose:
-///   * `--all` alone: every platform, declaration order.
-///   * `--current` alone: only platforms whose subdir matches
-///     `Platform::current()`.
-///   * `--all --current`: every platform, with current-subdir entries first
-///     and the rest after a `---` separator.
-async fn execute_show_multi(
-    workspace_ctx: &WorkspaceContext<CliInterface>,
-    all: bool,
-    current_flag: bool,
-    json: bool,
-) -> miette::Result<()> {
-    let workspace = workspace_ctx.workspace();
-    let workspace_platforms: Vec<PixiPlatform> = workspace
-        .workspace_manifest()
-        .workspace
-        .platforms
-        .iter()
-        .cloned()
-        .collect();
-
-    if all && workspace_platforms.is_empty() {
-        miette::bail!("workspace declares no platforms");
-    }
-
-    if json {
-        let to_json_entry = |p: &PixiPlatform| {
-            let users = environments_and_features_using(workspace, p);
-            show_to_json(p, &users)
-        };
-
-        // `--current` contributes the synthetic auto-detected entry; `--all`
-        // contributes every declared workspace platform. When both are set,
-        // the auto-detected entry comes first.
-        let mut platforms: Vec<serde_json::Value> = Vec::new();
-        if current_flag {
-            platforms.push(autodetected_to_json());
-        }
-        if all {
-            platforms.extend(workspace_platforms.iter().map(to_json_entry));
-        }
-
-        let value = serde_json::json!({
-            "current_subdir": Platform::current().as_str(),
-            "platforms": platforms,
-        });
-        let _ = writeln!(
-            std::io::stdout(),
-            "{}",
-            serde_json::to_string_pretty(&value).into_diagnostic()?
-        );
-        return Ok(());
-    }
-
-    let mut stdout = std::io::stdout();
-
-    if current_flag {
-        print_autodetected_host();
-    }
-
-    if all {
-        if current_flag {
-            let _ = writeln!(stdout, "\n{}", console::style("---").dim());
-        }
-        for (i, p) in workspace_platforms.iter().enumerate() {
-            if i > 0 {
-                let _ = writeln!(stdout);
-            }
-            let users = environments_and_features_using(workspace, p);
-            print_show_human(p, &users);
-        }
-    }
-
-    Ok(())
-}
-
-/// Pretty-print a synthetic "what the current host looks like" entry. Same
-/// shape as a real platform's show block but with a distinct header so the
-/// reader doesn't mistake it for a workspace declaration. No `Used by` lines
-/// because nothing in the manifest points at this entry.
+/// Pretty-print rattler's host detection as a "diagnostic" header rather
+/// than another `<name>:` row -- the host has no manifest-side identity, so
+/// labelling it `current:` was misleading. The body is the same
+/// `subdir=...[, ...]` payload the workspace rows use; subdir defaults
+/// filter out so it only mentions where the host diverges from pixi's
+/// baseline. Both `PIXI_OVERRIDE_PLATFORM` and the `CONDA_OVERRIDE_*`
+/// virtual-package overrides are respected here so the header agrees
+/// with what the workspace rows are matched against.
 fn print_autodetected_host() {
-    let host = PixiPlatform::auto_detected(Platform::current());
+    let subdir = current_platform_with_override();
+    let detected: Vec<GenericVirtualPackage> =
+        VirtualPackages::detect_for_platform(subdir, &VirtualPackageOverrides::from_env())
+            .map(|d| d.into_generic_virtual_packages().collect())
+            .unwrap_or_default();
     let mut stdout = std::io::stdout();
-
-    let _ = writeln!(
-        stdout,
-        "{} current",
-        console::style("Platform:").bold().bright(),
-    );
-    let _ = writeln!(
-        stdout,
-        "  Subdir:   {}",
-        styled_subdir_for_current_host(Platform::current())
-    );
-
-    let detected_str = match host.virtual_packages() {
-        Ok(d) => {
-            let specs: Vec<GenericVirtualPackage> = d.into_generic_virtual_packages().collect();
-            if specs.is_empty() {
-                "(none)".to_string()
-            } else {
-                specs
-                    .iter()
-                    .map(format_virtual_package_short)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            }
-        }
-        Err(_) => "(none)".to_string(),
-    };
-    let _ = writeln!(stdout, "  Packages: {detected_str}");
+    let _ = writeln!(stdout, "Your current machine was detected as:");
+    let _ = writeln!(stdout, "    {}", inline_entry_body(subdir, &detected));
 }
 
 /// Walk all environments + features in the workspace and collect the names of
@@ -818,55 +641,241 @@ struct PlatformUsers {
     environments: Vec<String>,
 }
 
-/// Colour a subdir string based on whether it matches the current host's
-/// subdir: green when this platform can actually run here, red otherwise.
-fn styled_subdir_for_current_host(subdir: Platform) -> String {
-    let raw = subdir.as_str();
-    if subdir == Platform::current() {
-        console::style(raw).green().to_string()
-    } else {
-        console::style(raw).red().to_string()
+/// Snapshot of the local machine used to colour platform rows in `list`:
+/// which subdirs we can run packages from (current + arch fallbacks) and
+/// which virtual packages rattler detected on the host.
+struct HostMachine {
+    candidate_subdirs: Vec<Platform>,
+    detected: Vec<GenericVirtualPackage>,
+}
+
+impl HostMachine {
+    fn detect(workspace: &pixi_core::Workspace) -> Self {
+        // Honor `PIXI_OVERRIDE_PLATFORM` so `list` reflects what the user
+        // is targeting, not just the literal machine they're typing on.
+        // Mirrors `pixi_core::workspace::environment::current_platform_with_override`.
+        let current = current_platform_with_override();
+        let candidate_subdirs = workspace
+            .workspace_manifest()
+            .workspace
+            .candidate_subdirs(current);
+        // `VirtualPackageOverrides::from_env()` reads the `CONDA_OVERRIDE_*`
+        // family (`CUDA`, `GLIBC`, `OSX`, `WIN`, `ARCHSPEC`, ...). Calling
+        // rattler's detector directly here is the same path
+        // `detect_system_virtual_packages` takes in `pixi_core`; we can't
+        // route through `PixiPlatform::virtual_packages()` because that
+        // method only takes the platform's manifest-declared overrides.
+        let detected =
+            VirtualPackages::detect_for_platform(current, &VirtualPackageOverrides::from_env())
+                .map(|d| d.into_generic_virtual_packages().collect::<Vec<_>>())
+                .unwrap_or_default();
+        HostMachine {
+            candidate_subdirs,
+            detected,
+        }
+    }
+
+    /// `true` when a platform with this subdir can actually run on the
+    /// current host -- includes architecture fallbacks (`Win64` → `Win32`,
+    /// `Osx*` → `Osx64`).
+    fn covers_subdir(&self, subdir: Platform) -> bool {
+        self.candidate_subdirs.contains(&subdir)
+    }
+
+    /// `true` when the host advertises a virtual package whose version is
+    /// at least the declared one (conda virtual-package semantics).
+    fn satisfies(&self, declared: &GenericVirtualPackage) -> bool {
+        self.detected
+            .iter()
+            .find(|h| h.name == declared.name)
+            .is_some_and(|h| h.version >= declared.version)
+    }
+
+    /// Does the current machine support running this platform? Combines
+    /// the subdir check with the per-VP satisfaction check on the user-
+    /// customised virtual packages (subdir defaults are pixi's baseline
+    /// and not considered host requirements). Used to colour both the
+    /// row itself and the env/feature names that reference it.
+    fn supports(&self, platform: &PixiPlatform) -> bool {
+        let subdir = platform.subdir();
+        if !self.covers_subdir(subdir) {
+            return false;
+        }
+        pixi_manifest::toml::inline_virtual_package_specs(
+            subdir,
+            platform.declared_virtual_packages(),
+        )
+        .iter()
+        .all(|spec| self.satisfies(&spec.package))
     }
 }
 
-fn print_show_human(platform: &PixiPlatform, users: &PlatformUsers) {
-    let mut stdout = std::io::stdout();
+/// Names of environments and features that have no platform supported by
+/// the current machine. Used to dim those names in the `Used in ...`
+/// continuation lines so they stand out as "won't run here".
+struct MachineReachability {
+    unreachable_environments: HashSet<String>,
+    unreachable_features: HashSet<String>,
+}
 
-    let _ = writeln!(
-        stdout,
-        "{} {}",
-        console::style("Platform:").bold().bright(),
-        platform.name().as_str(),
-    );
-    let _ = writeln!(
-        stdout,
-        "  Subdir:   {}",
-        styled_subdir_for_current_host(platform.subdir())
-    );
-
-    let declared = platform.declared_virtual_packages();
-    let declared_str = if declared.is_empty() {
-        "(none)".to_string()
-    } else {
-        declared
+impl MachineReachability {
+    fn compute(workspace: &pixi_core::Workspace, machine: &HostMachine) -> Self {
+        let manifest = workspace.workspace_manifest();
+        let supported: HashSet<&str> = manifest
+            .workspace
+            .platforms
             .iter()
-            .map(format_virtual_package_short)
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    let _ = writeln!(stdout, "  Packages: {declared_str}");
+            .filter(|p| machine.supports(p))
+            .map(|p| p.name().as_str())
+            .collect();
 
-    if !users.features.is_empty() {
-        let _ = writeln!(stdout, "  Features: {}", users.features.join(", "));
+        let unreachable_environments: HashSet<String> = workspace
+            .environments()
+            .iter()
+            .filter(|env| {
+                !env.platforms()
+                    .iter()
+                    .any(|name| supported.contains(name.as_str()))
+            })
+            .map(|env| env.name().to_string())
+            .collect();
+
+        let unreachable_features: HashSet<String> = manifest
+            .features
+            .iter()
+            .filter_map(|(name, feat)| {
+                // Only features that pin a `platforms = [...]` list can be
+                // "unreachable"; an implicit-platforms feature inherits
+                // the workspace's set and is reachable iff any workspace
+                // platform is reachable.
+                let platforms = feat.platforms.as_ref()?;
+                let reachable = platforms.iter().any(|n| supported.contains(n.as_str()));
+                (!reachable).then(|| name.to_string())
+            })
+            .collect();
+
+        MachineReachability {
+            unreachable_environments,
+            unreachable_features,
+        }
     }
+}
+
+/// One row in the `Platforms:` block. The name is highlighted when the
+/// platform is fully supported by the current machine; otherwise the
+/// blocking subdir / virtual packages are dimmed so the user can spot
+/// what's preventing the match at a glance. Followed by indented
+/// `Used in environments:` / `Used in features    :` lines whenever the
+/// manifest actually references the platform from either side, with the
+/// individual env/feature names dimmed when *they* have no reachable
+/// platform on this machine.
+fn print_workspace_platform_row(
+    platform: &PixiPlatform,
+    machine: &HostMachine,
+    users: &PlatformUsers,
+    reachability: &MachineReachability,
+) {
+    let subdir = platform.subdir();
+    let subdir_ok = machine.covers_subdir(subdir);
+
+    let mut parts: Vec<String> = Vec::new();
+    let subdir_text = format!("subdir={}", subdir.as_str());
+    parts.push(if subdir_ok {
+        subdir_text
+    } else {
+        console::style(subdir_text).dim().to_string()
+    });
+
+    let mut all_vps_ok = true;
+    for spec in pixi_manifest::toml::inline_virtual_package_specs(
+        subdir,
+        platform.declared_virtual_packages(),
+    ) {
+        let satisfied = machine.satisfies(&spec.package);
+        if !satisfied {
+            all_vps_ok = false;
+        }
+        parts.push(if satisfied {
+            spec.rendered
+        } else {
+            console::style(spec.rendered).dim().to_string()
+        });
+    }
+
+    let supported = subdir_ok && all_vps_ok;
+    let name_styled = if supported {
+        console::style(platform.name().as_str()).bold().bright()
+    } else {
+        // Unstyled but kept as the rest of the row's prefix; without this
+        // the unsupported names blend in with the body keys.
+        console::style(platform.name().as_str())
+    };
+    let suffix = if supported {
+        " (supported by current machine)"
+    } else {
+        ""
+    };
+    let mut stdout = std::io::stdout();
+    let _ = writeln!(
+        stdout,
+        "{name_styled}: {body}{suffix}",
+        body = parts.join(", "),
+    );
+    // Indented usage lines. The labels are padded so the two colons line
+    // up when both are emitted; either is omitted if nothing references
+    // the platform from that side. Names of environments/features that
+    // have no reachable platform on this machine are dimmed so users can
+    // see at a glance which references they can act on locally.
     if !users.environments.is_empty() {
-        let _ = writeln!(stdout, "  Used by:  {}", users.environments.join(", "));
+        let _ = writeln!(
+            stdout,
+            "    Used in environments: {}",
+            format_user_names(&users.environments, &reachability.unreachable_environments),
+        );
     }
+    if !users.features.is_empty() {
+        let _ = writeln!(
+            stdout,
+            "    Used in features    : {}",
+            format_user_names(&users.features, &reachability.unreachable_features),
+        );
+    }
+}
+
+/// Join `names` as a comma-separated list, dimming any entry that's in
+/// `unreachable`.
+fn format_user_names(names: &[String], unreachable: &HashSet<String>) -> String {
+    names
+        .iter()
+        .map(|name| {
+            if unreachable.contains(name) {
+                console::style(name).dim().to_string()
+            } else {
+                name.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// Plain (no styling) `subdir=...[, key=value, ...]` body used by the
+/// host-detection header. The header is informational, so the body is
+/// emitted verbatim without the match-aware dimming the workspace rows
+/// use.
+fn inline_entry_body(subdir: Platform, declared: &[GenericVirtualPackage]) -> String {
+    let mut parts = vec![format!("subdir={}", subdir.as_str())];
+    parts.extend(
+        pixi_manifest::toml::inline_virtual_package_specs(subdir, declared)
+            .into_iter()
+            .map(|s| s.rendered),
+    );
+    parts.join(", ")
 }
 
 /// Same compact form pixi_manifest writes to pixi.toml: bare name when version
 /// and build are zero, `name=version` when only the build is zero, otherwise
-/// the full conda spec.
+/// the full conda spec. Used by the JSON renderers so machine-readable
+/// output keeps the raw `__name` form for consumers that want to round-trip.
 fn format_virtual_package_short(gvp: &GenericVirtualPackage) -> String {
     let name = gvp.name.as_normalized();
     let version_is_zero = gvp.version.to_string() == "0";
@@ -878,26 +887,6 @@ fn format_virtual_package_short(gvp: &GenericVirtualPackage) -> String {
     } else {
         gvp.to_string()
     }
-}
-
-fn list_to_json(
-    platforms: &std::collections::HashMap<pixi_manifest::EnvironmentName, Vec<PixiPlatformName>>,
-) -> serde_json::Value {
-    let map: serde_json::Map<String, serde_json::Value> = platforms
-        .iter()
-        .map(|(env, names)| {
-            (
-                env.to_string(),
-                serde_json::Value::Array(
-                    names
-                        .iter()
-                        .map(|n| serde_json::Value::String(n.to_string()))
-                        .collect(),
-                ),
-            )
-        })
-        .collect();
-    serde_json::Value::Object(map)
 }
 
 fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::Value {

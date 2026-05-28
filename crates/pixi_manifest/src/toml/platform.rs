@@ -435,6 +435,75 @@ fn synthesize_name(
     })
 }
 
+/// One entry in [`inline_virtual_package_specs`]'s return value.
+///
+/// Pairs the rendered `key=value` text (using friendly shortcuts where
+/// possible, raw `__name=value` otherwise) with the underlying
+/// [`GenericVirtualPackage`] the entry came from. The CLI uses the latter
+/// to do identity/satisfaction checks against host-detected VPs without
+/// having to re-parse the rendered form.
+#[derive(Debug, Clone)]
+pub struct InlineVirtualPackage {
+    /// The conda virtual package the entry represents.
+    pub package: GenericVirtualPackage,
+    /// `key=value` rendering. Friendly keys (`cuda`, `archspec`, `libc`,
+    /// `linux`, `macos`, `windows`) are used when the entry fits one;
+    /// otherwise the raw `__name=value` form is used.
+    pub rendered: String,
+}
+
+/// Render a platform's declared virtual packages as the inline `key=value`
+/// strings used in `pixi.toml` and `pixi workspace platform add`, paired
+/// with the underlying conda VP so callers can run match logic against
+/// them.
+///
+/// Friendly entries use the `FRIENDLY_VIRTUAL_PACKAGES` short keys
+/// (`cuda`, `archspec`, `libc`, ...), in canonical order. Raw entries
+/// (virtual packages without a friendly slot, or with an off-shape value
+/// the friendly form can't represent) keep their `__name` form. Subdir
+/// defaults are filtered out, mirroring the on-disk shape -- only entries
+/// the user actually customised appear.
+pub fn inline_virtual_package_specs(
+    subdir: Platform,
+    declared: &[GenericVirtualPackage],
+) -> Vec<InlineVirtualPackage> {
+    let by_name: std::collections::HashMap<&str, &GenericVirtualPackage> = declared
+        .iter()
+        .map(|gvp| (gvp.name.as_normalized(), gvp))
+        .collect();
+    let (friendly, raw) = classify_virtual_packages(subdir, declared);
+    let mut out = Vec::with_capacity(friendly.len() + raw.len());
+    for (key, value) in friendly {
+        // `classify_virtual_packages` filters defaults and only keeps
+        // entries it could resolve to a friendly slot; the corresponding
+        // `__conda_name` must therefore be in `declared`.
+        let conda_name = FRIENDLY_VIRTUAL_PACKAGES
+            .iter()
+            .find(|(friendly_key, _, _)| *friendly_key == key)
+            .map(|(_, conda_name, _)| *conda_name)
+            .expect("friendly entry comes from FRIENDLY_VIRTUAL_PACKAGES");
+        let package = (*by_name
+            .get(conda_name)
+            .expect("friendly entry came from `declared`"))
+        .clone();
+        out.push(InlineVirtualPackage {
+            package,
+            rendered: format!("{key}={value}"),
+        });
+    }
+    for (conda_name, value) in raw {
+        let package = (*by_name
+            .get(conda_name.as_str())
+            .expect("raw entry came from `declared`"))
+        .clone();
+        out.push(InlineVirtualPackage {
+            package,
+            rendered: format!("{conda_name}={value}"),
+        });
+    }
+    out
+}
+
 /// Build the canonical auto-derived name for `(subdir, declared)`.
 ///
 /// The form is `<subdir>[-<key>-<value>...]`, with friendly keys emitted in

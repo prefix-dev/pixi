@@ -29,7 +29,7 @@ pub use manifest::ExternalWorkspaceProperties;
 pub use manifest::TomlManifest;
 use miette::LabeledSpan;
 pub use package::{PackageDefaults, PackageError, TomlPackage, WorkspacePackageProperties};
-pub use platform::TomlPlatform;
+pub use platform::{InlineVirtualPackage, TomlPlatform, inline_virtual_package_specs};
 pub use preview::TomlPreview;
 pub use pyproject::PyProjectToml;
 pub use target::TomlTarget;

@@ -713,11 +713,19 @@ def test_edit_unknown_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) ->
 def test_list_default_human(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install")
+    # The host detection appears as a labelled "Your current machine was
+    # detected as:" block, followed by a `Platforms:` header and one row
+    # per workspace platform.
     out = _run_platform(
         pixi,
         tmp_pixi_workspace,
         "list",
-        stdout_contains=["linux-64", "osx-64", "Environment:"],
+        stdout_contains=[
+            "Your current machine was detected as:",
+            "Platforms:",
+            "linux-64: subdir=linux-64",
+            "osx-64: subdir=osx-64",
+        ],
     )
     assert out.returncode == 0
 
@@ -733,12 +741,15 @@ def test_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-arm64", "--no-install")
     out = _run_platform(pixi, tmp_pixi_workspace, "list", "--json")
     payload = json.loads(out.stdout)
-    # Shape: {env_name: [platform_name, ...]}
-    assert "default" in payload
-    assert set(payload["default"]) >= {"linux-64", "osx-arm64"}
+    # New shape: `{current_subdir, platforms: [autodetected, ...workspace]}`.
+    # The auto-detected host comes first, with `is_autodetected: true`.
+    assert "current_subdir" in payload
+    assert payload["platforms"][0].get("is_autodetected") is True
+    names = [p["name"] for p in payload["platforms"][1:]]
+    assert "linux-64" in names and "osx-arm64" in names
 
 
-def test_list_shows_rich_hint(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_list_shows_rich_platform_packages(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
@@ -749,11 +760,13 @@ def test_list_shows_rich_hint(pixi: Path, tmp_pixi_workspace: Path) -> None:
         "12.0",
         "--no-install",
     )
+    # The one-line entry uses the same friendly key (`cuda`) as the add
+    # flag rather than the raw `__cuda` form.
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "list",
-        stdout_contains=["gpu-linux", "linux-64", "virtual package"],
+        stdout_contains=["gpu-linux: subdir=linux-64, cuda=12.0"],
     )
 
 
@@ -824,136 +837,249 @@ def test_remove_custom_platform_drops_vps(pixi: Path, tmp_pixi_workspace: Path) 
 
 
 # ----------------------------------------------------------------------------
-# show
+# list (richer scenarios)
 # ----------------------------------------------------------------------------
 
 
-def test_show_named(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_list_shows_rich_platform_in_block(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Rich entries render as `<name>: subdir=..., <friendly>=<value>`."""
     _seed_with_rich_platform(tmp_pixi_workspace, pixi)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
-        "show",
-        "gpu-linux",
-        stdout_contains=["Platform:", "gpu-linux", "linux-64", "__cuda=11.0"],
+        "list",
+        stdout_contains=["gpu-linux: subdir=linux-64, cuda=11.0"],
     )
 
 
-def test_show_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_list_json_payload_shape(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_with_rich_platform(tmp_pixi_workspace, pixi)
-    out = _run_platform(pixi, tmp_pixi_workspace, "show", "gpu-linux", "--json")
+    out = _run_platform(pixi, tmp_pixi_workspace, "list", "--json")
     payload = json.loads(out.stdout)
-    assert payload["name"] == "gpu-linux"
-    assert payload["subdir"] == "linux-64"
-    assert payload["virtual_packages"] == ["__cuda=11.0"]
-    assert "detected_virtual_packages" in payload
+    auto = payload["platforms"][0]
+    assert auto.get("is_autodetected") is True
+    assert auto["name"] == "current"
+    gpu = next(p for p in payload["platforms"][1:] if p["name"] == "gpu-linux")
+    assert gpu["subdir"] == "linux-64"
+    assert "__cuda=11.0" in gpu["virtual_packages"]
+    assert "detected_virtual_packages" in gpu
 
 
-def test_show_all(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_list_with_only_current_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A workspace with only the current platform lists the host header and
+    marks the matching workspace row as supported."""
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "list",
+        stdout_contains=[
+            "Your current machine was detected as:",
+            "Platforms:",
+            f"{CURRENT_PLATFORM}: subdir={CURRENT_PLATFORM} (supported by current machine)",
+        ],
+    )
+
+
+def test_list_omits_supported_marker_for_non_matching_subdir(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A platform whose subdir doesn't match the host gets no support
+    marker, and the host can't drag it along."""
+    # Pick a subdir that's guaranteed not to match the current host. On
+    # the off chance CI ever runs on that exact subdir, fall back to a
+    # different one so the test stays meaningful.
+    other = "linux-aarch64" if CURRENT_PLATFORM != "linux-aarch64" else "osx-arm64"
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(pixi, tmp_pixi_workspace, "add", other, "--no-install")
+    out = _run_platform(pixi, tmp_pixi_workspace, "list")
+    assert f"{other}: subdir={other}" in out.stdout
+    # The non-matching row never carries the support marker.
+    assert f"{other}: subdir={other} (supported by current machine)" not in out.stdout
+
+
+def test_list_shows_environments_and_features_using_platform(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """When the manifest references a platform from features/environments,
+    those names appear as indented `Used in ...` lines under the row."""
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(
+        f"""\
+[workspace]
+name = "platform-test"
+channels = []
+platforms = ["{CURRENT_PLATFORM}"]
+
+[feature.cuda]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[environments]
+gpu = ["cuda"]
+"""
+    )
+    out = _run_platform(pixi, tmp_pixi_workspace, "list")
+    assert f"{CURRENT_PLATFORM}:" in out.stdout
+    # Environments listing the platform: both `default` (implicit) and `gpu`.
+    assert "    Used in environments: default, gpu" in out.stdout
+    assert "    Used in features    : cuda" in out.stdout
+
+
+def test_list_omits_features_line_when_no_feature_references_platform(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A workspace without explicit feature platform pins only emits the
+    environments line (the default environment always inherits the
+    workspace's platforms); the features line is omitted entirely."""
+    _seed_workspace(tmp_pixi_workspace)
+    out = _run_platform(pixi, tmp_pixi_workspace, "list")
+    assert "    Used in environments: default" in out.stdout
+    assert "Used in features" not in out.stdout
+
+
+def test_list_respects_conda_override_cuda(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A workspace platform pinned to `__cuda=11.0` should pick up the
+    `CONDA_OVERRIDE_CUDA=12.0` env var: the host now claims `__cuda=12.0`,
+    which satisfies the platform's `>=11.0` requirement, so the row is
+    marked supported."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "add",
-        "linux-64",
-        "osx-64",
+        f"with-cuda={CURRENT_PLATFORM}",
+        "--cuda",
+        "11.0",
         "--no-install",
     )
+    out = verify_cli_command(
+        [
+            str(pixi),
+            "workspace",
+            "--manifest-path",
+            str(tmp_pixi_workspace / "pixi.toml"),
+            "platform",
+            "list",
+        ],
+        env={"CONDA_OVERRIDE_CUDA": "12.0"},
+        strip_ansi=True,
+    )
+    cuda_line = next(
+        (line for line in out.stdout.splitlines() if line.startswith("with-cuda:")),
+        None,
+    )
+    assert cuda_line is not None
+    assert cuda_line.endswith(" (supported by current machine)"), cuda_line
+    # The host header echoes the override so users can see what they're
+    # being matched against.
+    assert "cuda=12.0" in out.stdout
+
+
+def test_list_respects_pixi_override_platform(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Setting `PIXI_OVERRIDE_PLATFORM` cross-targets the listing: a
+    platform whose subdir matches the override gets the support marker
+    even when it doesn't match the literal host."""
+    other = "linux-aarch64" if CURRENT_PLATFORM != "linux-aarch64" else "osx-arm64"
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(pixi, tmp_pixi_workspace, "add", other, "--no-install")
+    out = verify_cli_command(
+        [
+            str(pixi),
+            "workspace",
+            "--manifest-path",
+            str(tmp_pixi_workspace / "pixi.toml"),
+            "platform",
+            "list",
+        ],
+        env={"PIXI_OVERRIDE_PLATFORM": other},
+        strip_ansi=True,
+    )
+    target_line = next(
+        (line for line in out.stdout.splitlines() if line.startswith(f"{other}:")),
+        None,
+    )
+    assert target_line is not None
+    assert target_line.endswith(" (supported by current machine)"), target_line
+    # The host header agrees with the override.
+    assert f"subdir={other}" in out.stdout
+
+
+def test_list_dims_unreachable_environments_and_features(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """An env/feature whose platforms are all unreachable on this host is
+    dimmed in the `Used in ...` continuation lines. Reachable entries
+    on the same line keep their normal styling."""
+    other = "linux-aarch64" if CURRENT_PLATFORM != "linux-aarch64" else "osx-arm64"
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(
+        f"""\
+[workspace]
+name = "platform-test"
+channels = []
+platforms = ["{CURRENT_PLATFORM}", "{other}"]
+
+[feature.only-other]
+platforms = ["{other}"]
+
+[feature.host-side]
+platforms = ["{CURRENT_PLATFORM}"]
+
+[environments]
+unreachable = ["only-other"]
+"""
+    )
+    # `--color always` forces the ANSI sequences through so we can spot
+    # the dim escape (`ESC[2m`) around the unreachable names.
+    out = verify_cli_command(
+        [
+            str(pixi),
+            "--color",
+            "always",
+            "workspace",
+            "--manifest-path",
+            str(manifest),
+            "platform",
+            "list",
+        ],
+    )
+    dim = "\x1b[2m"
+    # `unreachable` is the environment whose only feature pins a
+    # non-host subdir, so it must be dim-wrapped.
+    assert f"{dim}unreachable" in out.stdout
+    # `only-other` is dim because its sole platform doesn't run here;
+    # `host-side` is reachable and must stay un-dimmed.
+    assert f"{dim}only-other" in out.stdout
+    assert f"{dim}host-side" not in out.stdout
+
+
+def test_list_marks_rich_platform_unsupported_when_vps_unsatisfied(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A rich entry on the host subdir whose customised virtual package
+    the host can't satisfy is not marked as supported."""
+    _seed_workspace(tmp_pixi_workspace)
+    # `__cuda=999.0` is essentially guaranteed not to be present on any CI
+    # host, so the row must lack the support marker.
     _run_platform(
         pixi,
         tmp_pixi_workspace,
-        "show",
-        "--all",
-        stdout_contains=["linux-64", "osx-64"],
+        "add",
+        f"cuda-pinned={CURRENT_PLATFORM}",
+        "__cuda=999.0",
+        "--no-install",
     )
-
-
-def test_show_all_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_workspace(tmp_pixi_workspace)
-    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install")
-    out = _run_platform(pixi, tmp_pixi_workspace, "show", "--all", "--json")
-    payload = json.loads(out.stdout)
-    assert "current_subdir" in payload
-    names = [p["name"] for p in payload["platforms"]]
-    assert "linux-64" in names and "osx-64" in names
-
-
-def test_show_current_json_has_autodetected(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_workspace(tmp_pixi_workspace)
-    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "--no-install")
-    out = _run_platform(pixi, tmp_pixi_workspace, "show", "--current", "--json")
-    payload = json.loads(out.stdout)
-    # `--current` alone produces a synthetic auto-detected entry only.
-    assert payload["platforms"]
-    auto = payload["platforms"][0]
-    assert auto.get("is_autodetected") is True
-    assert auto["name"] == "current"
-
-
-def test_show_all_and_current_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """`--all --current`: synthetic entry first, then every workspace platform."""
-    _seed_workspace(tmp_pixi_workspace)
-    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "osx-64", "--no-install")
-    out = _run_platform(pixi, tmp_pixi_workspace, "show", "--all", "--current", "--json")
-    payload = json.loads(out.stdout)
-    assert payload["platforms"][0].get("is_autodetected") is True
-    other = [p["name"] for p in payload["platforms"][1:]]
-    assert "linux-64" in other and "osx-64" in other
-
-
-def test_show_name_with_all_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_workspace(tmp_pixi_workspace)
-    _run_platform(pixi, tmp_pixi_workspace, "add", "linux-64", "--no-install")
-    _run_platform(
-        pixi,
-        tmp_pixi_workspace,
-        "show",
-        "linux-64",
-        "--all",
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="cannot be combined",
+    out = _run_platform(pixi, tmp_pixi_workspace, "list")
+    cuda_line = next(
+        (line for line in out.stdout.splitlines() if line.startswith("cuda-pinned:")),
+        None,
     )
-
-
-def test_show_no_args_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi,
-        tmp_pixi_workspace,
-        "show",
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="missing platform name",
-    )
-
-
-def test_show_unknown_name_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi,
-        tmp_pixi_workspace,
-        "show",
-        "no-such-thing",
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="no-such-thing",
-    )
-
-
-def test_show_all_when_empty_workspace(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """`--all` against a workspace with no platforms should error."""
-    # Have to seed without any platform; the loader rejects an empty list, so
-    # use an init-like minimal manifest with only the current platform, then
-    # remove it. But the model also forbids leaving the workspace with zero
-    # platforms; instead, leave a different one and verify the error wording
-    # by asking about a name that doesn't exist (subsumed by other tests).
-    # Smoke test the trivial path: at least one platform => no error.
-    _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi,
-        tmp_pixi_workspace,
-        "show",
-        "--all",
-        stdout_contains=CURRENT_PLATFORM,
-    )
+    assert cuda_line is not None
+    assert not cuda_line.endswith(" (supported by current machine)")
 
 
 # ----------------------------------------------------------------------------
