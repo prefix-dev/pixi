@@ -79,7 +79,11 @@ pub struct TaskNode<'p> {
     /// The name of the task or `None` if the task is a custom task.
     pub name: Option<TaskName>,
 
-    /// The environment to run the task in
+    /// The environment to run the task in. For hierarchical-tasks member
+    /// tasks (`a::b::task`), this `Environment` belongs to the **member's**
+    /// workspace — so `run_environment.workspace().root()` is the member's
+    /// directory, and all downstream execution (cwd, activation, lockfile
+    /// path, install dir) automatically targets that member.
     pub run_environment: Environment<'p>,
 
     /// A reference to a project task, or a owned custom task.
@@ -173,7 +177,11 @@ impl TaskNode<'_> {
 /// different executable tasks.
 #[derive(Debug)]
 pub struct TaskGraph<'p> {
-    /// The project that this graph references
+    /// The project this graph was built from. Under the `hierarchical-tasks`
+    /// preview feature, individual nodes may point at different member
+    /// workspaces via their `run_environment.workspace()` — `project` is
+    /// the outermost (aggregator) workspace only.
+    #[allow(dead_code)]
     project: &'p Workspace,
 
     /// The tasks in the graph
@@ -199,6 +207,7 @@ impl<'p> Index<TaskId> for TaskGraph<'p> {
 }
 
 impl<'p> TaskGraph<'p> {
+    #[allow(dead_code)]
     pub(crate) fn project(&self) -> &'p Workspace {
         self.project
     }
@@ -304,11 +313,13 @@ impl<'p> TaskGraph<'p> {
                         Some(ArgValues::FreeFormArgs(free_args))
                     };
 
+                    let task_name_owned: TaskName = task_name.clone().into();
+
                     if skip_deps {
                         return Ok(Self {
                             project,
                             nodes: vec![TaskNode {
-                                name: Some(task_name.into()),
+                                name: Some(task_name_owned.clone()),
                                 task: Cow::Borrowed(task),
                                 run_environment: run_env,
                                 args: arg_values,
@@ -321,7 +332,7 @@ impl<'p> TaskGraph<'p> {
                         project,
                         search_envs,
                         TaskNode {
-                            name: Some(task_name.into()),
+                            name: Some(task_name_owned),
                             task: Cow::Borrowed(task),
                             run_environment: run_env,
                             args: arg_values,

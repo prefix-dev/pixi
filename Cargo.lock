@@ -7189,6 +7189,7 @@ dependencies = [
  "assert_matches",
  "crossbeam-channel",
  "deno_task_shell",
+ "dunce",
  "fancy_display",
  "fs-err",
  "itertools 0.14.0",
