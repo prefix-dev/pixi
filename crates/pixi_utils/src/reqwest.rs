@@ -179,30 +179,59 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
     Ok(builder)
 }
 
-/// Configure root certificates for the native-tls backend.
+/// The trust configuration to apply to a native-tls reqwest client for a given
+/// [`pixi_config::TlsRootCerts`] mode.
 ///
-/// `System` mode (the native-tls default) keeps native-tls's built-in OS trust
-/// evaluation and merely *adds* any roots from `SSL_CERT_FILE` / `SSL_CERT_DIR`
-/// on top, so enterprise / proxy CAs that the OS trusts keep working. Only the
-/// explicit `Webpki` mode replaces the OS store with the bundled Mozilla roots
-/// (via `tls_certs_only`); env-provided roots are folded into that set.
-#[cfg(feature = "native-tls")]
+/// Kept as a pure mapping (no certificate loading, no `ClientBuilder`) so the
+/// regression in issue #6229 can be unit tested directly: `reqwest`'s builder
+/// is opaque, so this enum is the only place the "keep vs. replace the OS trust
+/// store" decision is observable.
+#[cfg_attr(not(feature = "native-tls"), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NativeTlsTrust {
+    /// Keep native-tls's built-in OS trust evaluation
+    /// (`disable_built_in_roots(false)`) and only *merge* extra roots from
+    /// `SSL_CERT_FILE` / `SSL_CERT_DIR`.
+    OsStorePlusEnv,
+    /// Replace the OS store with the bundled Mozilla webpki roots
+    /// (`disable_built_in_roots(true)`), folding in any env-provided roots.
+    WebpkiOnly,
+}
+
+/// Decide how native-tls should source its root certificates for `mode`.
+///
+/// The critical invariant (issue #6229): every `System`-flavored mode maps to
+/// [`NativeTlsTrust::OsStorePlusEnv`] so the OS keeps doing chain validation.
+/// Routing those modes through `tls_certs_only` would set
+/// `disable_built_in_roots(true)` and reject enterprise / proxy CAs that the OS
+/// trusts but `rustls_native_certs` does not enumerate.
+#[cfg_attr(not(feature = "native-tls"), allow(dead_code))]
 #[allow(deprecated)]
+fn native_tls_trust(mode: pixi_config::TlsRootCerts) -> NativeTlsTrust {
+    match mode {
+        pixi_config::TlsRootCerts::Webpki => NativeTlsTrust::WebpkiOnly,
+        pixi_config::TlsRootCerts::System
+        | pixi_config::TlsRootCerts::LegacyNative
+        | pixi_config::TlsRootCerts::All => NativeTlsTrust::OsStorePlusEnv,
+    }
+}
+
+/// Configure root certificates for the native-tls backend, following the
+/// decision from [`native_tls_trust`].
+#[cfg(feature = "native-tls")]
 fn apply_native_tls_roots(
     mut builder: reqwest::ClientBuilder,
     mode: pixi_config::TlsRootCerts,
 ) -> reqwest::ClientBuilder {
-    match mode {
-        pixi_config::TlsRootCerts::Webpki => {
+    match native_tls_trust(mode) {
+        NativeTlsTrust::WebpkiOnly => {
             let mut certs = Certificates::webpki_roots();
             if let Some(env_certs) = Certificates::from_env() {
                 certs.merge(env_certs);
             }
             builder.tls_certs_only(certs.to_reqwest_certs())
         }
-        pixi_config::TlsRootCerts::System
-        | pixi_config::TlsRootCerts::LegacyNative
-        | pixi_config::TlsRootCerts::All => {
+        NativeTlsTrust::OsStorePlusEnv => {
             if let Some(env_certs) = Certificates::from_env() {
                 for cert in env_certs.to_reqwest_certs() {
                     builder = builder.add_root_certificate(cert);
@@ -353,10 +382,47 @@ pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn
 
 #[cfg(test)]
 mod tests {
-    use pixi_config::Config;
+    use pixi_config::{Config, TlsRootCerts};
     use url::Url;
 
     use super::*;
+
+    #[test]
+    fn native_tls_system_mode_keeps_os_store() {
+        // Regression guard for issue #6229: on the native-tls backend the
+        // default `System` mode must keep the OS trust store. Mapping it to
+        // `tls_certs_only` (anything other than `OsStorePlusEnv`) sets
+        // `disable_built_in_roots(true)` and breaks enterprise / proxy CAs.
+        assert_eq!(
+            native_tls_trust(TlsRootCerts::System),
+            NativeTlsTrust::OsStorePlusEnv
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn native_tls_legacy_system_aliases_keep_os_store() {
+        // The deprecated spellings of "use the system store" must behave like
+        // `System`, not silently disable the OS trust evaluation.
+        assert_eq!(
+            native_tls_trust(TlsRootCerts::LegacyNative),
+            NativeTlsTrust::OsStorePlusEnv
+        );
+        assert_eq!(
+            native_tls_trust(TlsRootCerts::All),
+            NativeTlsTrust::OsStorePlusEnv
+        );
+    }
+
+    #[test]
+    fn native_tls_webpki_mode_replaces_os_store() {
+        // `Webpki` is the only native-tls mode that intentionally replaces the
+        // OS store with the bundled Mozilla roots.
+        assert_eq!(
+            native_tls_trust(TlsRootCerts::Webpki),
+            NativeTlsTrust::WebpkiOnly
+        );
+    }
 
     #[test]
     fn test_uv_middlewares_includes_auth_with_mirrors() {
