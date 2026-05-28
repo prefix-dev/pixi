@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_discovery/tests/discovery.rs
+assertion_line: 81
 expression: backend
 input_file: tests/data/discovery/inherit/nested/TEST-CASE
 ---

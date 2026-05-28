@@ -12,7 +12,7 @@ use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_compute_reporters::OperationId;
 use pixi_record::{PinnedSourceSpec, SourceRecord};
-use pixi_spec::SourceLocationSpec;
+use pixi_spec::SourceSpec;
 use rattler_conda_types::PackageName;
 use tracing::instrument;
 
@@ -39,13 +39,13 @@ use pixi_compute_sources::SourceCheckoutExt;
 pub struct ResolveSourcePackageSpec {
     pub package: PackageName,
     /// Unpinned; SMK pins it.
-    pub source_location: SourceLocationSpec,
+    pub source_location: SourceSpec,
     pub preferred_build_source: Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     pub env_ref: EnvironmentRef,
     /// Source-record hints inherited from the enclosing SPEK; forwarded
     /// verbatim into nested build/host solves so every layer of the
     /// recursion agrees on one canonical hint per
-    /// `(PackageName, SourceLocationSpec)`. The hint matching
+    /// `(PackageName, SourceSpec)`. The hint matching
     /// `(package, source_location)` seeds this RSP's nested build / host
     /// solves with the previous resolution's `build_packages` /
     /// `host_packages`; all other hints flow through for deeper layers.

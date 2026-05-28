@@ -3,7 +3,7 @@ use miette::Diagnostic;
 use once_cell::sync::Lazy;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
-use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
+use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use rattler_conda_types::ChannelUrl;
 use std::time::SystemTime;
 use std::{
@@ -732,13 +732,12 @@ impl BuildBackendMetadataInner {
             .map_err(BuildBackendMetadataError::Discovery)?;
 
         let manifest_source_anchor =
-            SourceAnchor::from(SourceLocationSpec::from(self.manifest_source.clone()));
+            SourceAnchor::from(SourceSpec::from(self.manifest_source.clone()));
 
         let build_source_checkout_and_spec = match &discovered_backend.init_params.build_source {
             None => None,
             Some(build_source) => {
-                let relative_build_source_spec = if let SourceLocationSpec::Path(path) =
-                    build_source
+                let relative_build_source_spec = if let SourceSpec::Path(path) = build_source
                     && path.path.is_relative()
                 {
                     Some(normalize_typed(path.path.to_path()).to_string())

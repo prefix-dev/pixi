@@ -5,7 +5,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use pixi_spec::{SourceLocationSpec, TomlLocationSpec, TomlSpec};
+use pixi_spec::{SourceSpec, TomlLocationSpec, TomlSpec};
 use pixi_toml::{Same, TomlBTreeSet, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::{Flag, NamedChannelOrUrl, PackageName};
 use std::borrow::Cow;
@@ -25,7 +25,7 @@ pub struct TomlPackageBuild {
     pub backend: PixiSpanned<TomlBuildBackend>,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
-    pub source: Option<SourceLocationSpec>,
+    pub source: Option<SourceSpec>,
     pub configuration: Option<serde_value::Value>,
     pub flags: Vec<Flag>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
@@ -243,17 +243,14 @@ static BOTH_ADDITIONAL_DEPS_WARNING: Once = Once::new();
 
 fn spec_from_spanned_toml_location(
     spanned_toml: Spanned<TomlLocationSpec>,
-) -> Result<SourceLocationSpec, DeserError> {
-    let source_location_spec = spanned_toml
-        .value
-        .into_source_location_spec()
-        .map_err(|err| {
-            DeserError::from(Error {
-                kind: toml_span::ErrorKind::Custom(Cow::Owned(err.to_string())),
-                span: spanned_toml.span,
-                line_info: None,
-            })
-        })?;
+) -> Result<SourceSpec, DeserError> {
+    let source_location_spec = spanned_toml.value.into_source_spec().map_err(|err| {
+        DeserError::from(Error {
+            kind: toml_span::ErrorKind::Custom(Cow::Owned(err.to_string())),
+            span: spanned_toml.span,
+            line_info: None,
+        })
+    })?;
 
     Ok(source_location_spec)
 }

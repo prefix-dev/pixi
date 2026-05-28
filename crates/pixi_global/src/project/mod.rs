@@ -1495,7 +1495,7 @@ impl Project {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
             .engine()
-            .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec.location).await)
+            .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec).await)
             .await
             .map_err_into_dispatcher(std::convert::identity)
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;

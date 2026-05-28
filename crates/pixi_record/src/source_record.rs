@@ -28,7 +28,7 @@
 //! state transitions without field-by-field reconstruction.
 
 use pixi_git::sha::GitSha;
-use pixi_spec::{GitReference, SourceLocationSpec};
+use pixi_spec::{GitReference, SourceSpec};
 use rattler_conda_types::{
     Flag, MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord, PackageUrl,
     package::RunExportsJson,
@@ -310,7 +310,7 @@ pub struct PartialSourceRecordData {
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
-    pub sources: BTreeMap<String, SourceLocationSpec>,
+    pub sources: BTreeMap<String, SourceSpec>,
 }
 
 /// Complete metadata for a fully-evaluated source package.
@@ -324,7 +324,7 @@ pub struct FullSourceRecordData {
 
     /// Specifies which packages are expected to be installed as source packages
     /// and from which location.
-    pub sources: BTreeMap<String, SourceLocationSpec>,
+    pub sources: BTreeMap<String, SourceSpec>,
 }
 
 /// Runtime-checked variant used at the lock file boundary.
@@ -552,7 +552,7 @@ impl SourceRecord<FullSourceRecordData> {
     }
 
     /// Source dependency locations.
-    pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
+    pub fn sources(&self) -> &BTreeMap<String, SourceSpec> {
         &self.data.sources
     }
 
@@ -659,7 +659,7 @@ impl SourceRecord<PartialSourceRecordData> {
     }
 
     /// Source dependency locations.
-    pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
+    pub fn sources(&self) -> &BTreeMap<String, SourceSpec> {
         &self.data.sources
     }
 }
@@ -687,7 +687,7 @@ impl SourceRecord<SourceRecordData> {
     }
 
     /// Source dependency locations.
-    pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
+    pub fn sources(&self) -> &BTreeMap<String, SourceSpec> {
         match &self.data {
             SourceRecordData::Full(full) => &full.sources,
             SourceRecordData::Partial(partial) => &partial.sources,
@@ -783,7 +783,7 @@ impl SourceRecord<SourceRecordData> {
         let sources = data
             .sources
             .into_iter()
-            .map(|(k, v)| (k, SourceLocationSpec::from(v)))
+            .map(|(k, v)| (k, SourceSpec::from(v)))
             .collect();
 
         let record_data = match data.metadata {

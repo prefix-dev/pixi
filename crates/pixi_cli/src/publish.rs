@@ -31,7 +31,7 @@ use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::SourceLocationSpec;
+use pixi_spec::SourceSpec;
 use pixi_utils::variants::{VariantConfig, VariantValue};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::{AuthenticationStorage, s3_middleware};
@@ -711,7 +711,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Pre-resolve a SourceRecord per unique package name via RSP; each
     // returned variant becomes a separate SourceBuildKey invocation.
     let unique_names: BTreeSet<_> = packages.iter().map(|p| p.metadata.name.clone()).collect();
-    let source_location: SourceLocationSpec = manifest_source.clone().into();
+    let source_location: SourceSpec = manifest_source.clone().into();
     let mut resolved_records = Vec::new();
     for name in unique_names {
         let rsp = ResolveSourcePackageSpec {

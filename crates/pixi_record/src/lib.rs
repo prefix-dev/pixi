@@ -271,9 +271,9 @@ impl UnresolvedPixiRecord {
     }
 
     /// Source dependency locations. Empty for binary records.
-    pub fn sources(&self) -> &std::collections::BTreeMap<String, pixi_spec::SourceLocationSpec> {
+    pub fn sources(&self) -> &std::collections::BTreeMap<String, pixi_spec::SourceSpec> {
         static EMPTY: std::sync::LazyLock<
-            std::collections::BTreeMap<String, pixi_spec::SourceLocationSpec>,
+            std::collections::BTreeMap<String, pixi_spec::SourceSpec>,
         > = std::sync::LazyLock::new(std::collections::BTreeMap::new);
         match self {
             UnresolvedPixiRecord::Binary(_) => &EMPTY,

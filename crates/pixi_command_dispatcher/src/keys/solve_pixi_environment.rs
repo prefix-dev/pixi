@@ -23,8 +23,7 @@ use pixi_compute_engine::{ComputeCtx, Demand, Key, ParallelBuilder};
 use pixi_compute_reporters::OperationId;
 use pixi_record::{DevSourceRecord, PinnedSourceSpec, PixiRecord, UnresolvedPixiRecord};
 use pixi_spec::{
-    BinarySpec, DevSourceSpec, PixiSpec, ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec,
-    SourceSpec,
+    BinarySpec, DevSourceSpec, PixiSpec, ResolvedExcludeNewer, SourceAnchor, SourceSpec,
 };
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
@@ -103,7 +102,7 @@ pub struct SolvePixiEnvironmentSpec {
     /// hints. Built once at the top-level caller via
     /// [`InstalledSourceHints::from_records`] and propagated unchanged
     /// through nested solves so every layer of the recursion agrees on
-    /// one canonical hint per `(PackageName, SourceLocationSpec)`.
+    /// one canonical hint per `(PackageName, SourceSpec)`.
     ///
     /// [`PtrArc`] (pointer-identity `Hash`/`Eq`) because the map flows
     /// verbatim through the recursive solve; callers that share the
@@ -316,7 +315,7 @@ async fn compute_inner(
         .collect();
 
     // Source-record hints for this solve. Keyed on
-    // `(PackageName, SourceLocationSpec)`; the same `Arc` flows
+    // `(PackageName, SourceSpec)`; the same `Arc` flows
     // through every nested solve so a given source package gets the
     // same hint regardless of which branch of the recursion reached
     // it.
@@ -442,6 +441,7 @@ async fn compute_inner(
 /// the seeds. Binary match specs are NOT collected here; they're
 /// derived downstream inside [`SolveCondaKey`] from the same
 /// assembled records (see `derive_fetch_specs_from_source_repodata`).
+#[allow(clippy::mutable_key_type)]
 async fn walk_and_resolve(
     ctx: &mut ComputeCtx,
     seeds: Vec<(PackageName, SourceSpec)>,
@@ -450,7 +450,7 @@ async fn walk_and_resolve(
     installed_source_hints: &PtrArc<InstalledSourceHints>,
 ) -> Result<Vec<Arc<pixi_record::SourceRecord>>, SolvePixiEnvironmentError> {
     let mut all_records: Vec<Arc<pixi_record::SourceRecord>> = Vec::new();
-    let mut seen_sources: HashSet<(PackageName, SourceLocationSpec)> = HashSet::new();
+    let mut seen_sources: HashSet<(PackageName, SourceSpec)> = HashSet::new();
 
     // Fallback cycle frame used when a pushed RSP's guard fires but
     // the engine's cycle ring carried no RSP frames (e.g. the cycle
@@ -469,9 +469,9 @@ async fn walk_and_resolve(
     // cannot preserve across completed peers.
     let push = |p: &mut ParallelBuilder<'_>,
                 pending: &mut FuturesUnordered<_>,
-                seen: &mut HashSet<(PackageName, SourceLocationSpec)>,
+                seen: &mut HashSet<(PackageName, SourceSpec)>,
                 name: PackageName,
-                location: SourceLocationSpec,
+                location: SourceSpec,
                 parent: Option<PackageName>| {
         if !seen.insert((name.clone(), location.clone())) {
             return;
@@ -530,14 +530,7 @@ async fn walk_and_resolve(
     };
 
     for (name, spec) in seeds {
-        push(
-            &mut p,
-            &mut pending,
-            &mut seen_sources,
-            name,
-            spec.location,
-            None,
-        );
+        push(&mut p, &mut pending, &mut seen_sources, name, spec, None);
     }
 
     while let Some(result) = pending.next().await {
@@ -547,9 +540,14 @@ async fn walk_and_resolve(
         // for source refs and queue newly-seen pairs, tagging each
         // with the parent package that pulled it in.
         for record in records.iter() {
-            let anchor =
-                SourceAnchor::from(SourceLocationSpec::from(record.manifest_source().clone()));
-            for depend_str in &record.package_record().depends {
+            let anchor = SourceAnchor::from(SourceSpec::from(record.manifest_source().clone()));
+            for depend_str in record.package_record().depends.iter().chain(
+                record
+                    .package_record()
+                    .experimental_extra_depends
+                    .values()
+                    .flatten(),
+            ) {
                 let Ok(match_spec) = MatchSpec::from_str(
                     depend_str,
                     ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
@@ -596,7 +594,7 @@ async fn process_dev_sources(
             let name = name.clone();
             let env_ref = spec.env_ref.clone();
             let preferred_build_source = spec.preferred_build_source.get(&name).cloned();
-            let fut = ctx.pin_and_checkout(dev_spec.source.location.clone());
+            let fut = ctx.pin_and_checkout(dev_spec.source.clone());
             async move {
                 let checkout = fut
                     .await

@@ -118,10 +118,10 @@ mod tests {
 
         let result =
             resolve_pin_compatible(&PackageName::new_unchecked("python"), &spec, &map).unwrap();
-        let PixiSpec::Version(vs) = result else {
-            panic!("expected Version");
+        let PixiSpec::Detailed(d) = result else {
+            panic!("expected Detailed");
         };
-        assert_eq!(vs.to_string(), ">=3.11,<3.12.0a0");
+        assert_eq!(d.version.as_ref().unwrap().to_string(), ">=3.11,<3.12.0a0");
     }
 
     #[test]

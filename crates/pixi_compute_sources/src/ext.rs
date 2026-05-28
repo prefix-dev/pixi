@@ -5,12 +5,12 @@ use futures::FutureExt;
 use futures::future::BoxFuture;
 use pixi_compute_engine::ComputeCtx;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
-use pixi_spec::{SourceLocationSpec, UrlSpec};
+use pixi_spec::{SourceSpec, UrlSpec};
 
 use crate::path::RootDirExt;
 use crate::{GitSourceCheckoutExt, SourceCheckout, SourceCheckoutError, UrlSourceCheckoutExt};
 
-/// Dispatch a checkout based on a [`SourceLocationSpec`] or a fully
+/// Dispatch a checkout based on a [`SourceSpec`] or a fully
 /// pinned [`PinnedSourceSpec`].
 pub trait SourceCheckoutExt {
     /// Resolve a source-location spec into a [`SourceCheckout`].
@@ -22,7 +22,7 @@ pub trait SourceCheckoutExt {
     /// - **URL** specs download and extract the archive.
     fn pin_and_checkout(
         &mut self,
-        source_location_spec: SourceLocationSpec,
+        source_location_spec: SourceSpec,
     ) -> impl Future<Output = Result<SourceCheckout, SourceCheckoutError>> + Send + use<Self>;
 
     /// Like [`Self::pin_and_checkout`] but for a fully-pinned spec
@@ -36,11 +36,11 @@ pub trait SourceCheckoutExt {
 impl SourceCheckoutExt for ComputeCtx {
     fn pin_and_checkout(
         &mut self,
-        source_location_spec: SourceLocationSpec,
+        source_location_spec: SourceSpec,
     ) -> impl Future<Output = Result<SourceCheckout, SourceCheckoutError>> + Send + use<> {
         let fut: BoxFuture<'static, Result<SourceCheckout, SourceCheckoutError>> =
             match source_location_spec {
-                SourceLocationSpec::Url(url) => self
+                SourceSpec::Url(url) => self
                     .pin_and_checkout_url(UrlSpec {
                         url: url.url,
                         md5: url.md5,
@@ -48,7 +48,7 @@ impl SourceCheckoutExt for ComputeCtx {
                         subdirectory: url.subdirectory,
                     })
                     .boxed(),
-                SourceLocationSpec::Path(path) => {
+                SourceSpec::Path(path) => {
                     let result = self.resolve_typed_path(path.path.to_path());
                     async move {
                         let resolved = result?;
@@ -65,7 +65,7 @@ impl SourceCheckoutExt for ComputeCtx {
                     }
                     .boxed()
                 }
-                SourceLocationSpec::Git(git_spec) => self.pin_and_checkout_git(git_spec).boxed(),
+                SourceSpec::Git(git_spec) => self.pin_and_checkout_git(git_spec).boxed(),
             };
         fut
     }

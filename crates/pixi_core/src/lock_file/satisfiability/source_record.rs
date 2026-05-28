@@ -10,7 +10,7 @@ use pixi_command_dispatcher::{
 use pixi_record::{
     PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, SourceMismatchError, SourceRecordData,
 };
-use pixi_spec::{SourceAnchor, SourceLocationSpec, SpecConversionError};
+use pixi_spec::{SourceAnchor, SourceSpec, SpecConversionError};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageName};
 use std::collections::HashSet;
 
@@ -69,13 +69,10 @@ pub(super) fn verify_build_source_matches_manifest(
         lock_file_source_location.map(PinnedBuildSourceSpec::into_pinned),
     ) {
         (None, None) => ok,
-        (Some(SourceLocationSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {
+        (Some(SourceSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {
             lurl_spec.satisfies(&murl_spec).map_err(sat_err)
         }
-        (
-            Some(SourceLocationSpec::Git(mut mgit_spec)),
-            Some(PinnedSourceSpec::Git(mut lgit_spec)),
-        ) => {
+        (Some(SourceSpec::Git(mut mgit_spec)), Some(PinnedSourceSpec::Git(mut lgit_spec))) => {
             // Ignore subdirectory for comparison, they should not
             // trigger lock file invalidation.
             mgit_spec.subdirectory = Default::default();
@@ -87,7 +84,7 @@ pub(super) fn verify_build_source_matches_manifest(
             }
             lgit_spec.satisfies(&mgit_spec).map_err(sat_err)
         }
-        (Some(SourceLocationSpec::Path(mpath_spec)), Some(PinnedSourceSpec::Path(lpath_spec))) => {
+        (Some(SourceSpec::Path(mpath_spec)), Some(PinnedSourceSpec::Path(lpath_spec))) => {
             lpath_spec.satisfies(&mpath_spec).map_err(sat_err)
         }
         // If they not equal kind we error-out
@@ -175,8 +172,7 @@ pub(super) async fn verify_partial_source_record_against_backend(
     // empty slices reflect the truth or a stale snapshot. Forcing one
     // re-lock populates the canonical slices so subsequent runs hit
     // the fast verification path.
-    let source_anchor =
-        SourceAnchor::from(SourceLocationSpec::from(record.manifest_source.clone()));
+    let source_anchor = SourceAnchor::from(SourceSpec::from(record.manifest_source.clone()));
     if let Some(build_deps) = matching_output.build_dependencies.as_ref() {
         verify_locked_against_backend_specs(
             build_deps,
@@ -546,7 +542,7 @@ impl<'a> LockedConda<'a> {
     /// Returns `true` if any locked source record with the given
     /// `name` has a pinned manifest source compatible with
     /// `location` (per [`PinnedSourceSpec::matches_source_spec`]).
-    fn satisfies_source(&self, name: &PackageName, location: &SourceLocationSpec) -> bool {
+    fn satisfies_source(&self, name: &PackageName, location: &SourceSpec) -> bool {
         self.records_for(name).iter().any(|r| match r {
             pixi_record::UnresolvedPixiRecord::Source(s) => {
                 s.manifest_source.matches_source_spec(location)
@@ -632,12 +628,12 @@ fn verify_locked_against_backend_specs(
             }
             PackageSpec::Source(source) => {
                 let resolved = from_source_spec_v1(source.clone()).resolve(source_anchor);
-                if !locked_view.satisfies_source(&dep_name, &resolved.location) {
+                if !locked_view.satisfies_source(&dep_name, &resolved) {
                     return Err(Box::new(PlatformUnsat::SourceBuildHostSourceMissing {
                         package: package.as_source().to_string(),
                         env,
                         name: dep_name.as_source().to_string(),
-                        location: resolved.location.to_string(),
+                        location: resolved.to_string(),
                     }));
                 }
             }
@@ -781,7 +777,7 @@ fn build_full_source_record_from_output(
         },
         flags: output.metadata.flags.clone(),
     };
-    let sources: std::collections::BTreeMap<String, SourceLocationSpec> = match &record.data {
+    let sources: std::collections::BTreeMap<String, SourceSpec> = match &record.data {
         SourceRecordData::Full(full) => full.sources.clone(),
         SourceRecordData::Partial(partial) => partial.sources.clone(),
     };
@@ -821,7 +817,7 @@ mod tests {
         PartialSourceRecordData, PinnedPathSpec, PinnedSourceSpec, SourceRecordData,
         UnresolvedPixiRecord, UnresolvedSourceRecord,
     };
-    use pixi_spec::{SourceAnchor, SourceLocationSpec};
+    use pixi_spec::{SourceAnchor, SourceSpec};
     use rattler_conda_types::{
         ChannelConfig, NoArchType, PackageName, PackageRecord, Platform, RepoDataRecord,
         VersionSpec, VersionWithSource, package::DistArchiveIdentifier,
@@ -1001,11 +997,9 @@ mod tests {
             depends: vec![binary_dep("numpy", ">=1")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let result = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1030,11 +1024,9 @@ mod tests {
             depends: vec![binary_dep("numpy", ">=2")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let err = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1072,11 +1064,9 @@ mod tests {
             depends: vec![binary_dep("bar", "")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let err = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1106,11 +1096,9 @@ mod tests {
             depends: vec![binary_dep("cmake", "")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
         let err = verify_locked_against_backend_specs(
             &deps,
             &locked,
@@ -1172,11 +1160,9 @@ mod tests {
             depends: vec![pin_compatible_dep("numpy")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
 
         let err = verify_locked_against_backend_specs(
             &host_deps,
@@ -1216,11 +1202,9 @@ mod tests {
             depends: vec![pin_compatible_dep("numpy")],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
 
         let result = verify_locked_against_backend_specs(
             &host_deps,
@@ -1262,11 +1246,9 @@ mod tests {
             )],
             constraints: Vec::new(),
         };
-        let anchor = SourceAnchor::from(SourceLocationSpec::from(PinnedSourceSpec::Path(
-            PinnedPathSpec {
-                path: "./pkg".into(),
-            },
-        )));
+        let anchor = SourceAnchor::from(SourceSpec::from(PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        })));
 
         let err = verify_locked_against_backend_specs(
             &host_deps,

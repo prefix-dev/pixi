@@ -16,7 +16,7 @@ use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
     WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
 };
-use pixi_spec::{SourceLocationSpec, SpecConversionError};
+use pixi_spec::{SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
@@ -48,7 +48,7 @@ pub struct BackendInitializationParams {
     pub workspace_root: PathBuf,
 
     /// The location of the source code.
-    pub build_source: Option<SourceLocationSpec>,
+    pub build_source: Option<SourceSpec>,
 
     /// The anchor for relative paths to the location of the source code.
     pub source_anchor: PathBuf,

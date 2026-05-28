@@ -402,7 +402,7 @@ pub fn extract_git_requirements_from_workspace(project: &Workspace) -> Vec<GitSp
             for (_, dep_spec) in dependencies {
                 for spec in dep_spec {
                     if let PixiSpec::Git(spec) = spec {
-                        requirements.push(spec.clone());
+                        requirements.push(*spec);
                     }
                 }
             }

@@ -17,7 +17,7 @@ use pixi_compute_reporters::OperationId;
 use pixi_record::{
     FullSourceRecordData, PinnedSourceSpec, PixiRecord, SourceRecord, UnresolvedPixiRecord,
 };
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
 use rattler_conda_types::{PackageName, PackageRecord, package::RunExportsJson};
@@ -113,7 +113,7 @@ async fn assemble_source_record_inner(
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
-    let source_location = SourceLocationSpec::from(source.manifest_source().clone());
+    let source_location = SourceSpec::from(source.manifest_source().clone());
     let source_anchor = SourceAnchor::from(source_location.clone());
     let channel_config = ctx.compute(&ChannelConfigKey).await;
     let pkg_name = output.metadata.name.clone();
@@ -225,7 +225,7 @@ async fn assemble_source_record_inner(
             output.metadata.subdir,
         );
 
-    let mut sources: HashMap<PackageName, SourceLocationSpec> = HashMap::new();
+    let mut sources: HashMap<PackageName, SourceSpec> = HashMap::new();
 
     // Record a source-typed PixiSpec's location into `sources`, erroring
     // if the same (name, location) is registered twice.
@@ -233,16 +233,16 @@ async fn assemble_source_record_inner(
         if let Either::Left(source) = spec.clone().into_source_or_binary() {
             match sources.entry(name.clone()) {
                 std::collections::hash_map::Entry::Occupied(entry) => {
-                    if entry.get() == &source.location {
+                    if entry.get() == &source {
                         return Err(SourceRecordError::DuplicateSourceDependency {
                             package: name.clone(),
                             source1: Box::new(entry.get().clone()),
-                            source2: Box::new(source.location.clone()),
+                            source2: Box::new(source.clone()),
                         });
                     }
                 }
                 std::collections::hash_map::Entry::Vacant(entry) => {
-                    entry.insert(source.location.clone());
+                    entry.insert(source.clone());
                 }
             }
         }
@@ -374,7 +374,7 @@ async fn assemble_source_record_inner(
         flags: output.metadata.flags.clone(),
     };
 
-    let sources_by_str: BTreeMap<String, SourceLocationSpec> = sources
+    let sources_by_str: BTreeMap<String, SourceSpec> = sources
         .into_iter()
         .map(|(name, source)| (name.as_source().to_string(), source))
         .collect();

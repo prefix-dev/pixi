@@ -438,10 +438,10 @@ impl TomlPackage {
         let file_validation_dir: Option<PathBuf> =
             match (&build_result.value.source, root_directory) {
                 // Git or URL source: skip validation (files are in remote location)
-                (Some(pixi_spec::SourceLocationSpec::Git(_)), _)
-                | (Some(pixi_spec::SourceLocationSpec::Url(_)), _) => None,
+                (Some(pixi_spec::SourceSpec::Git(_)), _)
+                | (Some(pixi_spec::SourceSpec::Url(_)), _) => None,
                 // Path source: resolve the path and use that directory for validation
-                (Some(pixi_spec::SourceLocationSpec::Path(path_spec)), root_dir) => {
+                (Some(pixi_spec::SourceSpec::Path(path_spec)), root_dir) => {
                     path_spec.resolve(root_dir).ok()
                 }
                 // No source: use the manifest directory

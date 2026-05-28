@@ -13,7 +13,7 @@
 //! the same package.
 //!
 //! [`InstalledSourceHints`] flattens the tree once at the top and keys
-//! hints on `(PackageName, SourceLocationSpec)`. The same `Arc` of this
+//! hints on `(PackageName, SourceSpec)`. The same `Arc` of this
 //! type flows unchanged through every nested SPEK, so every layer of the
 //! walk looks up the same canonical hint for a given package.
 //!
@@ -45,7 +45,7 @@ use std::{
 use pixi_record::{
     PinnedBuildSourceSpec, PinnedSourceSpec, UnresolvedPixiRecord, UnresolvedSourceRecord,
 };
-use pixi_spec::SourceLocationSpec;
+use pixi_spec::SourceSpec;
 use rattler_conda_types::PackageName;
 
 use crate::PtrArc;
@@ -53,10 +53,10 @@ use crate::PtrArc;
 /// Flattened + canonicalized source-record hints for a pixi solve.
 #[derive(Debug, Default, Clone)]
 pub struct InstalledSourceHints {
-    by_key: HashMap<(PackageName, SourceLocationSpec), InstalledSourceHint>,
+    by_key: HashMap<(PackageName, SourceSpec), InstalledSourceHint>,
 }
 
-/// The canonical install hint for one `(PackageName, SourceLocationSpec)`
+/// The canonical install hint for one `(PackageName, SourceSpec)`
 /// pair: which pin represents it in this environment, and which build /
 /// host package sets to seed the nested solves with.
 ///
@@ -84,8 +84,9 @@ impl InstalledSourceHints {
     /// Walk `installed` recursively, collapsing duplicates by
     /// `(name, source_location)` and picking a canonical representative
     /// per group.
+    #[allow(clippy::mutable_key_type)]
     pub fn from_records(installed: &[UnresolvedPixiRecord]) -> Self {
-        let mut candidates: HashMap<(PackageName, SourceLocationSpec), Vec<InstalledSourceHint>> =
+        let mut candidates: HashMap<(PackageName, SourceSpec), Vec<InstalledSourceHint>> =
             HashMap::new();
         // Memoize by Arc pointer identity so a source record reached
         // through multiple parents is descended into once. Without this
@@ -106,18 +107,14 @@ impl InstalledSourceHints {
         Self { by_key }
     }
 
-    pub fn get(
-        &self,
-        name: &PackageName,
-        location: &SourceLocationSpec,
-    ) -> Option<&InstalledSourceHint> {
+    pub fn get(&self, name: &PackageName, location: &SourceSpec) -> Option<&InstalledSourceHint> {
         self.by_key.get(&(name.clone(), location.clone()))
     }
 
     /// Find a hint that matches `(name, location)` where `location` may be
     /// unpinned (e.g. `git+url?rev=main` from a manifest). The hint key is
     /// stored using the locked `PinnedSourceSpec`'s
-    /// `SourceLocationSpec` projection (e.g. `git+url?rev=sha`), so a
+    /// `SourceSpec` projection (e.g. `git+url?rev=sha`), so a
     /// direct `get` only matches when the caller already has a pinned
     /// location. This method also accepts unpinned specs by checking
     /// [`PinnedSourceSpec::matches_source_spec`] against each name-matched
@@ -128,7 +125,7 @@ impl InstalledSourceHints {
     pub fn find_for_location(
         &self,
         name: &PackageName,
-        location: &SourceLocationSpec,
+        location: &SourceSpec,
     ) -> Option<&InstalledSourceHint> {
         if let Some(hint) = self.by_key.get(&(name.clone(), location.clone())) {
             return Some(hint);
@@ -155,9 +152,10 @@ impl Default for PtrArc<InstalledSourceHints> {
     }
 }
 
+#[allow(clippy::mutable_key_type)]
 fn collect(
     records: &[UnresolvedPixiRecord],
-    out: &mut HashMap<(PackageName, SourceLocationSpec), Vec<InstalledSourceHint>>,
+    out: &mut HashMap<(PackageName, SourceSpec), Vec<InstalledSourceHint>>,
     visited: &mut HashSet<*const UnresolvedSourceRecord>,
 ) {
     for record in records {
@@ -166,7 +164,7 @@ fn collect(
         };
         let key = (
             source.name().clone(),
-            SourceLocationSpec::from(source.manifest_source.clone()),
+            SourceSpec::from(source.manifest_source.clone()),
         );
         out.entry(key).or_default().push(InstalledSourceHint {
             manifest_source: source.manifest_source.clone(),
@@ -221,13 +219,13 @@ mod tests {
     use std::sync::Arc;
 
     use pixi_record::{PartialSourceRecordData, SourceRecordData, UnresolvedSourceRecord};
-    use pixi_spec::{PathSourceSpec, SourceLocationSpec};
+    use pixi_spec::{PathSourceSpec, SourceSpec};
     use rattler_conda_types::PackageName;
 
     use super::*;
 
-    fn path_location(path: &str) -> SourceLocationSpec {
-        SourceLocationSpec::Path(PathSourceSpec { path: path.into() })
+    fn path_location(path: &str) -> SourceSpec {
+        SourceSpec::Path(PathSourceSpec::new(path))
     }
 
     fn make_source(
@@ -336,7 +334,7 @@ mod tests {
     fn nested_same_name_different_location_produces_both_hints() {
         // Test 2's shape at the type level: top-level `foo` from one
         // path and a nested `foo` reached through a different path
-        // land as two distinct hints (distinct `SourceLocationSpec`).
+        // land as two distinct hints (distinct `SourceSpec`).
         let nested = make_source("foo", "./nested-foo", Vec::new(), Vec::new());
         let outer = make_source("bar", "./bar", Vec::new(), vec![nested]);
         let top_level_foo = make_source("foo", "./foo", Vec::new(), Vec::new());
@@ -382,13 +380,13 @@ mod tests {
         }))
     }
 
-    fn unpinned_git_location(url: &str) -> SourceLocationSpec {
+    fn unpinned_git_location(url: &str) -> SourceSpec {
         use pixi_spec::{GitReference, GitSpec};
-        SourceLocationSpec::Git(GitSpec {
-            git: url::Url::parse(url).expect("valid git url"),
-            rev: Some(GitReference::Branch("main".into())),
-            subdirectory: Default::default(),
-        })
+        SourceSpec::Git(GitSpec::new(
+            url::Url::parse(url).expect("valid git url"),
+            Some(GitReference::Branch("main".into())),
+            Default::default(),
+        ))
     }
 
     #[test]

@@ -21,7 +21,7 @@ use pixi_manifest::{EnvironmentName, FeaturesExt};
 use pixi_record::{
     DevSourceRecord, LockFileResolver, PixiRecord, SourceRecordData, UnresolvedPixiRecord,
 };
-use pixi_spec::{PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec, SpecConversionError};
+use pixi_spec::{PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     as_uv_req, pep508_requirement_to_uv_requirement, to_normalize, to_uv_specifiers, to_uv_version,
@@ -422,7 +422,7 @@ async fn resolve_single_dev_dependency(
 ) -> Result<Vec<Dependency>, CommandDispatcherError<PlatformUnsat>> {
     let pinned_source = command_dispatcher
         .engine()
-        .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec.location).await)
+        .with_ctx(async |ctx| ctx.pin_and_checkout(source_spec).await)
         .await
         .map_err_into_dispatcher(PlatformUnsat::from)?;
 
@@ -942,7 +942,7 @@ async fn verify_package_platform_satisfiability(
                                 record.name().as_source(),
                                 record.manifest_source
                             )),
-                            SourceLocationSpec::from(record.manifest_source.clone()).into(),
+                            SourceSpec::from(record.manifest_source.clone()).into(),
                         ),
                     };
 
@@ -956,7 +956,9 @@ async fn verify_package_platform_satisfiability(
                         ))
                     }) {
                         let anchored_location = anchor.resolve(source.clone());
-                        let source_spec = SourceSpec::new(anchored_location, spec);
+                        let mut source_spec = anchored_location;
+                        *source_spec.matchspec_mut() =
+                            pixi_spec::MatchspecFields::from_nameless_match_spec(&spec);
                         conda_stack.push(Dependency::CondaSource(
                             package_name.clone(),
                             source_spec,
@@ -1274,7 +1276,7 @@ fn find_matching_source_package(
 
     source_package
         .manifest_source
-        .satisfies(&source_spec.location)
+        .satisfies(&source_spec)
         .map_err(|e| PlatformUnsat::SourcePackageMismatch(name.as_source().to_string(), e))?;
 
     let match_spec = source_spec.to_nameless_match_spec();

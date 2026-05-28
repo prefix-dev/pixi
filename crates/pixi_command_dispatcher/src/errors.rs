@@ -2,7 +2,7 @@ use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use miette::Diagnostic;
 use pixi_record::VariantValue;
-use pixi_spec::{SourceLocationSpec, SpecConversionError};
+use pixi_spec::{SourceSpec, SpecConversionError};
 use rattler_conda_types::{
     ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageName, ParseChannelError,
 };
@@ -172,8 +172,8 @@ pub enum SourceRecordError {
     )]
     DuplicateSourceDependency {
         package: PackageName,
-        source1: Box<SourceLocationSpec>,
-        source2: Box<SourceLocationSpec>,
+        source1: Box<SourceSpec>,
+        source2: Box<SourceSpec>,
     },
 
     #[error("the dependencies of some packages in the environment form a cycle")]

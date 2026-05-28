@@ -1461,6 +1461,22 @@ The `run-dependencies` are the packages that will be installed in the environmen
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-dependencies"
 ```
 
+#### repodata v3 fields
+
+In addition to the usual MatchSpec fields (`version`, `channel`, `build`, ...), conda dependencies accept three repodata v3 fields:
+
+- `extras`: pull in the listed optional dependency groups (see [`extra-dependencies`](#extra-dependencies)) of the dependency. Equivalent to writing `name[group1,group2]` in a MatchSpec.
+- `flags`: require the dependency to have been built with the listed [build flags](#build-flags-example).
+- `when`: only apply the dependency when the given condition is satisfied. The condition is itself a MatchSpec table with a `package` field naming the other dependency to check.
+
+```toml
+[dependencies]
+# Local source dependency: pull in the `test` extras and require it to have been built with `cuda` enabled.
+mypackage = { path = "./mypackage", extras = ["test"], flags = ["cuda"] }
+# Git source dependency: only pull it in when `python` is at least 3.12.
+otherpackage = { git = "https://github.com/example/otherpackage", when = { package = "python", version = ">=3.12" } }
+```
+
 ### `extra-dependencies`
 
 The `extra-dependencies` table defines extra dependency groups for a package. For example, a package that declares `test` and `cuda` groups:

@@ -171,9 +171,7 @@ pub trait BackendSourceBuildReporter: Send + Sync {
 pub(crate) fn has_direct_conda_dependency(
     dependencies: &pixi_spec_containers::DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
 ) -> bool {
-    dependencies.iter_specs().any(|(_, spec)| match spec {
-        PixiSpec::Url(url) => url.is_binary(),
-        PixiSpec::Path(path) => path.is_binary(),
-        _ => false,
-    })
+    dependencies
+        .iter_specs()
+        .any(|(_, spec)| matches!(spec, PixiSpec::UrlBinary(_) | PixiSpec::PathBinary(_)))
 }

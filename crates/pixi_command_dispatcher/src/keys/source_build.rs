@@ -15,7 +15,7 @@ use pixi_build_types::procedures::{
 };
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
-use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
+use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
 use rattler_conda_types::{
     ChannelUrl, PackageRecord, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
@@ -164,7 +164,7 @@ async fn compute_inner(
     // We need this identifier only to form the artifact cache key — on
     // a cache hit there's no further reason to talk to a backend, so
     // doing the spawn before the lookup is pure waste.
-    let manifest_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
+    let manifest_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
     let build_source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
@@ -307,7 +307,7 @@ async fn compute_inner(
     //   the env being defined)
     // - host deps see build records
     // - run deps (+ run_exports) see build + host records
-    let source_anchor = SourceAnchor::from(SourceLocationSpec::from(manifest_source.clone()));
+    let source_anchor = SourceAnchor::from(SourceSpec::from(manifest_source.clone()));
     let mut build_pixi_records: Vec<PixiRecord> = build_records
         .iter()
         .cloned()

@@ -14,7 +14,7 @@ use derive_more::Display;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::{PinnedSourceSpec, SourceRecord};
-use pixi_spec::SourceLocationSpec;
+use pixi_spec::SourceSpec;
 use rattler_conda_types::PackageName;
 use tracing::instrument;
 
@@ -80,7 +80,7 @@ pub struct SourceMetadataSpec {
     pub package: PackageName,
     /// Unpinned source location; pinned inside the compute unless
     /// `manifest_pin_override` carries a compatible pin (see below).
-    pub source_location: SourceLocationSpec,
+    pub source_location: SourceSpec,
     /// Optional override for the package's build source.
     pub preferred_build_source: Option<PinnedSourceSpec>,
     /// Optional caller-supplied pin for the manifest source. When set

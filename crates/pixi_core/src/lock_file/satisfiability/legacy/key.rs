@@ -12,7 +12,7 @@ use pixi_command_dispatcher::{
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec},
 };
 use pixi_record::{PinnedBuildSourceSpec, PinnedSourceSpec, UnresolvedPixiRecord, VariantValue};
-use pixi_spec::SourceLocationSpec;
+use pixi_spec::SourceSpec;
 use rattler_conda_types::PackageName;
 use thiserror::Error;
 use tracing::instrument;
@@ -161,7 +161,7 @@ impl Key for LegacySourceEnvKey {
         let variants = ctx
             .compute(&ResolveSourcePackageKey::new(ResolveSourcePackageSpec {
                 package: self.package.clone(),
-                source_location: SourceLocationSpec::from(self.manifest_source.clone()),
+                source_location: SourceSpec::from(self.manifest_source.clone()),
                 preferred_build_source: self.preferred_build_source.clone(),
                 env_ref: self.env_ref.clone(),
                 installed_source_hints: self.installed_source_hints.clone(),

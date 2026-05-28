@@ -25,7 +25,7 @@ use crate::SourceSpec;
 /// This would be represented as:
 /// ```ignore
 /// DevSourceSpec {
-///     source: SourceSpec::Path(PathSourceSpec { path: "../my-package" }),
+///     source: SourceSpec::Path(PathSourceSpec { path: "../my-package", .. }),
 /// }
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]

@@ -95,17 +95,16 @@ impl GlobalSpecs {
         project: &pixi_global::Project,
     ) -> Result<Vec<pixi_global::project::GlobalSpec>, GlobalSpecsConversionError> {
         let git_or_path_spec = if let Some(git_url) = &self.git {
-            let git_spec = pixi_spec::GitSpec {
-                git: git_url.clone(),
-                rev: self.rev.clone().map(Into::into),
-                subdirectory: self
-                    .subdir
+            let git_spec = pixi_spec::GitSpec::new(
+                git_url.clone(),
+                self.rev.clone().map(Into::into),
+                self.subdir
                     .clone()
                     .map(Subdirectory::try_from)
                     .transpose()?
                     .unwrap_or_default(),
-            };
-            Some(PixiSpec::Git(git_spec))
+            );
+            Some(PixiSpec::from(git_spec))
         } else if let Some(path) = &self.path {
             let absolute_path = dunce::canonicalize(path.as_str())
                 .map_err(|_| GlobalSpecsConversionError::AbsolutizePath(path.to_string()))?;
@@ -159,10 +158,10 @@ impl GlobalSpecs {
                         manifest_root.to_string_lossy().to_string(),
                     )
                 })?;
-            Some(PixiSpec::Path(pixi_spec::PathSpec {
-                path: Utf8NativePathBuf::from(relative_path.to_string_lossy().to_string())
+            Some(PixiSpec::from(pixi_spec::PathSpec::new(
+                Utf8NativePathBuf::from(relative_path.to_string_lossy().to_string())
                     .to_typed_path_buf(),
-            }))
+            )))
         } else {
             fn pathlike(s: &str) -> bool {
                 s.contains(".conda") || s.contains('/') || s.contains('\\')
@@ -315,8 +314,8 @@ mod tests {
                 assert_eq!(global_specs.len(), 1);
                 let installed_spec = &global_specs[0];
 
-                let PixiSpec::Path(path_spec) = &installed_spec.spec else {
-                    panic!("expected path spec");
+                let PixiSpec::PathBinary(path_spec) = &installed_spec.spec else {
+                    panic!("expected binary path spec");
                 };
 
                 let resolved_path = path_spec
