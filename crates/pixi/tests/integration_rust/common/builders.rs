@@ -31,6 +31,8 @@ use pixi_cli::{
     global, init, install, lock, remove, search, task, update, workspace,
 };
 use pixi_core::DependencyType;
+
+use super::isolated_config_source;
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -283,7 +285,7 @@ impl IntoFuture for AddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        add::execute(self.args).boxed_local()
+        async move { add::execute(self.args).await }.boxed_local()
     }
 }
 
@@ -328,7 +330,7 @@ impl IntoFuture for RemoveBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        remove::execute(self.args).boxed_local()
+        async move { remove::execute(self.args).await }.boxed_local()
     }
 }
 pub struct TaskAddBuilder {
@@ -364,6 +366,7 @@ impl TaskAddBuilder {
     /// Execute the CLI command
     pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
+            config_source: isolated_config_source(),
             operation: task::Operation::Add(self.args),
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
@@ -389,6 +392,7 @@ impl TaskAliasBuilder {
     /// Execute the CLI command
     pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
+            config_source: isolated_config_source(),
             operation: task::Operation::Alias(self.args),
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
@@ -429,10 +433,14 @@ impl IntoFuture for ProjectChannelAddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        workspace::channel::execute(workspace::channel::Args {
-            workspace_config: self.workspace_config,
-            command: workspace::channel::Command::Add(self.args),
-        })
+        async move {
+            workspace::channel::execute(workspace::channel::Args {
+                config_source: isolated_config_source(),
+                workspace_config: self.workspace_config,
+                command: workspace::channel::Command::Add(self.args),
+            })
+            .await
+        }
         .boxed_local()
     }
 }
@@ -462,10 +470,14 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        workspace::channel::execute(workspace::channel::Args {
-            workspace_config: self.workspace_config,
-            command: workspace::channel::Command::Remove(self.args),
-        })
+        async move {
+            workspace::channel::execute(workspace::channel::Args {
+                config_source: isolated_config_source(),
+                workspace_config: self.workspace_config,
+                command: workspace::channel::Command::Remove(self.args),
+            })
+            .await
+        }
         .boxed_local()
     }
 }
@@ -513,7 +525,7 @@ impl IntoFuture for InstallBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        install::execute(self.args).boxed_local()
+        async move { install::execute(self.args).await }.boxed_local()
     }
 }
 
@@ -551,13 +563,17 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        workspace::environment::execute(workspace::environment::Args {
-            workspace_config: WorkspaceConfig {
-                manifest_path: self.manifest_path,
-                ..Default::default()
-            },
-            command: workspace::environment::Command::Add(self.args),
-        })
+        async move {
+            workspace::environment::execute(workspace::environment::Args {
+                config_source: isolated_config_source(),
+                workspace_config: WorkspaceConfig {
+                    manifest_path: self.manifest_path,
+                    ..Default::default()
+                },
+                command: workspace::environment::Command::Add(self.args),
+            })
+            .await
+        }
         .boxed_local()
     }
 }
@@ -616,7 +632,7 @@ impl IntoFuture for UpdateBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        update::execute(self.args).boxed_local()
+        async move { update::execute(self.args).await }.boxed_local()
     }
 }
 
@@ -642,7 +658,7 @@ impl IntoFuture for LockBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        lock::execute(self.args).boxed_local()
+        async move { lock::execute(self.args).await }.boxed_local()
     }
 }
 
@@ -695,7 +711,7 @@ impl IntoFuture for BuildBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        build::execute(self.args).boxed_local()
+        async move { build::execute(self.args).await }.boxed_local()
     }
 }
 

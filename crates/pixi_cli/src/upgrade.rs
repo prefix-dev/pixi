@@ -27,6 +27,9 @@ use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
@@ -35,7 +38,7 @@ pub struct Args {
     pub lock_file_update_config: LockFileUpdateConfig,
 
     #[clap(flatten)]
-    config: ConfigCli,
+    pub config: ConfigCli,
 
     #[clap(flatten)]
     pub specs: UpgradeSpecsArgs,
@@ -66,6 +69,7 @@ pub struct UpgradeSpecsArgs {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config.clone());

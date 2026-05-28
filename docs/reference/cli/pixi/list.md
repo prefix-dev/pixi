@@ -36,6 +36,15 @@ pixi list [OPTIONS] [REGEX]
 - <a id="arg---explicit" href="#arg---explicit">`--explicit (-x)`</a>
 :  Only list packages that are explicitly defined in the workspace
 
+## Config Options
+- <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
+:  Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+<br>**env**: `PIXI_NO_CONFIG`
+<br>**default**: `false`
+- <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
+:  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+<br>**env**: `PIXI_CONFIG_FILE`
+
 ## Update Options
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file

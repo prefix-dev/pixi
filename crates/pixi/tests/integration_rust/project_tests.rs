@@ -44,7 +44,7 @@ async fn add_remove_channel() {
         .unwrap();
 
     // There should be a loadable project manifest in the directory
-    let project = Workspace::from_path(&pixi.manifest_path()).unwrap();
+    let project = pixi.workspace().unwrap();
 
     // Our channel should be in the list of channels
     let local_channel =
@@ -62,7 +62,7 @@ async fn add_remove_channel() {
         .unwrap();
 
     // Load again
-    let project = Workspace::from_path(&pixi.manifest_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     let channels = project.default_environment().channels();
     // still present
     assert!(channels.contains(&local_channel));
@@ -78,7 +78,7 @@ async fn add_remove_channel() {
         .unwrap();
 
     // Load again
-    let project = Workspace::from_path(&pixi.manifest_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     let channels = project.default_environment().channels();
 
     // Channel has been removed

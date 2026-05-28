@@ -156,6 +156,9 @@ pub const DEFAULT_FIELDS: [Field; 6] = [
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// List only packages matching a regular expression
     #[arg()]
     pub regex: Option<String>,
@@ -197,6 +200,7 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
