@@ -27,8 +27,10 @@ rattler_lock = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_with = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }

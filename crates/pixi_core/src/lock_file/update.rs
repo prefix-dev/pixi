@@ -2385,6 +2385,7 @@ impl<'p> UpdateContext<'p> {
         let mut builder = LockFile::builder()
             .with_platforms(all_platforms)
             .expect("all platforms should be unique");
+        let mut writer = pixi_record::LockFileWriter::new(&mut builder);
 
         // Iterate over all environments and add their records to the lock file.
         for environment in project.environments() {
@@ -2406,8 +2407,8 @@ impl<'p> UpdateContext<'p> {
                 .try_collect()
                 .into_diagnostic()?;
 
-            builder.set_channels(&environment_name, channels);
-            builder.set_options(
+            writer.builder.set_channels(&environment_name, channels);
+            writer.builder.set_options(
                 &environment_name,
                 rattler_lock::SolveOptions {
                     strategy: grouped_env.solve_strategy().into(),
@@ -2425,15 +2426,17 @@ impl<'p> UpdateContext<'p> {
                 let platform_str = platform.to_string();
                 if let Some(records) = self.take_latest_repodata_records(&environment, platform) {
                     for record in records.into_inner() {
-                        let data = record.into_conda_package_data(&mut builder, project.root());
-                        builder
+                        let data = record.into_conda_package_data(&mut writer, project.root());
+                        writer
+                            .builder
                             .add_conda_package(&environment_name, &platform_str, data)
                             .expect("platform was registered");
                     }
                 }
                 if let Some(records) = self.take_latest_pypi_records(&environment, platform) {
                     for r in records.into_inner() {
-                        builder
+                        writer
+                            .builder
                             .add_pypi_package(&environment_name, &platform_str, r.data.clone())
                             .expect("platform was registered");
                         has_pypi_records = true;
@@ -2444,9 +2447,12 @@ impl<'p> UpdateContext<'p> {
             // Store the indexes that were used to solve the environment. But only if there
             // are pypi packages.
             if has_pypi_records {
-                builder.set_pypi_indexes(&environment_name, grouped_pypi_options.into());
+                writer
+                    .builder
+                    .set_pypi_indexes(&environment_name, grouped_pypi_options.into());
             }
         }
+        drop(writer);
 
         // Store the lock file
         let lock_file = builder.finish();
@@ -2756,11 +2762,22 @@ async fn spawn_extract_environment_task(
     grouped_pypi_records: impl Future<Output = Arc<LockedPypiRecordsByName>>,
     command_dispatcher: CommandDispatcher,
 ) -> miette::Result<TaskResult> {
+    let env_name = environment.name().clone();
+    tracing::debug!(
+        env = %env_name,
+        platform = %platform,
+        "spawn_extract_environment_task: awaiting group records"
+    );
     let group = GroupedEnvironment::from(environment.clone());
 
     // Await the records from the group
     let (grouped_repodata_records, grouped_pypi_records) =
         tokio::join!(grouped_repodata_records, grouped_pypi_records);
+    tracing::debug!(
+        env = %env_name,
+        platform = %platform,
+        "spawn_extract_environment_task: group records received"
+    );
 
     // If the group is just the environment on its own we can immediately return the
     // records.

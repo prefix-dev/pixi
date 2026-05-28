@@ -1,13 +1,22 @@
+mod error;
+
 use clap::Parser;
-use pixi_api::{WorkspaceContext, workspace::DependencyOptions};
+use indexmap::IndexMap;
+use pixi_api::{
+    WorkspaceContext,
+    workspace::{DependencyOptions, RemoveError},
+};
 use pixi_config::ConfigCli;
 use pixi_core::{DependencyType, WorkspaceLocator};
+use pixi_manifest::HasWorkspaceManifest;
 
 use crate::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     cli_config::{DependencyConfig, NoInstallConfig, WorkspaceConfig},
     cli_interface::CliInterface,
 };
+
+use error::DependencyRemovalError;
 
 /// Removes dependencies from the workspace.
 ///
@@ -58,31 +67,64 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
-    match args.dependency_config.dependency_type() {
+    let dependency_type = args.dependency_config.dependency_type();
+    let feature = args.dependency_config.feature.clone();
+    let platforms = args.dependency_config.platforms.clone();
+
+    let result = match dependency_type {
         DependencyType::CondaDependency(spec_type) => {
-            workspace_ctx
-                .remove_conda_deps(
-                    args.dependency_config.specs()?,
-                    spec_type,
-                    (&args).try_into()?,
-                )
-                .await?;
+            let specs = args.dependency_config.specs()?;
+            let names: Vec<String> = specs
+                .keys()
+                .map(|n| n.as_normalized().to_string())
+                .collect();
+            (
+                workspace_ctx
+                    .remove_conda_deps(specs, spec_type, (&args).try_into()?)
+                    .await,
+                names,
+            )
         }
         DependencyType::PypiDependency => {
-            let pypi_deps = args
-                .dependency_config
-                .pypi_deps(&workspace)?
+            let pypi_deps = args.dependency_config.pypi_deps(&workspace)?;
+            let names: Vec<String> = pypi_deps
+                .keys()
+                .map(|n| n.as_source().to_string())
+                .collect();
+            let pypi_deps: IndexMap<_, _> = pypi_deps
                 .into_iter()
                 .map(|(name, req)| (name, (req, None, None)))
                 .collect();
-            workspace_ctx
-                .remove_pypi_deps(pypi_deps, (&args).try_into()?)
-                .await?;
+            (
+                workspace_ctx
+                    .remove_pypi_deps(pypi_deps, (&args).try_into()?)
+                    .await,
+                names,
+            )
         }
     };
 
-    args.dependency_config
-        .display_success("Removed", Default::default());
-
-    Ok(())
+    match result {
+        (Ok(()), _) => {
+            args.dependency_config
+                .display_success("Removed", Default::default());
+            Ok(())
+        }
+        (Err(RemoveError::NotFound { name: missing }), typed_names) => {
+            // Show the spelling the user typed, not the manifest's normalized form.
+            let name = typed_names
+                .iter()
+                .find(|n| n.eq_ignore_ascii_case(&missing))
+                .cloned()
+                .unwrap_or(missing);
+            Err(miette::Report::new(DependencyRemovalError::new(
+                name,
+                (&workspace).workspace_manifest(),
+                dependency_type,
+                &feature,
+                &platforms,
+            )))
+        }
+        (Err(other), _) => Err(miette::Report::new(other)),
+    }
 }

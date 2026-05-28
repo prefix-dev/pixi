@@ -16,7 +16,9 @@ use rattler_conda_types::{
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
-use crate::workspace::{ChannelOptions, DependencyOptions, InitOptions, Package, ReinstallOptions};
+use crate::workspace::{
+    ChannelOptions, DependencyOptions, InitOptions, Package, ReinstallOptions, RemoveError,
+};
 
 pub struct DefaultContext<I: Interface> {
     _interface: I,
@@ -319,9 +321,10 @@ impl<I: Interface> WorkspaceContext<I> {
         specs: IndexMap<PackageName, MatchSpec>,
         spec_type: SpecType,
         dep_options: DependencyOptions,
-    ) -> miette::Result<()> {
+    ) -> Result<(), RemoveError> {
+        let workspace_mut = self.workspace.clone().modify()?;
         Box::pin(crate::workspace::remove::remove_conda_deps(
-            self.workspace_mut()?,
+            workspace_mut,
             specs,
             spec_type,
             dep_options,
@@ -333,9 +336,10 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         pypi_deps: PypiDeps,
         options: DependencyOptions,
-    ) -> miette::Result<()> {
+    ) -> Result<(), RemoveError> {
+        let workspace_mut = self.workspace.clone().modify()?;
         Box::pin(crate::workspace::remove::remove_pypi_deps(
-            self.workspace_mut()?,
+            workspace_mut,
             pypi_deps,
             options,
         ))

@@ -6210,6 +6210,7 @@ dependencies = [
  "fancy_display",
  "fs-err",
  "indexmap 2.14.0",
+ "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
  "minijinja",
@@ -6222,6 +6223,7 @@ dependencies = [
  "pixi_pypi_spec",
  "pixi_reporters",
  "pixi_spec",
+ "pixi_test_utils",
  "pixi_utils",
  "pixi_uv_conversions",
  "pypi_modifiers",
@@ -6231,6 +6233,7 @@ dependencies = [
  "same-file",
  "serde",
  "tempfile",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
  "url",
@@ -6435,6 +6438,7 @@ dependencies = [
  "pixi_reporters",
  "pixi_spec",
  "pixi_task",
+ "pixi_test_utils",
  "pixi_utils",
  "pixi_uv_conversions",
  "pypi_modifiers",
@@ -6542,6 +6546,7 @@ dependencies = [
  "tracing",
  "typed-path",
  "url",
+ "which",
  "xxhash-rust",
 ]
 
@@ -7086,8 +7091,10 @@ dependencies = [
  "serde",
  "serde_with",
  "thiserror 2.0.18",
+ "tracing",
  "typed-path",
  "url",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -7632,7 +7639,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27c6023962132f4b30eb4c172c91ce92d933da334c59c23cddee82358ddafb0b"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn",
@@ -9135,9 +9142,9 @@ dependencies = [
 
 [[package]]
 name = "resolvo"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57a085c6cecab01bf88df532b7a03f066d5ab92e461bf4614a9de13f562eb163"
+checksum = "2985c35f7dd19ed00659031b77ce05d1828a12eb9c6b37104da21b09d218fc24"
 dependencies = [
  "ahash",
  "bitvec",

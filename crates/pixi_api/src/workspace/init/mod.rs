@@ -63,6 +63,9 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         options.platforms.clone()
     };
 
+    let index_url = config.pypi_config.index_url.clone();
+    let extra_index_urls = config.pypi_config.extra_index_urls.clone();
+
     // Create a 'pixi.toml' manifest and populate it by importing a conda
     // environment file
     let workspace = if let Some(env_file_path) = options.env_file {
@@ -90,8 +93,8 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
             author.as_ref(),
             channels,
             &platforms,
-            None,
-            &vec![],
+            index_url.as_ref(),
+            &extra_index_urls,
             config.s3_options,
             Some(&env_vars),
             options.conda_pypi_mapping.as_ref(),
@@ -122,9 +125,6 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         } else {
             config.default_channels().to_vec()
         };
-
-        let index_url = config.pypi_config.index_url;
-        let extra_index_urls = config.pypi_config.extra_index_urls;
 
         // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
         // If nothing is defined but there is a `pyproject.toml` file, ask the user.
@@ -168,6 +168,8 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
                         channels,
                         platforms,
                         environments,
+                        index_url => index_url.as_ref(),
+                        extra_index_urls => &extra_index_urls,
                         s3 => relevant_s3_options(config.s3_options, channels),
                     },
                 )

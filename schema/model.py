@@ -258,8 +258,8 @@ class Workspace(StrictBaseModel):
 ########################
 
 
-class MatchspecTable(StrictBaseModel):
-    """A precise description of a `conda` package version."""
+class BinaryMatchspecTable(StrictBaseModel):
+    """A precise description of a `conda` binary package version. Excludes source-location fields."""
 
     version: NonEmptyStr | None = Field(
         None,
@@ -298,6 +298,10 @@ class MatchspecTable(StrictBaseModel):
     track_features: list[NonEmptyStr] | None = Field(
         None, description="The track features of the package"
     )
+
+
+class MatchspecTable(BinaryMatchspecTable):
+    """A precise description of a `conda` package version."""
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
@@ -1020,7 +1024,7 @@ class Build(StrictBaseModel):
     )
 
 
-class BuildBackend(MatchspecTable):
+class BuildBackend(BinaryMatchspecTable):
     name: NonEmptyStr | None = Field(None, description="The name of the build backend package")
     channels: list[Channel] | None = Field(
         None, description="The `conda` channels that are used to fetch the build backend from"

@@ -13,7 +13,9 @@ use super::common::{
     VersionedCacheEntry, WriteResult as CommonWriteResult,
 };
 use crate::build::CanonicalSourceCodeLocation;
-use crate::input_hash::{BackendSpecHash, ConfigurationHash, ProjectModelHash};
+use crate::input_hash::{
+    BackendBinaryFingerprint, BackendSpecHash, ConfigurationHash, ProjectModelHash,
+};
 use rattler_conda_types::PackageName;
 
 use crate::BuildEnvironment;
@@ -167,6 +169,15 @@ pub struct BuildBackendMetadataCacheEntry {
     /// in the manifest would not invalidate the cache.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub backend_spec_hash: Option<BackendSpecHash>,
+
+    /// Content fingerprint of the backend executable. `Some` only for
+    /// system / path-based backends where the binary's identity isn't
+    /// captured by `backend_spec_hash` (a version constraint there doesn't
+    /// pin the actual executable on disk). On cache probe we recompute
+    /// the fingerprint and invalidate on mismatch; rebuilding the backend
+    /// is what flips this hash.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub backend_binary_fingerprint: Option<BackendBinaryFingerprint>,
 
     /// The pinned location of the source code. Although the specification of
     /// where to find the source is part of the `project_model_hash`, the

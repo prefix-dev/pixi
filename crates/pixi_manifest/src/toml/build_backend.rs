@@ -76,6 +76,13 @@ impl TomlPackageBuild {
             )?,
         };
 
+        if build_backend_spec.is_source() {
+            return Err(TomlError::Generic(
+                GenericError::new("build backends cannot be defined as source dependencies")
+                    .with_opt_span(self.backend.span.clone()),
+            ));
+        }
+
         // Convert the additional dependencies and make sure that they are binary.
         // Prioritize backend.additional_dependencies over top-level additional_dependencies
         let additional_dependencies =
@@ -590,6 +597,46 @@ mod test {
                 .into_iter()
                 .map(String::from)
                 .collect()
+        );
+    }
+
+    #[test]
+    fn test_backend_source_path_rejected() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+            backend = { name = "foobar", path = "./local-backend" }
+        "#
+            ),
+            @r#"
+          × build backends cannot be defined as source dependencies
+           ╭─[pixi.toml:2:23]
+         1 │
+         2 │             backend = { name = "foobar", path = "./local-backend" }
+           ·                       ─────────────────────────────────────────────
+         3 │
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_backend_source_git_rejected() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+            backend = { name = "foobar", git = "https://example.com/repo.git" }
+        "#
+            ),
+            @r#"
+          × build backends cannot be defined as source dependencies
+           ╭─[pixi.toml:2:23]
+         1 │
+         2 │             backend = { name = "foobar", git = "https://example.com/repo.git" }
+           ·                       ─────────────────────────────────────────────────────────
+         3 │
+           ╰────
+        "#
         );
     }
 
