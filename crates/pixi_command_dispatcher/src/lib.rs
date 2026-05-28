@@ -108,8 +108,8 @@ pub use injected_config::{
     BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
 };
 pub use install_pixi::{
-    EnvironmentFingerprint, InstallPixiEnvironmentError, InstallPixiEnvironmentExt,
-    InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
+    InstallPixiEnvironmentError, InstallPixiEnvironmentExt, InstallPixiEnvironmentResult,
+    InstallPixiEnvironmentSpec,
 };
 pub use installed_source_hints::{InstalledSourceHint, InstalledSourceHints};
 pub use instantiate_backend_key::{

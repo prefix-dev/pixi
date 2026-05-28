@@ -7319,6 +7319,7 @@ dependencies = [
  "url",
  "uv-configuration",
  "webpki-root-certs 1.0.7",
+ "xxhash-rust",
 ]
 
 [[package]]
