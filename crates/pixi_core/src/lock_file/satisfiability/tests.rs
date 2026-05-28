@@ -22,6 +22,7 @@ use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcherError};
 use pixi_manifest::FeaturesExt;
+use pixi_manifest::HasWorkspaceManifest;
 use pixi_manifest::PixiPlatformName;
 use pixi_record::LockFileResolver;
 use pixi_uv_context::UvResolutionContext;
@@ -73,6 +74,16 @@ async fn verify_lock_file_satisfiability(
     // DistributionDatabase). Without this, concurrent tests can race
     // and trigger a GlobalPoolAlreadyInitialized panic.
     uv_configuration::initialize_rayon_once();
+
+    // Mirror production's load path (`Workspace::load_lock_file`): align the
+    // lockfile's platform names to the manifest by identity, so short on-disk
+    // aliases like `p1` resolve to the workspace platform names the rest of
+    // this check matches against.
+    let aligned_lock_file = crate::lock_file::platform_rename::align_platform_names(
+        lock_file.clone(),
+        project.workspace_manifest(),
+    );
+    let lock_file = &aligned_lock_file;
 
     let mut individual_verified_envs = HashMap::new();
 

@@ -408,10 +408,21 @@ impl Workspace {
     /// - `.into_lock_file_or_empty_with_warning()` - displays warning and continues
     pub async fn load_lock_file(&self) -> miette::Result<LockFileLoadResult> {
         let lock_file_path = self.lock_file_path();
+        let manifest = self.workspace_manifest().clone();
         if lock_file_path.is_file() {
             // Spawn a background task because loading the file might be IO bound.
             tokio::task::spawn_blocking(move || {
                 LockFile::from_path(&lock_file_path)
+                    .map(|lock| {
+                        // Rewrite locked platform names to match the manifest's
+                        // current platforms by identity (subdir + customised
+                        // virtual packages). A user who renames an entry in
+                        // pixi.toml shouldn't have to re-solve to use the
+                        // existing locked packages, and downstream code
+                        // (satisfiability, environment lookup, install) sees
+                        // the workspace-current names directly.
+                        crate::lock_file::platform_rename::align_platform_names(lock, &manifest)
+                    })
                     .map(LockFileLoadResult::Loaded)
                     .or_else(|err| match err {
                         ParseCondaLockError::IncompatibleVersion {
