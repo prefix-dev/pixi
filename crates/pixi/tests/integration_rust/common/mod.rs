@@ -718,6 +718,7 @@ impl PixiControl {
                 config: Default::default(),
                 config_source: isolated_config_source(),
                 all: false,
+                platform: None,
                 skip: None,
                 skip_with_deps: None,
                 only: None,

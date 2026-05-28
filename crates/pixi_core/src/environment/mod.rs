@@ -606,6 +606,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let (lock_file, prefixes) = get_update_lock_file_and_prefixes(
         std::slice::from_ref(environment),
+        None,
         progress.clone(),
         update_mode,
         update_lock_file_options,
@@ -624,8 +625,15 @@ pub async fn get_update_lock_file_and_prefix<'env>(
 
 /// Update all the specified prefixes if it doesn't exist or if it is not
 /// up-to-date.
+///
+/// When `target_platform` is `Some`, every environment must list that
+/// platform; the install path then targets it directly without running
+/// the host-virtual-package satisfaction check. That's how
+/// `pixi install --platform <name>` materialises an environment for a
+/// subdir the local machine can't actually run.
 pub async fn get_update_lock_file_and_prefixes<'env>(
     environments: &[Environment<'env>],
+    target_platform: Option<&PixiPlatformName>,
     progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
@@ -640,8 +648,16 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
 
     let no_install = update_lock_file_options.no_install;
     for env in environments {
-        if !no_install && env.best_platform().is_none() {
-            return Err(env.unsupported_platform_error().into());
+        if !no_install && env.pinned_platform(target_platform).is_none() {
+            return Err(if let Some(name) = target_platform {
+                miette::miette!(
+                    "environment '{}' does not list platform '{}'",
+                    env.name(),
+                    name,
+                )
+            } else {
+                env.unsupported_platform_error().into()
+            });
         }
         if !no_install {
             env.emit_emulation_warning();
@@ -656,7 +672,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     store_credentials_from_requirements(requirements);
 
     // Ensure that the lock file is up-to-date
-    let lock_file = workspace
+    let mut lock_file = workspace
         .update_lock_file(
             progress.clone(),
             UpdateLockFileOptions {
@@ -668,6 +684,9 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
         )
         .await?
         .0;
+    // Pin the override so the downstream prefix helpers see it without a
+    // fresh parameter on every call.
+    lock_file.target_platform = target_platform.cloned();
 
     // Get the prefix from the lock file.
     let lock_file_ref = &lock_file;

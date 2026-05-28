@@ -516,6 +516,10 @@ impl InstallBuilder {
         self.args.only = Some(pkg);
         self
     }
+    pub fn with_platform(mut self, platform: Platform) -> Self {
+        self.args.platform = Some(platform.into());
+        self
+    }
 
     pub fn with_environment(mut self, env: Vec<String>) -> Self {
         self.args.environment = Some(env);

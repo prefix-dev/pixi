@@ -541,6 +541,13 @@ pub struct UpdatedPrefix {
 pub struct LockFileDerivedData<'p> {
     pub workspace: &'p Workspace,
 
+    /// Optional workspace-platform override applied to every install-side
+    /// "which platform does this environment target" lookup. Set by the
+    /// `pixi install --platform <name>` (and `pixi reinstall --platform
+    /// <name>`) flows so cross-target installs skip the host-VP
+    /// satisfaction check that would otherwise reject them.
+    pub target_platform: Option<PixiPlatformName>,
+
     /// The lock file
     ///
     /// Prefer to use `as_lock_file` or `into_lock_file` to also make a decision
@@ -610,6 +617,7 @@ impl<'p> LockFileDerivedData<'p> {
     ) -> Self {
         Self {
             workspace,
+            target_platform: None,
             lock_file,
             package_cache,
             updated_conda_prefixes: Default::default(),
@@ -677,7 +685,7 @@ impl<'p> LockFileDerivedData<'p> {
             .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
         Ok(LockedEnvironmentHash::from_environment(
             locked_environment,
-            environment.best_platform(),
+            environment.pinned_platform(self.target_platform.as_ref()),
         ))
     }
 
@@ -818,23 +826,28 @@ impl<'p> LockFileDerivedData<'p> {
             .get_or_try_init(async {
                 let start = Instant::now();
 
-                // Validate the virtual packages for the environment match the system
-                let best_platform = environment.best_platform().ok_or_else(|| {
-                    miette::miette!(
-                        "Cannot install environment '{}': no platform supported by it matches the current system",
-                        environment.name().fancy_display()
+                // Skip the host-VP validation when `--platform` pins a target the
+                // local machine can't satisfy -- that's the case the override exists for.
+                let target_override = self.target_platform.as_ref();
+                let best_platform =
+                    environment.pinned_platform(target_override).ok_or_else(|| {
+                        miette::miette!(
+                            "Cannot install environment '{}': no platform supported by it matches the current system",
+                            environment.name().fancy_display()
+                        )
+                    })?;
+                if target_override.is_none() {
+                    validate_system_meets_environment_requirements(
+                        &self.lock_file,
+                        best_platform,
+                        environment.name(),
+                        None,
                     )
-                })?;
-                validate_system_meets_environment_requirements(
-                    &self.lock_file,
-                    best_platform,
-                    environment.name(),
-                    None,
-                )
-                .wrap_err(format!(
-                    "Cannot install environment '{}'",
-                    environment.name().fancy_display()
-                ))?;
+                    .wrap_err(format!(
+                        "Cannot install environment '{}'",
+                        environment.name().fancy_display()
+                    ))?;
+                }
 
                 let platform = best_platform;
                 let locked_env = self.locked_env(environment)?;
@@ -1052,12 +1065,14 @@ impl<'p> LockFileDerivedData<'p> {
             .get_or_try_init(async {
                 // Create object to update the prefix
                 let group = GroupedEnvironment::Environment(environment.clone());
-                let pixi_platform = environment.best_platform().ok_or_else(|| {
-                    miette::miette!(
-                        "no platform supported by environment '{}' matches the current system",
-                        environment.name().fancy_display()
-                    )
-                })?;
+                let pixi_platform = environment
+                    .pinned_platform(self.target_platform.as_ref())
+                    .ok_or_else(|| {
+                        miette::miette!(
+                            "no platform supported by environment '{}' matches the current system",
+                            environment.name().fancy_display()
+                        )
+                    })?;
 
                 // Use cached conda_prefix_updater if available, otherwise create new
                 let cache_key = lock_file::outdated::BuildCacheKey::new(
@@ -2466,6 +2481,7 @@ impl<'p> UpdateContext<'p> {
 
         Ok(LockFileDerivedData {
             workspace: project,
+            target_platform: None,
             lock_file,
             updated_conda_prefixes: self
                 .take_instantiated_conda_prefixes()

@@ -10,7 +10,7 @@ use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
-    HasWorkspaceManifest, PixiPlatform, Task, TaskName, WorkspaceManifest,
+    HasWorkspaceManifest, PixiPlatform, PixiPlatformName, Task, TaskName, WorkspaceManifest,
 };
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
@@ -151,6 +151,30 @@ impl<'p> Environment<'p> {
             return Some(self.workspace.fallback_platform(current));
         }
         None
+    }
+
+    /// Picks the workspace platform install/solve should target, with
+    /// `override_platform` skipping [`Self::best_platform`]'s host-VP
+    /// filter so `pixi install --platform <name>` can target a subdir
+    /// the local machine can't satisfy. Returns `None` if the override
+    /// names a platform the environment doesn't list; falls through to
+    /// [`Self::best_platform`] when the override is `None`.
+    pub fn pinned_platform(
+        &self,
+        override_platform: Option<&PixiPlatformName>,
+    ) -> Option<&'p PixiPlatform> {
+        let Some(name) = override_platform else {
+            return self.best_platform();
+        };
+        let env_platforms = self.platforms();
+        if !env_platforms.contains(name) {
+            return None;
+        }
+        self.workspace_manifest()
+            .workspace
+            .platforms
+            .iter()
+            .find(|p| p.name() == name)
     }
 
     /// Returns the platform pixi treats as the host for cross-platform

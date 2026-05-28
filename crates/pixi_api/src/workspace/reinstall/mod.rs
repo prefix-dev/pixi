@@ -43,6 +43,7 @@ pub async fn reinstall<I: Interface>(
     // Update the prefixes by reinstalling `options.reinstall_packages`
     get_update_lock_file_and_prefixes(
         &environments,
+        options.target_platform.as_ref(),
         Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {

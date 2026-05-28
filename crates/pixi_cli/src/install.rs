@@ -7,9 +7,11 @@ use pixi_core::{
     environment::{InstallFilter, get_update_lock_file_and_prefixes},
     lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
 };
+use pixi_manifest::PixiPlatformName;
 use std::fmt::Write;
 
 use crate::cli_config::WorkspaceConfig;
+use crate::shared::install_platform::resolve_install_platform;
 
 /// Install an environment, both updating the lock file and installing the
 /// environment.
@@ -52,6 +54,11 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
+    /// Install for the given platform; a warning is printed when it
+    /// doesn't run on this machine.
+    #[arg(long, short)]
+    pub platform: Option<PixiPlatformName>,
+
     /// Skip installation of specific packages present in the lock file. This
     /// uses a soft exclusion: the package will be skipped but its dependencies
     /// are installed.
@@ -83,6 +90,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if let Some(backend_override) = args.workspace_config.backend_override.clone() {
         workspace = workspace.with_backend_override(backend_override);
     }
+
+    let target_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
 
     // Install either:
     //
@@ -137,6 +146,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Update the prefixes by installing all packages
     let (LockFileDerivedData { lock_file, .. }, _) = get_update_lock_file_and_prefixes(
         &environments,
+        target_platform.as_ref(),
         Some(pixi_reporters::TopLevelProgress::from_global()),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
