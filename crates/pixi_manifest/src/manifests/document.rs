@@ -533,28 +533,31 @@ impl ManifestDocument {
             return Some(PypiDependencyLocation::PixiPypiDependencies);
         }
 
-        if self
-            .manifest()
-            .get_toml_array(&["project"], "dependencies")
-            .is_ok()
-        {
+        // Check whether the package is actually present in a given PEP 508
+        // requirement array, rather than merely whether the array exists. This
+        // is required so that a package defined in e.g. `[dependency-groups]`
+        // is not mistakenly reported as living in `[project.dependencies]`.
+        let array_contains_package = |keys: &[&str], array_name: &str| -> bool {
+            let Ok(Some(array)) = self.manifest().get_toml_array(keys, array_name) else {
+                return false;
+            };
+            array.iter().any(|item| {
+                item.as_str()
+                    .and_then(|s| s.parse::<pep508_rs::Requirement>().ok())
+                    .is_some_and(|req| req.name == *package_name.as_normalized())
+            })
+        };
+
+        if array_contains_package(&["project"], "dependencies") {
             return Some(PypiDependencyLocation::Dependencies);
         }
         let name = feature_name.to_string();
 
-        if self
-            .manifest()
-            .get_toml_array(&["project", "optional-dependencies"], &name)
-            .is_ok()
-        {
+        if array_contains_package(&["project", "optional-dependencies"], &name) {
             return Some(PypiDependencyLocation::OptionalDependencies);
         }
 
-        if self
-            .manifest()
-            .get_toml_array(&["dependency-groups"], &name)
-            .is_ok()
-        {
+        if array_contains_package(&["dependency-groups"], &name) {
             return Some(PypiDependencyLocation::DependencyGroups);
         }
 
@@ -959,23 +962,34 @@ dev = ["dev"]
             DocumentMut::from_str(manifest_content).unwrap(),
         ));
 
-        let dev_feature = FeatureName::from_str("dev").unwrap();
-        let pytest = PypiPackageName::from_str("pytest").unwrap();
+        let location_name = |pkg: &str, feature: &FeatureName| -> &'static str {
+            let name = PypiPackageName::from_str(pkg).unwrap();
+            match document.pypi_dependency_location(&name, None, feature) {
+                Some(PypiDependencyLocation::PixiPypiDependencies) => "PixiPypiDependencies",
+                Some(PypiDependencyLocation::Dependencies) => "Dependencies",
+                Some(PypiDependencyLocation::OptionalDependencies) => "OptionalDependencies",
+                Some(PypiDependencyLocation::DependencyGroups) => "DependencyGroups",
+                None => "None",
+            }
+        };
 
-        let location = document.pypi_dependency_location(&pytest, None, &dev_feature);
+        let dev_feature = FeatureName::from_str("dev").unwrap();
 
         // `pytest` is defined in `[dependency-groups].dev`, so it must be
-        // reported as living in the dependency-groups section.
-        let location_name = match location {
-            Some(PypiDependencyLocation::PixiPypiDependencies) => "PixiPypiDependencies",
-            Some(PypiDependencyLocation::Dependencies) => "Dependencies",
-            Some(PypiDependencyLocation::OptionalDependencies) => "OptionalDependencies",
-            Some(PypiDependencyLocation::DependencyGroups) => "DependencyGroups",
-            None => "None",
-        };
+        // reported as living in the dependency-groups section, not in
+        // `[project.dependencies]`.
         assert_eq!(
-            location_name, "DependencyGroups",
-            "pytest belongs to [dependency-groups].dev but was located in {location_name}"
+            location_name("pytest", &dev_feature),
+            "DependencyGroups",
+            "pytest belongs to [dependency-groups].dev"
+        );
+
+        // A package genuinely listed in `[project.dependencies]` must still be
+        // reported there.
+        assert_eq!(
+            location_name("requests", &FeatureName::default()),
+            "Dependencies",
+            "requests belongs to [project.dependencies]"
         );
     }
 
