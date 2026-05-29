@@ -18,6 +18,7 @@ use reqwest_middleware::{ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
 use retry_policies::policies::ExponentialBackoff;
 
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::tls::Certificates;
 
 /// The default retry policy employed by pixi.
