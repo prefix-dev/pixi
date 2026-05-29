@@ -1,17 +1,15 @@
-//! Shared `--platform` resolution for `install` and `reinstall`. Returns
-//! a [`PixiPlatformName`] the caller threads down to the install path so
-//! the satisfiability check uses it directly rather than running
-//! host-detection and rejecting cross-targets.
+//! Shared `--platform` resolution for `install` and `reinstall`. Maps the
+//! user-supplied platform (possibly an alias like `osx`) to the canonical
+//! [`PixiPlatformName`] the caller threads down into the install path, where
+//! membership and host-runnability are checked.
 
 use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_core::Workspace;
 use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName};
-use rattler_conda_types::Platform;
 
-/// Resolve `--platform` to a workspace platform name, emitting a warning
-/// when the resolved subdir isn't a candidate for the current host.
-/// Returns `Ok(None)` when the flag was unset; the caller threads the
-/// result down into the install path.
+/// Resolve `--platform` to its canonical workspace platform name. Returns
+/// `Ok(None)` when the flag was unset; the caller threads the result down
+/// into the install path.
 pub(crate) fn resolve_install_platform(
     workspace: &Workspace,
     platform: Option<&PixiPlatformName>,
@@ -24,27 +22,14 @@ pub(crate) fn resolve_install_platform(
         .into_iter()
         .next()
         .expect("resolve_platforms preserves length");
-    let subdir = resolved.subdir();
-    let current = Platform::current();
-    let candidates = workspace
-        .workspace_manifest()
-        .workspace
-        .candidate_subdirs(current);
-    if !candidates.contains(&subdir) {
-        let warning = format!(
-            "installing for platform '{name}' (subdir '{subdir}'), \
-             which this machine ('{current}') can not run -- packages will \
-             be downloaded and extracted but won't be executable here",
-        );
-        tracing::warn!("{warning}");
-        eprintln!("{} {warning}", console::style("warning:").yellow().bold());
-    }
     Ok(Some(resolved.name().clone()))
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+
+    use rattler_conda_types::Platform;
 
     use super::*;
 
@@ -83,8 +68,8 @@ mod tests {
     }
 
     /// A workspace platform whose subdir is not a candidate for the host
-    /// still resolves -- the warning is emitted at run time but the
-    /// resolution itself succeeds so install can proceed.
+    /// still resolves -- the cross-target warning is emitted later, in the
+    /// install path; resolution itself just maps the name.
     #[test]
     fn cross_platform_subdir_resolves() {
         let workspace = workspace_with_platforms(&["linux-64", "osx-arm64"]);

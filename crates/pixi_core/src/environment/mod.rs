@@ -8,13 +8,14 @@ use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
-use pixi_manifest::{FeaturesExt, PixiPlatform, PixiPlatformName};
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName};
 use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSource;
 pub use pixi_python_status::PythonStatus;
 use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::EnvironmentFingerprint;
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
+use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackage};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -651,9 +652,9 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
         if !no_install && env.pinned_platform(target_platform).is_none() {
             return Err(if let Some(name) = target_platform {
                 miette::miette!(
-                    "environment '{}' does not list platform '{}'",
-                    env.name(),
+                    "platform '{}' is not part of environment '{}'",
                     name,
+                    env.name(),
                 )
             } else {
                 env.unsupported_platform_error().into()
@@ -661,6 +662,30 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
         }
         if !no_install {
             env.emit_emulation_warning();
+        }
+    }
+
+    // Every environment lists the pinned platform (checked above), so a
+    // cross-target `--platform` (a subdir this host can't run) only warns
+    // now -- after the clear membership error, never before it.
+    if !no_install
+        && target_platform.is_some()
+        && let Some(platform) = environments[0].pinned_platform(target_platform)
+    {
+        let current = Platform::current();
+        let subdir = platform.subdir();
+        if !workspace
+            .workspace_manifest()
+            .workspace
+            .candidate_subdirs(current)
+            .contains(&subdir)
+        {
+            tracing::warn!(
+                "installing for platform '{}' (subdir '{subdir}'), which this \
+                 machine ('{current}') can not run -- packages will be downloaded \
+                 and extracted but won't be executable here",
+                platform.name(),
+            );
         }
     }
 
