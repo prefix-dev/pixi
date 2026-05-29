@@ -101,7 +101,7 @@ The recognised friendly keys (`cuda`, `archspec`, `libc`, `linux`, `macos`,
 |--------------------------|-----|
 | `pixi workspace system-requirements add cuda 12` | `pixi workspace platform add linux-64 --cuda 12` |
 | `pixi workspace system-requirements add macos 13.5` | `pixi workspace platform edit osx-arm64 --macos 13.5` |
-| `pixi workspace system-requirements list` | `pixi workspace platform list` / `show` |
+| `pixi workspace system-requirements list` | `pixi workspace platform list` |
 
 The `pixi workspace platform` subcommand keeps `pixi.lock` in sync when it
 mutates a rich entry.

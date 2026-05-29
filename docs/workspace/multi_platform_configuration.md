@@ -133,7 +133,7 @@ the CLI surface for these entries:
   appends bare subdirs or rich platforms.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __libc]`
   mutates a custom platform's declared virtual packages.
-- `pixi workspace platform list` / `show` inspect what is declared.
+- `pixi workspace platform list` inspects what is declared.
 - `pixi workspace platform remove <NAME>` drops an entry.
 
 The mutating subcommands keep `pixi.lock` in sync.
