@@ -79,8 +79,9 @@ pub async fn add<I: Interface>(
 ) -> miette::Result<()> {
     let feature_name = feature.map_or_else(FeatureName::default, FeatureName::from);
 
-    // Add the platforms to the lock file
-    workspace
+    // Add the platforms to the manifest; `added` holds only those that caused
+    // an actual change so already-declared platforms are reported as no-ops.
+    let added = workspace
         .manifest()
         .add_platforms(platforms.iter(), &feature_name)?;
 
@@ -102,16 +103,25 @@ pub async fn add<I: Interface>(
     workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
-    for platform in platforms {
-        interface
-            .success(&format!(
+    for platform in &platforms {
+        let message = if added.contains(platform) {
+            format!(
                 "Added {}",
                 feature_name.non_default().map_or_else(
                     || platform.to_string(),
                     |name| format!("{platform} to the feature {name}")
                 )
-            ))
-            .await;
+            )
+        } else {
+            format!(
+                "Platform {} is already present; nothing to do",
+                feature_name.non_default().map_or_else(
+                    || platform.to_string(),
+                    |name| format!("{platform} in the feature {name}")
+                )
+            )
+        };
+        interface.success(&message).await;
     }
 
     Ok(())

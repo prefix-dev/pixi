@@ -446,11 +446,13 @@ impl WorkspaceManifestMut<'_> {
             .collect()
     }
 
-    /// Add new PixiPlatforms to the list of defined platforms in this Workspace
+    /// Declare `platforms` on the workspace, skipping any already present.
+    /// Returns the platforms that were actually added (empty when every
+    /// requested platform was already declared).
     pub fn add_workspace_platforms(
         &mut self,
         platforms: &IndexSet<PixiPlatform>,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<IndexSet<PixiPlatform>> {
         // Only platforms that aren't already declared cause a change. Re-adding
         // an existing platform (e.g. `pixi add <dep> --platform linux-64` when
         // linux-64 is already declared) must leave the document untouched.
@@ -479,7 +481,7 @@ impl WorkspaceManifestMut<'_> {
         }
 
         if new_platforms.is_empty() {
-            return Ok(());
+            return Ok(IndexSet::new());
         }
 
         // A newly-added non-subdir platform is the only edit that commits the
@@ -497,10 +499,12 @@ impl WorkspaceManifestMut<'_> {
             // them as bare strings so the on-disk `[system-requirements]` stays
             // authoritative and the in-memory migration isn't leaked into
             // `platforms`.
-            self.append_subdir_platforms_toml(&new_platforms)
+            self.append_subdir_platforms_toml(&new_platforms)?;
         } else {
-            self.rewrite_workspace_platforms_toml()
+            self.rewrite_workspace_platforms_toml()?;
         }
+
+        Ok(new_platforms)
     }
 
     /// Append `new_platforms` to the `platforms` array as bare subdir strings,
@@ -542,31 +546,36 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
-    /// Add new `PixiPlatform` based on its `name` to a feature.
+    /// Add platforms (by name) to a feature, skipping any the feature already
+    /// lists. Returns the names that were actually added.
     fn add_feature_platforms(
         &mut self,
         mut platforms: IndexSet<PixiPlatformName>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<IndexSet<PixiPlatformName>> {
         if feature_name.is_default() {
-            return Ok(());
+            return Ok(IndexSet::new());
         }
 
         let known_platform_names: HashSet<PixiPlatformName> = self.known_platform_names();
         platforms.retain(|pn| known_platform_names.contains(pn));
 
-        // Update the feature platforms:
-        self.workspace
+        let feature_platforms = self
+            .workspace
             .get_or_insert_feature_mut(feature_name)
-            .platforms_mut()
-            .extend(platforms.iter().cloned());
+            .platforms_mut();
+        let added: IndexSet<PixiPlatformName> = platforms
+            .into_iter()
+            .filter(|pn| !feature_platforms.contains(pn))
+            .collect();
+        feature_platforms.extend(added.iter().cloned());
 
         // Update TOML document feature platforms
         self.document
             .get_array_mut("platforms", feature_name)?
-            .extend(platforms.drain(..).map(|pn| pn.as_str().to_string()));
+            .extend(added.iter().map(|pn| pn.as_str().to_string()));
 
-        Ok(())
+        Ok(added)
     }
 
     /// Apply a [`PlatformEdit`] to the workspace platform identified by
@@ -681,8 +690,10 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
-    /// Add platforms to the workspace and, optionally, to a non-default
-    /// feature.
+    /// Add `platforms` to the workspace and, for a non-default feature, to that
+    /// feature. Returns the requested platforms that caused an actual change
+    /// (added to the workspace or to the feature); already-declared platforms
+    /// are excluded so callers can report them as no-ops.
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
@@ -690,20 +701,23 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: impl IntoIterator<Item = &'a PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> miette::Result<IndexSet<PixiPlatform>> {
         let pixi_platforms: IndexSet<PixiPlatform> = platforms.into_iter().cloned().collect();
         // Nothing to add (e.g. `pixi add <dep>` with no `--platform`): leave the
         // document untouched. Rewriting it here would flush the in-memory
         // `[system-requirements]` migration into `platforms` while leaving the
         // legacy table behind, yielding a manifest that no longer parses.
         if pixi_platforms.is_empty() {
-            return Ok(());
+            return Ok(IndexSet::new());
         }
         let platform_names: IndexSet<PixiPlatformName> =
             pixi_platforms.iter().map(|p| p.name().clone()).collect();
-        self.add_workspace_platforms(&pixi_platforms)?;
-        self.add_feature_platforms(platform_names, feature_name)?;
-        Ok(())
+        let added_to_workspace = self.add_workspace_platforms(&pixi_platforms)?;
+        let added_to_feature = self.add_feature_platforms(platform_names, feature_name)?;
+        Ok(pixi_platforms
+            .into_iter()
+            .filter(|p| added_to_workspace.contains(p) || added_to_feature.contains(p.name()))
+            .collect())
     }
 
     /// Remove platforms from the workspace and, optionally, from a non-default
