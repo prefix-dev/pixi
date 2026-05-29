@@ -39,6 +39,13 @@ Note
 
 To find the locations where `pixi` looks for configuration files, run `pixi info -vvv`.
 
+### Skipping or overriding config discovery
+
+Two global flags (and their environment-variable equivalents) let you opt out of the system and user-level config layers — the project-local `<project>/.pixi/config.toml` is always merged on top:
+
+- `--no-config` / `PIXI_NO_CONFIG=1` — skip all system and user-level config files. Useful in CI, scripts, and tests that need to be insulated from a developer's machine-wide settings.
+- `--config-file <PATH>` / `PIXI_CONFIG_FILE=<PATH>` — load only the given file as the global layer instead of searching the locations above.
+
 ## Configuration options
 
 Naming convention in configuration

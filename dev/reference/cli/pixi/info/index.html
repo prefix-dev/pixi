@@ -4010,6 +4010,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#config-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Options
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#global-options" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4075,6 +4086,24 @@
 <dl>
 <dt><a id="arg---json" href="#arg---json"><code>--json</code></a></dt>
 <dd>Whether to show the output as JSON or not</dd>
+</dl>
+</li>
+</ul>
+<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---no-config" href="#arg---no-config"><code>--no-config</code></a></dt>
+<dd>Don't read system or user-level configuration files. Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still loaded
+<br><strong>env</strong>: <code>PIXI_NO_CONFIG</code>
+<br><strong>default</strong>: <code>false</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---config-file" href="#arg---config-file"><code>--config-file &lt;PATH&gt;</code></a></dt>
+<dd>Load configuration from this file instead of searching system and user-level paths. Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still merged on top
+<br><strong>env</strong>: <code>PIXI_CONFIG_FILE</code></dd>
 </dl>
 </li>
 </ul>

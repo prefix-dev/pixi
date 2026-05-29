@@ -86,6 +86,20 @@ pixi publish [OPTIONS]
 
 ## Config Options
 
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
 - [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`

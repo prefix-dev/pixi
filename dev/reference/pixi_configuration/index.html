@@ -3737,6 +3737,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#skipping-or-overriding-config-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skipping or overriding config discovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#configuration-options" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4301,6 +4312,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#skipping-or-overriding-config-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skipping or overriding config discovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#configuration-options" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4742,6 +4764,17 @@ configuration read from lower priority locations are overwritten.</p>
 </div>
 <p>To find the locations where <code>pixi</code> looks for configuration files, run
 <code>pixi info -vvv</code>.</p>
+<h3 id="skipping-or-overriding-config-discovery">Skipping or overriding config discovery<a class="headerlink" href="#skipping-or-overriding-config-discovery" title="Permanent link">#</a></h3>
+<p>Two global flags (and their environment-variable equivalents) let you opt out
+of the system and user-level config layers — the project-local
+<code>&lt;project&gt;/.pixi/config.toml</code> is always merged on top:</p>
+<ul>
+<li><code>--no-config</code> / <code>PIXI_NO_CONFIG=1</code> — skip all system and user-level config
+  files. Useful in CI, scripts, and tests that need to be insulated from a
+  developer's machine-wide settings.</li>
+<li><code>--config-file &lt;PATH&gt;</code> / <code>PIXI_CONFIG_FILE=&lt;PATH&gt;</code> — load only the given
+  file as the global layer instead of searching the locations above.</li>
+</ul>
 <h2 id="configuration-options">Configuration options<a class="headerlink" href="#configuration-options" title="Permanent link">#</a></h2>
 <details class="info">
 <summary>Naming convention in configuration</summary>

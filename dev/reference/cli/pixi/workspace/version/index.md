@@ -18,6 +18,22 @@ pixi workspace version [OPTIONS] <COMMAND>
 | [`minor`](minor/) | Bump the workspace version to MINOR |
 | [`patch`](patch/) | Bump the workspace version to PATCH |
 
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory

@@ -4145,6 +4145,21 @@
 <ul>
 <li>
 <dl>
+<dt><a id="arg---no-config" href="#arg---no-config"><code>--no-config</code></a></dt>
+<dd>Don't read system or user-level configuration files. Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still loaded
+<br><strong>env</strong>: <code>PIXI_NO_CONFIG</code>
+<br><strong>default</strong>: <code>false</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---config-file" href="#arg---config-file"><code>--config-file &lt;PATH&gt;</code></a></dt>
+<dd>Load configuration from this file instead of searching system and user-level paths. Project-local <code>&lt;project&gt;/.pixi/config.toml</code> is still merged on top
+<br><strong>env</strong>: <code>PIXI_CONFIG_FILE</code></dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
 <dd>Path to the file containing the authentication token</dd>
 </dl>

@@ -14334,12 +14334,14 @@ if __name__ == "__main__":
 
 Pixi can also be configured via environment variables.
 
-| Name                     | Description                                                                                                                                                                                                                                         | Default                                                                                                                                                                                                                                                                                                                             |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `PIXI_HOME`              | Defines the directory where pixi puts its global data.                                                                                                                                                                                              | [HOME](https://docs.rs/dirs/latest/dirs/fn.home_dir.html)/.pixi                                                                                                                                                                                                                                                                     |
-| `PIXI_CACHE_DIR`         | Defines the directory where pixi puts its cache.                                                                                                                                                                                                    | - If `PIXI_CACHE_DIR` is not set, the `RATTLER_CACHE_DIR` environment variable is used. - If that is not set, `XDG_CACHE_HOME/pixi` is used when the directory exists. - If that is not set, the default cache directory of [rattler::default_cache_dir](https://docs.rs/rattler/latest/rattler/fn.default_cache_dir.html) is used. |
-| `PIXI_OVERRIDE_PLATFORM` | Overrides the detected host platform used to select and install environments. Accepts any valid platform string (e.g. `linux-aarch64`, `osx-arm64`, `win-64`).                                                                                      | Not set, pixi detects the current platform automatically.                                                                                                                                                                                                                                                                           |
-| `RATTLER_AUTH_FILE`      | Overrides the default location of the credentials file. When set, this is the only source of authentication data used by pixi. See [authentication docs](../../deployment/authentication/#override-the-authentication-storage) for the file format. | - If `RATTLER_AUTH_FILE` is not set, the system keyring is used. - If no keyring is available, file storage from `~/.rattler/credentials.json` is used. - Additionally, `.netrc` file authentication is checked.                                                                                                                    |
+| Name                     | Description                                                                                                                                                                                                                                                                                                                                                       | Default                                                                                                                                                                                                                                                                                                                             |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PIXI_HOME`              | Defines the directory where pixi puts its global data.                                                                                                                                                                                                                                                                                                            | [HOME](https://docs.rs/dirs/latest/dirs/fn.home_dir.html)/.pixi                                                                                                                                                                                                                                                                     |
+| `PIXI_CACHE_DIR`         | Defines the directory where pixi puts its cache.                                                                                                                                                                                                                                                                                                                  | - If `PIXI_CACHE_DIR` is not set, the `RATTLER_CACHE_DIR` environment variable is used. - If that is not set, `XDG_CACHE_HOME/pixi` is used when the directory exists. - If that is not set, the default cache directory of [rattler::default_cache_dir](https://docs.rs/rattler/latest/rattler/fn.default_cache_dir.html) is used. |
+| `PIXI_NO_CONFIG`         | When set to a truthy value (e.g. `1`), pixi skips loading system and user-level configuration files (such as `/etc/pixi/config.toml` and `~/.pixi/config.toml`). Project-local `<project>/.pixi/config.toml` is still loaded. Equivalent to passing `--no-config`. Useful in CI, scripts, and tests that need to be insulated from a developer's global settings. | Not set.                                                                                                                                                                                                                                                                                                                            |
+| `PIXI_CONFIG_FILE`       | Path to a configuration file to load *instead of* the system and user-level config files. Project-local `<project>/.pixi/config.toml` is still merged on top. Equivalent to passing `--config-file <PATH>`.                                                                                                                                                       | Not set.                                                                                                                                                                                                                                                                                                                            |
+| `PIXI_OVERRIDE_PLATFORM` | Overrides the detected host platform used to select and install environments. Accepts any valid platform string (e.g. `linux-aarch64`, `osx-arm64`, `win-64`).                                                                                                                                                                                                    | Not set, pixi detects the current platform automatically.                                                                                                                                                                                                                                                                           |
+| `RATTLER_AUTH_FILE`      | Overrides the default location of the credentials file. When set, this is the only source of authentication data used by pixi. See [authentication docs](../../deployment/authentication/#override-the-authentication-storage) for the file format.                                                                                                               | - If `RATTLER_AUTH_FILE` is not set, the system keyring is used. - If no keyring is available, file storage from `~/.rattler/credentials.json` is used. - Additionally, `.netrc` file authentication is checked.                                                                                                                    |
 
 ## Environment Variables Set By Pixi
 
@@ -14535,6 +14537,13 @@ The highest priority wins. If a configuration file is found in a higher priority
 Note
 
 To find the locations where `pixi` looks for configuration files, run `pixi info -vvv`.
+
+### Skipping or overriding config discovery
+
+Two global flags (and their environment-variable equivalents) let you opt out of the system and user-level config layers — the project-local `<project>/.pixi/config.toml` is always merged on top:
+
+- `--no-config` / `PIXI_NO_CONFIG=1` — skip all system and user-level config files. Useful in CI, scripts, and tests that need to be insulated from a developer's machine-wide settings.
+- `--config-file <PATH>` / `PIXI_CONFIG_FILE=<PATH>` — load only the given file as the global layer instead of searching the locations above.
 
 ## Configuration options
 
@@ -16634,6 +16643,20 @@ pixi add [OPTIONS] <SPEC>...
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Git Options
 
 - [`--git (-g) <GIT>`](#arg---git) : The git url to use when adding a git dependency
@@ -16837,6 +16860,22 @@ pixi clean [OPTIONS] [COMMAND]
 - [`--activation-cache`](#arg---activation-cache) : Only remove the activation cache
 - [`--build`](#arg---build) : Only remove the pixi-build cache
 - [`--workspaces-registry`](#arg---workspaces-registry) : Only remove disassociated workspace registries
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 ## Global Options
 
@@ -17141,6 +17180,20 @@ pixi import [OPTIONS] <FILE>
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) : Use environment activation cache (experimental)
 
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -17168,6 +17221,22 @@ pixi info [OPTIONS]
 
 - [`--extended`](#arg---extended) : Show cache and environment size
 - [`--json`](#arg---json) : Whether to show the output as JSON or not
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 ## Global Options
 
@@ -17310,6 +17379,20 @@ pixi install [OPTIONS]
 
 ## Config Options
 
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
 - [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
@@ -17450,6 +17533,22 @@ pixi list [OPTIONS] [REGEX]
 
 - [`--explicit (-x)`](#arg---explicit) : Only list packages that are explicitly defined in the workspace
 
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Update Options
 
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
@@ -17539,6 +17638,22 @@ pixi lock [OPTIONS]
 - [`--json`](#arg---json) : Output the changes in JSON format
 - [`--check`](#arg---check) : Check if any changes have been made to the lock file. If yes, exit with a non-zero code
 - [`--dry-run`](#arg---dry-run) : Compute the lock file without writing to disk. Implies --no-install
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 ## Update Options
 
@@ -17649,6 +17764,20 @@ pixi publish [OPTIONS]
 - [`--package-format <PACKAGE_FORMAT>`](#arg---package-format) : Archive format and optional compression level, e.g. `conda`, `tar-bz2`, `conda:max`, `conda:15`, `tar-bz2:9`. Numeric ranges match rattler-build: -7..=22 for `.conda`, 1..=9 for `.tar.bz2`
 
 ## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
@@ -17888,6 +18017,20 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 ## Config Options
 
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
 - [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
@@ -18007,6 +18150,20 @@ pixi remove [OPTIONS] <SPEC>...
   ```
 
 ## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
@@ -18144,6 +18301,20 @@ pixi run [OPTIONS] [TASK]...
 - [`--help`](#arg---help) :
 
 ## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
@@ -18338,6 +18509,22 @@ pixi search [OPTIONS] <PACKAGE>
 
 - [`--json`](#arg---json) : Output in JSON format
 
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -18419,6 +18606,20 @@ pixi shell-hook [OPTIONS]
   ```
 
 ## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
@@ -18572,6 +18773,20 @@ pixi shell [OPTIONS]
 
 ## Config Options
 
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
 - [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
@@ -18687,6 +18902,22 @@ pixi task [OPTIONS] <COMMAND>
 | [`alias`](alias/)   | Alias another specific command      |
 | [`list`](list/)     | List all tasks in the workspace     |
 
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -18711,6 +18942,22 @@ pixi tree [OPTIONS] [REGEX]
 - [`--platform (-p) <PLATFORM>`](#arg---platform) : The platform to list packages for. Defaults to the current platform
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to list packages for. Defaults to the default environment
 - [`--invert (-i)`](#arg---invert) : Invert tree and show what depends on given package in the regex argument
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 ## Update Options
 
@@ -18886,6 +19133,20 @@ pixi update [OPTIONS] [PACKAGES]...
 
 ## Config Options
 
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
 - [`--concurrent-downloads <CONCURRENT_DOWNLOADS>`](#arg---concurrent-downloads) : Max concurrent network requests, default is `50`
@@ -19018,6 +19279,20 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 - [`--dry-run (-n)`](#arg---dry-run) : Only show the changes that would be made, without actually updating the manifest, lock file, or environment
 
 ## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 
@@ -21386,6 +21661,22 @@ pixi workspace channel [OPTIONS] <COMMAND>
 | [`list`](list/)     | List the channels in the manifest                             |
 | [`remove`](remove/) | Remove channel(s) from the manifest and updates the lock file |
 
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -21407,6 +21698,22 @@ pixi workspace description [OPTIONS] <COMMAND>
 | ------------- | ----------------------------- |
 | [`get`](get/) | Get the workspace description |
 | [`set`](set/) | Set the workspace description |
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 ## Global Options
 
@@ -21430,6 +21737,22 @@ pixi workspace environment [OPTIONS] <COMMAND>
 | [`add`](add/)       | Adds an environment to the manifest file     |
 | [`list`](list/)     | List the environments in the manifest file   |
 | [`remove`](remove/) | Remove an environment from the manifest file |
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 ## Global Options
 
@@ -21470,6 +21793,22 @@ pixi workspace feature [OPTIONS] <COMMAND>
 | [`list`](list/)     | List the features in the manifest file  |
 | [`remove`](remove/) | Remove a feature from the manifest file |
 
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -21491,6 +21830,22 @@ pixi workspace name [OPTIONS] <COMMAND>
 | ------------- | ---------------------- |
 | [`get`](get/) | Get the workspace name |
 | [`set`](set/) | Set the workspace name |
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 ## Global Options
 
@@ -21514,6 +21869,22 @@ pixi workspace platform [OPTIONS] <COMMAND>
 | [`add`](add/)       | Adds a platform(s) to the workspace file and updates the lock file   |
 | [`list`](list/)     | List the platforms in the workspace file                             |
 | [`remove`](remove/) | Remove platform(s) from the workspace file and updates the lock file |
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 ## Global Options
 
@@ -21544,6 +21915,22 @@ pixi workspace register [OPTIONS] [COMMAND]
 - [`--path (-p) <PATH>`](#arg---path) : Path to register. Defaults to the path to the current workspace
 - [`--force (-f)`](#arg---force) : Overwrite the workspace entry if the name of the workspace already exists in the registry
 
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -21568,6 +21955,22 @@ pixi workspace requires-pixi [OPTIONS] <COMMAND>
 | [`unset`](unset/)   | Remove the pixi minimum version requirement |
 | [`verify`](verify/) | Verify the pixi minimum version requirement |
 
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -21589,6 +21992,22 @@ pixi workspace system-requirements [OPTIONS] <COMMAND>
 | --------------- | ------------------------------------------ |
 | [`add`](add/)   | Adds an environment to the manifest file   |
 | [`list`](list/) | List the environments in the manifest file |
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 ## Global Options
 
@@ -21614,6 +22033,22 @@ pixi workspace version [OPTIONS] <COMMAND>
 | [`major`](major/) | Bump the workspace version to MAJOR |
 | [`minor`](minor/) | Bump the workspace version to MINOR |
 | [`patch`](patch/) | Bump the workspace version to PATCH |
+
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 ## Global Options
 
@@ -21955,6 +22390,22 @@ pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
 - [`--name (-n) <NAME>`](#arg---name) : The name to use for the rendered conda environment. Defaults to the environment name
 - [`--from-lock-file`](#arg---from-lock-file) : Render the environment with packages pinned to the versions resolved in the lock file instead of the manifest specs
 
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Global Options
 
 - [`--manifest-path (-m) <MANIFEST_PATH>`](#arg---manifest-path) : The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -22005,6 +22456,20 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
   ```
 
 ## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
 

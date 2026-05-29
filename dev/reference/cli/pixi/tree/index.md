@@ -18,6 +18,22 @@ pixi tree [OPTIONS] [REGEX]
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) : The environment to list packages for. Defaults to the default environment
 - [`--invert (-i)`](#arg---invert) : Invert tree and show what depends on given package in the regex argument
 
+## Config Options
+
+- [`--no-config`](#arg---no-config) : Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+
+  ```
+  **env**: `PIXI_NO_CONFIG`
+    
+  **default**: `false`
+  ```
+
+- [`--config-file <PATH>`](#arg---config-file) : Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+
+  ```
+  **env**: `PIXI_CONFIG_FILE`
+  ```
+
 ## Update Options
 
 - [`--frozen`](#arg---frozen) : Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
