@@ -13,6 +13,12 @@
 //! one locked entry by identity, and the manifest name must not already be in
 //! use by another platform in the lockfile. Mismatched or ambiguous entries
 //! pass through unchanged so the satisfiability layer can still flag them.
+//!
+//! The inverse runs at save time: [`shorten_platform_names`] rewrites rich
+//! platforms to short aliases (`p1`, `p2`, ...) so `pixi.lock` keys don't carry
+//! their full descriptive identity names. Because the load-time pass matches by
+//! identity rather than name, those aliases round-trip transparently -- the real
+//! names only ever live in `pixi.toml`.
 use std::collections::HashMap;
 
 use pixi_manifest::{PixiPlatform, WorkspaceManifest, platform};
@@ -37,6 +43,41 @@ pub(crate) fn align_platform_names(lock_file: LockFile, manifest: &WorkspaceMani
             tracing::warn!(
                 "failed to rewrite lockfile platform names against the manifest: {err}; \
                  continuing with the lockfile's original names",
+            );
+            lock_file
+        }
+    }
+}
+
+/// Rewrite the lockfile's rich platform names to short, stable aliases (`p1`,
+/// `p2`, ...) before serializing to disk, keeping descriptive identity names
+/// out of `pixi.lock`. Subdir platforms keep their conda subdir name. Numbering
+/// follows the declaration order of the non-subdir platforms in the workspace
+/// manifest, so the aliases are stable as long as that order is. The real names
+/// stay in `pixi.toml`; [`align_platform_names`] restores them by identity on
+/// load. Returns the lockfile unchanged when there are no rich platforms.
+pub(crate) fn shorten_platform_names(
+    lock_file: LockFile,
+    manifest: &WorkspaceManifest,
+) -> LockFile {
+    let mut renames: HashMap<String, String> = HashMap::new();
+    let mut ordinal = 0usize;
+    for platform in &manifest.workspace.platforms {
+        if platform.is_subdir_platform() {
+            continue;
+        }
+        ordinal += 1;
+        renames.insert(platform.name().as_str().to_string(), format!("p{ordinal}"));
+    }
+    if renames.is_empty() {
+        return lock_file;
+    }
+    match rebuild_with_renames(&lock_file, &renames) {
+        Ok(rebuilt) => rebuilt,
+        Err(err) => {
+            tracing::warn!(
+                "failed to shorten lockfile platform names: {err}; \
+                 writing the lockfile with its full platform names",
             );
             lock_file
         }
@@ -186,7 +227,7 @@ mod tests {
     use rattler_conda_types::Platform;
     use rattler_lock::{LockFile, PlatformData, PlatformName};
 
-    use super::align_platform_names;
+    use super::{align_platform_names, shorten_platform_names};
 
     fn manifest(source: &str) -> WorkspaceManifest {
         WorkspaceManifest::from_toml_str_with_base_dir(source, Path::new("")).unwrap()
@@ -207,6 +248,66 @@ mod tests {
         builder.set_channels("default", Vec::<rattler_lock::Channel>::new());
         builder.set_options("default", rattler_lock::SolveOptions::default());
         builder.finish()
+    }
+
+    /// On save, rich platforms are aliased to `p1`, `p2`, ... in workspace
+    /// declaration order; subdir platforms keep their name. The aliases
+    /// round-trip back to the manifest names via the identity-based load pass.
+    #[test]
+    fn shorten_aliases_rich_platforms_in_declaration_order() {
+        let manifest = manifest(
+            r#"
+            [workspace]
+            name = "demo"
+            channels = []
+            platforms = [
+              { name = "mac", platform = "osx-arm64", macos = "13.5" },
+              "linux-64",
+              { name = "gpu", platform = "linux-64", cuda = "12.0" },
+            ]
+            "#,
+        );
+        let mut builder = LockFile::builder()
+            .with_platforms(vec![
+                PlatformData {
+                    name: PlatformName::try_from("mac").unwrap(),
+                    subdir: Platform::OsxArm64,
+                    virtual_packages: vec!["__osx=13.5".to_string()],
+                },
+                PlatformData {
+                    name: PlatformName::try_from("linux-64").unwrap(),
+                    subdir: Platform::Linux64,
+                    virtual_packages: vec![],
+                },
+                PlatformData {
+                    name: PlatformName::try_from("gpu").unwrap(),
+                    subdir: Platform::Linux64,
+                    virtual_packages: vec!["__cuda=12.0".to_string()],
+                },
+            ])
+            .unwrap();
+        builder.set_channels("default", Vec::<rattler_lock::Channel>::new());
+        builder.set_options("default", rattler_lock::SolveOptions::default());
+        let lock = builder.finish();
+
+        let shortened = shorten_platform_names(lock, &manifest);
+
+        // `mac` is the first non-subdir entry, `gpu` the second; `linux-64`
+        // is a subdir platform and keeps its name.
+        assert!(shortened.platform("p1").is_some());
+        assert!(shortened.platform("p2").is_some());
+        assert!(shortened.platform("linux-64").is_some());
+        assert!(shortened.platform("mac").is_none());
+        assert!(shortened.platform("gpu").is_none());
+
+        // The load pass restores the manifest names by identity, so the
+        // aliases never escape `pixi.lock`.
+        let restored = align_platform_names(shortened, &manifest);
+        assert!(restored.platform("mac").is_some());
+        assert!(restored.platform("gpu").is_some());
+        assert!(restored.platform("linux-64").is_some());
+        assert!(restored.platform("p1").is_none());
+        assert!(restored.platform("p2").is_none());
     }
 
     /// A workspace that renamed `linux-64-cuda` to `gpu-linux` (same

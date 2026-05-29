@@ -493,9 +493,17 @@ def test_lockfile_records_custom_platform_and_vps(pixi: Path, tmp_pixi_workspace
         "--no-install",
     )
     lock_platforms = _lockfile_platforms(tmp_pixi_workspace)
-    entry = next(p for p in lock_platforms if isinstance(p, dict) and p.get("name") == "gpu-linux")
+    # Rich platforms are written under a short alias (e.g. `p1`) rather than
+    # their manifest name; they are matched back to `gpu-linux` by identity
+    # (subdir + virtual packages) when the lock file is read.
+    entry = next(
+        p
+        for p in lock_platforms
+        if isinstance(p, dict) and "__cuda=12.0" in p.get("virtual-packages", [])
+    )
     assert entry["subdir"] == "linux-64"
-    assert "__cuda=12.0" in entry["virtual-packages"]
+    assert entry["name"] != "gpu-linux"
+    assert entry["name"].startswith("p")
 
 
 def test_lockfile_records_removed_platform_lazy_pruning(

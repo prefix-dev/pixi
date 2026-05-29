@@ -117,6 +117,13 @@ platforms = [
 platforms = ["linux-64-cuda-12-0"]  # the synthesised name for the entry above
 ```
 
+!!! note "Platform names in `pixi.lock`"
+    Rich platforms are written to `pixi.lock` under short aliases (`p1`, `p2`,
+    ...) instead of their full names, to keep the lock file compact. Pixi maps
+    these back to the manifest entries by their contents (subdir plus declared
+    virtual packages) when the lock file is read, so the aliases never need to
+    be understood by hand. The real names stay in `pixi.toml`.
+
 ### Managing platforms from the CLI
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) is

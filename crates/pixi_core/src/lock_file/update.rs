@@ -656,7 +656,13 @@ impl<'p> LockFileDerivedData<'p> {
     /// Write the lock file to disk.
     pub fn write_to_disk(&self) -> miette::Result<()> {
         let lock_file_path = self.workspace.lock_file_path();
-        self.lock_file
+        // Shorten rich platform names to `p1`, `p2`, ... on disk; the load-time
+        // pass restores the manifest names by identity.
+        let lock_file = crate::lock_file::platform_rename::shorten_platform_names(
+            self.lock_file.clone(),
+            self.workspace.workspace_manifest(),
+        );
+        lock_file
             .to_path(&lock_file_path)
             .into_diagnostic()
             .context("failed to write lock file to disk")
