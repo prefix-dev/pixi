@@ -723,8 +723,8 @@ def test_list_default_human(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains=[
             "Your current machine was detected as:",
             "Platforms:",
-            "linux-64: subdir=linux-64",
-            "osx-64: subdir=osx-64",
+            "linux-64: platform=linux-64",
+            "osx-64: platform=osx-64",
         ],
     )
     assert out.returncode == 0
@@ -766,7 +766,7 @@ def test_list_shows_rich_platform_packages(pixi: Path, tmp_pixi_workspace: Path)
         pixi,
         tmp_pixi_workspace,
         "list",
-        stdout_contains=["gpu-linux: subdir=linux-64, cuda=12.0"],
+        stdout_contains=["gpu-linux: platform=linux-64, cuda=12.0"],
     )
 
 
@@ -842,13 +842,13 @@ def test_remove_custom_platform_drops_vps(pixi: Path, tmp_pixi_workspace: Path) 
 
 
 def test_list_shows_rich_platform_in_block(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Rich entries render as `<name>: subdir=..., <friendly>=<value>`."""
+    """Rich entries render as `<name>: platform=..., <friendly>=<value>`."""
     _seed_with_rich_platform(tmp_pixi_workspace, pixi)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "list",
-        stdout_contains=["gpu-linux: subdir=linux-64, cuda=11.0"],
+        stdout_contains=["gpu-linux: platform=linux-64, cuda=11.0"],
     )
 
 
@@ -876,7 +876,7 @@ def test_list_with_only_current_platform(pixi: Path, tmp_pixi_workspace: Path) -
         stdout_contains=[
             "Your current machine was detected as:",
             "Platforms:",
-            f"{CURRENT_PLATFORM}: subdir={CURRENT_PLATFORM} (supported by current machine)",
+            f"{CURRENT_PLATFORM}: platform={CURRENT_PLATFORM} (supported by current machine)",
         ],
     )
 
@@ -893,9 +893,9 @@ def test_list_omits_supported_marker_for_non_matching_subdir(
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(pixi, tmp_pixi_workspace, "add", other, "--no-install")
     out = _run_platform(pixi, tmp_pixi_workspace, "list")
-    assert f"{other}: subdir={other}" in out.stdout
+    assert f"{other}: platform={other}" in out.stdout
     # The non-matching row never carries the support marker.
-    assert f"{other}: subdir={other} (supported by current machine)" not in out.stdout
+    assert f"{other}: platform={other} (supported by current machine)" not in out.stdout
 
 
 def test_list_shows_environments_and_features_using_platform(
@@ -925,21 +925,19 @@ gpu = ["cuda"]
     assert "    Used in features    : cuda" in out.stdout
 
 
-def test_list_omits_features_line_when_no_feature_references_platform(
+def test_list_omits_usage_lines_for_single_environment_workspace(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
-    """A workspace without explicit feature platform pins only emits the
-    environments line (the default environment always inherits the
-    workspace's platforms); the features line is omitted entirely."""
+    """A workspace with only the implicit `default` environment and no
+    feature platform pins emits neither usage line: the env line would
+    only ever say `default`, and there are no features to mention."""
     _seed_workspace(tmp_pixi_workspace)
     out = _run_platform(pixi, tmp_pixi_workspace, "list")
-    assert "    Used in environments: default" in out.stdout
+    assert "Used in environments" not in out.stdout
     assert "Used in features" not in out.stdout
 
 
-def test_list_respects_conda_override_cuda(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_list_respects_conda_override_cuda(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """A workspace platform pinned to `__cuda=11.0` should pick up the
     `CONDA_OVERRIDE_CUDA=12.0` env var: the host now claims `__cuda=12.0`,
     which satisfies the platform's `>=11.0` requirement, so the row is
@@ -977,9 +975,7 @@ def test_list_respects_conda_override_cuda(
     assert "cuda=12.0" in out.stdout
 
 
-def test_list_respects_pixi_override_platform(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
+def test_list_respects_pixi_override_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Setting `PIXI_OVERRIDE_PLATFORM` cross-targets the listing: a
     platform whose subdir matches the override gets the support marker
     even when it doesn't match the literal host."""
@@ -1005,7 +1001,7 @@ def test_list_respects_pixi_override_platform(
     assert target_line is not None
     assert target_line.endswith(" (supported by current machine)"), target_line
     # The host header agrees with the override.
-    assert f"subdir={other}" in out.stdout
+    assert f"platform={other}" in out.stdout
 
 
 def test_list_dims_unreachable_environments_and_features(

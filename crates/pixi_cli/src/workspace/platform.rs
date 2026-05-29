@@ -538,9 +538,10 @@ async fn execute_list(
     }
     let machine = HostMachine::detect(workspace);
     let reachability = MachineReachability::compute(workspace, &machine);
+    let multiple_environments = workspace.environments().len() > 1;
     for p in workspace_platforms.iter() {
         let users = environments_and_features_using(workspace, p);
-        print_workspace_platform_row(p, &machine, &users, &reachability);
+        print_workspace_platform_row(p, &machine, &users, &reachability, multiple_environments);
     }
 
     Ok(())
@@ -588,7 +589,7 @@ fn current_platform_with_override() -> Platform {
 /// Pretty-print rattler's host detection as a "diagnostic" header rather
 /// than another `<name>:` row -- the host has no manifest-side identity, so
 /// labelling it `current:` was misleading. The body is the same
-/// `subdir=...[, ...]` payload the workspace rows use; subdir defaults
+/// `platform=...[, ...]` payload the workspace rows use; subdir defaults
 /// filter out so it only mentions where the host diverges from pixi's
 /// baseline. Both `PIXI_OVERRIDE_PLATFORM` and the `CONDA_OVERRIDE_*`
 /// virtual-package overrides are respected here so the header agrees
@@ -761,25 +762,23 @@ impl MachineReachability {
     }
 }
 
-/// One row in the `Platforms:` block. The name is highlighted when the
-/// platform is fully supported by the current machine; otherwise the
-/// blocking subdir / virtual packages are dimmed so the user can spot
-/// what's preventing the match at a glance. Followed by indented
-/// `Used in environments:` / `Used in features    :` lines whenever the
-/// manifest actually references the platform from either side, with the
-/// individual env/feature names dimmed when *they* have no reachable
-/// platform on this machine.
+/// One row in the `Platforms:` block. Supported platforms are bold; blocking
+/// subdir / virtual packages are dimmed. Followed by indented usage lines:
+/// `Used in environments:` (only when the workspace has more than one
+/// environment) and `Used in features    :`, each emitted only when the
+/// manifest references the platform, with unreachable names dimmed.
 fn print_workspace_platform_row(
     platform: &PixiPlatform,
     machine: &HostMachine,
     users: &PlatformUsers,
     reachability: &MachineReachability,
+    multiple_environments: bool,
 ) {
     let subdir = platform.subdir();
     let subdir_ok = machine.covers_subdir(subdir);
 
     let mut parts: Vec<String> = Vec::new();
-    let subdir_text = format!("subdir={}", subdir.as_str());
+    let subdir_text = format!("platform={}", subdir.as_str());
     parts.push(if subdir_ok {
         subdir_text
     } else {
@@ -826,7 +825,7 @@ fn print_workspace_platform_row(
     // the platform from that side. Names of environments/features that
     // have no reachable platform on this machine are dimmed so users can
     // see at a glance which references they can act on locally.
-    if !users.environments.is_empty() {
+    if multiple_environments && !users.environments.is_empty() {
         let _ = writeln!(
             stdout,
             "    Used in environments: {}",
@@ -858,12 +857,12 @@ fn format_user_names(names: &[String], unreachable: &HashSet<String>) -> String 
         .join(", ")
 }
 
-/// Plain (no styling) `subdir=...[, key=value, ...]` body used by the
+/// Plain (no styling) `platform=...[, key=value, ...]` body used by the
 /// host-detection header. The header is informational, so the body is
 /// emitted verbatim without the match-aware dimming the workspace rows
 /// use.
 fn inline_entry_body(subdir: Platform, declared: &[GenericVirtualPackage]) -> String {
-    let mut parts = vec![format!("subdir={}", subdir.as_str())];
+    let mut parts = vec![format!("platform={}", subdir.as_str())];
     parts.extend(
         pixi_manifest::toml::inline_virtual_package_specs(subdir, declared)
             .into_iter()
