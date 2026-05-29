@@ -176,9 +176,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .expect("failed to write into message buffer");
 
         if skip_opts {
+            // Use the platform the install actually targeted (honoring a
+            // `--platform` override), falling back to the host subdir. Unlike
+            // `best_platform()`, this never panics when the chosen platform is
+            // not runnable on the current host (e.g. a cross-target install).
             let platform = environment
-                .best_platform()
-                .expect("environment supported on this system");
+                .pinned_platform(target_platform.as_ref())
+                .unwrap_or_else(|| environment.host_platform());
             let locked_env = lock_file
                 .environment(environment.name().as_str())
                 .expect("lock file is missing installed environment");
