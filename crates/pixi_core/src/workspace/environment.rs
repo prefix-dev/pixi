@@ -406,7 +406,7 @@ impl<'p> Environment<'p> {
 
 /// Returns the subdir pixi should target on this machine, honoring
 /// `PIXI_OVERRIDE_PLATFORM` (and warning if its value is not a valid platform).
-fn current_platform_with_override() -> Platform {
+pub(crate) fn current_platform_with_override() -> Platform {
     std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
         .ok()
         .and_then(|val| match val.parse::<Platform>() {
@@ -423,7 +423,7 @@ fn current_platform_with_override() -> Platform {
 /// flat list suitable for `Workspace::possible_pixi_platforms`. Returns an
 /// empty list if detection fails -- the caller treats every workspace platform
 /// as system-compatible in that case.
-fn detect_system_virtual_packages() -> Vec<GenericVirtualPackage> {
+pub(crate) fn detect_system_virtual_packages() -> Vec<GenericVirtualPackage> {
     VirtualPackages::detect(&VirtualPackageOverrides::from_env())
         .unwrap_or_default()
         .into_generic_virtual_packages()

@@ -5,7 +5,9 @@ use pixi_manifest::{EnvironmentName, PixiPlatform, PixiPlatformName};
 use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_record};
 use rattler_conda_types::ParseMatchSpecError;
 use rattler_conda_types::ParseStrictness::Lenient;
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageName};
+use rattler_conda_types::{
+    GenericVirtualPackage, MatchSpec, Matches, PackageName, Platform, Version, VersionSpec,
+};
 use rattler_lock::{CondaPackageData, ConversionError, LockFile, PypiPackageData};
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
@@ -110,6 +112,91 @@ pub(crate) fn get_required_virtual_packages_from_depends(
         .dedup()
         .collect::<Result<Vec<MatchSpec>, _>>()
         .map_err(MachineValidationError::DependencyParsingError)
+}
+
+/// The single version a virtual-package match spec carries. Virtual-package
+/// dependencies are always pinned to one exact version (`__cuda 12` /
+/// `__cuda >=12` both mean version `12`), so the operator is irrelevant -- we
+/// just read the version. Specs with no version (a bare `__cuda`) yield `None`.
+fn spec_version(spec: &VersionSpec) -> Option<&Version> {
+    match spec {
+        VersionSpec::Range(_, version) | VersionSpec::Exact(_, version) => Some(version),
+        _ => None,
+    }
+}
+
+/// Compute the minimal-required platform for each subdir the environment was
+/// resolved for: the subdir plus exactly the virtual packages that some resolved
+/// dependency requires, each at the highest version seen across all packages.
+///
+/// The result is keyed by subdir; `declared_platforms` that share a subdir are
+/// unioned. Only `depends` is considered, mirroring
+/// [`validate_system_meets_environment_requirements`]. A subdir whose lock-file
+/// entry has no conda packages is omitted (the caller falls back to the declared
+/// platform); a subdir with packages but no virtual-package requirements yields a
+/// platform with an empty declared set.
+pub(crate) fn compute_minimal_required_platforms(
+    lock_file: &LockFile,
+    environment_name: &EnvironmentName,
+    declared_platforms: &[&PixiPlatform],
+) -> HashMap<Platform, PixiPlatform> {
+    let Some(environment) = lock_file.environment(environment_name.as_str()) else {
+        return HashMap::new();
+    };
+
+    // subdir -> (virtual-package name -> highest-version requirement seen)
+    let mut required: HashMap<Platform, HashMap<PackageName, GenericVirtualPackage>> =
+        HashMap::new();
+
+    for platform in declared_platforms {
+        let lock_platform = environment.lock_file().platform(platform.name().as_str());
+        let Some(conda_packages) = lock_platform.and_then(|p| environment.conda_packages(p)) else {
+            continue;
+        };
+        let conda_packages = conda_packages.collect_vec();
+        let all_depends: Vec<&str> = conda_packages
+            .iter()
+            .flat_map(|data| data.depends())
+            .map(|s| s.as_str())
+            .collect_vec();
+        let Ok(specs) = get_required_virtual_packages_from_depends(&all_depends) else {
+            continue;
+        };
+
+        let aggregated = required.entry(platform.subdir()).or_default();
+        for spec in specs {
+            let Some(name) = spec.name.as_exact() else {
+                continue;
+            };
+            let Some(version) = spec.version.as_ref().and_then(spec_version) else {
+                continue;
+            };
+            aggregated
+                .entry(name.clone())
+                .and_modify(|existing| {
+                    if *version > existing.version {
+                        existing.version = version.clone();
+                    }
+                })
+                .or_insert_with(|| GenericVirtualPackage {
+                    name: name.clone(),
+                    version: version.clone(),
+                    build_string: String::new(),
+                });
+        }
+    }
+
+    required
+        .into_iter()
+        .map(|(subdir, vps)| {
+            let mut vps: Vec<GenericVirtualPackage> = vps.into_values().collect();
+            vps.sort_by(|a, b| a.name.as_normalized().cmp(b.name.as_normalized()));
+            (
+                subdir,
+                PixiPlatform::from_required_virtual_packages(subdir, vps),
+            )
+        })
+        .collect()
 }
 
 /// Get the wheel filenames from the lock file pypi package data
@@ -316,6 +403,56 @@ mod test {
             virtual_matchspecs
                 .iter()
                 .contains(&MatchSpec::from_str("__cuda >=12", Lenient).unwrap())
+        );
+    }
+
+    #[test]
+    fn test_spec_version() {
+        assert_eq!(
+            spec_version(&VersionSpec::from_str(">=12", Lenient).unwrap()),
+            Some(&Version::from_str("12").unwrap()),
+        );
+        assert_eq!(
+            spec_version(&VersionSpec::from_str("==12.0", Lenient).unwrap()),
+            Some(&Version::from_str("12.0").unwrap()),
+        );
+        assert_eq!(spec_version(&VersionSpec::Any), None);
+    }
+
+    #[test]
+    fn test_compute_minimal_required_platforms() {
+        let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let lock_file_path =
+            root_dir.join("../../tests/data/lock_files/cuda_virtual_dependency.lock");
+        let lock_file = LockFile::from_path(&lock_file_path).unwrap();
+        let declared = PixiPlatform::from_subdir(Platform::Linux64);
+
+        let minimal = compute_minimal_required_platforms(
+            &lock_file,
+            &EnvironmentName::default(),
+            &[&declared],
+        );
+
+        let platform = minimal
+            .get(&Platform::Linux64)
+            .expect("linux-64 minimal platform");
+        assert_eq!(platform.subdir(), Platform::Linux64);
+
+        // The resolved packages require `__cuda` at the highest version seen.
+        let cuda = platform
+            .declared_virtual_packages()
+            .iter()
+            .find(|vp| vp.name.as_normalized() == "__cuda")
+            .expect("__cuda is required");
+        assert_eq!(cuda.version, Version::from_str("12").unwrap());
+
+        // Only depended-on VPs are present; subdir defaults are not padded in
+        // (`__archspec` is a linux-64 default but never appears in `depends`).
+        assert!(
+            !platform
+                .declared_virtual_packages()
+                .iter()
+                .any(|vp| vp.name.as_normalized() == "__archspec")
         );
     }
 

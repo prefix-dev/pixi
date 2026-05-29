@@ -291,6 +291,29 @@ impl PixiPlatform {
         Self::new(name, subdir, declared)
     }
 
+    /// Build a runtime-only `PixiPlatform` for `subdir` declaring *exactly*
+    /// `virtual_packages` -- no subdir defaults are merged in. The name is
+    /// synthesised from the contents.
+    ///
+    /// Reserved for computed, in-memory platforms (e.g. an environment's
+    /// minimal-required-platform set). These are never registered in a workspace
+    /// or written to disk, so the subdir-platform invariant enforced by
+    /// [`Self::new`] does not apply.
+    pub fn from_required_virtual_packages(
+        subdir: Platform,
+        virtual_packages: Vec<GenericVirtualPackage>,
+    ) -> Self {
+        let name = PixiPlatformName(crate::toml::platform::synthesize_name_string(
+            subdir,
+            &virtual_packages,
+        ));
+        Self {
+            name,
+            subdir,
+            declared_virtual_packages: virtual_packages,
+        }
+    }
+
     pub fn as_target_selector(&self) -> TargetSelector {
         if self.subdir.as_str() == *self.name {
             TargetSelector::Subdir(self.subdir)
@@ -696,6 +719,28 @@ mod tests {
             .declared_virtual_packages()
             .iter()
             .any(|gvp| gvp.name.as_normalized() == name)
+    }
+
+    #[test]
+    fn from_required_virtual_packages_keeps_exact_vps() {
+        // Exactly the given VPs are declared; subdir defaults are NOT merged in.
+        let platform = PixiPlatform::from_required_virtual_packages(
+            Platform::Linux64,
+            vec![gvp("__cuda", "12")],
+        );
+        assert_eq!(platform.subdir(), Platform::Linux64);
+        assert_eq!(
+            declared_by_name(&platform, &["__cuda"]),
+            vec![("__cuda".to_string(), "12".to_string())],
+        );
+        assert!(!declares(&platform, "__glibc"));
+        assert!(!declares(&platform, "__archspec"));
+        // The synthesised name encodes the VP, so it is a rich platform.
+        assert!(!platform.is_subdir_platform());
+
+        // With no required VPs the platform carries an empty declared set.
+        let empty = PixiPlatform::from_required_virtual_packages(Platform::Linux64, vec![]);
+        assert!(empty.declared_virtual_packages().is_empty());
     }
 
     #[test]

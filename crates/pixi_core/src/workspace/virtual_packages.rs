@@ -1,9 +1,14 @@
 use crate::lock_file::virtual_packages::{
-    MachineValidationError, validate_system_meets_environment_requirements,
+    MachineValidationError, compute_minimal_required_platforms,
+    validate_system_meets_environment_requirements,
+};
+use crate::workspace::environment::{
+    current_platform_with_override, detect_system_virtual_packages,
 };
 use crate::workspace::{Environment, errors::UnsupportedPlatformError};
+use fancy_display::FancyDisplay;
 use miette::Diagnostic;
-use pixi_manifest::PixiPlatform;
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatform};
 use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::LockFile;
 use rattler_virtual_packages::{Archspec, Cuda, LibC, Linux, Osx, VirtualPackage};
@@ -79,8 +84,21 @@ pub enum VerifyCurrentPlatformError {
     MachineValidationError(#[from] MachineValidationError),
 }
 
-/// Verifies if the current platform satisfies the minimal virtual package
-/// requirements.
+/// Verifies that the current machine can run `environment`.
+///
+/// Two checks, in order:
+///
+/// 1. *Declared compatibility* -- does one of the environment's declared
+///    platforms match this machine (subdir + declared virtual packages)? This
+///    is [`Environment::best_platform`].
+/// 2. *Resolution compatibility* -- if (1) fails and a resolution is available,
+///    fall back to the minimal-required platform derived from the resolved
+///    dependencies (a declared platform may promise virtual packages the
+///    resolved packages don't actually need). If the machine satisfies that
+///    minimal set, the environment can run.
+///
+/// Outcomes: (1) holds -> ok; (1) fails but (2) holds -> ok with a warning;
+/// both fail -> error listing the unmet minimal requirements.
 pub fn verify_current_platform_can_run_environment(
     environment: &Environment<'_>,
     lock_file: Option<&LockFile>,
@@ -91,23 +109,91 @@ pub fn verify_current_platform_can_run_environment(
         return Ok(());
     }
 
-    let Some(current_platform) = environment.best_platform() else {
+    // Check 1: a declared platform matches this machine.
+    if let Some(current_platform) = environment.best_platform() {
+        // Declared-compatible. Keep validating the resolved requirements
+        // (conda virtual packages + pypi wheel tags) against the lock file.
+        if let Some(lock_file) = lock_file {
+            validate_system_meets_environment_requirements(
+                lock_file,
+                current_platform,
+                environment.name(),
+                None,
+            )?;
+        }
+        return Ok(());
+    }
+
+    // Check 1 failed. Without a resolution there is nothing to fall back on, so
+    // keep the original "platform not supported" error.
+    let Some(lock_file) = lock_file else {
         return Err(VerifyCurrentPlatformError::from(Box::new(
             environment.unsupported_platform_error(),
         )));
     };
 
-    // If this function is given a lock file we can also compute the ability to run in this environment on the current machine.
-    if let Some(lock_file) = lock_file {
-        validate_system_meets_environment_requirements(
-            lock_file,
-            current_platform,
-            environment.name(),
-            None,
-        )?;
+    // Check 2: does the machine satisfy the minimal-required platform for a
+    // subdir it can run (the current subdir or an architecture fallback)?
+    let current = current_platform_with_override();
+    let system_virtual_packages = detect_system_virtual_packages();
+    let candidate_subdirs = environment
+        .workspace_manifest()
+        .workspace
+        .candidate_subdirs(current);
+
+    let manifest = environment.workspace_manifest();
+    let declared_platforms: Vec<&PixiPlatform> = environment
+        .platforms()
+        .iter()
+        .filter_map(|name| manifest.workspace.platform_by_name(name))
+        .collect();
+    let minimal =
+        compute_minimal_required_platforms(lock_file, environment.name(), &declared_platforms);
+
+    let mut unmet: Option<Vec<GenericVirtualPackage>> = None;
+    for subdir in &candidate_subdirs {
+        let Some(platform) = minimal.get(subdir) else {
+            continue;
+        };
+        let unsatisfied = unsatisfied_virtual_packages(platform, &system_virtual_packages);
+        if unsatisfied.is_empty() {
+            // Check 1 failed but the resolution is compatible -- continue.
+            tracing::warn!(
+                "The current machine is not one of the platforms declared for environment '{}', but the resolved dependencies are compatible with it -- continuing.",
+                environment.name().fancy_display(),
+            );
+            return Ok(());
+        }
+        unmet.get_or_insert(unsatisfied);
     }
 
-    Ok(())
+    // Both checks failed: report the unmet minimal requirements.
+    Err(VerifyCurrentPlatformError::from(Box::new(
+        UnsupportedPlatformError {
+            environments_platforms: environment.platforms().into_iter().collect(),
+            environment: environment.name().clone(),
+            platform: current,
+            unsatisfied_requirements: unmet.unwrap_or_default(),
+        },
+    )))
+}
+
+/// The declared virtual packages of `platform` that the machine does not
+/// provide (missing entirely, or present at a lower version).
+fn unsatisfied_virtual_packages(
+    platform: &PixiPlatform,
+    system: &[GenericVirtualPackage],
+) -> Vec<GenericVirtualPackage> {
+    platform
+        .declared_virtual_packages()
+        .iter()
+        .filter(|required| {
+            !system
+                .iter()
+                .any(|sys| sys.name == required.name && sys.version >= required.version)
+        })
+        .cloned()
+        .collect()
 }
 impl Environment<'_> {
     /// Returns the set of virtual packages to use for the specified platform.
@@ -188,6 +274,38 @@ mod tests {
                 .any(|vp| matches!(vp, VirtualPackage::Cuda(_))),
             "bare subdir platform should not declare __cuda"
         );
+    }
+
+    #[test]
+    fn unsatisfied_virtual_packages_reports_missing_and_lower() {
+        use rattler_conda_types::{PackageName, Version};
+
+        let platform = pixi_manifest::PixiPlatform::from_required_virtual_packages(
+            Platform::Linux64,
+            vec![GenericVirtualPackage {
+                name: PackageName::try_from("__cuda").unwrap(),
+                version: Version::from_str("12").unwrap(),
+                build_string: String::new(),
+            }],
+        );
+        let cuda = |v: &str| {
+            vec![GenericVirtualPackage {
+                name: PackageName::try_from("__cuda").unwrap(),
+                version: Version::from_str(v).unwrap(),
+                build_string: String::new(),
+            }]
+        };
+
+        // Machine provides cuda 12 -> the requirement is met.
+        assert!(unsatisfied_virtual_packages(&platform, &cuda("12")).is_empty());
+        // A higher machine version still satisfies the minimum.
+        assert!(unsatisfied_virtual_packages(&platform, &cuda("12.4")).is_empty());
+        // A lower machine version leaves the requirement unmet.
+        let unmet = unsatisfied_virtual_packages(&platform, &cuda("11"));
+        assert_eq!(unmet.len(), 1);
+        assert_eq!(unmet[0].name.as_normalized(), "__cuda");
+        // No cuda at all -> unmet.
+        assert_eq!(unsatisfied_virtual_packages(&platform, &[]).len(), 1);
     }
 
     #[test]
