@@ -72,7 +72,7 @@ a glibc minimum.
 
 !!! info "Replaces `[system-requirements]`"
     These inline-table entries are the recommended way to declare CUDA, glibc,
-    macOS, archspec, … constraints. The older `[system-requirements]` table
+    macOS, archspec, and similar constraints. The older `[system-requirements]` table
     still parses but is deprecated; see
     [Migrating from `[system-requirements]`](./system_requirements.md) for the
     equivalent forms.

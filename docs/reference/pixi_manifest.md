@@ -71,7 +71,7 @@ The available platforms (except `noarch` and `unknown`) are listed [here](https:
 
 #### Inline-table entries (per-platform virtual packages)
 
-Each entry can also be an inline table that pins which virtual packages the solver should treat as available on that subdir. This is the recommended way to declare CUDA, glibc, macOS, archspec, … constraints — it replaces the legacy `[system-requirements]` table.
+Each entry can also be an inline table that pins which virtual packages the solver should treat as available on that subdir. This is the recommended way to declare CUDA, glibc, macOS, archspec, and similar constraints. It replaces the legacy `[system-requirements]` table.
 
 ```toml
 [workspace]
@@ -84,9 +84,9 @@ platforms = [
 
 Recognised keys on an inline-table entry:
 
-- `platform` — the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
-- `name` — workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
-- Friendly virtual-package keys: `cuda`, `archspec`, `libc`, `linux`, `macos`, `windows`. Each maps to the matching `__name` conda virtual package (`cuda` → `__cuda`, `libc` → `__glibc`, `macos` → `__osx`, …).
+- `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
+- `name`: workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
+- Friendly virtual-package keys: `cuda`, `archspec`, `libc`, `linux`, `macos` (alias `osx`), `windows`. Each maps to the matching `__name` conda virtual package (`cuda` to `__cuda`, `libc` to `__glibc`, `macos` to `__osx`, etc.).
 - Raw `__name = "version"` entries are accepted as an escape hatch for virtual packages without a friendly key.
 
 Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir using whatever virtual packages Pixi auto-detects on the host.
@@ -510,7 +510,7 @@ You can modify this table using [`pixi task`](cli/pixi/task.md).
 ## The `system-requirements` table (deprecated)
 
 !!! warning "Deprecated"
-    The `[system-requirements]` table — and its per-feature variant `[feature.<name>.system-requirements]` — is parsed for backwards compatibility but should not be used in new manifests. Declare the virtual packages directly on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) using inline-table entries.
+    The `[system-requirements]` table (and its per-feature variant `[feature.<name>.system-requirements]`) is parsed for backwards compatibility but should not be used in new manifests. Declare the virtual packages directly on [`workspace.platforms`](#inline-table-entries-per-platform-virtual-packages) using inline-table entries.
 
     Existing tables are migrated transparently into synthetic per-platform entries at parse time, and the on-disk file is rewritten the first time you edit platforms through the CLI. See [Migrating from `[system-requirements]`](../workspace/system_requirements.md) for the equivalent forms.
 

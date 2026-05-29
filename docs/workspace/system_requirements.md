@@ -129,9 +129,9 @@ is declared in `pixi.toml`. Use them when you need to install in an environment
 that doesn't match the declared virtual packages (for example a CPU-only CI
 runner solving a CUDA-enabled lock file).
 
-- `CONDA_OVERRIDE_CUDA` — sets the `__cuda` version. Example: `CONDA_OVERRIDE_CUDA=11`.
-- `CONDA_OVERRIDE_GLIBC` — sets the `__glibc` version. Example: `CONDA_OVERRIDE_GLIBC=2.28`.
-- `CONDA_OVERRIDE_OSX` — sets the `__osx` version. Example: `CONDA_OVERRIDE_OSX=13.0`.
+- `CONDA_OVERRIDE_CUDA` sets the `__cuda` version. Example: `CONDA_OVERRIDE_CUDA=11`.
+- `CONDA_OVERRIDE_GLIBC` sets the `__glibc` version. Example: `CONDA_OVERRIDE_GLIBC=2.28`.
+- `CONDA_OVERRIDE_OSX` sets the `__osx` version. Example: `CONDA_OVERRIDE_OSX=13.0`.
 
 ## Additional resources
 
