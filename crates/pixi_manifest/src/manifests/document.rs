@@ -533,10 +533,9 @@ impl ManifestDocument {
             return Some(PypiDependencyLocation::PixiPypiDependencies);
         }
 
-        // Check whether the package is actually present in a given PEP 508
-        // requirement array, rather than merely whether the array exists. This
-        // is required so that a package defined in e.g. `[dependency-groups]`
-        // is not mistakenly reported as living in `[project.dependencies]`.
+        // Whether `package_name` is present in the given PEP 508 requirement
+        // array. Membership (not just the array's existence) decides the
+        // location, so a package is reported in the section it truly belongs to.
         let array_contains_package = |keys: &[&str], array_name: &str| -> bool {
             let Ok(Some(array)) = self.manifest().get_toml_array(keys, array_name) else {
                 return false;
