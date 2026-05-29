@@ -21,6 +21,9 @@ use crate::cli_interface::CliInterface;
 /// If you want to re-install all environments, you can use the `--all` flag.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Specifies the package that should be reinstalled.
     /// If no package is given, the whole environment will be reinstalled.
     #[arg(value_name = "PACKAGE")]
@@ -71,6 +74,7 @@ impl From<Args> for ReinstallOptions {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config.clone());

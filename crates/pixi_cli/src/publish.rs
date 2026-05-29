@@ -59,6 +59,9 @@ use rattler_package_streaming::seek::read_package_file;
 #[clap(verbatim_doc_comment)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub config_cli: ConfigCli,
 
     /// Backend override for testing purposes.
@@ -513,6 +516,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_locator = determine_discovery_start(&args.path).await?;
 
     let mut workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(workspace_locator.clone())
         .with_closest_package(false)
         .locate()?

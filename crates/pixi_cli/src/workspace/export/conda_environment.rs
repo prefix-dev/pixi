@@ -18,6 +18,9 @@ use crate::cli_config::WorkspaceConfig;
 #[derive(Debug, Default, Parser)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
     /// Explicit path to export the environment file to.
@@ -406,6 +409,7 @@ fn channels_with_nodefaults(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChanne
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
@@ -467,6 +471,7 @@ mod tests {
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
             from_lock_file: false,
         };
@@ -496,6 +501,7 @@ mod tests {
             platform: None,
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
             from_lock_file: false,
         };
@@ -526,6 +532,7 @@ mod tests {
             platform: None,
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
             from_lock_file: false,
         };
@@ -561,6 +568,7 @@ mod tests {
             platform: None,
             environment: Some("alternative".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
             from_lock_file: false,
         };
@@ -591,6 +599,7 @@ mod tests {
             platform: None,
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
             from_lock_file: false,
         };
@@ -620,6 +629,7 @@ mod tests {
             platform: Some(Platform::OsxArm64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
             from_lock_file: false,
         };
@@ -657,6 +667,7 @@ mod tests {
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
             from_lock_file: false,
         };
@@ -751,6 +762,7 @@ mod tests {
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: Some(env_name.clone()),
             from_lock_file: false,
         };

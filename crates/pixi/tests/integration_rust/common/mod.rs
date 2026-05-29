@@ -103,6 +103,15 @@ pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<
     iter.into_iter().map(|s| s.as_ref().to_string()).collect()
 }
 
+/// `ConfigSourceCli` with `--no-config` set, used for every command the test
+/// harness builds so the developer's `~/.pixi/config.toml` doesn't leak in.
+pub(crate) fn isolated_config_source() -> pixi_config::ConfigSourceCli {
+    pixi_config::ConfigSourceCli {
+        no_config: true,
+        ..Default::default()
+    }
+}
+
 pub trait LockFileExt {
     /// Check if this package is contained in the lock file
     fn contains_conda_package(&self, environment: &str, platform: Platform, name: &str) -> bool;
@@ -354,9 +363,14 @@ impl PixiControl {
         Ok(())
     }
 
-    /// Loads the workspace manifest and returns it.
+    /// Loads the workspace manifest and returns it. Uses `--no-config`
+    /// semantics so the developer's `~/.pixi/config.toml` doesn't leak in.
     pub fn workspace(&self) -> miette::Result<Workspace> {
-        let mut workspace = Workspace::from_path(&self.manifest_path()).into_diagnostic()?;
+        let mut workspace = Workspace::from_path_with_source(
+            &self.manifest_path(),
+            &pixi_config::GlobalConfigSource::None,
+        )
+        .into_diagnostic()?;
         if let Some(backend_override) = &self.backend_override {
             workspace = workspace.with_backend_override(backend_override.clone());
         }
@@ -481,6 +495,7 @@ impl PixiControl {
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
+                config_source: isolated_config_source(),
                 editable: false,
             },
         }
@@ -492,6 +507,7 @@ impl PixiControl {
         SearchBuilder {
             args: search::Args {
                 package: name,
+                config_source: isolated_config_source(),
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     ..Default::default()
@@ -520,6 +536,7 @@ impl PixiControl {
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
+                config_source: isolated_config_source(),
             },
         }
     }
@@ -696,6 +713,7 @@ impl PixiControl {
                     locked: false,
                 },
                 config: Default::default(),
+                config_source: isolated_config_source(),
                 all: false,
                 skip: None,
                 skip_with_deps: None,
@@ -719,6 +737,7 @@ impl PixiControl {
         UpdateBuilder {
             args: update::Args {
                 config: Default::default(),
+                config_source: isolated_config_source(),
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     ..Default::default()
@@ -736,7 +755,10 @@ impl PixiControl {
     /// If you want to lock file to be up-to-date with the project call
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
-        let workspace = Workspace::from_path(&self.manifest_path())?;
+        let workspace = Workspace::from_path_with_source(
+            &self.manifest_path(),
+            &pixi_config::GlobalConfigSource::None,
+        )?;
         workspace.load_lock_file().await?.into_lock_file()
     }
 
@@ -756,6 +778,7 @@ impl PixiControl {
     pub fn lock(&self) -> LockBuilder {
         LockBuilder {
             args: lock::Args {
+                config_source: isolated_config_source(),
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
@@ -776,6 +799,7 @@ impl PixiControl {
             args: build::Args {
                 backend_override: self.backend_override.clone(),
                 config_cli: Default::default(),
+                config_source: isolated_config_source(),
                 lock_and_install_config: Default::default(),
                 target_platform: rattler_conda_types::Platform::current(),
                 build_platform: rattler_conda_types::Platform::current(),
@@ -831,6 +855,7 @@ impl TasksControl<'_> {
         feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
+            config_source: isolated_config_source(),
             workspace_config: WorkspaceConfig {
                 manifest_path: Some(self.pixi.manifest_path()),
                 ..Default::default()

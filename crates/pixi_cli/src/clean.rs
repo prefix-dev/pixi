@@ -39,6 +39,9 @@ pub enum Command {
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
     #[command(subcommand)]
@@ -110,6 +113,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_closest_package(false)
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
