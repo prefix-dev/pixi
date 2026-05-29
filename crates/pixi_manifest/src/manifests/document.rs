@@ -926,6 +926,59 @@ NumPy = ">=1.20.0" # table inline comment
         insta::assert_snapshot!(document.to_string());
     }
 
+    /// Reproduction for https://github.com/prefix-dev/pixi/issues/6239
+    ///
+    /// When a pyproject.toml has both a `[project.dependencies]` array and a
+    /// `[dependency-groups]` section, `pypi_dependency_location` must report
+    /// that a package belonging to a dependency group lives in
+    /// `DependencyGroups` (not `Dependencies`). Otherwise `pixi upgrade`
+    /// writes the upgraded constraint into `[project.dependencies]`.
+    #[test]
+    pub fn repro_6239_dependency_group_location() {
+        let manifest_content = r#"[project]
+name = "test"
+dependencies = [
+    "requests>=2.28.1,<3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0,<9",
+    "ruff>=0.5,<0.6",
+]
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.environments]
+dev = ["dev"]
+"#;
+
+        let document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let dev_feature = FeatureName::from_str("dev").unwrap();
+        let pytest = PypiPackageName::from_str("pytest").unwrap();
+
+        let location = document.pypi_dependency_location(&pytest, None, &dev_feature);
+
+        // `pytest` is defined in `[dependency-groups].dev`, so it must be
+        // reported as living in the dependency-groups section.
+        let location_name = match location {
+            Some(PypiDependencyLocation::PixiPypiDependencies) => "PixiPypiDependencies",
+            Some(PypiDependencyLocation::Dependencies) => "Dependencies",
+            Some(PypiDependencyLocation::OptionalDependencies) => "OptionalDependencies",
+            Some(PypiDependencyLocation::DependencyGroups) => "DependencyGroups",
+            None => "None",
+        };
+        assert_eq!(
+            location_name, "DependencyGroups",
+            "pytest belongs to [dependency-groups].dev but was located in {location_name}"
+        );
+    }
+
     /// This test checks that removing a pypi dependency
     /// uses the same source name as the one used to add it.
     #[test]
