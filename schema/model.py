@@ -119,7 +119,19 @@ class WorkspacePlatform(BaseModel):
     # `windows`) and forward-compatible raw `__name` keys whose value is
     # `version` or `version=build_string`. Listing the fixed slots explicitly is
     # enough for documentation; the open shape is preserved here.
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow", alias_generator=hyphenize)
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="allow",
+        alias_generator=hyphenize,
+        # A platform entry must set at least one of `name`/`platform`; the
+        # parser rejects an empty table. The schema can't express this with
+        # required fields alone (both are optional), so spell it out.
+        json_schema_extra={
+            "anyOf": [
+                {"required": ["name"]},
+                {"required": ["platform"]},
+            ]
+        },
+    )
 
     name: str | None = Field(
         None,
