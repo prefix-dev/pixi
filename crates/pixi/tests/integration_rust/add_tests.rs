@@ -3,7 +3,7 @@ use std::str::FromStr;
 use pep508_rs::MarkerTree;
 use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
-use pixi_core::{DependencyType, Workspace};
+use pixi_core::DependencyType;
 use pixi_manifest::{FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
@@ -110,7 +110,7 @@ async fn add_with_channel() {
         .await
         .unwrap();
 
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     let mut specs = project
         .default_environment()
         .combined_dependencies(Some(Platform::current()))
@@ -353,7 +353,7 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     // Read project from file and check if the dev extras are added.
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -493,7 +493,7 @@ index-url = "{index_url}"
         .unwrap();
 
     // Check if the extras are added
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -514,7 +514,7 @@ index-url = "{index_url}"
         .unwrap();
 
     // Check if the extras are removed
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -532,7 +532,7 @@ index-url = "{index_url}"
         .unwrap();
 
     // Check if the extras added and the version is set
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)

@@ -5,7 +5,6 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_config;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_global::{BinDir, EnvRoot};
@@ -29,6 +28,9 @@ static WIDTH: usize = 19;
 /// Information about the system, workspace and environments for the current machine.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Show cache and environment size
     #[arg(long)]
     extended: bool,
@@ -380,7 +382,9 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let source = args.config_source.source();
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(source.clone())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
         .ok();
@@ -473,7 +477,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let config = workspace
         .map(|p| p.config().clone())
-        .unwrap_or_else(pixi_config::Config::load_global);
+        .unwrap_or_else(|| pixi_config::Config::load_global_with(&source));
 
     let auth_file: PathBuf = if let Ok(auth_file) = std::env::var("RATTLER_AUTH_FILE") {
         auth_file.into()

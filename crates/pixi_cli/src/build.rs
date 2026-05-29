@@ -15,6 +15,9 @@ pub struct Args {
     #[clap(flatten)]
     pub config_cli: ConfigCli,
 
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Backend override for testing purposes. This field is ignored by clap
     /// and should only be set programmatically in tests.
     #[clap(skip)]
@@ -91,6 +94,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     publish::execute(publish::Args {
         config_cli: args.config_cli,
+        config_source: args.config_source,
         backend_override: args.backend_override,
         target_platform: args.target_platform,
         build_platform: args.build_platform,

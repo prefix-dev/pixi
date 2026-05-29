@@ -10,7 +10,7 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::{
-    common::{LockFileExt, PixiControl},
+    common::{LockFileExt, PixiControl, isolated_config_source},
     setup_tracing,
 };
 use pixi_cli::publish;
@@ -633,6 +633,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
     let err = publish::execute(publish::Args {
         backend_override: Some(BackendOverride::from_memory(instantiator)),
         config_cli: Default::default(),
+        config_source: isolated_config_source(),
         target_platform: Platform::current(),
         build_platform: Platform::current(),
         build_string_prefix: None,
@@ -2456,6 +2457,7 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
     publish::execute(publish::Args {
         backend_override: Some(BackendOverride::from_memory(instantiator)),
         config_cli: Default::default(),
+        config_source: isolated_config_source(),
         target_platform: Platform::current(),
         build_platform: Platform::current(),
         build_string_prefix: None,
@@ -2523,6 +2525,7 @@ backend.version = "0.1.0"
     let _ = publish::execute(publish::Args {
         backend_override: None,
         config_cli: Default::default(),
+        config_source: isolated_config_source(),
         target_platform: Platform::current(),
         build_platform: Platform::current(),
         build_string_prefix: None,
@@ -2646,6 +2649,7 @@ host-lib = "*"
             PassthroughBackend::instantiator(),
         )),
         config_cli: Default::default(),
+        config_source: isolated_config_source(),
         target_platform: Platform::current(),
         build_platform: Platform::current(),
         build_string_prefix: None,

@@ -24,6 +24,9 @@ use crate::cli_config::WorkspaceConfig;
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub config: ConfigCli,
 
     #[clap(flatten)]
@@ -124,11 +127,11 @@ impl UpdateSpecs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = args.config;
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(config);
+        .with_cli_config(args.config);
 
     let specs = UpdateSpecs::from(args.specs);
 

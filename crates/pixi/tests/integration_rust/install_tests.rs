@@ -729,8 +729,9 @@ async fn test_old_lock_install() {
         workspace_root.join("tests/data/satisfiability/old_lock_file/pixi.lock"),
     )
     .unwrap();
-    let project = Workspace::from_path(
+    let project = Workspace::from_path_with_source(
         &workspace_root.join("tests/data/satisfiability/old_lock_file/pyproject.toml"),
+        &pixi_config::GlobalConfigSource::None,
     )
     .unwrap();
     pixi_core::environment::get_update_lock_file_and_prefix(
@@ -788,7 +789,11 @@ async fn test_v6_local_archive_path_upgrade() {
     );
 
     // Re-resolve — should detect the mismatch and re-solve.
-    let project = Workspace::from_path(&test_dir.join("pixi.toml")).unwrap();
+    let project = Workspace::from_path_with_source(
+        &test_dir.join("pixi.toml"),
+        &pixi_config::GlobalConfigSource::None,
+    )
+    .unwrap();
     pixi_core::environment::get_update_lock_file_and_prefix(
         &project.default_environment(),
         None,

@@ -29,6 +29,9 @@ use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 /// itself.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`,
     /// `powershell`,  `fish`,  `nushell`]
     #[arg(short, long)]
@@ -159,6 +162,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .merge_config(args.prompt_config.merge_config(args.config.clone().into()));
 
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
         .with_cli_config(config);
