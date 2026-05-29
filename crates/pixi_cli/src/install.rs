@@ -213,8 +213,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 );
             }
 
-            if !num_skipped > 0 {
-                if num_skipped > 0 && num_skipped < SKIP_CUTOFF {
+            if num_skipped > 0 {
+                if num_skipped < SKIP_CUTOFF {
                     let mut skipped_packages_vec: Vec<_> = names.ignored.into_iter().collect();
                     skipped_packages_vec.sort();
 
@@ -224,24 +224,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         skipped_packages_vec.join("', '")
                     )
                     .expect("failed to write into message buffer");
-                } else if num_skipped > 0 {
-                    let num_matched = matched.len();
-                    if num_matched > 0 {
-                        write!(
-                            &mut message,
-                            " excluding '{}' and {} other packages",
-                            matched.into_iter().join("', '"),
-                            num_skipped
-                        )
-                        .expect("failed to write into message buffer")
-                    } else {
-                        write!(&mut message, " excluding {num_skipped} other packages")
-                            .expect("failed to write into message buffer")
-                    }
+                } else if matched.is_empty() {
+                    write!(&mut message, " excluding {num_skipped} other packages")
+                        .expect("failed to write into message buffer");
                 } else {
                     write!(
                         &mut message,
-                        " no packages were skipped (check if cli args were correct)"
+                        " excluding '{}' and {} other packages",
+                        matched.into_iter().join("', '"),
+                        num_skipped
                     )
                     .expect("failed to write into message buffer");
                 }
