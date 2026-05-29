@@ -30,6 +30,7 @@ pixi workspace platform add [OPTIONS] <PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=B
 :  Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`. Only valid on linux subdirs
 - <a id="arg---macos" href="#arg---macos">`--macos <VERSION>`</a>
 :  Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`. Only valid on osx subdirs
+<br>**aliases**: osx
 - <a id="arg---windows" href="#arg---windows">`--windows <VERSION>`</a>
 :  Declare a `__win` virtual package at the given Windows version, e.g. `10`. Only valid on win subdirs
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>

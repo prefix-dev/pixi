@@ -108,10 +108,10 @@ class WorkspacePlatform(BaseModel):
     guarantees, identified by a workspace-scoped name."""
 
     # extra="allow" because workspace platforms accept top-level virtual-package
-    # shortcut keys (`cuda`, `archspec`, `libc`, `linux`, `macos`, `windows`)
-    # and forward-compatible raw `__name` keys whose value is `version` or
-    # `version=build_string`. Listing the fixed slots explicitly is enough for
-    # documentation; the open shape is preserved here.
+    # shortcut keys (`cuda`, `archspec`, `libc`, `linux`, `macos`/`osx`,
+    # `windows`) and forward-compatible raw `__name` keys whose value is
+    # `version` or `version=build_string`. Listing the fixed slots explicitly is
+    # enough for documentation; the open shape is preserved here.
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow", alias_generator=hyphenize)
 
     name: str | None = Field(
@@ -143,6 +143,10 @@ class WorkspacePlatform(BaseModel):
     macos: NonEmptyStr | None = Field(
         None,
         description="Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+    )
+    osx: NonEmptyStr | None = Field(
+        None,
+        description="Alias for `macos`: declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
     )
     windows: NonEmptyStr | None = Field(
         None,
@@ -253,7 +257,7 @@ class Workspace(StrictBaseModel):
     )
     platforms: list[Platform | PlatformName | WorkspacePlatform] | None = Field(
         None,
-        description="The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `libc`, `linux`, `macos`, `windows`).",
+        description="The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `libc`, `linux`, `macos`/`osx`, `windows`).",
     )
     license: NonEmptyStr | None = Field(
         None,

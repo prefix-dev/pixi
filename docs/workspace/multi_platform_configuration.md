@@ -96,9 +96,9 @@ Each inline-table entry has:
   declared virtual packages, so two entries that declare the same set in
   different key order share the same identifier.
 - Friendly keys for the common virtual packages: `cuda`, `archspec`, `libc`,
-  `linux`, `macos`, `windows`. Each maps onto the matching `__name` conda
-  virtual package (`cuda` -> `__cuda`, `libc` -> `__glibc`, `macos` ->
-  `__osx`, etc.).
+  `linux`, `macos` (alias `osx`), `windows`. Each maps onto the matching
+  `__name` conda virtual package (`cuda` -> `__cuda`, `libc` -> `__glibc`,
+  `macos` -> `__osx`, etc.).
 - For virtual packages without a friendly key, a raw `__name = "version"`
   entry is also accepted as an escape hatch.
 

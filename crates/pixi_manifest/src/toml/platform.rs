@@ -103,17 +103,58 @@ enum VirtualPackageValueKind {
     Microarch,
 }
 
+/// A friendly TOML/CLI shortcut for a virtual package.
+struct FriendlyVirtualPackage {
+    /// Canonical key. This is the form pixi writes back when serializing.
+    key: &'static str,
+    /// Alternative input keys accepted as synonyms for [`Self::key`].
+    aliases: &'static [&'static str],
+    /// The conda virtual-package name the key maps to (e.g. `__osx`).
+    conda_name: &'static str,
+    kind: VirtualPackageValueKind,
+}
+
 /// Friendly TOML keys accepted inside an inline platform entry. Order is
 /// load-bearing: the auto-derived platform name concatenates these keys in
 /// this exact sequence so two manifests that declare the same packages in
 /// different key order share a name.
-const FRIENDLY_VIRTUAL_PACKAGES: &[(&str, &str, VirtualPackageValueKind)] = &[
-    ("cuda", "__cuda", VirtualPackageValueKind::Version),
-    ("archspec", "__archspec", VirtualPackageValueKind::Microarch),
-    ("libc", "__glibc", VirtualPackageValueKind::Version),
-    ("linux", "__linux", VirtualPackageValueKind::Version),
-    ("macos", "__osx", VirtualPackageValueKind::Version),
-    ("windows", "__win", VirtualPackageValueKind::Version),
+const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
+    FriendlyVirtualPackage {
+        key: "cuda",
+        aliases: &[],
+        conda_name: "__cuda",
+        kind: VirtualPackageValueKind::Version,
+    },
+    FriendlyVirtualPackage {
+        key: "archspec",
+        aliases: &[],
+        conda_name: "__archspec",
+        kind: VirtualPackageValueKind::Microarch,
+    },
+    FriendlyVirtualPackage {
+        key: "libc",
+        aliases: &[],
+        conda_name: "__glibc",
+        kind: VirtualPackageValueKind::Version,
+    },
+    FriendlyVirtualPackage {
+        key: "linux",
+        aliases: &[],
+        conda_name: "__linux",
+        kind: VirtualPackageValueKind::Version,
+    },
+    FriendlyVirtualPackage {
+        key: "macos",
+        aliases: &["osx"],
+        conda_name: "__osx",
+        kind: VirtualPackageValueKind::Version,
+    },
+    FriendlyVirtualPackage {
+        key: "windows",
+        aliases: &[],
+        conda_name: "__win",
+        kind: VirtualPackageValueKind::Version,
+    },
 ];
 
 /// TOML representation of a workspace platform entry.
@@ -140,8 +181,8 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[(&str, &str, VirtualPackageValueKind)] = &[
 ///   `platform` and the declared virtual packages so the entry still has a
 ///   stable identifier.
 /// * Each remaining key is a virtual-package shortcut: `cuda`, `archspec`,
-///   `libc`, `linux`, `macos`, `windows`. Their values are conda version
-///   strings (or, for `archspec`, a microarchitecture string). Any key
+///   `libc`, `linux`, `macos` (alias `osx`), `windows`. Their values are conda
+///   version strings (or, for `archspec`, a microarchitecture string). Any key
 ///   starting with `__` is taken as a raw `GenericVirtualPackage` so rattler
 ///   can grow new virtual packages without the TOML layer needing to learn
 ///   about them.
@@ -172,9 +213,13 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                 let platform_value: Option<Spanned<String>> = th.optional("platform");
 
                 let mut declared: Vec<GenericVirtualPackage> = Vec::new();
-                for &(key, conda_name, kind) in FRIENDLY_VIRTUAL_PACKAGES {
-                    if let Some(raw) = th.optional::<Spanned<String>>(key) {
-                        declared.push(build_friendly_virtual_package(conda_name, kind, &raw)?);
+                for entry in FRIENDLY_VIRTUAL_PACKAGES {
+                    if let Some(raw) = take_friendly_value(&mut th, entry)? {
+                        declared.push(build_friendly_virtual_package(
+                            entry.conda_name,
+                            entry.kind,
+                            &raw,
+                        )?);
                     }
                 }
 
@@ -269,6 +314,32 @@ impl Serialize for TomlPixiPlatform {
         }
         map.end()
     }
+}
+
+/// Take a friendly virtual-package value from the table, accepting either the
+/// canonical key or any of its aliases. Errors if more than one spelling of
+/// the same package is present.
+fn take_friendly_value<'de>(
+    th: &mut TableHelper<'de>,
+    entry: &FriendlyVirtualPackage,
+) -> Result<Option<Spanned<String>>, Error> {
+    let mut found: Option<Spanned<String>> = None;
+    for key in std::iter::once(entry.key).chain(entry.aliases.iter().copied()) {
+        let Some(raw) = th.optional::<Spanned<String>>(key) else {
+            continue;
+        };
+        if found.is_some() {
+            return Err(Error {
+                kind: ErrorKind::Custom(
+                    format!("'{key}' is an alias for '{}'; set only one", entry.key).into(),
+                ),
+                span: raw.span,
+                line_info: None,
+            });
+        }
+        found = Some(raw);
+    }
+    Ok(found)
 }
 
 fn build_friendly_virtual_package(
@@ -479,8 +550,8 @@ pub fn inline_virtual_package_specs(
         // `__conda_name` must therefore be in `declared`.
         let conda_name = FRIENDLY_VIRTUAL_PACKAGES
             .iter()
-            .find(|(friendly_key, _, _)| *friendly_key == key)
-            .map(|(_, conda_name, _)| *conda_name)
+            .find(|entry| entry.key == key)
+            .map(|entry| entry.conda_name)
             .expect("friendly entry comes from FRIENDLY_VIRTUAL_PACKAGES");
         let package = (*by_name
             .get(conda_name)
@@ -583,14 +654,14 @@ fn classify_virtual_packages(
     let mut friendly = Vec::new();
     let mut consumed: HashSet<&str> = HashSet::new();
 
-    for &(friendly_key, conda_name, kind) in FRIENDLY_VIRTUAL_PACKAGES {
+    for entry in FRIENDLY_VIRTUAL_PACKAGES {
         let Some(package) = customised
             .iter()
-            .find(|p| p.name.as_normalized() == conda_name)
+            .find(|p| p.name.as_normalized() == entry.conda_name)
         else {
             continue;
         };
-        let fits = match kind {
+        let fits = match entry.kind {
             VirtualPackageValueKind::Version => {
                 package.build_string.is_empty() || package.build_string == "0"
             }
@@ -602,12 +673,12 @@ fn classify_virtual_packages(
             // Odd shape: don't take the friendly slot; fall through to raw.
             continue;
         }
-        let value = match kind {
+        let value = match entry.kind {
             VirtualPackageValueKind::Version => package.version.to_string(),
             VirtualPackageValueKind::Microarch => package.build_string.clone(),
         };
-        consumed.insert(conda_name);
-        friendly.push((friendly_key, value));
+        consumed.insert(entry.conda_name);
+        friendly.push((entry.key, value));
     }
 
     let mut leftover: Vec<&GenericVirtualPackage> = customised
@@ -824,6 +895,40 @@ mod test {
                 "__glibc=2.28".to_string(),
                 "__archspec=0=aarch64".to_string(),
             ]
+        );
+    }
+
+    /// `osx` is accepted as an alias for the `macos` friendly key, and the
+    /// canonical `macos` spelling is used when serializing back.
+    #[test]
+    fn test_workspace_platform_osx_alias_for_macos() {
+        let via_osx =
+            TopLevel::from_toml_str(r#"platform = { platform = "osx-arm64", osx = "13.5" }"#)
+                .unwrap();
+        let via_macos =
+            TopLevel::from_toml_str(r#"platform = { platform = "osx-arm64", macos = "13.5" }"#)
+                .unwrap();
+        assert_eq!(via_osx.platform.name(), via_macos.platform.name());
+        assert_eq!(
+            virtual_package_specs(&via_osx.platform),
+            virtual_package_specs(&via_macos.platform),
+        );
+        let json = serde_json::to_value(TomlPixiPlatform(via_osx.platform)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({ "platform": "osx-arm64", "macos": "13.5" }),
+        );
+    }
+
+    /// Declaring both `macos` and its `osx` alias on one entry is rejected.
+    #[test]
+    fn test_workspace_platform_osx_and_macos_conflict() {
+        let input = r#"platform = { platform = "osx-arm64", macos = "13.5", osx = "14.0" }"#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        let rendered = format_parse_error(input, error);
+        assert!(
+            rendered.contains("'osx' is an alias for 'macos'"),
+            "expected alias-conflict error, got: {rendered}",
         );
     }
 

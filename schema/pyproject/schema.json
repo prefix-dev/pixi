@@ -3223,7 +3223,7 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `libc`, `linux`, `macos`, `windows`).",
+          "description": "The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `libc`, `linux`, `macos`/`osx`, `windows`).",
           "type": "array",
           "items": {
             "anyOf": [
@@ -3389,6 +3389,12 @@
           "type": "string",
           "maxLength": 64,
           "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+        },
+        "osx": {
+          "title": "Osx",
+          "description": "Alias for `macos`: declare a `__osx` virtual package at the given macOS version, e.g. `14.0`.",
+          "type": "string",
+          "minLength": 1
         },
         "platform": {
           "$ref": "#/$defs/Platform",

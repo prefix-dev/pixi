@@ -60,7 +60,7 @@ pub struct VirtualPackageArgs {
 
     /// Declare a `__osx` virtual package at the given macOS version,
     /// e.g. `14.0`. Only valid on osx subdirs.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, visible_alias = "osx", value_name = "VERSION")]
     pub macos: Option<String>,
 
     /// Declare a `__win` virtual package at the given Windows version,
