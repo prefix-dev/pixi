@@ -300,8 +300,8 @@ build-backends = { cmd = "rattler-build build --recipe-dir empty --output-dir . 
 git = ">=2.51.0,<3"
 
 [feature.rust-build.tasks]
-build-debug = { cmd = "cargo build", description = "Build pixi in debug mode" }
-build-release = { cmd = "cargo build --release", description = "Build pixi in release mode" }
+build-debug = { cmd = "cargo build --workspace --bin pixi", description = "Build pixi in debug mode" }
+build-release = { cmd = "cargo build --workspace --bin pixi --release", description = "Build pixi in release mode" }
 build-workspace-debug = { cmd = "cargo build --workspace", description = "Build all workspace members in debug mode" }
 build-workspace-release = { cmd = "cargo build --workspace --release", description = "Build all workspace members in release mode" }
 install = { cmd = "cargo install --path crates/pixi --locked", description = "Install pixi itself locally using cargo" }
