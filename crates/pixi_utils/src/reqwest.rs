@@ -152,8 +152,7 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
     #[cfg(feature = "rustls")]
     {
         builder = builder.use_rustls_tls();
-        builder =
-            builder.tls_certs_only(Certificates::for_mode(tls_root_certs).to_reqwest_certs());
+        builder = builder.tls_certs_only(Certificates::for_mode(tls_root_certs).to_reqwest_certs());
     }
 
     let proxies = config
