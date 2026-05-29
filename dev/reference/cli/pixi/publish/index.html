@@ -4066,6 +4066,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#publishing-to-cloudsmith" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Publishing to Cloudsmith
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#publishing-to-s3" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4199,6 +4210,10 @@
 <td><a href="https://anaconda.org">Anaconda.org</a></td>
 </tr>
 <tr>
+<td><code>cloudsmith://&lt;owner&gt;/&lt;repository&gt;/</code></td>
+<td><a href="https://cloudsmith.com">Cloudsmith</a></td>
+</tr>
+<tr>
 <td><code>s3://bucket-name/channel</code></td>
 <td>S3-compatible storage</td>
 </tr>
@@ -4268,7 +4283,7 @@
 <li>
 <dl>
 <dt><a id="arg---target-channel" href="#arg---target-channel"><code>--target-channel &lt;TARGET_CHANNEL&gt;</code></a></dt>
-<dd>The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, s3://, quetz://, artifactory://) or a local filesystem path / <code>file://</code> URL for an indexed local channel
+<dd>The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, cloudsmith://, s3://, quetz://, artifactory://) or a local filesystem path / <code>file://</code> URL for an indexed local channel
 <br><strong>aliases</strong>: to</dd>
 </dl>
 </li>
@@ -4423,6 +4438,7 @@
 <p>Supported destinations for <code>--target-channel</code> (alias <code>--to</code>):
   - prefix.dev: <code>https://prefix.dev/&lt;channel-name&gt;</code>
   - anaconda.org: <code>https://anaconda.org/&lt;owner&gt;/&lt;label&gt;</code>
+  - Cloudsmith: <code>cloudsmith://&lt;owner&gt;/&lt;repository&gt;</code>
   - S3: <code>s3://bucket-name</code>
   - Quetz: <code>quetz://server/&lt;channel&gt;</code>
   - Artifactory: <code>artifactory://server/&lt;channel&gt;</code>
@@ -4461,65 +4477,71 @@ directory without creating a channel structure.</p>
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="c1"># Publish to a specific label/channel</span>
 </span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://anaconda.org/my-username/dev
 </span></code></pre></div>
+<h3 id="publishing-to-cloudsmith">Publishing to Cloudsmith<a class="headerlink" href="#publishing-to-cloudsmith" title="Permanent link">#</a></h3>
+<p>Pass the Cloudsmith channel URL as the target. Pixi derives the owner and repository from that URL and uses Cloudsmith's API for the upload.</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Build and publish to a Cloudsmith Conda repository</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--to<span class="w"> </span>cloudsmith://my-org/my-repository/
+</span></code></pre></div>
+<p>For authentication, set <code>CLOUDSMITH_API_KEY</code> or store credentials for the Cloudsmith API URL. Set <code>CLOUDSMITH_API_URL</code> only when targeting a custom Cloudsmith API endpoint.</p>
 <h3 id="publishing-to-s3">Publishing to S3<a class="headerlink" href="#publishing-to-s3" title="Permanent link">#</a></h3>
 <p>When publishing to S3, the channel is automatically initialized (if new) and indexed after the upload.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Build and publish to an S3 bucket (using AWS credentials from environment)</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>s3://my-bucket/my-channel
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Build and publish to an S3 bucket (using AWS credentials from environment)</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>s3://my-bucket/my-channel
 </span></code></pre></div>
 <p>S3 credentials are resolved from the standard AWS credential chain (environment variables, shared credentials file, instance profiles, etc.).</p>
 <h3 id="publishing-to-a-local-filesystem-channel">Publishing to a local filesystem channel<a class="headerlink" href="#publishing-to-a-local-filesystem-channel" title="Permanent link">#</a></h3>
 <p>Local channels are useful for development and testing. The channel directory is automatically created and indexed. Pass a <code>file://</code> URL or a bare path to <code>--target-channel</code>.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Build and publish to a local channel (bare path)</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>/path/to/my-channel
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Equivalent, using a file:// URL</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>file:///path/to/my-channel
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="c1"># Force overwrite if the package already exists</span>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>/path/to/my-channel<span class="w"> </span>--force
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Build and publish to a local channel (bare path)</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>/path/to/my-channel
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Equivalent, using a file:// URL</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>file:///path/to/my-channel
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Force overwrite if the package already exists</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>/path/to/my-channel<span class="w"> </span>--force
 </span></code></pre></div>
 <h3 id="copying-to-a-local-directory">Copying to a local directory<a class="headerlink" href="#copying-to-a-local-directory" title="Permanent link">#</a></h3>
 <p>Use <code>--target-dir</code> to copy the built <code>.conda</code> artifact directly to a directory, without creating a channel structure.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Copy the built package(s) to a directory</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-dir<span class="w"> </span>/path/to/output/dir
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># Relative paths work too</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-dir<span class="w"> </span>../my-packages
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Copy the built package(s) to a directory</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-dir<span class="w"> </span>/path/to/output/dir
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Relative paths work too</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-dir<span class="w"> </span>../my-packages
 </span></code></pre></div>
 <h3 id="publishing-from-a-specific-manifest">Publishing from a specific manifest<a class="headerlink" href="#publishing-from-a-specific-manifest" title="Permanent link">#</a></h3>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Publish a package from a specific recipe</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/my-channel<span class="w"> </span>--path<span class="w"> </span>./my-recipe/recipe.yaml
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="c1"># Publish from a different workspace</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/my-channel<span class="w"> </span>--path<span class="w"> </span>./my-project/
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Publish a package from a specific recipe</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/my-channel<span class="w"> </span>--path<span class="w"> </span>./my-recipe/recipe.yaml
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="c1"># Publish from a different workspace</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/my-channel<span class="w"> </span>--path<span class="w"> </span>./my-project/
 </span></code></pre></div>
 <h3 id="clean-rebuild-and-publish">Clean rebuild and publish<a class="headerlink" href="#clean-rebuild-and-publish" title="Permanent link">#</a></h3>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># Clean the build directory before building and publishing</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/my-channel<span class="w"> </span>--clean
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Clean the build directory before building and publishing</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/my-channel<span class="w"> </span>--clean
 </span></code></pre></div>
 <h3 id="overriding-build-variants">Overriding build variants<a class="headerlink" href="#overriding-build-variants" title="Permanent link">#</a></h3>
 <p>By default <code>pixi publish</code> builds every entry in the <a href="../../../pixi_manifest/#build-variants-optional"><code>[workspace.build-variants]</code></a> matrix. Use <code>--variant KEY=VALUE</code> to override individual variant keys at the command line — for iterating locally on a single variant, parallelizing CI jobs across the matrix, or anything else where you don't want the full cross-product.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Build just one entry of the matrix</span>
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--variant<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
-</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
-</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># Constrain a variant to a subset of values (cross-product with the</span>
-</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="c1"># remaining workspace variants)</span>
-</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--variant<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12<span class="w"> </span>--variant<span class="w"> </span>cuda-version<span class="o">=</span><span class="m">12</span>.8,13.0
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Build just one entry of the matrix</span>
+</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--variant<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
+</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Constrain a variant to a subset of values (cross-product with the</span>
+</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="c1"># remaining workspace variants)</span>
+</span><span id="__span-10-6"><a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--variant<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12<span class="w"> </span>--variant<span class="w"> </span>cuda-version<span class="o">=</span><span class="m">12</span>.8,13.0
 </span></code></pre></div>
 <p>CLI overrides replace the matching key from the workspace <code>build-variants</code>; workspace keys that aren't named on the command line keep their full value list.</p>
 <p>For shared variant configuration, prefer listing the YAML files in <a href="../../../pixi_manifest/#build-variants-files-optional"><code>[workspace.build-variants-files]</code></a> in <code>pixi.toml</code> so every contributor and CI run picks them up automatically. The <code>--variant-config</code> / <code>-m</code> flag is meant for one-off overrides — for example, an extra file you don't want to commit. CLI-supplied files are appended after the workspace files, so values from <code>-m</code> override any matching key from the workspace files (<code>rattler-build --variant-config</code> semantics).</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Use an extra variant file for this build only</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>-m<span class="w"> </span>variants.yaml
-</span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
-</span><span id="__span-10-4"><a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Combine with a key override</span>
-</span><span id="__span-10-5"><a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>pixi<span class="w"> </span>publish<span class="w"> </span>-m<span class="w"> </span>variants.yaml<span class="w"> </span>--variant<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Use an extra variant file for this build only</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>-m<span class="w"> </span>variants.yaml
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>
+</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="c1"># Combine with a key override</span>
+</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>pixi<span class="w"> </span>publish<span class="w"> </span>-m<span class="w"> </span>variants.yaml<span class="w"> </span>--variant<span class="w"> </span><span class="nv">python</span><span class="o">=</span><span class="m">3</span>.12
 </span></code></pre></div>
 <h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">#</a></h2>
 <p><code>pixi publish</code> uses the same authentication system as other pixi commands. Credentials can be configured in three ways:</p>
 <ol>
 <li>
 <p><strong>Keychain / auth-file</strong>: Use <code>pixi auth login</code> to store credentials
-   <div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--token<span class="w"> </span><span class="nv">$MY_TOKEN</span><span class="w"> </span>https://prefix.dev
+   <div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi<span class="w"> </span>auth<span class="w"> </span>login<span class="w"> </span>--token<span class="w"> </span><span class="nv">$MY_TOKEN</span><span class="w"> </span>https://prefix.dev
 </span></code></pre></div></p>
 </li>
 <li>
@@ -4530,6 +4552,7 @@ directory without creating a channel structure.</p>
 <ul>
 <li><code>PREFIX_API_KEY</code> for prefix.dev</li>
 <li><code>ANACONDA_API_KEY</code> for Anaconda.org</li>
+<li><code>CLOUDSMITH_API_KEY</code> for Cloudsmith</li>
 <li><code>QUETZ_API_KEY</code> for Quetz</li>
 <li><code>ARTIFACTORY_TOKEN</code> for Artifactory</li>
 <li>Standard AWS environment variables for S3</li>

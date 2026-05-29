@@ -15,6 +15,7 @@ The `--target-channel` value determines the upload backend:
 | --------------------------------------------------------- | --------------------------------------------------- |
 | `https://prefix.dev/<channel>`                            | [prefix.dev](https://prefix.dev)                    |
 | `https://anaconda.org/<owner>`                            | [Anaconda.org](https://anaconda.org)                |
+| `cloudsmith://<owner>/<repository>/`                      | [Cloudsmith](https://cloudsmith.com)                |
 | `s3://bucket-name/channel`                                | S3-compatible storage                               |
 | `quetz://server/<channel>`                                | [Quetz](https://github.com/mamba-org/quetz)         |
 | `artifactory://server/<channel>`                          | [JFrog Artifactory](https://jfrog.com/artifactory/) |
@@ -50,7 +51,7 @@ pixi publish [OPTIONS]
 
 - [`--path <PATH>`](#arg---path) : The path to a directory containing a package manifest, or to a specific manifest file
 
-- [`--target-channel <TARGET_CHANNEL>`](#arg---target-channel) : The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
+- [`--target-channel <TARGET_CHANNEL>`](#arg---target-channel) : The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, cloudsmith://, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
 
   ```
   **aliases**: to
@@ -158,6 +159,7 @@ Supported destinations for `--target-channel` (alias `--to`):
 
 - prefix.dev: `https://prefix.dev/<channel-name>`
 - anaconda.org: `https://anaconda.org/<owner>/<label>`
+- Cloudsmith: `cloudsmith://<owner>/<repository>`
 - S3: `s3://bucket-name`
 - Quetz: `quetz://server/<channel>`
 - Artifactory: `artifactory://server/<channel>`
@@ -207,6 +209,17 @@ pixi publish --target-channel https://anaconda.org/my-username
 # Publish to a specific label/channel
 pixi publish --target-channel https://anaconda.org/my-username/dev
 ```
+
+### Publishing to Cloudsmith
+
+Pass the Cloudsmith channel URL as the target. Pixi derives the owner and repository from that URL and uses Cloudsmith's API for the upload.
+
+```shell
+# Build and publish to a Cloudsmith Conda repository
+pixi publish --to cloudsmith://my-org/my-repository/
+```
+
+For authentication, set `CLOUDSMITH_API_KEY` or store credentials for the Cloudsmith API URL. Set `CLOUDSMITH_API_URL` only when targeting a custom Cloudsmith API endpoint.
 
 ### Publishing to S3
 
@@ -304,6 +317,7 @@ pixi publish -m variants.yaml --variant python=3.12
 
    - `PREFIX_API_KEY` for prefix.dev
    - `ANACONDA_API_KEY` for Anaconda.org
+   - `CLOUDSMITH_API_KEY` for Cloudsmith
    - `QUETZ_API_KEY` for Quetz
    - `ARTIFACTORY_TOKEN` for Artifactory
    - Standard AWS environment variables for S3
