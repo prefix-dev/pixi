@@ -30,9 +30,9 @@ use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
     convert_uv_requirements_to_pep508, into_pinned_git_spec, into_uv_git_reference,
-    into_uv_git_sha, pypi_options_to_build_options, pypi_options_to_index_locations,
-    to_index_strategy, to_prerelease_mode, to_requirements, to_uv_normalize, to_uv_version,
-    to_version_specifiers,
+    into_uv_git_sha, pypi_build_config_settings, pypi_options_to_build_options,
+    pypi_options_to_index_locations, to_index_strategy, to_prerelease_mode, to_requirements,
+    to_uv_normalize, to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -554,7 +554,11 @@ pub async fn resolve_pypi(
 
     let dependency_metadata = DependencyMetadata::default();
 
-    let config_settings = ConfigSettings::default();
+    // Scope source builds to the conda environment. See issue #6226.
+    let config_settings = match repodata_building_records.as_ref() {
+        Ok(records) => pypi_build_config_settings(&records.records),
+        Err(_) => ConfigSettings::default(),
+    };
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,

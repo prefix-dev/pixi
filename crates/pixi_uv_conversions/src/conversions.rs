@@ -15,18 +15,40 @@ use pixi_manifest::pypi::{
         PypiOptions,
     },
 };
-use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
+use pixi_record::{
+    CondaEnvironmentFingerprint, LockedGitUrl, PinnedGitCheckout, PinnedGitSpec, PixiRecord,
+};
 use pixi_spec::GitReference as PixiReference;
 use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
 use uv_configuration::TrustedHost;
-use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
+use uv_distribution_types::{
+    ConfigSettingEntry, ConfigSettings, GitSourceDist, Index, IndexLocations, IndexUrl,
+};
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
 use uv_redacted::DisplaySafeUrl;
 
 use crate::{ConversionError, VersionError};
+
+/// The `config_settings` key under which the conda-environment fingerprint is
+/// injected.
+const CONDA_ENVIRONMENT_CONFIG_SETTING: &str = "pixi-conda-environment";
+
+/// Builds the [`ConfigSettings`] for PyPI resolution and installation, seeded
+/// with a fingerprint of the conda environment.
+///
+/// uv folds `config_settings` into the cache key of wheels it builds from
+/// source, so this scopes source builds per environment. Prebuilt registry
+/// wheels are unaffected. See <https://github.com/prefix-dev/pixi/issues/6226>.
+pub fn pypi_build_config_settings(conda_records: &[PixiRecord]) -> ConfigSettings {
+    let fingerprint = CondaEnvironmentFingerprint::new(conda_records);
+    let entry =
+        ConfigSettingEntry::from_str(&format!("{CONDA_ENVIRONMENT_CONFIG_SETTING}={fingerprint}"))
+            .expect("the fingerprint is always a valid `KEY=VALUE` config setting");
+    std::iter::once(entry).collect()
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
