@@ -3349,6 +3349,15 @@
           "title": "Name",
           "description": "The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
           "type": "string",
+          "not": {
+            "enum": [
+              "linux",
+              "macos",
+              "osx",
+              "unix",
+              "win"
+            ]
+          },
           "maxLength": 64,
           "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
         },

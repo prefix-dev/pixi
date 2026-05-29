@@ -103,6 +103,13 @@ class StrictBaseModel(BaseModel):
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", alias_generator=hyphenize)
 
 
+# Family selectors double as `target.<family>.*` keys, so the parser rejects
+# them as platform names; mirror that in the schema. See `family_name_to_selector`
+# in crates/pixi_manifest.
+RESERVED_PLATFORM_NAMES = ["linux", "macos", "osx", "unix", "win"]
+NotReservedPlatformName: Any = {"not": {"enum": RESERVED_PLATFORM_NAMES}}
+
+
 class WorkspacePlatform(BaseModel):
     """A workspace platform: a conda subdir plus declared virtual-package
     guarantees, identified by a workspace-scoped name."""
@@ -118,6 +125,7 @@ class WorkspacePlatform(BaseModel):
         None,
         pattern=r"^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$",
         max_length=64,
+        json_schema_extra=NotReservedPlatformName,
         description="The workspace-scoped name features reference this platform by. Defaults to a name auto-derived from `platform` plus the declared virtual packages when omitted.",
     )
     platform: Platform | None = Field(
