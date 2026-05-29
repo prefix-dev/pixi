@@ -17,8 +17,9 @@ use pixi_config::PinningStrategy;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
-    ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation, SpecType, TomlError,
-    WorkspaceManifest, WorkspaceManifestMut, toml::TomlDocument, utils::WithSourceCode,
+    ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation, SpecType,
+    TargetSelector, TomlError, WorkspaceManifest, WorkspaceManifestMut, toml::TomlDocument,
+    utils::WithSourceCode,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -192,6 +193,19 @@ impl WorkspaceMut {
         &self.workspace_manifest_document
     }
 
+    /// Maps workspace platform names to the [`TargetSelector`]s used to key
+    /// their target tables (e.g. `--platform` arguments of `pixi add`).
+    pub fn target_selectors_for_platforms(
+        &self,
+        platforms: &[PixiPlatformName],
+    ) -> Vec<TargetSelector> {
+        let workspace = &self.workspace().workspace.value.workspace;
+        platforms
+            .iter()
+            .map(|name| workspace.target_selector_for_platform(name))
+            .collect()
+    }
+
     /// An internal method to save the changes to the workspace manifest to disk
     /// without consuming the instance.
     ///
@@ -248,7 +262,7 @@ impl WorkspaceMut {
         no_install: bool,
         lock_file_update_config: &LockFileUsage,
         feature_name: &FeatureName,
-        platforms: &[PixiPlatformName],
+        targets: &[TargetSelector],
         editable: bool,
         dry_run: bool,
     ) -> Result<Option<UpdateDeps>, miette::Error> {
@@ -266,7 +280,7 @@ impl WorkspaceMut {
                 &name,
                 &pixi_spec,
                 spec_type,
-                platforms,
+                targets,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
             )?;
@@ -286,7 +300,7 @@ impl WorkspaceMut {
                 &name,
                 &pixi_spec,
                 spec_type,
-                platforms,
+                targets,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
             )?;
@@ -295,7 +309,7 @@ impl WorkspaceMut {
         for (name, (spec, pixi_spec, location)) in pypi_deps {
             let added = self.manifest().add_pep508_dependency(
                 (&spec, pixi_spec.as_ref()),
-                platforms,
+                targets,
                 feature_name,
                 Some(editable),
                 DependencyOverwriteBehavior::Overwrite,
@@ -351,12 +365,31 @@ impl WorkspaceMut {
                 .format(", ")
                 .to_string()
         );
+        // The edited target tables apply to every workspace platform their
+        // selector matches. `None` means "no selector given" (the default
+        // target), which affects all platforms.
+        let affected_platform_names: Option<HashSet<PixiPlatformName>> = (!targets.is_empty())
+            .then(|| {
+                self.workspace()
+                    .workspace
+                    .value
+                    .workspace
+                    .platforms
+                    .iter()
+                    .filter(|platform| targets.iter().any(|target| target.matches(platform)))
+                    .map(|platform| platform.name().clone())
+                    .collect()
+            });
         let affect_environment_and_platforms = affected_environments
             .into_iter()
             // Create an iterator over all environment and platform combinations
             .flat_map(|e| e.platforms().into_iter().map(move |p| (e.clone(), p)))
             // Filter out any platform that is not affected by the changes.
-            .filter(|(_, platform)| platforms.is_empty() || platforms.contains(platform))
+            .filter(|(_, platform)| {
+                affected_platform_names
+                    .as_ref()
+                    .is_none_or(|names| names.contains(platform))
+            })
             .map(|(e, p)| (e.name().to_string(), p))
             .collect_vec();
         let unlocked_lock_file = self.workspace().unlock_packages(
@@ -414,7 +447,7 @@ impl WorkspaceMut {
                 conda_specs_to_add_constraints_for,
                 affect_environment_and_platforms.clone(),
                 feature_name,
-                platforms,
+                targets,
             )?;
             implicit_constraints.extend(conda_constraints);
         }
@@ -425,7 +458,7 @@ impl WorkspaceMut {
                 pypi_specs_to_add_constraints_for,
                 affect_environment_and_platforms,
                 feature_name,
-                platforms,
+                targets,
                 editable,
             )?;
             implicit_constraints.extend(pypi_constraints);
@@ -498,7 +531,7 @@ impl WorkspaceMut {
         &mut self,
         conda_deps: Vec<MatchSpec>,
         pypi_deps: Vec<Requirement>,
-        platforms: &[PixiPlatformName],
+        targets: &[TargetSelector],
         feature_name: &FeatureName,
     ) -> Result<(), miette::Error> {
         for spec in conda_deps {
@@ -516,7 +549,7 @@ impl WorkspaceMut {
                 &spec,
                 SpecType::Run,
                 // No platforms required as you can't define them in the yaml
-                platforms,
+                targets,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
             )?;
@@ -525,7 +558,7 @@ impl WorkspaceMut {
             self.manifest().add_pep508_dependency(
                 (&requirement, None),
                 // No platforms required as you can't define them in the yaml
-                platforms,
+                targets,
                 feature_name,
                 None,
                 DependencyOverwriteBehavior::Overwrite,
@@ -543,7 +576,7 @@ impl WorkspaceMut {
         conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, NamelessMatchSpec)>,
         affect_environment_and_platforms: Vec<(String, PixiPlatformName)>,
         feature_name: &FeatureName,
-        platforms: &[PixiPlatformName],
+        targets: &[TargetSelector],
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
@@ -599,7 +632,7 @@ impl WorkspaceMut {
                     &name,
                     &pixi_spec,
                     spec_type,
-                    platforms,
+                    targets,
                     feature_name,
                     DependencyOverwriteBehavior::Overwrite,
                 )?;
@@ -624,7 +657,7 @@ impl WorkspaceMut {
         >,
         affect_environment_and_platforms: Vec<(String, PixiPlatformName)>,
         feature_name: &FeatureName,
-        platforms: &[PixiPlatformName],
+        targets: &[TargetSelector],
         editable: bool,
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
@@ -683,7 +716,7 @@ impl WorkspaceMut {
 
                 self.manifest().add_pep508_dependency(
                     (&req, pixi_req.as_ref()),
-                    platforms,
+                    targets,
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,

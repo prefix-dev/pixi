@@ -24,7 +24,7 @@ use crate::{
     feature::{Feature, FeatureName},
     manifests::document::ManifestDocument,
     solve_group::SolveGroups,
-    to_options,
+    to_options, to_target_options,
     toml::{
         ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, TomlManifest,
         WorkspacePackageProperties,
@@ -817,16 +817,15 @@ impl WorkspaceManifestMut<'_> {
         name: &rattler_conda_types::PackageName,
         spec: &PixiSpec,
         spec_type: SpecType,
-        platforms: &[PixiPlatformName],
+        targets: &[TargetSelector],
         feature_name: &FeatureName,
         overwrite_behavior: DependencyOverwriteBehavior,
     ) -> miette::Result<bool> {
         let mut any_added = false;
-        for platform_name in to_options(platforms) {
-            let selector = self.platform_target_selector(platform_name.as_ref());
+        for target in to_target_options(targets) {
             match self
                 .workspace
-                .get_or_insert_target_mut(selector.as_ref(), Some(feature_name))
+                .get_or_insert_target_mut(target.as_ref(), Some(feature_name))
                 .try_add_dependency(name, spec, spec_type, overwrite_behavior)
             {
                 Ok(true) => {
@@ -834,7 +833,7 @@ impl WorkspaceManifestMut<'_> {
                         name,
                         spec,
                         spec_type,
-                        platform_name,
+                        target.as_ref(),
                         feature_name,
                     )?;
                     any_added = true;
@@ -855,13 +854,7 @@ impl WorkspaceManifestMut<'_> {
         &self,
         platform_name: Option<&PixiPlatformName>,
     ) -> Option<TargetSelector> {
-        platform_name.map(|name| {
-            self.workspace
-                .workspace
-                .platform_by_name(name)
-                .map(PixiPlatform::as_target_selector)
-                .unwrap_or_else(|| TargetSelector::Platform(name.clone()))
-        })
+        platform_name.map(|name| self.workspace.workspace.target_selector_for_platform(name))
     }
 
     /// Removes a dependency based on `SpecType`.
@@ -919,25 +912,24 @@ impl WorkspaceManifestMut<'_> {
     pub fn add_pep508_dependency(
         &mut self,
         (requirement, pixi_req): (&pep508_rs::Requirement, Option<&PixiPypiSpec>),
-        platforms: &[PixiPlatformName],
+        targets: &[TargetSelector],
         feature_name: &FeatureName,
         editable: Option<bool>,
         overwrite_behavior: DependencyOverwriteBehavior,
         location: Option<PypiDependencyLocation>,
     ) -> miette::Result<bool> {
         let mut any_added = false;
-        for platform_name in to_options(platforms) {
-            let selector = self.platform_target_selector(platform_name.as_ref());
+        for target in to_target_options(targets) {
             match self
                 .workspace
-                .get_or_insert_target_mut(selector.as_ref(), Some(feature_name))
+                .get_or_insert_target_mut(target.as_ref(), Some(feature_name))
                 .try_add_pep508_dependency(requirement, pixi_req, editable, overwrite_behavior)
             {
                 Ok(true) => {
                     self.document.add_pypi_dependency(
                         requirement,
                         pixi_req,
-                        platform_name,
+                        target.as_ref(),
                         feature_name,
                         editable,
                         location,

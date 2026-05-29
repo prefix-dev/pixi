@@ -154,6 +154,18 @@ pub(crate) fn to_options(platforms: &[PixiPlatformName]) -> Vec<Option<PixiPlatf
     }
 }
 
+/// Converts a slice of [`TargetSelector`]s to a non-empty `Vec` of
+/// `Option<TargetSelector>`. An empty input yields `vec![None]` so callers
+/// always iterate at least once (the `None` arm meaning "no target selector"
+/// i.e. the default target).
+pub(crate) fn to_target_options(targets: &[TargetSelector]) -> Vec<Option<TargetSelector>> {
+    if targets.is_empty() {
+        vec![None]
+    } else {
+        targets.iter().cloned().map(Some).collect_vec()
+    }
+}
+
 impl FancyDisplay for EnvironmentName {
     fn fancy_display(&self) -> StyledObject<&str> {
         consts::ENVIRONMENT_STYLE.apply_to(self.as_str())

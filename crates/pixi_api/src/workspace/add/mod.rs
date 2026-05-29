@@ -90,6 +90,7 @@ pub async fn add_conda_dep(
     // TODO: add dry_run logic to add
     let dry_run = false;
 
+    let targets = workspace.target_selectors_for_platforms(&dep_options.platforms);
     let update_deps = match Box::pin(workspace.update_dependencies(
         match_specs,
         IndexMap::default(),
@@ -97,7 +98,7 @@ pub async fn add_conda_dep(
         dep_options.no_install,
         &dep_options.lock_file_usage,
         &dep_options.feature,
-        &dep_options.platforms,
+        &targets,
         false,
         dry_run,
     ))
@@ -141,6 +142,7 @@ pub async fn add_pypi_dep(
     // TODO: add dry_run logic to add
     let dry_run = false;
 
+    let targets = workspace.target_selectors_for_platforms(&options.platforms);
     let update_deps = match Box::pin(workspace.update_dependencies(
         IndexMap::default(),
         pypi_deps,
@@ -148,7 +150,7 @@ pub async fn add_pypi_dep(
         options.no_install,
         &options.lock_file_usage,
         &options.feature,
-        &options.platforms,
+        &targets,
         editable,
         dry_run,
     ))

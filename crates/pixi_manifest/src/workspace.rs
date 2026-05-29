@@ -16,7 +16,8 @@ use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
-    PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, Targets, preview::Preview,
+    PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector, Targets,
+    preview::Preview,
 };
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
 use once_cell::sync::Lazy;
@@ -122,6 +123,15 @@ impl Workspace {
     /// Look up a configured [`PixiPlatform`] by its name.
     pub fn platform_by_name(&self, name: &PixiPlatformName) -> Option<&PixiPlatform> {
         self.platforms.iter().find(|p| p.name() == name)
+    }
+
+    /// Returns the [`TargetSelector`] used to key the target table for a
+    /// platform name, matching how the platform is declared in the workspace
+    /// (`Subdir` for bare subdir platforms, `Platform` for richer ones).
+    pub fn target_selector_for_platform(&self, name: &PixiPlatformName) -> TargetSelector {
+        self.platform_by_name(name)
+            .map(PixiPlatform::as_target_selector)
+            .unwrap_or_else(|| TargetSelector::Platform(name.clone()))
     }
 
     /// Return every workspace [`PixiPlatform`] whose subdir matches `current`

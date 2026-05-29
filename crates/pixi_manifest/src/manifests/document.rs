@@ -312,12 +312,12 @@ impl ManifestDocument {
         name: &PackageName,
         spec: &PixiSpec,
         spec_type: SpecType,
-        platform: Option<PixiPlatformName>,
+        target: Option<&TargetSelector>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         let dependency_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_target(platform.map(TargetSelector::Platform))
+            .with_target(target.cloned())
             .with_feature_name(Some(feature_name))
             .with_table(Some(spec_type.name()));
 
@@ -359,7 +359,7 @@ impl ManifestDocument {
         &mut self,
         requirement: &pep508_rs::Requirement,
         pixi_requirement: Option<&PixiPypiSpec>,
-        platform: Option<PixiPlatformName>,
+        target: Option<&TargetSelector>,
         feature_name: &FeatureName,
         editable: Option<bool>,
         location: Option<PypiDependencyLocation>,
@@ -372,7 +372,7 @@ impl ManifestDocument {
         //  - When an editable install is requested
         if matches!(self, ManifestDocument::PixiToml(_))
             || matches!(location, Some(PypiDependencyLocation::PixiPypiDependencies))
-            || platform.is_some()
+            || target.is_some()
             || editable.is_some_and(|e| e)
         {
             let mut pypi_requirement = match pixi_requirement {
@@ -385,7 +385,7 @@ impl ManifestDocument {
 
             let dependency_table_name = TableName::new()
                 .with_prefix(self.table_prefix())
-                .with_target(platform.map(TargetSelector::Platform))
+                .with_target(target.cloned())
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
@@ -537,7 +537,7 @@ impl ManifestDocument {
     pub fn pypi_dependency_location(
         &self,
         package_name: &PypiPackageName,
-        platform: Option<&PixiPlatform>,
+        target: Option<&TargetSelector>,
         feature_name: &FeatureName,
     ) -> Option<PypiDependencyLocation> {
         // For both 'pyproject.toml' and 'pixi.toml' manifest,
@@ -545,7 +545,7 @@ impl ManifestDocument {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_feature_name(Some(feature_name))
-            .with_target(platform.map(PixiPlatform::as_target_selector))
+            .with_target(target.cloned())
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
         let pypi_dependency_table = self.manifest().get_nested_table(&table_name.as_keys()).ok();

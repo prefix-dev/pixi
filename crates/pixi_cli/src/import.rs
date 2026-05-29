@@ -223,7 +223,8 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         }
     };
 
-    workspace.add_specs(conda_deps, pypi_deps, &platform_names, &feature_name)?;
+    let targets = workspace.target_selectors_for_platforms(&platform_names);
+    workspace.add_specs(conda_deps, pypi_deps, &targets, &feature_name)?;
 
     match workspace.workspace().environment(&environment_name) {
         None => {
