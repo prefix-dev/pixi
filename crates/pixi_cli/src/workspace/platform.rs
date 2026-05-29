@@ -44,7 +44,7 @@ pub struct VirtualPackageArgs {
     pub cuda: Option<String>,
 
     /// Declare a `__archspec` virtual package with the given microarchitecture
-    /// string, e.g. `x86_64_v3`. Valid on any subdir.
+    /// string, e.g. `x86-64-v3`. Valid on any subdir.
     #[clap(long, value_name = "ARCH")]
     pub archspec: Option<String>,
 

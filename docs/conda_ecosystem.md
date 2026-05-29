@@ -134,7 +134,7 @@ Common virtual packages:
 | `__glibc`       | GNU C Library version |
 | `__osx`         | macOS version |
 | `__cuda`        | NVIDIA driver's CUDA capability |
-| `__archspec`    | CPU microarchitecture (e.g. `x86_64_v3`) |
+| `__archspec`    | CPU microarchitecture (e.g. `x86-64-v3`) |
 
 When a package depends on `__cuda >= 12`, the solver will only
 select it if the system provides a `__cuda` virtual package with

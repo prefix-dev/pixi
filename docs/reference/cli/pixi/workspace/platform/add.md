@@ -23,7 +23,7 @@ pixi workspace platform add [OPTIONS] <PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=B
 - <a id="arg---cuda" href="#arg---cuda">`--cuda <VERSION>`</a>
 :  Declare a `__cuda` virtual package at the given version, e.g. `12.0`. Valid on any subdir
 - <a id="arg---archspec" href="#arg---archspec">`--archspec <ARCH>`</a>
-:  Declare a `__archspec` virtual package with the given microarchitecture string, e.g. `x86_64_v3`. Valid on any subdir
+:  Declare a `__archspec` virtual package with the given microarchitecture string, e.g. `x86-64-v3`. Valid on any subdir
 - <a id="arg---libc" href="#arg---libc">`--libc <VERSION>`</a>
 :  Declare a `__glibc` virtual package at the given version, e.g. `2.28`. Only valid on linux subdirs
 - <a id="arg---linux" href="#arg---linux">`--linux <VERSION>`</a>
