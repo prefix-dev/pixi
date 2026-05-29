@@ -322,6 +322,21 @@ def test_add_duplicate_virtual_package_rejected(pixi: Path, tmp_pixi_workspace: 
     )
 
 
+def test_add_duplicate_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """The same platform passed twice should error rather than silently collapse."""
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "osx-arm64",
+        "osx-arm64",
+        "--no-install",
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="more than once",
+    )
+
+
 def test_add_invalid_virtual_package_name(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """A trailing positional that doesn't start with `__` is treated as a
     second platform entry, which then trips the single-platform-with-vps rule."""

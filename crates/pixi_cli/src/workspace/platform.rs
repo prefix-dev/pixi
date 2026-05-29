@@ -409,6 +409,16 @@ async fn execute_add(
         .map(|raw| parse_add_positional(raw))
         .collect::<miette::Result<_>>()?;
 
+    // Reject duplicate platform positionals so `add linux-64 linux-64` fails
+    // loudly instead of silently collapsing, mirroring the virtual-package
+    // dedup above.
+    let mut seen_platforms = HashSet::new();
+    for (name, _) in &parsed {
+        if !seen_platforms.insert(name.clone()) {
+            miette::bail!("platform '{name}' was specified more than once on the command line");
+        }
+    }
+
     let mut platforms: Vec<PixiPlatform> = Vec::with_capacity(parsed.len());
     if virtual_packages_present {
         let (name, subdir) = parsed.into_iter().next().expect("len checked above");
