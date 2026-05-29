@@ -100,7 +100,11 @@ Each inline-table entry has:
   `__name` conda virtual package (`cuda` -> `__cuda`, `libc` -> `__glibc`,
   `macos` -> `__osx`, etc.).
 - For virtual packages without a friendly key, a raw `__name = "version"`
-  entry is also accepted as an escape hatch.
+  entry is also accepted as an escape hatch. Only the virtual packages pixi
+  knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`,
+  and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection;
+  any other raw `__name` is stored but ignored when checking host
+  compatibility.
 
 A feature's `platforms` array is a list of names that must each resolve to a
 workspace platform (or be a bare conda subdir, which Pixi treats as an alias

@@ -597,9 +597,11 @@ pub(crate) fn merge_subdir_defaults(declared: &mut Vec<GenericVirtualPackage>, s
 /// shape rattler expects for detection.
 ///
 /// This is the single place in pixi that needs to know which conda virtual
-/// package names map to which slot of [`VirtualPackageOverrides`]. Names that
-/// have no override slot (`__unix`) or that rattler doesn't recognize are
-/// dropped -- they round-trip through TOML but have no effect at detection.
+/// package names map to which slot of [`VirtualPackageOverrides`]. Any raw
+/// `__name` rattler models no slot for (`__unix`, or a forward-compat
+/// escape-hatch name like `__future_pkg`) round-trips through TOML but has no
+/// effect at detection -- declaring it neither overrides nor introduces a
+/// detected virtual package.
 fn overrides_from_declared(declared: &[GenericVirtualPackage]) -> VirtualPackageOverrides {
     let mut overrides = VirtualPackageOverrides::default();
     for gvp in declared {
@@ -616,9 +618,10 @@ fn overrides_from_declared(declared: &[GenericVirtualPackage]) -> VirtualPackage
                 };
                 overrides.archspec = Some(Override::String(value));
             }
-            // Upstream's `LibC::parse_version` hardcodes `family = "glibc"`,
-            // so the family in the name is not preserved at detection time.
-            other if other.starts_with("__") && other != "__unix" => {
+            // The conda libc family collapses to rattler's single `libc`
+            // slot; the family in the name is not preserved (upstream's
+            // `LibC::parse_version` hardcodes `family = "glibc"`).
+            "__glibc" | "__musl" | "__eglibc" => {
                 overrides.libc = Some(Override::String(gvp.version.to_string()));
             }
             _ => {}
