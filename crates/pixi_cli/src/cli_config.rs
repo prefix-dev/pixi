@@ -27,7 +27,7 @@ use pixi_pypi_spec::PypiPackageName;
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
-    /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+    /// The path to a manifest file or the workspace directory
     #[arg(long, short, global = true, conflicts_with = "workspace", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 

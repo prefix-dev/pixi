@@ -635,7 +635,21 @@ impl Workspace {
     /// Returns the path to the lock file of the project
     /// [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
-        self.root.join(consts::PROJECT_LOCK_FILE)
+        match self
+            .workspace
+            .provenance
+            .path
+            .file_name()
+            .and_then(|file_name| file_name.to_str())
+        {
+            Some(
+                consts::WORKSPACE_MANIFEST
+                | consts::PYPROJECT_MANIFEST
+                | consts::MOJOPROJECT_MANIFEST,
+            ) => self.root.join(consts::PROJECT_LOCK_FILE),
+            Some(file_name) => self.root.join(file_name).with_extension("lock"),
+            None => self.root.join(consts::PROJECT_LOCK_FILE),
+        }
     }
 
     /// Returns the default environment of the project.
@@ -1895,6 +1909,23 @@ platforms = []
             dot_pixi.join(consts::WORKSPACE_CACHE_DIR)
         );
         assert_eq!(workspace.build_dir(), workspace.default_build_dir());
+    }
+
+    #[test]
+    fn custom_manifest_lock_file_path() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join("custom-pixi.toml"),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap();
+
+        assert_eq!(
+            workspace.lock_file_path(),
+            dunce::canonicalize(temp_dir.path())
+                .unwrap()
+                .join("custom-pixi.lock")
+        );
     }
 
     #[test]

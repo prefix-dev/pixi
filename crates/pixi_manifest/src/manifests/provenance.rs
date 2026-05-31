@@ -94,6 +94,7 @@ impl ManifestKind {
             consts::WORKSPACE_MANIFEST => Some(Self::Pixi),
             consts::PYPROJECT_MANIFEST => Some(Self::Pyproject),
             consts::MOJOPROJECT_MANIFEST => Some(Self::MojoProject),
+            _ if path.extension().and_then(OsStr::to_str) == Some("toml") => Some(Self::Pixi),
             _ => None,
         }
     }
@@ -215,5 +216,14 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn custom_toml_manifest_is_pixi_manifest() {
+        let path = PathBuf::from("custom-pixi.toml");
+        let provenance = ManifestProvenance::from_path(path.clone()).unwrap();
+
+        assert_eq!(provenance.path, path);
+        assert_eq!(provenance.kind, ManifestKind::Pixi);
     }
 }

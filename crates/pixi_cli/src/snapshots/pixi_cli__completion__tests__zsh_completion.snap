@@ -5,7 +5,7 @@ expression: result
 
 (add)
 _arguments "${_arguments_options[@]}" \
-'--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'--manifest-path=[The path to a manifest file or the workspace directory]:MANIFEST_PATH:_files' \
 '*::specs -- Specify the dependencies you wish to add to the project:' \
 && ret=0
 ;;
@@ -19,7 +19,7 @@ else
     return 1
 fi
 _arguments "${_arguments_options[@]}" \
-'--manifest-path=[The path to '\''pixi.toml'\'']:MANIFEST_PATH:_files' \
+'--manifest-path=[The path to a manifest file or the workspace directory]:MANIFEST_PATH:_files' \
 '--color=[Whether the log needs to be colored]:COLOR:(always never auto)' \
 '(--frozen)--locked[Require pixi.lock is up-to-date]' \
 '(--locked)--frozen[Don'\''t check if pixi.lock is up-to-date, install as lock file states]' \
@@ -44,5 +44,4 @@ _arguments "${_arguments_options[@]}" \
 _arguments "${_arguments_options[@]}" \
 && ret=0
 ;;
-
 
