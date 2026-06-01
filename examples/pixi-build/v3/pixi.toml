@@ -1,0 +1,35 @@
+# ----------------------------------
+# Package definition
+# -----------------------------------
+
+[package.build]
+backend = { name = "pixi-build-rust", version = "*"  }
+
+[package.extra-dependencies.rust]
+bat = "*"
+
+[package.extra-dependencies.py]
+python = "*"
+
+# ----------------------------------
+# Workspace definition
+# ----------------------------------
+
+[workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+preview = ["pixi-build"]
+
+[feature.all.dependencies]
+v3 = { path = ".", extras = ["rust", "py"]}
+
+[feature.py.dependencies]
+v3 = { path = ".", extras = ["py"]}
+
+[feature.rust.dependencies]
+v3 = { path = ".", extras = ["rust"]}
+
+[environments]
+all = ["all"]
+py = ["py"]
+rust = ["rust"]
