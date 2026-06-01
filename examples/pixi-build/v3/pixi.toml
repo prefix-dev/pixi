@@ -4,9 +4,11 @@
 
 [package.build]
 backend = { name = "pixi-build-rust", version = "*"  }
+flags = ["a", "b"]
 
 [package.extra-dependencies.rust]
-bat = "*"
+bat = { version = "*", when = { package = "python", version = ">=3.10" } }
+ripgrep = "*"
 
 [package.extra-dependencies.py]
 python = "*"
@@ -21,13 +23,17 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 preview = ["pixi-build"]
 
 [feature.all.dependencies]
-v3 = { path = ".", extras = ["rust", "py"]}
+v3 = { path = ".", extras = ["rust", "py"], flags = ["a"] }
+# Should avoid `bat` to be installed in this environment
+python = "<3.10"
 
 [feature.py.dependencies]
 v3 = { path = ".", extras = ["py"]}
 
 [feature.rust.dependencies]
 v3 = { path = ".", extras = ["rust"]}
+# Should allow bat to be installed in this environment
+python = ">=3.10"
 
 [environments]
 all = ["all"]
