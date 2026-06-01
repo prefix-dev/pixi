@@ -2,4 +2,4 @@
 source: crates/pixi_manifest/src/discovery.rs
 expression: snapshot
 ---
-  × unrecognized manifest file format. Expected either pixi.toml or pyproject.toml.
+  × unrecognized manifest path. Expected a .toml file or a directory containing pixi.toml, pyproject.toml, or mojoproject.toml.

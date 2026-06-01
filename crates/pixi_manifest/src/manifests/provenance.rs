@@ -23,7 +23,12 @@ pub struct ManifestProvenance {
 #[derive(Debug, Error, Diagnostic)]
 pub enum ProvenanceError {
     /// Returned when the manifest file format is not recognized.
-    #[error("unrecognized manifest file format. Expected either pixi.toml or pyproject.toml.")]
+    #[error(
+        "unrecognized manifest path. Expected a .toml file or a directory containing {}, {}, or {}.",
+        consts::WORKSPACE_MANIFEST,
+        consts::PYPROJECT_MANIFEST,
+        consts::MOJOPROJECT_MANIFEST
+    )]
     UnrecognizedManifestFormat,
 }
 
@@ -225,5 +230,15 @@ mod tests {
 
         assert_eq!(provenance.path, path);
         assert_eq!(provenance.kind, ManifestKind::Pixi);
+    }
+
+    #[test]
+    fn non_toml_manifest_path_error_mentions_toml() {
+        let error = ManifestProvenance::from_path(PathBuf::from("foo.bar")).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "unrecognized manifest path. Expected a .toml file or a directory containing pixi.toml, pyproject.toml, or mojoproject.toml."
+        );
     }
 }

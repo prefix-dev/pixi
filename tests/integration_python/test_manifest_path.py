@@ -33,6 +33,21 @@ def test_explicit_manifest_correct_location(pixi: Path, tmp_path: Path) -> None:
     assert actual == expected
 
 
+def test_manifest_path_rejects_non_toml_file(pixi: Path, tmp_path: Path) -> None:
+    manifest = tmp_path / "foo.bar"
+    manifest.write_text("bar")
+
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains=(
+            "Expected a .toml file or a directory containing pixi.toml, "
+            "pyproject.toml, or mojoproject.toml."
+        ),
+        strip_ansi=True,
+    )
+
+
 def test_ignore_env_vars_when_manifest_path_differs(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """When running a nested pixi command with --manifest-path pointing to a different
     project, the inherited PIXI_ENVIRONMENT_NAME should be ignored because it refers
