@@ -3,8 +3,8 @@ use std::sync::Arc;
 use pixi_command_dispatcher::{
     CommandDispatcherError,
     build::{
-        Dependencies, PixiRunExports, dependencies::filter_match_specs,
-        pin_compatible::PinCompatibilityMap,
+        Dependencies, PixiRunExports, convert_extra_dependencies,
+        dependencies::filter_match_specs, pin_compatible::PinCompatibilityMap,
     },
 };
 use pixi_record::{
@@ -318,6 +318,53 @@ fn verify_locked_run_deps_against_backend(
         .collect::<Result<Vec<_>, _>>()?;
     diff_dep_sequences(record.constrains(), &expected_constrains)
         .map_err(|diff| diff.into_unsat(record.name(), SourceRunDepKind::RunConstrains))?;
+
+    // Verify the extra groups the backend declares still match what the lock
+    // file carries. Mirror the solve-path
+    // stringification in `resolve_source_record` exactly (resolve against the
+    // same pin-compatibility map, then `to_match_spec`) so the comparison is
+    // byte-for-byte. Without this, a manifest edit to an extra group goes
+    // unnoticed and the stale lock is treated as satisfied.
+    let expected_extras: std::collections::BTreeMap<String, Vec<String>> =
+        convert_extra_dependencies(&matching_output.extra_dependencies, None, &compat_map)
+            .map_err(|err| {
+                Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+                    record.name().as_source().to_string(),
+                    err.to_string(),
+                ))
+            })?
+            .into_iter()
+            .map(|(group, specs)| {
+                let strings = specs
+                    .into_specs()
+                    .map(|(name, spec)| {
+                        spec.to_match_spec(&name, channel_config)
+                            .map(|m| m.to_string())
+                            .map_err(|err| spec_unsat(&name, &err))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok((group.into_inner(), strings))
+            })
+            .collect::<Result<std::collections::BTreeMap<String, Vec<String>>, Box<PlatformUnsat>>>(
+            )?;
+
+    // Compare every group present on either side. A group missing from one
+    // side compares against the empty list, so an added group surfaces as
+    // `added` and a dropped group as `removed`.
+    let locked_extras = record.experimental_extra_depends();
+    let empty: Vec<String> = Vec::new();
+    for group in locked_extras.keys().chain(expected_extras.keys()) {
+        let locked = locked_extras.get(group).unwrap_or(&empty);
+        let expected = expected_extras.get(group).unwrap_or(&empty);
+        diff_dep_sequences(locked, expected).map_err(|diff| {
+            Box::new(PlatformUnsat::SourceExtraDependenciesChanged {
+                package: record.name().as_source().to_string(),
+                group: group.clone(),
+                added: diff.added,
+                removed: diff.removed,
+            })
+        })?;
+    }
 
     Ok(())
 }
@@ -1486,6 +1533,120 @@ mod tests {
                 assert_eq!(removed, vec!["bar <2".to_string()]);
             }
             other => panic!("expected RunConstrains drift, got: {other}"),
+        }
+    }
+
+    // -- Unit tests for extra-dependency (optional group) drift ---------
+
+    use pixi_build_types::ExtraGroupName;
+
+    /// Build an `extra_dependencies` map carrying a single group.
+    fn extra_group(
+        group: &str,
+        deps: Vec<NamedSpec<PackageSpec>>,
+    ) -> BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> {
+        let mut map = BTreeMap::new();
+        map.insert(ExtraGroupName::new(group.to_string()).unwrap(), deps);
+        map
+    }
+
+    /// A locked record whose extras match what the backend re-derives
+    /// must verify clean.
+    #[test]
+    fn verify_locked_run_deps_passes_when_extras_match() {
+        let mut record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        if let SourceRecordData::Full(full) = &mut record.data {
+            full.package_record.experimental_extra_depends =
+                BTreeMap::from([("test".to_string(), vec!["extra-pkg >=1".to_string()])]);
+        }
+        let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
+        output.extra_dependencies = extra_group("test", vec![binary_dep("extra-pkg", ">=1")]);
+
+        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        assert!(result.is_ok(), "matching extras must not drift: {result:?}");
+    }
+
+    /// The backend declares an extra group the locked record never
+    /// captured. Editing `[package.run-dependencies.<group>]` in the
+    /// manifest must invalidate the lock, surfacing the new spec.
+    #[test]
+    fn verify_locked_run_deps_detects_extra_group_addition() {
+        let record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
+        output.extra_dependencies = extra_group("test", vec![binary_dep("extra-pkg", ">=1")]);
+
+        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+            .expect_err("backend added an extra group the lock file lacks");
+        match *err {
+            super::super::PlatformUnsat::SourceExtraDependenciesChanged {
+                group,
+                added,
+                removed,
+                ..
+            } => {
+                assert_eq!(group, "test");
+                assert_eq!(added, vec!["extra-pkg >=1".to_string()]);
+                assert!(removed.is_empty());
+            }
+            other => panic!("expected SourceExtraDependenciesChanged, got: {other}"),
+        }
+    }
+
+    /// The locked record carries an extra group the backend no longer
+    /// declares. The stale spec must surface as a removal.
+    #[test]
+    fn verify_locked_run_deps_detects_extra_group_removal() {
+        let mut record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        if let SourceRecordData::Full(full) = &mut record.data {
+            full.package_record.experimental_extra_depends =
+                BTreeMap::from([("test".to_string(), vec!["extra-pkg >=1".to_string()])]);
+        }
+        let output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
+
+        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+            .expect_err("backend dropped an extra group that's still locked");
+        match *err {
+            super::super::PlatformUnsat::SourceExtraDependenciesChanged {
+                group,
+                added,
+                removed,
+                ..
+            } => {
+                assert_eq!(group, "test");
+                assert!(added.is_empty());
+                assert_eq!(removed, vec!["extra-pkg >=1".to_string()]);
+            }
+            other => panic!("expected SourceExtraDependenciesChanged, got: {other}"),
+        }
+    }
+
+    /// The group is present on both sides but its dependency spec
+    /// changed (e.g. the manifest bumped the version bound). The drift
+    /// must report both the new and the old spec.
+    #[test]
+    fn verify_locked_run_deps_detects_extra_spec_change() {
+        let mut record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        if let SourceRecordData::Full(full) = &mut record.data {
+            full.package_record.experimental_extra_depends =
+                BTreeMap::from([("test".to_string(), vec!["extra-pkg >=1".to_string()])]);
+        }
+        let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
+        output.extra_dependencies = extra_group("test", vec![binary_dep("extra-pkg", ">=2")]);
+
+        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+            .expect_err("the extra group's spec changed bound");
+        match *err {
+            super::super::PlatformUnsat::SourceExtraDependenciesChanged {
+                group,
+                added,
+                removed,
+                ..
+            } => {
+                assert_eq!(group, "test");
+                assert_eq!(added, vec!["extra-pkg >=2".to_string()]);
+                assert_eq!(removed, vec!["extra-pkg >=1".to_string()]);
+            }
+            other => panic!("expected SourceExtraDependenciesChanged, got: {other}"),
         }
     }
 }
