@@ -637,7 +637,7 @@ impl PixiControl {
         let fallback_platform = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
         let search_env_platform = explicit_environment
             .as_ref()
-            .and_then(|e| e.best_platform())
+            .and_then(|e| e.best_declared_platform())
             .unwrap_or(&fallback_platform);
         let search_env = SearchEnvironments::from_opt_env(
             &project,

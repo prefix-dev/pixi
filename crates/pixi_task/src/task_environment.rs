@@ -245,7 +245,7 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let env = project.default_environment();
-        let search = SearchEnvironments::from_opt_env(&project, None, env.best_platform());
+        let search = SearchEnvironments::from_opt_env(&project, None, env.best_declared_platform());
         let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
         assert!(result.is_ok());
         assert!(result.unwrap().0.name().is_default());

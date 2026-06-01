@@ -212,7 +212,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let platform_display: String = match &args.platform {
         Some(p) => p.to_string(),
         None => environment
-            .best_platform()
+            .best_declared_platform()
             .map(|p| p.name().to_string())
             .unwrap_or_else(|| Platform::current().to_string()),
     };

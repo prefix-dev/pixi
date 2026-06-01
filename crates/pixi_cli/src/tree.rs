@@ -100,12 +100,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .into_iter()
             .next()
             .expect("resolve_platforms preserves length"),
-        None => environment.best_platform().cloned().ok_or_else(|| {
-            miette::miette!(
-                "no platform supported by environment '{}' matches the current system",
-                environment.name()
-            )
-        })?,
+        None => environment
+            .best_declared_platform()
+            .cloned()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "no platform supported by environment '{}' matches the current system",
+                    environment.name()
+                )
+            })?,
     };
     let locked_deps = lock_file
         .environment(environment.name().as_str())

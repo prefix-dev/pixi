@@ -470,7 +470,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ws.environments()
                 .iter()
                 .map(|env| {
-                    let best = env.best_platform();
+                    let best = env.best_declared_platform();
                     let tasks = env
                         .tasks(best)
                         .ok()

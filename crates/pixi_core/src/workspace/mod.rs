@@ -53,13 +53,17 @@ use pixi_utils::{
     variants::{VariantConfig, VariantValue},
 };
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{
+    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
+};
 use rattler_lock::LockFile;
 
 use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use rattler_virtual_packages::{
+    Cuda, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages,
+};
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
@@ -182,12 +186,6 @@ pub struct Workspace {
 
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
-
-    /// Lazily-initialised stand-in `PixiPlatform` for workspaces whose manifest
-    /// declares no platforms. Used by [`Environment::best_platform`] to keep
-    /// behaviour compatible with the pre-`PixiPlatform` model, which always
-    /// fell back to the current (possibly overridden) host subdir.
-    fallback_platform: OnceCell<PixiPlatform>,
 }
 
 impl Debug for Workspace {
@@ -211,6 +209,69 @@ pub type PypiDeps = indexmap::IndexMap<
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
 pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
+
+/// Where the virtual packages of a host [`PixiPlatform`] come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlatformSource {
+    /// Pixi's fixed per-subdir defaults: deterministic and machine-independent.
+    Defaults,
+    /// The virtual packages actually detected on this machine.
+    AutoDetected,
+}
+
+/// Whether environment-variable overrides are honored when building a host
+/// [`PixiPlatform`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlatformOverrides {
+    /// Ignore `PIXI_OVERRIDE_PLATFORM` and `CONDA_OVERRIDE_*`.
+    NoOverrides,
+    /// Honor `PIXI_OVERRIDE_PLATFORM` for the subdir and `CONDA_OVERRIDE_*` for
+    /// the detected virtual packages (via [`VirtualPackageOverrides::from_env`]).
+    EnvironmentVariableOverrides,
+}
+
+/// Apply `CONDA_OVERRIDE_*` env vars to `packages`, matching upstream rattler
+/// semantics: unset keeps the current version, non-empty replaces it, and
+/// empty removes the package entirely. Rattler drives this per slot via
+/// `detect_with_fallback`; `Ok(Some(v))` = use v, `Ok(None)` = disabled,
+/// error = leave untouched.
+fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage>) {
+    let env = Override::DefaultEnvVar;
+    packages.retain_mut(|package| {
+        let base = package.version.clone();
+        let outcome: Option<Option<Version>> = match package.name.as_normalized() {
+            "__cuda" => Cuda::detect_with_fallback(&env, || Ok(Some(Cuda { version: base })))
+                .ok()
+                .map(|cuda| cuda.map(|cuda| cuda.version)),
+            "__linux" => Linux::detect_with_fallback(&env, || Ok(Some(Linux { version: base })))
+                .ok()
+                .map(|linux| linux.map(|linux| linux.version)),
+            "__osx" => Osx::detect_with_fallback(&env, || Ok(Some(Osx { version: base })))
+                .ok()
+                .map(|osx| osx.map(|osx| osx.version)),
+            "__glibc" | "__musl" | "__eglibc" => LibC::detect_with_fallback(&env, || {
+                Ok(Some(LibC {
+                    family: "glibc".to_string(),
+                    version: base,
+                }))
+            })
+            .ok()
+            .map(|libc| libc.map(|libc| libc.version)),
+            _ => None,
+        };
+        match outcome {
+            // Override (or unset fallback) produced a version: keep it.
+            Some(Some(version)) => {
+                package.version = version;
+                true
+            }
+            // Variable was set empty: disable the package.
+            Some(None) => false,
+            // Not env-overridable, or detection failed: leave untouched.
+            None => true,
+        }
+    });
+}
 
 impl Workspace {
     /// Core constructor: takes parsed manifests and loads the workspace config
@@ -263,7 +324,6 @@ impl Workspace {
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
-            fallback_platform: OnceCell::default(),
         }
     }
 
@@ -649,14 +709,20 @@ impl Workspace {
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
+        let host = self.host_platform(
+            PlatformSource::Defaults,
+            PlatformOverrides::EnvironmentVariableOverrides,
+        );
         let tool_virtual_packages =
-            if tool_platform.only_platform() == Platform::current().only_platform() {
+            if tool_platform.only_platform() == host.subdir().only_platform() {
                 // If the tool platform is the same as the current platform, we just assume the
                 // same virtual packages apply.
-                VirtualPackages::detect(&VirtualPackageOverrides::from_env())
-                    .unwrap_or_default()
-                    .into_generic_virtual_packages()
-                    .collect()
+                self.host_platform(
+                    PlatformSource::AutoDetected,
+                    PlatformOverrides::EnvironmentVariableOverrides,
+                )
+                .declared_virtual_packages()
+                .to_vec()
             } else {
                 vec![]
             };
@@ -708,19 +774,51 @@ impl Workspace {
         &self.config
     }
 
-    /// Returns a stand-in `PixiPlatform` for manifests that declare no
-    /// platforms. The platform is initialised on first use with `current` and
-    /// cached, so subsequent calls hand out the same reference. The cache key
-    /// is intentionally implicit: within a single workspace lifetime the host
-    /// subdir and `PIXI_OVERRIDE_PLATFORM` are assumed to be stable.
-    pub(crate) fn fallback_platform(&self, current: Platform) -> &PixiPlatform {
-        // The fallback stands in for a workspace that declares no platforms;
-        // solve-time code paths read its `declared_virtual_packages()` as
-        // their source of truth (no more separate "compute defaults for the
-        // subdir" step). `from_subdir` materialises the subdir defaults so
-        // the fallback behaves like any other subdir platform.
-        self.fallback_platform
-            .get_or_init(|| PixiPlatform::from_subdir(current))
+    /// The platform pixi treats as this machine's host.
+    ///
+    /// `source` selects whether the virtual packages are pixi's per-subdir
+    /// defaults (deterministic) or the set actually detected on this machine;
+    /// `overrides` selects whether the `PIXI_OVERRIDE_PLATFORM` (subdir) and
+    /// `CONDA_OVERRIDE_*` (virtual package) environment variables are honored.
+    pub fn host_platform(
+        &self,
+        source: PlatformSource,
+        overrides: PlatformOverrides,
+    ) -> PixiPlatform {
+        let subdir = match overrides {
+            PlatformOverrides::NoOverrides => Platform::current(),
+            PlatformOverrides::EnvironmentVariableOverrides => {
+                std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
+                    .ok()
+                    .and_then(|value| match value.parse::<Platform>() {
+                        Ok(platform) => Some(platform),
+                        Err(_) => {
+                            tracing::warn!(
+                                "Invalid value for PIXI_OVERRIDE_PLATFORM='{value}', ignoring."
+                            );
+                            None
+                        }
+                    })
+                    .unwrap_or_else(Platform::current)
+            }
+        };
+
+        let mut virtual_packages = match source {
+            PlatformSource::Defaults => PixiPlatform::from_subdir(subdir)
+                .declared_virtual_packages()
+                .to_vec(),
+            PlatformSource::AutoDetected => {
+                VirtualPackages::detect(&VirtualPackageOverrides::default())
+                    .map(|detected| detected.into_generic_virtual_packages().collect())
+                    .unwrap_or_default()
+            }
+        };
+
+        if let PlatformOverrides::EnvironmentVariableOverrides = overrides {
+            apply_environment_variable_overrides(&mut virtual_packages);
+        }
+
+        PixiPlatform::from_required_virtual_packages(subdir, virtual_packages)
     }
 
     /// Construct a [`ChannelConfig`] that is specific to this project. This

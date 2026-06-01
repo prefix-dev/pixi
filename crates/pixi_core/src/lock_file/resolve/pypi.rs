@@ -77,11 +77,14 @@ use crate::{
             resolver_provider::CondaResolverProvider,
         },
     },
-    workspace::{Environment, EnvironmentVars, grouped_environment::GroupedEnvironment},
+    workspace::{
+        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+        grouped_environment::GroupedEnvironment,
+    },
 };
 use pixi_command_dispatcher::CommandDispatcher;
 use pixi_uv_context::UvResolutionContext;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::GenericVirtualPackage;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid hash: {0} type: {1}")]
@@ -605,12 +608,15 @@ pub async fn resolve_pypi(
             // pypi resolves still need a local Python to compute wheel tags. Fall
             // back to a bare current-subdir platform when no declared workspace
             // platform matches this machine.
-            let fallback;
-            let prefix_platform: &PixiPlatform = match environment.best_platform() {
+            let host_platform;
+            let prefix_platform: &PixiPlatform = match environment.best_declared_platform() {
                 Some(p) => p,
                 None => {
-                    fallback = PixiPlatform::from_subdir(Platform::current());
-                    &fallback
+                    host_platform = environment.workspace().host_platform(
+                        PlatformSource::Defaults,
+                        PlatformOverrides::EnvironmentVariableOverrides,
+                    );
+                    &host_platform
                 }
             };
             let group = GroupedEnvironment::Environment(environment.clone());

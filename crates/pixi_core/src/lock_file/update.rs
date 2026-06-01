@@ -694,7 +694,7 @@ impl<'p> LockFileDerivedData<'p> {
             .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
         Ok(LockedEnvironmentHash::from_environment(
             locked_environment,
-            environment.pinned_platform(self.target_platform.as_ref()),
+            environment.named_or_best_declared_platform(self.target_platform.as_ref()),
         ))
     }
 
@@ -706,7 +706,8 @@ impl<'p> LockFileDerivedData<'p> {
         &self,
         environment: &Environment<'p>,
     ) -> Option<(PlatformData, PlatformData)> {
-        let resolved = environment.pinned_platform(self.target_platform.as_ref())?;
+        let resolved =
+            environment.named_or_best_declared_platform(self.target_platform.as_ref())?;
         let minimal =
             compute_minimal_required_platforms(&self.lock_file, environment.name(), &[resolved]);
         // A subdir whose lock entry has no conda packages is absent from the
@@ -825,7 +826,7 @@ impl<'p> LockFileDerivedData<'p> {
             // that is a directory, this is basically the only kind of source dependency
             // that you'll modify on a general basis.
             let contains_pypi_source_pkgs = environment
-                .pypi_dependencies(environment.best_platform())
+                .pypi_dependencies(environment.best_declared_platform())
                 .iter()
                 .any(|(_, req)| {
                     req.iter()
@@ -865,8 +866,8 @@ impl<'p> LockFileDerivedData<'p> {
                 // Skip the host-VP validation when `--platform` pins a target the
                 // local machine can't satisfy -- that's the case the override exists for.
                 let target_override = self.target_platform.as_ref();
-                let best_platform =
-                    environment.pinned_platform(target_override).ok_or_else(|| {
+                let best_declared_platform =
+                    environment.named_or_best_declared_platform(target_override).ok_or_else(|| {
                         miette::miette!(
                             "Cannot install environment '{}': no platform supported by it matches the current system",
                             environment.name().fancy_display()
@@ -875,7 +876,7 @@ impl<'p> LockFileDerivedData<'p> {
                 if target_override.is_none() {
                     validate_system_meets_environment_requirements(
                         &self.lock_file,
-                        best_platform,
+                        best_declared_platform,
                         environment.name(),
                         None,
                     )
@@ -885,7 +886,7 @@ impl<'p> LockFileDerivedData<'p> {
                     ))?;
                 }
 
-                let platform = best_platform;
+                let platform = best_declared_platform;
                 let locked_env = self.locked_env(environment)?;
                 let subset = InstallSubset::new(
                     &filter.skip_with_deps,
@@ -1018,7 +1019,7 @@ impl<'p> LockFileDerivedData<'p> {
                     let pypi_update_config = PyPIUpdateConfig {
                         environment_name: environment.name(),
                         prefix: &prefix,
-                        platform: best_platform,
+                        platform: best_declared_platform,
                         lock_file_dir: self.workspace.root(),
                     };
 
@@ -1102,7 +1103,7 @@ impl<'p> LockFileDerivedData<'p> {
                 // Create object to update the prefix
                 let group = GroupedEnvironment::Environment(environment.clone());
                 let pixi_platform = environment
-                    .pinned_platform(self.target_platform.as_ref())
+                    .named_or_best_declared_platform(self.target_platform.as_ref())
                     .ok_or_else(|| {
                         miette::miette!(
                             "no platform supported by environment '{}' matches the current system",
@@ -1970,7 +1971,7 @@ impl<'p> UpdateContext<'p> {
                 .intersection(platforms)
                 .cloned()
                 .collect::<IndexSet<_>>();
-            if let Some(best) = environment.best_platform()
+            if let Some(best) = environment.best_declared_platform()
                 && let Some(current_platform_index) = ordered_platforms.get_index_of(best.name())
             {
                 ordered_platforms.move_index(current_platform_index, 0);
@@ -2120,7 +2121,7 @@ impl<'p> UpdateContext<'p> {
             // Construct an optional future that will resolve for building the pypi sources,
             // the error is delayed to raise at the time when building the sources.
             let best_platform_name = environment
-                .best_platform()
+                .best_declared_platform()
                 .map(|p| p.name().clone())
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment, false));
             let repodata_building_env = match best_platform_name {
@@ -2545,7 +2546,7 @@ fn make_unsupported_pypi_platform_error(
 ) -> Report {
     let grouped_environment = GroupedEnvironment::from(environment.clone());
     let current_platform_name = environment
-        .best_platform()
+        .best_declared_platform()
         .map(|p| p.name().clone())
         .unwrap_or_else(|| Platform::current().into());
     let platforms = environment.platforms();

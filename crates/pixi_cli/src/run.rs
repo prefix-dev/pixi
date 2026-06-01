@@ -18,9 +18,12 @@ use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_core::{
     Workspace, WorkspaceLocator,
-    environment::sanity_check_workspace,
+    environment::{PlatformData, sanity_check_workspace},
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
-    workspace::{Environment, errors::UnsupportedPlatformError},
+    workspace::{
+        Environment, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+        errors::UnsupportedPlatformError,
+    },
 };
 use pixi_manifest::{PixiPlatformName, TaskName};
 use pixi_progress::global_multi_progress;
@@ -160,16 +163,48 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     sanity_check_workspace(&workspace).await?;
 
     // `--platform` pins which declared platform the environment is installed
-    // and activated for; without it we fall back to the host-aware best match.
-    let target_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
-    let best_platform = environment.pinned_platform(target_platform.as_ref());
+    // and activated for. Without it we auto-upgrade to the platform the
+    // environment was last installed for (so users need not repeat
+    // `--platform`), falling back to the host-aware best match when the
+    // environment isn't installed yet.
+    let user_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
+    let installed_platform = environment.installed_resolved_platform_name();
+    let run_platform = user_platform.clone().or_else(|| installed_platform.clone());
+    let best_declared_platform = environment.named_or_best_declared_platform(run_platform.as_ref());
+
+    let (resolved_marker, minimum_marker) = environment.installed_platforms();
+    let format_marker = |marker: &Option<PlatformData>| {
+        marker
+            .as_ref()
+            .map_or_else(|| "<none>".to_string(), ToString::to_string)
+    };
+    tracing::debug!(
+        "Run-platform decision for environment '{}': --platform={:?}, auto-detected={}, installed resolved platform={:?}, marker resolved={}, marker minimum={}, chosen run platform={:?}",
+        environment.name(),
+        user_platform.as_ref().map(|p| p.as_str()),
+        PlatformData::from(&environment.workspace().host_platform(
+            PlatformSource::Defaults,
+            PlatformOverrides::EnvironmentVariableOverrides
+        )),
+        installed_platform.as_ref().map(|p| p.as_str()),
+        format_marker(&resolved_marker),
+        format_marker(&minimum_marker),
+        run_platform.as_ref().map(|p| p.as_str()),
+    );
+    if let Some(platform) = best_declared_platform {
+        tracing::info!(
+            "Running tasks in environment '{}' assuming platform '{}'",
+            environment.name().fancy_display(),
+            platform.name(),
+        );
+    }
 
     // Check if the current platform is supported, but only when we're going to
     // install/activate. Without installs we skip environment activation,
     // so platform doesn't matter. A `--platform` that the environment doesn't
     // list gets a clear membership error, matching `pixi install --platform`.
-    if args.lock_and_install_config.allow_installs() && best_platform.is_none() {
-        return Err(if let Some(name) = target_platform.as_ref() {
+    if args.lock_and_install_config.allow_installs() && best_declared_platform.is_none() {
+        return Err(if let Some(name) = user_platform.as_ref() {
             miette::miette!(
                 "platform '{}' is not part of environment '{}'",
                 name,
@@ -201,8 +236,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .0;
 
-    // Pin `--platform` so the on-demand prefix install below targets it.
-    lock_file.target_platform = target_platform.clone();
+    // Pin the run platform (explicit `--platform`, else the auto-upgraded
+    // resolved platform) so the on-demand prefix install below targets it.
+    lock_file.target_platform = run_platform.clone();
 
     // Spawn a task that listens for ctrl+c and resets the cursor.
     tokio::spawn(async {
@@ -215,7 +251,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // When installs are allowed, filter by platform since we are activating
     // an environment and the platform matters.
     let search_platform = if args.lock_and_install_config.allow_installs() {
-        best_platform
+        best_declared_platform
     } else {
         None
     };
@@ -351,6 +387,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             &pixi_core::environment::InstallFilter::default(),
                         )
                         .await?;
+
+                    // Validate that the auto-detected machine (or explicit
+                    // `--platform`) can run what was installed, comparing
+                    // against the resolved/minimum platforms in conda-meta/pixi.
+                    pixi_core::workspace::virtual_packages::verify_run_platform(
+                        &executable_task.run_environment,
+                        user_platform.as_ref(),
+                    )?;
                 }
 
                 // Clear the current progress reports.
@@ -439,7 +483,7 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
     if workspace
         .environments()
         .iter()
-        .all(|env| env.best_platform().is_none())
+        .all(|env| env.best_declared_platform().is_none())
     {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",

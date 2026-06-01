@@ -47,7 +47,8 @@ use crate::{
         resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
     },
     workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, grouped_environment::GroupedEnvironment,
+        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+        grouped_environment::GroupedEnvironment,
     },
 };
 
@@ -564,7 +565,10 @@ async fn read_local_package_metadata(
     // Get or create cache entry for this environment and host platform. The
     // build prefix is shared across all target platforms, so we key the cache
     // on the *host* platform rather than the target being satisfied.
-    let host_platform = ctx.environment.host_platform();
+    let host_platform = ctx.environment.workspace().host_platform(
+        PlatformSource::Defaults,
+        PlatformOverrides::EnvironmentVariableOverrides,
+    );
     let cache_key =
         BuildCacheKey::new(ctx.environment.name().clone(), host_platform.name().clone());
     let cache = ctx.build_caches.entry(cache_key).or_default().clone();
@@ -682,9 +686,12 @@ async fn read_local_package_metadata(
     let conda_prefix_updater = cache
         .conda_prefix_updater
         .get_or_try_init(|| {
-            let prefix_platform = ctx.environment.host_platform();
+            let prefix_platform = ctx.environment.workspace().host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            );
             let group = GroupedEnvironment::Environment(ctx.environment.clone());
-            let virtual_packages = ctx.environment.virtual_packages(prefix_platform);
+            let virtual_packages = ctx.environment.virtual_packages(&prefix_platform);
 
             // Force the initialization of the rayon thread pool to avoid implicit creation
             // by the uv.

@@ -130,7 +130,7 @@ impl EnvironmentHash {
         // Hash the packages
         let mut urls = Vec::new();
         if let Some(env) = lock_file.environment(run_environment.name().as_str())
-            && let Some(best) = run_environment.best_platform()
+            && let Some(best) = run_environment.best_declared_platform()
             && let Some(lock_platform) = lock_file.platform(best.name().as_str())
             && let Some(packages) = env.packages(lock_platform)
         {
@@ -193,13 +193,13 @@ impl EnvironmentHash {
         }
 
         let activation_scripts =
-            run_environment.activation_scripts(run_environment.best_platform());
+            run_environment.activation_scripts(run_environment.best_declared_platform());
         for script in activation_scripts {
             script.hash(hasher);
         }
 
         let project_activation_env =
-            run_environment.activation_env(run_environment.best_platform());
+            run_environment.activation_env(run_environment.best_declared_platform());
         let mut env_vars: Vec<_> = project_activation_env.iter().collect();
         env_vars.sort_by_key(|(key, _)| *key);
         for (key, value) in env_vars {
@@ -292,6 +292,22 @@ impl From<&PixiPlatform> for PlatformData {
             subdir: platform.subdir(),
             virtual_packages: platform.declared_virtual_packages().to_vec(),
         }
+    }
+}
+
+impl Display for PlatformData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.subdir)?;
+        if !self.virtual_packages.is_empty() {
+            let packages = self
+                .virtual_packages
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ");
+            write!(f, " [{packages}]")?;
+        }
+        Ok(())
     }
 }
 
@@ -693,7 +709,11 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
 
     let no_install = update_lock_file_options.no_install;
     for env in environments {
-        if !no_install && env.pinned_platform(target_platform).is_none() {
+        if !no_install
+            && env
+                .named_or_best_declared_platform(target_platform)
+                .is_none()
+        {
             return Err(if let Some(name) = target_platform {
                 miette::miette!(
                     "platform '{}' is not part of environment '{}'",
@@ -714,7 +734,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     // now -- after the clear membership error, never before it.
     if !no_install
         && target_platform.is_some()
-        && let Some(platform) = environments[0].pinned_platform(target_platform)
+        && let Some(platform) = environments[0].named_or_best_declared_platform(target_platform)
     {
         let current = Platform::current();
         let subdir = platform.subdir();

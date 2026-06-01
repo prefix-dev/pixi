@@ -6,6 +6,7 @@ use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
+use pixi_core::workspace::{PlatformOverrides, PlatformSource};
 use pixi_manifest::{
     FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit,
 };
@@ -541,7 +542,7 @@ async fn execute_list(
     }
 
     let mut stdout = std::io::stdout();
-    print_autodetected_host();
+    print_autodetected_host(workspace);
 
     if !workspace_platforms.is_empty() {
         let _ = writeln!(stdout, "\n{}", console::style("Platforms:").bold().bright());
@@ -585,17 +586,6 @@ async fn execute_remove(
 }
 
 /// Resolve the subdir `list` should treat as "current": the host's real
-/// subdir unless the user has set `PIXI_OVERRIDE_PLATFORM`. Pixi's other
-/// CLI paths use the same env var to cross-target a different platform
-/// (see `pixi_core::workspace::environment::current_platform_with_override`),
-/// and `list` should agree with them.
-fn current_platform_with_override() -> Platform {
-    std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM)
-        .ok()
-        .and_then(|val| val.parse::<Platform>().ok())
-        .unwrap_or_else(Platform::current)
-}
-
 /// Pretty-print rattler's host detection as a "diagnostic" header rather
 /// than another `<name>:` row -- the host has no manifest-side identity, so
 /// labelling it `current:` was misleading. The body is the same
@@ -604,8 +594,13 @@ fn current_platform_with_override() -> Platform {
 /// baseline. Both `PIXI_OVERRIDE_PLATFORM` and the `CONDA_OVERRIDE_*`
 /// virtual-package overrides are respected here so the header agrees
 /// with what the workspace rows are matched against.
-fn print_autodetected_host() {
-    let subdir = current_platform_with_override();
+fn print_autodetected_host(workspace: &pixi_core::Workspace) {
+    let subdir = workspace
+        .host_platform(
+            PlatformSource::Defaults,
+            PlatformOverrides::EnvironmentVariableOverrides,
+        )
+        .subdir();
     let detected: Vec<GenericVirtualPackage> =
         VirtualPackages::detect_for_platform(subdir, &VirtualPackageOverrides::from_env())
             .map(|d| d.into_generic_virtual_packages().collect())
@@ -662,20 +657,18 @@ struct HostMachine {
 
 impl HostMachine {
     fn detect(workspace: &pixi_core::Workspace) -> Self {
-        // Honor `PIXI_OVERRIDE_PLATFORM` so `list` reflects what the user
-        // is targeting, not just the literal machine they're typing on.
-        // Mirrors `pixi_core::workspace::environment::current_platform_with_override`.
-        let current = current_platform_with_override();
+        let current = workspace
+            .host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            )
+            .subdir();
         let candidate_subdirs = workspace
             .workspace_manifest()
             .workspace
             .candidate_subdirs(current);
         // `VirtualPackageOverrides::from_env()` reads the `CONDA_OVERRIDE_*`
         // family (`CUDA`, `GLIBC`, `OSX`, `WIN`, `ARCHSPEC`, ...). Calling
-        // rattler's detector directly here is the same path
-        // `detect_system_virtual_packages` takes in `pixi_core`; we can't
-        // route through `PixiPlatform::virtual_packages()` because that
-        // method only takes the platform's manifest-declared overrides.
         let detected =
             VirtualPackages::detect_for_platform(current, &VirtualPackageOverrides::from_env())
                 .map(|d| d.into_generic_virtual_packages().collect::<Vec<_>>())

@@ -415,7 +415,7 @@ impl<'p> TaskGraph<'p> {
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
             for dependency in dependencies {
                 let context = pixi_manifest::task::TaskRenderContext {
-                    platform: node.run_environment.best_platform(),
+                    platform: node.run_environment.best_declared_platform(),
                     environment_name: node.run_environment.name(),
                     manifest_path: None,
                     args: node.args.as_ref(),
@@ -776,7 +776,7 @@ mod test {
                 .map(|task_id| &graph[task_id])
                 .filter_map(|task| {
                     let context = pixi_manifest::task::TaskRenderContext {
-                        platform: task.run_environment.best_platform(),
+                        platform: task.run_environment.best_declared_platform(),
                         environment_name: task.run_environment.name(),
                         manifest_path: Some(&project.workspace.provenance.path),
                         args: task.args.as_ref(),
@@ -1093,7 +1093,7 @@ mod test {
         assert_eq!(order.len(), 1);
         let task = &graph[order[0]];
         let context = pixi_manifest::task::TaskRenderContext {
-            platform: task.run_environment.best_platform(),
+            platform: task.run_environment.best_declared_platform(),
             environment_name: task.run_environment.name(),
             manifest_path: Some(&project.workspace.provenance.path),
             args: task.args.as_ref(),
@@ -1140,7 +1140,7 @@ mod test {
         let order = graph.topological_order();
         let task = &graph[order[0]];
         let context = pixi_manifest::task::TaskRenderContext {
-            platform: task.run_environment.best_platform(),
+            platform: task.run_environment.best_declared_platform(),
             environment_name: task.run_environment.name(),
             manifest_path: Some(&project.workspace.provenance.path),
             args: task.args.as_ref(),

@@ -6,6 +6,7 @@ use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
     environment::{InstallFilter, get_update_lock_file_and_prefixes},
     lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
+    workspace::{HasWorkspaceRef, PlatformOverrides, PlatformSource},
 };
 use pixi_manifest::PixiPlatformName;
 use std::fmt::Write;
@@ -122,7 +123,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.all {
         let (supported, skipped): (Vec<_>, Vec<_>) = environments
             .into_iter()
-            .partition(|env| env.best_platform().is_some());
+            .partition(|env| env.best_declared_platform().is_some());
 
         if !skipped.is_empty() {
             tracing::warn!(
@@ -178,11 +179,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if skip_opts {
             // Use the platform the install actually targeted (honoring a
             // `--platform` override), falling back to the host subdir. Unlike
-            // `best_platform()`, this never panics when the chosen platform is
+            // `best_declared_platform()`, this never panics when the chosen platform is
             // not runnable on the current host (e.g. a cross-target install).
+            let host_platform = environment.workspace().host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            );
             let platform = environment
-                .pinned_platform(target_platform.as_ref())
-                .unwrap_or_else(|| environment.host_platform());
+                .named_or_best_declared_platform(target_platform.as_ref())
+                .unwrap_or(&host_platform);
             let locked_env = lock_file
                 .environment(environment.name().as_str())
                 .expect("lock file is missing installed environment");

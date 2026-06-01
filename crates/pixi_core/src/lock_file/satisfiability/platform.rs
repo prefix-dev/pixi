@@ -48,7 +48,7 @@ use crate::{
         package_identifier::ConversionError,
         records_by_name::{HasNameVersion, LockedPypiRecordsByName},
     },
-    workspace::{Environment, EnvironmentVars},
+    workspace::{Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource},
 };
 
 /// Context for verifying platform satisfiability.
@@ -305,7 +305,16 @@ pub async fn verify_platform_satisfiability(
             })?;
 
         // Get host platform records for building (we can only run Python on the host platform)
-        let best_platform_name = Some(ctx.environment.host_platform().name().clone());
+        let best_platform_name = Some(
+            ctx.environment
+                .workspace()
+                .host_platform(
+                    PlatformSource::Defaults,
+                    PlatformOverrides::EnvironmentVariableOverrides,
+                )
+                .name()
+                .clone(),
+        );
         let building_pixi_records = if best_platform_name.as_ref() == Some(&ctx.platform) {
             // Same platform, reuse the records
             Ok(pixi_records_by_name.clone())

@@ -139,7 +139,7 @@ async fn generate_environment_json(
     .await?;
 
     let activation_scripts: Vec<PathBuf> = environment
-        .activation_scripts(environment.best_platform())
+        .activation_scripts(environment.best_declared_platform())
         .into_iter()
         .map(|s| environment.workspace().root().join(s))
         .filter(|p| p.is_file())

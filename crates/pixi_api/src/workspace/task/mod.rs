@@ -79,11 +79,11 @@ pub async fn list_tasks(
         .into_iter()
         .map(|(env, task_names)| {
             let env_name = env.name().clone();
-            let best_platform = env.best_platform();
+            let best_declared_platform = env.best_declared_platform();
             let task_map = task_names
                 .into_iter()
                 .flat_map(|task_name| {
-                    env.task(&task_name, best_platform)
+                    env.task(&task_name, best_declared_platform)
                         .ok()
                         .map(|task| (task_name, task.clone()))
                 })

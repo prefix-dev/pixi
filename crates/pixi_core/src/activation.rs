@@ -1,5 +1,8 @@
 use crate::{Workspace, workspace::Environment};
-use crate::{environment::EnvironmentHash, workspace::HasWorkspaceRef};
+use crate::{
+    environment::EnvironmentHash,
+    workspace::{HasWorkspaceRef, PlatformOverrides, PlatformSource},
+};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -124,13 +127,15 @@ pub fn get_activator<'p>(
     // matching platform (e.g. `platforms = []`) fall back to a bare current
     // subdir so we can still activate; the lock-file path is the one that
     // enforces declared-platform support.
-    let fallback;
-    let pixi_platform: &pixi_manifest::PixiPlatform = match environment.best_platform() {
+    let host_platform;
+    let pixi_platform: &pixi_manifest::PixiPlatform = match environment.best_declared_platform() {
         Some(p) => p,
         None => {
-            fallback =
-                pixi_manifest::PixiPlatform::from_subdir(rattler_conda_types::Platform::current());
-            &fallback
+            host_platform = environment.workspace().host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            );
+            &host_platform
         }
     };
     let subdir = pixi_platform.subdir();

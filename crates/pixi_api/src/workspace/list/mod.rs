@@ -62,7 +62,7 @@ pub async fn list(
     };
     let platform = match resolved_platform.as_ref() {
         Some(p) => p,
-        None => environment.best_platform().ok_or_else(|| {
+        None => environment.best_declared_platform().ok_or_else(|| {
             miette::miette!(
                 "no platform supported by environment '{}' matches the current system",
                 environment.name()

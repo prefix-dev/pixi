@@ -499,7 +499,7 @@ impl WorkspaceMut {
             // environment's platforms match this machine (e.g. a `__cuda`
             // platform on a GPU-less host) just skip the install -- the add
             // still succeeds and the lock file is up to date.
-            if default_environment.best_platform().is_some() {
+            if default_environment.best_declared_platform().is_some() {
                 updated_lock_file
                     .prefix(
                         &default_environment,

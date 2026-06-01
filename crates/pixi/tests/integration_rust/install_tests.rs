@@ -1984,7 +1984,7 @@ async fn install_all_skips_unsupported_environments() {
     setup_tracing();
 
     let current_platform = Platform::current();
-    // Pick a platform from a different OS family so that no `best_platform`
+    // Pick a platform from a different OS family so that no `best_declared_platform`
     // fallback (e.g. osx-arm64 -> osx-64) accidentally rescues the env.
     let other_platform = if current_platform.is_linux() {
         Platform::Osx64

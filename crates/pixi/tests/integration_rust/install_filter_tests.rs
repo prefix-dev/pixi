@@ -78,7 +78,8 @@ async fn install_filter_skip_direct_soft_exclusion() {
     let skipped = PackageFilterNames::new(
         &filter,
         derived.lock_file.environment(env.name().as_str()).unwrap(),
-        env.best_platform().expect("no best platform for env"),
+        env.best_declared_platform()
+            .expect("no best platform for env"),
     )
     .unwrap()
     .ignored;
@@ -105,7 +106,8 @@ async fn install_filter_skip_with_deps_hard_exclusion() {
     let skipped = PackageFilterNames::new(
         &filter,
         derived.lock_file.environment(env.name().as_str()).unwrap(),
-        env.best_platform().expect("no best platform for env"),
+        env.best_declared_platform()
+            .expect("no best platform for env"),
     )
     .unwrap()
     .ignored;
@@ -139,7 +141,8 @@ async fn install_filter_target_package_zoom_in() {
     let skipped = PackageFilterNames::new(
         &filter,
         derived.lock_file.environment(env.name().as_str()).unwrap(),
-        env.best_platform().expect("no best platform for env"),
+        env.best_declared_platform()
+            .expect("no best platform for env"),
     )
     .unwrap()
     .ignored;
@@ -165,7 +168,8 @@ async fn install_filter_target_with_skip_with_deps_stop() {
     let skipped = PackageFilterNames::new(
         &filter,
         derived.lock_file.environment(env.name().as_str()).unwrap(),
-        env.best_platform().expect("no best platform for env"),
+        env.best_declared_platform()
+            .expect("no best platform for env"),
     )
     .unwrap()
     .ignored;

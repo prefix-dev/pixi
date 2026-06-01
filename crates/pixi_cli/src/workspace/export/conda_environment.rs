@@ -430,12 +430,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .ok_or_else(|| {
                 miette::miette!("workspace does not define a platform with subdir '{subdir}'")
             })?,
-        None => environment.best_platform().cloned().ok_or_else(|| {
-            miette::miette!(
-                "no platform supported by environment '{}' matches the current system",
-                environment.name()
-            )
-        })?,
+        None => environment
+            .best_declared_platform()
+            .cloned()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "no platform supported by environment '{}' matches the current system",
+                    environment.name()
+                )
+            })?,
     };
     let config = workspace.config();
     let name = args
@@ -497,7 +500,7 @@ mod tests {
                 .cloned()
                 .expect("test workspace must declare the requested platform"),
             None => environment
-                .best_platform()
+                .best_declared_platform()
                 .cloned()
                 .expect("environment must support the current system"),
         }
