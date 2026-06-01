@@ -121,6 +121,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if !environment.is_default() {
         eprintln!("Environment: {}", environment.name().fancy_display());
     }
+    if let Some(platform) = crate::shared::platform_note::installed_platform_note(&environment) {
+        eprintln!("Installed for: {platform}");
+    }
 
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();
