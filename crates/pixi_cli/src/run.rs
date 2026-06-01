@@ -22,7 +22,7 @@ use pixi_core::{
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
-use pixi_manifest::TaskName;
+use pixi_manifest::{PixiPlatformName, TaskName};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -35,6 +35,7 @@ use tracing::Level;
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 use crate::process_exit;
+use crate::shared::install_platform::resolve_install_platform;
 
 /// Runs task in the pixi environment.
 ///
@@ -75,6 +76,12 @@ pub struct Args {
     /// The environment to run the task in.
     #[arg(long, short)]
     pub environment: Option<String>,
+
+    /// Install and run in the environment for the given platform; a warning is
+    /// printed when it doesn't run on this machine. Accepts a workspace
+    /// platform name; a bare conda subdir (e.g. `linux-64`) is also accepted.
+    #[arg(long, short)]
+    pub platform: Option<PixiPlatformName>,
 
     /// Use a clean environment to run the task
     ///
@@ -152,13 +159,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Sanity check of prefix location
     sanity_check_workspace(&workspace).await?;
 
-    let best_platform = environment.best_platform();
+    // `--platform` pins which declared platform the environment is installed
+    // and activated for; without it we fall back to the host-aware best match.
+    let target_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
+    let best_platform = environment.pinned_platform(target_platform.as_ref());
 
     // Check if the current platform is supported, but only when we're going to
     // install/activate. Without installs we skip environment activation,
-    // so platform doesn't matter.
+    // so platform doesn't matter. A `--platform` that the environment doesn't
+    // list gets a clear membership error, matching `pixi install --platform`.
     if args.lock_and_install_config.allow_installs() && best_platform.is_none() {
-        return Err(environment.unsupported_platform_error().into());
+        return Err(if let Some(name) = target_platform.as_ref() {
+            miette::miette!(
+                "platform '{}' is not part of environment '{}'",
+                name,
+                environment.name(),
+            )
+        } else {
+            environment.unsupported_platform_error().into()
+        });
     }
 
     if args.lock_and_install_config.allow_installs() {
@@ -169,7 +188,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
     // Ensure that the lock file is up-to-date.
-    let lock_file = workspace
+    let mut lock_file = workspace
         .update_lock_file(
             Some(progress.clone()),
             UpdateLockFileOptions {
@@ -181,6 +200,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
         .await?
         .0;
+
+    // Pin `--platform` so the on-demand prefix install below targets it.
+    lock_file.target_platform = target_platform.clone();
 
     // Spawn a task that listens for ctrl+c and resets the cursor.
     tokio::spawn(async {
