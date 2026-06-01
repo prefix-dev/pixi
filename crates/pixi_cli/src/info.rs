@@ -7,6 +7,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
+use pixi_core::environment::PlatformData;
 use pixi_global::{BinDir, EnvRoot};
 use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasWorkspaceManifest};
@@ -72,6 +73,22 @@ impl From<&pixi_manifest::PixiPlatform> for PlatformInfo {
     }
 }
 
+/// Built from a marker-file [`PlatformData`], which records the platform's
+/// composition but not its name; the subdir stands in as the display name.
+impl From<&PlatformData> for PlatformInfo {
+    fn from(data: &PlatformData) -> Self {
+        Self {
+            name: data.subdir().into(),
+            subdir: data.subdir().to_string(),
+            virtual_packages: data
+                .virtual_packages()
+                .iter()
+                .map(|gvp| gvp.to_string())
+                .collect(),
+        }
+    }
+}
+
 /// Human-readable representation of a platform entry in the `pixi info`
 /// output: bare name when it carries no declared VPs, otherwise
 /// `<name> (vp1, vp2, ...)`.
@@ -92,6 +109,8 @@ pub struct EnvironmentInfo {
     dependencies: Vec<String>,
     pypi_dependencies: Vec<String>,
     platforms: Vec<PlatformInfo>,
+    resolved_platform: Option<PlatformInfo>,
+    minimum_supported_platform: Option<PlatformInfo>,
     tasks: Vec<TaskName>,
     channels: Vec<String>,
     prefix: PathBuf,
@@ -172,6 +191,23 @@ impl Display for EnvironmentInfo {
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Target platforms"),
                 platform_list
+            )?;
+        }
+
+        if let Some(resolved) = &self.resolved_platform {
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Resolved platform"),
+                format_platform(resolved)
+            )?;
+        }
+        if let Some(minimum) = &self.minimum_supported_platform {
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Minimum platform"),
+                format_platform(minimum)
             )?;
         }
 
@@ -444,6 +480,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     let environment_size =
                         args.extended.then(|| dir_size(env.dir()).ok()).flatten();
 
+                    let (resolved_platform, minimum_supported_platform) = env.installed_platforms();
+
                     EnvironmentInfo {
                         name: env.name().clone(),
                         features: env.features().map(|feature| feature.name.clone()).collect(),
@@ -471,6 +509,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                                     .map(PlatformInfo::from)
                             })
                             .collect(),
+                        resolved_platform: resolved_platform.as_ref().map(PlatformInfo::from),
+                        minimum_supported_platform: minimum_supported_platform
+                            .as_ref()
+                            .map(PlatformInfo::from),
                         channels: env.channels().into_iter().map(|c| c.to_string()).collect(),
                         prefix: env.dir(),
                         tasks,

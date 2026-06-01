@@ -103,6 +103,21 @@ impl<'p> Environment<'p> {
             .join(self.environment.name.as_str())
     }
 
+    /// The platforms recorded in this environment's `conda-meta/pixi` marker
+    /// file: `(resolved, minimum_supported)`. Both are `None` when the
+    /// environment isn't installed yet or was written by an older pixi.
+    pub fn installed_platforms(
+        &self,
+    ) -> (
+        Option<crate::environment::PlatformData>,
+        Option<crate::environment::PlatformData>,
+    ) {
+        match crate::environment::read_environment_file(&self.dir()) {
+            Ok(Some(file)) => (file.resolved_platform, file.minimum_supported_platform),
+            _ => (None, None),
+        }
+    }
+
     /// We store a hash of the lock file and all activation env variables in a
     /// file in the cache. The current name is
     /// `activation_environment-name.json`.

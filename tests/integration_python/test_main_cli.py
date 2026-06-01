@@ -1078,6 +1078,21 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "dependencies": [],
                     "pypi_dependencies": [],
                     "platforms": IsAnyList,
+                    "resolved_platform": {
+                        "name": "linux-64",
+                        "subdir": "linux-64",
+                        "virtual_packages": [
+                            "__unix=0=0",
+                            "__linux=4.18",
+                            "__glibc=2.28",
+                            "__archspec=0=x86_64",
+                        ],
+                    },
+                    "minimum_supported_platform": {
+                        "name": "linux-64",
+                        "subdir": "linux-64",
+                        "virtual_packages": [],
+                    },
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,
@@ -1090,6 +1105,21 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "dependencies": ["python"],
                     "pypi_dependencies": [],
                     "platforms": IsAnyList,
+                    "resolved_platform": {
+                        "name": "linux-64",
+                        "subdir": "linux-64",
+                        "virtual_packages": [
+                            "__unix=0=0",
+                            "__linux=4.18",
+                            "__glibc=2.28",
+                            "__archspec=0=x86_64",
+                        ],
+                    },
+                    "minimum_supported_platform": {
+                        "name": "linux-64",
+                        "subdir": "linux-64",
+                        "virtual_packages": [],
+                    },
                     "tasks": [],
                     "channels": ["conda-forge"],
                     "prefix": IsStr,

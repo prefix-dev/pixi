@@ -267,11 +267,23 @@ impl LockedEnvironmentHash {
 /// survives: a synthesised rich-platform name can't be parsed back into its
 /// virtual packages, and a bare subdir name drops them entirely.
 #[derive(Serialize, Deserialize)]
-pub(crate) struct PlatformData {
+pub struct PlatformData {
     /// The conda subdir this platform targets, e.g. `linux-64`.
     pub(crate) subdir: Platform,
     /// The virtual packages that define this platform.
     pub(crate) virtual_packages: Vec<GenericVirtualPackage>,
+}
+
+impl PlatformData {
+    /// The conda subdir this platform targets, e.g. `linux-64`.
+    pub fn subdir(&self) -> Platform {
+        self.subdir
+    }
+
+    /// The virtual packages that define this platform.
+    pub fn virtual_packages(&self) -> &[GenericVirtualPackage] {
+        &self.virtual_packages
+    }
 }
 
 impl From<&PixiPlatform> for PlatformData {
