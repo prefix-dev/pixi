@@ -68,12 +68,15 @@ use crate::{
     activation::CurrentEnvVarBehavior,
     environment::{
         CondaPrefixUpdated, EnvironmentFile, InstallFilter, LockFileUsage, LockedEnvironmentHash,
-        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, read_environment_file,
-        write_environment_file,
+        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PlatformData,
+        read_environment_file, write_environment_file,
     },
     lock_file::{
-        self, reporter::SolveProgressBar,
-        virtual_packages::validate_system_meets_environment_requirements,
+        self,
+        reporter::SolveProgressBar,
+        virtual_packages::{
+            compute_minimal_required_platforms, validate_system_meets_environment_requirements,
+        },
     },
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef,
@@ -695,6 +698,29 @@ impl<'p> LockFileDerivedData<'p> {
         ))
     }
 
+    /// The platform data recorded in the `conda-meta/pixi` marker file for the
+    /// installed prefix: the platform the environment was resolved with, and
+    /// the minimum platform its resolved packages actually require. `None` when
+    /// no declared platform runs on this machine.
+    fn installed_platform_data(
+        &self,
+        environment: &Environment<'p>,
+    ) -> Option<(PlatformData, PlatformData)> {
+        let resolved = environment.pinned_platform(self.target_platform.as_ref())?;
+        let minimal =
+            compute_minimal_required_platforms(&self.lock_file, environment.name(), &[resolved]);
+        // A subdir whose lock entry has no conda packages is absent from the
+        // map; the minimum is then the subdir with no required virtual packages.
+        let minimum = minimal.get(&resolved.subdir()).map_or_else(
+            || PlatformData {
+                subdir: resolved.subdir(),
+                virtual_packages: Vec::new(),
+            },
+            PlatformData::from,
+        );
+        Some((PlatformData::from(resolved), minimum))
+    }
+
     /// Returns the up-to-date prefix for the given environment.
     pub async fn prefix(
         &self,
@@ -727,6 +753,8 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Save an environment file to the environment directory after the update.
         // Avoiding writing the cache away before the update is done.
+        let (resolved_platform, minimum_supported_platform) =
+            self.installed_platform_data(environment).unzip();
         write_environment_file(
             &environment.dir(),
             EnvironmentFile {
@@ -734,6 +762,8 @@ impl<'p> LockFileDerivedData<'p> {
                 environment_name: environment.name().to_string(),
                 pixi_version: consts::PIXI_VERSION.to_string(),
                 environment_lock_file_hash: hash,
+                resolved_platform,
+                minimum_supported_platform,
             },
         )?;
 

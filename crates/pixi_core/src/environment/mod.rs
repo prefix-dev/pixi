@@ -15,7 +15,7 @@ pub use pixi_python_status::PythonStatus;
 use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::EnvironmentFingerprint;
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_lock::{LockFile, LockedPackage};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
@@ -261,6 +261,28 @@ impl LockedEnvironmentHash {
     }
 }
 
+/// The conda subdir plus the virtual packages that define a [`PixiPlatform`].
+///
+/// Stored instead of the platform's name so the full platform definition
+/// survives: a synthesised rich-platform name can't be parsed back into its
+/// virtual packages, and a bare subdir name drops them entirely.
+#[derive(Serialize, Deserialize)]
+pub(crate) struct PlatformData {
+    /// The conda subdir this platform targets, e.g. `linux-64`.
+    pub(crate) subdir: Platform,
+    /// The virtual packages that define this platform.
+    pub(crate) virtual_packages: Vec<GenericVirtualPackage>,
+}
+
+impl From<&PixiPlatform> for PlatformData {
+    fn from(platform: &PixiPlatform) -> Self {
+        Self {
+            subdir: platform.subdir(),
+            virtual_packages: platform.declared_virtual_packages().to_vec(),
+        }
+    }
+}
+
 /// Information about the environment that was used to create the environment.
 ///
 /// The install fingerprint that downstream caches key on lives in a
@@ -278,6 +300,16 @@ pub(crate) struct EnvironmentFile {
     pub(crate) pixi_version: String,
     /// The hash of the lock file that was used to create the environment.
     pub(crate) environment_lock_file_hash: LockedEnvironmentHash,
+    /// The platform the environment was resolved with (subdir + the virtual
+    /// packages the workspace declared for it). `None` on environments written
+    /// by an older pixi, or when no declared platform runs on this machine.
+    #[serde(default)]
+    pub(crate) resolved_platform: Option<PlatformData>,
+    /// The minimum platform the installed packages actually require (the subdir
+    /// plus only the virtual packages some resolved dependency depends on). Can
+    /// be weaker than [`Self::resolved_platform`]. `None` as above.
+    #[serde(default)]
+    pub(crate) minimum_supported_platform: Option<PlatformData>,
 }
 
 /// The path to the environment file in the `conda-meta` directory of the
@@ -737,3 +769,58 @@ pub type PerEnvironment<'p, T> = HashMap<Environment<'p>, T>;
 pub type PerGroup<'p, T> = HashMap<GroupedEnvironment<'p>, T>;
 pub type PerEnvironmentAndPlatform<'p, T> = PerEnvironment<'p, HashMap<PixiPlatformName, T>>;
 pub type PerGroupAndPlatform<'p, T> = PerGroup<'p, HashMap<PixiPlatformName, T>>;
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use rattler_conda_types::{PackageName, Version};
+
+    use super::*;
+
+    /// A marker file written by an older pixi has no platform fields. It must
+    /// still deserialize (with both fields `None`) so a pixi upgrade doesn't
+    /// invalidate every installed prefix.
+    #[test]
+    fn environment_file_without_platforms_deserializes() {
+        let json = r#"{
+            "manifest_path": "/ws/pixi.toml",
+            "environment_name": "default",
+            "pixi_version": "0.1.0",
+            "environment_lock_file_hash": "deadbeef"
+        }"#;
+        let parsed: EnvironmentFile = serde_json::from_str(json).expect("legacy file parses");
+        assert!(parsed.resolved_platform.is_none());
+        assert!(parsed.minimum_supported_platform.is_none());
+    }
+
+    /// `PlatformData` stores the platform's composition (subdir + declared
+    /// virtual packages), not its name -- a custom rich-platform name carries
+    /// none of the virtual packages, so the name alone would be lossy.
+    #[test]
+    fn platform_data_captures_composition_not_name() {
+        let cuda = GenericVirtualPackage {
+            name: PackageName::from_str("__cuda").unwrap(),
+            version: Version::from_str("12").unwrap(),
+            build_string: String::new(),
+        };
+        let platform = PixiPlatform::new(
+            PixiPlatformName::try_from("gpu-box").unwrap(),
+            Platform::Linux64,
+            vec![cuda.clone()],
+        )
+        .unwrap();
+
+        let data = PlatformData::from(&platform);
+        assert_eq!(data.subdir, Platform::Linux64);
+        assert!(data.virtual_packages.contains(&cuda));
+
+        // The composition survives a JSON round-trip; the custom name is not
+        // part of the stored data.
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(!json.contains("gpu-box"));
+        let restored: PlatformData = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored.subdir, Platform::Linux64);
+        assert!(restored.virtual_packages.contains(&cuda));
+    }
+}
