@@ -4260,6 +4260,11 @@ Because resolvo is written to support both ecosystems, it is possible to use it 
 <p>Pixi first runs the conda (<code>rattler</code>) solver, which will resolve the conda dependencies.
 Then it maps the conda packages to PyPI packages, using <a href="https://github.com/prefix-dev/parselmouth"><code>parselmouth</code></a>.
 Then it runs the PyPI (<code>uv</code>) solver, which will resolve the remaining PyPI dependencies.</p>
+<div class="admonition tip">
+<p class="admonition-title">Explore the mapping</p>
+<p>You can browse the conda-to-PyPI name mapping that <code>parselmouth</code> provides using the
+<a href="https://prefix-dev.github.io/parselmouth/">parselmouth mapping browser</a>.</p>
+</div>
 <p>The consequence is that Pixi will install the conda package (and not the PyPI package) if both are available and specified as dependencies.</p>
 <p>Here is an example of how this works in practice:
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[dependencies]</span>
