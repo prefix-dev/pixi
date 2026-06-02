@@ -121,6 +121,58 @@ impl PixiRecord {
     }
 }
 
+/// A stable, order-independent fingerprint over a set of conda records.
+///
+/// Used to scope PyPI source-build cache keys per environment, so a wheel
+/// built against one set of conda dependencies isn't reused in another that
+/// resolves different ones. See <https://github.com/prefix-dev/pixi/issues/6226>.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CondaEnvironmentFingerprint(u64);
+
+impl CondaEnvironmentFingerprint {
+    /// Computes the fingerprint over the given conda records.
+    pub fn new<'a>(records: impl IntoIterator<Item = &'a PixiRecord>) -> Self {
+        use std::hash::{Hash, Hasher};
+
+        use xxhash_rust::xxh3::Xxh3;
+
+        // Names are unique within an environment, so sorting by name makes the
+        // result order-independent.
+        let mut records: Vec<&PixiRecord> = records.into_iter().collect();
+        records.sort_unstable_by(|a, b| {
+            a.package_record()
+                .name
+                .as_normalized()
+                .cmp(b.package_record().name.as_normalized())
+        });
+
+        let mut hasher = Xxh3::new();
+        for record in records {
+            let package_record = record.package_record();
+            package_record.name.as_normalized().hash(&mut hasher);
+            package_record.version.to_string().hash(&mut hasher);
+            package_record.build.hash(&mut hasher);
+            package_record.subdir.hash(&mut hasher);
+            if let Some(sha256) = package_record.sha256.as_ref() {
+                sha256.as_slice().hash(&mut hasher);
+            }
+            // Source packages have no binary hash; use the content-derived
+            // identifier and pinned source instead.
+            if let Some(source) = record.as_source() {
+                source.identifier_hash.hash(&mut hasher);
+                source.manifest_source.hash(&mut hasher);
+            }
+        }
+        Self(hasher.finish())
+    }
+}
+
+impl std::fmt::Display for CondaEnvironmentFingerprint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:016x}", self.0)
+    }
+}
+
 impl From<SourceRecord> for PixiRecord {
     fn from(value: SourceRecord) -> Self {
         PixiRecord::Source(Arc::new(value))
@@ -514,5 +566,100 @@ impl AsRef<PackageRecord> for PixiRecord {
             PixiRecord::Binary(record) => &record.package_record,
             PixiRecord::Source(record) => record.as_ref().as_ref(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::BTreeMap, str::FromStr};
+
+    use rattler_conda_types::{VersionWithSource, package::DistArchiveIdentifier};
+
+    use super::*;
+
+    fn binary_record(name: &str, version: &str, build: &str) -> PixiRecord {
+        let mut package_record = PackageRecord::new(
+            PackageName::from_str(name).unwrap(),
+            version.parse::<VersionWithSource>().unwrap(),
+            build.to_string(),
+        );
+        package_record.subdir = "linux-64".into();
+        let record = RepoDataRecord {
+            package_record,
+            identifier: DistArchiveIdentifier::try_from_filename(&format!(
+                "{name}-{version}-{build}.conda"
+            ))
+            .unwrap(),
+            url: url::Url::parse("https://example.com/pkg.conda").unwrap(),
+            channel: None,
+        };
+        PixiRecord::Binary(Arc::new(record))
+    }
+
+    fn source_record(name: &str, identifier_hash: &str, path: &str) -> PixiRecord {
+        let mut package_record = PackageRecord::new(
+            PackageName::from_str(name).unwrap(),
+            "1.0.0".parse::<VersionWithSource>().unwrap(),
+            "h0".to_string(),
+        );
+        package_record.subdir = "linux-64".into();
+        let record = SourceRecord {
+            data: FullSourceRecordData {
+                package_record,
+                sources: BTreeMap::new(),
+            },
+            manifest_source: PinnedSourceSpec::Path(PinnedPathSpec {
+                path: typed_path::Utf8TypedPathBuf::from(path),
+            }),
+            build_source: None,
+            variants: BTreeMap::new(),
+            identifier_hash: identifier_hash.to_string(),
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
+        };
+        PixiRecord::Source(Arc::new(record))
+    }
+
+    fn fingerprint(records: &[PixiRecord]) -> String {
+        CondaEnvironmentFingerprint::new(records).to_string()
+    }
+
+    #[test]
+    fn fingerprint_is_order_independent() {
+        let gdal = binary_record("libgdal", "3.10.3", "h0");
+        let python = binary_record("python", "3.12.0", "h1");
+        assert_eq!(
+            fingerprint(&[gdal.clone(), python.clone()]),
+            fingerprint(&[python, gdal]),
+        );
+    }
+
+    #[test]
+    fn fingerprint_changes_with_conda_dependency_version() {
+        // The motivating case from issue #6226.
+        let gdal_310 = binary_record("libgdal", "3.10.3", "h0");
+        let gdal_313 = binary_record("libgdal", "3.13.0", "h0");
+        assert_ne!(fingerprint(&[gdal_310]), fingerprint(&[gdal_313]));
+    }
+
+    #[test]
+    fn fingerprint_changes_with_conda_dependency_build() {
+        let gdal_h0 = binary_record("libgdal", "3.10.3", "h0");
+        let gdal_h1 = binary_record("libgdal", "3.10.3", "h1");
+        assert_ne!(fingerprint(&[gdal_h0]), fingerprint(&[gdal_h1]));
+    }
+
+    #[test]
+    fn fingerprint_changes_with_source_identifier() {
+        let a = source_record("my-pkg", "aaaaaaaa", "./my-pkg");
+        let b = source_record("my-pkg", "bbbbbbbb", "./my-pkg");
+        assert_ne!(fingerprint(&[a]), fingerprint(&[b]));
+    }
+
+    #[test]
+    fn fingerprint_changes_with_source_location() {
+        let a = source_record("my-pkg", "aaaaaaaa", "./my-pkg");
+        let b = source_record("my-pkg", "aaaaaaaa", "./other");
+        assert_ne!(fingerprint(&[a]), fingerprint(&[b]));
     }
 }

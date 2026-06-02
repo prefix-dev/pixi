@@ -19,8 +19,9 @@ use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_options_to_build_options,
-    pypi_options_to_index_locations, to_index_strategy, to_requirements,
+    configure_insecure_hosts_for_tls_bypass, into_pixi_reference, pypi_build_config_settings,
+    pypi_options_to_build_options, pypi_options_to_index_locations, to_index_strategy,
+    to_requirements,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
@@ -633,8 +634,11 @@ async fn read_local_package_metadata(
         )
     };
 
-    // Create build dispatch parameters
-    let config_settings = ConfigSettings::default();
+    // Scope source builds to the conda environment. See issue #6226.
+    let config_settings = match ctx.building_pixi_records.as_ref() {
+        Ok(records) => pypi_build_config_settings(&records.records),
+        Err(_) => ConfigSettings::default(),
+    };
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &ctx.uv_context.cache,
