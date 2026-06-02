@@ -240,6 +240,7 @@ async fn setup_environment(
     let environment_update = project
         .install_environment_with_options(env_name, args.force_reinstall)
         .await?;
+    project.clear_progress();
 
     // Sync exposed name
     sync_exposed_names(env_name, project, args).await?;

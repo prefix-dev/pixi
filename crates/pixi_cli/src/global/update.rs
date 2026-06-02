@@ -118,40 +118,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    // Run install directly for a single environment.
-    if env_names.len() == 1 {
-        let env_name = &env_names[0];
-        let mut project = project_original;
-        let result = install_and_determine_expose_type(&project, env_name).await;
-        match result {
-            Ok(env_result) => {
-                let env_name = env_result.env_name.clone();
-                match apply_manifest_changes(&mut project, env_result).await {
-                    Ok(state_changes) => state_changes.report(),
-                    Err(err) => {
-                        revert_environment_after_error(&env_name, &project).await?;
-                        return Err(err);
-                    }
-                }
-            }
-            Err(err) => {
-                let _ = project.manifest.save().await;
-                return Err(err);
-            }
-        }
-        project.manifest.save().await?;
-        return Ok(());
-    }
-
-    // Install in parallel with for multiple environments.
-    let install_results: Vec<miette::Result<EnvInstallResult>> =
-        futures::future::join_all(env_names.iter().map(|env_name| {
-            let project = project_original.clone().with_fresh_progress();
-            async move { install_and_determine_expose_type(&project, env_name).await }
-        }))
-        .await;
+    // Install all environments in parallel, sharing one dispatcher.
+    let install_results: Vec<miette::Result<EnvInstallResult>> = futures::future::join_all(
+        env_names
+            .iter()
+            .map(|env_name| install_and_determine_expose_type(&project_original, env_name)),
+    )
+    .await;
 
     let mut project = project_original;
+    project.clear_progress();
     for result in install_results {
         match result {
             Ok(env_result) => {
