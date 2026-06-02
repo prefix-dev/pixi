@@ -36,6 +36,8 @@ pixi add [OPTIONS] <SPEC>...
 
 - [`--editable`](#arg---editable) : Whether the pypi requirement should be editable
 
+- [`--index <INDEX>`](#arg---index) : The PyPI index URL to use for this dependency. Only applicable when adding pypi dependencies
+
 ## Config Options
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) : Path to the file containing the authentication token
