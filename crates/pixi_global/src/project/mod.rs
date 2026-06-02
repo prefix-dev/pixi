@@ -505,11 +505,14 @@ impl Project {
         self
     }
 
-    /// Reset the command dispatcher and progress reporter.
-    pub fn with_fresh_progress(mut self) -> Self {
-        self.command_dispatcher = OnceCell::new();
-        self.top_level_progress = OnceCell::new();
-        self
+    /// Clear any active progress bars without tearing down the reporter.
+    ///
+    /// Installing draws into a shared progress reporter; callers invoke this
+    /// once they are done installing so the bars don't linger.
+    pub fn clear_progress(&self) {
+        if let Some(progress) = self.top_level_progress.get() {
+            progress.on_clear();
+        }
     }
 
     /// Returns the environments in this project.
@@ -696,8 +699,6 @@ impl Project {
                 variant_files: None,
             })
             .await?;
-
-        self.top_level_progress().on_clear();
 
         let install_changes = get_install_changes(result.transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
@@ -1123,6 +1124,24 @@ impl Project {
         env_name: &EnvironmentName,
         removed_packages: Option<Vec<PackageName>>,
     ) -> miette::Result<StateChanges> {
+        let mut state_changes = self
+            .sync_environment_install(env_name, removed_packages)
+            .await?;
+        state_changes |= self.sync_environment_expose(env_name).await?;
+        Ok(state_changes)
+    }
+
+    /// Install phase of [`Self::sync_environment`]: bring the environment's
+    /// installation in line with the manifest.
+    ///
+    /// Safe to run concurrently for multiple environments: it only touches the
+    /// environment's own prefix and the shared, concurrency-safe command
+    /// dispatcher.
+    pub async fn sync_environment_install(
+        &self,
+        env_name: &EnvironmentName,
+        removed_packages: Option<Vec<PackageName>>,
+    ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
         if self.environment_in_sync(env_name).await? {
             tracing::debug!(
@@ -1145,6 +1164,19 @@ impl Project {
                 StateChange::UpdatedEnvironment(environment_update),
             );
         }
+        Ok(state_changes)
+    }
+
+    /// Expose phase of [`Self::sync_environment`]: link executables, shortcuts
+    /// and completions for the environment.
+    ///
+    /// Must run sequentially across environments: these write into directories
+    /// shared by all environments (the binary, shortcut and completion dirs).
+    pub async fn sync_environment_expose(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
