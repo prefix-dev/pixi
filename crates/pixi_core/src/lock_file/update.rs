@@ -2795,22 +2795,31 @@ async fn spawn_extract_environment_task(
 
     #[derive(Clone, Eq, PartialEq, Hash)]
     enum PackageName {
-        Conda(rattler_conda_types::PackageName),
+        // `Some(extra)` follows that extra group's `experimental_extra_depends`.
+        Conda((rattler_conda_types::PackageName, Option<String>)),
         Pypi((uv_normalize::PackageName, Option<ExtraName>)),
     }
 
     enum PackageRecord<'a> {
-        Conda(&'a PixiRecord),
+        Conda((&'a PixiRecord, Option<String>)),
         Pypi((&'a LockedPypiRecord, Option<ExtraName>)),
     }
 
-    // Determine the conda packages we need.
-    let mut conda_package_names: Vec<_> = environment
-        .combined_dependencies(Some(platform))
-        .names()
-        .cloned()
-        .map(PackageName::Conda)
-        .collect();
+    // Queue each conda dep, plus an entry per requested extra so the walk
+    // follows that extra's `experimental_extra_depends`.
+    let combined_conda_dependencies = environment.combined_dependencies(Some(platform));
+    let mut conda_package_names: Vec<PackageName> = Vec::new();
+    for (name, spec) in combined_conda_dependencies.iter_specs() {
+        conda_package_names.push(PackageName::Conda((name.clone(), None)));
+        if let Some(extras) = spec
+            .as_detailed()
+            .and_then(|detailed| detailed.extras.as_ref())
+        {
+            for extra in extras {
+                conda_package_names.push(PackageName::Conda((name.clone(), Some(extra.clone()))));
+            }
+        }
+    }
 
     // Also include packages from dev dependencies.
     // Dev dependencies are source packages that bring in their own dependencies.
@@ -2885,7 +2894,7 @@ async fn spawn_extract_environment_task(
         // Add the resolved dev dependency package names to the queue
         for dep in resolved_dev_deps {
             if let Some(name) = dep.conda_package_name() {
-                conda_package_names.push(PackageName::Conda(name));
+                conda_package_names.push(PackageName::Conda((name, None)));
             }
         }
     }
@@ -2922,19 +2931,40 @@ async fn spawn_extract_environment_task(
     let mut queue = itertools::chain(conda_package_names, pypi_package_names).collect::<Vec<_>>();
     let mut queued_names = queue.iter().cloned().collect::<HashSet<_>>();
 
+    // Queue entries a dependency implies: the package, plus one per requested
+    // extra (so extra-only packages aren't pruned).
+    let conda_dependency_entries = |dependency: &str| -> Vec<PackageName> {
+        let base_name = rattler_conda_types::PackageName::from_matchspec_str_unchecked(dependency);
+        let mut entries = vec![PackageName::Conda((base_name, None))];
+        if dependency.contains('[')
+            && let Ok(spec) = rattler_conda_types::MatchSpec::from_str(
+                dependency,
+                rattler_conda_types::ParseMatchSpecOptions::lenient()
+                    .with_repodata_revision(rattler_conda_types::RepodataRevision::V3),
+            )
+            && let rattler_conda_types::PackageNameMatcher::Exact(name) = spec.name
+        {
+            for extra in spec.extras.into_iter().flatten() {
+                entries.push(PackageName::Conda((name.clone(), Some(extra))));
+            }
+        }
+        entries
+    };
+
     let mut pixi_records = Vec::new();
+    let mut seen_conda_records = HashSet::new();
     let mut pypi_records = HashMap::new();
     while let Some(package) = queue.pop() {
         let record = match package {
-            PackageName::Conda(name) => grouped_repodata_records
+            PackageName::Conda((name, extra)) => grouped_repodata_records
                 .by_name(&name)
-                .map(PackageRecord::Conda),
+                .map(|record| PackageRecord::Conda((record, extra))),
             PackageName::Pypi((name, extra)) => {
                 let pep_name = to_normalize(&name).into_diagnostic()?;
                 if let Some(found_record) = grouped_pypi_records.by_name(&pep_name) {
                     Some(PackageRecord::Pypi((found_record, extra)))
                 } else if let Some((_, _, found_record)) = conda_package_identifiers.get(&name) {
-                    Some(PackageRecord::Conda(found_record))
+                    Some(PackageRecord::Conda((found_record, None)))
                 } else {
                     None
                 }
@@ -2948,20 +2978,36 @@ async fn spawn_extract_environment_task(
         };
 
         match record {
-            PackageRecord::Conda(record) => {
-                // Find all dependencies in the record and add them to the queue.
+            PackageRecord::Conda((record, extra)) => {
+                // Regular dependencies.
                 for dependency in record.package_record().depends.iter() {
-                    let dependency_name =
-                        PackageName::Conda(rattler_conda_types::PackageName::new_unchecked(
-                            dependency.split_once(' ').unwrap_or((dependency, "")).0,
-                        ));
-                    if queued_names.insert(dependency_name.clone()) {
-                        queue.push(dependency_name);
+                    for entry in conda_dependency_entries(dependency) {
+                        if queued_names.insert(entry.clone()) {
+                            queue.push(entry);
+                        }
                     }
                 }
 
-                // Store the record itself as part of the subset
-                pixi_records.push(record);
+                // Dependencies contributed by the requested extra.
+                if let Some(extra) = &extra
+                    && let Some(extra_dependencies) = record
+                        .package_record()
+                        .experimental_extra_depends
+                        .get(extra)
+                {
+                    for dependency in extra_dependencies {
+                        for entry in conda_dependency_entries(dependency) {
+                            if queued_names.insert(entry.clone()) {
+                                queue.push(entry);
+                            }
+                        }
+                    }
+                }
+
+                // Store the record once.
+                if seen_conda_records.insert(record.package_record().name.clone()) {
+                    pixi_records.push(record);
+                }
             }
             PackageRecord::Pypi((record, extra)) => {
                 // Evaluate all dependencies

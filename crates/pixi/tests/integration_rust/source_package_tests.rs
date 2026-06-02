@@ -2710,3 +2710,179 @@ host-lib = "*"
     version: 0.4.2
     "###);
 }
+
+/// A binary package that declares two extra groups (`foo` and `bar`) must be
+/// solvable from two environments that each select a different extra, even when
+/// those environments share a solve group.
+///
+/// `my-package` advertises `experimental_extra_depends = { foo: [dep-foo],
+/// bar: [dep-bar] }` in its repodata. Environment `env-foo` depends on
+/// `my-package[foo]` and `env-bar` on `my-package[bar]`. Sharing a solve group
+/// keeps the resolved versions consistent across both environments, but
+/// per-environment extraction must still pull in only the dependencies of the
+/// extra each environment actually selected: `env-foo` gets `dep-foo` and not
+/// `dep-bar`, and vice versa.
+#[tokio::test]
+async fn test_package_extras_select_per_environment_in_solve_group() {
+    setup_tracing();
+
+    // `dep-foo` and `dep-bar` are the packages pulled in by the `foo` and `bar`
+    // extras respectively. `my-package` advertises both extra groups through
+    // its `experimental_extra_depends` repodata field. All three live in the
+    // same local channel so the solver can resolve them once an extra selects
+    // them.
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("dep-foo", "1.0.0").finish());
+    package_database.add_package(Package::build("dep-bar", "1.0.0").finish());
+
+    let mut my_package = Package::build("my-package", "1.0.0").finish();
+    my_package.package_record.experimental_extra_depends = std::collections::BTreeMap::from([
+        ("foo".to_string(), vec!["dep-foo".to_string()]),
+        ("bar".to_string(), vec!["dep-bar".to_string()]),
+    ]);
+    package_database.add_package(my_package);
+
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+
+    // Two environments, both depending on `my-package` but selecting a
+    // different extra, sharing the `shared` solve group.
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+
+[feature.foo.dependencies]
+my-package = {{ version = "*", extras = ["foo"] }}
+
+[feature.bar.dependencies]
+my-package = {{ version = "*", extras = ["bar"] }}
+
+[environments]
+env-foo = {{ features = ["foo"], solve-group = "shared" }}
+env-bar = {{ features = ["bar"], solve-group = "shared" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    let lock_file = pixi
+        .update_lock_file()
+        .await
+        .expect("lock file generation should succeed for a package with extras");
+
+    let platform = Platform::current();
+
+    // Both environments must be present in the lock file.
+    assert!(
+        lock_file.environment("env-foo").is_some(),
+        "lock file should contain the env-foo environment"
+    );
+    assert!(
+        lock_file.environment("env-bar").is_some(),
+        "lock file should contain the env-bar environment"
+    );
+
+    // Both environments contain the source package itself.
+    assert!(
+        lock_file.contains_conda_package("env-foo", platform, "my-package"),
+        "env-foo should contain my-package"
+    );
+    assert!(
+        lock_file.contains_conda_package("env-bar", platform, "my-package"),
+        "env-bar should contain my-package"
+    );
+
+    // env-foo selected the `foo` extra: it must contain `dep-foo` only.
+    assert!(
+        lock_file.contains_conda_package("env-foo", platform, "dep-foo"),
+        "env-foo selected extra foo and must contain dep-foo"
+    );
+    assert!(
+        !lock_file.contains_conda_package("env-foo", platform, "dep-bar"),
+        "env-foo did not select extra bar and must not contain dep-bar"
+    );
+
+    // env-bar selected the `bar` extra: it must contain `dep-bar` only.
+    assert!(
+        lock_file.contains_conda_package("env-bar", platform, "dep-bar"),
+        "env-bar selected extra bar and must contain dep-bar"
+    );
+    assert!(
+        !lock_file.contains_conda_package("env-bar", platform, "dep-foo"),
+        "env-bar did not select extra foo and must not contain dep-foo"
+    );
+}
+
+/// A lock file for two solve-group environments that each select a different
+/// extra of the same package must satisfy its manifest.
+///
+/// This exercises the satisfiability check (rather than just the solve): the
+/// reachability walk has to follow each package's `experimental_extra_depends`
+/// for the extra its environment selected. If it does not, `dep-foo` / `dep-bar`
+/// are flagged as unused locked packages and the lock is wrongly considered
+/// out-of-date, re-solving on every invocation. The second
+/// `update_lock_file` therefore must report the lock as already up-to-date.
+#[tokio::test]
+async fn test_package_extras_lock_file_is_satisfiable() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("dep-foo", "1.0.0").finish());
+    package_database.add_package(Package::build("dep-bar", "1.0.0").finish());
+
+    let mut my_package = Package::build("my-package", "1.0.0").finish();
+    my_package.package_record.experimental_extra_depends = std::collections::BTreeMap::from([
+        ("foo".to_string(), vec!["dep-foo".to_string()]),
+        ("bar".to_string(), vec!["dep-bar".to_string()]),
+    ]);
+    package_database.add_package(my_package);
+
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+
+[feature.foo.dependencies]
+my-package = {{ version = "*", extras = ["foo"] }}
+
+[feature.bar.dependencies]
+my-package = {{ version = "*", extras = ["bar"] }}
+
+[environments]
+env-foo = {{ features = ["foo"], solve-group = "shared" }}
+env-bar = {{ features = ["bar"], solve-group = "shared" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // First invocation: generate the lock file.
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated) = workspace
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("first lock file generation should succeed");
+    assert!(was_updated, "first invocation should create the lock file");
+
+    // Second invocation: the existing lock must be found satisfiable so the
+    // lock file is not rewritten.
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated_second) = workspace
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("second lock file check should succeed");
+    assert!(
+        !was_updated_second,
+        "a lock file selecting package extras must satisfy its manifest and not be re-solved"
+    );
+}
