@@ -17,11 +17,16 @@ use rattler_build_recipe::{
 };
 use rattler_build_variant_config::{VariantConfig, VariantConfigError};
 use rattler_conda_types::compression_level::CompressionLevel;
-use rattler_conda_types::{GenericVirtualPackage, NoArchType, Platform, package::CondaArchiveType};
+use rattler_conda_types::{
+    GenericVirtualPackage, NoArchType, Platform, RepodataRevision, package::CondaArchiveType,
+};
 use rattler_virtual_packages::VirtualPackageOverrides;
 use url::Url;
 
-use crate::{source::Source, specs_conversion::convert_variant_from_pixi_build_types};
+use crate::{
+    source::Source, specs_conversion::convert_variant_from_pixi_build_types,
+    v3::recipe_source_uses_v3,
+};
 
 /// A `recipe.yaml` file might be accompanied by a `variants.toml` file from
 /// which we can read variant configuration for that specific recipe..
@@ -200,8 +205,17 @@ impl RattlerBuild {
             self.recipe_source.code.to_string(),
         );
 
+        let repodata_revision = if recipe_source_uses_v3(&self.recipe_source.code) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
+
         // Parse the recipe into a stage0 representation
-        let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
+        let stage0_recipe = rattler_build_recipe::parse_recipe_with_config(
+            &source,
+            rattler_build_recipe::stage0::ParseConfig { repodata_revision },
+        )?;
 
         // Check if there is a `variants.yaml` file next to the recipe that we should
         // potentially use.
@@ -235,6 +249,7 @@ impl RattlerBuild {
             .with_build_platform(self.build_platform)
             .with_host_platform(self.host_platform)
             .with_experimental(self.experimental)
+            .with_repodata_revision(repodata_revision)
             .with_recipe_path(&self.recipe_source.path);
 
         // Render recipe with variant config
@@ -292,6 +307,11 @@ impl RattlerBuild {
         build_platform: Platform,
     ) -> miette::Result<Vec<Output>> {
         let mut outputs = Vec::new();
+        let repodata_revision = if recipe_source_uses_v3(&self.recipe_source.code) {
+            RepodataRevision::V3
+        } else {
+            RepodataRevision::Legacy
+        };
 
         let mut subpackages = BTreeMap::new();
 
@@ -373,7 +393,7 @@ impl RattlerBuild {
                     sandbox_config: None,
                     exclude_newer: None,
                     env_isolation: Default::default(),
-                    v3: false,
+                    repodata_revision,
                 },
                 finalized_dependencies: None,
                 finalized_cache_dependencies: None,

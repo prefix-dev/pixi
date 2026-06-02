@@ -2,6 +2,7 @@
 mod capabilities;
 mod channel_configuration;
 mod conda_package_metadata;
+mod extra_group_name;
 mod input_glob_set;
 pub mod procedures;
 mod project_model;
@@ -12,6 +13,7 @@ use std::{fmt::Display, sync::LazyLock};
 pub use capabilities::{BackendCapabilities, FrontendCapabilities};
 pub use channel_configuration::ChannelConfiguration;
 pub use conda_package_metadata::CondaPackageMetadata;
+pub use extra_group_name::{ExtraGroupName, InvalidExtraGroupName, MAX_EXTRA_GROUP_NAME_LEN};
 pub use input_glob_set::InputGlobSet;
 pub use project_model::{
     BinaryPackageSpec, ConstraintSpec, GitReference, GitSpec, NamedSpec, PackageSpec, PathSpec,

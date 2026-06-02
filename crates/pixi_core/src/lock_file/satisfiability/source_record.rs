@@ -617,7 +617,7 @@ fn verify_locked_against_backend_specs(
 
         match &dep.spec {
             PackageSpec::Binary(binary) => {
-                let nameless = from_binary_spec_v1(binary.clone())
+                let nameless = from_binary_spec_v1((**binary).clone())
                     .try_into_nameless_match_spec(channel_config)
                     .map_err(|e| {
                         failed_to_parse_match_spec_unsat(
@@ -771,8 +771,15 @@ fn build_full_source_record_from_output(
         track_features: vec![],
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
-        experimental_extra_depends: Default::default(),
-        flags: Default::default(),
+        // Reuse the locked record's already-resolved extras, mirroring how
+        // `depends`/`constrains` are taken from the lock above. `output`'s
+        // extras are unresolved (source specs are not yet pinned), so deriving
+        // them here would drop the resolution the original solve produced.
+        experimental_extra_depends: match &record.data {
+            SourceRecordData::Full(full) => full.package_record.experimental_extra_depends.clone(),
+            SourceRecordData::Partial(partial) => partial.experimental_extra_depends.clone(),
+        },
+        flags: output.metadata.flags.clone(),
     };
     let sources: std::collections::BTreeMap<String, SourceLocationSpec> = match &record.data {
         SourceRecordData::Full(full) => full.sources.clone(),
@@ -865,7 +872,7 @@ mod tests {
         };
         NamedSpec {
             name: SourcePackageName::from(PackageName::from_str(name).expect("valid name")),
-            spec: PackageSpec::Binary(spec),
+            spec: spec.into(),
         }
     }
 
@@ -930,6 +937,7 @@ mod tests {
                 subdir: Platform::Linux64,
                 license: None,
                 license_family: None,
+                flags: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,
@@ -944,6 +952,7 @@ mod tests {
                 depends: Vec::new(),
                 constraints: Vec::new(),
             },
+            extra_dependencies: Default::default(),
             ignore_run_exports: CondaOutputIgnoreRunExports::default(),
             run_exports: CondaOutputRunExports::default(),
             input_globs: None,

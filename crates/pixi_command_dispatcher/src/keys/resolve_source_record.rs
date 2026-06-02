@@ -26,7 +26,7 @@ use rattler_solve::SolveStrategy;
 use crate::{
     BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, InstalledSourceHints, PtrArc,
     SourceRecordError, SourceRecordReporterSpec,
-    build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports},
+    build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasSourceRecordReporter},
     cycle::CycleEnvironment,
     injected_config::ChannelConfigKey,
@@ -318,6 +318,21 @@ async fn assemble_source_record_inner(
         strong_constrains: stringify_binary_specs(run_exports_pixi.strong_constrains)?,
     };
 
+    // Resolve the extra groups the same way as run dependencies,
+    // threading source specs through `track_source` so a source dependency
+    // pulled in by an extra is registered as a source of this record.
+    let extra_depends =
+        convert_extra_dependencies(&output.extra_dependencies, None, &compatibility_map)
+            .map_err(SourceRecordError::from)?
+            .into_iter()
+            .map(|(group, specs)| {
+                Ok((
+                    group.into_inner(),
+                    stringify_pixi_specs(specs, &mut track_source)?,
+                ))
+            })
+            .collect::<Result<BTreeMap<String, Vec<String>>, SourceRecordError>>()?;
+
     let package_record = PackageRecord {
         size: None,
         sha256: None,
@@ -355,8 +370,8 @@ async fn assemble_source_record_inner(
         track_features: vec![],
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
-        experimental_extra_depends: Default::default(),
-        flags: Default::default(),
+        experimental_extra_depends: extra_depends,
+        flags: output.metadata.flags.clone(),
     };
 
     let sources_by_str: BTreeMap<String, SourceLocationSpec> = sources

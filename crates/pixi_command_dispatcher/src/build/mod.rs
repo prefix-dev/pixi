@@ -11,7 +11,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_environment::BuildEnvironment;
 pub use dependencies::{
-    Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports, WithSource,
+    Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports,
+    WithSource, convert_extra_dependencies,
 };
 use pixi_consts::consts::KNOWN_MANIFEST_FILES;
 use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec};

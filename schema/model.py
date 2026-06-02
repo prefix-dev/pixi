@@ -43,6 +43,12 @@ NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
 Md5Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{32}$")]
 Sha256Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{64}$")]
 PathNoBackslash = Annotated[str, StringConstraints(pattern=r"^[^\\]+$")]
+# Extra-dependency group names follow the conda optional-dependencies naming
+# rules (CEP-0044).
+ExtraName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9._+-]{1,64}$")]
+# Variant flags are non-empty strings with optional `key:value` semantics,
+# allowing a single colon as the separator.
+FlagName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]+(:[a-z0-9_]+)?$")]
 Glob = NonEmptyStr
 UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
@@ -509,6 +515,7 @@ RunConstraintsField = Field(
 )
 Dependencies = dict[CondaPackageName, MatchSpec] | None
 InheritableDependencies = dict[CondaPackageName, InheritableMatchSpec] | None
+ExtraDependencies = dict[ExtraName, dict[CondaPackageName, MatchSpec]] | None
 
 
 ################
@@ -946,6 +953,11 @@ class Package(StrictBaseModel):
     host_dependencies: InheritableDependencies = HostDependenciesField
     build_dependencies: InheritableDependencies = BuildDependenciesField
     run_dependencies: InheritableDependencies = RunDependenciesField
+    extra_dependencies: ExtraDependencies = Field(
+        None,
+        description="Extra groups that can be requested through MatchSpec extras. Each group uses the same conda package specification syntax as run-dependencies.",
+        examples=[{"test": {"pytest": ">=8", "hypothesis": "*"}}],
+    )
     run_constraints: InheritableDependencies = RunConstraintsField
 
     target: dict[TargetName, PackageTarget] | None = Field(
@@ -984,6 +996,11 @@ class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
     channels: list[Channel] | None = Field(
         None, description="The `conda` channels that are used to fetch the build backend from"
+    )
+    flags: list[FlagName] | None = Field(
+        None,
+        description="Plain string flags recorded on built packages for v3 package variant selection",
+        examples=[["cuda", "blas_openblas"]],
     )
     additional_dependencies: Dependencies = Field(
         None, description="Additional dependencies to install alongside the build backend"
@@ -1047,6 +1064,11 @@ class PackageTarget(StrictBaseModel):
     run_constraints: InheritableDependencies = RunConstraintsField
     host_dependencies: InheritableDependencies = HostDependenciesField
     build_dependencies: InheritableDependencies = BuildDependenciesField
+    extra_dependencies: ExtraDependencies = Field(
+        None,
+        description="Extra groups for this target. Same shape as the top-level `extra-dependencies`, but scoped to the matching platform selector.",
+        examples=[{"test": {"pytest": ">=8"}}],
+    )
 
 
 #######################
