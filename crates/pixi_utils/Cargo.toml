@@ -58,6 +58,7 @@ tracing-subscriber = { workspace = true }
 url = { workspace = true }
 uv-configuration = { workspace = true }
 webpki-root-certs = { workspace = true }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
 insta = { workspace = true }

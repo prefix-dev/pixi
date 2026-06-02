@@ -25,8 +25,7 @@ use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use ordermap::{OrderMap, OrderSet};
 use pixi_command_dispatcher::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    ComputeResultExt, EnvironmentFingerprint, EnvironmentRef, EnvironmentSpec,
-    SolvePixiEnvironmentError,
+    ComputeResultExt, EnvironmentRef, EnvironmentSpec, SolvePixiEnvironmentError,
     executor::CancellationAwareFutures,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
@@ -516,28 +515,11 @@ pub enum ReinstallEnvironment {
     Some(HashSet<String>),
 }
 
-/// The result of a successful prefix update: the prefix that was
-/// produced plus the content fingerprint of every record installed
-/// into it (see [`pixi_command_dispatcher::EnvironmentFingerprint`]).
-///
-/// The fingerprint is `None` for code paths that don't run a fresh
-/// install whose fingerprint represents the full prefix state — most
-/// notably a filtered install (`InstallFilter::filter_active()`),
-/// where only a subset of packages is touched and the fingerprint
-/// would mislead any downstream cache that key on "what's currently
-/// in this prefix".
-///
-/// Threaded out of `InstallPixiEnvironmentResult::installed_fingerprint`
-/// via [`CondaPrefixUpdated::installed_fingerprint`]. Persisted to a
-/// standalone marker file under the prefix by
-/// [`LockFileDerivedData::prefix`] so it survives across processes.
+/// The result of a successful prefix update.
 #[derive(Clone)]
 pub struct UpdatedPrefix {
     /// The prefix that was produced.
     pub prefix: Prefix,
-    /// Content fingerprint of every record installed into the prefix,
-    /// or `None` (see struct-level docs).
-    pub installed_fingerprint: Option<EnvironmentFingerprint>,
 }
 
 /// A struct that holds the lock file and any potential derived data that was
@@ -703,10 +685,7 @@ impl<'p> LockFileDerivedData<'p> {
         }
 
         // Get the up-to-date prefix
-        let UpdatedPrefix {
-            prefix,
-            installed_fingerprint,
-        } = self
+        let UpdatedPrefix { prefix } = self
             .update_prefix(environment, reinstall_packages, filter)
             .await?;
 
@@ -729,20 +708,6 @@ impl<'p> LockFileDerivedData<'p> {
                 environment_lock_file_hash: hash,
             },
         )?;
-
-        // Persist the install fingerprint next to the prefix so the
-        // activation cache (and any other future "what is in the
-        // prefix" cache) can short-circuit on the next process. Best-
-        // effort: a write failure just costs the next activation one
-        // re-run.
-        if let Some(fp) = installed_fingerprint
-            && let Err(err) = fp.write(&environment.dir())
-        {
-            tracing::debug!(
-                "Failed to write install fingerprint marker for '{}': {err}",
-                environment.name().fancy_display()
-            );
-        }
 
         // Reproducible-build hook: when SOURCE_DATE_EPOCH is set, clamp
         // the mtime of every pixi-owned entry under `.pixi/` so repeated
@@ -923,24 +888,11 @@ impl<'p> LockFileDerivedData<'p> {
                     .await?;
                 let prefix = conda_result.prefix.clone();
                 let python_status = *conda_result.python_status.clone();
-                let installed_fingerprint = if filter.filter_active() {
-                    // A filtered install only touched a subset of
-                    // packages, so its fingerprint isn't representative
-                    // of the prefix's full state and would mislead the
-                    // activation cache. Surface `None` so callers
-                    // recompute / skip caching.
-                    None
-                } else {
-                    Some(conda_result.installed_fingerprint.clone())
-                };
                 let resolved_pixi_records = conda_result.into_pixi_records(pixi_records);
 
                 // No `uv` support for WASM right now
                 if platform.arch() == Some(Arch::Wasm32) {
-                    return Ok(UpdatedPrefix {
-                        prefix,
-                        installed_fingerprint,
-                    });
+                    return Ok(UpdatedPrefix { prefix });
                 }
 
                 let pypi_lock_file_names = pypi_records
@@ -1050,10 +1002,7 @@ impl<'p> LockFileDerivedData<'p> {
                     start.elapsed()
                 );
 
-                Ok(UpdatedPrefix {
-                    prefix,
-                    installed_fingerprint,
-                })
+                Ok(UpdatedPrefix { prefix })
             })
             .await
             .cloned()

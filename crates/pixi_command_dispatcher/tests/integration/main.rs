@@ -520,10 +520,7 @@ pub async fn dropping_future_cancels_background_task() {
     let prefix_dir = dispatcher
         .cache_dir::<BuildBackendsDir>()
         .join(spec.cache_key());
-    let mut write_guard = pixi_utils::AsyncPrefixGuard::new(prefix_dir.as_std_path())
-        .await
-        .unwrap()
-        .write()
+    let write_guard = pixi_utils::EnvironmentLock::acquire(prefix_dir.as_std_path())
         .await
         .unwrap();
 
@@ -552,7 +549,6 @@ pub async fn dropping_future_cancels_background_task() {
 
     // Release our write lock (after cancellation). If cancellation worked,
     // the background task should not proceed into installation.
-    write_guard.begin().await.unwrap();
     drop(write_guard);
 
     // The aborted task should unwind promptly once the prefix lock is
