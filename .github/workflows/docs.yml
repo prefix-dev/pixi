@@ -48,7 +48,7 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
+      - uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11 # v0.9.6
         with:
           environments: docs
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -79,7 +79,7 @@ jobs:
         env:
           GITHUB_EVENT_INPUTS_TAG: ${{ github.event.inputs.tag }}
 
-      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
+      - uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11 # v0.9.6
         with:
           environments: docs
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -117,7 +117,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - uses: prefix-dev/setup-pixi@1b2de7f3351f171c8b4dfeb558c639cb58ed4ec0 # v0.9.5
+      - uses: prefix-dev/setup-pixi@5185adfbffb4bd703da3010310260805d89ebb11 # v0.9.6
         with:
           environments: docs
           cache-write: ${{ github.ref == 'refs/heads/main' }}
