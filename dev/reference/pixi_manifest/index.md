@@ -1274,6 +1274,7 @@ The build system specifies how the package can be built. The build system is a t
   - `rev`: a string representing SHA revision to checkout.
   - `subdirectory`: a string representing path to subdirectory to use.
 - `channels`: specifies the channels to get the build backend from.
+- `flags`: package variant flags recorded in the produced package metadata.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use.
@@ -1292,6 +1293,7 @@ backend = { name = "pixi-build-cmake", version = "0.*" }
 # not required:
 channels = ["https://prefix.dev/conda-forge"]
 config = { key = "value" }                    # Optional configuration, specific to the build backend
+flags = ["cuda", "blas_openblas"]             # Optional variant flags recorded in the package metadata
 ```
 
 #### Target-specific build configuration example
@@ -1322,6 +1324,7 @@ The dependencies of a package are split into four tables. Each of these tables h
 - [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
 - [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link against the package on the target platform.
 - [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
+- [`extra-dependencies`](#extra-dependencies): Optional run dependency groups that consumers can request through `extras`.
 - [`run-constraints`](#run-constraints): Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.
 
 ### `build-dependencies`
@@ -1374,6 +1377,26 @@ The `run-dependencies` are the packages that will be installed in the environmen
 [package.run-dependencies]
 rich = ">=13.9.4,<14"
 unix-helper = { version = "*", when = "__unix" }
+```
+
+### `extra-dependencies`
+
+The `extra-dependencies` table defines extra dependency groups for a package. For example, a package that declares `test` and `cuda` groups:
+
+```toml
+[package.extra-dependencies.test]
+pytest = ">=8"
+hypothesis = "*"
+
+[package.extra-dependencies.cuda]
+cupy = ">=13"
+```
+
+A workspace that consumes this package as a source dependency requests the `test` group with:
+
+```toml
+[dependencies]
+mypackage = { path = "./mypackage", extras = ["test"] }
 ```
 
 ### `run-constraints`

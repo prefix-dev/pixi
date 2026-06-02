@@ -4280,6 +4280,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#extra-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extra-dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#run-constraints" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -5194,6 +5205,17 @@
     <span class="md-ellipsis">
       
         run-dependencies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#extra-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extra-dependencies
       
     </span>
   </a>
@@ -6394,6 +6416,7 @@ The build system is a table that can contain the following fields:</p>
 </ul>
 </li>
 <li><code>channels</code>: specifies the channels to get the build backend from.</li>
+<li><code>flags</code>: package variant flags recorded in the produced package metadata.</li>
 <li><code>backend</code>: specifies the build backend to use. This is a table that can contain the following fields:<ul>
 <li><code>name</code>: the name of the build backend to use. This will also be the executable name.</li>
 <li><code>version</code>: the version of the build backend to use.</li>
@@ -6413,6 +6436,7 @@ The build system is a table that can contain the following fields:</p>
 </span><span id="__span-74-3"><a id="__codelineno-74-3" name="__codelineno-74-3" href="#__codelineno-74-3"></a><span class="c1"># not required:</span>
 </span><span id="__span-74-4"><a id="__codelineno-74-4" name="__codelineno-74-4" href="#__codelineno-74-4"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/conda-forge&quot;</span><span class="p">]</span>
 </span><span id="__span-74-5"><a id="__codelineno-74-5" name="__codelineno-74-5" href="#__codelineno-74-5"></a><span class="n">config</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">key</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;value&quot;</span><span class="w"> </span><span class="p">}</span><span class="w">                    </span><span class="c1"># Optional configuration, specific to the build backend</span>
+</span><span id="__span-74-6"><a id="__codelineno-74-6" name="__codelineno-74-6" href="#__codelineno-74-6"></a><span class="n">flags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cuda&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;blas_openblas&quot;</span><span class="p">]</span><span class="w">             </span><span class="c1"># Optional variant flags recorded in the package metadata</span>
 </span></code></pre></div>
 <h4 id="target-specific-build-configuration-example">Target-specific build configuration example<a class="headerlink" href="#target-specific-build-configuration-example" title="Permanent link">#</a></h4>
 <p>For platform-specific build configuration, use the <code>[package.build.target.&lt;platform&gt;]</code> table:</p>
@@ -6438,6 +6462,7 @@ Each of these tables has a different purpose and is used to define the dependenc
 <li><a href="#build-dependencies"><code>build-dependencies</code></a>: Dependencies that are required to build the package on the build platform.</li>
 <li><a href="#host-dependencies"><code>host-dependencies</code></a>: Dependencies that are required during the build process, to link against the package on the target platform.</li>
 <li><a href="#run-dependencies"><code>run-dependencies</code></a>: Dependencies that are required to run the package on the target platform.</li>
+<li><a href="#extra-dependencies"><code>extra-dependencies</code></a>: Optional run dependency groups that consumers can request through <code>extras</code>.</li>
 <li><a href="#run-constraints"><code>run-constraints</code></a>: Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.</li>
 </ul>
 <h3 id="build-dependencies"><code>build-dependencies</code><a class="headerlink" href="#build-dependencies" title="Permanent link">#</a></h3>
@@ -6484,12 +6509,25 @@ For more details on how to do this, check the <a href="https://docs.github.com/e
 </span><span id="__span-78-2"><a id="__codelineno-78-2" name="__codelineno-78-2" href="#__codelineno-78-2"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13.9.4,&lt;14&quot;</span>
 </span><span id="__span-78-3"><a id="__codelineno-78-3" name="__codelineno-78-3" href="#__codelineno-78-3"></a><span class="n">unix-helper</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">when</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;__unix&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
+<h3 id="extra-dependencies"><code>extra-dependencies</code><a class="headerlink" href="#extra-dependencies" title="Permanent link">#</a></h3>
+<p>The <code>extra-dependencies</code> table defines extra dependency groups for a package. For example, a package that declares <code>test</code> and <code>cuda</code> groups:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-79-1"><a id="__codelineno-79-1" name="__codelineno-79-1" href="#__codelineno-79-1"></a><span class="k">[package.extra-dependencies.test]</span>
+</span><span id="__span-79-2"><a id="__codelineno-79-2" name="__codelineno-79-2" href="#__codelineno-79-2"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=8&quot;</span>
+</span><span id="__span-79-3"><a id="__codelineno-79-3" name="__codelineno-79-3" href="#__codelineno-79-3"></a><span class="n">hypothesis</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-79-4"><a id="__codelineno-79-4" name="__codelineno-79-4" href="#__codelineno-79-4"></a>
+</span><span id="__span-79-5"><a id="__codelineno-79-5" name="__codelineno-79-5" href="#__codelineno-79-5"></a><span class="k">[package.extra-dependencies.cuda]</span>
+</span><span id="__span-79-6"><a id="__codelineno-79-6" name="__codelineno-79-6" href="#__codelineno-79-6"></a><span class="n">cupy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13&quot;</span>
+</span></code></pre></div>
+<p>A workspace that consumes this package as a source dependency requests the <code>test</code> group with:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-80-1"><a id="__codelineno-80-1" name="__codelineno-80-1" href="#__codelineno-80-1"></a><span class="k">[dependencies]</span>
+</span><span id="__span-80-2"><a id="__codelineno-80-2" name="__codelineno-80-2" href="#__codelineno-80-2"></a><span class="n">mypackage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;./mypackage&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">extras</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
 <h3 id="run-constraints"><code>run-constraints</code><a class="headerlink" href="#run-constraints" title="Permanent link">#</a></h3>
 <p>The <code>run-constraints</code> are version constraints applied to the package's run environment.
 They constrain the versions of packages that may be installed <em>if</em> they are pulled in by another dependency, without themselves causing those packages to be installed.</p>
 <p>This mirrors the conda concept that surfaces as <code>run_constrained</code> in the package metadata.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-79-1"><a id="__codelineno-79-1" name="__codelineno-79-1" href="#__codelineno-79-1"></a><span class="k">[package.run-constraints]</span>
-</span><span id="__span-79-2"><a id="__codelineno-79-2" name="__codelineno-79-2" href="#__codelineno-79-2"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-81-1"><a id="__codelineno-81-1" name="__codelineno-81-1" href="#__codelineno-81-1"></a><span class="k">[package.run-constraints]</span>
+</span><span id="__span-81-2"><a id="__codelineno-81-2" name="__codelineno-81-2" href="#__codelineno-81-2"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2&quot;</span>
 </span></code></pre></div>
 
 

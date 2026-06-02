@@ -1874,6 +1874,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#extra-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extra Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#run-constraints" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4123,6 +4134,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#extra-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extra Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#run-constraints" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -4289,6 +4311,37 @@ When using something like <code>zlib</code>, you would only need to specify it i
 <h3 id="dependencies-run-dependencies"><a href="../../reference/pixi_manifest/#dependencies">Dependencies (Run Dependencies)</a><a class="headerlink" href="#dependencies-run-dependencies" title="Permanent link">#</a></h3>
 <p>These are the dependencies that are required to when running the package, they are the most common dependencies.
 And are what you would usually use in a <code>workspace</code>.</p>
+<h3 id="extra-dependencies"><a href="../../reference/pixi_manifest/#extra-dependencies">Extra Dependencies</a><a class="headerlink" href="#extra-dependencies" title="Permanent link">#</a></h3>
+<p>Package manifests can define groups of <em>extra dependencies</em> in <code>package.extra-dependencies</code>.</p>
+<p>Each group is a named set of additional run dependencies that can be enabled when needed. Dependencies use the same conda package specification syntax as <code>run-dependencies</code>.</p>
+<p>This follows the conda <a href="https://github.com/conda/ceps/blob/main/cep-0044.md">optional dependencies CEP</a>.</p>
+<p>For example, here is a complete package manifest that declares a <code>test</code> group for its test suite and a <code>cuda</code> group for GPU support:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[package]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;mypackage&quot;</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">[package.build]</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">backend</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-python&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0.*&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="k">[package.run-dependencies]</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2&quot;</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="k">[package.extra-dependencies.test]</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=8&quot;</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="n">hypothesis</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="k">[package.extra-dependencies.cuda]</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="n">cupy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=13&quot;</span>
+</span></code></pre></div>
+<p>A workspace that depends on <code>mypackage</code> as a source dependency can enable one or more of these groups through the <code>extras</code> field:</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[workspace]</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;linux-64&quot;</span><span class="p">]</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="k">[dependencies]</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="c1"># Pulls in the `cuda` group of `mypackage` in addition to its regular run dependencies.</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="n">mypackage</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;./mypackage&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">extras</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cuda&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span></code></pre></div>
 <h3 id="run-constraints"><a href="../../reference/pixi_manifest/#run-constraints">Run Constraints</a><a class="headerlink" href="#run-constraints" title="Permanent link">#</a></h3>
 <p>Constraints that apply to the package's run environment, but only when the constrained package is pulled in as a dependency by something else.
 They never cause a package to be installed on their own. To do that, use run-dependencies (#dependencies-run-dependencies).</p>

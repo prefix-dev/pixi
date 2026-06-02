@@ -124,7 +124,7 @@ version = "2.0.*"
 build = "cuda*"
 # Build number constraint
 build-number = ">=1"
-# Optional dependency groups exposed by package metadata
+# Extra dependency groups exposed by package metadata
 extras = ["test"]
 # Variant-selection flags exposed by package metadata
 flags = ["cuda", "blas:*"]
@@ -153,7 +153,7 @@ This syntax allows you to specify:
 
 ### Extras And Flags
 
-Some conda packages expose optional dependency groups or variant flags in their package metadata. Use `extras` to request optional dependencies and `flags` to select variants that are represented as package metadata instead of a separate package name.
+Some conda packages expose extra dependency groups or variant flags in their package metadata. Use `extras` to request optional dependencies and `flags` to select variants that are represented as package metadata instead of a separate package name.
 
 pixi.toml
 

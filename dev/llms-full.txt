@@ -6540,7 +6540,7 @@ version = "2.0.*"
 build = "cuda*"
 # Build number constraint
 build-number = ">=1"
-# Optional dependency groups exposed by package metadata
+# Extra dependency groups exposed by package metadata
 extras = ["test"]
 # Variant-selection flags exposed by package metadata
 flags = ["cuda", "blas:*"]
@@ -6569,7 +6569,7 @@ This syntax allows you to specify:
 
 ### Extras And Flags
 
-Some conda packages expose optional dependency groups or variant flags in their package metadata. Use `extras` to request optional dependencies and `flags` to select variants that are represented as package metadata instead of a separate package name.
+Some conda packages expose extra dependency groups or variant flags in their package metadata. Use `extras` to request optional dependencies and `flags` to select variants that are represented as package metadata instead of a separate package name.
 
 pixi.toml
 
@@ -7902,6 +7902,47 @@ Conda packages, can define `run-exports`, that are dependencies that when specif
 ### [Dependencies (Run Dependencies)](../../reference/pixi_manifest/#dependencies)
 
 These are the dependencies that are required to when running the package, they are the most common dependencies. And are what you would usually use in a `workspace`.
+
+### [Extra Dependencies](../../reference/pixi_manifest/#extra-dependencies)
+
+Package manifests can define groups of *extra dependencies* in `package.extra-dependencies`.
+
+Each group is a named set of additional run dependencies that can be enabled when needed. Dependencies use the same conda package specification syntax as `run-dependencies`.
+
+This follows the conda [optional dependencies CEP](https://github.com/conda/ceps/blob/main/cep-0044.md).
+
+For example, here is a complete package manifest that declares a `test` group for its test suite and a `cuda` group for GPU support:
+
+```toml
+[package]
+name = "mypackage"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "0.*" }
+
+[package.run-dependencies]
+numpy = ">=2"
+
+[package.extra-dependencies.test]
+pytest = ">=8"
+hypothesis = "*"
+
+[package.extra-dependencies.cuda]
+cupy = ">=13"
+```
+
+A workspace that depends on `mypackage` as a source dependency can enable one or more of these groups through the `extras` field:
+
+```toml
+[workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+# Pulls in the `cuda` group of `mypackage` in addition to its regular run dependencies.
+mypackage = { path = "./mypackage", extras = ["cuda"] }
+```
 
 ### [Run Constraints](../../reference/pixi_manifest/#run-constraints)
 
@@ -16366,6 +16407,7 @@ The build system specifies how the package can be built. The build system is a t
   - `rev`: a string representing SHA revision to checkout.
   - `subdirectory`: a string representing path to subdirectory to use.
 - `channels`: specifies the channels to get the build backend from.
+- `flags`: package variant flags recorded in the produced package metadata.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use.
@@ -16384,6 +16426,7 @@ backend = { name = "pixi-build-cmake", version = "0.*" }
 # not required:
 channels = ["https://prefix.dev/conda-forge"]
 config = { key = "value" }                    # Optional configuration, specific to the build backend
+flags = ["cuda", "blas_openblas"]             # Optional variant flags recorded in the package metadata
 ```
 
 #### Target-specific build configuration example
@@ -16414,6 +16457,7 @@ The dependencies of a package are split into four tables. Each of these tables h
 - [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
 - [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link against the package on the target platform.
 - [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
+- [`extra-dependencies`](#extra-dependencies): Optional run dependency groups that consumers can request through `extras`.
 - [`run-constraints`](#run-constraints): Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.
 
 ### `build-dependencies`
@@ -16466,6 +16510,26 @@ The `run-dependencies` are the packages that will be installed in the environmen
 [package.run-dependencies]
 rich = ">=13.9.4,<14"
 unix-helper = { version = "*", when = "__unix" }
+```
+
+### `extra-dependencies`
+
+The `extra-dependencies` table defines extra dependency groups for a package. For example, a package that declares `test` and `cuda` groups:
+
+```toml
+[package.extra-dependencies.test]
+pytest = ">=8"
+hypothesis = "*"
+
+[package.extra-dependencies.cuda]
+cupy = ">=13"
+```
+
+A workspace that consumes this package as a source dependency requests the `test` group with:
+
+```toml
+[dependencies]
+mypackage = { path = "./mypackage", extras = ["test"] }
 ```
 
 ### `run-constraints`
