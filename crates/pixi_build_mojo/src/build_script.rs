@@ -4,8 +4,6 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct BuildScriptContext {
-    /// The directory where the source code is located, the manifest root.
-    pub source_dir: String,
     /// Any executable artifacts to create.
     pub bins: Option<Vec<MojoBinConfig>>,
     /// Any packages to create.

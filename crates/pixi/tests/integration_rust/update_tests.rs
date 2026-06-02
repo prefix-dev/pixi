@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use pixi_consts::consts;
 use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
@@ -38,7 +36,7 @@ async fn test_update() {
     pixi.add("bar <=2").await.unwrap();
     pixi.add("foo <=2").await.unwrap();
 
-    // Get the created lock-file
+    // Get the created lock file
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
@@ -64,7 +62,7 @@ async fn test_update() {
     // Run the update command to update all the packages
     pixi.update().await.unwrap();
 
-    // Reload the lock-file and check if the new version of `bar` still matches the
+    // Reload the lock file and check if the new version of `bar` still matches the
     // spec and has been updated.
     let lock = pixi.lock_file().await.unwrap();
     assert!(
@@ -73,7 +71,7 @@ async fn test_update() {
             Platform::current(),
             "foo ==2"
         ),
-        "expected `foo` to be on version 2 because we updated the lock-file"
+        "expected `foo` to be on version 2 because we updated the lock file"
     );
     assert!(
         lock.contains_match_spec(
@@ -81,7 +79,7 @@ async fn test_update() {
             Platform::current(),
             "bar ==2"
         ),
-        "expected `bar` to be on version 2 because we updated the lock-file"
+        "expected `bar` to be on version 2 because we updated the lock file"
     );
 }
 
@@ -114,7 +112,7 @@ async fn test_update_single_package() {
     pixi.add("bar <=2").await.unwrap();
     pixi.add("foo <=2").await.unwrap();
 
-    // Get the created lock-file
+    // Get the created lock file
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
@@ -195,7 +193,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
         .await
         .unwrap();
 
-    // Get the created lock-file
+    // Get the created lock file
     let lock = pixi.lock_file().await.unwrap();
 
     let workspace = pixi.workspace().unwrap();
@@ -207,7 +205,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
         )
         .unwrap();
 
-    let pkg_version = pkg.as_pypi().unwrap().0.version.to_string();
+    let pkg_version = pkg.as_pypi().unwrap().version_string();
 
     let mut lock_file_str = lock.render_to_string().unwrap();
 
@@ -215,8 +213,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let fragment = pkg
         .as_pypi()
         .unwrap()
-        .0
-        .location
+        .location()
         .as_url()
         .unwrap()
         .fragment()
@@ -227,15 +224,15 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
 
     lock_file_str = lock_file_str.replace(&pkg_version, "0.1.0");
 
-    let lockfile = LockFile::from_str(&lock_file_str).unwrap();
+    let lock_file = LockFile::from_str_with_base_directory(&lock_file_str, None).unwrap();
 
-    lockfile.to_path(&workspace.lock_file_path()).unwrap();
+    lock_file.to_path(&workspace.lock_file_path()).unwrap();
 
     // now run the update command to update conda packages
     // which will invalidate also pypi packages
     pixi.update().with_package("python").await.unwrap();
 
-    // Get the re-locked lock-file
+    // Get the re-locked lock file
     let lock = pixi.lock_file().await.unwrap();
 
     let url_or_path = lock
@@ -299,23 +296,23 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     .await
     .unwrap();
 
-    // Get the created lock-file
+    // Get the created lock file
     let lock = pixi.lock_file().await.unwrap();
 
-    // previous lockfile
-    let previous_lockfile_str = lock.render_to_string().unwrap();
+    // previous lock file
+    let previous_lock_file_str = lock.render_to_string().unwrap();
 
     // now run the update command to update conda packages
     // which should not trigger any update for the pinned pypi package
     pixi.update().with_package("python").await.unwrap();
 
-    // Get the re-locked lock-file
+    // Get the re-locked lock file
     let lock = pixi.lock_file().await.unwrap();
 
-    let new_lockfile_str = lock.render_to_string().unwrap();
+    let new_lock_file_str = lock.render_to_string().unwrap();
 
     assert_eq!(
-        previous_lockfile_str, new_lockfile_str,
+        previous_lock_file_str, new_lock_file_str,
         "expected git pypi package to not be updated when updating conda packages"
     );
 }
@@ -373,7 +370,7 @@ async fn test_update_git_pypi_when_requested() {
     // run pixi update to re-lock
     pixi.update().with_package("minimal-package").await.unwrap();
 
-    // Get the created lock-file
+    // Get the created lock file
     let lock = pixi.lock_file().await.unwrap();
 
     // find the package

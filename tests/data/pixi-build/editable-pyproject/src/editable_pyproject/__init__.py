@@ -8,7 +8,7 @@ import site
 def is_editable() -> bool:
     package_name = "editable_pyproject"
     for site_package in site.getsitepackages():
-        egg_link_path = Path(site_package).joinpath(f"_{package_name}.pth")
+        egg_link_path = Path(site_package).joinpath(f"_editable_impl_{package_name}.pth")
         if egg_link_path.is_file():
             return True
     return False

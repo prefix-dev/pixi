@@ -57,7 +57,7 @@ def test_build_git_source_deps(pixi: Path, tmp_pixi_workspace: Path, build_data:
     # verify that we indeed recorded the git url with it's commit
     pixi_lock_file = minimal_workspace / "pixi.lock"
 
-    assert f"conda: git+{target_git_url}#{commit_hash}" in pixi_lock_file.read_text()
+    assert f"@ git+{target_git_url}#{commit_hash}" in pixi_lock_file.read_text()
 
     # now we update source code so we can verify that
     # both pixi-git will discover a new commit
@@ -80,7 +80,7 @@ def test_build_git_source_deps(pixi: Path, tmp_pixi_workspace: Path, build_data:
     # verify that we indeed recorded the git url with it's commit
     pixi_lock_file = minimal_workspace / "pixi.lock"
 
-    assert f"conda: git+{target_git_url}#{new_commit_hash}" in pixi_lock_file.read_text()
+    assert f"@ git+{target_git_url}#{new_commit_hash}" in pixi_lock_file.read_text()
 
     # run the *built* script to verify that new name is used
     verify_cli_command(
@@ -147,10 +147,7 @@ def test_build_git_source_deps_from_branch(
     pixi_lock_file = minimal_workspace / "pixi.lock"
 
     # verify that we recorded used the branch
-    assert (
-        f"conda: git+{target_git_url}?branch=test-branch#{commit_hash}"
-        in pixi_lock_file.read_text()
-    )
+    assert f"@ git+{target_git_url}?branch=test-branch#{commit_hash}" in pixi_lock_file.read_text()
 
 
 @pytest.mark.slow
@@ -212,8 +209,7 @@ def test_build_git_source_deps_from_rev(
 
     # verify that we recorded used rev but also the full one
     assert (
-        f"conda: git+{target_git_url}?rev={commit_hash[:7]}#{commit_hash}"
-        in pixi_lock_file.read_text()
+        f"@ git+{target_git_url}?rev={commit_hash[:7]}#{commit_hash}" in pixi_lock_file.read_text()
     )
 
 
@@ -271,7 +267,4 @@ def test_build_git_source_deps_from_tag(
     pixi_lock_file = minimal_workspace / "pixi.lock"
 
     # verify that we recorded used rev but also the full one
-    assert (
-        f"conda: git+{target_git_dir.as_uri()}?tag=v1.0.0#{commit_hash}"
-        in pixi_lock_file.read_text()
-    )
+    assert f"@ git+{target_git_dir.as_uri()}?tag=v1.0.0#{commit_hash}" in pixi_lock_file.read_text()

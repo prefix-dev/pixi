@@ -22,11 +22,40 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
+def pytest_configure(config: pytest.Config) -> None:
+    # Keep basetemp inside the workspace so it shares a filesystem with the
+    # pixi cache (cross-FS rename/copy in /tmp is much slower). The PID
+    # subdir makes it unique per invocation so two concurrent `pixi run
+    # test`s don't race on xdist.setup_node's basetemp.mkdir(mode=0o700,
+    # exist_ok=False). The fixed `pytest-temp/` parent matches the literal
+    # path in `workspace.exclude` in Cargo.toml (cargo doesn't glob-expand
+    # exclude entries). xdist workers inherit --basetemp from the
+    # controller, so we only set it once.
+    if not config.option.basetemp:
+        parent = Path("pytest-temp")
+        parent.mkdir(exist_ok=True)
+        config.option.basetemp = str(parent / str(os.getpid()))
+
+
 @pytest.fixture
 def pixi(request: pytest.FixtureRequest) -> Path:
     pixi_build = request.config.getoption("--pixi-build")
     pixi_path = Path(__file__).parent.joinpath(f"../../target/pixi/{pixi_build}/pixi")
     return Path(exec_extension(str(pixi_path)))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def isolated_pixi_cache_per_worker(
+    tmp_path_factory: pytest.TempPathFactory, worker_id: str
+) -> None:
+    # Parallel xdist workers all share the user's `~/.cache/rattler/` by default,
+    # which causes hash mismatches when two workers race to build the same source
+    # package into the same `bld/` path. Give each worker its own cache root.
+    # Single-process runs (worker_id == "master") keep the user's cache for speed.
+    if worker_id == "master":
+        return
+    cache_dir = tmp_path_factory.mktemp("pixi-cache", numbered=False)
+    os.environ["PIXI_CACHE_DIR"] = str(cache_dir)
 
 
 @pytest.fixture

@@ -37,6 +37,9 @@ pub struct Args {
     pub channels: ChannelsConfig,
 
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
     /// The platform(s) to search for.
@@ -80,6 +83,7 @@ pub async fn execute_impl<W: Write>(
     out: &mut W,
 ) -> miette::Result<Vec<RepoDataRecord>> {
     let workspace = match WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
     {
@@ -206,7 +210,12 @@ fn print_search_results<W: Write>(
 
     // Single package name => show detailed view
     if by_name.len() == 1 {
-        let (_, records) = by_name.iter().next().expect("by_name has exactly 1 entry");
+        let (name, records) = by_name.iter().next().expect("by_name has exactly 1 entry");
+        // When limit is 0, only print the package name
+        if limit_versions == Some(0) {
+            writeln!(out, "{}", name.as_source())?;
+            return Ok(());
+        }
         let newest = records
             .last()
             .expect("records is non-empty since packages is non-empty");
@@ -223,8 +232,14 @@ fn print_search_results<W: Write>(
         if i >= n_packages {
             break;
         }
-        if i > 0 {
+        if i > 0 && n_versions > 0 {
             writeln!(out)?;
+        }
+
+        // When limit is 0, only print the package name
+        if n_versions == 0 {
+            writeln!(out, "{}", name.as_source())?;
+            continue;
         }
 
         let total_versions = records.len();

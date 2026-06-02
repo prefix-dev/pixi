@@ -12,6 +12,9 @@ use crate::cli_config::WorkspaceConfig;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
     /// The subcommand to execute
@@ -35,15 +38,17 @@ pub enum Command {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    let is_verify = matches!(args.command, Command::Verify);
     let workspace_locator = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_ignore_pixi_version_check(true);
+        .with_ignore_pixi_version_check(!is_verify);
 
     match args.command {
         Command::Get => get::execute(workspace_locator.locate()?).await?,
         Command::Set(args) => set::execute(workspace_locator.locate()?, args).await?,
         Command::Unset => unset::execute(workspace_locator.locate()?).await?,
-        Command::Verify => verify::execute(workspace_locator.locate()?).await?,
+        Command::Verify => verify::execute(workspace_locator.locate().map(|_| ()))?,
     }
 
     Ok(())

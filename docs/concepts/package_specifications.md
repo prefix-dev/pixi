@@ -72,9 +72,23 @@ This syntax allows you to specify:
 - **build**: Build string pattern (see [build strings](#build-strings))
 - **build-number**: Build number constraint (e.g., `">=1"`, `"0"`) (see [build number](#build-number))
 - **channel**: Specific channel name or full URL (see [channel](#channel))
+- **extras**: Optional extra dependencies exposed by the package metadata
+- **flags**: Variant-selection flags exposed by package metadata
 - **sha256/md5**: Package checksums for verification (see [checksums](#checksums-sha256md5))
 - **license**: Expected license type (see [license](#license))
 - **file-name**: Specific package file name (see [file name](#file-name))
+
+### Extras And Flags
+
+Some conda packages expose optional dependency groups or variant flags in their package metadata.
+Use `extras` to request optional dependencies and `flags` to select variants that are represented as package metadata instead of a separate package name.
+
+```toml title="pixi.toml"
+[dependencies.v3-package]
+version = ">=1.0"
+extras = ["test"]
+flags = ["cuda", "blas:*"]
+```
 
 ### Version Operators
 
@@ -234,6 +248,16 @@ This is rarely needed but useful for:
 [dependencies.pytorch]
 file-name = "pytorch-2.0.0-cuda.tar.bz2"
 ```
+
+## Local Package Files
+
+You can install a pre-built `.conda` or `.tar.bz2` package directly from the local filesystem by passing an absolute path:
+
+```shell
+pixi add /path/to/package-1.0-hb0f4dca_0.conda
+```
+
+The package name is extracted from the archive filename, and the path is stored as a `file://` URL in the dependency specification.
 
 ## Source Packages
 

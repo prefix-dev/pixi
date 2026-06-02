@@ -6,7 +6,6 @@ mod discovery;
 mod environment;
 mod environments;
 mod error;
-mod exclude_newer;
 mod feature;
 mod features_ext;
 mod has_features_iter;
@@ -30,21 +29,22 @@ pub use activation::Activation;
 pub use build_system::BuildBackend;
 pub use build_system::PackageBuild;
 pub use channel::PrioritizedChannel;
-pub use dependencies::{CondaDependencies, PyPiDependencies};
+pub use dependencies::{CondaConstraints, CondaDependencies, PyPiDependencies};
 pub use discovery::{
-    DiscoveryStart, ExplicitManifestError, LoadManifestsError, Manifests, WorkspaceDiscoverer,
-    WorkspaceDiscoveryError,
+    DiscoveryStart, ExplicitManifestError, InvalidRequiresPixiError, LoadManifestsError, Manifests,
+    PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
 pub use environment::{Environment, EnvironmentName};
-pub use error::TomlError;
+pub use error::{DependencyError, TomlError};
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
-    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
-    ProvenanceError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
+    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, MissingTargetError,
+    PackageManifest, ProvenanceError, RemoveDependencyError, WithProvenance, WorkspaceManifest,
+    WorkspaceManifestMut,
 };
 use miette::Diagnostic;
 pub use package::Package;
@@ -134,7 +134,7 @@ pub enum PypiDependencyLocation {
     DependencyGroups,
 }
 
-/// Converts an array of Platforms to a non-empty Vec of Option<Platform>
+/// Converts an array of `Platform`s to a non-empty `Vec` of `Option<Platform>`.
 fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
     match platforms.is_empty() {
         true => vec![None],

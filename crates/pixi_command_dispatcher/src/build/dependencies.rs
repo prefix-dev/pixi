@@ -16,7 +16,7 @@ use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, UrlBinarySpec}
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
-    ParseStrictness, Platform, VersionSpec,
+    ParseMatchSpecOptions, Platform, RepodataRevision, VersionSpec,
 };
 use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
@@ -103,7 +103,7 @@ impl Dependencies {
         let mut constraints = DependencyMap::default();
 
         for depend in &output.depends {
-            let name = rattler_conda_types::PackageName::from_str(&depend.name)?;
+            let name = rattler_conda_types::PackageName::from_str(depend.name.as_str())?;
 
             // Match directly on PackageSpec
             match &depend.spec {
@@ -129,7 +129,7 @@ impl Dependencies {
         }
 
         for constraint in &output.constraints {
-            let name = rattler_conda_types::PackageName::from_str(&constraint.name)?;
+            let name = rattler_conda_types::PackageName::from_str(constraint.name.as_str())?;
 
             // Match on ConstraintSpec enum
             match &constraint.spec {
@@ -256,9 +256,9 @@ impl Dependencies {
         // Determine the records that have missing run exports.
         let records_missing_run_exports = relevant_records
             .iter_mut()
-            .flat_map(|r| match *r {
-                PixiRecord::Binary(repo_data_record) => Some(repo_data_record),
-                PixiRecord::Source(_source_record) => None,
+            .flat_map(|r| match r {
+                PixiRecord::Binary(repo_data_record) => Some(Arc::make_mut(repo_data_record)),
+                PixiRecord::Source(_) => None,
             })
             .filter(|r| r.package_record.run_exports.is_none());
         gateway
@@ -301,19 +301,19 @@ impl Dependencies {
     }
 }
 
-fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
+pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
     specs: &[String],
     ignore: &CondaOutputIgnoreRunExports,
 ) -> DependencyMap<PackageName, T> {
     specs
         .iter()
         .filter_map(move |spec| {
-            let (Some(name_matcher), spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
-                .ok()?
-                .into_nameless()
-            else {
-                return None;
-            };
+            let (name_matcher, spec) = MatchSpec::from_str(
+                spec,
+                ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+            )
+            .ok()?
+            .into_nameless();
             let name = name_matcher.as_exact().cloned()?;
             if ignore.by_name.contains(&name) {
                 return None;
@@ -341,36 +341,45 @@ fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
                     url: _,
                     license: None,
                     track_features: None,
+                    flags: None,
+                    license_family: None,
                 } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
                 NamelessMatchSpec {
                     version,
                     build,
                     build_number,
                     file_name,
+                    extras,
+                    flags,
                     channel,
                     subdir,
                     md5,
                     sha256,
                     license,
+                    license_family,
+                    condition,
+                    track_features,
 
                     // Caught in the above case
                     url: _,
 
                     // Explicitly ignored
                     namespace: _,
-                    extras: _,
-                    condition: _,
-                    track_features: _,
                 } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
                     version,
                     build,
                     build_number,
                     file_name,
+                    extras,
+                    flags,
                     channel: channel.map(|c| NamedChannelOrUrl::Url(c.base_url.clone().into())),
                     subdir,
                     md5,
                     sha256,
                     license,
+                    license_family,
+                    condition,
+                    track_features,
                 })),
             };
 
@@ -405,7 +414,7 @@ impl PixiRunExports {
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let name = PackageName::from_str(&named_spec.name)?;
+                    let name = PackageName::from_str(named_spec.name.as_str())?;
 
                     let spec = match named_spec.spec {
                         pbt::PackageSpec::Binary(binary) => {
@@ -431,7 +440,7 @@ impl PixiRunExports {
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let name = PackageName::from_str(&named_spec.name)?;
+                    let name = PackageName::from_str(named_spec.name.as_str())?;
 
                     // Match on ConstraintSpec enum
                     let spec = match named_spec.spec {

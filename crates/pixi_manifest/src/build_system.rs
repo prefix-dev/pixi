@@ -32,6 +32,18 @@ pub struct PackageBuild {
 
     /// Target-specific configuration for different platforms
     pub target_config: Option<IndexMap<TargetSelector, serde_value::Value>>,
+
+    /// An optional prefix to prepend to the auto-generated build string.
+    pub build_string_prefix: Option<String>,
+
+    /// The build number configured by the user.
+    pub build_number: Option<u64>,
+
+    /// Names of environment variables to expose as secrets to the build
+    /// script. Values are looked up at build time from the host environment by
+    /// the build backend; only the names live in the manifest. Stored as a
+    /// set since order is not observable.
+    pub secrets: std::collections::BTreeSet<String>,
 }
 
 impl PackageBuild {
@@ -44,6 +56,9 @@ impl PackageBuild {
             source: None,
             config: None,
             target_config: None,
+            build_string_prefix: None,
+            build_number: None,
+            secrets: std::collections::BTreeSet::new(),
         }
     }
 }
@@ -58,9 +73,21 @@ pub struct BuildBackend {
 }
 
 impl PackageBuild {
-    /// Parses the specified string as a toml representation of a build system.
+    /// Parses a build system in isolation. Rejects `workspace = true` on the
+    /// backend since there is no workspace context to resolve against.
     pub fn from_toml_str(source: &str) -> Result<WithWarnings<Self>, TomlError> {
-        TomlPackageBuild::from_toml_str(source).and_then(TomlPackageBuild::into_build_system)
+        TomlPackageBuild::from_toml_str(source).and_then(|build| {
+            if let crate::toml::BackendSpec::Inherited { marker_span, .. } =
+                &build.backend.value.spec
+            {
+                return Err(crate::error::GenericError::new(
+                    "`workspace = true` on `[build.backend]` requires a workspace context",
+                )
+                .with_span(marker_span.clone())
+                .into());
+            }
+            build.into_build_system(&indexmap::IndexMap::new())
+        })
     }
 }
 

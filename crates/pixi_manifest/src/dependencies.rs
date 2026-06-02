@@ -6,3 +6,4 @@ use rattler_conda_types::PackageName;
 pub type PyPiDependencies = DependencyMap<PypiPackageName, PixiPypiSpec>;
 pub type CondaDependencies = DependencyMap<PackageName, PixiSpec>;
 pub type CondaDevDependencies = DependencyMap<PackageName, SourceSpec>;
+pub type CondaConstraints = DependencyMap<PackageName, PixiSpec>;

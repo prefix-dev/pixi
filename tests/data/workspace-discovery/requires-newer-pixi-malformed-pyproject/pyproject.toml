@@ -1,0 +1,8 @@
+[project]
+name = "requires-newer-pixi-malformed-pyproject"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+requires-pixi = "not a valid version spec!!"
+some-future-field = true

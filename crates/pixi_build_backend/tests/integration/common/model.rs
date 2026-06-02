@@ -5,7 +5,7 @@ use pixi_build_types::{
     ProjectModel, Target as PbtTarget, TargetSelector as PbtTargetSelector, Targets as PbtTargets,
 };
 
-use rattler_conda_types::{ParseStrictness, Version, VersionSpec};
+use rattler_conda_types::{PackageName, ParseStrictness, Version, VersionSpec};
 
 use fs_err as fs;
 use serde::{Deserialize, Serialize};
@@ -37,6 +37,7 @@ pub struct Target {
     pub host_dependencies: HashMap<String, PackageSpec>,
     pub build_dependencies: HashMap<String, PackageSpec>,
     pub run_dependencies: HashMap<String, PackageSpec>,
+    pub run_constraints: HashMap<String, PackageSpec>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -132,7 +133,8 @@ pub(crate) fn convert_test_model_to_project_model_v1(test_model: TestProjectMode
             .and_then(|d| url::Url::parse(&d).ok()),
         targets: Some(targets_v1),
         build_number: None,
-        build_string: None,
+        build_string_prefix: None,
+        secrets: std::collections::BTreeSet::new(),
     }
 }
 
@@ -143,21 +145,44 @@ fn convert_target_to_v1(target: &Target) -> PbtTarget {
             target
                 .build_dependencies
                 .iter()
-                .map(|(name, spec)| (name.clone(), convert_package_spec_to_v1(spec)))
+                .map(|(name, spec)| {
+                    let source_name =
+                        pixi_build_types::SourcePackageName::from(PackageName::new_unchecked(name));
+                    (source_name, convert_package_spec_to_v1(spec))
+                })
                 .collect(),
         ),
         host_dependencies: Some(
             target
                 .host_dependencies
                 .iter()
-                .map(|(name, spec)| (name.clone(), convert_package_spec_to_v1(spec)))
+                .map(|(name, spec)| {
+                    let source_name =
+                        pixi_build_types::SourcePackageName::from(PackageName::new_unchecked(name));
+                    (source_name, convert_package_spec_to_v1(spec))
+                })
                 .collect(),
         ),
         run_dependencies: Some(
             target
                 .run_dependencies
                 .iter()
-                .map(|(name, spec)| (name.clone(), convert_package_spec_to_v1(spec)))
+                .map(|(name, spec)| {
+                    let source_name =
+                        pixi_build_types::SourcePackageName::from(PackageName::new_unchecked(name));
+                    (source_name, convert_package_spec_to_v1(spec))
+                })
+                .collect(),
+        ),
+        run_constraints: Some(
+            target
+                .run_constraints
+                .iter()
+                .map(|(name, spec)| {
+                    let source_name =
+                        pixi_build_types::SourcePackageName::from(PackageName::new_unchecked(name));
+                    (source_name, convert_package_spec_to_v1(spec))
+                })
                 .collect(),
         ),
     }
@@ -193,6 +218,7 @@ fn convert_package_spec_to_v1(spec: &PackageSpec) -> PbtPackageSpec {
                 sha256: None,
                 url: None,
                 license: None,
+                condition: None,
             })
         }
         PackageSpec::Source(source_spec) => {

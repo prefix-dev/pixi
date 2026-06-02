@@ -230,7 +230,7 @@ impl Task {
         }
     }
     /// Returns the environment variables for the task to run in.
-    pub fn env(&self) -> Option<&IndexMap<String, String>> {
+    pub fn env(&self) -> Option<&IndexMap<String, TemplateString>> {
         match self {
             Task::Plain(_) => None,
             Task::Custom(_) => None,
@@ -363,7 +363,7 @@ pub struct Execute {
     pub cwd: Option<PathBuf>,
 
     /// A list of environment variables to set before running the command
-    pub env: Option<IndexMap<String, String>>,
+    pub env: Option<IndexMap<String, TemplateString>>,
 
     /// A default environment to run the task in.
     pub default_environment: Option<EnvironmentName>,
@@ -970,7 +970,10 @@ impl From<Task> for Item {
                     table.insert("cwd", cwd.to_string_lossy().to_string().into());
                 }
                 if let Some(env) = &process.env {
-                    table.insert("env", Value::InlineTable(env.into_iter().collect()));
+                    table.insert(
+                        "env",
+                        Value::InlineTable(env.iter().map(|(k, v)| (k, v.source())).collect()),
+                    );
                 }
                 if let Some(description) = &process.description {
                     table.insert("description", description.into());

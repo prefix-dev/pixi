@@ -8,7 +8,7 @@ The images are available on [ghcr.io/prefix-dev/pixi](https://ghcr.io/prefix-dev
 
 There are different tags for different base images available:
 
-- `latest` - based on `ubuntu:jammy`
+- `latest` - based on `ubuntu:noble`
 - `focal` - based on `ubuntu:focal`
 - `bullseye` - based on `debian:bullseye`
 - `noble-cuda-12.9.1` - based on `nvidia/cuda:12.9.1-base-ubuntu24.04`
@@ -31,13 +31,13 @@ It also makes use of `pixi shell-hook` to not rely on Pixi being installed in th
     For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.41.4 AS build
+FROM ghcr.io/prefix-dev/pixi:0.70.0 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
 COPY . .
 # install dependencies to `/app/.pixi/envs/prod`
-# use `--locked` to ensure the lockfile is up to date with pixi.toml
+# use `--locked` to ensure the lock file is up to date with pixi.toml
 RUN pixi install --locked -e prod
 # create the shell-hook bash script to activate the environment
 RUN pixi shell-hook -e prod -s bash > /shell-hook

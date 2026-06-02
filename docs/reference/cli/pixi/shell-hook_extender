@@ -14,6 +14,24 @@ pixi shell-hook --environment cuda
 pixi shell-hook --json
 ```
 
+Sourcing the script in bash and similar shells:
+
+```shell
+eval "$(pixi shell-hook)"
+```
+
+or in fish shell:
+
+```shell
+pixi shell-hook | source
+```
+
+or in powershell:
+
+```shell
+(pixi shell-hook) | Out-String | Invoke-Expression
+```
+
 Example use-case, when you want to get rid of the `pixi` executable in a Docker container.
 
 ```shell

@@ -10,8 +10,10 @@
 
 mod detailed;
 mod dev_source;
+mod exclude_newer;
 mod git;
 mod path;
+mod pin;
 mod source_anchor;
 mod subdirectory;
 mod toml;
@@ -21,13 +23,16 @@ use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
 pub use dev_source::DevSourceSpec;
+pub use exclude_newer::{ExcludeNewer, ResolvedExcludeNewer};
 pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
+pub use pin::{Pin, PinBound, PinError, PinExpression};
 use rattler_conda_types::{
-    BuildNumberSpec, ChannelConfig, MatchSpecCondition, NamedChannelOrUrl, NamelessMatchSpec,
-    ParseChannelError, StringMatcher, VersionSpec,
+    BuildNumberSpec, ChannelConfig, MatchSpec, MatchSpecCondition, NamedChannelOrUrl,
+    NamelessMatchSpec, PackageName, ParseChannelError, StringMatcher, VersionSpec,
 };
+pub use rattler_lock::Verbatim;
 pub use source_anchor::SourceAnchor;
 pub use subdirectory::{Subdirectory, SubdirectoryError};
 use thiserror::Error;
@@ -134,18 +139,23 @@ impl PixiSpec {
                 url,
                 md5: spec.md5,
                 sha256: spec.sha256,
-                // A namelessmatchspec always describes a binary spec which cannot have a
+                // A nameless matchspec always describes a binary spec which cannot have a
                 // subdirectory
                 subdirectory: Subdirectory::default(),
             })
         } else if spec.build.is_none()
             && spec.build_number.is_none()
             && spec.file_name.is_none()
+            && spec.extras.is_none()
+            && spec.flags.is_none()
             && spec.channel.is_none()
             && spec.subdir.is_none()
             && spec.md5.is_none()
             && spec.sha256.is_none()
             && spec.license.is_none()
+            && spec.license_family.is_none()
+            && spec.condition.is_none()
+            && spec.track_features.is_none()
         {
             Self::Version(spec.version.unwrap_or(VersionSpec::Any))
         } else {
@@ -154,6 +164,8 @@ impl PixiSpec {
                 build: spec.build,
                 build_number: spec.build_number,
                 file_name: spec.file_name,
+                extras: spec.extras,
+                flags: spec.flags,
                 channel: spec.channel.map(|c| {
                     NamedChannelOrUrl::from_str(&channel_config.canonical_name(c.base_url.url()))
                         .unwrap()
@@ -162,6 +174,9 @@ impl PixiSpec {
                 md5: spec.md5,
                 sha256: spec.sha256,
                 license: spec.license,
+                license_family: spec.license_family,
+                condition: spec.condition,
+                track_features: spec.track_features,
             }))
         }
     }
@@ -369,6 +384,23 @@ impl PixiSpec {
             Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config),
         }
     }
+
+    /// Convert this spec into a fully-named [`MatchSpec`] for the given
+    /// package `name`. Source-typed specs round-trip through
+    /// [`SourceSpec::to_nameless_match_spec`], binary-typed specs through
+    /// [`BinarySpec::try_into_nameless_match_spec`]; the result is wrapped
+    /// in a `MatchSpec` carrying `name`.
+    pub fn to_match_spec(
+        self,
+        name: &PackageName,
+        channel_config: &ChannelConfig,
+    ) -> Result<MatchSpec, SpecConversionError> {
+        let nameless = match self.into_source_or_binary() {
+            Either::Left(source) => source.to_nameless_match_spec(),
+            Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config)?,
+        };
+        Ok(MatchSpec::from_nameless(nameless, name.clone().into()))
+    }
 }
 
 /// A specification for a source package.
@@ -393,6 +425,9 @@ pub struct SourceSpec {
     /// Optional extra dependencies to select for the package
     pub extras: Option<Vec<String>>,
 
+    /// Plain string flags used to select package variants.
+    pub flags: Option<Vec<StringMatcher>>,
+
     /// The subdir of the channel
     pub subdir: Option<String>,
 
@@ -402,8 +437,14 @@ pub struct SourceSpec {
     /// The license of the package
     pub license: Option<String>,
 
+    /// The license family of the package
+    pub license_family: Option<String>,
+
     /// The condition under which this match spec applies.
     pub condition: Option<MatchSpecCondition>,
+
+    /// The track features of the package
+    pub track_features: Option<Vec<String>>,
 }
 
 impl From<SourceLocationSpec> for SourceSpec {
@@ -414,10 +455,13 @@ impl From<SourceLocationSpec> for SourceSpec {
             build: None,
             build_number: None,
             extras: None,
+            flags: None,
             subdir: None,
             namespace: None,
             license: None,
+            license_family: None,
             condition: None,
+            track_features: None,
         }
     }
 }
@@ -462,6 +506,7 @@ impl SourceSpec {
             build_number,
             file_name: _,
             extras,
+            flags,
             channel: _,
             subdir,
             namespace,
@@ -470,7 +515,8 @@ impl SourceSpec {
             url: _,
             license,
             condition,
-            track_features: _,
+            track_features,
+            license_family,
         } = spec;
         Self {
             location,
@@ -478,10 +524,13 @@ impl SourceSpec {
             build,
             build_number,
             extras,
+            flags,
             subdir,
             namespace,
             license,
+            license_family,
             condition,
+            track_features,
         }
     }
 
@@ -493,20 +542,26 @@ impl SourceSpec {
             build,
             build_number,
             extras,
+            flags,
             subdir,
             namespace,
             license,
+            license_family,
             condition,
+            track_features,
         } = self;
         NamelessMatchSpec {
             version: version.clone(),
             build: build.clone(),
             build_number: build_number.clone(),
             extras: extras.clone(),
+            flags: flags.clone(),
             subdir: subdir.clone(),
             namespace: namespace.clone(),
             license: license.clone(),
+            license_family: license_family.clone(),
             condition: condition.clone(),
+            track_features: track_features.clone(),
             ..NamelessMatchSpec::default()
         }
     }
@@ -637,6 +692,17 @@ impl BinarySpec {
             BinarySpec::Path(path) => path.try_into_nameless_match_spec(&channel_config.root_dir),
         }
     }
+
+    /// Convert this binary spec into a fully-named [`MatchSpec`] for the
+    /// given package `name`.
+    pub fn to_match_spec(
+        self,
+        name: &PackageName,
+        channel_config: &ChannelConfig,
+    ) -> Result<MatchSpec, SpecConversionError> {
+        let nameless = self.try_into_nameless_match_spec(channel_config)?;
+        Ok(MatchSpec::from_nameless(nameless, name.clone().into()))
+    }
 }
 
 impl From<BinarySpec> for PixiSpec {
@@ -681,13 +747,20 @@ impl From<SourceLocationSpec> for rattler_lock::source::SourceLocation {
 #[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::UrlSourceLocation> for UrlSourceSpec {
     fn from(value: rattler_lock::source::UrlSourceLocation) -> Self {
-        let rattler_lock::source::UrlSourceLocation { url, md5, sha256 } = value;
+        let rattler_lock::source::UrlSourceLocation {
+            url,
+            md5,
+            sha256,
+            subdirectory,
+        } = value;
 
         Self {
             url,
             md5,
             sha256,
-            subdirectory: Subdirectory::default(),
+            subdirectory: subdirectory
+                .and_then(|s| Subdirectory::try_from(s).ok())
+                .unwrap_or_default(),
         }
     }
 }
@@ -699,6 +772,7 @@ impl From<UrlSourceSpec> for rattler_lock::source::UrlSourceLocation {
             url: value.url,
             md5: value.md5,
             sha256: value.sha256,
+            subdirectory: value.subdirectory.to_option_string(),
         }
     }
 }
@@ -758,12 +832,18 @@ impl From<PathSourceSpec> for rattler_lock::source::PathSourceLocation {
 
 #[cfg(test)]
 mod test {
-    use rattler_conda_types::ChannelConfig;
+    use std::str::FromStr;
+
+    use rattler_conda_types::{
+        ChannelConfig, MatchSpec, MatchSpecCondition, NamelessMatchSpec, PackageName,
+        ParseMatchSpecOptions, ParseStrictness::Lenient, RepodataRevision, StringMatcher,
+        VersionSpec,
+    };
     use serde::Serialize;
     use serde_json::{Value, json};
     use url::Url;
 
-    use crate::PixiSpec;
+    use crate::{BinarySpec, PixiSpec};
 
     #[test]
     fn test_is_binary() {
@@ -853,5 +933,85 @@ mod test {
         ]}, {
             insta::assert_yaml_snapshot!(snapshot);
         });
+    }
+
+    #[test]
+    fn test_pixi_spec_to_match_spec_binary() {
+        // A version-only PixiSpec for `numpy` should produce
+        // `MatchSpec("numpy >=1.0")` with the supplied name attached.
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let spec: PixiSpec = serde_json::from_value(json!({ "version": ">=1.0" })).unwrap();
+        let name = PackageName::new_unchecked("numpy");
+        let match_spec = spec.to_match_spec(&name, &channel_config).unwrap();
+        assert_eq!(
+            match_spec.name.as_exact().map(PackageName::as_normalized),
+            Some("numpy")
+        );
+        assert_eq!(match_spec.to_string(), "numpy >=1.0");
+    }
+
+    #[test]
+    fn test_v3_nameless_match_spec_fields_roundtrip() {
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let condition = MatchSpecCondition::MatchSpec(Box::new(
+            MatchSpec::from_str(
+                "python >=3.12",
+                ParseMatchSpecOptions::lenient()
+                    .with_repodata_revision(RepodataRevision::V3)
+                    .with_experimental_conditionals(true),
+            )
+            .unwrap(),
+        ));
+        let spec = NamelessMatchSpec {
+            version: Some(VersionSpec::from_str(">=1.0", Lenient).unwrap()),
+            extras: Some(vec!["cuda".to_string(), "mkl".to_string()]),
+            flags: Some(vec![
+                StringMatcher::from_str("cuda").unwrap(),
+                StringMatcher::from_str("blas:*").unwrap(),
+            ]),
+            license_family: Some("BSD".to_string()),
+            condition: Some(condition.clone()),
+            track_features: Some(vec!["legacy".to_string()]),
+            ..NamelessMatchSpec::default()
+        };
+
+        let pixi_spec = PixiSpec::from_nameless_matchspec(spec.clone(), &channel_config);
+        assert!(matches!(pixi_spec, PixiSpec::DetailedVersion(_)));
+
+        let roundtrip = pixi_spec
+            .try_into_nameless_match_spec(&channel_config)
+            .unwrap()
+            .unwrap();
+        assert_eq!(roundtrip.version, spec.version);
+        assert_eq!(roundtrip.extras, spec.extras);
+        assert_eq!(roundtrip.flags, spec.flags);
+        assert_eq!(roundtrip.license_family, spec.license_family);
+        assert_eq!(roundtrip.condition, spec.condition);
+        assert_eq!(roundtrip.track_features, spec.track_features);
+    }
+
+    #[test]
+    fn test_pixi_spec_to_match_spec_source_path() {
+        // A path-based source spec carries no version material, so the
+        // resulting MatchSpec only names the package.
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let spec: PixiSpec = serde_json::from_value(json!({ "path": "foobar" })).unwrap();
+        let name = PackageName::new_unchecked("my-package");
+        let match_spec = spec.to_match_spec(&name, &channel_config).unwrap();
+        assert_eq!(
+            match_spec.name.as_exact().map(PackageName::as_normalized),
+            Some("my-package")
+        );
+    }
+
+    #[test]
+    fn test_binary_spec_to_match_spec() {
+        // The BinarySpec convenience method should produce a MatchSpec
+        // equivalent to `try_into_nameless_match_spec` + `from_nameless`.
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let spec = BinarySpec::Version(VersionSpec::from_str(">=2.0", Lenient).unwrap());
+        let name = PackageName::new_unchecked("openssl");
+        let match_spec = spec.to_match_spec(&name, &channel_config).unwrap();
+        assert_eq!(match_spec.to_string(), "openssl >=2.0");
     }
 }

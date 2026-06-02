@@ -15,9 +15,15 @@ ERROR:
 
 
 TRACE:
-Pixi solve (package_a)
+Pixi solve (test@linux-64)
 └── Source metadata (package_a @ package_a)
     ├── Build backend metadata (package_a)
-    └── Pixi solve (package_b)
-        └── Source metadata (package_b @ package_b)
-            └── Build backend metadata (package_b)
+    │   └── Instantiate backend (in-memory)
+    └── Source record (package_a @ package_a)
+        └── Pixi solve (Host of package_a in test@linux-64)
+            ├── Source metadata (package_b @ package_b)
+            │   ├── Build backend metadata (package_b)
+            │   │   └── Instantiate backend (in-memory)
+            │   └── Source record (package_b @ package_b)
+            └── Source metadata (package_a @ package_a)
+                └── Source record (package_a @ package_a)

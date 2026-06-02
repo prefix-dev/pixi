@@ -1,3 +1,4 @@
+pub mod inheritable_package_map;
 pub mod package_map;
 mod spanned;
 

@@ -15,8 +15,7 @@ The vision is to enable building of packages from source, for any language, on a
 
     1. Limited set of [build-backends](https://github.com/prefix-dev/pixi-build-backends).
     2. Build-backends are probably missing a lot of parameters/features.
-    3. Recursive source dependencies are not supported. (source dependencies that have source dependencies)
-    4. Workspace dependencies cannot be inherited.
+    3. Workspace dependencies cannot be inherited.
 
 ## Setting up the Manifest
 
@@ -81,5 +80,5 @@ You can read up on run-dependencies in the [dependency types chapter](./dependen
 ## CLI Commands
 Using the preview feature you can now build packages from source.
 
-- `pixi build` has been added and will build a `.conda` file out of your package.
+- `pixi publish` builds a `.conda` file from your package and either uploads it to a channel (`--target-channel`) or copies it into a local directory (`--target-dir <PATH>`).
 - Other commands like `pixi install` and `pixi run` automatically make use of the build feature when a `path`, `git` or `url` dependency is present.

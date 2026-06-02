@@ -1,9 +1,9 @@
 use std::{
-    collections::{BTreeSet as Set, HashMap},
+    collections::{BTreeSet as Set, HashMap, HashSet},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
-    sync::LazyLock,
+    sync::{LazyLock, Mutex},
 };
 
 use clap::{ArgAction, Parser};
@@ -29,21 +29,38 @@ const EXPERIMENTAL: &str = "experimental";
 
 /// Controls which root certificates to use for TLS connections.
 ///
-/// - `Webpki`: Use bundled Mozilla root certificates (portable, works everywhere)
-/// - `Native`: Use the system's certificate store (includes corporate CAs)
-/// - `All`: Use both webpki and native certificates (union of both sources)
-///
-/// Note: This setting only has an effect when pixi is built with the `rustls-tls` feature.
+/// Note: This setting only has an effect when pixi is built with the `rustls` feature.
 /// When built with `native-tls`, system certificates are always used regardless of this setting.
+///
+/// `SSL_CERT_FILE` / `SSL_CERT_DIR` (when set and valid) always take precedence over this setting.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
 pub enum TlsRootCerts {
-    /// Use bundled Mozilla root certificates
+    /// Use bundled Mozilla root certificates (portable, works everywhere).
+    #[serde(rename = "webpki")]
     Webpki,
-    /// Use the system's native certificate store
-    Native,
-    /// Use both webpki and native certificates
+    /// Use the system's native certificate store (includes corporate CAs).
     #[default]
+    #[serde(rename = "system")]
+    System,
+    /// Deprecated spelling of [`Self::System`].
+    ///
+    /// Configs that still set `tls-root-certs = "native"` deserialize into this
+    /// variant so we can emit a runtime warning pointing users at the new
+    /// spelling. Behaves identically to `System` at use sites.
+    #[deprecated(note = "use `tls-root-certs = \"system\"`")]
+    #[serde(rename = "native")]
+    LegacyNative,
+    /// Use both webpki and native certificates.
+    ///
+    /// Deprecated: uv 0.11 no longer supports merging the two trust stores via
+    /// its public API, so pixi can no longer plumb this through for uv's
+    /// reqwest clients. This variant now falls through to `System` at
+    /// runtime and emits a warning. Use `webpki` or `system` explicitly,
+    /// or set `SSL_CERT_FILE` / `SSL_CERT_DIR`.
+    #[deprecated(
+        note = "merging webpki + native roots is no longer supported: use `system`, `webpki`, or set SSL_CERT_FILE/DIR"
+    )]
+    #[serde(rename = "all")]
     All,
 }
 
@@ -59,16 +76,18 @@ impl std::fmt::Display for TlsRootCerts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TlsRootCerts::Webpki => write!(f, "webpki"),
-            TlsRootCerts::Native => write!(f, "native"),
+            TlsRootCerts::System => write!(f, "system"),
+            #[allow(deprecated)]
+            TlsRootCerts::LegacyNative => write!(f, "native"),
+            #[allow(deprecated)]
             TlsRootCerts::All => write!(f, "all"),
         }
     }
 }
 
 pub fn default_channel_config() -> ChannelConfig {
-    ChannelConfig::default_with_root_dir(
-        std::env::current_dir().expect("Could not retrieve the current directory"),
-    )
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    ChannelConfig::default_with_root_dir(cwd)
 }
 
 /// Determines the default author based on the default git author. Both the name
@@ -119,6 +138,74 @@ static ENV_NO_PROXY: LazyLock<Option<String>> = LazyLock::new(|| {
 static USE_PROXY_FROM_ENV: LazyLock<bool> =
     LazyLock::new(|| (*ENV_HTTPS_PROXY).is_some() || (*ENV_HTTP_PROXY).is_some());
 
+static NETFS_REDIRECT_WARNED: LazyLock<Mutex<HashSet<CacheKind>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// Lazily-loaded global (system + user) cache config.
+///
+/// Used by the free [`cache_dir_for`] function so process-wide overrides like
+/// `[cache.conda-packages]` in `~/.config/pixi/config.toml` are honored even
+/// in callers that don't have a [`Config`] handy (e.g. `pypi_mapping`).
+/// Workspace-scoped overrides flow through [`Config::cache_dir_for`] instead.
+static GLOBAL_CACHE_CONFIG: LazyLock<CacheConfig> = LazyLock::new(|| Config::load_global().cache);
+
+/// Describes where the system + user-level config layer comes from. Built from
+/// [`ConfigSourceCli`] (which mirrors `--no-config` / `--config-file`) and
+/// passed into [`Config::load_global_with`] and [`Config::load_with`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum GlobalConfigSource {
+    /// Search the system and user-level paths (the default).
+    #[default]
+    Search,
+    /// Skip every system and user-level config file.
+    None,
+    /// Load only this file as the global layer.
+    File(PathBuf),
+}
+
+/// CLI flags that select where the global (system + user-level) config layer is
+/// read from. Flattened into each subcommand's `Args` so `--no-config` /
+/// `--config-file` are available per command.
+#[derive(Parser, Debug, Default, Clone)]
+pub struct ConfigSourceCli {
+    /// Don't read system or user-level configuration files. Project-local
+    /// `<project>/.pixi/config.toml` is still loaded.
+    #[arg(
+        long,
+        env = "PIXI_NO_CONFIG",
+        value_parser = clap::builder::BoolishValueParser::new(),
+        default_value_t = false,
+        conflicts_with = "config_file",
+        help_heading = consts::CLAP_CONFIG_OPTIONS
+    )]
+    pub no_config: bool,
+
+    /// Load configuration from this file instead of searching system and
+    /// user-level paths. Project-local `<project>/.pixi/config.toml` is still
+    /// merged on top.
+    #[arg(
+        long,
+        value_name = "PATH",
+        env = "PIXI_CONFIG_FILE",
+        conflicts_with = "no_config",
+        help_heading = consts::CLAP_CONFIG_OPTIONS
+    )]
+    pub config_file: Option<PathBuf>,
+}
+
+impl ConfigSourceCli {
+    /// Translate the flags into a [`GlobalConfigSource`].
+    pub fn source(&self) -> GlobalConfigSource {
+        if self.no_config {
+            GlobalConfigSource::None
+        } else if let Some(path) = &self.config_file {
+            GlobalConfigSource::File(path.clone())
+        } else {
+            GlobalConfigSource::Search
+        }
+    }
+}
+
 /// Get pixi home directory, default to `$HOME/.pixi`
 ///
 /// It may be overridden by the `PIXI_HOME` environment variable.
@@ -144,55 +231,506 @@ pub fn pixi_home() -> Option<PathBuf> {
 /// - If that is not set, the default cache directory of
 ///   [`rattler::default_cache_dir`] is used.
 pub fn get_cache_dir() -> miette::Result<PathBuf> {
-    std::env::var("PIXI_CACHE_DIR")
-        .ok()
-        .map(PathBuf::from)
-        .or_else(|| std::env::var("RATTLER_CACHE_DIR").map(PathBuf::from).ok())
-        .or_else(|| {
-            let pixi_cache_dir = dirs::cache_dir().map(|d| d.join(consts::PIXI_DIR));
-            // Only use the xdg cache pixi directory when it exists
-            pixi_cache_dir.and_then(|d| d.exists().then_some(d))
-        })
-        .or_else(|| rattler::default_cache_dir().ok())
+    resolve_cache_root(&GLOBAL_CACHE_CONFIG)
+        .map(|(path, _)| path)
         .ok_or_else(|| miette::miette!("could not determine default cache directory"))
 }
+
+/// How the cache directory was resolved.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum CacheDirSource {
+    /// User explicitly pinned via `PIXI_CACHE_DIR`, `RATTLER_CACHE_DIR`, or
+    /// `[cache.root]`.
+    UserPinned,
+    /// XDG default / rattler default.
+    Default,
+}
+
+/// Returns `true` when `path` (or its first existing ancestor) lives on a
+/// network-backed filesystem.
+pub fn is_network_filesystem(path: &Path) -> bool {
+    if std::env::var_os("PIXI_DISABLE_NETFS_REDIRECT").is_some() {
+        return false;
+    }
+    if std::env::var_os("PIXI_FORCE_NETFS_REDIRECT").is_some() {
+        return true;
+    }
+    detect_network_filesystem(path).unwrap_or(false)
+}
+
+#[cfg(target_os = "linux")]
+fn detect_network_filesystem(path: &Path) -> Option<bool> {
+    use nix::sys::statfs::{
+        AUTOFS_SUPER_MAGIC, FUSE_SUPER_MAGIC, FsType, NFS_SUPER_MAGIC, SMB_SUPER_MAGIC,
+    };
+    // Magics not re-exported by `nix` are defined inline below.
+    // CIFS: fs/smb/client/cifsfs.h
+    let cifs_magic = FsType(0xff53_4d42_u32 as _);
+    // BeeGFS (a.k.a. fhgfs): client_module/source/common/Common.h
+    let beegfs_magic = FsType(0x1983_0326_u32 as _);
+    // Lustre: include/uapi/linux/lustre/lustre_user.h (LL_SUPER_MAGIC)
+    let lustre_magic = FsType(0x0bd0_0bd0_u32 as _);
+    // GPFS / IBM Spectrum Scale ("GPFS" in ASCII)
+    let gpfs_magic = FsType(0x4750_4653_u32 as _);
+    // CephFS: include/linux/magic.h (CEPH_SUPER_MAGIC)
+    let ceph_magic = FsType(0x00c3_6400_u32 as _);
+    let fs = statfs_nearest_existing(path)?.filesystem_type();
+    Some(
+        fs == NFS_SUPER_MAGIC
+            || fs == SMB_SUPER_MAGIC
+            || fs == cifs_magic
+            || fs == FUSE_SUPER_MAGIC
+            || fs == AUTOFS_SUPER_MAGIC
+            || fs == beegfs_magic
+            || fs == lustre_magic
+            || fs == gpfs_magic
+            || fs == ceph_magic,
+    )
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn detect_network_filesystem(path: &Path) -> Option<bool> {
+    let stat = statfs_nearest_existing(path)?;
+    Some(matches!(
+        stat.filesystem_type_name(),
+        "nfs" | "smbfs" | "webdav" | "afpfs" | "macfuse" | "osxfuse"
+    ))
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "ios")))]
+fn detect_network_filesystem(_path: &Path) -> Option<bool> {
+    None
+}
+
+#[cfg(unix)]
+fn statfs_nearest_existing(path: &Path) -> Option<nix::sys::statfs::Statfs> {
+    // Walk upward until we find an ancestor that actually exists
+    let mut current = Some(path);
+    while let Some(p) = current {
+        if p.exists() {
+            return nix::sys::statfs::statfs(p).ok();
+        }
+        current = p.parent();
+    }
+    None
+}
+
+/// Returns a directory suitable for node-local scratch caching on HPC nodes.
+///
+/// Prefers scheduler-provided tmp dirs (`SLURM_TMPDIR`, `PBS_JOBFS`,
+/// `SCRATCH`)
+pub fn node_local_scratch_dir() -> PathBuf {
+    for var in ["SLURM_TMPDIR", "PBS_JOBFS", "SCRATCH", "TMPDIR"] {
+        if let Some(dir) = std::env::var_os(var) {
+            let path = PathBuf::from(dir);
+            if !detect_network_filesystem(&path).unwrap_or(false) {
+                return path;
+            }
+        }
+    }
+    std::env::temp_dir()
+}
+
+/// Identifies a specific pixi cache directory.
+///
+///
+/// [`CacheKind::prefers_shared`] encodes this preference and is consulted by
+/// the auto-redirect logic when the resolved cache root is on a network
+/// filesystem. It can be configured using `[cache.<kind>]` in
+/// `config.toml`.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum CacheKind {
+    /// Conda package cache (`pkgs`).
+    CondaPackages,
+    /// Sharded / classic repodata cache.
+    Repodata,
+    /// uv wheel cache.
+    PypiWheels,
+    /// conda → PyPI name-mapping cache.
+    PypiMapping,
+    /// Cached `pixi exec` environments.
+    ExecEnvironments,
+    /// Cached build-tool environments.
+    BuildToolEnvironments,
+    /// Detached environments root (when `detached-environments = true`).
+    DetachedEnvironments,
+}
+
+impl CacheKind {
+    /// The directory name (relative to the cache root) used for this kind.
+    pub fn subdir(self) -> &'static str {
+        match self {
+            CacheKind::CondaPackages => consts::CONDA_PACKAGE_CACHE_DIR,
+            CacheKind::Repodata => consts::CONDA_REPODATA_CACHE_DIR,
+            CacheKind::PypiWheels => consts::PYPI_CACHE_DIR,
+            CacheKind::PypiMapping => consts::CONDA_PYPI_MAPPING_CACHE_DIR,
+            CacheKind::ExecEnvironments => consts::CACHED_ENVS_DIR,
+            CacheKind::BuildToolEnvironments => consts::CACHED_BUILD_TOOL_ENVS_DIR,
+            CacheKind::DetachedEnvironments => consts::ENVIRONMENTS_DIR,
+        }
+    }
+
+    /// Whether this cache benefits from being shared across users on a single
+    /// (potentially networked) filesystem.
+    ///
+    pub fn prefers_shared(self) -> bool {
+        matches!(self, CacheKind::CondaPackages | CacheKind::PypiWheels)
+    }
+}
+
+/// Per-cache TOML configuration. Lives under `[cache]` in `config.toml`.
+///
+/// All path fields are absolute. Setting one bypasses the auto-redirect logic
+/// for that kind and uses the configured path verbatim.
+#[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct CacheConfig {
+    /// Override for the cache root. Equivalent to setting `PIXI_CACHE_DIR`,
+    /// but persisted in `config.toml`. Per-kind fields below override this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root: Option<PathBuf>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conda_packages: Option<PathBuf>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repodata: Option<PathBuf>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pypi_wheels: Option<PathBuf>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pypi_mapping: Option<PathBuf>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exec_environments: Option<PathBuf>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build_tool_environments: Option<PathBuf>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detached_environments: Option<PathBuf>,
+
+    /// How to handle a cache that lives on a network filesystem.
+    #[serde(default, skip_serializing_if = "NetfsRedirect::is_default")]
+    pub netfs_redirect: NetfsRedirect,
+}
+
+impl CacheConfig {
+    pub fn is_default(&self) -> bool {
+        self == &Self::default()
+    }
+
+    /// Per-kind path override, if configured.
+    pub fn path_for(&self, kind: CacheKind) -> Option<&Path> {
+        let p = match kind {
+            CacheKind::CondaPackages => &self.conda_packages,
+            CacheKind::Repodata => &self.repodata,
+            CacheKind::PypiWheels => &self.pypi_wheels,
+            CacheKind::PypiMapping => &self.pypi_mapping,
+            CacheKind::ExecEnvironments => &self.exec_environments,
+            CacheKind::BuildToolEnvironments => &self.build_tool_environments,
+            CacheKind::DetachedEnvironments => &self.detached_environments,
+        };
+        p.as_deref()
+    }
+
+    /// Merge `other` on top of `self`, with `other` taking priority.
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            root: other.root.or(self.root),
+            conda_packages: other.conda_packages.or(self.conda_packages),
+            repodata: other.repodata.or(self.repodata),
+            pypi_wheels: other.pypi_wheels.or(self.pypi_wheels),
+            pypi_mapping: other.pypi_mapping.or(self.pypi_mapping),
+            exec_environments: other.exec_environments.or(self.exec_environments),
+            build_tool_environments: other
+                .build_tool_environments
+                .or(self.build_tool_environments),
+            detached_environments: other.detached_environments.or(self.detached_environments),
+            netfs_redirect: if other.netfs_redirect == NetfsRedirect::default() {
+                self.netfs_redirect
+            } else {
+                other.netfs_redirect
+            },
+        }
+    }
+
+    /// Iterate over every set `(field-name, path)` pair. Used by
+    /// [`Self::expand_paths`] and [`Self::validate`].
+    fn iter_paths_mut(&mut self) -> impl Iterator<Item = (&'static str, &mut PathBuf)> {
+        [
+            ("cache.root", &mut self.root),
+            ("cache.conda-packages", &mut self.conda_packages),
+            ("cache.repodata", &mut self.repodata),
+            ("cache.pypi-wheels", &mut self.pypi_wheels),
+            ("cache.pypi-mapping", &mut self.pypi_mapping),
+            ("cache.exec-environments", &mut self.exec_environments),
+            (
+                "cache.build-tool-environments",
+                &mut self.build_tool_environments,
+            ),
+            (
+                "cache.detached-environments",
+                &mut self.detached_environments,
+            ),
+        ]
+        .into_iter()
+        .filter_map(|(name, opt)| opt.as_mut().map(|p| (name, p)))
+    }
+
+    /// Expand a leading `~` to the user's home directory in every set path.
+    ///
+    /// Mirrors the existing behavior of the top-level `detached-environments`
+    /// field. Called automatically by [`Config::from_toml`].
+    pub fn expand_paths(&mut self) -> miette::Result<()> {
+        for (name, path) in self.iter_paths_mut() {
+            if !path.to_string_lossy().starts_with('~') {
+                continue;
+            }
+            let home_dir = dirs::home_dir().ok_or_else(|| {
+                miette!(
+                    "could not resolve home directory for '~' in `{}` = {}",
+                    name,
+                    path.display()
+                )
+            })?;
+            // Safe unwrap: we just checked the path starts with '~'.
+            *path = home_dir.join(path.strip_prefix("~").unwrap());
+        }
+        Ok(())
+    }
+
+    /// Ensure every set path is absolute. `~` should already be expanded by
+    /// [`Self::expand_paths`] before calling this.
+    pub fn validate(&self) -> miette::Result<()> {
+        // iter_paths_mut takes &mut, so reuse the field list locally rather
+        // than cloning. Keep this in sync with `iter_paths_mut`.
+        let entries: [(&str, Option<&PathBuf>); 8] = [
+            ("cache.root", self.root.as_ref()),
+            ("cache.conda-packages", self.conda_packages.as_ref()),
+            ("cache.repodata", self.repodata.as_ref()),
+            ("cache.pypi-wheels", self.pypi_wheels.as_ref()),
+            ("cache.pypi-mapping", self.pypi_mapping.as_ref()),
+            ("cache.exec-environments", self.exec_environments.as_ref()),
+            (
+                "cache.build-tool-environments",
+                self.build_tool_environments.as_ref(),
+            ),
+            (
+                "cache.detached-environments",
+                self.detached_environments.as_ref(),
+            ),
+        ];
+        for (name, path) in entries.into_iter().filter_map(|(n, p)| p.map(|p| (n, p))) {
+            if !path.is_absolute() {
+                return Err(miette!(
+                    "`{}` must be an absolute path, got: {}",
+                    name,
+                    path.display()
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Policy for cache redirection when the cache root sits on a network
+/// filesystem.
+#[derive(Default, Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum NetfsRedirect {
+    /// Redirect kinds that don't [`CacheKind::prefers_shared`] to node-local
+    /// scratch. Default.
+    #[default]
+    Auto,
+    /// Always redirect every kind to node-local scratch when on netfs.
+    Always,
+    /// Never redirect. Equivalent to `PIXI_DISABLE_NETFS_REDIRECT=1`.
+    Never,
+}
+
+impl NetfsRedirect {
+    fn is_default(&self) -> bool {
+        *self == Self::Auto
+    }
+}
+
+impl FromStr for NetfsRedirect {
+    type Err = serde::de::value::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::deserialize(s.into_deserializer())
+    }
+}
+
+/// Per-kind cache path env var name. Setting one is equivalent to
+/// `[cache.<kind>]` in `config.toml` and takes precedence over it.
+fn env_var_for(kind: CacheKind) -> &'static str {
+    match kind {
+        CacheKind::CondaPackages => "PIXI_CACHE_CONDA_PACKAGES_DIR",
+        CacheKind::Repodata => "PIXI_CACHE_REPODATA_DIR",
+        CacheKind::PypiWheels => "PIXI_CACHE_PYPI_WHEELS_DIR",
+        CacheKind::PypiMapping => "PIXI_CACHE_PYPI_MAPPING_DIR",
+        CacheKind::ExecEnvironments => "PIXI_CACHE_EXEC_ENVIRONMENTS_DIR",
+        CacheKind::BuildToolEnvironments => "PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR",
+        CacheKind::DetachedEnvironments => "PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR",
+    }
+}
+
+/// Read the per-kind path override from the environment, if set.
+fn env_path_for(kind: CacheKind) -> Option<PathBuf> {
+    std::env::var_os(env_var_for(kind))
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+}
+
+/// Read the netfs-redirect policy from the environment. An unset or
+/// unrecognized value yields `None`, deferring to the TOML config.
+fn env_netfs_redirect() -> Option<NetfsRedirect> {
+    let raw = std::env::var("PIXI_CACHE_NETFS_REDIRECT").ok()?;
+    match raw.parse() {
+        Ok(mode) => Some(mode),
+        Err(_) => {
+            tracing::warn!(
+                "ignoring PIXI_CACHE_NETFS_REDIRECT={raw}: expected one of \
+                 `auto`, `always`, `never`"
+            );
+            None
+        }
+    }
+}
+
+/// Resolve the cache directory for a single [`CacheKind`], consulting the
+/// process-wide global config (system + user `config.toml`).
+///
+/// Use [`Config::cache_dir_for`] when a workspace-merged [`Config`] is
+/// available, since that picks up workspace-level overrides too.
+pub fn cache_dir_for(kind: CacheKind) -> miette::Result<PathBuf> {
+    resolve_cache_kind_dir(&GLOBAL_CACHE_CONFIG, kind)
+}
+
+fn resolve_cache_kind_dir(cache_cfg: &CacheConfig, kind: CacheKind) -> miette::Result<PathBuf> {
+    // Env vars override TOML for per-kind paths. Setting one bypasses the
+    // redirect logic for that kind, mirroring the TOML field's semantics.
+    if let Some(p) = env_path_for(kind) {
+        return Ok(p);
+    }
+    if let Some(p) = cache_cfg.path_for(kind) {
+        return Ok(p.to_path_buf());
+    }
+
+    let (base, source) = resolve_cache_root(cache_cfg)
+        .ok_or_else(|| miette::miette!("could not determine default cache directory"))?;
+    let pinned = matches!(source, CacheDirSource::UserPinned);
+
+    let redirect_mode = env_netfs_redirect().unwrap_or(cache_cfg.netfs_redirect);
+    let should_redirect = match redirect_mode {
+        NetfsRedirect::Never => false,
+        NetfsRedirect::Always => is_network_filesystem(&base) && !pinned,
+        NetfsRedirect::Auto => !pinned && !kind.prefers_shared() && is_network_filesystem(&base),
+    };
+
+    if !should_redirect {
+        return Ok(base.join(kind.subdir()));
+    }
+
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "pixi".to_string());
+    let redirected = node_local_scratch_dir()
+        .join(format!("pixi-cache-{user}"))
+        .join(kind.subdir());
+
+    let original = base.join(kind.subdir());
+    let mut warned = NETFS_REDIRECT_WARNED.lock().unwrap();
+    if warned.insert(kind) {
+        tracing::warn!(
+            "cache for {:?} at {} is on a network/parallel filesystem \
+             (NFS/SMB/FUSE/BeeGFS/Lustre/GPFS/CephFS), \
+             redirected to {} for this run. Set [cache.{}] in config.toml or \
+             PIXI_CACHE_DIR to override, or [cache.netfs-redirect] = \"never\" \
+             to keep the original path.",
+            kind,
+            original.display(),
+            redirected.display(),
+            kind.subdir(),
+        );
+    }
+    Ok(redirected)
+}
+
+/// Resolve the cache root, consulting (in order): `PIXI_CACHE_DIR`,
+/// `RATTLER_CACHE_DIR`, `[cache.root]` in config, XDG, rattler default.
+fn resolve_cache_root(cache_cfg: &CacheConfig) -> Option<(PathBuf, CacheDirSource)> {
+    if let Ok(dir) = std::env::var("PIXI_CACHE_DIR") {
+        return Some((PathBuf::from(dir), CacheDirSource::UserPinned));
+    }
+    if let Ok(dir) = std::env::var("RATTLER_CACHE_DIR") {
+        return Some((PathBuf::from(dir), CacheDirSource::UserPinned));
+    }
+    if let Some(root) = &cache_cfg.root {
+        return Some((root.clone(), CacheDirSource::UserPinned));
+    }
+    if let Some(xdg) = dirs::cache_dir()
+        .map(|d| d.join(consts::PIXI_DIR))
+        .and_then(|d| d.exists().then_some(d))
+    {
+        return Some((xdg, CacheDirSource::Default));
+    }
+    rattler::default_cache_dir()
+        .ok()
+        .map(|p| (p, CacheDirSource::Default))
+}
+
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {
     /// Path to the file containing the authentication token.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    auth_file: Option<PathBuf>,
+    pub auth_file: Option<PathBuf>,
 
     /// Max concurrent network requests, default is `50`
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    concurrent_downloads: Option<usize>,
+    pub concurrent_downloads: Option<usize>,
 
     /// Max concurrent solves, default is the number of CPUs
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    concurrent_solves: Option<usize>,
+    pub concurrent_solves: Option<usize>,
 
     /// Set pinning strategy
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS, value_enum)]
-    pinning_strategy: Option<PinningStrategy>,
+    pub pinning_strategy: Option<PinningStrategy>,
 
     /// Specifies whether to use the keyring to look up credentials for PyPI.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pypi_keyring_provider: Option<KeyringProvider>,
+    pub pypi_keyring_provider: Option<KeyringProvider>,
 
     /// Run post-link scripts (insecure)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    run_post_link_scripts: bool,
+    pub run_post_link_scripts: bool,
+
+    /// Disallow symbolic links during package installation
+    #[arg(long, env = "PIXI_NO_SYMBOLIC_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    pub no_symbolic_links: bool,
+
+    /// Disallow hard links during package installation
+    #[arg(long, env = "PIXI_NO_HARD_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    pub no_hard_links: bool,
+
+    /// Disallow ref links (copy-on-write) during package installation
+    #[arg(long, env = "PIXI_NO_REF_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    pub no_ref_links: bool,
 
     /// Do not verify the TLS certificate of the server.
     #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    tls_no_verify: bool,
+    pub tls_no_verify: bool,
 
-    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots), 'native' (system store), or 'all' (both).
+    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store).
     #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    tls_root_certs: Option<TlsRootCerts>,
+    pub tls_root_certs: Option<TlsRootCerts>,
 
     /// Use environment activation cache (experimental)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    use_environment_activation_cache: bool,
+    pub use_environment_activation_cache: bool,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -222,14 +760,69 @@ impl ConfigCliPrompt {
     }
 }
 
-#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Clone, Default, Debug, Serialize, PartialEq, Eq)]
 pub struct RepodataConfig {
     #[serde(flatten)]
     pub default: RepodataChannelConfig,
 
     #[serde(flatten)]
     pub per_channel: HashMap<Url, RepodataChannelConfig>,
+}
+
+impl<'de> Deserialize<'de> for RepodataConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct RepodataConfigVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for RepodataConfigVisitor {
+            type Value = RepodataConfig;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a repodata config map")
+            }
+
+            fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+            where
+                M: serde::de::MapAccess<'de>,
+            {
+                let mut default = RepodataChannelConfig::default();
+                let mut per_channel = HashMap::new();
+
+                while let Some(key) = access.next_key::<String>()? {
+                    match key.as_str() {
+                        "disable-bzip2" | "disable_bzip2" => {
+                            default.disable_bzip2 = Some(access.next_value()?);
+                        }
+                        "disable-zstd" | "disable_zstd" => {
+                            default.disable_zstd = Some(access.next_value()?);
+                        }
+                        "disable-sharded" | "disable_sharded" => {
+                            default.disable_sharded = Some(access.next_value()?);
+                        }
+                        other => {
+                            if let Ok(url) = Url::parse(other) {
+                                per_channel.insert(url, access.next_value()?);
+                            } else {
+                                // Unknown/deprecated keys (e.g. `disable-jlap`) are
+                                // silently ignored. `serde_ignored` will report them
+                                // as unused so the "Ignoring '…'" warning fires.
+                                let _: serde::de::IgnoredAny = access.next_value()?;
+                            }
+                        }
+                    }
+                }
+
+                Ok(RepodataConfig {
+                    default,
+                    per_channel,
+                })
+            }
+        }
+
+        deserializer.deserialize_map(RepodataConfigVisitor)
+    }
 }
 
 impl RepodataConfig {
@@ -284,12 +877,8 @@ impl ConfigCliActivation {
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub struct RepodataChannelConfig {
-    /// Disable JLAP compression for repodata.
-    #[serde(alias = "disable_jlap")] // BREAK: remove to stop supporting snake_case alias
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub disable_jlap: Option<bool>,
     /// Disable bzip2 compression for repodata.
     #[serde(alias = "disable_bzip2")] // BREAK: remove to stop supporting snake_case alias
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -305,15 +894,13 @@ pub struct RepodataChannelConfig {
 
 impl RepodataChannelConfig {
     pub fn is_empty(&self) -> bool {
-        self.disable_jlap.is_none()
-            && self.disable_bzip2.is_none()
+        self.disable_bzip2.is_none()
             && self.disable_zstd.is_none()
             && self.disable_sharded.is_none()
     }
 
     pub fn merge(&self, other: Self) -> Self {
         Self {
-            disable_jlap: self.disable_jlap.or(other.disable_jlap),
             disable_zstd: self.disable_zstd.or(other.disable_zstd),
             disable_bzip2: self.disable_bzip2.or(other.disable_bzip2),
             disable_sharded: self.disable_sharded.or(other.disable_sharded),
@@ -392,8 +979,7 @@ impl DetachedEnvironments {
         match resolved_self {
             DetachedEnvironments::Path(p) => Ok(Some(p.clone())),
             DetachedEnvironments::Boolean(b) if b => {
-                let path = get_cache_dir()?.join(consts::ENVIRONMENTS_DIR);
-                Ok(Some(path))
+                Ok(Some(cache_dir_for(CacheKind::DetachedEnvironments)?))
             }
             _ => Ok(None),
         }
@@ -476,8 +1062,6 @@ impl ExperimentalConfig {
     }
 }
 
-// Making the default values part of pixi_config to allow for printing the
-// default settings in the future.
 /// The default maximum number of concurrent solves that can be run at once.
 /// Defaulting to the number of CPUs available.
 fn default_max_concurrent_solves() -> usize {
@@ -790,6 +1374,21 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_post_link_scripts: Option<RunPostLinkScripts>,
 
+    /// If set to false, symbolic links will not be used during package installation.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_symbolic_links: Option<bool>,
+
+    /// If set to false, hard links will not be used during package installation.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_hard_links: Option<bool>,
+
+    /// If set to false, ref links (copy-on-write) will not be used during package installation.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_ref_links: Option<bool>,
+
     /// Https/Http proxy configuration for pixi
     #[serde(default)]
     #[serde(skip_serializing_if = "ProxyConfig::is_default")]
@@ -809,6 +1408,14 @@ pub struct Config {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_platform: Option<Platform>,
+
+    /// Per-cache directory configuration. Lets users redirect specific
+    /// caches (conda packages, repodata, pypi mapping, etc.) to different
+    /// locations — useful on HPC where the package cache should live on a
+    /// shared filesystem but transient caches should stay node-local.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "CacheConfig::is_default")]
+    pub cache: CacheConfig,
 
     //////////////////////
     // Deprecated fields //
@@ -842,9 +1449,13 @@ impl Default for Config {
             experimental: ExperimentalConfig::default(),
             concurrency: ConcurrencyConfig::default(),
             run_post_link_scripts: None,
+            allow_symbolic_links: None,
+            allow_hard_links: None,
+            allow_ref_links: None,
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
             tool_platform: None,
+            cache: CacheConfig::default(),
 
             // Deprecated fields
             change_ps1: None,
@@ -853,8 +1464,45 @@ impl Default for Config {
     }
 }
 
+/// Emit a deprecation warning when a config layer (file, CLI flag, or env var)
+/// sets `tls-root-certs` to one of the deprecated spellings.
+///
+/// `source` is included in the message so users can find where the bad value
+/// came from. Pass `None` for non-file sources (CLI / env).
+fn warn_deprecated_tls_root_certs(value: Option<TlsRootCerts>, source: Option<&str>) {
+    #[allow(deprecated)]
+    let (old, advice): (&str, String) = match value {
+        Some(TlsRootCerts::LegacyNative) => (
+            "tls-root-certs = \"native\"",
+            format!(
+                "rename to '{}'",
+                console::style("tls-root-certs = \"system\"").green()
+            ),
+        ),
+        Some(TlsRootCerts::All) => (
+            "tls-root-certs = \"all\"",
+            format!(
+                "merging webpki and system roots is no longer supported. \
+                 Pick one of '{}' or '{}', or set {} / {}. \
+                 The value falls back to 'system' for now.",
+                console::style("webpki").green(),
+                console::style("system").green(),
+                console::style("SSL_CERT_FILE").green(),
+                console::style("SSL_CERT_DIR").green(),
+            ),
+        ),
+        _ => return,
+    };
+    let msg = format!("'{}' is deprecated: {advice}", console::style(old).red(),);
+    match source {
+        Some(src) => tracing::warn!("In '{}': {msg}", console::style(src).bold()),
+        None => tracing::warn!("{msg}"),
+    }
+}
+
 impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
+        warn_deprecated_tls_root_certs(cli.tls_root_certs, None);
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
             tls_root_certs: cli.tls_root_certs,
@@ -886,6 +1534,9 @@ impl From<ConfigCli> for Config {
                 },
             },
             pinning_strategy: cli.pinning_strategy,
+            allow_symbolic_links: cli.no_symbolic_links.then_some(false),
+            allow_hard_links: cli.no_hard_links.then_some(false),
+            allow_ref_links: cli.no_ref_links.then_some(false),
             ..Default::default()
         }
     }
@@ -1199,6 +1850,16 @@ impl Config {
             config.shell.force_activate = config.force_activate;
         }
 
+        warn_deprecated_tls_root_certs(
+            config.tls_root_certs,
+            source_path.map(|p| p.display().to_string()).as_deref(),
+        );
+
+        // Expand `~` in every [cache] path, matching how the top-level
+        // `detached-environments` field is handled. Validation that the
+        // expanded paths are absolute happens in `Config::validate`.
+        config.cache.expand_paths()?;
+
         Ok((config, unused_keys))
     }
 
@@ -1229,7 +1890,7 @@ impl Config {
 
         if !unused_keys.is_empty() {
             tracing::warn!(
-                "Ignoring '{}' in at {}",
+                "Ignoring '{}' in {}",
                 console::style(
                     unused_keys
                         .iter()
@@ -1307,35 +1968,69 @@ impl Config {
             detached_environments.validate()?
         }
 
+        // Validate that all configured [cache] paths are absolute.
+        self.cache.validate()?;
+
         Ok(())
     }
 
-    /// Load the global config file from various global paths.
+    /// Load the global (system + user-level) config layer using the given
+    /// source.
     ///
-    /// # Returns
+    /// - [`GlobalConfigSource::None`]: return [`Config::default`].
+    /// - [`GlobalConfigSource::File`]: load only that file.
+    /// - [`GlobalConfigSource::Search`]: load `/etc/pixi/config.toml` and
+    ///   every entry in [`config_path_global`], merging them in order. This
+    ///   case is cached process-wide because the underlying files are
+    ///   env-independent.
     ///
-    /// The loaded global config
-    pub fn load_global() -> Config {
-        let mut config = Self::load_system();
-
-        for p in config_path_global() {
-            match Self::from_path(&p) {
-                Ok(c) => config = config.merge_config(c),
-                Err(ConfigError::FileNotFound(_)) => (),
-                Err(e) => tracing::error!(
-                    "Failed to load global config '{}' with error: {}",
-                    p.display(),
-                    e
-                ),
+    /// The project-local `<project>/.pixi/config.toml` layer that
+    /// [`Config::load_with`] adds on top is unaffected.
+    pub fn load_global_with(source: &GlobalConfigSource) -> Config {
+        // Cache only the default search-the-disk layers; non-default sources
+        // (--no-config / --config-file) are per-invocation and can vary.
+        static SEARCH_LAYERS: LazyLock<Config> = LazyLock::new(|| {
+            let mut config = Config::load_system();
+            for p in config_path_global() {
+                match Config::from_path(&p) {
+                    Ok(c) => config = config.merge_config(c),
+                    Err(ConfigError::FileNotFound(_)) => (),
+                    Err(e) => tracing::error!(
+                        "Failed to load global config '{}' with error: {}",
+                        p.display(),
+                        e
+                    ),
+                }
             }
-        }
+            config
+        });
 
-        // Load the default CLI config and layer it on top of the global config
-        // This will add any environment variables defined in the `clap` attributes to
-        // the config
+        let file_layers = match source {
+            GlobalConfigSource::None => Config::default(),
+            GlobalConfigSource::File(path) => match Config::from_path(path) {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to load config file '{}' (from --config-file / \
+                         PIXI_CONFIG_FILE): {}",
+                        path.display(),
+                        e
+                    );
+                    Config::default()
+                }
+            },
+            GlobalConfigSource::Search => SEARCH_LAYERS.clone(),
+        };
+
+        // Layer env-derived CLI defaults so process-env changes still apply.
         let mut default_cli = ConfigCli::default();
         default_cli.update_from(std::env::args().take(0));
-        config.merge_config(default_cli.into())
+        file_layers.merge_config(default_cli.into())
+    }
+
+    /// Load the global config layer using the default search behavior.
+    pub fn load_global() -> Config {
+        Self::load_global_with(&GlobalConfigSource::Search)
     }
 
     /// Load the global config and layer the given cli config on top of it.
@@ -1344,13 +2039,11 @@ impl Config {
         config.merge_config(cli.clone().into())
     }
 
-    /// Load the config from the given path (project root).
-    ///
-    /// # Returns
-    ///
-    /// The loaded config (merged with the global config)
-    pub fn load(project_root: &Path) -> Config {
-        let mut config = Self::load_global();
+    /// Load the config from the given path (project root), using the supplied
+    /// source for the global layer. Project-local
+    /// `<project>/.pixi/config.toml` is merged on top.
+    pub fn load_with(project_root: &Path, source: &GlobalConfigSource) -> Config {
+        let mut config = Self::load_global_with(source);
         let local_config_path = project_root
             .join(consts::PIXI_DIR)
             .join(consts::CONFIG_FILE);
@@ -1367,10 +2060,26 @@ impl Config {
         config
     }
 
+    /// Load the config from the given path (project root) using the default
+    /// global search.
+    pub fn load(project_root: &Path) -> Config {
+        Self::load_with(project_root, &GlobalConfigSource::Search)
+    }
+
     // Get all possible keys of the configuration
     pub fn get_keys(&self) -> &[&str] {
         &[
             "authentication-override-file",
+            "cache",
+            "cache.build-tool-environments",
+            "cache.conda-packages",
+            "cache.detached-environments",
+            "cache.exec-environments",
+            "cache.netfs-redirect",
+            "cache.pypi-mapping",
+            "cache.pypi-wheels",
+            "cache.repodata",
+            "cache.root",
             "concurrency",
             "concurrency.downloads",
             "concurrency.solves",
@@ -1391,10 +2100,12 @@ impl Config {
             "pypi-config.keyring-provider",
             "repodata-config",
             "repodata-config.disable-bzip2",
-            "repodata-config.disable-jlap",
             "repodata-config.disable-sharded",
             "repodata-config.disable-zstd",
             "run-post-link-scripts",
+            "allow-symbolic-links",
+            "allow-hard-links",
+            "allow-ref-links",
             "s3-options",
             "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
@@ -1451,10 +2162,14 @@ impl Config {
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self.concurrency.merge(other.concurrency),
             run_post_link_scripts: other.run_post_link_scripts.or(self.run_post_link_scripts),
+            allow_symbolic_links: other.allow_symbolic_links.or(self.allow_symbolic_links),
+            allow_hard_links: other.allow_hard_links.or(self.allow_hard_links),
+            allow_ref_links: other.allow_ref_links.or(self.allow_ref_links),
 
             proxy_config: self.proxy_config.merge(other.proxy_config),
             build: self.build.merge(other.build),
             tool_platform: self.tool_platform.or(other.tool_platform),
+            cache: self.cache.merge(other.cache),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -1477,9 +2192,14 @@ impl Config {
         self.tls_no_verify.unwrap_or(false)
     }
 
-    /// Retrieve the value for the tls_root_certs field (defaults to Webpki).
-    pub fn tls_root_certs(&self) -> TlsRootCerts {
-        self.tls_root_certs.unwrap_or_default()
+    /// The user-set `tls-root-certs` value, if any.
+    ///
+    /// Returns `None` when the field was not set in any config layer. The
+    /// backend-aware fallback lives in `pixi_utils::reqwest::default_tls_root_certs`,
+    /// since the choice depends on whether pixi is built against `native-tls`
+    /// or `rustls` and this crate is feature-agnostic.
+    pub fn tls_root_certs(&self) -> Option<TlsRootCerts> {
+        self.tls_root_certs
     }
 
     /// Retrieve the value for the change_ps1 field (defaults to true).
@@ -1667,10 +2387,6 @@ impl Config {
 
                 let subkey = key.strip_prefix("repodata-config.").unwrap();
                 match subkey {
-                    "disable-jlap" => {
-                        self.repodata_config.default.disable_jlap =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
-                    }
                     "disable-bzip2" => {
                         self.repodata_config.default.disable_bzip2 =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
@@ -1881,6 +2597,16 @@ impl Config {
                 }
                 return Ok(());
             }
+            "allow-symbolic-links" => {
+                self.allow_symbolic_links =
+                    value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "allow-hard-links" => {
+                self.allow_hard_links = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
+            "allow-ref-links" => {
+                self.allow_ref_links = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+            }
             key if key.starts_with("proxy-config") => {
                 if key == "proxy-config" {
                     if let Some(value) = value {
@@ -1917,6 +2643,45 @@ impl Config {
                     _ => return Err(err),
                 }
             }
+            key if key.starts_with("cache") => {
+                if key == "cache" {
+                    if let Some(value) = value {
+                        self.cache = serde_json::de::from_str(&value).into_diagnostic()?;
+                    } else {
+                        self.cache = CacheConfig::default();
+                    }
+                    self.cache.expand_paths()?;
+                    self.cache.validate()?;
+                    return Ok(());
+                } else if !key.starts_with("cache.") {
+                    return Err(err);
+                }
+                let subkey = key.strip_prefix("cache.").unwrap();
+                match subkey {
+                    "root" => self.cache.root = value.map(PathBuf::from),
+                    "conda-packages" => self.cache.conda_packages = value.map(PathBuf::from),
+                    "repodata" => self.cache.repodata = value.map(PathBuf::from),
+                    "pypi-wheels" => self.cache.pypi_wheels = value.map(PathBuf::from),
+                    "pypi-mapping" => self.cache.pypi_mapping = value.map(PathBuf::from),
+                    "exec-environments" => self.cache.exec_environments = value.map(PathBuf::from),
+                    "build-tool-environments" => {
+                        self.cache.build_tool_environments = value.map(PathBuf::from)
+                    }
+                    "detached-environments" => {
+                        self.cache.detached_environments = value.map(PathBuf::from)
+                    }
+                    "netfs-redirect" => {
+                        self.cache.netfs_redirect = value
+                            .map(|v| NetfsRedirect::from_str(&v))
+                            .transpose()
+                            .into_diagnostic()?
+                            .unwrap_or_default();
+                    }
+                    _ => return Err(err),
+                }
+                self.cache.expand_paths()?;
+                self.cache.validate()?;
+            }
             _ => return Err(err),
         }
 
@@ -1940,17 +2705,21 @@ impl Config {
             .wrap_err(format!("failed to write config to '{}'", to.display()))
     }
 
+    /// Resolve the cache directory for `kind`, applying this config's
+    /// `[cache]` settings on top of the env-var / default resolution.
+    pub fn cache_dir_for(&self, kind: CacheKind) -> miette::Result<PathBuf> {
+        resolve_cache_kind_dir(&self.cache, kind)
+    }
+
     /// Constructs a [`GatewayBuilder`] with preconfigured settings.
     pub fn gateway(&self) -> GatewayBuilder {
-        // Determine the cache directory and fall back to sane defaults otherwise.
-        let cache_dir = get_cache_dir().unwrap_or_else(|e| {
+        let repodata_cache = self.cache_dir_for(CacheKind::Repodata).unwrap_or_else(|e| {
             tracing::error!("failed to determine repodata cache directory: {e}");
             std::env::current_dir().unwrap_or_else(|_| PathBuf::from("./"))
         });
 
-        // Construct the gateway
         Gateway::builder()
-            .with_cache_dir(cache_dir.join(consts::CONDA_REPODATA_CACHE_DIR))
+            .with_cache_dir(repodata_cache)
             .with_channel_config(self.into())
             .with_max_concurrent_requests(self.max_concurrent_downloads())
     }
@@ -2018,6 +2787,9 @@ mod tests {
 
     #[test]
     fn test_config_parse() {
+        // Calls get_cache_dir() via detached_environments().path(); serialize
+        // against other tests that mutate the process env.
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
         let toml = format!(
             r#"default-channels = ["conda-forge"]
 tls-no-verify = true
@@ -2035,7 +2807,9 @@ UNUSED = "unused"
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
         assert_eq!(config.tls_no_verify, Some(true));
-        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
+        #[allow(deprecated)]
+        let expected_legacy = TlsRootCerts::LegacyNative;
+        assert_eq!(config.tls_root_certs, Some(expected_legacy));
         assert_eq!(
             config.detached_environments().path().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
@@ -2126,18 +2900,21 @@ UNUSED = "unused"
         // Test with all CLI options enabled
         let cli = ConfigCli {
             tls_no_verify: true,
-            tls_root_certs: Some(TlsRootCerts::Native),
+            tls_root_certs: Some(TlsRootCerts::System),
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
             concurrent_solves: Some(8),
             concurrent_downloads: Some(100),
             run_post_link_scripts: true,
+            no_symbolic_links: false,
+            no_hard_links: false,
+            no_ref_links: false,
             use_environment_activation_cache: true,
             pinning_strategy: Some(PinningStrategy::Semver),
         };
         let config = Config::from(cli);
         assert_eq!(config.tls_no_verify, Some(true));
-        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::System));
         assert_eq!(
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
@@ -2162,6 +2939,9 @@ UNUSED = "unused"
             concurrent_solves: None,
             concurrent_downloads: None,
             run_post_link_scripts: false,
+            no_symbolic_links: false,
+            no_hard_links: false,
+            no_ref_links: false,
             use_environment_activation_cache: false,
             pinning_strategy: None,
         };
@@ -2267,7 +3047,7 @@ UNUSED = "unused"
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
-            tls_root_certs: Some(TlsRootCerts::Native),
+            tls_root_certs: Some(TlsRootCerts::System),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             concurrency: ConcurrencyConfig {
                 solves: 5,
@@ -2307,7 +3087,6 @@ UNUSED = "unused"
             repodata_config: RepodataConfig {
                 default: RepodataChannelConfig {
                     disable_bzip2: Some(true),
-                    disable_jlap: Some(true),
                     disable_sharded: Some(true),
                     disable_zstd: Some(true),
                 },
@@ -2317,9 +3096,19 @@ UNUSED = "unused"
                 )]),
             },
             run_post_link_scripts: Some(RunPostLinkScripts::Insecure),
+            allow_symbolic_links: Some(true),
+            allow_hard_links: Some(true),
+            allow_ref_links: Some(false),
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
             tool_platform: None,
+            cache: CacheConfig {
+                root: Some(PathBuf::from("/some/cache/root")),
+                conda_packages: Some(PathBuf::from("/shared/pkgs")),
+                pypi_mapping: Some(PathBuf::from("/local/mapping")),
+                netfs_redirect: NetfsRedirect::Always,
+                ..CacheConfig::default()
+            },
             // Deprecated keys
             change_ps1: None,
             force_activate: None,
@@ -2445,7 +3234,6 @@ UNUSED = "unused"
                 "https://prefix.dev/conda-forge"
             ]
             [repodata_config]
-            disable_jlap = true
             disable_bzip2 = true
             disable_zstd = true
         "#;
@@ -2467,7 +3255,6 @@ UNUSED = "unused"
             Some(&vec![Url::parse("https://prefix.dev/conda-forge").unwrap()])
         );
         let repodata_config = config.repodata_config;
-        assert_eq!(repodata_config.default.disable_jlap, Some(true));
         assert_eq!(repodata_config.default.disable_bzip2, Some(true));
         assert_eq!(repodata_config.default.disable_zstd, Some(true));
         assert_eq!(repodata_config.default.disable_sharded, None);
@@ -2492,6 +3279,9 @@ UNUSED = "unused"
 
     #[test]
     fn test_alter_config() {
+        // Calls get_cache_dir() / cache_dir_for(), which read PIXI_CACHE_DIR;
+        // serialize against other tests that mutate the process env.
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
         let mut config = Config::default();
         config
             .set("default-channels", Some(r#"["conda-forge"]"#.to_string()))
@@ -2545,12 +3335,6 @@ UNUSED = "unused"
                 .get(&Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
             Some(&vec![Url::parse("https://prefix.dev/conda-forge").unwrap()])
         );
-
-        config
-            .set("repodata-config.disable-jlap", Some("true".to_string()))
-            .unwrap();
-        let repodata_config = config.repodata_config();
-        assert_eq!(repodata_config.default.disable_jlap, Some(true));
 
         config
             .set(
@@ -2658,6 +3442,13 @@ UNUSED = "unused"
         );
 
         // Test more repodata-config options
+        // disable-jlap has been removed — setting it should error
+        assert!(
+            config
+                .set("repodata-config.disable-jlap", Some("true".to_string()))
+                .is_err()
+        );
+
         config
             .set("repodata-config.disable-bzip2", Some("true".to_string()))
             .unwrap();
@@ -2759,9 +3550,17 @@ UNUSED = "unused"
 
         // Test tls-root-certs
         config
+            .set("tls-root-certs", Some("system".to_string()))
+            .unwrap();
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::System));
+
+        // The deprecated `native` spelling still deserializes.
+        config
             .set("tls-root-certs", Some("native".to_string()))
             .unwrap();
-        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Native));
+        #[allow(deprecated)]
+        let expected_legacy = TlsRootCerts::LegacyNative;
+        assert_eq!(config.tls_root_certs, Some(expected_legacy));
 
         // Test mirrors
         config
@@ -2871,25 +3670,21 @@ UNUSED = "unused"
     fn test_repodata_config() {
         let toml = r#"
             [repodata-config]
-            disable-jlap = true
             disable-bzip2 = true
             disable-zstd = true
             disable-sharded = true
 
             [repodata-config."https://prefix.dev/conda-forge"]
-            disable-jlap = false
             disable-bzip2 = false
             disable-zstd = false
             disable-sharded = false
 
             [repodata-config."https://conda.anaconda.org/conda-forge"]
-            disable-jlap = false
             disable-bzip2 = false
             disable-zstd = false
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
         let repodata_config = config.repodata_config();
-        assert_eq!(repodata_config.default.disable_jlap, Some(true));
         assert_eq!(repodata_config.default.disable_bzip2, Some(true));
         assert_eq!(repodata_config.default.disable_zstd, Some(true));
         assert_eq!(repodata_config.default.disable_sharded, Some(true));
@@ -2900,7 +3695,6 @@ UNUSED = "unused"
         let prefix_config = per_channel
             .get(&Url::from_str("https://prefix.dev/conda-forge").unwrap())
             .unwrap();
-        assert_eq!(prefix_config.disable_jlap, Some(false));
         assert_eq!(prefix_config.disable_bzip2, Some(false));
         assert_eq!(prefix_config.disable_zstd, Some(false));
         assert_eq!(prefix_config.disable_sharded, Some(false));
@@ -2908,7 +3702,6 @@ UNUSED = "unused"
         let anaconda_config = per_channel
             .get(&Url::from_str("https://conda.anaconda.org/conda-forge").unwrap())
             .unwrap();
-        assert_eq!(anaconda_config.disable_jlap, Some(false));
         assert_eq!(anaconda_config.disable_bzip2, Some(false));
         assert_eq!(anaconda_config.disable_zstd, Some(false));
         assert_eq!(anaconda_config.disable_sharded, None);
@@ -3023,5 +3816,361 @@ UNUSED = "unused"
                 compression_level: CompressionLevel::Lowest
             }
         );
+    }
+
+    // Serialize env-var-sensitive tests so they don't race against each other.
+    // Parallel cargo-test threads share the process environment, and
+    // cache_dir_for / is_network_filesystem read several env vars.
+    static NETFS_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct ScopedEnv {
+        key: &'static str,
+        prev: Option<std::ffi::OsString>,
+    }
+
+    impl ScopedEnv {
+        fn set(key: &'static str, value: &str) -> Self {
+            let prev = std::env::var_os(key);
+            // SAFETY: tests take NETFS_ENV_LOCK before touching the process env,
+            // so no other thread is reading/writing env simultaneously.
+            unsafe { std::env::set_var(key, value) };
+            Self { key, prev }
+        }
+
+        fn unset(key: &'static str) -> Self {
+            let prev = std::env::var_os(key);
+            // SAFETY: see `set` above.
+            unsafe { std::env::remove_var(key) };
+            Self { key, prev }
+        }
+    }
+
+    impl Drop for ScopedEnv {
+        fn drop(&mut self) {
+            // SAFETY: see `ScopedEnv::set`.
+            unsafe {
+                match &self.prev {
+                    Some(v) => std::env::set_var(self.key, v),
+                    None => std::env::remove_var(self.key),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn netfs_force_redirect_env_wins() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        assert!(is_network_filesystem(&PathBuf::from("/tmp")));
+    }
+
+    #[test]
+    fn netfs_disable_beats_force() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _disable = ScopedEnv::set("PIXI_DISABLE_NETFS_REDIRECT", "1");
+        assert!(!is_network_filesystem(&PathBuf::from("/tmp")));
+    }
+
+    #[test]
+    fn netfs_local_tempdir_is_not_network() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::unset("PIXI_FORCE_NETFS_REDIRECT");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        // CI runners and local dev both have /tmp (or macOS equivalent) on
+        // local disk. If this ever fails the test runner is itself on NFS.
+        assert!(!is_network_filesystem(&std::env::temp_dir()));
+    }
+
+    #[test]
+    fn cache_dir_for_honors_user_pinned_cache_dir() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        // Even with force-redirect set, an explicit user pin must win.
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _pin = ScopedEnv::set("PIXI_CACHE_DIR", "/some/user/path");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+
+        let got = Config::default()
+            .cache_dir_for(CacheKind::PypiMapping)
+            .unwrap();
+        assert_eq!(got, PathBuf::from("/some/user/path/conda-pypi-mapping"));
+    }
+
+    #[test]
+    fn cache_dir_for_redirects_local_kinds_when_network_detected() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+
+        let got = Config::default()
+            .cache_dir_for(CacheKind::PypiMapping)
+            .unwrap();
+
+        assert!(got.ends_with("conda-pypi-mapping"));
+        assert!(got.starts_with(node_local_scratch_dir()));
+    }
+
+    #[test]
+    fn cache_dir_for_keeps_shared_kinds_on_netfs() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+
+        // The conda package cache benefits from being on a shared filesystem;
+        // it should not be redirected to node-local scratch even when the
+        // root looks like netfs.
+        let got = Config::default()
+            .cache_dir_for(CacheKind::CondaPackages)
+            .unwrap();
+        assert!(got.ends_with(consts::CONDA_PACKAGE_CACHE_DIR));
+        assert!(!got.starts_with(node_local_scratch_dir()));
+    }
+
+    #[test]
+    fn cache_dir_for_passes_through_when_local() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::unset("PIXI_FORCE_NETFS_REDIRECT");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+
+        let got = Config::default()
+            .cache_dir_for(CacheKind::PypiMapping)
+            .unwrap();
+        let expected = get_cache_dir().unwrap().join("conda-pypi-mapping");
+        assert_eq!(got, expected);
+    }
+
+    #[test]
+    fn cache_dir_for_per_kind_path_override_wins() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        // Even when redirection is forced and a config-level root is set,
+        // the per-kind [cache.pypi-mapping] path should override.
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+
+        let config = Config {
+            cache: CacheConfig {
+                root: Some(PathBuf::from("/some/configured/root")),
+                pypi_mapping: Some(PathBuf::from("/explicit/per/kind/path")),
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+
+        let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
+        assert_eq!(got, PathBuf::from("/explicit/per/kind/path"));
+    }
+
+    #[test]
+    fn cache_dir_for_config_root_acts_like_user_pin() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+
+        // [cache.root] in config should behave like a user pin: no redirect
+        // even with FORCE_NETFS_REDIRECT, because the user explicitly chose
+        // this location.
+        let config = Config {
+            cache: CacheConfig {
+                root: Some(PathBuf::from("/configured/root")),
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+
+        let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
+        assert_eq!(got, PathBuf::from("/configured/root/conda-pypi-mapping"));
+    }
+
+    #[test]
+    fn cache_dir_for_netfs_redirect_never_disables_redirect() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+
+        let config = Config {
+            cache: CacheConfig {
+                netfs_redirect: NetfsRedirect::Never,
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+
+        let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
+        assert!(!got.starts_with(node_local_scratch_dir()));
+    }
+
+    #[test]
+    fn cache_config_parses_from_toml() {
+        let toml = r#"
+            [cache]
+            root = "/shared/hpc"
+            conda-packages = "/shared/hpc/pkgs"
+            pypi-mapping = "/local/scratch/mapping"
+            netfs-redirect = "never"
+        "#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(config.cache.root, Some(PathBuf::from("/shared/hpc")));
+        assert_eq!(
+            config.cache.conda_packages,
+            Some(PathBuf::from("/shared/hpc/pkgs"))
+        );
+        assert_eq!(
+            config.cache.pypi_mapping,
+            Some(PathBuf::from("/local/scratch/mapping"))
+        );
+        assert_eq!(config.cache.netfs_redirect, NetfsRedirect::Never);
+    }
+
+    #[test]
+    fn cache_config_expands_tilde_in_paths() {
+        let home_dir = dirs::home_dir().expect("home dir resolves on test host");
+        let toml = r#"
+            [cache]
+            root = "~/.cache/pixi"
+            pypi-mapping = "~/scratch/mapping"
+        "#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(config.cache.root, Some(home_dir.join(".cache/pixi")));
+        assert_eq!(
+            config.cache.pypi_mapping,
+            Some(home_dir.join("scratch/mapping"))
+        );
+    }
+
+    #[test]
+    fn cache_config_rejects_relative_paths_on_validate() {
+        let cfg = CacheConfig {
+            pypi_mapping: Some(PathBuf::from("not-absolute")),
+            ..CacheConfig::default()
+        };
+        let err = cfg.validate().unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("cache.pypi-mapping"),
+            "error should name the offending field, got: {msg}"
+        );
+        assert!(
+            msg.contains("must be an absolute path"),
+            "error should explain the requirement, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn cache_config_validate_passes_when_unset() {
+        // An empty CacheConfig is valid (no paths to check).
+        CacheConfig::default().validate().unwrap();
+    }
+
+    #[test]
+    fn cache_dir_for_per_kind_env_overrides_toml() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        // Even with a TOML per-kind path AND force-redirect set, the env var
+        // wins and bypasses redirect.
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        let _env = ScopedEnv::set("PIXI_CACHE_PYPI_MAPPING_DIR", "/from/env/mapping");
+
+        let config = Config {
+            cache: CacheConfig {
+                pypi_mapping: Some(PathBuf::from("/from/toml/mapping")),
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+
+        let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
+        assert_eq!(got, PathBuf::from("/from/env/mapping"));
+    }
+
+    #[test]
+    fn cache_dir_for_per_kind_env_only_affects_named_kind() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::unset("PIXI_FORCE_NETFS_REDIRECT");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        let _cache = ScopedEnv::set("PIXI_CACHE_DIR", "/pinned/root");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _env = ScopedEnv::set("PIXI_CACHE_REPODATA_DIR", "/from/env/repodata");
+
+        // Repodata uses the env-var path verbatim.
+        let got_repo = Config::default()
+            .cache_dir_for(CacheKind::Repodata)
+            .unwrap();
+        assert_eq!(got_repo, PathBuf::from("/from/env/repodata"));
+
+        // Other kinds keep their default subdir under the pinned root.
+        let got_wheels = Config::default()
+            .cache_dir_for(CacheKind::PypiWheels)
+            .unwrap();
+        assert!(got_wheels.starts_with("/pinned/root"));
+        assert!(!got_wheels.starts_with("/from/env"));
+    }
+
+    #[test]
+    fn cache_dir_for_netfs_redirect_env_overrides_toml() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        // TOML says `always`, env says `never` — env wins, so no redirect.
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        let _redirect = ScopedEnv::set("PIXI_CACHE_NETFS_REDIRECT", "never");
+
+        let config = Config {
+            cache: CacheConfig {
+                netfs_redirect: NetfsRedirect::Always,
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+
+        let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
+        assert!(!got.starts_with(node_local_scratch_dir()));
+    }
+
+    #[test]
+    fn cache_dir_for_netfs_redirect_env_invalid_falls_back_to_toml() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+        let _redirect = ScopedEnv::set("PIXI_CACHE_NETFS_REDIRECT", "garbage");
+
+        let config = Config {
+            cache: CacheConfig {
+                netfs_redirect: NetfsRedirect::Never,
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+
+        // Bad env value → ignored, TOML `never` still applies.
+        let got = config.cache_dir_for(CacheKind::PypiMapping).unwrap();
+        assert!(!got.starts_with(node_local_scratch_dir()));
+    }
+
+    #[test]
+    fn config_validate_surfaces_cache_errors() {
+        // Config::validate must propagate CacheConfig::validate failures so
+        // bad cache paths are caught at load time, not at first cache use.
+        let config = Config {
+            cache: CacheConfig {
+                conda_packages: Some(PathBuf::from("relative/dir")),
+                ..CacheConfig::default()
+            },
+            ..Config::default()
+        };
+        let err = config.validate().unwrap_err();
+        assert!(format!("{err}").contains("cache.conda-packages"));
     }
 }

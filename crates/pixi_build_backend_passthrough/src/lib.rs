@@ -95,11 +95,13 @@ impl InMemoryBackend for PassthroughBackend {
             &params,
             &self.run_exports,
             self.package_run_exports.as_ref(),
+            &self.config,
         );
 
         Ok(CondaOutputsResult {
             outputs,
             input_globs: Default::default(),
+            input_glob_sets: None,
         })
     }
 
@@ -124,13 +126,22 @@ impl InMemoryBackend for PassthroughBackend {
             .output_directory
             .unwrap_or(params.work_directory.clone());
 
-        // Determine the subdir - use the one from index_json if present, otherwise default to NoArch
+        // Determine the subdir - use the one from index_json if present.
+        // Otherwise honor the config: an explicit `noarch = false` opts in
+        // to a platform-specific build (using `params.output.subdir`),
+        // while the unset / `noarch = true` default stays NoArch.
         let subdir = self
             .index_json
             .subdir
             .as_ref()
             .map(|s| s.parse().expect("invalid subdir in index.json"))
-            .unwrap_or(Platform::NoArch);
+            .unwrap_or_else(|| {
+                if self.config.noarch == Some(false) {
+                    params.output.subdir
+                } else {
+                    Platform::NoArch
+                }
+            });
 
         let output_file = match &self.config.package {
             Some(package) => {
@@ -144,7 +155,7 @@ impl InMemoryBackend for PassthroughBackend {
                     "{}-{}-{}.conda",
                     self.index_json.name.as_normalized(),
                     self.index_json.version,
-                    &build_string
+                    build_string
                 );
                 let output_path = output_dir.join(&file_name);
 
@@ -162,6 +173,24 @@ impl InMemoryBackend for PassthroughBackend {
                 }
                 modified_index_json.license = self.project_model.license.clone();
 
+                // Reflect the run-dependencies and run-constraints that
+                // the frontend resolved (including run-exports propagated
+                // from build / host envs) into the package's index.json
+                // so that consumers inspecting the built `.conda` see the
+                // expected `depends` / `constrains` arrays.
+                if let Some(run_dependencies) = &params.run_dependencies {
+                    modified_index_json.depends = run_dependencies
+                        .iter()
+                        .map(|dep| dep.spec.to_string())
+                        .collect();
+                }
+                if let Some(run_constraints) = &params.run_constraints {
+                    modified_index_json.constrains = run_constraints
+                        .iter()
+                        .map(|dep| dep.spec.to_string())
+                        .collect();
+                }
+
                 create_conda_package_on_the_fly(&modified_index_json, &output_path).map_err(
                     |err| {
                         Box::new(
@@ -177,6 +206,7 @@ impl InMemoryBackend for PassthroughBackend {
         Ok(CondaBuildV1Result {
             output_file,
             input_globs: self.config.build_globs.clone().unwrap_or_default(),
+            input_glob_sets: None,
             name: self.index_json.name.as_normalized().to_owned(),
             version: self.index_json.version.clone(),
             build: build_string,
@@ -264,6 +294,7 @@ fn generate_variant_outputs(
     params: &CondaOutputsParams,
     run_exports: &BTreeMap<String, RunExportsJson>,
     package_run_exports: Option<&RunExportsJson>,
+    config: &PassthroughBackendConfig,
 ) -> Vec<CondaOutput> {
     // Check if we have variant configurations and dependencies with "*"
     let variant_keys = find_variant_keys(project_model, params);
@@ -277,6 +308,7 @@ fn generate_variant_outputs(
             BTreeMap::new(),
             run_exports,
             package_run_exports,
+            config,
         )];
     }
 
@@ -301,6 +333,7 @@ fn generate_variant_outputs(
             BTreeMap::new(),
             run_exports,
             package_run_exports,
+            config,
         )];
     }
 
@@ -318,6 +351,7 @@ fn generate_variant_outputs(
                 variant,
                 run_exports,
                 package_run_exports,
+                config,
             )
         })
         .collect()
@@ -391,6 +425,7 @@ fn is_star_requirement(spec: &PackageSpec) -> bool {
             sha256: None,
             url: None,
             license: None,
+            condition: None,
         } => version
             .as_ref()
             .is_none_or(|v| matches!(v, VersionSpec::Any)),
@@ -457,7 +492,7 @@ fn compute_build_string(
         if base_build.is_empty() {
             variant_hash
         } else {
-            format!("{}_{}", base_build, variant_hash)
+            format!("{base_build}_{variant_hash}")
         }
     }
 }
@@ -485,12 +520,19 @@ fn create_output(
     mut variant: BTreeMap<String, VariantValue>,
     run_exports_config: &BTreeMap<String, RunExportsJson>,
     package_run_exports: Option<&RunExportsJson>,
+    config: &PassthroughBackendConfig,
 ) -> CondaOutput {
     let subdir = index_json
         .subdir
         .clone()
         .map(|s| s.parse().unwrap())
-        .unwrap_or(Platform::NoArch);
+        .unwrap_or_else(|| {
+            if config.noarch == Some(false) {
+                params.host_platform
+            } else {
+                Platform::NoArch
+            }
+        });
 
     // Track if there were actual variants before we add target_platform.
     // We only compute a build hash when there are real variants (not just target_platform).
@@ -572,6 +614,7 @@ fn create_output(
             .map(convert_run_exports_json)
             .unwrap_or_default(),
         input_globs: None,
+        input_glob_sets: None,
     }
 }
 
@@ -648,12 +691,7 @@ fn resolve_run_export_spec(
     )
     .ok()?;
 
-    let name = match_spec
-        .name
-        .as_ref()?
-        .as_exact()?
-        .as_source()
-        .to_string();
+    let pkg_name = match_spec.name.as_exact()?.clone();
 
     // Check if there's a variant value for this package
     let version_spec = if match_spec
@@ -662,7 +700,7 @@ fn resolve_run_export_spec(
         .is_none_or(|v| matches!(v, VersionSpec::Any))
     {
         // If version is "*" or unspecified, try to use the variant value
-        if let Some(variant_value) = variant.get(&name) {
+        if let Some(variant_value) = variant.get(pkg_name.as_source()) {
             Some(
                 VersionSpec::from_str(
                     variant_value.to_string().as_str(),
@@ -678,7 +716,7 @@ fn resolve_run_export_spec(
     };
 
     Some(NamedSpec {
-        name: SourcePackageName::from(name),
+        name: SourcePackageName::from(pkg_name),
         spec: PackageSpec::Binary(BinaryPackageSpec {
             version: version_spec,
             ..Default::default()
@@ -700,15 +738,10 @@ fn convert_run_exports_json(
                 )
                 .ok()?;
 
-                let name = match_spec
-                    .name
-                    .as_ref()?
-                    .as_exact()?
-                    .as_source()
-                    .to_string();
+                let pkg_name = match_spec.name.as_exact()?.clone();
 
                 Some(NamedSpec {
-                    name: SourcePackageName::from(name),
+                    name: SourcePackageName::from(pkg_name),
                     spec: PackageSpec::Binary(BinaryPackageSpec {
                         version: match_spec.version.clone(),
                         ..Default::default()
@@ -728,15 +761,10 @@ fn convert_run_exports_json(
                 )
                 .ok()?;
 
-                let name = match_spec
-                    .name
-                    .as_ref()?
-                    .as_exact()?
-                    .as_source()
-                    .to_string();
+                let pkg_name = match_spec.name.as_exact()?.clone();
 
                 Some(NamedSpec {
-                    name: SourcePackageName::from(name),
+                    name: SourcePackageName::from(pkg_name),
                     spec: ConstraintSpec::Binary(BinaryPackageSpec {
                         version: match_spec.version.clone(),
                         ..Default::default()
@@ -862,6 +890,8 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                         .clone()
                         .unwrap_or_else(|| Version::major(0))
                         .into(),
+                    flags: vec![],
+                    repodata_revision: None,
                 };
                 (index_json, None)
             }
@@ -892,7 +922,7 @@ pub struct PassthroughBackendConfig {
     pub noarch: Option<bool>,
 
     /// Build globs
-    pub build_globs: Option<BTreeSet<String>>,
+    pub build_globs: Option<Vec<String>>,
 }
 
 /// Observer that allows collecting backend events from an ObservableBackend.

@@ -1,7 +1,6 @@
 use std::sync::Once;
 
 mod add_tests;
-mod build_tests;
 mod common;
 mod develop_dependencies_tests;
 mod global_tests;
@@ -13,6 +12,7 @@ mod project_tests;
 mod pypi_tests;
 mod search_tests;
 mod solve_group_tests;
+mod source_package_tests;
 mod task_tests;
 mod test_activation;
 mod update_tests;

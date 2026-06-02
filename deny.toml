@@ -13,8 +13,11 @@ allow = [
   "CC0-1.0",
   "ISC",
   "MIT",
+  # MIT-0 ("MIT No Attribution") - same as MIT minus the attribution clause,
+  # so strictly more permissive. OSI-approved. Pulled in transitively via
+  # `borrow-or-share` (uv -> cyclonedx-bom -> fluent-uri -> borrow-or-share).
+  "MIT-0",
   "MPL-2.0",
-  "OpenSSL",
   "Unicode-3.0",
   "Zlib",
 ]

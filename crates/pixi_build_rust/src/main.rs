@@ -10,15 +10,14 @@ use pixi_build_backend::variants::NormalizedKey;
 use pixi_build_backend::{
     Variable,
     cache::{sccache_envs, sccache_tools},
+    compilers::default_compiler_variants,
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
+    tools::BackendIdentifier,
     traits::ProjectModel,
 };
+use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_conda_types::{ChannelUrl, Platform};
-use recipe_stage0::{
-    matchspec::PackageDependency,
-    recipe::{Item, Script},
-};
 use std::collections::HashSet;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -43,6 +42,9 @@ impl GenerateRecipe for RustGenerator {
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Construct a CargoMetadataProvider to read the Cargo.toml file
         // and extract metadata from it.
@@ -102,9 +104,12 @@ impl GenerateRecipe for RustGenerator {
         );
 
         // Check if openssl is in the host dependencies
-        let has_openssl = model_dependencies
-            .host
-            .contains_key(&pixi_build_types::SourcePackageName::from("openssl"));
+        let has_openssl =
+            model_dependencies
+                .host
+                .contains_key(&pixi_build_types::SourcePackageName::from(
+                    rattler_conda_types::PackageName::new_unchecked("openssl"),
+                ));
 
         let mut has_sccache = false;
 
@@ -122,7 +127,7 @@ impl GenerateRecipe for RustGenerator {
             .chain(system_env_vars.clone())
             .collect();
 
-        let mut sccache_secrets = Vec::default();
+        let mut sccache_secrets: BTreeSet<String> = BTreeSet::new();
 
         // Verify if user has set any sccache environment variables
         if sccache_envs(&all_env_vars).is_some() {
@@ -144,10 +149,15 @@ impl GenerateRecipe for RustGenerator {
                 sccache_secrets = system_sccache_keys;
             };
 
-            let sccache_dep: Vec<Item<PackageDependency>> = sccache_tools()
+            let sccache_dep: Vec<Item<SerializableMatchSpec>> = sccache_tools()
                 .iter()
-                .map(|tool| tool.parse().into_diagnostic())
-                .collect::<miette::Result<Vec<_>>>()?;
+                .map(|tool| {
+                    Item::Value(Value::new_concrete(
+                        SerializableMatchSpec::from(tool.as_str()),
+                        None,
+                    ))
+                })
+                .collect();
 
             // Add sccache tools to the build requirements
             // only if they are not already present
@@ -162,20 +172,33 @@ impl GenerateRecipe for RustGenerator {
             has_sccache = true;
         }
 
+        // Synthesize cargo_args: add --bin for each binary if specified
+        let mut cargo_args = config.extra_args.clone();
+        for bin in &config.binaries {
+            cargo_args.push("--bin".to_string());
+            cargo_args.push(bin.clone());
+        }
+
         let build_script = BuildScriptContext {
             source_dir: manifest_root.display().to_string(),
-            extra_args: config.extra_args.clone(),
+            extra_args: cargo_args,
             has_openssl,
             has_sccache,
             is_bash: !Platform::current().is_windows(),
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script {
-            content: build_script,
-            env: config_env,
-            secrets: sccache_secrets,
-        };
+        sccache_secrets.extend(model.secrets.iter().cloned());
+        let secrets = sccache_secrets.into_iter().collect();
+
+        generated_recipe.recipe.build.script = Script::from_content(build_script)
+            .with_env(
+                config_env
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                    .collect(),
+            )
+            .with_secrets(secrets);
 
         // Add the input globs from the Cargo metadata provider
         generated_recipe
@@ -191,7 +214,7 @@ impl GenerateRecipe for RustGenerator {
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
+    ) -> miette::Result<Vec<String>> {
         Ok([
             "**/*.rs",
             // Cargo configuration files
@@ -210,25 +233,18 @@ impl GenerateRecipe for RustGenerator {
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        let mut variants = BTreeMap::new();
-
-        if host_platform.is_windows() {
-            // Default to the Visual Studio 2022 compiler on Windows
-            // Not 2019 due to Conda-forge switching and the mainstream support dropping in 2024.
-            // rattler-build will default to vs2017 which for most github runners is too
-            // old.
-            variants.insert(NormalizedKey::from("c_compiler"), vec!["vs2022".into()]);
-            variants.insert(NormalizedKey::from("cxx_compiler"), vec!["vs2022".into()]);
-        }
-
-        Ok(variants)
+        Ok(default_compiler_variants(host_platform))
     }
 }
 
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<RustGenerator>::new(log, Arc::default())
+        IntermediateBackendInstantiator::<RustGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            log,
+            Arc::default(),
+        )
     })
     .await
     {
@@ -241,15 +257,55 @@ pub async fn main() {
 mod tests {
     use cargo_toml::Manifest;
     use indexmap::IndexMap;
-    use recipe_stage0::recipe::{Item, Value};
+    use rattler_build_recipe::stage0::Item;
+    use rattler_conda_types::PackageName;
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_binaries_flag_is_rendered() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        let generated_recipe = RustGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RustBackendConfig {
+                    binaries: vec!["rattler-build".to_string()],
+                    ..RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest()
+                },
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &std::collections::HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let content = &generated_recipe.recipe.build.script.content;
+        let content_str = content
+            .as_ref()
+            .expect("script content should be set")
+            .iter()
+            .filter_map(|item| item.as_value().and_then(|v| v.as_concrete()))
+            .cloned()
+            .collect::<Vec<String>>()
+            .join("\n");
+        assert!(content_str.contains("--bin rattler-build"));
+    }
 
     #[test]
     fn test_input_globs_includes_extra_globs() {
         let config = RustBackendConfig {
             extra_input_globs: vec!["custom/*.txt".to_string(), "extra/**/*.py".to_string()],
-            ..Default::default()
+            ..RustBackendConfig::new_with_clean_environment()
         };
 
         let generator = RustGenerator::default();
@@ -258,19 +314,21 @@ mod tests {
             .extract_input_globs_from_build(&config, PathBuf::new(), false)
             .unwrap();
 
+        let contains = |needle: &str| result.iter().any(|g| g == needle);
+
         // Verify that all extra globs are included in the result
         for extra_glob in &config.extra_input_globs {
             assert!(
-                result.contains(extra_glob),
+                contains(extra_glob),
                 "Result should contain extra glob: {extra_glob}"
             );
         }
 
         // Verify that default globs are still present
-        assert!(result.contains("**/*.rs"));
-        assert!(result.contains("Cargo.toml"));
-        assert!(result.contains("Cargo.lock"));
-        assert!(result.contains("build.rs"));
+        assert!(contains("**/*.rs"));
+        assert!(contains("Cargo.toml"));
+        assert!(contains("Cargo.lock"));
+        assert!(contains("build.rs"));
     }
 
     #[macro_export]
@@ -303,12 +361,15 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -348,12 +409,15 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -392,13 +456,16 @@ mod tests {
                     env: env.clone(),
                     system_env: Default::default(),
                     ignore_cargo_manifest: Some(true),
-                    ..Default::default()
+                    ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -437,13 +504,16 @@ mod tests {
                     env,
                     system_env,
                     ignore_cargo_manifest: Some(true),
-                    ..Default::default()
+                    ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -471,13 +541,16 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default(),
+                &RustBackendConfig::new_with_clean_environment(),
                 // Using this crate itself, as it has interesting metadata, using .workspace
                 std::env::current_dir().unwrap(),
                 Platform::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -509,8 +582,8 @@ mod tests {
             generated_recipe
                 .recipe
                 .about
-                .as_ref()
-                .and_then(|a| a.description.clone())
+                .description
+                .clone()
                 .unwrap()
                 .to_string()
         );
@@ -526,8 +599,8 @@ mod tests {
             generated_recipe
                 .recipe
                 .about
-                .as_ref()
-                .and_then(|a| a.license.clone())
+                .license
+                .clone()
                 .unwrap()
                 .to_string()
         );
@@ -543,16 +616,16 @@ mod tests {
             generated_recipe
                 .recipe
                 .about
-                .as_ref()
-                .and_then(|a| a.repository.clone())
+                .repository
+                .clone()
                 .unwrap()
                 .to_string()
         );
 
         insta::assert_yaml_snapshot!(&generated_recipe.metadata_input_globs, @r###"
-        - "../../Cargo.toml"
-        - "../Cargo.toml"
         - Cargo.toml
+        - "../Cargo.toml"
+        - "../../Cargo.toml"
         "###);
     }
 
@@ -572,12 +645,15 @@ mod tests {
         let result = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default(),
+                &RustBackendConfig::new_with_clean_environment(),
                 PathBuf::from("/non/existent/path"),
                 Platform::Linux64,
                 None,
                 &std::collections::HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await;
@@ -603,12 +679,15 @@ mod tests {
         let result = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 std::env::current_dir().unwrap(),
                 Platform::Linux64,
                 None,
                 &std::collections::HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await;
@@ -642,13 +721,16 @@ mod tests {
                 &RustBackendConfig {
                     compilers: Some(vec!["rust".to_string(), "c".to_string(), "cxx".to_string()]),
                     ignore_cargo_manifest: Some(true),
-                    ..Default::default()
+                    ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -658,9 +740,15 @@ mod tests {
         let build_reqs = &generated_recipe.recipe.requirements.build;
         let compiler_templates: Vec<String> = build_reqs
             .iter()
-            .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
-                _ => None,
+            .filter_map(|item| {
+                if let Item::Value(v) = item {
+                    let t = v.as_template()?;
+                    let s = t.to_string();
+                    if s.contains("compiler") {
+                        return Some(s);
+                    }
+                }
+                None
             })
             .collect();
 
@@ -710,13 +798,16 @@ mod tests {
                 &RustBackendConfig {
                     compilers: None,
                     ignore_cargo_manifest: Some(true),
-                    ..Default::default()
+                    ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -726,9 +817,15 @@ mod tests {
         let build_reqs = &generated_recipe.recipe.requirements.build;
         let compiler_templates: Vec<String> = build_reqs
             .iter()
-            .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
-                _ => None,
+            .filter_map(|item| {
+                if let Item::Value(v) = item {
+                    let t = v.as_template()?;
+                    let s = t.to_string();
+                    if s.contains("compiler") {
+                        return Some(s);
+                    }
+                }
+                None
             })
             .collect();
 
@@ -775,7 +872,9 @@ mod tests {
         assert!(
             linux_deps
                 .build
-                .contains_key(&pixi_build_types::SourcePackageName::from("openssl")),
+                .contains_key(&pixi_build_types::SourcePackageName::from(
+                    PackageName::new_unchecked("openssl")
+                )),
             "openssl should be in build dependencies for Linux64"
         );
 
@@ -784,7 +883,9 @@ mod tests {
         assert!(
             !osx_deps
                 .build
-                .contains_key(&pixi_build_types::SourcePackageName::from("openssl")),
+                .contains_key(&pixi_build_types::SourcePackageName::from(
+                    PackageName::new_unchecked("openssl")
+                )),
             "openssl should NOT be in build dependencies for Osx64"
         );
 
@@ -792,12 +893,15 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -805,15 +909,16 @@ mod tests {
 
         // Verify that conditional build dependencies contain openssl with linux-64 condition
         let mut found_openssl_conditional = false;
-        for item in &generated_recipe.recipe.requirements.build {
+        for item in generated_recipe.recipe.requirements.build.iter() {
             if let Item::Conditional(cond) = item {
                 // Check if the then branch contains openssl
-                if cond
-                    .then
-                    .0
-                    .iter()
-                    .any(|dep| dep.package_name().as_source() == "openssl")
-                {
+                if cond.then.iter().any(|item| {
+                    item.as_value()
+                        .and_then(|v| v.as_concrete())
+                        .and_then(|spec| spec.0.name.as_exact())
+                        .map(|name| name.as_normalized() == "openssl")
+                        .unwrap_or(false)
+                }) {
                     // Print the actual condition for debugging
                     eprintln!(
                         "Found openssl conditional with condition: '{}'",
@@ -821,7 +926,8 @@ mod tests {
                     );
                     // The condition should be exactly "host_platform == 'linux-64'"
                     assert_eq!(
-                        cond.condition, "host_platform == 'linux-64'",
+                        cond.condition.source(),
+                        "host_platform == 'linux-64'",
                         "Condition should be exactly \"host_platform == 'linux-64'\""
                     );
                     found_openssl_conditional = true;
@@ -863,7 +969,9 @@ mod tests {
         assert!(
             linux_deps
                 .build
-                .contains_key(&pixi_build_types::SourcePackageName::from("gcc")),
+                .contains_key(&pixi_build_types::SourcePackageName::from(
+                    PackageName::new_unchecked("gcc")
+                )),
             "gcc should be in build dependencies for Linux64 (unix)"
         );
 
@@ -872,7 +980,9 @@ mod tests {
         assert!(
             osx_deps
                 .build
-                .contains_key(&pixi_build_types::SourcePackageName::from("gcc")),
+                .contains_key(&pixi_build_types::SourcePackageName::from(
+                    PackageName::new_unchecked("gcc")
+                )),
             "gcc should be in build dependencies for Osx64 (unix)"
         );
 
@@ -881,7 +991,9 @@ mod tests {
         assert!(
             !win_deps
                 .build
-                .contains_key(&pixi_build_types::SourcePackageName::from("gcc")),
+                .contains_key(&pixi_build_types::SourcePackageName::from(
+                    PackageName::new_unchecked("gcc")
+                )),
             "gcc should NOT be in build dependencies for Win64 (not unix)"
         );
 
@@ -889,12 +1001,15 @@ mod tests {
         let generated_recipe = RustGenerator::default()
             .generate_recipe(
                 &project_model,
-                &RustBackendConfig::default_with_ignore_cargo_manifest(),
+                &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
                 Platform::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -902,20 +1017,22 @@ mod tests {
 
         // Verify that conditional build dependencies contain gcc with unix condition
         let mut found_gcc_conditional = false;
-        for item in &generated_recipe.recipe.requirements.build {
+        for item in generated_recipe.recipe.requirements.build.iter() {
             if let Item::Conditional(cond) = item {
                 // Check if the then branch contains gcc
-                if cond
-                    .then
-                    .0
-                    .iter()
-                    .any(|dep| dep.package_name().as_source() == "gcc")
-                {
+                if cond.then.iter().any(|item| {
+                    item.as_value()
+                        .and_then(|v| v.as_concrete())
+                        .and_then(|spec| spec.0.name.as_exact())
+                        .map(|name| name.as_normalized() == "gcc")
+                        .unwrap_or(false)
+                }) {
                     // Print the actual condition for debugging
                     eprintln!("Found gcc conditional with condition: '{}'", cond.condition);
                     // The condition should be exactly "unix"
                     assert_eq!(
-                        cond.condition, "unix",
+                        cond.condition.source(),
+                        "unix",
                         "Condition should be exactly \"unix\""
                     );
                     found_gcc_conditional = true;

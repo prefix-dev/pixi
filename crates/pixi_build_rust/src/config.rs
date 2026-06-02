@@ -29,12 +29,11 @@ pub struct RustBackendConfig {
     /// List of compilers to use (e.g., ["rust", "c", "cxx"])
     /// If not specified, a default will be used
     pub compilers: Option<Vec<String>>,
-}
 
-impl Default for RustBackendConfig {
-    fn default() -> Self {
-        Self::new_with_system_environment()
-    }
+    /// List of binaries to install. If empty, all binaries are installed.
+    /// Example: `binaries = ["rattler-build"]`
+    #[serde(default)]
+    pub binaries: Vec<String>,
 }
 
 fn collect_system_env() -> IndexMap<String, String> {
@@ -60,16 +59,17 @@ impl RustBackendConfig {
             extra_input_globs: Default::default(),
             ignore_cargo_manifest: Default::default(),
             compilers: Default::default(),
+            binaries: Default::default(),
         }
     }
 
     /// Creates a new [`RustBackendConfig`] with default values and
     /// `ignore_cargo_manifest` set to `true`.
     #[cfg(test)]
-    pub fn default_with_ignore_cargo_manifest() -> Self {
+    pub fn with_ignore_cargo_manifest(self) -> Self {
         Self {
             ignore_cargo_manifest: Some(true),
-            ..Default::default()
+            ..self
         }
     }
 }
@@ -83,18 +83,18 @@ impl BackendConfig for RustBackendConfig {
     /// Target-specific values override base values using the following rules:
     /// - extra_args: Platform-specific completely replaces base
     /// - env: Platform env vars override base, others merge
-    /// - debug_dir: Not allowed to have target specific value
     /// - extra_input_globs: Platform-specific completely replaces base
     fn merge_with_target_config(&self, target_config: &Self) -> miette::Result<Self> {
-        if target_config.debug_dir.is_some() {
-            miette::bail!("`debug_dir` cannot have a target specific value");
-        }
-
         Ok(Self {
             extra_args: if target_config.extra_args.is_empty() {
                 self.extra_args.clone()
             } else {
                 target_config.extra_args.clone()
+            },
+            binaries: if target_config.binaries.is_empty() {
+                self.binaries.clone()
+            } else {
+                target_config.binaries.clone()
             },
             system_env: collect_system_env(),
             env: {
@@ -125,6 +125,25 @@ mod tests {
     use pixi_build_backend::generated_recipe::BackendConfig;
     use serde_json::json;
     use std::path::PathBuf;
+
+    #[test]
+    fn test_binaries_deserialization() {
+        let json_data = json!({
+            "binaries": ["rattler-build", "other-tool"]
+        });
+        let config = serde_json::from_value::<RustBackendConfig>(json_data).unwrap();
+        assert_eq!(
+            config.binaries,
+            vec!["rattler-build".to_string(), "other-tool".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_binaries_empty_by_default() {
+        let json_data = json!({});
+        let config = serde_json::from_value::<RustBackendConfig>(json_data).unwrap();
+        assert!(config.binaries.is_empty());
+    }
 
     #[test]
     fn test_ensure_deserialize_from_empty() {
@@ -163,6 +182,7 @@ mod tests {
             extra_input_globs: vec!["*.base".to_string()],
             ignore_cargo_manifest: None,
             compilers: Some(vec!["rust".to_string()]),
+            binaries: vec![],
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -177,6 +197,7 @@ mod tests {
             extra_input_globs: vec!["*.target".to_string()],
             ignore_cargo_manifest: Some(true),
             compilers: Some(vec!["c".to_string(), "rust".to_string()]),
+            binaries: vec![],
         };
 
         let merged = base_config
@@ -223,9 +244,10 @@ mod tests {
             extra_input_globs: vec!["*.base".to_string()],
             ignore_cargo_manifest: None,
             compilers: Some(vec!["rust".to_string()]),
+            binaries: vec![],
         };
 
-        let empty_target_config = RustBackendConfig::default();
+        let empty_target_config = RustBackendConfig::new_with_clean_environment();
 
         let merged = base_config
             .merge_with_target_config(&empty_target_config)
@@ -237,23 +259,6 @@ mod tests {
         assert_eq!(merged.debug_dir, Some(PathBuf::from("/base/debug")));
         assert_eq!(merged.extra_input_globs, vec!["*.base".to_string()]);
         assert_eq!(merged.compilers, Some(vec!["rust".to_string()]));
-    }
-
-    #[test]
-    fn test_merge_target_debug_dir_error() {
-        let base_config = RustBackendConfig {
-            debug_dir: Some(PathBuf::from("/base/debug")),
-            ..Default::default()
-        };
-
-        let target_config = RustBackendConfig {
-            debug_dir: Some(PathBuf::from("/target/debug")),
-            ..Default::default()
-        };
-
-        let result = base_config.merge_with_target_config(&target_config);
-        assert!(result.is_err());
-        let error_msg = result.unwrap_err().to_string();
-        assert!(error_msg.contains("`debug_dir` cannot have a target specific value"));
+        assert!(merged.binaries.is_empty());
     }
 }

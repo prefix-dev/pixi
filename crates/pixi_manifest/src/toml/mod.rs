@@ -19,7 +19,7 @@ mod workspace;
 
 use std::{borrow::Cow, ops::Range};
 
-pub use build_backend::TomlPackageBuild;
+pub use build_backend::{BackendSpec, TomlPackageBuild};
 pub use channel::TomlPrioritizedChannel;
 pub use document::TomlDocument;
 pub use environment::{TomlEnvironment, TomlEnvironmentList};
@@ -73,7 +73,7 @@ fn create_unsupported_selector_warning(
 
     GenericError::new(format!(
         "The target selector '{}' does not match any of the platforms supported by the {}",
-        selector.value, &feature_or_workspace,
+        selector.value, feature_or_workspace,
     ))
     .with_opt_span(selector.span.clone())
     .with_span_label("target selector specified here")

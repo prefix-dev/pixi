@@ -10,7 +10,9 @@
 //! older pixi TOMLs keep loading, we can send them to the backend.
 use ordermap::OrderMap;
 use pixi_stable_hash::{IsDefault, StableHashBuilder};
-use rattler_conda_types::{BuildNumber, BuildNumberSpec, StringMatcher, Version, VersionSpec};
+use rattler_conda_types::{
+    BuildNumber, BuildNumberSpec, MatchSpecCondition, StringMatcher, Version, VersionSpec,
+};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
@@ -18,8 +20,7 @@ use std::hash::Hasher;
 use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
 use url::Url;
 
-/// The source package name of a package. Not normalized per se.
-pub type SourcePackageName = String;
+pub use rattler_conda_types::SourcePackageName;
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
@@ -28,8 +29,8 @@ pub struct ProjectModel {
     /// The name of the project
     pub name: Option<String>,
 
-    /// A build string configured by the user.
-    pub build_string: Option<String>,
+    /// An optional prefix to prepend to the auto-generated build string.
+    pub build_string_prefix: Option<String>,
 
     /// The build number configured by the user.
     #[cfg_attr(feature = "schemars", schemars(with = "Option<u64>"))]
@@ -66,6 +67,14 @@ pub struct ProjectModel {
     /// The target of the project, this may contain
     /// platform specific configurations.
     pub targets: Option<Targets>,
+
+    /// Names of environment variables that should be exposed as secrets to
+    /// the build script. Backends forward these into the generated
+    /// `build.script.secrets` so rattler-build performs the host-env
+    /// passthrough at build time. Stored as a set: order is not observable
+    /// and changing it should not invalidate caches.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub secrets: std::collections::BTreeSet<String>,
 }
 
 impl IsDefault for ProjectModel {
@@ -158,23 +167,30 @@ pub struct Target {
     /// Host dependencies of the project
     #[cfg_attr(
         feature = "schemars",
-        schemars(with = "Option<std::collections::HashMap<SourcePackageName, PackageSpec>>")
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
     )]
     pub host_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
 
     /// Build dependencies of the project
     #[cfg_attr(
         feature = "schemars",
-        schemars(with = "Option<std::collections::HashMap<SourcePackageName, PackageSpec>>")
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
     )]
     pub build_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
 
     /// Run dependencies of the project
     #[cfg_attr(
         feature = "schemars",
-        schemars(with = "Option<std::collections::HashMap<SourcePackageName, PackageSpec>>")
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
     )]
     pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpec>>,
+
+    /// Run constraints of the project
+    #[cfg_attr(
+        feature = "schemars",
+        schemars(with = "Option<std::collections::HashMap<String, PackageSpec>>")
+    )]
+    pub run_constraints: Option<OrderMap<SourcePackageName, PackageSpec>>,
 }
 
 impl Target {
@@ -187,8 +203,9 @@ impl Target {
             .is_none_or(|d| d.is_empty());
         let has_no_host_deps = self.host_dependencies.as_ref().is_none_or(|d| d.is_empty());
         let has_no_run_deps = self.run_dependencies.as_ref().is_none_or(|d| d.is_empty());
+        let has_no_run_constraints = self.run_constraints.as_ref().is_none_or(|d| d.is_empty());
 
-        has_no_build_deps && has_no_host_deps && has_no_run_deps
+        has_no_build_deps && has_no_host_deps && has_no_run_deps && has_no_run_constraints
     }
 }
 
@@ -265,6 +282,7 @@ pub enum PinBound {
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct NamedSpec<T> {
+    #[cfg_attr(feature = "schemars", schemars(with = "String"))]
     pub name: SourcePackageName,
 
     #[serde(flatten)]
@@ -469,6 +487,9 @@ pub struct BinaryPackageSpec {
     pub url: Option<Url>,
     /// The license of the package
     pub license: Option<String>,
+    /// The condition under which this match spec applies.
+    #[cfg_attr(feature = "schemars", schemars(with = "Option<serde_json::Value>"))]
+    pub condition: Option<MatchSpecCondition>,
 }
 
 impl From<VersionSpec> for BinaryPackageSpec {
@@ -517,6 +538,9 @@ impl std::fmt::Debug for BinaryPackageSpec {
         if let Some(sha256) = &self.sha256 {
             debug_struct.field("sha256", &format!("{sha256:x}"));
         }
+        if let Some(condition) = &self.condition {
+            debug_struct.field("condition", condition);
+        }
 
         debug_struct.finish()
     }
@@ -530,7 +554,7 @@ impl Hash for ProjectModel {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let ProjectModel {
             name,
-            build_string,
+            build_string_prefix,
             build_number,
             version,
             description,
@@ -542,11 +566,12 @@ impl Hash for ProjectModel {
             repository,
             documentation,
             targets,
+            secrets,
         } = self;
 
         StableHashBuilder::<H>::new()
             .field("authors", authors)
-            .field("build_string", build_string)
+            .field("build_string_prefix", build_string_prefix)
             .field("build_number", build_number)
             .field("description", description)
             .field("documentation", documentation)
@@ -556,6 +581,7 @@ impl Hash for ProjectModel {
             .field("name", name)
             .field("readme", readme)
             .field("repository", repository)
+            .field("secrets", secrets)
             .field("targets", targets)
             .field("version", version)
             .finish(state);
@@ -605,12 +631,14 @@ impl Hash for Target {
             build_dependencies,
             host_dependencies,
             run_dependencies,
+            run_constraints,
         } = self;
 
         StableHashBuilder::<H>::new()
             .field("build_dependencies", build_dependencies)
             .field("host_dependencies", host_dependencies)
             .field("run_dependencies", run_dependencies)
+            .field("run_constraints", run_constraints)
             .finish(state);
     }
 }
@@ -817,12 +845,14 @@ impl Hash for BinaryPackageSpec {
     /// field configurations produce different hashes while maintaining
     /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let condition = self.condition.as_ref().map(ToString::to_string);
         StableHashBuilder::<H>::new()
             .field("build", &self.build)
             .field("build_number", &self.build_number)
             .field("channel", &self.channel)
             .field("file_name", &self.file_name)
             .field("license", &self.license)
+            .field("condition", &condition)
             .field("md5", &self.md5)
             .field("sha256", &self.sha256)
             .field("subdir", &self.subdir)
@@ -850,7 +880,7 @@ mod tests {
         let mut project_model = ProjectModel {
             name: Some("test-project".to_string()),
             build_number: None,
-            build_string: None,
+            build_string_prefix: None,
             version: None,
             description: None,
             authors: None,
@@ -861,6 +891,7 @@ mod tests {
             repository: None,
             documentation: None,
             targets: None,
+            secrets: std::collections::BTreeSet::new(),
         };
 
         let hash1 = calculate_hash(&project_model);
@@ -879,6 +910,7 @@ mod tests {
             host_dependencies: Some(OrderMap::new()),
             build_dependencies: Some(OrderMap::new()),
             run_dependencies: Some(OrderMap::new()),
+            run_constraints: Some(OrderMap::new()),
         };
         project_model.targets = Some(Targets {
             default_target: Some(empty_target),
@@ -908,7 +940,7 @@ mod tests {
         let mut project_model = ProjectModel {
             name: Some("test-project".to_string()),
             build_number: None,
-            build_string: None,
+            build_string_prefix: None,
             version: None,
             description: None,
             authors: None,
@@ -919,6 +951,7 @@ mod tests {
             repository: None,
             documentation: None,
             targets: None,
+            secrets: std::collections::BTreeSet::new(),
         };
 
         let hash1 = calculate_hash(&project_model);
@@ -930,7 +963,7 @@ mod tests {
         // Add a real dependency (should change hash)
         let mut deps = OrderMap::new();
         deps.insert(
-            "python".to_string(),
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
             PackageSpec::Binary(BinaryPackageSpec::default()),
         );
 
@@ -938,6 +971,7 @@ mod tests {
             host_dependencies: Some(deps),
             build_dependencies: Some(OrderMap::new()),
             run_dependencies: Some(OrderMap::new()),
+            run_constraints: Some(OrderMap::new()),
         };
         project_model.targets = Some(Targets {
             default_target: Some(target_with_deps),
@@ -974,6 +1008,7 @@ mod tests {
             sha256: None,
             url: None,
             license: None,
+            condition: None,
         };
         let hash2 = calculate_hash(&spec2);
 
@@ -1026,15 +1061,27 @@ mod tests {
     fn create_sample_target_v1() -> Target {
         Target {
             host_dependencies: Some(OrderMap::from([(
-                "host_dep1".to_string(),
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "host_dep1",
+                )),
                 PackageSpec::Binary(BinaryPackageSpec::default()),
             )])),
             build_dependencies: Some(OrderMap::from([(
-                "build_dep1".to_string(),
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "build_dep1",
+                )),
                 PackageSpec::Binary(BinaryPackageSpec::default()),
             )])),
             run_dependencies: Some(OrderMap::from([(
-                "run_dep1".to_string(),
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "run_dep1",
+                )),
+                PackageSpec::Binary(BinaryPackageSpec::default()),
+            )])),
+            run_constraints: Some(OrderMap::from([(
+                SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked(
+                    "run_const1",
+                )),
                 PackageSpec::Binary(BinaryPackageSpec::default()),
             )])),
         }
@@ -1136,6 +1183,36 @@ mod tests {
         );
     }
 
+    /// Regression test for the copy-paste bug where `is_empty()` checked
+    /// `self.run_dependencies` twice instead of once for each field. A target
+    /// populated only via `run_constraints` must not report itself as empty,
+    /// otherwise `IsDefault::is_non_default` filters it out and the constraints
+    /// silently disappear from the project model.
+    #[test]
+    fn test_target_is_empty_only_run_constraints() {
+        let mut deps = OrderMap::new();
+        deps.insert(
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
+            PackageSpec::Binary(BinaryPackageSpec::default()),
+        );
+
+        let target = Target {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: None,
+            run_constraints: Some(deps),
+        };
+        assert!(!target.is_empty());
+
+        let empty = Target {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: None,
+            run_constraints: None,
+        };
+        assert!(empty.is_empty());
+    }
+
     #[test]
     fn test_hash_collision_bug_dependency_fields() {
         // Test that moving dependencies between different dependency types produces
@@ -1143,7 +1220,7 @@ mod tests {
 
         let mut deps = OrderMap::new();
         deps.insert(
-            "python".to_string(),
+            SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
             PackageSpec::Binary(BinaryPackageSpec::default()),
         );
 
@@ -1152,6 +1229,7 @@ mod tests {
             host_dependencies: Some(deps.clone()),
             build_dependencies: None,
             run_dependencies: None,
+            run_constraints: None,
         };
 
         // Same dependency in run_dependencies
@@ -1159,6 +1237,7 @@ mod tests {
             host_dependencies: None,
             build_dependencies: None,
             run_dependencies: Some(deps.clone()),
+            run_constraints: None,
         };
 
         // Same dependency in build_dependencies
@@ -1166,11 +1245,20 @@ mod tests {
             host_dependencies: None,
             build_dependencies: Some(deps.clone()),
             run_dependencies: None,
+            run_constraints: None,
+        };
+        // Same dependency in run_constraints
+        let target4 = Target {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: None,
+            run_constraints: Some(deps.clone()),
         };
 
         let hash1 = calculate_hash(&target1);
         let hash2 = calculate_hash(&target2);
         let hash3 = calculate_hash(&target3);
+        let hash4 = calculate_hash(&target4);
 
         assert_ne!(
             hash1, hash2,
@@ -1183,6 +1271,18 @@ mod tests {
         assert_ne!(
             hash2, hash3,
             "Same dependency in run vs build should produce different hashes"
+        );
+        assert_ne!(
+            hash1, hash4,
+            "Same dependency in host vs run_constraints should produce different hashes"
+        );
+        assert_ne!(
+            hash2, hash4,
+            "Same dependency in build vs run_constraints should produce different hashes"
+        );
+        assert_ne!(
+            hash3, hash4,
+            "Same dependency in run vs run_constraints should produce different hashes"
         );
 
         // Test with TargetsV1 as well

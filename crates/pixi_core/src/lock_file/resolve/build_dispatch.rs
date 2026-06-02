@@ -37,19 +37,19 @@ use uv_build_frontend::SourceBuild;
 use uv_cache::Cache;
 use uv_client::RegistryClient;
 use uv_configuration::{
-    BuildKind, BuildOptions, BuildOutput, Concurrency, Constraints, IndexStrategy, SourceStrategy,
+    BuildKind, BuildOptions, BuildOutput, Concurrency, Constraints, IndexStrategy, NoSources,
 };
 use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
 use uv_distribution_types::{
     CachedDist, ConfigSettings, DependencyMetadata, ExtraBuildRequires, IndexLocations,
-    IsBuildBackendError, PackageConfigSettings, Resolution, SourceDist,
+    IsBuildBackendError, PackageConfigSettings, SourceDist,
 };
 use uv_distribution_types::{ExtraBuildVariables, Requirement};
 use uv_install_wheel::LinkMode;
 use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
-use uv_types::{BuildArena, BuildContext, BuildStack, HashStrategy};
+use uv_types::{BuildArena, BuildContext, BuildStack, HashStrategy, ResolvedRequirements};
 use uv_workspace::WorkspaceCache;
 
 /// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
@@ -70,7 +70,7 @@ pub struct UvBuildDispatchParams<'a> {
     shared_state: SharedState,
     link_mode: uv_install_wheel::LinkMode,
     exclude_newer: Option<ExcludeNewer>,
-    sources: SourceStrategy,
+    sources: NoSources,
     concurrency: Concurrency,
     preview: uv_preview::Preview,
     workspace_cache: WorkspaceCache,
@@ -105,7 +105,7 @@ impl<'a> UvBuildDispatchParams<'a> {
             link_mode: LinkMode::default(),
             constraints: Constraints::default(),
             exclude_newer: None,
-            sources: SourceStrategy::default(),
+            sources: NoSources::default(),
             concurrency: Concurrency::default(),
             preview: uv_preview::Preview::default(),
             workspace_cache: WorkspaceCache::default(),
@@ -125,7 +125,7 @@ impl<'a> UvBuildDispatchParams<'a> {
     }
 
     /// Set the source strategy for the build dispatch
-    pub fn with_source_strategy(mut self, sources: SourceStrategy) -> Self {
+    pub fn with_no_sources(mut self, sources: NoSources) -> Self {
         self.sources = sources;
         self
     }
@@ -136,8 +136,7 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    /// Set the link mode for the build dispatch
-    #[expect(unused)]
+    /// Set the link mode for the build dispatch.
     pub fn with_link_mode(mut self, link_mode: LinkMode) -> Self {
         self.link_mode = link_mode;
         self
@@ -227,11 +226,14 @@ pub struct LazyBuildDispatch<'a> {
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily
-/// initialized. along with the build dispatch.
+/// initialized along with the build dispatch.
 ///
-/// This needs to be passed in externally or there will be problems with the
-/// borrows being shorter than the lifetime of the `BuildDispatch`, and we are
-/// returning the references.
+/// Fields are stored here for two reasons:
+/// 1. **Expensive operations**: `interpreter` requires disk I/O
+/// 2. **Lifetime requirements**: `BuildDispatch<'a>` needs references with lifetime `'a`,
+///    so values must be stored in a struct with that lifetime (not borrowed from `&self`)
+///
+/// The `last_error` field is for panic recovery during build dispatch initialization.
 #[derive(Default)]
 pub struct LazyBuildDispatchDependencies {
     /// The initialized python interpreter
@@ -239,6 +241,8 @@ pub struct LazyBuildDispatchDependencies {
     /// The non isolated packages
     non_isolated_packages: OnceCell<BuildIsolation>,
     /// The python environment
+    /// needed to be together with the interpreter
+    /// for passing correctly the lifetime of BuildDispatch<'a>
     python_env: OnceCell<PythonEnvironment>,
     /// The constraints for dependency resolution
     constraints: OnceCell<Constraints>,
@@ -336,7 +340,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 let prefix = self
                     .prefix_updater
                     .update(
-                        repodata_records.to_vec(),
+                        repodata_records.into_iter().map(Into::into).collect(),
                         None,
                         self.ignore_packages.clone(),
                     )
@@ -420,9 +424,10 @@ impl<'a> LazyBuildDispatch<'a> {
                     self.params.build_options,
                     self.params.hasher,
                     self.params.exclude_newer.clone().unwrap_or_default(),
-                    self.params.sources,
+                    self.params.sources.clone(),
+                    uv_types::SourceTreeEditablePolicy::default(),
                     self.params.workspace_cache.clone(),
-                    self.params.concurrency,
+                    self.params.concurrency.clone(),
                     self.params.preview,
                 )
                 .with_build_extra_env_vars(env_vars);
@@ -474,8 +479,8 @@ impl BuildContext for LazyBuildDispatch<'_> {
         self.params.config_settings
     }
 
-    fn sources(&self) -> uv_configuration::SourceStrategy {
-        self.params.sources
+    fn sources(&self) -> &uv_configuration::NoSources {
+        &self.params.sources
     }
 
     fn locations(&self) -> &uv_distribution_types::IndexLocations {
@@ -486,23 +491,25 @@ impl BuildContext for LazyBuildDispatch<'_> {
         &'a self,
         requirements: &'a [Requirement],
         build_stack: &'a BuildStack,
-    ) -> Result<Resolution, impl IsBuildBackendError> {
+    ) -> Result<ResolvedRequirements, impl IsBuildBackendError> {
+        // Box the inner uv future. uv re-enters this trait recursively when an
+        // sdist needs its build backend resolved (`process_request → setup_build
+        // → resolve → install → process_request`), so flattening the
+        // state machine here keeps the cumulative stack frame bounded.
         let dispatch = self.get_or_try_init().await?;
-        dispatch
-            .resolve(requirements, build_stack)
+        Box::pin(dispatch.resolve(requirements, build_stack))
             .await
             .map_err(LazyBuildDispatchError::Uv)
     }
 
     async fn install<'a>(
         &'a self,
-        resolution: &'a Resolution,
+        resolution: &'a ResolvedRequirements,
         venv: &'a PythonEnvironment,
         build_stack: &'a BuildStack,
     ) -> Result<Vec<CachedDist>, impl IsBuildBackendError> {
         let dispatch = self.get_or_try_init().await?;
-        dispatch
-            .install(resolution, venv, build_stack)
+        Box::pin(dispatch.install(resolution, venv, build_stack))
             .await
             .map_err(LazyBuildDispatchError::Uv)
     }
@@ -514,26 +521,25 @@ impl BuildContext for LazyBuildDispatch<'_> {
         install_path: &'a Path,
         version_id: Option<&'a str>,
         dist: Option<&'a SourceDist>,
-        sources: SourceStrategy,
+        sources: &'a NoSources,
         build_kind: BuildKind,
         build_output: BuildOutput,
         build_stack: BuildStack,
     ) -> Result<Self::SourceDistBuilder, impl IsBuildBackendError> {
         let dispatch = self.get_or_try_init().await?;
-        dispatch
-            .setup_build(
-                source,
-                subdirectory,
-                install_path,
-                version_id,
-                dist,
-                sources,
-                build_kind,
-                build_output,
-                build_stack,
-            )
-            .await
-            .map_err(LazyBuildDispatchError::from)
+        Box::pin(dispatch.setup_build(
+            source,
+            subdirectory,
+            install_path,
+            version_id,
+            dist,
+            sources,
+            build_kind,
+            build_output,
+            build_stack,
+        ))
+        .await
+        .map_err(LazyBuildDispatchError::from)
     }
 
     async fn direct_build<'a>(
@@ -541,14 +547,21 @@ impl BuildContext for LazyBuildDispatch<'_> {
         source: &'a Path,
         subdirectory: Option<&'a Path>,
         output_dir: &'a Path,
+        sources: uv_configuration::NoSources,
         build_kind: BuildKind,
         version_id: Option<&'a str>,
     ) -> Result<Option<DistFilename>, impl IsBuildBackendError> {
         let dispatch = self.get_or_try_init().await?;
-        dispatch
-            .direct_build(source, subdirectory, output_dir, build_kind, version_id)
-            .await
-            .map_err(LazyBuildDispatchError::from)
+        Box::pin(dispatch.direct_build(
+            source,
+            subdirectory,
+            output_dir,
+            sources,
+            build_kind,
+            version_id,
+        ))
+        .await
+        .map_err(LazyBuildDispatchError::from)
     }
 
     /// Workspace discovery caching.

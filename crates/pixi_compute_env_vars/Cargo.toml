@@ -1,0 +1,16 @@
+[package]
+authors.workspace = true
+description = "Engine-tracked environment-variable lookup for pixi"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_compute_env_vars"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+pixi_compute_engine = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }

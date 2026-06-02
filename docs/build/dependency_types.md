@@ -101,3 +101,18 @@ When using something like `zlib`, you would only need to specify it in the `host
 
 These are the dependencies that are required to when running the package, they are the most common dependencies.
 And are what you would usually use in a `workspace`.
+
+### [Run Constraints](../reference/pixi_manifest.md#run-constraints)
+
+Constraints that apply to the package's run environment, but only when the constrained package is pulled in as a dependency by something else.
+They never cause a package to be installed on their own. To do that, use run-dependencies (#dependencies-run-dependencies).
+
+This corresponds to conda's `run_constrained` package metadata.
+
+## Inheriting Versions From the Workspace
+
+When several packages in the same workspace share dependency versions you can
+declare them once in `[workspace.dependencies]` and inherit per entry from
+every member's package tables (and from `[package.build.backend]`).
+See [Workspace Dependencies](workspace_dependencies.md) for the full rules
+around overrides and errors.

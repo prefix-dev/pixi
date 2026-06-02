@@ -1,6 +1,6 @@
 use crate::{
-    SpecType, SystemRequirements, WorkspaceTarget, channel::PrioritizedChannel, consts,
-    pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
+    CondaConstraints, SpecType, SystemRequirements, WorkspaceTarget, channel::PrioritizedChannel,
+    consts, pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
     workspace::SolveStrategy,
 };
 use indexmap::{IndexMap, IndexSet};
@@ -421,10 +421,44 @@ impl Feature {
                 }
             })
     }
+
+    /// Returns the version constraints of the feature for a given `platform`.
+    ///
+    /// Constraints limit the versions of packages that can be installed
+    /// without explicitly requiring them to be installed.
+    ///
+    /// This function returns a [`Cow`]. If the constraints are not combined or
+    /// overwritten by multiple targets than this function returns a
+    /// reference to the internal constraints.
+    ///
+    /// Returns `None` if this feature does not define any target that has any
+    /// constraints.
+    ///
+    /// If the `platform` is `None` no platform specific constraints are taken
+    /// into consideration.
+    pub fn constraints(&self, platform: Option<Platform>) -> Option<Cow<'_, CondaConstraints>> {
+        self.targets
+            .resolve(platform)
+            // Get the targets in reverse order, from least specific to most specific.
+            // This is required because we want more specific targets to overwrite their specs.
+            .rev()
+            .filter_map(|t| t.constraints.as_ref())
+            .filter(|constraints| !constraints.is_empty())
+            .fold(None, |acc, constraints| match acc {
+                None => Some(Cow::Borrowed(constraints)),
+                Some(acc) => {
+                    // Overwrite the accumulator with specs from this target
+                    // More specific targets (processed later) overwrite less specific ones
+                    Some(Cow::Owned(acc.as_ref().overwrite(constraints)))
+                }
+            })
+    }
 }
 
 #[cfg(test)]
 mod tests {
+
+    use std::path::Path;
 
     use assert_matches::assert_matches;
 
@@ -433,7 +467,7 @@ mod tests {
 
     #[test]
     fn test_dependencies_borrowed() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "foo"
@@ -452,6 +486,7 @@ mod tests {
         [feature.bla.host-dependencies]
         # empty on purpose
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -498,7 +533,7 @@ mod tests {
 
     #[test]
     fn test_activation() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "foo"
@@ -511,6 +546,7 @@ mod tests {
         [target.linux-64.activation]
         scripts = ["linux-64.bat"]
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -531,7 +567,7 @@ mod tests {
 
     #[test]
     pub fn test_pypi_options_manifest() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "foo"
@@ -544,6 +580,7 @@ mod tests {
         [pypi-options]
         extra-index-urls = ["https://mypypi.org/simple"]
         "#,
+            Path::new(""),
         )
         .unwrap();
 

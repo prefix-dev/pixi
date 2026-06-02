@@ -1,0 +1,52 @@
+---
+source: crates/pixi_build_r/src/main.rs
+expression: generated_recipe.recipe
+---
+schema_version: 1
+package:
+  name: r-webmockr
+  version: 2.2.1.92
+build:
+  script:
+    content: "[build_script]"
+  python:
+    entry_points: []
+    skip_pyc_compilation: []
+    use_python_app_entrypoint: false
+  skip: []
+  always_copy_files: []
+  always_include_files: []
+  merge_build_and_host_envs: false
+  files: []
+  dynamic_linking:
+    rpaths: []
+    binary_relocation: true
+    missing_dso_allowlist: []
+    rpath_allowlist: []
+  variant:
+    use_keys: []
+    ignore_keys: []
+  prefix_detection:
+    force_file_type:
+      text: []
+      binary: []
+    ignore: false
+    ignore_binary_files: false
+  post_process: []
+requirements:
+  host:
+    - r-base
+    - r-curl
+    - r-jsonlite
+    - r-magrittr >=1.5
+    - r-r6 >=2.1.3
+    - r-urltools >=1.6.0
+  run:
+    - r-base
+    - r-curl
+    - r-jsonlite
+    - r-magrittr >=1.5
+    - r-r6 >=2.1.3
+    - r-urltools >=1.6.0
+about: {}
+extra: {}

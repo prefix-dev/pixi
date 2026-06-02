@@ -41,7 +41,7 @@ use pixi_task::{
     TaskGraphError, TaskName, get_task_env,
 };
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
-use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
+use rattler_lock::{CondaSourceData, LockFile, LockedPackage, UrlOrPath};
 use tempfile::TempDir;
 use thiserror::Error;
 
@@ -103,11 +103,20 @@ pub fn string_from_iter(iter: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<
     iter.into_iter().map(|s| s.as_ref().to_string()).collect()
 }
 
+/// `ConfigSourceCli` with `--no-config` set, used for every command the test
+/// harness builds so the developer's `~/.pixi/config.toml` doesn't leak in.
+pub(crate) fn isolated_config_source() -> pixi_config::ConfigSourceCli {
+    pixi_config::ConfigSourceCli {
+        no_config: true,
+        ..Default::default()
+    }
+}
+
 pub trait LockFileExt {
-    /// Check if this package is contained in the lockfile
+    /// Check if this package is contained in the lock file
     fn contains_conda_package(&self, environment: &str, platform: Platform, name: &str) -> bool;
     fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool;
-    /// Check if this matchspec is contained in the lockfile
+    /// Check if this matchspec is contained in the lock file
     fn contains_match_spec(
         &self,
         environment: &str,
@@ -115,7 +124,7 @@ pub trait LockFileExt {
         match_spec: impl IntoMatchSpec,
     ) -> bool;
 
-    /// Check if the pep508 requirement is contained in the lockfile for this
+    /// Check if the pep508 requirement is contained in the lock file for this
     /// platform
     fn contains_pep508_requirement(
         &self,
@@ -143,15 +152,17 @@ pub trait LockFileExt {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef<'_>>;
+    ) -> Option<&'_ LockedPackage>;
 
-    /// Check if a PyPI package is marked as editable in the lock file
-    fn is_pypi_package_editable(
+    /// Returns the [`CondaSourceData`] for a source package in the given
+    /// environment and platform, or `None` if the package is not found or is
+    /// not a source package.
+    fn get_conda_source_package(
         &self,
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<bool>;
+    ) -> Option<&CondaSourceData>;
 }
 
 impl LockFileExt for LockFile {
@@ -159,23 +170,29 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
-            .filter_map(LockedPackageRef::as_conda)
-            .any(|package| package.record().name.as_normalized() == name)
+            .filter_map(LockedPackage::as_conda)
+            .any(|package| package.name().as_normalized() == name)
     }
     fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
         let Some(env) = self.environment(environment) else {
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
-            .filter_map(LockedPackageRef::as_pypi)
-            .any(|(data, _)| data.name.as_ref() == name)
+            .filter_map(LockedPackage::as_pypi)
+            .any(|data| data.name().as_ref() == name)
     }
 
     fn contains_match_spec(
@@ -188,11 +205,14 @@ impl LockFileExt for LockFile {
         let Some(env) = self.environment(environment) else {
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
-            .filter_map(LockedPackageRef::as_conda)
+            .filter_map(LockedPackage::as_conda)
             .any(move |p| p.satisfies(&match_spec))
     }
 
@@ -206,12 +226,15 @@ impl LockFileExt for LockFile {
             eprintln!("environment not found: {environment}");
             return false;
         };
+        let Some(p) = self.platform(&platform.to_string()) else {
+            return false;
+        };
 
-        env.packages(platform)
+        env.packages(p)
             .into_iter()
             .flatten()
-            .filter_map(LockedPackageRef::as_pypi)
-            .any(move |(data, _)| data.satisfies(&requirement))
+            .filter_map(LockedPackage::as_pypi)
+            .any(move |data| data.satisfies(&requirement))
     }
 
     fn get_pypi_package_version(
@@ -220,13 +243,13 @@ impl LockFileExt for LockFile {
         platform: Platform,
         package: &str,
     ) -> Option<String> {
+        let p = self.platform(&platform.to_string())?;
         self.environment(environment)
             .and_then(|env| {
-                env.pypi_packages(platform).and_then(|mut packages| {
-                    packages.find(|(data, _)| data.name.as_ref() == package)
-                })
+                env.pypi_packages(p)
+                    .and_then(|mut packages| packages.find(|data| data.name().as_ref() == package))
             })
-            .map(|(data, _)| data.version.to_string())
+            .map(|data| data.version_string())
     }
 
     fn get_pypi_package(
@@ -234,9 +257,10 @@ impl LockFileExt for LockFile {
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<LockedPackageRef<'_>> {
+    ) -> Option<&'_ LockedPackage> {
+        let p = self.platform(&platform.to_string())?;
         self.environment(environment).and_then(|env| {
-            env.packages(platform)
+            env.packages(p)
                 .and_then(|mut packages| packages.find(|p| p.name() == package))
         })
     }
@@ -247,27 +271,39 @@ impl LockFileExt for LockFile {
         platform: Platform,
         package: &str,
     ) -> Option<UrlOrPath> {
+        let p = self.platform(&platform.to_string())?;
         self.environment(environment)
             .and_then(|env| {
-                env.packages(platform)
+                env.packages(p)
                     .and_then(|mut packages| packages.find(|p| p.name() == package))
             })
             .map(|p| p.location().clone())
     }
 
-    fn is_pypi_package_editable(
+    fn get_conda_source_package(
         &self,
         environment: &str,
         platform: Platform,
         package: &str,
-    ) -> Option<bool> {
-        self.environment(environment)
-            .and_then(|env| {
-                env.pypi_packages(platform).and_then(|mut packages| {
-                    packages.find(|(data, _)| data.name.as_ref() == package)
+    ) -> Option<&CondaSourceData> {
+        let p = self.platform(&platform.to_string())?;
+        self.environment(environment).and_then(|env| {
+            env.packages(p).and_then(|mut packages| {
+                packages.find_map(|p| match p {
+                    LockedPackage::Conda(conda) => {
+                        let source = conda.as_source()?;
+                        let matches = source.metadata.as_full().is_some_and(|package_record| {
+                            package_record.name.as_normalized() == package
+                        }) || source
+                            .metadata
+                            .as_partial()
+                            .is_some_and(|partial| partial.name.as_normalized() == package);
+                        matches.then_some(source)
+                    }
+                    LockedPackage::Pypi(_) => None,
                 })
             })
-            .map(|(data, _)| data.editable)
+        })
     }
 }
 
@@ -327,9 +363,14 @@ impl PixiControl {
         Ok(())
     }
 
-    /// Loads the workspace manifest and returns it.
+    /// Loads the workspace manifest and returns it. Uses `--no-config`
+    /// semantics so the developer's `~/.pixi/config.toml` doesn't leak in.
     pub fn workspace(&self) -> miette::Result<Workspace> {
-        let mut workspace = Workspace::from_path(&self.manifest_path()).into_diagnostic()?;
+        let mut workspace = Workspace::from_path_with_source(
+            &self.manifest_path(),
+            &pixi_config::GlobalConfigSource::None,
+        )
+        .into_diagnostic()?;
         if let Some(backend_override) = &self.backend_override {
             workspace = workspace.with_backend_override(backend_override.clone());
         }
@@ -445,14 +486,16 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    workspace: None,
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
-                    no_lockfile_update: false,
+                    no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
+                config_source: isolated_config_source(),
                 editable: false,
                 index: None,
             },
@@ -465,6 +508,7 @@ impl PixiControl {
         SearchBuilder {
             args: search::Args {
                 package: name,
+                config_source: isolated_config_source(),
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     ..Default::default()
@@ -489,10 +533,11 @@ impl PixiControl {
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
-                    no_lockfile_update: false,
+                    no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
+                config_source: isolated_config_source(),
             },
         }
     }
@@ -508,7 +553,7 @@ impl PixiControl {
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
-                    no_lockfile_update: false,
+                    no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
@@ -530,7 +575,7 @@ impl PixiControl {
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
-                    no_lockfile_update: false,
+                    no_lock_file_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
                 },
                 config: Default::default(),
@@ -576,12 +621,15 @@ impl PixiControl {
             })
             .transpose()?;
 
-        // Ensure the lock-file is up-to-date
+        // Ensure the lock file is up-to-date
         let lock_file = project
-            .update_lock_file(UpdateLockFileOptions {
-                lock_file_usage: args.lock_and_install_config.lock_file_usage().unwrap(),
-                ..UpdateLockFileOptions::default()
-            })
+            .update_lock_file(
+                None,
+                UpdateLockFileOptions {
+                    lock_file_usage: args.lock_and_install_config.lock_file_usage().unwrap(),
+                    ..UpdateLockFileOptions::default()
+                },
+            )
             .await?
             .0;
 
@@ -659,12 +707,14 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    workspace: None,
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
                     locked: false,
                 },
                 config: Default::default(),
+                config_source: isolated_config_source(),
                 all: false,
                 skip: None,
                 skip_with_deps: None,
@@ -688,6 +738,7 @@ impl PixiControl {
         UpdateBuilder {
             args: update::Args {
                 config: Default::default(),
+                config_source: isolated_config_source(),
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     ..Default::default()
@@ -700,21 +751,24 @@ impl PixiControl {
         }
     }
 
-    /// Load the current lock-file.
+    /// Load the current lock file.
     ///
-    /// If you want to lock-file to be up-to-date with the project call
+    /// If you want to lock file to be up-to-date with the project call
     /// [`Self::update_lock_file`].
     pub async fn lock_file(&self) -> miette::Result<LockFile> {
-        let workspace = Workspace::from_path(&self.manifest_path())?;
+        let workspace = Workspace::from_path_with_source(
+            &self.manifest_path(),
+            &pixi_config::GlobalConfigSource::None,
+        )?;
         workspace.load_lock_file().await?.into_lock_file()
     }
 
-    /// Load the current lock-file and makes sure that its up to date with the
+    /// Load the current lock file and makes sure that its up to date with the
     /// project.
     pub async fn update_lock_file(&self) -> miette::Result<LockFile> {
         let project = self.workspace()?;
         Ok(project
-            .update_lock_file(UpdateLockFileOptions::default())
+            .update_lock_file(None, UpdateLockFileOptions::default())
             .await?
             .0
             .into_lock_file())
@@ -725,9 +779,11 @@ impl PixiControl {
     pub fn lock(&self) -> LockBuilder {
         LockBuilder {
             args: lock::Args {
+                config_source: isolated_config_source(),
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                     backend_override: self.backend_override.clone(),
+                    workspace: None,
                 },
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
@@ -742,8 +798,9 @@ impl PixiControl {
     pub fn build(&self) -> BuildBuilder {
         BuildBuilder {
             args: build::Args {
-                backend_override: Default::default(),
+                backend_override: self.backend_override.clone(),
                 config_cli: Default::default(),
+                config_source: isolated_config_source(),
                 lock_and_install_config: Default::default(),
                 target_platform: rattler_conda_types::Platform::current(),
                 build_platform: rattler_conda_types::Platform::current(),
@@ -799,6 +856,7 @@ impl TasksControl<'_> {
         feature_name: Option<String>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
+            config_source: isolated_config_source(),
             workspace_config: WorkspaceConfig {
                 manifest_path: Some(self.pixi.manifest_path()),
                 ..Default::default()

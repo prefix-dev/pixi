@@ -160,6 +160,33 @@ The rattler-build backend follows this build process:
 5. **Package Creation**: Creates conda packages according to the recipe specification
 
 
+## Custom Build Variants as Environment Variables
+
+When using `[workspace.build-variants]`, any variant key that is not a recognized language key (like `python`, `numpy`, `r`, etc.) is automatically exported as an environment variable during the build.
+
+This is useful for passing configuration to build scripts without modifying the recipe.
+For example, to override the macOS sysroot used during compilation:
+
+```toml title="pixi.toml"
+[workspace.target.osx.build-variants]
+CONDA_BUILD_SYSROOT = ["/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk"]
+```
+
+During the build, `CONDA_BUILD_SYSROOT` will be set as an environment variable available to the build script.
+Custom variant keys can also be used in recipe templates via Jinja:
+
+```yaml title="recipe.yaml"
+build:
+  script:
+    env:
+      MY_FLAG: ${{ my_custom_flag }}
+```
+
+```toml title="pixi.toml"
+[workspace.build-variants]
+my_custom_flag = ["enabled"]
+```
+
 ## Limitations
 
 - Requires an existing rattler-build recipe file - cannot infer build instructions automatically

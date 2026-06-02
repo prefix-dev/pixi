@@ -3,7 +3,7 @@ use std::str::FromStr;
 use pep508_rs::MarkerTree;
 use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
-use pixi_core::{DependencyType, Workspace};
+use pixi_core::DependencyType;
 use pixi_manifest::{FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
@@ -110,7 +110,7 @@ async fn add_with_channel() {
         .await
         .unwrap();
 
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     let mut specs = project
         .default_environment()
         .combined_dependencies(Some(Platform::current()))
@@ -131,7 +131,7 @@ async fn add_with_channel() {
     );
 }
 
-/// Test that we get the union of all packages in the lockfile for the run,
+/// Test that we get the union of all packages in the lock file for the run,
 /// build and host
 #[tokio::test]
 async fn add_functionality_union() {
@@ -353,7 +353,7 @@ async fn add_pypi_functionality() {
         .unwrap();
 
     // Read project from file and check if the dev extras are added.
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -493,7 +493,7 @@ index-url = "{index_url}"
         .unwrap();
 
     // Check if the extras are added
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -514,7 +514,7 @@ index-url = "{index_url}"
         .unwrap();
 
     // Check if the extras are removed
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -532,7 +532,7 @@ index-url = "{index_url}"
         .unwrap();
 
     // Check if the extras added and the version is set
-    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let project = pixi.workspace().unwrap();
     project
         .default_environment()
         .pypi_dependencies(None)
@@ -810,10 +810,11 @@ preview = ['pixi-build']
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Win64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
-        .packages(Platform::Win64)
+        .packages(p)
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
@@ -864,10 +865,11 @@ preview = ['pixi-build']
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
-        .packages(Platform::Linux64)
+        .packages(p)
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
@@ -923,10 +925,11 @@ preview = ['pixi-build']"#,
 
     // Check the lock file
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
-        .packages(Platform::Linux64)
+        .packages(p)
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
@@ -979,10 +982,11 @@ preview = ['pixi-build']"#,
 
     // Check the lock file
     let lock = pixi.lock_file().await.unwrap();
+    let p = lock.platform(&Platform::Win64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
-        .packages(Platform::Win64)
+        .packages(p)
         .unwrap()
         .find(|p| p.as_conda().unwrap().location().as_str().contains("git+"));
 
@@ -1082,19 +1086,22 @@ platforms = ["{platform}"]
     });
 
     let lock_file = pixi.lock_file().await.unwrap();
+    let p = lock_file
+        .platform(&Platform::current().to_string())
+        .unwrap();
 
-    let (boltons, _) = lock_file
+    let boltons = lock_file
         .default_environment()
         .unwrap()
-        .pypi_packages(Platform::current())
+        .pypi_packages(p)
         .unwrap()
-        .find(|(p, _)| p.name.to_string() == "boltons")
+        .find(|p| p.name().to_string() == "boltons")
         .unwrap();
 
     insta::with_settings!( {filters => vec![
         (r"#([a-f0-9]+)", "#[FULL_COMMIT]"),
     ]}, {
-        insta::assert_snapshot!(boltons.location);
+        insta::assert_snapshot!(boltons.location());
     });
 }
 

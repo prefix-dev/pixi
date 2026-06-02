@@ -3,7 +3,7 @@ use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
 use pixi_core::Workspace;
 use pixi_pypi_spec::PypiPackageName;
-use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness};
+use rattler_conda_types::{MatchSpec, PackageName, ParseMatchSpecOptions, RepodataRevision};
 
 /// A trait to facilitate extraction of packages data from arguments
 pub(crate) trait HasSpecs {
@@ -14,15 +14,14 @@ pub(crate) trait HasSpecs {
         self.packages()
             .iter()
             .map(|package| {
-                let spec =
-                    MatchSpec::from_str(package, ParseStrictness::Lenient).into_diagnostic()?;
-                let name_matcher = spec.name.clone().ok_or_else(|| {
-                    miette::miette!("could not find package name in MatchSpec {}", spec)
+                let spec = MatchSpec::from_str(
+                    package,
+                    ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+                )
+                .into_diagnostic()?;
+                let name = spec.name.as_exact().cloned().ok_or_else(|| {
+                    miette::miette!("could not find exact package name in MatchSpec {}", spec)
                 })?;
-                let name = name_matcher
-                    .as_exact()
-                    .cloned()
-                    .ok_or_else(|| miette::miette!("wildcard package names are not supported"))?;
                 Ok((name, spec))
             })
             .collect()

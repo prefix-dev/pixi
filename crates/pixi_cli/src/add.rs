@@ -17,9 +17,10 @@ use crate::{
 
 /// Adds dependencies to the workspace
 ///
-/// The dependencies should be defined as MatchSpec for conda package, or a PyPI
-/// requirement for the `--pypi` dependencies. If no specific version is
-/// provided, the latest version compatible with your workspace will be chosen
+/// The dependencies should be defined as MatchSpec for conda package, a PyPI
+/// requirement for the `--pypi` dependencies, or an absolute path to a local
+/// `.conda` or `.tar.bz2` package file. If no specific version is provided,
+/// the latest version compatible with your workspace will be chosen
 /// automatically or a * will be used.
 ///
 /// Example usage:
@@ -92,6 +93,9 @@ pub struct Args {
     #[clap(flatten)]
     pub config: ConfigCli,
 
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
@@ -160,6 +164,7 @@ fn map_pypi_requirements_with_index(
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config.clone());

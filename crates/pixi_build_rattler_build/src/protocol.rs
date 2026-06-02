@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
     sync::Arc,
 };
@@ -28,11 +28,11 @@ use pixi_build_types::{
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
 };
-use rattler_build::{
+use rattler_build_core::{
     DiscoveredOutput,
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
-    metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
+    metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
     tool_configuration::Configuration,
     types::{PackageIdentifier, PackagingSettings},
 };
@@ -86,12 +86,18 @@ impl Protocol for RattlerBuildBackend {
         let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(params.host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(params.host_platform)
             .with_experimental(self.config.experimental.unwrap_or(false))
             .with_recipe_path(&self.recipe_source.path);
+        if let Some(prefix) = &self.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -280,6 +286,7 @@ impl Protocol for RattlerBuildBackend {
 
                 // The input globs are the same for all outputs
                 input_globs: None,
+                input_glob_sets: None,
                 // TODO: Implement caching
             });
         }
@@ -293,6 +300,7 @@ impl Protocol for RattlerBuildBackend {
         Ok(CondaOutputsResult {
             outputs,
             input_globs,
+            input_glob_sets: None,
         })
     }
 
@@ -337,12 +345,18 @@ impl Protocol for RattlerBuildBackend {
         let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(host_platform)
             .with_experimental(self.config.experimental.unwrap_or(false))
             .with_recipe_path(&self.recipe_source.path);
+        if let Some(prefix) = &self.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -425,14 +439,21 @@ impl Protocol for RattlerBuildBackend {
                 timestamp: chrono::Utc::now(),
                 subpackages: BTreeMap::new(),
                 packaging_settings: PackagingSettings::from_args(
-                    CondaArchiveType::Conda,
-                    CompressionLevel::default(),
+                    params
+                        .package_format
+                        .map(|pf| pf.archive_type)
+                        .unwrap_or(CondaArchiveType::Conda),
+                    params
+                        .package_format
+                        .map(|pf| CompressionLevel::from(pf.compression_level))
+                        .unwrap_or_default(),
                 ),
                 store_recipe: false,
                 force_colors: true,
                 sandbox_config: None,
-                debug: Debug::new(false),
                 exclude_newer: None,
+                env_isolation: Default::default(),
+                v3: false,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,
@@ -445,8 +466,12 @@ impl Protocol for RattlerBuildBackend {
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
             build_summary: Arc::default(),
-            system_tools: Default::default(),
+            system_tools: rattler_build_core::system_tools::SystemTools::new(
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+            ),
             extra_meta: None,
+            staging_library_name_map: None,
         };
 
         let (output, output_path) =
@@ -461,6 +486,7 @@ impl Protocol for RattlerBuildBackend {
                 extract_mutable_package_sources(&output),
                 self.config.extra_input_globs.clone(),
             )?,
+            input_glob_sets: None,
             name: output.name().as_normalized().to_string(),
             version: output.version().clone(),
             build: output.build_string().into_owned(),
@@ -523,7 +549,7 @@ fn build_input_globs(
     source: &Path,
     package_sources: Option<Vec<PathBuf>>,
     extra_globs: Vec<String>,
-) -> miette::Result<BTreeSet<String>> {
+) -> miette::Result<Vec<String>> {
     // Get parent directory path
     let src_parent = if source.is_file() {
         // use the parent path as glob
@@ -534,7 +560,7 @@ fn build_input_globs(
     };
 
     // Always add the current directory of the package to the globs
-    let mut input_globs = BTreeSet::from([build_relative_glob(manifest_root, &src_parent)?]);
+    let mut input_globs = vec![build_relative_glob(manifest_root, &src_parent)?];
 
     // If there are sources add them to the globs as well
     if let Some(package_sources) = package_sources {
@@ -544,7 +570,7 @@ fn build_input_globs(
             } else {
                 src_parent.join(source)
             };
-            input_globs.insert(build_relative_glob(manifest_root, &source)?);
+            input_globs.push(build_relative_glob(manifest_root, &source)?);
         }
     }
 
@@ -559,10 +585,10 @@ fn build_input_globs(
 fn get_metadata_input_globs(
     manifest_root: &Path,
     recipe_source_path: &Path,
-) -> miette::Result<BTreeSet<String>> {
+) -> miette::Result<Vec<String>> {
     match build_relative_glob(manifest_root, recipe_source_path) {
-        Ok(rel) if !rel.is_empty() => Ok(BTreeSet::from_iter([rel])),
-        Ok(_) => Ok(Default::default()),
+        Ok(rel) if !rel.is_empty() => Ok(vec![rel]),
+        Ok(_) => Ok(Vec::new()),
         Err(e) => Err(e),
     }
 }
@@ -590,6 +616,12 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
 
         let mut workspace_dependencies = HashMap::new();
 
+        let build_string_prefix = params
+            .project_model
+            .as_ref()
+            .and_then(|m| m.build_string_prefix.clone());
+        let build_number = params.project_model.as_ref().and_then(|m| m.build_number);
+
         if let Some(target) = params.project_model.and_then(|m| m.targets) {
             fn extract_workspace_deps(
                 target: Target,
@@ -608,7 +640,7 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
                         match spec {
                             pixi_build_types::PackageSpec::Source(source_spec) => {
                                 // Source dependencies are allowed - they represent workspace packages
-                                workspace_deps.insert(name, source_spec);
+                                workspace_deps.insert(name.to_string(), source_spec);
                             }
                             pixi_build_types::PackageSpec::Binary(_) => {
                                 // Binary dependencies must be specified in the recipe, not here
@@ -649,8 +681,9 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
             config,
         )?;
 
-        // Set the workspace dependencies
         instance.workspace_dependencies = workspace_dependencies;
+        instance.build_string_prefix = build_string_prefix;
+        instance.build_number = build_number;
 
         Ok((Box::new(instance), InitializeResult {}))
     }
@@ -678,7 +711,7 @@ mod tests {
     use fs_err as fs;
     use pixi_build_backend::utils::test::conda_outputs_snapshot;
     use pixi_build_types::{VariantValue, procedures::initialize::InitializeParams};
-    use rattler_build::console_utils::LoggingOutputHandler;
+    use rattler_build_core::console_utils::LoggingOutputHandler;
     use tempfile::tempdir;
 
     use super::*;
@@ -693,12 +726,14 @@ mod tests {
                 let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
                     .initialize(InitializeParams {
                         workspace_directory: None,
+                        checkout_root: None,
                         source_directory: None,
                         manifest_path: recipe_path.to_path_buf(),
                         project_model: None,
                         configuration: None,
                         target_configuration: None,
                         cache_directory: None,
+                        workspace_scratch_directory: None,
                     })
                     .await
                     .unwrap();
@@ -758,12 +793,14 @@ mod tests {
         let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
             .initialize(InitializeParams {
                 workspace_directory: None,
+                checkout_root: None,
                 source_directory: None,
                 manifest_path: recipe_path,
                 project_model: None,
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -804,12 +841,14 @@ mod tests {
         let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
             .initialize(InitializeParams {
                 workspace_directory: None,
+                checkout_root: None,
                 source_directory: None,
                 manifest_path: recipe_path.clone(),
                 project_model: None,
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -869,12 +908,14 @@ numpy:
         let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
             .initialize(InitializeParams {
                 workspace_directory: None,
+                checkout_root: None,
                 source_directory: None,
                 manifest_path: recipe_path,
                 project_model: None,
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -942,12 +983,14 @@ numpy:
         let factory = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
             .initialize(InitializeParams {
                 workspace_directory: None,
+                checkout_root: None,
                 source_directory: None,
                 manifest_path: recipe_path,
                 project_model: None,
                 configuration: None,
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -1178,7 +1221,7 @@ numpy:
         let recipe_path = base_path.join("recipe.yaml");
         fs::write(&recipe_path, "fake").unwrap();
         let globs = super::build_input_globs(base_path, &recipe_path, None, Vec::new()).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("**")]));
+        assert_eq!(globs, vec![String::from("**")]);
 
         // Case 2: source is a directory, with a file and a dir as package sources
         let pkg_dir = base_path.join("pkg");
@@ -1195,11 +1238,11 @@ numpy:
         .unwrap();
         assert_eq!(
             globs,
-            BTreeSet::from([
+            vec![
                 String::from("**"),
                 String::from("pkg/file.txt"),
-                String::from("pkg/dir/**")
-            ])
+                String::from("pkg/dir/**"),
+            ]
         );
 
         // Case 3: source is a file in a subdirectory (custom recipe path)
@@ -1208,7 +1251,7 @@ numpy:
         fs::create_dir_all(&custom_dir).unwrap();
         fs::write(&custom_recipe, "fake").unwrap();
         let globs = super::build_input_globs(base_path, &custom_recipe, None, Vec::new()).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("custom/**")]));
+        assert_eq!(globs, vec![String::from("custom/**")]);
     }
 
     #[test]
@@ -1234,7 +1277,7 @@ numpy:
         .unwrap();
         assert_eq!(
             globs,
-            BTreeSet::from([String::from("source/**"), String::from("pkgsrc/**")])
+            vec![String::from("source/**"), String::from("pkgsrc/**")]
         );
     }
 
@@ -1263,7 +1306,7 @@ numpy:
         // The relative path from base_path to rel_dir should be "rel_folder/**"
         assert_eq!(
             globs,
-            BTreeSet::from_iter(["**", "rel_folder/**"].into_iter().map(ToString::to_string))
+            vec![String::from("**"), String::from("rel_folder/**")]
         );
     }
 
@@ -1274,30 +1317,27 @@ numpy:
         let manifest_root = PathBuf::from("/foo/bar");
         let path = PathBuf::from("/foo/bar/recipe.yaml");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("recipe.yaml")]));
+        assert_eq!(globs, vec![String::from("recipe.yaml")]);
         // Case: file with no name (root)
         let manifest_root = PathBuf::from("/");
         let path = PathBuf::from("/");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("**")]));
+        assert_eq!(globs, vec![String::from("**")]);
         // Case: file with .yml extension
         let manifest_root = PathBuf::from("/foo/bar");
         let path = PathBuf::from("/foo/bar/recipe.yml");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("recipe.yml")]));
+        assert_eq!(globs, vec![String::from("recipe.yml")]);
         // Case: file in subdir
         let manifest_root = PathBuf::from("/foo");
         let path = PathBuf::from("/foo/bar/recipe.yaml");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
-        assert_eq!(globs, BTreeSet::from([String::from("bar/recipe.yaml")]));
+        assert_eq!(globs, vec![String::from("bar/recipe.yaml")]);
         // Case: custom recipe in nested subdir
         let manifest_root = PathBuf::from("/tmp/xxx");
         let path = PathBuf::from("/tmp/xxx/custom/my_recipe.yaml");
         let globs = super::get_metadata_input_globs(&manifest_root, &path).unwrap();
-        assert_eq!(
-            globs,
-            BTreeSet::from([String::from("custom/my_recipe.yaml")])
-        );
+        assert_eq!(globs, vec![String::from("custom/my_recipe.yaml")]);
     }
 
     #[test]
@@ -1315,15 +1355,17 @@ numpy:
         let globs =
             super::build_input_globs(base_path, &recipe_path, None, extra_globs.clone()).unwrap();
 
+        let contains = |needle: &str| globs.iter().any(|g| g == needle);
+
         // Verify that all extra globs are included in the result
         for extra_glob in &extra_globs {
             assert!(
-                globs.contains(extra_glob),
+                contains(extra_glob),
                 "Result should contain extra glob: {extra_glob}"
             );
         }
 
         // Verify that the basic manifest glob is still present
-        assert!(globs.contains("**"));
+        assert!(contains("**"));
     }
 }

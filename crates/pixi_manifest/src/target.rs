@@ -11,7 +11,7 @@ use crate::{
     CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PyPiDependencies,
     SpecType,
     activation::Activation,
-    dependencies::CondaDevDependencies,
+    dependencies::{CondaConstraints, CondaDevDependencies},
     task::{Task, TaskName},
     utils::PixiSpanned,
 };
@@ -35,6 +35,13 @@ pub struct WorkspaceTarget {
     /// Dev dependencies - source packages whose dependencies should be
     /// installed without building the packages themselves
     pub dev_dependencies: Option<CondaDevDependencies>,
+
+    /// Version constraints for this target.
+    ///
+    /// Constraints limit the versions of packages that can be installed without
+    /// explicitly requiring them to be installed. They apply only if the
+    /// package is installed as a dependency of another package.
+    pub constraints: Option<CondaConstraints>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -340,6 +347,11 @@ impl PackageTarget {
     /// Returns the run dependencies of the target
     pub fn run_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Run)
+    }
+
+    /// Returns the run constraints of the target
+    pub fn run_constraints(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
+        self.dependencies.get(&SpecType::RunConstraints)
     }
 
     /// Returns the host dependencies of the target
@@ -669,13 +681,13 @@ mod tests {
     use itertools::Itertools;
     use pixi_spec::PixiSpec;
     use rattler_conda_types::{PackageName, VersionSpec};
-    use std::str::FromStr;
+    use std::{path::Path, str::FromStr};
 
     use crate::{DependencyOverwriteBehavior, FeatureName, SpecType, WorkspaceManifest};
 
     #[test]
     fn test_targets_overwrite_order() {
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "test"
@@ -694,6 +706,7 @@ mod tests {
         run = "3.0"
         host = "1.0"
         "#,
+            Path::new(""),
         )
         .unwrap();
 
@@ -732,7 +745,9 @@ mod tests {
         foo = "1.0"
         "#;
 
-        let mut manifest = WorkspaceManifest::from_toml_str(manifest_content).unwrap();
+        let mut manifest =
+            WorkspaceManifest::from_toml_str_with_base_dir(manifest_content, Path::new(""))
+                .unwrap();
         let mut document = ManifestDocument::empty_pixi();
 
         // Create a mutable context
@@ -782,7 +797,9 @@ mod tests {
         platforms = []
         "#;
 
-        let mut manifest = WorkspaceManifest::from_toml_str(manifest_content).unwrap();
+        let mut manifest =
+            WorkspaceManifest::from_toml_str_with_base_dir(manifest_content, Path::new(""))
+                .unwrap();
         let mut document = ManifestDocument::empty_pixi();
 
         let mut manifest_mut = WorkspaceManifestMut {
@@ -864,7 +881,9 @@ mod tests {
         foo = "1.0"
         "#;
 
-        let mut manifest = WorkspaceManifest::from_toml_str(manifest_content).unwrap();
+        let mut manifest =
+            WorkspaceManifest::from_toml_str_with_base_dir(manifest_content, Path::new(""))
+                .unwrap();
         let mut document = ManifestDocument::empty_pixi();
 
         let mut manifest_mut = WorkspaceManifestMut {
@@ -906,7 +925,7 @@ mod tests {
     fn test_target_specific_overrides_default() {
         use rattler_conda_types::Platform;
 
-        let manifest = WorkspaceManifest::from_toml_str(
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
         [project]
         name = "test"
@@ -919,6 +938,7 @@ mod tests {
         [target.linux-64.dependencies]
         foo = "2.0"
         "#,
+            Path::new(""),
         )
         .unwrap();
 

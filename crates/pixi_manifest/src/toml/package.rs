@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
+use pixi_spec::TomlSpec;
 pub use pixi_toml::TomlFromStr;
 use pixi_toml::{DeserializeAs, Same, TomlIndexMap, TomlWith};
-use rattler_conda_types::Version;
+use rattler_conda_types::{PackageName, Version};
 use thiserror::Error;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
@@ -15,7 +16,7 @@ use crate::{
     toml::{
         TomlPackageBuild, manifest::ExternalWorkspaceProperties, package_target::TomlPackageTarget,
     },
-    utils::{PixiSpanned, package_map::UniquePackageMap},
+    utils::{PixiSpanned, inheritable_package_map::InheritablePackageMap},
 };
 
 /// Represents a field that can either have a direct value or inherit from
@@ -132,9 +133,10 @@ pub struct TomlPackage {
 
     // Fields that are package-specific and cannot be inherited
     pub build: TomlPackageBuild,
-    pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub host_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
+    pub build_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
+    pub run_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
+    pub run_constraints: Option<PixiSpanned<InheritablePackageMap>>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
 
     pub span: Span,
@@ -173,6 +175,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
         let run_dependencies = th.optional("run-dependencies");
+        let run_constraints = th.optional("run-constraints");
         let build = th.required("build")?;
         let target = th
             .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
@@ -194,6 +197,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             host_dependencies,
             build_dependencies,
             run_dependencies,
+            run_constraints,
             build,
             target,
             span: value.span,
@@ -218,6 +222,12 @@ pub struct WorkspacePackageProperties {
     pub homepage: Option<Url>,
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
+    /// `[workspace.dependencies]` pool; paths are relative to `workspace_root`.
+    pub dependencies: IndexMap<PackageName, TomlSpec>,
+
+    /// Absolute directory of the workspace manifest. Used to re-base
+    /// `dependencies` path specs against the member's directory.
+    pub workspace_root: Option<PathBuf>,
 }
 
 impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
@@ -233,6 +243,8 @@ impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
             homepage: value.homepage,
             repository: value.repository,
             documentation: value.documentation,
+            dependencies: IndexMap::new(),
+            workspace_root: None,
         }
     }
 }
@@ -274,7 +286,7 @@ impl TomlPackage {
     /// 1. Direct value (from package)
     /// 2. Workspace inheritance (from workspace) - ERROR if explicitly
     ///    requested but missing
-    /// 3. Package defaults (from [project] section if the manifest is a
+    /// 3. Package defaults (from `[project]` section if the manifest is a
     ///    `pyproject.toml`)
     /// 4. None if missing at all levels
     fn resolve_optional_field_with_defaults<T>(
@@ -311,11 +323,19 @@ impl TomlPackage {
         workspace: WorkspacePackageProperties,
         package_defaults: PackageDefaults,
         preview: &Preview,
-        root_directory: Option<&Path>,
+        root_directory: &Path,
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
         let mut warnings = Vec::new();
 
-        let build_result = self.build.into_build_system()?;
+        // Re-base workspace dependency path specs against this member's
+        // directory. The pool itself stores them relative to the workspace root.
+        let workspace_dependencies = rebase_workspace_path_specs(
+            &workspace.dependencies,
+            workspace.workspace_root.as_deref(),
+            root_directory,
+        );
+
+        let build_result = self.build.into_build_system(&workspace_dependencies)?;
         warnings.extend(build_result.warnings);
 
         // Resolve fields with 3-tier hierarchy: direct → workspace → package defaults →
@@ -335,16 +355,17 @@ impl TomlPackage {
 
         let default_package_target = TomlPackageTarget {
             run_dependencies: self.run_dependencies,
+            run_constraints: self.run_constraints,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
         }
-        .into_package_target(preview)?;
+        .into_package_target(preview, &workspace_dependencies)?;
 
         let targets = self
             .target
             .into_iter()
             .map(|(selector, target)| {
-                let target = target.into_package_target(preview)?;
+                let target = target.into_package_target(preview, &workspace_dependencies)?;
                 Ok::<_, TomlError>((selector, target))
             })
             .collect::<Result<_, _>>()?;
@@ -413,13 +434,12 @@ impl TomlPackage {
                 (Some(pixi_spec::SourceLocationSpec::Git(_)), _)
                 | (Some(pixi_spec::SourceLocationSpec::Url(_)), _) => None,
                 // Path source: resolve the path and use that directory for validation
-                (Some(pixi_spec::SourceLocationSpec::Path(path_spec)), Some(root_dir)) => {
+                (Some(pixi_spec::SourceLocationSpec::Path(path_spec)), root_dir) => {
                     path_spec.resolve(root_dir).ok()
                 }
                 // No source: use the manifest directory
-                (None, Some(root_dir)) => Some(root_dir.to_path_buf()),
+                (None, root_dir) => Some(root_dir.to_path_buf()),
                 // No root directory provided: skip validation
-                (_, None) => None,
             };
 
         let license_file = check_resolved_file(
@@ -490,16 +510,93 @@ fn workspace_cannot_be_false() -> GenericError {
         .with_help("By default no fields are inherited from the workspace")
 }
 
+/// Re-anchor `path` entries in workspace `TomlSpec`s from `workspace_root` to
+/// `member_root`. Absolute and `~/` paths are returned unchanged. Returns the
+/// input map verbatim when either root is unknown or the roots are equal.
+fn rebase_workspace_path_specs(
+    specs: &IndexMap<PackageName, TomlSpec>,
+    workspace_root: Option<&Path>,
+    member_root: &Path,
+) -> IndexMap<PackageName, TomlSpec> {
+    let Some(workspace_root) = workspace_root else {
+        return specs.clone();
+    };
+    if workspace_root == member_root
+        || workspace_root.as_os_str().is_empty()
+        || member_root.as_os_str().is_empty()
+    {
+        return specs.clone();
+    }
+    specs
+        .iter()
+        .map(|(name, spec)| {
+            let mut rebased = spec.clone();
+            rebased.rebase_path(workspace_root, member_root);
+            (name.clone(), rebased)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use assert_matches::assert_matches;
     use fs_err as fs;
     use insta::assert_snapshot;
+    use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
+    use rattler_conda_types::{PackageName, Platform};
     use tempfile::TempDir;
 
     use super::*;
-    use crate::toml::FromTomlStr;
+    use crate::{KnownPreviewFeature, SpecType, TargetSelector, toml::FromTomlStr};
+
+    /// Parses a manifest using only `Preview::default()` and asserts it succeeds.
+    fn parse_package(input: &str) -> PackageManifest {
+        TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect("expected manifest to parse")
+            .value
+    }
+
+    /// Asserts that the dependency map for `spec_type` contains exactly one
+    /// entry for `name` whose version spec stringifies to `expected`.
+    #[track_caller]
+    fn assert_single_version(
+        deps: &std::collections::HashMap<
+            SpecType,
+            pixi_spec_containers::DependencyMap<PackageName, PixiSpec>,
+        >,
+        spec_type: SpecType,
+        name: &str,
+        expected: &str,
+    ) {
+        let entry = deps
+            .get(&spec_type)
+            .unwrap_or_else(|| panic!("missing {spec_type:?} bucket"));
+        let specs = entry
+            .get(&PackageName::from_str(name).unwrap())
+            .unwrap_or_else(|| panic!("missing {name} in {spec_type:?}"));
+        assert_eq!(specs.len(), 1, "expected exactly one spec for {name}");
+        assert_eq!(
+            specs
+                .iter()
+                .next()
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            expected,
+        );
+    }
 
     #[must_use]
     fn expect_parse_failure(pixi_toml: &str) -> String {
@@ -549,7 +646,7 @@ mod test {
                     WorkspacePackageProperties::default(),
                     PackageDefaults::default(),
                     &Preview::default(),
-                    Some(path),
+                    path,
                 )
             })
             .unwrap_err();
@@ -581,7 +678,7 @@ mod test {
                     WorkspacePackageProperties::default(),
                     PackageDefaults::default(),
                     &Preview::default(),
-                    Some(path),
+                    path,
                 )
             })
             .unwrap_err();
@@ -620,7 +717,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap();
         assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
@@ -674,7 +771,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap();
         assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
@@ -711,7 +808,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
@@ -739,7 +836,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
@@ -765,7 +862,12 @@ mod test {
         };
 
         let manifest = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .into_manifest(
+                workspace,
+                package_defaults,
+                &Preview::default(),
+                Path::new(""),
+            )
             .unwrap();
         // Should use package defaults for name and version
         assert_eq!(manifest.value.package.name.unwrap(), "default-name");
@@ -806,7 +908,12 @@ mod test {
         };
 
         let manifest = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .into_manifest(
+                workspace,
+                package_defaults,
+                &Preview::default(),
+                Path::new(""),
+            )
             .unwrap();
         // Should use workspace values for name and version (overrides defaults)
         assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
@@ -842,7 +949,12 @@ mod test {
         };
 
         let parse_error = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .into_manifest(
+                workspace,
+                package_defaults,
+                &Preview::default(),
+                Path::new(""),
+            )
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
@@ -870,7 +982,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap();
 
@@ -896,7 +1008,7 @@ mod test {
                 workspace,
                 PackageDefaults::default(),
                 &Preview::default(),
-                None,
+                Path::new(""),
             )
             .unwrap();
 
@@ -925,7 +1037,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(path),
+                path,
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -952,7 +1064,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(path),
+                path,
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -977,7 +1089,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(path),
+                path,
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -1003,7 +1115,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(path),
+                path,
             )
         });
         assert!(result.is_err(), "Expected failure for path source");
@@ -1031,7 +1143,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(temp_dir.path()),
+                temp_dir.path(),
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -1073,7 +1185,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(manifest_dir.path()),
+                manifest_dir.path(),
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -1081,6 +1193,130 @@ mod test {
         // Verify the license_file path is set correctly
         let manifest = result.unwrap().value;
         assert!(manifest.package.license_file.is_some());
+    }
+
+    #[test]
+    fn test_package_dependencies_all_types() {
+        // Each of run-, host-, build-dependencies and run-constraints at the
+        // package level must land in its own SpecType bucket of the default target.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [run-dependencies]
+        run-dep = "==1.0"
+
+        [host-dependencies]
+        host-dep = "==2.0"
+
+        [build-dependencies]
+        build-dep = "==3.0"
+
+        [run-constraints]
+        constrained = ">=4.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let manifest = parse_package(input);
+        let deps = &manifest.targets.default().dependencies;
+
+        assert_single_version(deps, SpecType::Run, "run-dep", "==1.0");
+        assert_single_version(deps, SpecType::Host, "host-dep", "==2.0");
+        assert_single_version(deps, SpecType::Build, "build-dep", "==3.0");
+        assert_single_version(deps, SpecType::RunConstraints, "constrained", ">=4.0");
+    }
+
+    #[test]
+    fn test_package_target_specific_dependencies() {
+        // Target-specific package dependencies (including run-constraints) must
+        // land in the per-target bucket, not the default target.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [run-dependencies]
+        shared = "==1.0"
+
+        [target.linux-64.run-dependencies]
+        only-linux = "==2.0"
+
+        [target.linux-64.run-constraints]
+        only-linux-constrained = ">=3.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let manifest = parse_package(input);
+
+        // Default target only has the shared run dep.
+        let default_deps = &manifest.targets.default().dependencies;
+        assert_single_version(default_deps, SpecType::Run, "shared", "==1.0");
+        assert!(
+            !default_deps.contains_key(&SpecType::RunConstraints),
+            "run-constraints should not leak into default target",
+        );
+
+        // linux-64 target has its own deps and constraints.
+        let linux = manifest
+            .targets
+            .for_target(&TargetSelector::Platform(Platform::Linux64))
+            .expect("linux-64 target should exist");
+        assert_single_version(&linux.dependencies, SpecType::Run, "only-linux", "==2.0");
+        assert_single_version(
+            &linux.dependencies,
+            SpecType::RunConstraints,
+            "only-linux-constrained",
+            ">=3.0",
+        );
+    }
+
+    #[test]
+    fn test_run_constraints_source_spec_requires_pixi_build() {
+        // Source specs in [package.run-constraints] must be rejected unless the
+        // pixi-build preview is enabled — same gate as the other dependency
+        // tables.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [run-constraints]
+        local-pkg = { path = "./local" }
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        let rendered = format_parse_error(input, err);
+        assert!(
+            rendered.contains("pixi-build"),
+            "expected pixi-build gating error, got: {rendered}"
+        );
+
+        // With pixi-build enabled the same input parses.
+        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &preview,
+                    Path::new(""),
+                )
+            })
+            .expect("source specs in run-constraints must be allowed when pixi-build is enabled");
     }
 
     #[test]
@@ -1105,7 +1341,7 @@ mod test {
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
                 &Preview::default(),
-                Some(temp_dir.path()),
+                temp_dir.path(),
             )
         });
         assert!(result.is_ok(), "Expected success but got: {result:?}");
@@ -1113,5 +1349,74 @@ mod test {
         // Verify the readme path is set correctly
         let manifest = result.unwrap().value;
         assert!(manifest.package.readme.is_some());
+    }
+
+    #[test]
+    fn test_rebase_workspace_path_specs_relativizes_to_member() {
+        use indexmap::IndexMap;
+        let mut pool: IndexMap<rattler_conda_types::PackageName, TomlSpec> = IndexMap::new();
+        pool.insert("local".parse().unwrap(), path_spec("../shared"));
+
+        let workspace_root = Path::new("/ws");
+        let member_root = Path::new("/ws/members/foo");
+        let rebased = super::rebase_workspace_path_specs(&pool, Some(workspace_root), member_root);
+        let spec = rebased
+            .get(&rattler_conda_types::PackageName::from_str("local").unwrap())
+            .unwrap();
+        assert_eq!(
+            spec.location.as_ref().unwrap().path.as_deref(),
+            Some("../../../shared")
+        );
+    }
+
+    #[test]
+    fn test_rebase_workspace_path_specs_passes_absolute_through() {
+        use indexmap::IndexMap;
+        let mut pool: IndexMap<rattler_conda_types::PackageName, TomlSpec> = IndexMap::new();
+        pool.insert("abs".parse().unwrap(), path_spec("/abs/path"));
+
+        let rebased =
+            super::rebase_workspace_path_specs(&pool, Some(Path::new("/ws")), Path::new("/ws/m"));
+        let spec = rebased
+            .get(&rattler_conda_types::PackageName::from_str("abs").unwrap())
+            .unwrap();
+        assert_eq!(
+            spec.location.as_ref().unwrap().path.as_deref(),
+            Some("/abs/path")
+        );
+    }
+
+    #[test]
+    fn test_rebase_no_op_when_roots_match() {
+        use indexmap::IndexMap;
+        let mut pool: IndexMap<rattler_conda_types::PackageName, TomlSpec> = IndexMap::new();
+        pool.insert("local".parse().unwrap(), path_spec("../shared"));
+
+        let same = Path::new("/ws");
+        let rebased = super::rebase_workspace_path_specs(&pool, Some(same), same);
+        let spec = rebased
+            .get(&rattler_conda_types::PackageName::from_str("local").unwrap())
+            .unwrap();
+        assert_eq!(
+            spec.location.as_ref().unwrap().path.as_deref(),
+            Some("../shared")
+        );
+    }
+
+    /// Construct a [`TomlSpec`] carrying only a path location.
+    fn path_spec(path: &str) -> TomlSpec {
+        let mut spec = TomlSpec::empty();
+        spec.location = Some(pixi_spec::TomlLocationSpec {
+            url: None,
+            git: None,
+            path: Some(path.to_string()),
+            branch: None,
+            rev: None,
+            tag: None,
+            subdirectory: None,
+            md5: None,
+            sha256: None,
+        });
+        spec
     }
 }

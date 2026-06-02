@@ -20,6 +20,7 @@ pixi upload [OPTIONS] [PACKAGE_FILES]... <COMMAND>
 | [`artifactory`](upload/artifactory.md) | Options for uploading to a Artifactory channel. Authentication is used from the keychain / auth-file |
 | [`prefix`](upload/prefix.md) | Options for uploading to a prefix.dev server. Authentication is used from the keychain / auth-file |
 | [`anaconda`](upload/anaconda.md) | Options for uploading to a Anaconda.org server |
+| [`cloudsmith`](upload/cloudsmith.md) | Options for uploading to a Cloudsmith repository. Authentication is used from the keychain / auth-file |
 | [`s3`](upload/s3.md) | Options for uploading to S3 |
 
 

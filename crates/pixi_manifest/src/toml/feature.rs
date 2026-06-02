@@ -34,6 +34,10 @@ pub struct TomlFeature {
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     pub dev: Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
 
+    /// Version constraints - limit versions of packages that can be installed
+    /// without explicitly requiring them.
+    pub constraints: Option<PixiSpanned<UniquePackageMap>>,
+
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
 
@@ -61,6 +65,7 @@ impl TomlFeature {
             dependencies: self.dependencies,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
+            constraints: self.constraints,
             pypi_dependencies: self.pypi_dependencies,
             dev_dependencies: self.dev,
             activation: self.activation,
@@ -170,6 +175,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
         }
         let build_dependencies = build_dependencies.map(From::from);
 
+        let constraints = th.optional("constraints");
         let pypi_dependencies = th
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
             .map(TomlIndexMap::into_inner);
@@ -206,6 +212,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             dependencies,
             host_dependencies,
             build_dependencies,
+            constraints,
             pypi_dependencies,
             dev,
             activation,

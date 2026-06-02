@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display, hash::Hash, str::FromStr};
+use std::{collections::HashMap, fmt::Display, hash::Hash, path::Path, str::FromStr};
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
@@ -46,15 +46,16 @@ pub struct WorkspaceManifest {
 
 impl WorkspaceManifest {
     /// Parses a TOML string into a [`WorkspaceManifest`].
-    pub fn from_toml_str<S: AsRef<str> + SourceCode>(
+    pub fn from_toml_str_with_base_dir<S: AsRef<str> + SourceCode>(
         source: S,
+        root_directory: &Path,
     ) -> Result<Self, WithSourceCode<TomlError, S>> {
         TomlManifest::from_toml_str(source.as_ref())
             .and_then(|manifest| {
                 manifest.into_workspace_manifest(
                     ExternalWorkspaceProperties::default(),
                     PackageDefaults::default(),
-                    None,
+                    root_directory,
                 )
             })
             .map(|manifests| manifests.0)
@@ -209,6 +210,8 @@ impl WorkspaceManifest {
             authors: self.workspace.authors.clone(),
             documentation: self.workspace.documentation.clone(),
             homepage: self.workspace.homepage.clone(),
+            dependencies: self.workspace.dependencies.clone(),
+            workspace_root: Some(self.workspace.root_directory.clone()),
         }
     }
 }
@@ -542,32 +545,43 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
+    ///
+    /// Returns [`DependencyError::NoDependency`] if the dependency was not
+    /// found on any of the requested platforms. Per-platform misses are
+    /// tolerated as long as at least one platform contained the dependency.
     pub fn remove_dependency(
         &mut self,
         dep: &rattler_conda_types::PackageName,
         spec_type: SpecType,
         platforms: &[Platform],
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), RemoveDependencyError> {
+        let mut any_removed = false;
         for platform in crate::to_options(platforms) {
             // Remove the dependency from the manifest
             match self
                 .workspace
                 .target_mut(platform, feature_name)
                 .ok_or_else(|| {
-                    handle_missing_target(platform.as_ref(), feature_name, consts::DEPENDENCIES)
+                    MissingTargetError::new(platform.as_ref(), feature_name, consts::DEPENDENCIES)
                 })?
                 .remove_dependency(dep, spec_type)
             {
-                Ok(_) => (),
-                Err(DependencyError::NoDependency(e)) => {
-                    tracing::warn!("Dependency `{}` doesn't exist", e);
+                Ok(_) => {
+                    any_removed = true;
+                }
+                Err(DependencyError::NoDependency(_)) => {
+                    // Tolerate per-platform misses; we only fail if no platform
+                    // had the dependency.
                 }
                 Err(e) => return Err(e.into()),
             };
             // Remove the dependency from the TOML document
             self.document
                 .remove_dependency(dep, spec_type, platform, feature_name)?;
+        }
+        if !any_removed {
+            return Err(DependencyError::NoDependency(dep.as_normalized().into()).into());
         }
         Ok(())
     }
@@ -615,19 +629,24 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
+    ///
+    /// Returns [`DependencyError::NoDependency`] if the dependency was not
+    /// found on any of the requested platforms. Per-platform misses are
+    /// tolerated as long as at least one platform contained the dependency.
     pub fn remove_pypi_dependency(
         &mut self,
         dep: &PypiPackageName,
         platforms: &[Platform],
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), RemoveDependencyError> {
+        let mut any_removed = false;
         for platform in crate::to_options(platforms) {
             // Remove the dependency from the manifest
             match self
                 .workspace
                 .target_mut(platform, feature_name)
                 .ok_or_else(|| {
-                    handle_missing_target(
+                    MissingTargetError::new(
                         platform.as_ref(),
                         feature_name,
                         consts::PYPI_DEPENDENCIES,
@@ -635,15 +654,21 @@ impl WorkspaceManifestMut<'_> {
                 })?
                 .remove_pypi_dependency(dep)
             {
-                Ok(_) => (),
-                Err(DependencyError::NoDependency(e)) => {
-                    tracing::warn!("Dependency `{}` doesn't exist", e);
+                Ok(_) => {
+                    any_removed = true;
+                }
+                Err(DependencyError::NoDependency(_) | DependencyError::NoPyPiDependencies) => {
+                    // Tolerate per-platform misses; we only fail if no platform
+                    // had the dependency.
                 }
                 Err(e) => return Err(e.into()),
             };
             // Remove the dependency from the TOML document
             self.document
                 .remove_pypi_dependency(dep, platform, feature_name)?;
+        }
+        if !any_removed {
+            return Err(DependencyError::NoDependency(dep.as_source().into()).into());
         }
         Ok(())
     }
@@ -874,32 +899,73 @@ impl WorkspaceManifestMut<'_> {
     }
 }
 
-// Handles the target missing error cases
-fn handle_missing_target(
-    platform: Option<&Platform>,
-    feature_name: &FeatureName,
-    section: &str,
-) -> miette::Report {
-    let platform = platform.copied().unwrap_or_else(Platform::current);
+/// Raised when [`WorkspaceManifestMut::remove_dependency`] or
+/// [`WorkspaceManifestMut::remove_pypi_dependency`] cannot find the
+/// `[<feature>.target.<platform>.<section>]` table they need to mutate.
+#[derive(Debug, thiserror::Error)]
+#[error("No target for feature `{feature_name}` found on platform `{platform}`")]
+pub struct MissingTargetError {
+    pub platform: Platform,
+    pub feature_name: FeatureName,
+    pub section: &'static str,
+}
 
-    let help = if feature_name.is_default() {
-        format!(r#"Expected target for `{feature_name}`, e.g.: `[target.{platform}.{section}]`"#)
-    } else {
-        format!(
-            r#"Expected target for `{feature_name}`, e.g.: `[feature.{feature_name}.target.{platform}.{section}]`"#
-        )
-    };
-    miette!(
-        help = &help,
-        "No target for feature `{name}` found on platform `{platform}`",
-        name = feature_name,
-        platform = platform
-    )
+impl MissingTargetError {
+    fn new(platform: Option<&Platform>, feature_name: &FeatureName, section: &'static str) -> Self {
+        Self {
+            platform: platform.copied().unwrap_or_else(Platform::current),
+            feature_name: feature_name.clone(),
+            section,
+        }
+    }
+}
+
+impl miette::Diagnostic for MissingTargetError {
+    fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        let help = if self.feature_name.is_default() {
+            format!(
+                "Expected target for `{}`, e.g.: `[target.{}.{}]`",
+                self.feature_name, self.platform, self.section
+            )
+        } else {
+            format!(
+                "Expected target for `{name}`, e.g.: `[feature.{name}.target.{platform}.{section}]`",
+                name = self.feature_name,
+                platform = self.platform,
+                section = self.section,
+            )
+        };
+        Some(Box::new(help))
+    }
+}
+
+/// Errors that may arise while mutating a manifest to remove a dependency.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum RemoveDependencyError {
+    /// The dependency was missing, or had the wrong kind, in the in-memory
+    /// representation of the manifest.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Dependency(#[from] DependencyError),
+
+    /// The target the user asked to mutate (a feature/platform combination)
+    /// does not exist in the manifest.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingTarget(#[from] MissingTargetError),
+
+    /// Editing the underlying TOML document failed.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, str::FromStr};
+    use std::{
+        path::{Path, PathBuf},
+        str::FromStr,
+    };
 
     use indexmap::{IndexMap, IndexSet};
     use insta::{assert_debug_snapshot, assert_snapshot, assert_yaml_snapshot};
@@ -917,8 +983,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
-        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
+        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, Feature, FeatureName,
+        FeaturesExt, HasFeaturesIter, HasWorkspaceManifest, PrioritizedChannel, SpecType,
+        TargetSelector, Task, TomlError, WorkspaceManifest,
         manifests::document::ManifestDocument,
         pyproject::PyProjectManifest,
         task::TaskRenderContext,
@@ -975,9 +1042,10 @@ start = "python -m flask run --port=5050"
                 panic!("{}", format_parse_error(source, TomlError::from(error)))
             });
 
-        let manifest = WorkspaceManifest::from_toml_str(source).unwrap_or_else(
-            |WithSourceCode { error, source }| panic!("{}", format_parse_error(source, error)),
-        );
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(source, Path::new(""))
+            .unwrap_or_else(|WithSourceCode { error, source }| {
+                panic!("{}", format_parse_error(source, error))
+            });
 
         Workspace {
             manifest,
@@ -994,7 +1062,7 @@ start = "python -m flask run --port=5050"
 
         let manifest = PyProjectManifest::from_toml_str(source)
             .unwrap_or_else(|error| panic!("{}", format_parse_error(source, error)))
-            .into_workspace_manifest(None)
+            .into_workspace_manifest(Path::new(""))
             .unwrap_or_else(|error| panic!("{}", format_parse_error(source, error)))
             .0;
 
@@ -1371,7 +1439,7 @@ start = "python -m flask run --port=5050"
                     target.tasks.iter().map(move |(name, task)| {
                         format!(
                             "{}/{} = {:?}",
-                            &selector_name,
+                            selector_name,
                             name.as_str(),
                             task.as_single_command(&TaskRenderContext::default())
                                 .ok()
@@ -1395,7 +1463,7 @@ start = "python -m flask run --port=5050"
         );
 
         let WithSourceCode { error, source } =
-            WorkspaceManifest::from_toml_str(contents).unwrap_err();
+            WorkspaceManifest::from_toml_str_with_base_dir(contents, Path::new("")).unwrap_err();
         assert_snapshot!(format_parse_error(&source, error));
     }
 
@@ -2234,6 +2302,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2249,6 +2318,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2266,6 +2336,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2288,6 +2359,7 @@ platforms = ["linux-64", "win-64"]
             vec![PrioritizedChannel {
                 channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                 priority: None,
+                exclude_newer: None,
             }]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2306,10 +2378,12 @@ platforms = ["linux-64", "win-64"]
                 PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test")),
                     priority: None,
+                    exclude_newer: None,
                 },
                 PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test2")),
                     priority: None,
+                    exclude_newer: None,
                 },
             ]
             .into_iter()
@@ -2320,6 +2394,7 @@ platforms = ["linux-64", "win-64"]
         let custom_channel = PrioritizedChannel {
             channel: NamedChannelOrUrl::Url("https://custom.com/channel".parse().unwrap()),
             priority: None,
+            exclude_newer: None,
         };
         manifest
             .add_channels([custom_channel.clone()], &FeatureName::DEFAULT, false)
@@ -2338,6 +2413,7 @@ platforms = ["linux-64", "win-64"]
         let prioritized_channel1 = PrioritizedChannel {
             channel: NamedChannelOrUrl::Name(String::from("prioritized")),
             priority: Some(12i32),
+            exclude_newer: None,
         };
         manifest
             .add_channels([prioritized_channel1.clone()], &FeatureName::DEFAULT, false)
@@ -2355,6 +2431,7 @@ platforms = ["linux-64", "win-64"]
         let prioritized_channel2 = PrioritizedChannel {
             channel: NamedChannelOrUrl::Name(String::from("prioritized2")),
             priority: Some(-12i32),
+            exclude_newer: None,
         };
         manifest
             .add_channels([prioritized_channel2.clone()], &FeatureName::DEFAULT, false)
@@ -2405,6 +2482,7 @@ platforms = ["linux-64", "win-64"]
                 [PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                     priority: None,
+                    exclude_newer: None,
                 }],
                 &FeatureName::DEFAULT,
             )
@@ -2417,6 +2495,7 @@ platforms = ["linux-64", "win-64"]
                 [PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("test_channel")),
                     priority: None,
+                    exclude_newer: None,
                 }],
                 &FeatureName::from("test"),
             )
@@ -2438,6 +2517,7 @@ platforms = ["linux-64", "win-64"]
                     [PrioritizedChannel {
                         channel: NamedChannelOrUrl::Name(String::from("conda-forge")),
                         priority: None,
+                        exclude_newer: None,
                     }],
                     &FeatureName::DEFAULT,
                 )
@@ -2621,10 +2701,12 @@ platforms = ["linux-64", "win-64"]
                 &PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("pytorch")),
                     priority: None,
+                    exclude_newer: None,
                 },
                 &PrioritizedChannel {
                     channel: NamedChannelOrUrl::Name(String::from("nvidia")),
                     priority: Some(-1),
+                    exclude_newer: None,
                 },
             ]
         );
@@ -2750,7 +2832,7 @@ bar = "*"
         let spec = &MatchSpec::from_str("baz >=1.2.3", Strict).unwrap();
 
         let (name, spec) = spec.clone().into_nameless();
-        let name = name.unwrap().as_exact().unwrap().clone();
+        let name = name.as_exact().unwrap().clone();
 
         let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
 
@@ -2787,7 +2869,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                name.unwrap().as_exact().unwrap(),
+                name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
                 &[],
@@ -2822,7 +2904,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                package_name.unwrap().as_exact().unwrap(),
+                package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
                 &[Platform::Linux64],
@@ -2858,7 +2940,7 @@ bar = "*"
 
         manifest
             .add_dependency(
-                package_name.unwrap().as_exact().unwrap(),
+                package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Build,
                 &[Platform::Linux64],
@@ -3266,7 +3348,7 @@ channels = ["nvidia", "pytorch"]
         foo = { path = "./foo" }
         "#;
 
-        let manifest = WorkspaceManifest::from_toml_str(toml);
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(toml, Path::new(""));
         let err = manifest.unwrap_err();
         insta::assert_snapshot!(format_parse_error(toml, err.error), @r###"
          × conda source dependencies are not allowed without enabling the 'pixi-build' preview feature
@@ -3329,5 +3411,282 @@ channels = ["nvidia", "pytorch"]
         "#;
         let manifest_no = parse_pixi_toml(contents_no).manifest;
         assert_eq!(manifest_no.workspace.requires_pixi, None);
+    }
+
+    #[test]
+    fn test_constraints_in_default_feature() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+
+[dependencies]
+python = ">=3.9"
+
+[constraints]
+openssl = "<3"
+zlib = ">=1.2"
+"#;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let constraints = manifest.default_feature().constraints(None);
+
+        assert!(
+            constraints.is_some(),
+            "Default feature should have constraints"
+        );
+        let constraints = constraints.unwrap();
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+        assert!(
+            constraints.get(&openssl).is_some(),
+            "Should have openssl constraint"
+        );
+    }
+
+    #[test]
+    fn test_combined_constraints_across_features() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+
+[constraints]
+openssl = "<3"
+
+[feature.extra.constraints]
+zlib = ">=1.2"
+
+[environments]
+full = ["extra"]
+"#;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let workspace =
+            crate::WorkspaceManifest::from_toml_str_with_base_dir(contents, Path::new("")).unwrap();
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+        let zlib = PackageName::from_str("zlib").unwrap();
+
+        // Check default feature constraints
+        let default_constraints = workspace.default_feature().constraints(None);
+        assert!(default_constraints.is_some());
+        assert!(default_constraints.unwrap().get(&openssl).is_some());
+
+        // Check extra feature constraints
+        let extra = workspace
+            .features
+            .get(&FeatureName::from("extra"))
+            .expect("Should have extra feature");
+        let extra_constraints = extra.constraints(None);
+        assert!(extra_constraints.is_some());
+        assert!(extra_constraints.unwrap().get(&zlib).is_some());
+    }
+
+    #[test]
+    fn test_constraints_in_platform_target() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = ["linux-64", "win-64"]
+
+[constraints]
+openssl = "<3"
+
+[target.linux-64.constraints]
+openssl = "<2"
+"#;
+        use rattler_conda_types::{PackageName, Platform};
+        use std::str::FromStr;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+
+        let openssl = PackageName::from_str("openssl").unwrap();
+
+        // Platform-independent constraint
+        let base_constraints = default_feature.constraints(None);
+        assert!(base_constraints.is_some());
+        let base_spec = base_constraints
+            .unwrap()
+            .get(&openssl)
+            .expect("Should have openssl")
+            .iter()
+            .next()
+            .unwrap()
+            .as_version_spec()
+            .unwrap()
+            .to_string();
+        assert_eq!(base_spec, "<3");
+
+        // Platform-specific constraint overrides
+        let linux_constraints = default_feature.constraints(Some(Platform::Linux64));
+        assert!(linux_constraints.is_some());
+        let linux_spec = linux_constraints
+            .unwrap()
+            .get(&openssl)
+            .expect("Should have openssl on linux")
+            .iter()
+            .next()
+            .unwrap()
+            .as_version_spec()
+            .unwrap()
+            .to_string();
+        assert_eq!(linux_spec, "<2");
+    }
+
+    #[test]
+    fn test_package_exclude_newer_tables_are_parsed() {
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#;
+        use pixi_pypi_spec::PypiPackageName;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let polars = PackageName::from_str("polars").unwrap();
+        assert_eq!(
+            manifest
+                .workspace
+                .exclude_newer_package_overrides
+                .get(&polars)
+                .map(|value| value.to_string()),
+            Some("0s".to_string())
+        );
+
+        let boltons = PypiPackageName::from_str("boltons").unwrap();
+        assert_eq!(
+            manifest
+                .workspace
+                .pypi_exclude_newer_package_overrides
+                .get(&boltons)
+                .map(|value| value.to_string()),
+            Some("0s".to_string())
+        );
+    }
+
+    #[test]
+    fn test_exclude_newer_config_applies_package_overrides() {
+        struct TestFeatures<'a> {
+            manifest: &'a WorkspaceManifest,
+            features: Vec<&'a Feature>,
+        }
+
+        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
+            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+                self.manifest
+            }
+        }
+
+        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
+            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+                self.features.clone().into_iter()
+            }
+        }
+
+        let contents = r#"
+[project]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+
+[exclude-newer]
+polars = "0d"
+"#;
+
+        let before = chrono::Utc::now();
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+        let features = TestFeatures {
+            manifest: &manifest,
+            features: vec![default_feature],
+        };
+        let config: rattler_solve::ExcludeNewer = features
+            .exclude_newer_config_resolved(&default_channel_config())
+            .unwrap()
+            .unwrap()
+            .into();
+        let after = chrono::Utc::now();
+        let package = PackageName::from_str("polars").unwrap();
+        let package_cutoff = config.cutoff_for_package(&package, None);
+
+        assert!(package_cutoff >= before);
+        assert!(package_cutoff <= after + chrono::Duration::seconds(1));
+    }
+
+    #[test]
+    fn test_exclude_newer_config_applies_channel_overrides() {
+        struct TestFeatures<'a> {
+            manifest: &'a WorkspaceManifest,
+            features: Vec<&'a Feature>,
+        }
+
+        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
+            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+                self.manifest
+            }
+        }
+
+        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
+            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+                self.features.clone().into_iter()
+            }
+        }
+
+        let contents = r#"
+[project]
+name = "foo"
+channels = ["conda-forge", { channel = "bioconda", exclude-newer = "0d" }]
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+"#;
+
+        let before = chrono::Utc::now();
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+        let features = TestFeatures {
+            manifest: &manifest,
+            features: vec![default_feature],
+        };
+        let channel_config = default_channel_config();
+        let config: rattler_solve::ExcludeNewer = features
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
+        let after = chrono::Utc::now();
+
+        let bioconda = NamedChannelOrUrl::Name(String::from("bioconda"))
+            .into_base_url(&channel_config)
+            .unwrap();
+
+        let package = PackageName::from_str("polars").unwrap();
+        let bioconda_cutoff = config.cutoff_for_package(&package, Some(bioconda.as_str()));
+        assert!(bioconda_cutoff >= before);
+        assert!(bioconda_cutoff <= after + chrono::Duration::seconds(1));
+
+        assert_eq!(
+            config.cutoff_for_package(&package, Some("conda-forge")),
+            chrono::DateTime::parse_from_rfc3339("2015-12-02T02:07:43Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        );
     }
 }

@@ -1,5 +1,5 @@
 use miette::{IntoDiagnostic, WrapErr};
-use rattler_build::metadata::Output;
+use rattler_build_core::metadata::Output;
 use std::future::Future;
 use std::io::BufWriter;
 use std::path::PathBuf;

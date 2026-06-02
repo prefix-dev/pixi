@@ -6,24 +6,29 @@ use std::sync::Arc;
 
 use crate::glob_set::walk_root::SimpleGlob;
 
-use super::GlobSetError;
+use super::{GlobSetError, Match};
 
-type SharedResults = Arc<Mutex<Option<Vec<Result<ignore::DirEntry, GlobSetError>>>>>;
+type SharedResults = Arc<Mutex<Option<Vec<Result<Match, GlobSetError>>>>>;
 
 struct CollectBuilder {
     // Shared aggregation storage wrapped in an Option so we can `take` at the end.
     sink: SharedResults,
     // The root we are walking, used for error reporting
     err_root: PathBuf,
+    // When false, drop file entries the walker yields — used for leaf-only
+    // walks where the override is empty and every file would otherwise pass.
+    collect_patterns: bool,
 }
 
 struct CollectVisitor {
     // Local per-thread buffer to append results without holding the lock.
-    local: Vec<Result<ignore::DirEntry, GlobSetError>>,
+    local: Vec<Result<Match, GlobSetError>>,
     // Reference to the shared sink.
     sink: SharedResults,
     // The root we are walking, used for error reporting
     err_root: PathBuf,
+    // Mirror of `CollectBuilder::collect_patterns`.
+    collect_patterns: bool,
 }
 
 impl Drop for CollectVisitor {
@@ -41,20 +46,27 @@ impl<'s> ignore::ParallelVisitorBuilder<'s> for CollectBuilder {
             local: Vec::new(),
             sink: Arc::clone(&self.sink),
             err_root: self.err_root.clone(),
+            collect_patterns: self.collect_patterns,
         })
     }
 }
 
 impl ignore::ParallelVisitor for CollectVisitor {
-    /// This function loops over all matches, ignores directories, and ignores PermissionDenied and
-    /// NotFound errors
+    /// Loop over all matches, drop directories, drop NotFound/PermissionDenied races.
     fn visit(&mut self, dir_entry: Result<ignore::DirEntry, ignore::Error>) -> ignore::WalkState {
         match dir_entry {
             Ok(dir_entry) => {
                 if dir_entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
                     return ignore::WalkState::Continue;
                 }
-                self.local.push(Ok(dir_entry));
+                if !self.collect_patterns {
+                    // Leaf-only walk: an empty override doesn't suppress
+                    // yield, so we drop file entries here. Leaves still
+                    // arrive via the side-channel sink set up by
+                    // `filter_entry`.
+                    return ignore::WalkState::Continue;
+                }
+                self.local.push(Ok(Match::Pattern(dir_entry)));
             }
             Err(e) => {
                 if let Some(ioe) = e.io_error() {
@@ -74,30 +86,52 @@ impl ignore::ParallelVisitor for CollectVisitor {
     }
 }
 
-/// Walk over the globs in the specific root
+/// Walk `effective_walk_root` collecting paths that match `globs`.  When
+/// `markers` is non-empty, each directory the walker enters is also probed
+/// for the presence of those file names; a marker hit is then matched
+/// against the same pattern override that drives ordinary glob matching,
+/// and resolves to one of:
+///
+/// - **leaf**: marker matches an include pattern → the marker path is
+///   appended to the results and descent stops at this directory;
+/// - **prune**: marker matches an exclude (`!`) pattern → the whole
+///   subtree is skipped;
+/// - **noop**: marker matches nothing → walking continues normally.
 pub fn walk_globs(
     effective_walk_root: &Path,
     globs: &[SimpleGlob],
-) -> Result<Vec<ignore::DirEntry>, GlobSetError> {
+    markers: &[String],
+    exclude_hidden: bool,
+) -> Result<Vec<Match>, GlobSetError> {
     let mut ob = ignore::overrides::OverrideBuilder::new(effective_walk_root);
     let glob_patterns = globs
         .iter()
         .map(|g| anchor_literal_pattern(g.to_pattern()))
         .collect_vec();
 
-    // Always add ignore hidden folders unless the user explicitly included them
-    // because we add patterns as overrides, which overrides any `WalkBuilder` settings.
-    let ignore_patterns = set_ignore_hidden_patterns(&glob_patterns);
+    // When hidden exclusion is enabled, the existing helper inspects the
+    // patterns to decide which approach to use: either rely on
+    // `WalkBuilder::hidden(true)` outright or, when broad patterns like
+    // `**` would otherwise drag hidden entries back in, append explicit
+    // negations.  When the caller has opted out we don't do anything here
+    // and just leave `WalkBuilder::hidden(false)` to yield everything.
+    let ignore_patterns = if exclude_hidden {
+        set_ignore_hidden_patterns(&glob_patterns)
+    } else {
+        None
+    };
 
     for provided_pattern in &glob_patterns {
         ob.add(provided_pattern)
             .map_err(GlobSetError::BuildOverrides)?;
     }
 
-    let enable_ignoring_hidden = if let Some(ref patterns) = ignore_patterns {
+    let walker_hidden_setting = if !exclude_hidden {
+        false
+    } else if let Some(ref patterns) = ignore_patterns {
         // If we added negated patterns for hidden folders, we want to allow searching through hidden folders
         // unless the user explicitly included them
-        tracing::debug!("Adding ignore patterns for hidden folders: {:?}", patterns);
+        tracing::trace!("Adding ignore patterns for hidden folders: {:?}", patterns);
         for pattern in patterns {
             ob.add(pattern).map_err(GlobSetError::BuildOverrides)?;
         }
@@ -108,28 +142,104 @@ pub fn walk_globs(
 
     let overrides = ob.build().map_err(GlobSetError::BuildOverrides)?;
 
-    let mut builder = ignore::WalkBuilder::new(effective_walk_root);
+    // `ignore::WalkBuilder::filter_entry` is not invoked on the root entry,
+    // so resolve any marker hits there before starting the walk, mirroring
+    // the per-directory dispatch logic: a marker that matches an exclude or
+    // that matches nothing prunes the subtree; a marker that matches an
+    // include records a leaf.
+    let mut root_leaves = Vec::new();
+    for marker in markers {
+        let marker_path = effective_walk_root.join(marker);
+        if !marker_path.is_file() {
+            continue;
+        }
+        match overrides.matched(&marker_path, false) {
+            ignore::Match::Whitelist(_) if root_leaves.is_empty() => {
+                root_leaves.push(Match::Leaf(marker_path));
+            }
+            ignore::Match::Whitelist(_) => {}
+            // Ignore or None both prune.
+            _ => return Ok(Vec::new()),
+        }
+    }
+    if !root_leaves.is_empty() {
+        return Ok(root_leaves);
+    }
 
-    let walker_builder = builder
+    let leaf_sink: Arc<Mutex<Vec<Match>>> = Arc::new(Mutex::new(Vec::new()));
+
+    let mut builder = ignore::WalkBuilder::new(effective_walk_root);
+    builder
         .follow_links(true)
         .git_ignore(false)
         .git_exclude(true)
-        .hidden(enable_ignoring_hidden)
+        .hidden(walker_hidden_setting)
         .git_global(false)
         .ignore(false)
-        .overrides(overrides)
-        .build_parallel();
+        .overrides(overrides.clone());
+
+    if !markers.is_empty() {
+        let markers: Vec<String> = markers.to_vec();
+        let overrides_for_filter = overrides.clone();
+        let leaf_sink_for_filter = Arc::clone(&leaf_sink);
+        builder.filter_entry(move |entry| {
+            let Some(ft) = entry.file_type() else {
+                return false;
+            };
+            if !ft.is_dir() {
+                // Non-directories pass through to the pattern matcher.
+                return true;
+            }
+            // Pass over all markers present in this dir. A marker that
+            // matches an exclude (or no pattern at all) prunes the subtree;
+            // a marker that matches an include records a leaf. Pruning wins
+            // when both fire in the same directory.
+            let mut leaf_match: Option<PathBuf> = None;
+            for marker in &markers {
+                let marker_path = entry.path().join(marker);
+                if !marker_path.is_file() {
+                    continue;
+                }
+                match overrides_for_filter.matched(&marker_path, false) {
+                    ignore::Match::Whitelist(_) if leaf_match.is_none() => {
+                        leaf_match = Some(marker_path);
+                    }
+                    ignore::Match::Whitelist(_) => {}
+                    // Ignore or None both prune.
+                    _ => return false,
+                }
+            }
+            if let Some(leaf) = leaf_match {
+                leaf_sink_for_filter.lock().push(Match::Leaf(leaf));
+                return false;
+            }
+            true
+        });
+    }
+
+    let walker = builder.build_parallel();
 
     let collected: SharedResults = Arc::new(Mutex::new(Some(Vec::new())));
     let start = std::time::Instant::now();
 
-    let mut builder = CollectBuilder {
+    let mut collect = CollectBuilder {
         sink: Arc::clone(&collected),
         err_root: effective_walk_root.to_path_buf(),
+        collect_patterns: !globs.is_empty(),
     };
-    walker_builder.visit(&mut builder);
+    walker.visit(&mut collect);
 
-    let results = collected.lock().take().unwrap_or_default();
+    let mut results: Vec<Match> = collected
+        .lock()
+        .take()
+        .unwrap_or_default()
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut leaves = std::mem::take(&mut *leaf_sink.lock());
+    if !leaves.is_empty() {
+        results.append(&mut leaves);
+    }
 
     // Log some statistics as long as we are unsure with regards to performance
     let matched = results.len();
@@ -138,16 +248,17 @@ pub fn walk_globs(
     let include_patterns = include.iter().map(|g| g.to_pattern()).join(", ");
     let exclude_patterns = excludes.iter().map(|g| g.to_pattern()).join(", ");
 
-    tracing::debug!(
+    tracing::trace!(
         include = include_patterns,
         excludes = exclude_patterns,
+        markers = ?markers,
         matched,
         elapsed_ms = elapsed.as_millis(),
         root = ?effective_walk_root,
         "glob pass completed"
     );
 
-    results.into_iter().collect()
+    Ok(results)
 }
 
 /// Ensures plain file names behave as "current directory" matches for the ignore crate.
@@ -247,7 +358,7 @@ pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
         .iter()
         .any(|p| p == ".*" || p == ".**" || p == "**/.*" || p == "./.*" || p == ".**/*");
 
-    tracing::debug!(
+    tracing::trace!(
         user_includes_hidden,
         has_negation_for_all_folders,
         search_all_hidden,

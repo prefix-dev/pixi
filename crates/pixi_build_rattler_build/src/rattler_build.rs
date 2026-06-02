@@ -7,7 +7,7 @@ use std::{
 use miette::IntoDiagnostic;
 use pixi_build_backend::source::Source;
 use pixi_build_types::SourcePackageSpec;
-use rattler_build::console_utils::LoggingOutputHandler;
+use rattler_build_core::console_utils::LoggingOutputHandler;
 
 use crate::config::RattlerBuildBackendConfig;
 
@@ -22,6 +22,10 @@ pub struct RattlerBuildBackend {
     pub(crate) config: RattlerBuildBackendConfig,
     /// Workspace dependencies from the project model
     pub(crate) workspace_dependencies: HashMap<String, SourcePackageSpec>,
+    /// An optional prefix to prepend to the auto-generated build string.
+    pub(crate) build_string_prefix: Option<String>,
+    /// An optional build number override.
+    pub(crate) build_number: Option<u64>,
 }
 
 impl RattlerBuildBackend {
@@ -97,6 +101,8 @@ impl RattlerBuildBackend {
             cache_dir,
             config,
             workspace_dependencies: HashMap::new(),
+            build_string_prefix: None,
+            build_number: None,
         })
     }
 }

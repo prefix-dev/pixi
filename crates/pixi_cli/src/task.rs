@@ -14,7 +14,7 @@ use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_manifest::{
     EnvironmentName, FeatureName,
-    task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, quote},
+    task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, TemplateString, quote},
 };
 use rattler_conda_types::Platform;
 use serde::Serialize;
@@ -206,7 +206,7 @@ impl From<AddArgs> for Task {
             } else {
                 let mut env = IndexMap::new();
                 for (key, value) in value.env {
-                    env.insert(key, value);
+                    env.insert(key, TemplateString::from(value));
                 }
                 Some(env)
             };
@@ -242,6 +242,9 @@ impl From<AliasArgs> for Task {
 #[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Add, remove, or update a task
     #[clap(subcommand)]
     pub operation: Operation,
@@ -300,7 +303,7 @@ fn print_tasks(
         header_style.apply_to("Task"),
         header_style.apply_to("Description"),
     );
-    writeln!(writer, "{}", &header)?;
+    writeln!(writer, "{}", header)?;
     for (taskname, row) in formatted_descriptions {
         writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
     }
@@ -316,6 +319,7 @@ fn print_tasks(
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
@@ -351,8 +355,8 @@ async fn list_tasks(
 
     if args.machine_readable {
         let unformatted: String = tasks_per_env
-            .iter()
-            .flat_map(|(_, v)| v.keys())
+            .values()
+            .flat_map(|v| v.keys())
             .sorted()
             .map(|name| name.as_str())
             .join(" ");
@@ -500,7 +504,7 @@ pub struct TaskInfo {
     depends_on: Vec<Dependency>,
     args: Option<Vec<TaskArg>>,
     cwd: Option<PathBuf>,
-    env: Option<IndexMap<String, String>>,
+    env: Option<IndexMap<String, TemplateString>>,
     default_environment: Option<EnvironmentName>,
     clean_env: bool,
     inputs: Option<Vec<String>>,

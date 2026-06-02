@@ -1,19 +1,23 @@
 mod build_script;
 mod config;
+mod inputs;
 
 use build_script::{BuildPlatform, BuildScriptContext};
 use config::CMakeBackendConfig;
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
+    compilers::default_compiler_variants,
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
+    tools::BackendIdentifier,
     traits::ProjectModel,
 };
 use pixi_build_types::SourcePackageName;
 use rattler_build_jinja::Variable;
+use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_build_types::NormalizedKey;
+use rattler_conda_types::PackageName;
 use rattler_conda_types::{ChannelUrl, Platform};
-use recipe_stage0::recipe::Script;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{
@@ -24,6 +28,22 @@ use std::{
 
 #[derive(Default, Clone)]
 pub struct CMakeGenerator {}
+
+/// Globs used when ninja-based exact input extraction is unavailable
+/// (e.g. the build dir was wiped, ninja exited non-zero, or this is a
+/// dry-run). Kept intentionally broad so we don't miss real changes.
+fn fallback_input_globs() -> BTreeSet<String> {
+    [
+        // Source files
+        "**/*.{c,cc,cxx,cpp,h,hpp,hxx}",
+        // CMake files
+        "**/*.{cmake,cmake.in}",
+        "**/CMakeLists.txt",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
+}
 
 #[async_trait::async_trait]
 impl GenerateRecipe for CMakeGenerator {
@@ -39,6 +59,9 @@ impl GenerateRecipe for CMakeGenerator {
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root, because `manifest_path` can be
         // either a direct file path or a directory path.
@@ -91,9 +114,12 @@ impl GenerateRecipe for CMakeGenerator {
 
         // add necessary build tools
         for tool in ["cmake", "ninja"] {
-            let tool_name = SourcePackageName::from(tool);
+            let tool_name = SourcePackageName::from(PackageName::new_unchecked(tool));
             if !model_dependencies.build.contains_key(&tool_name) {
-                requirements.build.push(tool.parse().into_diagnostic()?);
+                requirements.build.push(Item::Value(Value::new_concrete(
+                    SerializableMatchSpec::from(tool),
+                    None,
+                )));
             }
         }
 
@@ -102,7 +128,9 @@ impl GenerateRecipe for CMakeGenerator {
         // executable
         let has_host_python = model_dependencies
             .host
-            .contains_key(&SourcePackageName::from("python"));
+            .contains_key(&SourcePackageName::from(PackageName::new_unchecked(
+                "python",
+            )));
 
         let build_script = BuildScriptContext {
             build_platform: if Platform::current().is_windows() {
@@ -116,11 +144,15 @@ impl GenerateRecipe for CMakeGenerator {
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script {
-            content: build_script,
-            env: config.env.clone(),
-            ..Default::default()
-        };
+        generated_recipe.recipe.build.script = Script::from_content(build_script)
+            .with_env(
+                config
+                    .env
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+                    .collect(),
+            )
+            .with_secrets(model.secrets.iter().cloned().collect());
 
         Ok(generated_recipe)
     }
@@ -128,45 +160,40 @@ impl GenerateRecipe for CMakeGenerator {
     fn extract_input_globs_from_build(
         &self,
         config: &Self::Config,
-        _workdir: impl AsRef<Path>,
+        workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
-        Ok([
-            // Source files
-            "**/*.{c,cc,cxx,cpp,h,hpp,hxx}",
-            // CMake files
-            "**/*.{cmake,cmake.in}",
-            "**/CMakeFiles.txt",
-        ]
-        .iter()
-        .map(|s: &&str| s.to_string())
-        .chain(config.extra_input_globs.clone())
-        .collect())
+    ) -> miette::Result<Vec<String>> {
+        let workdir = workdir.as_ref();
+        let mut globs = match inputs::exact_inputs_from_ninja(workdir) {
+            Ok(set) => set,
+            Err(err) => {
+                tracing::warn!(
+                    "falling back to glob-based input tracking for cmake build at {}: {err}",
+                    workdir.display()
+                );
+                fallback_input_globs()
+            }
+        };
+        globs.extend(config.extra_input_globs.iter().cloned());
+        Ok(globs.into_iter().collect())
     }
 
     fn default_variants(
         &self,
         host_platform: Platform,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        let mut variants = BTreeMap::new();
-
-        if host_platform.is_windows() {
-            // Default to the Visual Studio 2022 compiler on Windows
-            // Not 2019 due to Conda-forge switching and the mainstream support dropping in 2024.
-            // rattler-build will default to vs2017 which for most github runners is too
-            // old.
-            variants.insert(NormalizedKey::from("c_compiler"), vec!["vs2022".into()]);
-            variants.insert(NormalizedKey::from("cxx_compiler"), vec!["vs2022".into()]);
-        }
-
-        Ok(variants)
+        Ok(default_compiler_variants(host_platform))
     }
 }
 
 #[tokio::main]
 pub async fn main() {
     if let Err(err) = pixi_build_backend::cli::main(|log| {
-        IntermediateBackendInstantiator::<CMakeGenerator>::new(log, Arc::default())
+        IntermediateBackendInstantiator::<CMakeGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            log,
+            Arc::default(),
+        )
     })
     .await
     {
@@ -187,8 +214,7 @@ mod tests {
         ProjectModel, VariantValue,
         procedures::{conda_outputs::CondaOutputsParams, initialize::InitializeParams},
     };
-    use rattler_build::console_utils::LoggingOutputHandler;
-    use recipe_stage0::recipe::{Item, Value};
+    use rattler_build_core::console_utils::LoggingOutputHandler;
     use tokio::fs;
 
     use super::*;
@@ -244,6 +270,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -287,6 +316,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -325,6 +357,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -334,12 +369,14 @@ mod tests {
         insta::assert_yaml_snapshot!(generated_recipe.recipe.build,
 
             {
-            ".script.content" => insta::dynamic_redaction(|value, _path| {
-                dbg!(&value);
-                // assert that the value looks like a uuid here
-                assert!(value.as_str().unwrap().lines()
-                    .any(|c| c.contains("-DPython_EXECUTABLE"))
-                );
+            ".script.content[]" => insta::dynamic_redaction(|value, _path| {
+                // content is a ConditionalList<String>, serialized as an array
+                if let Some(s) = value.as_str() {
+                    assert!(s.lines()
+                        .any(|c| c.contains("-DPython_EXECUTABLE")),
+                        "expected -DPython_EXECUTABLE in build script, got: {s}"
+                    );
+                }
                 "[content]"
             })
         });
@@ -373,6 +410,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -391,17 +431,20 @@ mod tests {
         });
 
         let factory = IntermediateBackendInstantiator::<CMakeGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
             LoggingOutputHandler::default(),
             Arc::default(),
         )
         .initialize(InitializeParams {
             workspace_directory: None,
+            checkout_root: None,
             source_directory: None,
             manifest_path: PathBuf::from("pixi.toml"),
             project_model: Some(project_model),
             configuration: None,
             target_configuration: None,
             cache_directory: None,
+            workspace_scratch_directory: None,
         })
         .await
         .unwrap();
@@ -425,6 +468,55 @@ mod tests {
             Some(&VariantValue::from("vs2022")),
             "On windows the default cxx_compiler variant should be vs2022"
         );
+    }
+
+    #[tokio::test]
+    async fn test_default_cuda_compiler() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        for platform in [Platform::Linux64, Platform::Win64] {
+            let factory = IntermediateBackendInstantiator::<CMakeGenerator>::new(
+                BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+                LoggingOutputHandler::default(),
+                Arc::default(),
+            )
+            .initialize(InitializeParams {
+                workspace_directory: None,
+                checkout_root: None,
+                source_directory: None,
+                manifest_path: PathBuf::from("pixi.toml"),
+                project_model: Some(project_model.clone()),
+                configuration: Some(serde_json::json!({ "compilers": ["cuda"] })),
+                target_configuration: None,
+                cache_directory: None,
+                workspace_scratch_directory: None,
+            })
+            .await
+            .unwrap();
+
+            let current_dir = std::env::current_dir().unwrap();
+            let outputs = factory
+                .0
+                .conda_outputs(CondaOutputsParams {
+                    channels: vec![],
+                    host_platform: platform,
+                    build_platform: platform,
+                    variant_configuration: None,
+                    variant_files: None,
+                    work_directory: current_dir,
+                })
+                .await
+                .unwrap();
+
+            assert_eq!(
+                outputs.outputs[0].metadata.variant.get("cuda_compiler"),
+                Some(&VariantValue::from("cuda-nvcc")),
+                "On {platform} the default cuda_compiler variant should be cuda-nvcc",
+            );
+        }
     }
 
     #[tokio::test]
@@ -546,6 +638,9 @@ mod tests {
                 &HashSet::new(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -555,7 +650,10 @@ mod tests {
         let compiler_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
+                Item::Value(value) => value
+                    .as_template()
+                    .filter(|t| t.to_string().contains("compiler"))
+                    .map(|t| t.to_string()),
                 _ => None,
             })
             .collect();
@@ -602,6 +700,9 @@ mod tests {
                 &HashSet::default(),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -611,7 +712,10 @@ mod tests {
         let compiler_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("compiler") => Some(s.clone()),
+                Item::Value(value) => value
+                    .as_template()
+                    .filter(|t| t.to_string().contains("compiler"))
+                    .map(|t| t.to_string()),
                 _ => None,
             })
             .collect();
@@ -648,6 +752,9 @@ mod tests {
                 &HashSet::from_iter([NormalizedKey("c_stdlib".into())]),
                 vec![],
                 None,
+                None,
+                None,
+                None,
             )
             .await
             .expect("Failed to generate recipe");
@@ -657,7 +764,10 @@ mod tests {
         let stdlib_templates: Vec<String> = build_reqs
             .iter()
             .filter_map(|item| match item {
-                Item::Value(Value::Template(s)) if s.contains("stdlib") => Some(s.clone()),
+                Item::Value(value) => value
+                    .as_template()
+                    .filter(|t| t.to_string().contains("stdlib"))
+                    .map(|t| t.to_string()),
                 _ => None,
             })
             .collect();

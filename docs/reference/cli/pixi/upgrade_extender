@@ -35,6 +35,6 @@ pixi upgrade --dry-run # (7)!
 4. This will upgrade the `numpy` package to the latest version in the manifest file at the given path.
 5. This will upgrade the `python` package in the `lint` feature.
 6. This will upgrade all packages and output the result in JSON format.
-7. This will show the packages that would be upgraded without actually upgrading them in the lockfile or manifest.
+7. This will show the packages that would be upgraded without actually upgrading them in the lock file or manifest.
 
 --8<-- [end:example]

@@ -66,7 +66,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 upload_time_utc_ms: None,
                 url: match repodata_record {
                     PixiRecord::Binary(repodata_record) => FileLocation::AbsoluteUrl(
-                        UrlString::from(DisplaySafeUrl::from(repodata_record.url.clone())),
+                        UrlString::from(DisplaySafeUrl::from_url(repodata_record.url.clone())),
                     ),
                     PixiRecord::Source(_source) => {
                         // TODO(baszalmstra): Does this matter??
@@ -83,7 +83,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 version: version.parse().expect("could not convert to pypi version"),
                 file: Box::new(file),
                 index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                    DisplaySafeUrl::from(consts::DEFAULT_PYPI_INDEX_URL.clone()),
+                    DisplaySafeUrl::from_url(consts::DEFAULT_PYPI_INDEX_URL.clone()),
                 ))),
                 wheels: vec![],
                 ext: SourceDistExtension::TarGz,
@@ -156,9 +156,13 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
             .left_future();
         }
 
-        // Otherwise just call the default implementation
+        // Otherwise just call the default implementation. Box the fallback
+        // future so the recursive uv build path (which can re-enter the
+        // resolver to fetch build dependencies) heaps its state machine
+        // instead of inlining it into the parent's stack frame.
         self.fallback
             .get_or_build_wheel_metadata(dist)
+            .boxed_local()
             .right_future()
     }
 

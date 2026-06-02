@@ -64,7 +64,7 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
         .feature
         .map_or_else(FeatureName::default, FeatureName::from);
 
-    // Add the platforms to the lock-file
+    // Add the platforms to the lock file
     let mut workspace = workspace.modify()?;
     workspace
         .manifest()

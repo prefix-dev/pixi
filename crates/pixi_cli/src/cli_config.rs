@@ -28,21 +28,28 @@ use pixi_pypi_spec::PypiPackageName;
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[arg(long, short, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[arg(long, short, global = true, conflicts_with = "workspace", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 
     /// Backend override for testing purposes. This field is ignored by clap
     /// and should only be set programmatically in tests.
     #[clap(skip)]
     pub backend_override: Option<BackendOverride>,
+
+    /// Name of the workspace
+    #[arg(long, short = 'w', global = true, conflicts_with = "manifest_path", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    pub workspace: Option<String>,
 }
 
 impl WorkspaceConfig {
     /// Returns the start location when trying to discover a workspace.
     pub fn workspace_locator_start(&self) -> DiscoveryStart {
-        match &self.manifest_path {
-            Some(path) => DiscoveryStart::ExplicitManifest(path.clone()),
-            None => DiscoveryStart::CurrentDir,
+        if let Some(manifest_path) = &self.manifest_path {
+            DiscoveryStart::ExplicitManifest(manifest_path.clone())
+        } else if let Some(workspace) = &self.workspace {
+            DiscoveryStart::WorkspaceRegistry(workspace.clone())
+        } else {
+            DiscoveryStart::CurrentDir
         }
     }
 }
@@ -107,9 +114,9 @@ impl ChannelsConfig {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUpdateConfig {
-    /// DEPRECATED: use `--frozen` `--no-install`. Skips lock-file updates
+    /// DEPRECATED: use `--frozen` `--no-install`. Skips lock file updates
     #[clap(hide = true, long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
-    pub no_lockfile_update: bool,
+    pub no_lock_file_update: bool,
 
     /// Lock file usage from the CLI
     #[clap(flatten)]
@@ -119,9 +126,9 @@ pub struct LockFileUpdateConfig {
 impl LockFileUpdateConfig {
     pub fn lock_file_usage(&self) -> miette::Result<LockFileUsage> {
         // Error on deprecated flag usage
-        if self.no_lockfile_update {
+        if self.no_lock_file_update {
             return Err(miette::miette!(
-                help = "Use '--frozen' to skip lock-file updates.\nUse '--no-install' to skip installation.",
+                help = "Use '--frozen' to skip lock file updates.\nUse '--no-install' to skip installation.",
                 "The '--no-lockfile-update' flag has been deprecated due to inconsistent behavior across commands. This flag will be removed in a future version."
             ));
         }
@@ -133,8 +140,8 @@ impl LockFileUpdateConfig {
 /// Configuration for skipping installation
 #[derive(Parser, Debug, Default, Clone)]
 pub struct NoInstallConfig {
-    /// Don't modify the environment, only modify the lock-file.
-    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    /// Don't modify the environment, only modify the lock file.
+    #[arg(long, env = "PIXI_NO_INSTALL", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
 }
 

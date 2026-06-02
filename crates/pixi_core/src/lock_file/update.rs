@@ -1,6 +1,6 @@
 use std::{
     cmp::PartialEq,
-    collections::{BTreeMap, HashMap, HashSet, hash_map::Entry},
+    collections::{BTreeMap, HashMap, HashSet},
     future::{Future, ready},
     iter,
     path::PathBuf,
@@ -10,58 +10,67 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::lock_file::{
+    LockedPypiRecord,
+    records_by_name::{HasNameVersion, LockedPypiRecordsByName},
+};
 use barrier_cell::BarrierCell;
 use dashmap::DashMap;
 use fancy_display::FancyDisplay;
-use futures::{FutureExt, StreamExt, TryFutureExt, stream::FuturesUnordered};
+use futures::{FutureExt, StreamExt, TryFutureExt};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
+use ordermap::{OrderMap, OrderSet};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PixiEnvironmentSpec,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    ComputeResultExt, EnvironmentFingerprint, EnvironmentRef, EnvironmentSpec,
     SolvePixiEnvironmentError,
+    executor::CancellationAwareFutures,
+    keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
-    PyPIUpdateConfig,
+    PyPIUpdateConfig, derive_link_mode,
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_record::{LockFileResolver, ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
-    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
-    to_uv_normalize,
+    ConversionError, to_exclude_newer, to_extra_name, to_marker_environment, to_normalize,
+    to_uv_extra_name, to_uv_normalize,
 };
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
-use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
+use rattler_lock::{LockFile, LockedPackage, ParseCondaLockError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
+use uv_install_wheel::LinkMode;
 use uv_normalize::ExtraName;
 
 use super::{
     CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName,
-    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
+    UnresolvedPixiRecordsByName, outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
 };
 use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
     environment::{
         CondaPrefixUpdated, EnvironmentFile, InstallFilter, LockFileUsage, LockedEnvironmentHash,
-        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
-        read_environment_file, write_environment_file,
+        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, read_environment_file,
+        write_environment_file,
     },
     lock_file::{
-        self, PypiRecord, reporter::SolveProgressBar,
+        self, reporter::SolveProgressBar,
         virtual_packages::validate_system_meets_environment_requirements,
     },
     workspace::{
@@ -72,19 +81,19 @@ use crate::{
     },
 };
 
-/// Result of loading a lock-file from disk
+/// Result of loading a lock file from disk
 #[derive(Debug)]
 pub enum LockFileLoadResult {
-    /// The lock-file was successfully loaded
+    /// The lock file was successfully loaded
     Loaded(LockFile),
-    /// The lock-file version is newer than what is supported
+    /// The lock file version is newer than what is supported
     VersionMismatch {
         lock_file_version: u64,
         max_supported_version: rattler_lock::FileFormatVersion,
     },
 }
 
-/// Warning for when a lock-file version is newer than supported
+/// Warning for when a lock file version is newer than supported
 #[derive(Debug, Error, Diagnostic)]
 #[error("Lock-file version {lock_file_version} is newer than supported")]
 #[diagnostic(severity(Warning))]
@@ -94,7 +103,7 @@ struct LockFileVersionMismatchWarning {
     help_message: String,
 }
 
-/// Error for when a lock-file version is newer than supported and cannot continue
+/// Error for when a lock file version is newer than supported and cannot continue
 #[derive(Debug, Error, Diagnostic)]
 #[error("Lock-file version {lock_file_version} is newer than supported")]
 struct LockFileVersionMismatchError {
@@ -104,9 +113,9 @@ struct LockFileVersionMismatchError {
 }
 
 impl LockFileLoadResult {
-    /// Extract the lock-file, treating version mismatch as an error.
+    /// Extract the lock file, treating version mismatch as an error.
     ///
-    /// Use this in tests and places where lock-file integrity is critical.
+    /// Use this in tests and places where lock file integrity is critical.
     /// This ensures that version mismatches are caught and reported as errors.
     pub fn into_lock_file(self) -> miette::Result<LockFile> {
         match self {
@@ -137,12 +146,12 @@ impl LockFileLoadResult {
         }
     }
 
-    /// Extract the lock-file, treating version mismatch as missing (empty lock-file).
+    /// Extract the lock file, treating version mismatch as missing (empty lock file).
     ///
     /// Use this in CLI code where we want to continue gracefully when encountering
-    /// a newer lock-file version without displaying a warning. The version mismatch
+    /// a newer lock file version without displaying a warning. The version mismatch
     /// should be reported elsewhere (e.g., in `update_lock_file()` or a prior load).
-    /// This allows the operation to continue by treating the incompatible lock-file
+    /// This allows the operation to continue by treating the incompatible lock file
     /// as if it doesn't exist.
     pub fn into_lock_file_or_empty(self) -> LockFile {
         match self {
@@ -156,12 +165,12 @@ impl LockFileLoadResult {
         matches!(self, Self::VersionMismatch { .. })
     }
 
-    /// Extract the lock-file, displaying a warning for version mismatches and treating them as missing.
+    /// Extract the lock file, displaying a warning for version mismatches and treating them as missing.
     ///
     /// This method:
-    /// - Returns the loaded lock-file if successful
+    /// - Returns the loaded lock file if successful
     /// - Displays a prominent warning if version is incompatible
-    /// - Returns an empty lock-file (treating it as missing) to allow graceful continuation
+    /// - Returns an empty lock file (treating it as missing) to allow graceful continuation
     ///
     /// Use this in CLI code where version mismatches should be warned about but shouldn't
     /// stop execution (unless --locked or --frozen is set, which is handled elsewhere).
@@ -181,7 +190,7 @@ impl LockFileLoadResult {
 
                 let help_message = format!(
                     "Maximum supported version: {} (pixi v{})\n\
-                     The lock-file will be treated as missing and regenerated.\n\
+                     The lock file will be treated as missing and regenerated.\n\
                      {}",
                     max_supported_version,
                     consts::PIXI_VERSION,
@@ -195,7 +204,7 @@ impl LockFileLoadResult {
 
                 eprintln!("{:?}", miette::Report::new(warning));
 
-                // Treat as missing lock-file (same as if it doesn't exist)
+                // Treat as missing lock file (same as if it doesn't exist)
                 LockFile::default()
             }
         }
@@ -203,20 +212,21 @@ impl LockFileLoadResult {
 }
 
 impl Workspace {
-    /// Ensures that the lock-file is up-to-date with the project.
+    /// Ensures that the lock file is up-to-date with the project.
     ///
     /// This function will return a `LockFileDerivedData` struct that contains
-    /// the lock-file and any potential derived data that was computed as
+    /// the lock file and any potential derived data that was computed as
     /// part of this function. The derived data might be usable by other
     /// functions to avoid recomputing the same data.
     ///
-    /// This function starts by checking if the lock-file is up-to-date. If it
+    /// This function starts by checking if the lock file is up-to-date. If it
     /// is not up-to-date it will construct a task graph of all the work
-    /// that needs to be done to update the lock-file. The tasks are awaited
+    /// that needs to be done to update the lock file. The tasks are awaited
     /// in a specific order to make sure that we can start instantiating
     /// prefixes as soon as possible.
     pub async fn update_lock_file(
         &self,
+        progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
         options: UpdateLockFileOptions,
     ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
         let lock_file_result = self.load_lock_file().await?;
@@ -240,7 +250,7 @@ impl Workspace {
 
                 let help_message = format!(
                     "Maximum supported version: {} (pixi v{})\n\
-                         Cannot continue with --locked or --frozen mode as the lock-file cannot be read.\n\
+                         Cannot continue with --locked or --frozen mode as the lock file cannot be read.\n\
                          {}",
                     max_supported_version,
                     consts::PIXI_VERSION,
@@ -255,91 +265,126 @@ impl Workspace {
             }
         }
 
-        // Load the lock-file, displaying warning if there's a version mismatch
+        // Load the lock file, displaying warning if there's a version mismatch
         let lock_file = lock_file_result.into_lock_file_or_empty_with_warning();
+
+        let needs_format_upgrade = lock_file.version() < rattler_lock::FileFormatVersion::LATEST;
 
         let glob_hash_cache = GlobHashCache::default();
 
-        // Construct a command dispatcher that will be used to run the tasks.
-        let multi_progress = global_multi_progress();
-        let anchor_pb = multi_progress.add(ProgressBar::hidden());
-        let command_dispatcher = self
-            .command_dispatcher_builder()?
-            .with_reporter(pixi_reporters::TopLevelProgress::new(
-                global_multi_progress(),
-                anchor_pb,
-            ))
-            .finish();
+        // Construct a command dispatcher to run the tasks.
+        let mut builder = self.command_dispatcher_builder()?;
+        if let Some(progress) = progress {
+            builder = progress.register_with(builder);
+        }
+        let command_dispatcher = builder.finish();
 
         // Get the package cache from the dispatcher.
         let package_cache = command_dispatcher.package_cache().clone();
 
-        // should we check the lock-file in the first place?
-        if !options.lock_file_usage.should_check_if_out_of_date() {
-            tracing::info!("skipping check if lock-file is up-to-date");
+        // Stage the input lock file into a derived-data wrapper so that
+        // every downstream consumer shares one lazily-built resolver.
+        let mut derived = LockFileDerivedData::from_input_lock_file(
+            self,
+            lock_file,
+            package_cache,
+            command_dispatcher.clone(),
+            glob_hash_cache,
+        );
 
-            return Ok((
-                LockFileDerivedData {
-                    workspace: self,
-                    lock_file,
-                    package_cache,
-                    updated_conda_prefixes: Default::default(),
-                    updated_pypi_prefixes: Default::default(),
-                    uv_context: Default::default(),
-                    io_concurrency_limit: IoConcurrencyLimit::default(),
-                    command_dispatcher,
-                    glob_hash_cache,
-                },
-                false,
-            ));
+        // should we check the lock file in the first place?
+        if !options.lock_file_usage.should_check_if_out_of_date() {
+            tracing::info!("skipping check if lock file is up-to-date");
+            return Ok((derived, false));
         }
 
         // Check which environments are out of date.
-        let outdated = OutdatedEnvironments::from_workspace_and_lock_file(
+        let resolver = derived.resolver()?;
+        let mut outdated = OutdatedEnvironments::from_workspace_and_lock_file(
             self,
             command_dispatcher.clone(),
-            &lock_file,
+            &derived.lock_file,
+            &resolver,
         )
         .await;
-        if outdated.is_empty() {
-            tracing::info!("the lock-file is up-to-date");
+        if outdated.is_empty() && !(needs_format_upgrade && options.upgrade_lock_file_format) {
+            if needs_format_upgrade {
+                tracing::warn!(
+                    "the lock file is up-to-date but uses an older format (v{}), \
+                     run `pixi lock` to upgrade to v{} for improved reproducibility",
+                    derived.lock_file.version(),
+                    rattler_lock::FileFormatVersion::LATEST,
+                );
+            } else {
+                tracing::info!("the lock file is up-to-date");
+            }
 
-            // If no-environment is outdated we can return early.
-            return Ok((
-                LockFileDerivedData {
-                    workspace: self,
-                    lock_file,
-                    package_cache,
-                    updated_conda_prefixes: Default::default(),
-                    updated_pypi_prefixes: Default::default(),
-                    uv_context: Default::default(),
-                    io_concurrency_limit: IoConcurrencyLimit::default(),
-                    command_dispatcher,
-                    glob_hash_cache,
-                },
-                false,
-            ));
+            // If no-environment is outdated we can return early. Pass the
+            // build_caches even if empty, in case conda_prefix needs them.
+            derived.uv_context = outdated.uv_context;
+            derived.build_caches = outdated.build_caches;
+            return Ok((derived, false));
         }
 
-        // If the lock-file is out of date, but we're not allowed to update it, we
+        // Force a re-solve of every environment when upgrading the lock
+        // file format so source records gain the v7 fields (timestamps,
+        // build / host packages) that v6 didn't store. The locked records
+        // ride along as solver hints (`locked_group_records` on both the
+        // conda and pypi solve paths), so the re-solve is a no-op for
+        // anything that was already pinned. Both maps must be touched:
+        // skipping `pypi` makes the extract task fill the env's pypi cell
+        // with `Arc::default()`, which then wins over the locked-file
+        // fallback in `take_latest_pypi_records` and silently strips
+        // every pypi entry on the upgrade.
+        if needs_format_upgrade && options.upgrade_lock_file_format {
+            tracing::warn!(
+                "the lock file is up-to-date but uses an older format (v{}), \
+                 re-solving all environments using locked content to upgrade to v{}",
+                derived.lock_file.version(),
+                rattler_lock::FileFormatVersion::LATEST,
+            );
+            for env in self.environments() {
+                let platforms = env.platforms();
+                outdated
+                    .conda
+                    .entry(env.clone())
+                    .or_default()
+                    .extend(platforms.iter().copied());
+                outdated
+                    .pypi
+                    .entry(env.clone())
+                    .or_default()
+                    .extend(platforms);
+            }
+        }
+
+        // If the lock file is out of date, but we're not allowed to update it, we
         // should exit.
         if !options.lock_file_usage.allow_updates() {
-            miette::bail!("lock-file not up-to-date with the workspace");
+            miette::bail!("lock file not up-to-date with the workspace");
         }
 
+        let LockFileDerivedData {
+            lock_file,
+            package_cache,
+            glob_hash_cache,
+            ..
+        } = derived;
+
         // Construct an update context and perform the actual update.
-        let lock_file_derived_data = UpdateContext::builder(self, Some(command_dispatcher))?
+        let lock_file_derived_data = UpdateContext::builder(self, command_dispatcher)?
             .with_package_cache(package_cache)
             .with_no_install(options.no_install)
             .with_outdated_environments(outdated)
             .with_lock_file(lock_file)
             .with_glob_hash_cache(glob_hash_cache)
+            .with_resolver(resolver)
             .finish()
             .await?
             .update()
             .await?;
 
-        // Write the lock-file to disk
+        // Write the lock file to disk
 
         if options.lock_file_usage != LockFileUsage::DryRun {
             lock_file_derived_data.write_to_disk()?;
@@ -348,12 +393,12 @@ impl Workspace {
         Ok((lock_file_derived_data, true))
     }
 
-    /// Loads the lockfile for the workspace or returns an appropriate enum variant.
+    /// Loads the lock file for the workspace or returns an appropriate enum variant.
     ///
     /// Returns:
-    /// - `LockFileLoadResult::Loaded(lock_file)` if the lock-file was successfully loaded
-    /// - `LockFileLoadResult::VersionMismatch` if the lock-file version is newer than supported
-    /// - If no lock-file exists, returns `LockFileLoadResult::Loaded(LockFile::default())`
+    /// - `LockFileLoadResult::Loaded(lock_file)` if the lock file was successfully loaded
+    /// - `LockFileLoadResult::VersionMismatch` if the lock file version is newer than supported
+    /// - If no lock file exists, returns `LockFileLoadResult::Loaded(LockFile::default())`
     ///
     /// Use the enum's methods to handle the result:
     /// - `.into_lock_file()` - errors on version mismatch (for tests)
@@ -393,9 +438,9 @@ impl Workspace {
 
 #[derive(Debug, Error, Diagnostic)]
 enum UpdateError {
-    #[error("the lockfile is not up-to-date with requested environment: '{}'", .0.fancy_display())]
+    #[error("the lock file is not up-to-date with requested environment: '{}'", .0.fancy_display())]
     LockFileMissingEnv(EnvironmentName),
-    #[error("some information from the lockfile could not be parsed")]
+    #[error("some information from the lock file could not be parsed")]
     ParseLockFileError(#[from] ParseLockFileError),
 }
 
@@ -407,7 +452,7 @@ pub enum SolveCondaEnvironmentError {
         platform: Platform,
         #[source]
         #[diagnostic_source]
-        source: Box<CommandDispatcherError<SolvePixiEnvironmentError>>,
+        source: Box<SolvePixiEnvironmentError>,
     },
 
     #[error(
@@ -422,28 +467,32 @@ pub enum SolveCondaEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Variants(#[from] VariantsError),
+
+    #[error(
+        "source specifications are not supported in the `[constraints]` table, but a source constraint was found for '{0}'"
+    )]
+    SourceConstraintNotSupported(String),
 }
 
-impl SolveCondaEnvironmentError {
-    /// Returns true if this error is due to cancellation (e.g., a sibling
-    /// platform solve failed and this one was cancelled as a result).
-    fn is_cancelled(&self) -> bool {
-        matches!(
-            self,
-            Self::SolveFailed { source, .. }
-                if matches!(source.as_ref(), CommandDispatcherError::Cancelled)
-        )
+impl From<ParseChannelError> for SolveCondaEnvironmentError {
+    fn from(value: ParseChannelError) -> Self {
+        SolveCondaEnvironmentError::ParseChannels(Box::new(value))
     }
 }
 
 /// Options to pass to [`Workspace::update_lock_file`].
 #[derive(Default)]
 pub struct UpdateLockFileOptions {
-    /// Defines what to do if the lock-file is out of date
+    /// Defines what to do if the lock file is out of date
     pub lock_file_usage: LockFileUsage,
 
     /// Don't install anything to disk.
     pub no_install: bool,
+
+    /// If true, rewrite the lock file to the latest format version even when
+    /// its content is already up-to-date. Set by `pixi lock`, `pixi update`,
+    /// and `pixi upgrade`.
+    pub upgrade_lock_file_format: bool,
 
     /// The maximum number of concurrent solves that are allowed to run. If this
     /// value is None a heuristic is used based on the number of cores
@@ -467,12 +516,36 @@ pub enum ReinstallEnvironment {
     Some(HashSet<String>),
 }
 
-/// A struct that holds the lock-file and any potential derived data that was
+/// The result of a successful prefix update: the prefix that was
+/// produced plus the content fingerprint of every record installed
+/// into it (see [`pixi_command_dispatcher::EnvironmentFingerprint`]).
+///
+/// The fingerprint is `None` for code paths that don't run a fresh
+/// install whose fingerprint represents the full prefix state — most
+/// notably a filtered install (`InstallFilter::filter_active()`),
+/// where only a subset of packages is touched and the fingerprint
+/// would mislead any downstream cache that key on "what's currently
+/// in this prefix".
+///
+/// Threaded out of `InstallPixiEnvironmentResult::installed_fingerprint`
+/// via [`CondaPrefixUpdated::installed_fingerprint`]. Persisted to a
+/// standalone marker file under the prefix by
+/// [`LockFileDerivedData::prefix`] so it survives across processes.
+#[derive(Clone)]
+pub struct UpdatedPrefix {
+    /// The prefix that was produced.
+    pub prefix: Prefix,
+    /// Content fingerprint of every record installed into the prefix,
+    /// or `None` (see struct-level docs).
+    pub installed_fingerprint: Option<EnvironmentFingerprint>,
+}
+
+/// A struct that holds the lock file and any potential derived data that was
 /// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
     pub workspace: &'p Workspace,
 
-    /// The lock-file
+    /// The lock file
     ///
     /// Prefer to use `as_lock_file` or `into_lock_file` to also make a decision
     /// what to do with the resources used to create this instance.
@@ -483,11 +556,12 @@ pub struct LockFileDerivedData<'p> {
 
     /// A list of prefixes that are up-to-date with the latest conda packages.
     pub updated_conda_prefixes:
-        DashMap<EnvironmentName, Arc<async_once_cell::OnceCell<(Prefix, PythonStatus)>>>,
+        DashMap<EnvironmentName, Arc<async_once_cell::OnceCell<CondaPrefixUpdated>>>,
 
     /// A list of prefixes that have been updated while resolving all
-    /// dependencies.
-    pub updated_pypi_prefixes: DashMap<EnvironmentName, Arc<async_once_cell::OnceCell<Prefix>>>,
+    /// dependencies. See [`UpdatedPrefix`] for the cached value.
+    pub updated_pypi_prefixes:
+        DashMap<EnvironmentName, Arc<async_once_cell::OnceCell<UpdatedPrefix>>>,
 
     /// The cached uv context
     pub uv_context: once_cell::sync::OnceCell<UvResolutionContext>,
@@ -500,6 +574,17 @@ pub struct LockFileDerivedData<'p> {
 
     /// An object that caches input hashes
     pub glob_hash_cache: GlobHashCache,
+
+    /// Per-environment-platform build caches for sharing resources (CondaPrefixUpdater, etc.)
+    pub build_caches: HashMap<
+        lock_file::outdated::BuildCacheKey,
+        Arc<lock_file::outdated::PypiEnvironmentBuildCache>,
+    >,
+
+    /// Lazily-built resolver for `lock_file`. Built once on first access to
+    /// [`Self::resolver`] and reused across all downstream consumers. Kept
+    /// private so all interaction goes through the accessor method.
+    resolver: once_cell::sync::OnceCell<Arc<LockFileResolver>>,
 }
 
 /// The mode to use when updating a prefix.
@@ -511,28 +596,75 @@ pub enum UpdateMode {
     /// activating commands. Like `pixi shell` or `pixi run`.
     QuickValidate,
     /// Force a prefix install without running the short validation.
-    /// Used for updating the prefix when the lock-file likely out of date.
+    /// Used for updating the prefix when the lock file likely out of date.
     /// Like `pixi install` or `pixi update`.
     Revalidate,
 }
 
 impl<'p> LockFileDerivedData<'p> {
-    /// Write the lock-file to disk.
+    /// Construct a derived-data wrapper whose runtime state is empty. Intended
+    /// for the start of an update flow or any caller that needs the lazy
+    /// resolver cache but has no prefixes, caches, or solved records yet.
+    pub fn from_input_lock_file(
+        workspace: &'p Workspace,
+        lock_file: LockFile,
+        package_cache: PackageCache,
+        command_dispatcher: CommandDispatcher,
+        glob_hash_cache: GlobHashCache,
+    ) -> Self {
+        Self {
+            workspace,
+            lock_file,
+            package_cache,
+            updated_conda_prefixes: Default::default(),
+            updated_pypi_prefixes: Default::default(),
+            uv_context: Default::default(),
+            io_concurrency_limit: IoConcurrencyLimit::default(),
+            command_dispatcher,
+            glob_hash_cache,
+            build_caches: Default::default(),
+            resolver: Default::default(),
+        }
+    }
+
+    /// Returns a resolver for the current lock file, building it on first
+    /// access and caching the result.
+    pub fn resolver(&self) -> miette::Result<Arc<LockFileResolver>> {
+        self.resolver
+            .get_or_try_init(|| {
+                LockFileResolver::build(&self.lock_file, self.workspace.root())
+                    .map(Arc::new)
+                    .into_diagnostic()
+            })
+            .cloned()
+    }
+
+    /// Seeds the resolver cache with a pre-built `Arc`, but only if the
+    /// cache is still empty. Used inside the update flow to forward a
+    /// resolver that was already built for the same lock file, so later
+    /// `self.resolver()` calls return the same `Arc` without rebuilding.
+    ///
+    /// No-op if the cache already holds a value.
+    fn seed_resolver(&self, resolver: Arc<LockFileResolver>) {
+        let _ = self.resolver.set(resolver);
+    }
+
+    /// Write the lock file to disk.
     pub fn write_to_disk(&self) -> miette::Result<()> {
         let lock_file_path = self.workspace.lock_file_path();
         self.lock_file
             .to_path(&lock_file_path)
             .into_diagnostic()
-            .context("failed to write lock-file to disk")
+            .context("failed to write lock file to disk")
     }
 
     /// Consumes this instance, dropping any resources that are not needed
-    /// anymore to work with the lock-file.
+    /// anymore to work with the lock file.
     pub fn into_lock_file(self) -> LockFile {
         self.lock_file
     }
 
-    /// Returns a reference to the internal lock-file but does not consume any
+    /// Returns a reference to the internal lock file but does not consume any
     /// build resources, this is useful if you want to keep using the original
     /// instance.
     pub fn as_lock_file(&self) -> &LockFile {
@@ -571,7 +703,10 @@ impl<'p> LockFileDerivedData<'p> {
         }
 
         // Get the up-to-date prefix
-        let prefix = self
+        let UpdatedPrefix {
+            prefix,
+            installed_fingerprint,
+        } = self
             .update_prefix(environment, reinstall_packages, filter)
             .await?;
 
@@ -595,6 +730,46 @@ impl<'p> LockFileDerivedData<'p> {
             },
         )?;
 
+        // Persist the install fingerprint next to the prefix so the
+        // activation cache (and any other future "what is in the
+        // prefix" cache) can short-circuit on the next process. Best-
+        // effort: a write failure just costs the next activation one
+        // re-run.
+        if let Some(fp) = installed_fingerprint
+            && let Err(err) = fp.write(&environment.dir())
+        {
+            tracing::debug!(
+                "Failed to write install fingerprint marker for '{}': {err}",
+                environment.name().fancy_display()
+            );
+        }
+
+        // Reproducible-build hook: when SOURCE_DATE_EPOCH is set, clamp
+        // the mtime of every pixi-owned entry under `.pixi/` so repeated
+        // installs of the same workspace produce a bit-stable layout.
+        // No-op when the env var is unset. Best-effort: an error here is
+        // logged but doesn't fail the install.
+        if let Some(mtime) = pixi_utils::reproducible::reproducible_mtime() {
+            let pixi_dir = environment.workspace().pixi_dir();
+            let span = tracing::debug_span!(
+                "stamp_pixi_tree",
+                pixi_dir = %pixi_dir.display(),
+                mtime = ?mtime,
+            );
+            let _enter = span.enter();
+            let start = Instant::now();
+            let result = pixi_utils::reproducible::stamp_pixi_tree(&pixi_dir, mtime);
+            let elapsed = start.elapsed();
+            match result {
+                Ok(()) => tracing::debug!(?elapsed, "Stamped .pixi/ tree for reproducibility"),
+                Err(err) => tracing::warn!(
+                    ?elapsed,
+                    "Failed to apply SOURCE_DATE_EPOCH mtimes under {}: {err}",
+                    pixi_dir.display()
+                ),
+            }
+        }
+
         Ok(prefix)
     }
 
@@ -615,7 +790,9 @@ impl<'p> LockFileDerivedData<'p> {
             // If we contain source packages from conda or PyPI we update the prefix by
             // default
             let contains_conda_source_pkgs = self.lock_file.environments().any(|(_, env)| {
-                env.conda_packages(Platform::current())
+                self.lock_file
+                    .platform(&Platform::current().to_string())
+                    .and_then(|p| env.conda_packages(p))
                     .is_some_and(|mut packages| {
                         packages.any(|package| package.as_source().is_some())
                     })
@@ -652,7 +829,7 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
         reinstall_packages: &ReinstallPackages,
         filter: &InstallFilter,
-    ) -> miette::Result<Prefix> {
+    ) -> miette::Result<UpdatedPrefix> {
         let prefix_once_cell = self
             .updated_pypi_prefixes
             .entry(environment.name().clone())
@@ -681,7 +858,8 @@ impl<'p> LockFileDerivedData<'p> {
                     &filter.skip_direct,
                     &filter.target_packages,
                 );
-                let result = subset.filter(locked_env.packages(platform))?;
+                let lock_platform = self.lock_file.platform(&platform.to_string());
+                let result = subset.filter(lock_platform.and_then(|p| locked_env.packages(p)))?;
                 let packages = result.install;
                 let ignored = result.ignore;
 
@@ -692,12 +870,12 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let (ignored_conda, ignored_pypi): (HashSet<_>, HashSet<_>) =
                     ignored.into_iter().partition_map(|p| match p {
-                        LockedPackageRef::Conda(data) => Either::Left(data.record().name.clone()),
-                        LockedPackageRef::Pypi(data, _) => Either::Right(data.name.clone()),
+                        LockedPackage::Conda(data) => Either::Left(data.name().clone()),
+                        LockedPackage::Pypi(data) => Either::Right(data.name().clone()),
                     });
 
-                let pixi_records =
-                    locked_packages_to_pixi_records(conda_packages, self.workspace.root())?;
+                let resolver = self.resolver()?;
+                let pixi_records = locked_packages_to_unresolved_records(conda_packages, &resolver);
 
                 // Get the manifest's pypi dependencies for this environment to look up editability.
                 // The lock file always stores editable=false, so we apply the actual
@@ -706,11 +884,23 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let pypi_records = pypi_packages
                     .into_iter()
-                    .filter_map(LockedPackageRef::as_pypi)
-                    .map(|(data, env_data)| {
-                        let mut data = data.clone();
-                        data.editable = is_editable_from_manifest(&manifest_pypi_deps, &data.name);
-                        (data, env_data.clone())
+                    .filter_map(LockedPackage::as_pypi)
+                    .map(move |data| {
+                        let version = data
+                            .version()
+                            .cloned()
+                            .unwrap_or_else(|| pep440_rs::MIN_VERSION.clone());
+                        let locked = pixi_install_pypi::UnresolvedPypiRecord::from(data.clone())
+                            .lock(version);
+                        pixi_install_pypi::InstallablePypiRecord::from_locked(
+                            &locked,
+                            pixi_install_pypi::ManifestData {
+                                editable: is_editable_from_manifest(
+                                    &manifest_pypi_deps,
+                                    data.name(),
+                                ),
+                            },
+                        )
                     })
                     .collect::<Vec<_>>();
 
@@ -728,18 +918,34 @@ impl<'p> LockFileDerivedData<'p> {
                 };
 
                 // Get the prefix with the conda packages installed.
-                let (prefix, python_status) = self
+                let conda_result = self
                     .conda_prefix(environment, conda_reinstall_packages, Some(ignored_conda))
                     .await?;
+                let prefix = conda_result.prefix.clone();
+                let python_status = *conda_result.python_status.clone();
+                let installed_fingerprint = if filter.filter_active() {
+                    // A filtered install only touched a subset of
+                    // packages, so its fingerprint isn't representative
+                    // of the prefix's full state and would mislead the
+                    // activation cache. Surface `None` so callers
+                    // recompute / skip caching.
+                    None
+                } else {
+                    Some(conda_result.installed_fingerprint.clone())
+                };
+                let resolved_pixi_records = conda_result.into_pixi_records(pixi_records);
 
                 // No `uv` support for WASM right now
                 if platform.arch() == Some(Arch::Wasm32) {
-                    return Ok(prefix);
+                    return Ok(UpdatedPrefix {
+                        prefix,
+                        installed_fingerprint,
+                    });
                 }
 
                 let pypi_lock_file_names = pypi_records
                     .iter()
-                    .filter_map(|(data, _)| to_uv_normalize(&data.name).ok())
+                    .filter_map(|r| to_uv_normalize(&r.name).ok())
                     .collect::<HashSet<_>>();
 
                 // Figure out uv reinstall
@@ -759,7 +965,12 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let uv_context = self
                     .uv_context
-                    .get_or_try_init(|| UvResolutionContext::from_config(self.workspace.config()))?
+                    .get_or_try_init(|| {
+                        UvResolutionContext::from_config(
+                            self.workspace.config(),
+                            self.workspace.client()?.clone(),
+                        )
+                    })?
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
 
@@ -779,11 +990,11 @@ impl<'p> LockFileDerivedData<'p> {
                 {
                     let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
                     let index_strategy = environment.pypi_options().index_strategy.clone();
-                    let exclude_newer = environment.exclude_newer();
+                    let pypi_exclude_newer = environment.pypi_exclude_newer_config_resolved();
                     let skip_wheel_filename_check =
                         environment.pypi_options().skip_wheel_filename_check;
 
-                    let config = PyPIUpdateConfig {
+                    let pypi_update_config = PyPIUpdateConfig {
                         environment_name: environment.name(),
                         prefix: &prefix,
                         platform: environment.best_platform(),
@@ -791,13 +1002,19 @@ impl<'p> LockFileDerivedData<'p> {
                         system_requirements: &environment.system_requirements(),
                     };
 
+                    let workspace_config = self.workspace.config();
                     let build_config = PyPIBuildConfig {
                         no_build_isolation: &non_isolated_packages,
                         no_build: &no_build,
                         no_binary: &no_binary,
                         index_strategy: index_strategy.as_ref(),
-                        exclude_newer: exclude_newer.as_ref(),
+                        exclude_newer: &pypi_exclude_newer,
                         skip_wheel_filename_check,
+                        link_mode: Some(derive_link_mode(
+                            workspace_config.allow_symbolic_links,
+                            workspace_config.allow_hard_links,
+                            workspace_config.allow_ref_links,
+                        )),
                     };
 
                     let lazy_env_vars = LazyPixiEnvironmentVars {
@@ -815,9 +1032,9 @@ impl<'p> LockFileDerivedData<'p> {
                         .map(to_uv_normalize)
                         .collect::<Result<Vec<_>, _>>()
                         .into_diagnostic()?;
-                    PyPIEnvironmentUpdater::new(config, build_config, context_config)
+                    PyPIEnvironmentUpdater::new(pypi_update_config, build_config, context_config)
                         .with_ignored_extraneous(names)
-                        .update(&python_status, &pixi_records, &pypi_records)
+                        .update(&python_status, &resolved_pixi_records, &pypi_records)
                         .await
                 }
                 .with_context(|| {
@@ -833,7 +1050,10 @@ impl<'p> LockFileDerivedData<'p> {
                     start.elapsed()
                 );
 
-                Ok(prefix)
+                Ok(UpdatedPrefix {
+                    prefix,
+                    installed_fingerprint,
+                })
             })
             .await
             .cloned()
@@ -853,7 +1073,7 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
         reinstall_packages: Option<HashSet<PackageName>>,
         ignore_packages: Option<HashSet<PackageName>>,
-    ) -> miette::Result<(Prefix, PythonStatus)> {
+    ) -> miette::Result<CondaPrefixUpdated> {
         // If we previously updated this environment, early out.
         let prefix_once_cell = self
             .updated_conda_prefixes
@@ -865,42 +1085,82 @@ impl<'p> LockFileDerivedData<'p> {
                 // Create object to update the prefix
                 let group = GroupedEnvironment::Environment(environment.clone());
                 let platform = environment.best_platform();
-                let virtual_packages = environment.virtual_packages(platform);
 
-                let conda_prefix_updater = CondaPrefixUpdater::builder(
-                    group,
-                    platform,
-                    virtual_packages
-                        .into_iter()
-                        .map(GenericVirtualPackage::from)
-                        .collect(),
-                    self.command_dispatcher.clone(),
-                )
-                .finish()?;
+                // Use cached conda_prefix_updater if available, otherwise create new
+                let cache_key =
+                    lock_file::outdated::BuildCacheKey::new(environment.name().clone(), platform);
+                let conda_prefix_updater = match self
+                    .build_caches
+                    .get(&cache_key)
+                    .and_then(|c| c.conda_prefix_updater.get().cloned())
+                {
+                    Some(updater) => updater,
+                    None => {
+                        let virtual_packages = environment.virtual_packages(platform);
 
-                // Get the locked environment from the lock-file.
+                        CondaPrefixUpdater::builder(
+                            group,
+                            platform,
+                            virtual_packages
+                                .into_iter()
+                                .map(GenericVirtualPackage::from)
+                                .collect(),
+                            self.command_dispatcher.clone(),
+                        )
+                        .finish()?
+                    }
+                };
+
+                // Get the locked environment from the lock file.
                 let locked_env = self.locked_env(environment)?;
-                let packages = locked_env.packages(platform);
+                let lock_platform = self.lock_file.platform(&platform.to_string());
+                let packages = lock_platform.and_then(|p| locked_env.packages(p));
                 let packages = if let Some(iter) = packages {
                     iter.collect_vec()
                 } else {
                     Vec::new()
                 };
-                let records = locked_packages_to_pixi_records(packages, self.workspace.root())?;
+                // Convert locked packages to unresolved records. Partial
+                // source records are NOT resolved here — they are passed
+                // directly to the installer which builds them using
+                // variant-based output matching.
+                let resolver = self.resolver()?;
+                let mut records = locked_packages_to_unresolved_records(packages, &resolver);
+
+                // Reify pre-v7 source envs in the records before
+                // handing them to install. Pre-v7 lock files don't
+                // store the resolved build/host packages of source
+                // records, so the install pipeline (which reads those
+                // slices directly off each record) would otherwise see
+                // empty envs and skip building. v7+ lock files no-op
+                // this. The platform setup is allocated through the
+                // shared helper so it produces the same
+                // `WorkspaceEnvRef` satisfiability allocated for this
+                // environment in the same process, hitting the
+                // in-memory `LegacySourceEnvKey` cache.
+                let setup = lock_file::platform_setup::build_platform_setup(
+                    environment,
+                    platform,
+                    &self.command_dispatcher,
+                )
+                .into_diagnostic()?;
+                lock_file::satisfiability::legacy::reify_legacy_source_envs(
+                    &self.command_dispatcher,
+                    &mut records,
+                    self.lock_file.version(),
+                    &setup.workspace_env_ref,
+                )
+                .await
+                .into_diagnostic()?;
 
                 // Update the conda prefix
-                let CondaPrefixUpdated {
-                    prefix,
-                    python_status,
-                    ..
-                } = conda_prefix_updater
+                conda_prefix_updater
                     .update(records, reinstall_packages, ignore_packages)
-                    .await?;
-
-                Ok((prefix.clone(), *python_status.clone()))
+                    .await
+                    .cloned()
             })
             .await
-            .map(|(prefix, python_status)| (prefix.clone(), python_status.clone()))
+            .cloned()
     }
 }
 
@@ -930,7 +1190,7 @@ impl LazyEnvironmentVariables for LazyPixiEnvironmentVars<'_> {
     }
 }
 
-/// The result of applying an InstallFilter over the lockfile for a given
+/// The result of applying an InstallFilter over the lock file for a given
 /// environment, expressed as just package names.
 #[derive(Default)]
 pub struct PackageFilterNames {
@@ -950,9 +1210,12 @@ impl PackageFilterNames {
             &filter.skip_direct,
             &filter.target_packages,
         );
-        let filtered = subset.filter(environment.packages(platform)).ok()?;
+        let lock_platform = environment.lock_file().platform(&platform.to_string());
+        let filtered = subset
+            .filter(lock_platform.and_then(|p| environment.packages(p)))
+            .ok()?;
 
-        // Map to names, dedupe and sort for stable output.
+        // Map to names, deduplicate and sort for stable output.
         let retained = filtered
             .install
             .into_iter()
@@ -972,38 +1235,42 @@ impl PackageFilterNames {
     }
 }
 
-fn locked_packages_to_pixi_records(
-    conda_packages: Vec<LockedPackageRef<'_>>,
-    workspace_root: &std::path::Path,
-) -> Result<Vec<PixiRecord>, Report> {
-    let pixi_records = conda_packages
+fn locked_packages_to_unresolved_records(
+    conda_packages: Vec<&'_ LockedPackage>,
+    resolver: &LockFileResolver,
+) -> Vec<UnresolvedPixiRecord> {
+    conda_packages
         .into_iter()
-        .filter_map(LockedPackageRef::as_conda)
-        .cloned()
-        .map(|data| PixiRecord::from_conda_package_data(data, workspace_root))
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-    Ok(pixi_records)
+        .filter_map(|pkg| resolver.get_for_package(pkg))
+        .collect()
 }
 
 pub struct UpdateContext<'p> {
     project: &'p Workspace,
 
-    /// Repodata records from the lock-file. This contains the records that
-    /// actually exist in the lock-file. If the lock-file is missing or
+    /// Repodata records from the lock file. This contains the records that
+    /// actually exist in the lock file. If the lock file is missing or
     /// partially missing then the data also won't exist in this field.
-    locked_repodata_records: PerEnvironmentAndPlatform<'p, Arc<PixiRecordsByName>>,
+    ///
+    /// Records may be unresolved (partial source records from mutable path
+    /// sources). They are resolved lazily only when needed.
+    locked_repodata_records: PerEnvironmentAndPlatform<'p, Arc<UnresolvedPixiRecordsByName>>,
 
-    /// Repodata records from the lock-file grouped by solve-group.
-    locked_grouped_repodata_records: PerGroupAndPlatform<'p, Arc<PixiRecordsByName>>,
+    /// Repodata records from the lock file grouped by solve-group.
+    locked_grouped_repodata_records: PerGroupAndPlatform<'p, Arc<UnresolvedPixiRecordsByName>>,
 
-    /// Pypi  records from the lock-file grouped by solve-group.
+    /// Pypi  records from the lock file grouped by solve-group.
     locked_grouped_pypi_records: PerGroupAndPlatform<'p, Arc<PypiRecordsByName>>,
 
-    /// Repodata records from the lock-file. This contains the records that
-    /// actually exist in the lock-file. If the lock-file is missing or
+    /// Repodata records from the lock file. This contains the records that
+    /// actually exist in the lock file. If the lock file is missing or
     /// partially missing then the data also won't exist in this field.
     locked_pypi_records: PerEnvironmentAndPlatform<'p, Arc<PypiRecordsByName>>,
+
+    /// Locked pypi records with metadata, resolved during the satisfiability
+    /// check. These have correct versions for source packages (read from the
+    /// source tree) and are preferred over `locked_pypi_records` when available.
+    pre_resolved_pypi_records: HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
 
     /// Information about environments that are considered out of date. Only
     /// these environments are updated.
@@ -1021,23 +1288,22 @@ pub struct UpdateContext<'p> {
     /// Keeps track of all pending prefix updates. This only tracks the conda
     /// updates to a prefix, not whether the pypi packages have also been
     /// updated.
-    instantiated_conda_prefixes: PerGroup<'p, Arc<BarrierCell<(Prefix, PythonStatus)>>>,
+    instantiated_conda_prefixes: PerGroup<'p, Arc<BarrierCell<CondaPrefixUpdated>>>,
 
     /// Keeps track of all pending conda targets that are being solved. The
     /// mapping contains a [`BarrierCell`] that will eventually contain the
     /// solved records computed by another task. This allows tasks to wait
     /// for the records to be solved before proceeding.
-    solved_pypi_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<PypiRecordsByName>>>,
+    solved_pypi_records: PerEnvironmentAndPlatform<'p, Arc<BarrierCell<LockedPypiRecordsByName>>>,
 
     /// Keeps track of all pending grouped pypi targets that are being solved.
-    grouped_solved_pypi_records: PerGroupAndPlatform<'p, Arc<BarrierCell<PypiRecordsByName>>>,
+    grouped_solved_pypi_records: PerGroupAndPlatform<'p, Arc<BarrierCell<LockedPypiRecordsByName>>>,
 
     /// The package cache to use when instantiating prefixes.
     package_cache: PackageCache,
 
     /// The mapping client to use when fetching pypi mappings.
     mapping_client: MappingClient,
-
     /// A semaphore to limit the number of concurrent pypi solves.
     /// TODO(tim): we need this semaphore, to limit the number of concurrent
     ///     solves. This is a problem when using source dependencies
@@ -1059,7 +1325,6 @@ pub struct UpdateContext<'p> {
     /// The progress bar where all the command dispatcher progress will be
     /// placed.
     dispatcher_progress_bar: ProgressBar,
-
     /// Optional list of packages explicitly targeted for update.
     update_targets: Option<std::collections::HashSet<String>>,
 }
@@ -1083,14 +1348,16 @@ impl<'p> UpdateContext<'p> {
             return Some((async move { pending_records.wait().await.clone() }).left_future());
         }
 
-        // Otherwise read the records directly from the lock-file.
+        // Otherwise read the records directly from the lock file, converting
+        // unresolved records to resolved on a best-effort basis (partial source
+        // records are dropped — they have no version/PackageRecord anyway).
         let locked_records = self
             .locked_grouped_repodata_records
             .get(group)
-            .and_then(|records| records.get(&platform))?
-            .clone();
+            .and_then(|records| records.get(&platform))?;
+        let resolved = Arc::new(locked_records.as_ref().clone().into_resolved_best_effort());
 
-        Some(ready(locked_records).right_future())
+        Some(ready(resolved).right_future())
     }
 
     /// Returns a future that will resolve to the solved pypi records for the
@@ -1100,7 +1367,7 @@ impl<'p> UpdateContext<'p> {
         &self,
         group: &GroupedEnvironment<'p>,
         platform: Platform,
-    ) -> Option<impl Future<Output = Arc<PypiRecordsByName>> + use<>> {
+    ) -> Option<impl Future<Output = Arc<LockedPypiRecordsByName>> + use<>> {
         // Check if there is a pending operation for this group and platform
         if let Some(pending_records) = self
             .grouped_solved_pypi_records
@@ -1123,22 +1390,31 @@ impl<'p> UpdateContext<'p> {
         &mut self,
         environment: &Environment<'p>,
         platform: Platform,
-    ) -> Option<PixiRecordsByName> {
+    ) -> Option<UnresolvedPixiRecordsByName> {
         self.solved_repodata_records
             .get_mut(environment)
             .and_then(|records| records.remove(&platform))
             .map(|cell| {
-                Arc::into_inner(cell)
+                let solved = Arc::into_inner(cell)
                     .expect("records must not be shared")
                     .into_inner()
-                    .expect("records must be available")
+                    .expect("records must be available");
+                // Convert solved PixiRecords into UnresolvedPixiRecords so the
+                // return type is uniform with locked (potentially partial) records.
+                let solved = Arc::try_unwrap(solved).unwrap_or_else(|arc| (*arc).clone());
+                UnresolvedPixiRecordsByName::from_iter(
+                    solved
+                        .into_inner()
+                        .into_iter()
+                        .map(UnresolvedPixiRecord::from),
+                )
             })
             .or_else(|| {
                 self.locked_repodata_records
                     .get_mut(environment)
                     .and_then(|records| records.remove(&platform))
+                    .map(|records| Arc::try_unwrap(records).unwrap_or_else(|arc| (*arc).clone()))
             })
-            .map(|records| Arc::try_unwrap(records).unwrap_or_else(|arc| (*arc).clone()))
     }
 
     /// Takes the latest pypi records for the given environment and platform.
@@ -1150,7 +1426,7 @@ impl<'p> UpdateContext<'p> {
         &mut self,
         environment: &Environment<'p>,
         platform: Platform,
-    ) -> Option<PypiRecordsByName> {
+    ) -> Option<LockedPypiRecordsByName> {
         self.solved_pypi_records
             .get_mut(environment)
             .and_then(|records| records.remove(&platform))
@@ -1161,9 +1437,28 @@ impl<'p> UpdateContext<'p> {
                     .expect("records must be available")
             })
             .or_else(|| {
+                // Prefer pre-resolved records from the satisfiability check —
+                // they have correct versions for source packages.
+                self.pre_resolved_pypi_records
+                    .remove(&(environment.clone(), platform))
+                    .map(Arc::new)
+            })
+            .or_else(|| {
                 self.locked_pypi_records
                     .get_mut(environment)
                     .and_then(|records| records.remove(&platform))
+                    .map(|unresolved| {
+                        Arc::new(LockedPypiRecordsByName::from_iter(
+                            unresolved.records.iter().map(|ur| {
+                                ur.lock(
+                                    ur.as_package_data()
+                                        .version()
+                                        .unwrap_or(&pep440_rs::MIN_VERSION)
+                                        .clone(),
+                                )
+                            }),
+                        ))
+                    })
             })
             .map(|records| Arc::try_unwrap(records).unwrap_or_else(|arc| (*arc).clone()))
     }
@@ -1171,16 +1466,17 @@ impl<'p> UpdateContext<'p> {
     /// Get a list of conda prefixes that have been updated.
     pub(crate) fn take_instantiated_conda_prefixes(
         &mut self,
-    ) -> HashMap<EnvironmentName, (Prefix, PythonStatus)> {
+    ) -> HashMap<EnvironmentName, CondaPrefixUpdated> {
         self.instantiated_conda_prefixes
             .drain()
             .filter_map(|(env, cell)| match env {
                 GroupedEnvironment::Environment(env) => {
-                    let prefix = Arc::into_inner(cell)
+                    let result = Arc::into_inner(cell)
                         .expect("prefixes must not be shared")
                         .into_inner()
                         .expect("prefix must be available");
-                    Some((env.name().clone(), (prefix.0.clone(), prefix.1.clone())))
+                    let result = Arc::try_unwrap(result).unwrap_or_else(|arc| (*arc).clone());
+                    Some((env.name().clone(), result))
                 }
                 _ => None,
             })
@@ -1211,12 +1507,12 @@ pub struct UpdateContextBuilder<'p> {
     /// The project
     project: &'p Workspace,
 
-    /// The current lock-file.
+    /// The current lock file.
     lock_file: LockFile,
 
     /// The environments that are considered outdated. These are the
-    /// environments that will be updated in the lock-file. If this value is
-    /// `None` it will be computed from the project and the lock-file.
+    /// environments that will be updated in the lock file. If this value is
+    /// `None` it will be computed from the project and the lock file.
     outdated_environments: Option<OutdatedEnvironments<'p>>,
 
     /// Defines if during the update-process it is allowed to create prefixes.
@@ -1229,7 +1525,6 @@ pub struct UpdateContextBuilder<'p> {
 
     /// The mapping client to use for fetching pypi mappings.
     mapping_client: Option<MappingClient>,
-
     /// The io concurrency semaphore to use when updating environments
     io_concurrency_limit: Option<IoConcurrencyLimit>,
 
@@ -1238,9 +1533,12 @@ pub struct UpdateContextBuilder<'p> {
 
     /// Set the command dispatcher to use for the update process.
     command_dispatcher: CommandDispatcher,
-
     /// Optional list of package names explicitly targeted for update.
     update_targets: Option<std::collections::HashSet<String>>,
+
+    /// Pre-built resolver for the input lock file, shared with the caller.
+    /// When `None`, the builder builds its own resolver in `finish`.
+    resolver: Option<Arc<LockFileResolver>>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -1267,7 +1565,7 @@ impl<'p> UpdateContextBuilder<'p> {
         Self { no_install, ..self }
     }
 
-    /// Sets the current lock-file that should be used to determine the
+    /// Sets the current lock file that should be used to determine the
     /// previously locked packages.
     pub fn with_lock_file(self, lock_file: LockFile) -> Self {
         Self { lock_file, ..self }
@@ -1296,6 +1594,16 @@ impl<'p> UpdateContextBuilder<'p> {
         }
     }
 
+    /// Provide a pre-built lock file resolver to share with any computation
+    /// the builder performs. When omitted, the builder constructs its own
+    /// resolver inside `finish`.
+    pub fn with_resolver(self, resolver: Arc<LockFileResolver>) -> Self {
+        Self {
+            resolver: Some(resolver),
+            ..self
+        }
+    }
+
     /// Sets the io concurrency semaphore to use when updating environments.
     #[allow(unused)]
     pub fn with_io_concurrency_semaphore(self, io_concurrency_limit: IoConcurrencyLimit) -> Self {
@@ -1311,57 +1619,89 @@ impl<'p> UpdateContextBuilder<'p> {
         let package_cache = match self.package_cache {
             Some(package_cache) => package_cache,
             None => PackageCache::new(
-                pixi_config::get_cache_dir()?.join(consts::CONDA_PACKAGE_CACHE_DIR),
+                project
+                    .config()
+                    .cache_dir_for(pixi_config::CacheKind::CondaPackages)?,
             ),
         };
-        let lock_file = self.lock_file;
         let glob_hash_cache = self.glob_hash_cache.unwrap_or_default();
 
         let multi_progress = pixi_progress::global_multi_progress();
         let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
 
-        let outdated = match self.outdated_environments {
+        // Route resolver construction through a `LockFileDerivedData`, seeding
+        // it with the caller's `Arc` when one was provided so we never build
+        // a second resolver for the same lock file.
+        let input = LockFileDerivedData::from_input_lock_file(
+            project,
+            self.lock_file,
+            package_cache.clone(),
+            self.command_dispatcher.clone(),
+            glob_hash_cache.clone(),
+        );
+        if let Some(resolver) = self.resolver {
+            input.seed_resolver(resolver);
+        }
+        let resolver = input.resolver()?;
+
+        let mut outdated = match self.outdated_environments {
             Some(outdated) => outdated,
             None => {
                 OutdatedEnvironments::from_workspace_and_lock_file(
                     project,
                     self.command_dispatcher.clone(),
-                    &lock_file,
+                    &input.lock_file,
+                    &resolver,
                 )
                 .await
             }
         };
+        let lock_file = input.lock_file;
 
-        // Extract the current conda records from the lock-file
-        // TODO: Should we parallelize this? Measure please.
-        let workspace_root = project.root();
-        let locked_repodata_records = project
+        // Extract the current conda records from the lock file.
+
+        // Collect unresolved records per environment and platform.
+        #[allow(clippy::type_complexity)]
+        let unresolved_by_env: Vec<(
+            crate::workspace::Environment<'_>,
+            Vec<(Platform, Vec<UnresolvedPixiRecord>)>,
+        )> = project
             .environments()
             .into_iter()
-            .flat_map(|env| {
-                lock_file
-                    .environment(env.name().as_str())
-                    .into_iter()
-                    .map(move |locked_env| {
-                        locked_env
-                            .conda_packages_by_platform()
-                            .map(|(platform, records)| {
-                                records
-                                    .cloned()
-                                    .map(|data| {
-                                        PixiRecord::from_conda_package_data(data, workspace_root)
-                                    })
-                                    .collect::<Result<Vec<_>, _>>()
-                                    .map(|records| {
-                                        (platform, Arc::new(PixiRecordsByName::from_iter(records)))
-                                    })
-                            })
-                            .collect::<Result<HashMap<_, _>, _>>()
-                            .map(|records| (env.clone(), records))
+            .filter_map(|env| {
+                let locked_env = lock_file.environment(env.name().as_str())?;
+                let platforms: Vec<_> = locked_env
+                    .packages_by_platform()
+                    .map(|(lock_platform, packages)| {
+                        let platform = lock_platform.subdir();
+                        let unresolved = packages
+                            .filter_map(|pkg| resolver.get_for_package(pkg))
+                            .collect::<Vec<_>>();
+                        (platform, unresolved)
                     })
+                    .collect();
+                Some((env, platforms))
             })
-            .collect::<Result<HashMap<_, HashMap<_, _>>, _>>()
-            .into_diagnostic()?;
+            .collect();
+
+        // Step 2: Store the unresolved records directly. Partial source records
+        // are kept as-is and resolved lazily only when needed. This avoids a
+        // hard error when a partial record cannot be resolved (e.g. after a
+        // package rename) — the outdated environment will be re-solved anyway.
+        let mut locked_repodata_records: HashMap<
+            crate::workspace::Environment<'_>,
+            HashMap<Platform, Arc<UnresolvedPixiRecordsByName>>,
+        > = HashMap::new();
+        for (env, platform_records) in unresolved_by_env {
+            let mut env_map = HashMap::new();
+            for (platform, unresolved) in platform_records {
+                env_map.insert(
+                    platform,
+                    Arc::new(UnresolvedPixiRecordsByName::from_iter(unresolved)),
+                );
+            }
+            locked_repodata_records.insert(env, env_map);
+        }
 
         let locked_pypi_records = project
             .environments()
@@ -1375,12 +1715,12 @@ impl<'p> UpdateContextBuilder<'p> {
                             env.clone(),
                             locked_env
                                 .pypi_packages_by_platform()
-                                .map(|(platform, records)| {
+                                .map(|(lock_platform, records)| {
                                     (
-                                        platform,
-                                        Arc::new(PypiRecordsByName::from_iter(records.map(
-                                            |(data, env_data)| (data.clone(), env_data.clone()),
-                                        ))),
+                                        lock_platform.subdir(),
+                                        Arc::new(PypiRecordsByName::from_iter(
+                                            records.map(|r| r.clone().into()),
+                                        )),
                                     )
                                 })
                                 .collect(),
@@ -1397,7 +1737,7 @@ impl<'p> UpdateContextBuilder<'p> {
             .unique()
             .collect_vec();
 
-        // For every grouped environment extract the data from the lock-file. If
+        // For every grouped environment extract the data from the lock file. If
         // multiple environments in a single solve-group have different versions for
         // a single package name than the record with the highest version is used.
         // This logic is implemented in `RepoDataRecordsByName::from_iter`. This can
@@ -1407,6 +1747,19 @@ impl<'p> UpdateContextBuilder<'p> {
             .filter_map(|group| {
                 // If any content of the environments in the group are outdated we need to
                 // disregard the locked content.
+                //
+                // This drop also reaches the build/host environments of every
+                // source record in the group: they live inside the source
+                // record (`build_packages` / `host_packages`), and dropping
+                // the source records here means
+                // `spawn_solve_conda_environment_task` receives empty
+                // `installed`, `InstalledSourceHints::from_records(&[])`
+                // produces an empty hint map, and the nested SPEK calls
+                // therefore start with empty installed slices too. So a
+                // workspace-level disregard (channel mismatch, strategy
+                // change, exclude-newer drift, ...) implicitly disregards
+                // every nested build/host env at the same time, without
+                // a separate per-build/host check.
                 if group
                     .environments()
                     .any(|e| outdated.disregard_locked_content.should_disregard_conda(&e))
@@ -1436,7 +1789,10 @@ impl<'p> UpdateContextBuilder<'p> {
                         by_platform
                             .into_iter()
                             .map(|(platform, records)| {
-                                (platform, Arc::new(PixiRecordsByName::from_iter(records)))
+                                (
+                                    platform,
+                                    Arc::new(UnresolvedPixiRecordsByName::from_iter(records)),
+                                )
                             })
                             .collect()
                     }
@@ -1494,6 +1850,8 @@ impl<'p> UpdateContextBuilder<'p> {
                 .finish()
         });
 
+        let pre_resolved_pypi_records = std::mem::take(&mut outdated.locked_pypi_records);
+
         Ok(UpdateContext {
             project,
 
@@ -1501,6 +1859,7 @@ impl<'p> UpdateContextBuilder<'p> {
             locked_grouped_repodata_records,
             locked_grouped_pypi_records,
             locked_pypi_records,
+            pre_resolved_pypi_records,
             outdated_envs: outdated,
 
             solved_repodata_records: HashMap::new(),
@@ -1527,22 +1886,8 @@ impl<'p> UpdateContext<'p> {
     /// Construct a new builder for the update context.
     pub fn builder(
         project: &'p Workspace,
-        command_dispatcher: Option<CommandDispatcher>,
+        command_dispatcher: CommandDispatcher,
     ) -> miette::Result<UpdateContextBuilder<'p>> {
-        let multi_progress = pixi_progress::global_multi_progress();
-        let anchor_pb = multi_progress.add(indicatif::ProgressBar::hidden());
-
-        let command_dispatcher = match command_dispatcher {
-            Some(cd) => cd,
-            None => project
-                .command_dispatcher_builder()?
-                .with_reporter(pixi_reporters::TopLevelProgress::new(
-                    multi_progress,
-                    anchor_pb,
-                ))
-                .finish(),
-        };
-
         Ok(UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),
@@ -1554,6 +1899,7 @@ impl<'p> UpdateContext<'p> {
             mapping_client: None,
             command_dispatcher,
             update_targets: None,
+            resolver: None,
         })
     }
 
@@ -1579,7 +1925,7 @@ impl<'p> UpdateContext<'p> {
         // This will keep track of all outstanding tasks that we need to wait for. All
         // tasks are added to this list after they are spawned. This function blocks
         // until all pending tasks have either completed or errored.
-        let mut pending_futures = FuturesUnordered::new();
+        let mut pending_futures = CancellationAwareFutures::new(self.command_dispatcher.executor());
 
         // Spawn tasks for all the conda targets that are out of date.
         for (environment, platforms) in self.outdated_envs.conda.iter() {
@@ -1616,6 +1962,10 @@ impl<'p> UpdateContext<'p> {
                     continue;
                 }
                 // No, we need to spawn a task to update for the entire solve group.
+                // Pass the unresolved records straight through; partial
+                // source records carry pinned manifest sources and
+                // build/host package sets that must reach the solver
+                // as stability hints.
                 let locked_group_records = self
                     .locked_grouped_repodata_records
                     .get(&source)
@@ -1623,56 +1973,48 @@ impl<'p> UpdateContext<'p> {
                     .cloned()
                     .unwrap_or_default();
 
-                // Spawn a task to solve the group.
-                // Determine override pinned sources for source packages when performing
-                // a targeted update.
-                let pin_overrides = (|| {
-                    let targets = self.update_targets.as_ref()?;
-                    if targets.is_empty() {
-                        return None;
-                    }
-                    Some(
-                        locked_group_records
-                            .records
-                            .iter()
-                            .filter_map(|r| match r {
-                                PixiRecord::Source(src) => {
-                                    let name = src.package_record.name.clone();
-                                    if targets.contains(name.as_source()) {
-                                        src.build_source
-                                            .clone()
-                                            .map(|spec| (name, spec.into_pinned()))
-                                    } else {
-                                        None
-                                    }
+                // Default `preferred_build_source` to every locked
+                // source record's build_source pin so out-of-tree
+                // builds stay stable across re-locks. Packages
+                // explicitly named in `update_targets` are excluded
+                // from the default so their build source is allowed
+                // to be re-pinned. (Manifest-source pin propagation
+                // for the same drift-avoidance goal is handled via
+                // `installed_source_hints`, threaded through
+                // `installed` below.)
+                let pin_overrides: BTreeMap<_, _> = {
+                    let targets = self.update_targets.as_ref();
+                    locked_group_records
+                        .records
+                        .iter()
+                        .filter_map(|r| match r {
+                            pixi_record::UnresolvedPixiRecord::Source(src) => {
+                                let name = src.name().clone();
+                                if targets.is_some_and(|t| t.contains(name.as_source())) {
+                                    return None;
                                 }
-                                _ => None,
-                            })
-                            .collect(),
-                    )
-                })()
-                .unwrap_or_default();
+                                src.build_source
+                                    .clone()
+                                    .map(|spec| (name, spec.into_pinned()))
+                            }
+                            _ => None,
+                        })
+                        .collect()
+                };
 
                 let mapping_client = self.mapping_client.clone();
                 let command_dispatcher = self.command_dispatcher.clone();
                 let source_clone = source.clone();
-                let group_solve_task = async move {
-                    match spawn_solve_conda_environment_task(
-                        source_clone,
-                        locked_group_records,
-                        mapping_client,
-                        platform,
-                        channel_priority,
-                        command_dispatcher,
-                        pin_overrides,
-                    )
-                    .await
-                    {
-                        Ok(result) => Ok(Some(result)),
-                        Err(err) if err.is_cancelled() => Ok(None),
-                        Err(err) => Err(Report::new(err)),
-                    }
-                }
+                let group_solve_task = spawn_solve_conda_environment_task(
+                    source_clone,
+                    locked_group_records,
+                    mapping_client,
+                    platform,
+                    channel_priority,
+                    command_dispatcher,
+                    pin_overrides,
+                )
+                .map(|result| result.map_err_with(Report::new))
                 .boxed_local();
 
                 // Store the task so we can poll it later.
@@ -1692,8 +2034,14 @@ impl<'p> UpdateContext<'p> {
         }
 
         // Spawn tasks to update the pypi packages.
-        let uv_context = once_cell::sync::OnceCell::new();
-        let mut pypi_conda_prefix_updaters = HashMap::new();
+        let project_link_mode = {
+            let config = project.config();
+            derive_link_mode(
+                config.allow_symbolic_links,
+                config.allow_hard_links,
+                config.allow_ref_links,
+            )
+        };
         for (environment, platform) in
             self.outdated_envs
                 .pypi
@@ -1737,30 +2085,12 @@ impl<'p> UpdateContext<'p> {
                 .get_latest_group_repodata_records(&group, environment.best_platform())
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment, false));
 
-            // Creates an object to initiate an update at a later point. Make sure to only
-            // create a single entry if we are solving for multiple platforms.
-            let conda_prefix_updater =
-                match pypi_conda_prefix_updaters.entry(environment.name().clone()) {
-                    Entry::Vacant(entry) => {
-                        let prefix_platform = environment.best_platform();
-                        let conda_prefix_updater = CondaPrefixUpdater::builder(
-                            group.clone(),
-                            prefix_platform,
-                            environment
-                                .virtual_packages(prefix_platform)
-                                .into_iter()
-                                .map(GenericVirtualPackage::from)
-                                .collect(),
-                            self.command_dispatcher.clone(),
-                        )
-                        .finish()?;
-                        entry.insert(conda_prefix_updater).clone()
-                    }
-                    Entry::Occupied(entry) => entry.get().clone(),
-                };
-
-            let uv_context = uv_context
-                .get_or_try_init(|| UvResolutionContext::from_config(project.config()))?
+            let uv_context = self
+                .outdated_envs
+                .uv_context
+                .get_or_try_init(|| {
+                    UvResolutionContext::from_config(project.config(), project.client()?.clone())
+                })?
                 .clone();
 
             let locked_group_records = self
@@ -1771,6 +2101,16 @@ impl<'p> UpdateContext<'p> {
                 .unwrap_or_default();
 
             // Spawn a task to solve the pypi environment
+            let cache_key =
+                lock_file::outdated::BuildCacheKey::new(environment.name().clone(), platform);
+
+            let build_cache = self
+                .outdated_envs
+                .build_caches
+                .get(&cache_key)
+                .cloned()
+                .unwrap_or_default();
+
             let pypi_solve_future = spawn_solve_pypi_task(
                 uv_context,
                 group.clone(),
@@ -1779,14 +2119,20 @@ impl<'p> UpdateContext<'p> {
                 platform,
                 repodata_solve_platform_future,
                 repodata_building_env,
-                conda_prefix_updater,
+                self.command_dispatcher.clone(),
                 self.pypi_solve_semaphore.clone(),
                 project.root().to_path_buf(),
                 locked_group_records,
                 self.no_install,
+                build_cache,
+                project_link_mode,
             );
 
-            pending_futures.push(pypi_solve_future.map_ok(Some).boxed_local());
+            pending_futures.push(
+                pypi_solve_future
+                    .map_err(CommandDispatcherError::Failed)
+                    .boxed_local(),
+            );
 
             let previous_cell = self
                 .grouped_solved_pypi_records
@@ -1832,7 +2178,11 @@ impl<'p> UpdateContext<'p> {
                 grouped_pypi_records,
                 self.command_dispatcher.clone(),
             );
-            pending_futures.push(extract_resolution_task.map_ok(Some).boxed_local());
+            pending_futures.push(
+                extract_resolution_task
+                    .map_err(CommandDispatcherError::Failed)
+                    .boxed_local(),
+            );
 
             // Create a cell that will be used to store the result of the extraction.
             let previous_cell = self
@@ -1863,7 +2213,7 @@ impl<'p> UpdateContext<'p> {
             .expect("should be able to set style")
             .progress_chars("━━╾─"));
         top_level_progress.enable_steady_tick(Duration::from_millis(50));
-        top_level_progress.set_prefix("updating lock-file");
+        top_level_progress.set_prefix("updating lock file");
         top_level_progress.set_length(pending_futures.len() as u64);
 
         // Iterate over all the futures we spawned and wait for them to complete.
@@ -1876,19 +2226,23 @@ impl<'p> UpdateContext<'p> {
         // A loop on the main task is used versus individually spawning all tasks for
         // two reasons:
         //
-        // 1. This provides some control over when data is polled and broadcasted to
-        //    other tasks. No data is broadcasted until we start polling futures here.
+        // 1. This provides some control over when data is polled and broadcast to
+        //    other tasks. No data is broadcast until we start polling futures here.
         //    This reduces the risk of race-conditions where data has already been
-        //    broadcasted before a task subscribes to it.
+        //    broadcast before a task subscribes to it.
         // 2. The futures stored in `pending_futures` do not necessarily have to be
         //    `'static`. Which makes them easier to work with.
         while let Some(result) = pending_futures.next().await {
-            let Some(task_result) = result? else {
-                // Task was cancelled (a sibling solve failed) — skip.
-                top_level_progress.inc(1);
-                continue;
-            };
             top_level_progress.inc(1);
+            let task_result = match result {
+                Ok(task_result) => task_result,
+                Err(CommandDispatcherError::Cancelled) => {
+                    unreachable!(
+                        "If we get a cancellation error here it means the error that caused the cancellation did not propagate."
+                    );
+                }
+                Err(CommandDispatcherError::Failed(report)) => return Err(report),
+            };
             match task_result {
                 TaskResult::CondaGroupSolved(group_name, platform, records, duration) => {
                     let group = GroupedEnvironment::from_name(project, &group_name)
@@ -1965,7 +2319,7 @@ impl<'p> UpdateContext<'p> {
                         self.instantiated_conda_prefixes
                             .get_mut(&group)
                             .expect("the entry for this environment should exists")
-                            .set(Arc::new((conda_prefix.prefix, *conda_prefix.python_status)))
+                            .set(Arc::new(conda_prefix))
                             .expect("prefix should not be instantiated twice");
 
                         tracing::info!(
@@ -2014,10 +2368,26 @@ impl<'p> UpdateContext<'p> {
             }
         }
 
-        // Construct a new lock-file containing all the updated or old records.
-        let mut builder = LockFile::builder();
+        // Construct a new lock file containing all the updated or old records.
+        // First, collect all platforms across all environments and register them.
+        let all_platforms: Vec<rattler_lock::PlatformData> = project
+            .environments()
+            .into_iter()
+            .flat_map(|env| env.platforms())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .map(|p| rattler_lock::PlatformData {
+                name: rattler_lock::PlatformName::from(&p),
+                subdir: p,
+                virtual_packages: Vec::new(),
+            })
+            .collect();
+        let mut builder = LockFile::builder()
+            .with_platforms(all_platforms)
+            .expect("all platforms should be unique");
+        let mut writer = pixi_record::LockFileWriter::new(&mut builder);
 
-        // Iterate over all environments and add their records to the lock-file.
+        // Iterate over all environments and add their records to the lock file.
         for environment in project.environments() {
             let environment_name = environment.name().to_string();
             let grouped_env = GroupedEnvironment::from(environment.clone());
@@ -2037,8 +2407,8 @@ impl<'p> UpdateContext<'p> {
                 .try_collect()
                 .into_diagnostic()?;
 
-            builder.set_channels(&environment_name, channels);
-            builder.set_options(
+            writer.builder.set_channels(&environment_name, channels);
+            writer.builder.set_options(
                 &environment_name,
                 rattler_lock::SolveOptions {
                     strategy: grouped_env.solve_strategy().into(),
@@ -2047,30 +2417,28 @@ impl<'p> UpdateContext<'p> {
                         .unwrap_or_default()
                         .unwrap_or_default()
                         .into(),
-                    exclude_newer: grouped_env.exclude_newer(),
-                    pypi_prerelease_mode: Some(pypi_prerelease_mode.into()),
+                    pypi_prerelease_mode: pypi_prerelease_mode.into(),
                 },
             );
 
             let mut has_pypi_records = false;
             for platform in environment.platforms() {
+                let platform_str = platform.to_string();
                 if let Some(records) = self.take_latest_repodata_records(&environment, platform) {
                     for record in records.into_inner() {
-                        builder.add_conda_package(
-                            &environment_name,
-                            platform,
-                            record.into_conda_package_data(project.root()),
-                        );
+                        let data = record.into_conda_package_data(&mut writer, project.root());
+                        writer
+                            .builder
+                            .add_conda_package(&environment_name, &platform_str, data)
+                            .expect("platform was registered");
                     }
                 }
                 if let Some(records) = self.take_latest_pypi_records(&environment, platform) {
-                    for (pkg_data, pkg_env_data) in records.into_inner() {
-                        builder.add_pypi_package(
-                            &environment_name,
-                            platform,
-                            pkg_data,
-                            pkg_env_data,
-                        );
+                    for r in records.into_inner() {
+                        writer
+                            .builder
+                            .add_pypi_package(&environment_name, &platform_str, r.data.clone())
+                            .expect("platform was registered");
                         has_pypi_records = true;
                     }
                 }
@@ -2079,9 +2447,12 @@ impl<'p> UpdateContext<'p> {
             // Store the indexes that were used to solve the environment. But only if there
             // are pypi packages.
             if has_pypi_records {
-                builder.set_pypi_indexes(&environment_name, grouped_pypi_options.into());
+                writer
+                    .builder
+                    .set_pypi_indexes(&environment_name, grouped_pypi_options.into());
             }
         }
+        drop(writer);
 
         // Store the lock file
         let lock_file = builder.finish();
@@ -2097,10 +2468,12 @@ impl<'p> UpdateContext<'p> {
                 .collect(),
             package_cache: self.package_cache,
             updated_pypi_prefixes: Default::default(),
-            uv_context,
+            uv_context: self.outdated_envs.uv_context,
             io_concurrency_limit: self.io_concurrency_limit,
             command_dispatcher: self.command_dispatcher,
             glob_hash_cache: self.glob_hash_cache,
+            build_caches: self.outdated_envs.build_caches,
+            resolver: Default::default(),
         })
     }
 }
@@ -2165,7 +2538,7 @@ pub enum TaskResult {
     PypiGroupSolved(
         GroupedEnvironmentName,
         Platform,
-        PypiRecordsByName,
+        LockedPypiRecordsByName,
         Duration,
         Option<CondaPrefixUpdated>,
     ),
@@ -2176,29 +2549,56 @@ pub enum TaskResult {
         EnvironmentName,
         Platform,
         Arc<PixiRecordsByName>,
-        Arc<PypiRecordsByName>,
+        Arc<LockedPypiRecordsByName>,
     ),
 }
 
 /// A task that solves the conda dependencies for a given environment.
+///
+/// `existing_repodata_records` is the unresolved view of the lock file's
+/// records for this group/platform: binary records and full source
+/// records, plus partial source records (for mutable sources whose
+/// metadata is not stored in the lock file). The partial entries still
+/// carry their pinned manifest source and the build/host package sets
+/// they were last solved against, both of which are forwarded to the
+/// solver as stability hints (via `installed` and `installed_source_hints`)
+/// so re-locks stay incremental and don't drift the locked git/url
+/// commits when the user did not request an update.
 #[allow(clippy::too_many_arguments)]
 async fn spawn_solve_conda_environment_task(
     group: GroupedEnvironment<'_>,
-    existing_repodata_records: Arc<PixiRecordsByName>,
+    existing_repodata_records: Arc<UnresolvedPixiRecordsByName>,
     mapping_client: MappingClient,
     platform: Platform,
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
     pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
-) -> Result<TaskResult, SolveCondaEnvironmentError> {
+) -> Result<TaskResult, CommandDispatcherError<SolveCondaEnvironmentError>> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
     // Get the dev dependencies for this platform
     let dev_dependencies = group.combined_dev_dependencies(Some(platform));
 
+    // Get the constraints for this platform and convert to binary specs.
+    // Source specs are not meaningful as constraints and are an error.
+    let constraints = {
+        let conda_constraints = group.combined_constraints(Some(platform));
+        let (source_constraints, binary_constraints) =
+            pixi_record::DevSourceRecord::split_into_source_and_binary_requirements(
+                conda_constraints.into_specs(),
+            );
+        if let Some((name, _)) = source_constraints.iter_specs().next() {
+            return Err(CommandDispatcherError::Failed(
+                SolveCondaEnvironmentError::SourceConstraintNotSupported(
+                    name.as_source().to_string(),
+                ),
+            ));
+        }
+        binary_constraints
+    };
+
     // Get solve options
-    let exclude_newer = group.exclude_newer();
     let strategy = group.solve_strategy().into();
 
     // Get the environment name
@@ -2224,7 +2624,11 @@ async fn spawn_solve_conda_environment_task(
     let pypi_name_mapping_location = group
         .workspace()
         .pypi_name_mapping_source()
-        .map_err(|err| SolveCondaEnvironmentError::PypiMappingFailed(err.into()))?
+        .map_err(|err| {
+            CommandDispatcherError::Failed(SolveCondaEnvironmentError::PypiMappingFailed(
+                err.into(),
+            ))
+        })?
         .clone();
 
     // The list of channels and platforms we need for this task
@@ -2232,22 +2636,31 @@ async fn spawn_solve_conda_environment_task(
 
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
+    let exclude_newer = group
+        .exclude_newer_config_resolved(&channel_config)
+        .map_err(SolveCondaEnvironmentError::from)
+        .map_err(CommandDispatcherError::Failed)?;
 
     // Resolve the channel URLs for the channels we need.
     let channels = channels
         .iter()
         .map(|c| c.clone().into_base_url(&channel_config))
         .collect::<Result<Vec<_>, _>>()
-        .map_err(Box::new)?;
+        .map_err(SolveCondaEnvironmentError::from)
+        .map_err(CommandDispatcherError::Failed)?;
 
     // Determine the build variants
     let VariantConfig {
         variant_configuration,
         variant_files,
-    } = group.workspace().variants(platform)?;
+    } = group
+        .workspace()
+        .variants(platform)
+        .map_err(SolveCondaEnvironmentError::from)
+        .map_err(CommandDispatcherError::Failed)?;
 
     // Convert dev dependencies to DevSourceSpecs
-    let dev_sources: IndexMap<_, _> = dev_dependencies
+    let dev_sources: OrderMap<_, _> = dev_dependencies
         .into_iter()
         .flat_map(|(name, source_specs)| {
             source_specs.into_iter().map(move |source_spec| {
@@ -2263,32 +2676,51 @@ async fn spawn_solve_conda_environment_task(
 
     let start = Instant::now();
 
-    // Solve the environment using the command dispatcher.
-    // Determine if we should override the pinned source for the current package
-    let mut records = command_dispatcher
-        .solve_pixi_environment(PixiEnvironmentSpec {
-            name: Some(group_name.to_string()),
-            dependencies,
-            constraints: Default::default(),
-            dev_sources,
-            installed: existing_repodata_records.records.clone(),
-            build_environment: BuildEnvironment::simple(platform, virtual_packages),
+    // Solve the environment.
+    let env_ref = EnvironmentRef::Workspace(command_dispatcher.workspace_env_registry().allocate(
+        group_name.to_string(),
+        platform,
+        EnvironmentSpec {
             channels,
-            strategy,
-            channel_priority: channel_priority.into(),
+            build_environment: BuildEnvironment::simple(platform, virtual_packages),
+            variants: pixi_utils::variants::VariantConfig {
+                variant_configuration,
+                variant_files,
+            },
             exclude_newer,
-            channel_config,
-            variant_configuration: Some(variant_configuration),
-            variant_files: Some(variant_files),
-            enabled_protocols: Default::default(),
-            preferred_build_source: pin_overrides,
-        })
+            channel_priority: channel_priority.into(),
+        },
+    ));
+    // Pass partial source records through alongside binary and full
+    // source records: their `manifest_source` and `build_packages` /
+    // `host_packages` flow into `InstalledSourceHints`, which the
+    // solver uses to keep nested build/host envs stable across
+    // re-locks. Dropping partials here would silently lose those
+    // hints and cause unnecessary version churn / commit drift.
+    let installed: Arc<[pixi_record::UnresolvedPixiRecord]> =
+        existing_repodata_records.records.iter().cloned().collect();
+    let installed_source_hints = pixi_command_dispatcher::PtrArc::from_value(
+        pixi_command_dispatcher::InstalledSourceHints::from_records(&installed),
+    );
+    let records_arc = command_dispatcher
+        .engine()
+        .compute(&SolvePixiEnvironmentKey::new(SolvePixiEnvironmentSpec {
+            dependencies,
+            constraints,
+            dev_sources,
+            installed,
+            installed_source_hints,
+            strategy,
+            preferred_build_source: Arc::new(pin_overrides),
+            env_ref,
+        }))
         .await
-        .map_err(|source| SolveCondaEnvironmentError::SolveFailed {
+        .map_err_into_dispatcher(|source| SolveCondaEnvironmentError::SolveFailed {
             environment_name: group_name.clone(),
             platform,
             source: Box::new(source),
         })?;
+    let mut records: Vec<PixiRecord> = (*records_arc).clone();
 
     // Add purl's for the conda packages that are also available as pypi packages if
     // we need them.
@@ -2301,7 +2733,11 @@ async fn spawn_solve_conda_environment_task(
                 None,
             )
             .await
-            .map_err(|err| SolveCondaEnvironmentError::PypiMappingFailed(err.into()))?;
+            .map_err(|err| {
+                CommandDispatcherError::Failed(SolveCondaEnvironmentError::PypiMappingFailed(
+                    err.into(),
+                ))
+            })?;
     }
 
     // Turn the records into a map by name
@@ -2323,14 +2759,25 @@ async fn spawn_extract_environment_task(
     environment: Environment<'_>,
     platform: Platform,
     grouped_repodata_records: impl Future<Output = Arc<PixiRecordsByName>>,
-    grouped_pypi_records: impl Future<Output = Arc<PypiRecordsByName>>,
+    grouped_pypi_records: impl Future<Output = Arc<LockedPypiRecordsByName>>,
     command_dispatcher: CommandDispatcher,
 ) -> miette::Result<TaskResult> {
+    let env_name = environment.name().clone();
+    tracing::debug!(
+        env = %env_name,
+        platform = %platform,
+        "spawn_extract_environment_task: awaiting group records"
+    );
     let group = GroupedEnvironment::from(environment.clone());
 
     // Await the records from the group
     let (grouped_repodata_records, grouped_pypi_records) =
         tokio::join!(grouped_repodata_records, grouped_pypi_records);
+    tracing::debug!(
+        env = %env_name,
+        platform = %platform,
+        "spawn_extract_environment_task: group records received"
+    );
 
     // If the group is just the environment on its own we can immediately return the
     // records.
@@ -2354,7 +2801,7 @@ async fn spawn_extract_environment_task(
 
     enum PackageRecord<'a> {
         Conda(&'a PixiRecord),
-        Pypi((&'a PypiRecord, Option<ExtraName>)),
+        Pypi((&'a LockedPypiRecord, Option<ExtraName>)),
     }
 
     // Determine the conda packages we need.
@@ -2399,15 +2846,37 @@ async fn spawn_extract_environment_task(
 
         let build_environment = BuildEnvironment::simple(platform, virtual_packages);
 
+        let exclude_newer = environment
+            .exclude_newer_config_resolved(&channel_config)
+            .into_diagnostic()
+            .wrap_err("failed to resolve exclude-newer")?;
+        let channel_priority = environment
+            .channel_priority()
+            .into_diagnostic()
+            .wrap_err("failed to resolve channel priority")?
+            .unwrap_or_default();
+
+        let workspace_env_ref = command_dispatcher.workspace_env_registry().allocate(
+            environment.name().as_str().to_string(),
+            platform,
+            EnvironmentSpec {
+                channels,
+                build_environment,
+                variants: pixi_utils::variants::VariantConfig {
+                    variant_configuration,
+                    variant_files,
+                },
+                exclude_newer,
+                channel_priority: channel_priority.into(),
+            },
+        );
+
         // Resolve dev dependencies
         let resolved_dev_deps = super::resolve_dev_dependencies(
             dev_dependencies,
             &command_dispatcher,
             &channel_config,
-            &channels,
-            &build_environment,
-            &variant_configuration,
-            &variant_files,
+            workspace_env_ref,
         )
         .await
         .into_diagnostic()
@@ -2502,7 +2971,7 @@ async fn spawn_extract_environment_task(
                     .into_diagnostic()?
                     .unwrap_or_default();
 
-                for req in record.0.requires_dist.iter() {
+                for req in record.data.requires_dist().iter() {
                     // Evaluate the marker environment with the given extras
                     if let Some(marker_env) = &marker_environment {
                         // let marker_str = marker_env.to_string();
@@ -2535,7 +3004,7 @@ async fn spawn_extract_environment_task(
                 }
 
                 // Insert the record if it is not already present
-                pypi_records.entry(record.0.name.clone()).or_insert(record);
+                pypi_records.entry(record.name().clone()).or_insert(record);
             }
         }
     }
@@ -2546,7 +3015,7 @@ async fn spawn_extract_environment_task(
         Arc::new(PixiRecordsByName::from_iter(
             pixi_records.into_iter().cloned(),
         )),
-        Arc::new(PypiRecordsByName::from_iter(
+        Arc::new(LockedPypiRecordsByName::from_iter(
             pypi_records.into_values().cloned(),
         )),
     ))
@@ -2562,11 +3031,13 @@ async fn spawn_solve_pypi_task<'p>(
     platform: Platform,
     repodata_solve_records: impl Future<Output = Arc<PixiRecordsByName>>,
     repodata_building_records: miette::Result<impl Future<Output = Arc<PixiRecordsByName>>>,
-    prefix_task: CondaPrefixUpdater,
+    command_dispatcher: CommandDispatcher,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
     locked_pypi_packages: Arc<PypiRecordsByName>,
     disallow_install_conda_prefix: bool,
+    build_cache: Arc<lock_file::outdated::PypiEnvironmentBuildCache>,
+    link_mode: LinkMode,
 ) -> miette::Result<TaskResult> {
     // Get the Pypi dependencies for this environment
     let dependencies = grouped_environment.pypi_dependencies(Some(platform));
@@ -2574,13 +3045,13 @@ async fn spawn_solve_pypi_task<'p>(
         return Ok(TaskResult::PypiGroupSolved(
             grouped_environment.name().clone(),
             platform,
-            PypiRecordsByName::default(),
+            LockedPypiRecordsByName::default(),
             Duration::from_millis(0),
             None,
         ));
     }
 
-    let exclude_newer = grouped_environment.exclude_newer();
+    let exclude_newer = to_exclude_newer(&grouped_environment.pypi_exclude_newer_config_resolved());
 
     // Get the system requirements for this environment
     let system_requirements = grouped_environment.system_requirements();
@@ -2619,7 +3090,7 @@ async fn spawn_solve_pypi_task<'p>(
 
         let start = Instant::now();
 
-        let dependencies: Vec<(uv_normalize::PackageName, IndexSet<_>)> = dependencies
+        let dependencies: Vec<(uv_normalize::PackageName, OrderSet<_>)> = dependencies
             .into_iter()
             .map(|(name, requirement)| Ok((to_uv_normalize(name.as_normalized())?, requirement)))
             .collect::<Result<_, ConversionError>>()
@@ -2637,13 +3108,15 @@ async fn spawn_solve_pypi_task<'p>(
             platform,
             &pb.pb,
             &project_root,
-            prefix_task,
+            command_dispatcher,
             repodata_building_records,
             project_variables,
             environment,
             disallow_install_conda_prefix,
             exclude_newer,
             solve_strategy,
+            build_cache,
+            link_mode,
         )
         .await
         .with_context(|| {
@@ -2658,7 +3131,7 @@ async fn spawn_solve_pypi_task<'p>(
         pb.finish();
 
         Ok::<(_, _, _), miette::Report>((
-            PypiRecordsByName::from_iter(records),
+            LockedPypiRecordsByName::from_iter(records),
             end - start,
             prefix_task_result,
         ))
@@ -2712,7 +3185,7 @@ mod tests {
 
         // Simulate tool.pixi.pypi-dependencies (added first)
         let path_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
-            path: "./requests".into(),
+            path: std::path::PathBuf::from("./requests").into(),
             editable: Some(true),
         });
         deps.insert(name.clone(), path_spec);
@@ -2757,14 +3230,14 @@ mod tests {
 
         // Higher-priority feature explicitly sets editable=false (inserted first)
         let non_editable_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
-            path: "./requests".into(),
+            path: std::path::PathBuf::from("./requests").into(),
             editable: Some(false),
         });
         deps.insert(name.clone(), non_editable_spec);
 
         // Lower-priority feature has editable=true (inserted second)
         let editable_spec = PixiPypiSpec::new(pixi_pypi_spec::PixiPypiSource::Path {
-            path: "./requests".into(),
+            path: std::path::PathBuf::from("./requests").into(),
             editable: Some(true),
         });
         deps.insert(name.clone(), editable_spec);

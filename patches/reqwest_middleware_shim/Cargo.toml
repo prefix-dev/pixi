@@ -1,0 +1,22 @@
+[package]
+description = "Shim that re-exports astral-reqwest-middleware so consumers of crates.io's reqwest-middleware (e.g. http-cache-reqwest) share the astral fork's trait identity. Used via [patch.crates-io] in the pixi workspace."
+edition = "2021"
+license = "MIT OR Apache-2.0"
+name = "reqwest-middleware"
+publish = false
+version = "0.5.99"
+
+[lib]
+name = "reqwest_middleware"
+path = "src/lib.rs"
+
+[features]
+charset = ["inner/charset"]
+default = []
+http2 = ["inner/http2"]
+json = ["inner/json"]
+multipart = ["inner/multipart"]
+rustls = ["inner/rustls"]
+
+[dependencies]
+inner = { package = "astral-reqwest-middleware", version = "0.5" }

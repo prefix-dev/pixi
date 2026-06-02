@@ -37,6 +37,8 @@ pub mod install;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
+mod process_exit;
+pub mod publish;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
@@ -155,6 +157,7 @@ pub enum Command {
     #[clap(visible_alias = "a")]
     Add(add::Args),
     Auth(rattler::cli::auth::Args),
+    #[clap(hide = true)]
     Build(build::Args),
     Clean(clean::Args),
     Completion(completion::Args),
@@ -172,6 +175,7 @@ pub enum Command {
     List(list::Args),
     Lock(lock::Args),
     Reinstall(reinstall::Args),
+    Publish(publish::Args),
     #[clap(visible_alias = "rm")]
     Remove(remove::Args),
     #[clap(visible_alias = "r")]
@@ -198,16 +202,16 @@ pub enum Command {
 /// Configuration for lock file usage, used by LockFileUpdateConfig
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUsageConfig {
-    /// Install the environment as defined in the lockfile, doesn't update
-    /// lockfile if it isn't up-to-date with the manifest file.
+    /// Install the environment as defined in the lock file, doesn't update
+    /// lock file if it isn't up-to-date with the manifest file.
     #[clap(
         long,
         env = "PIXI_FROZEN",
         help_heading = consts::CLAP_UPDATE_OPTIONS
     )]
     pub frozen: bool,
-    /// Check if lockfile is up-to-date before installing the environment,
-    /// aborts when lockfile isn't up-to-date with the manifest file.
+    /// Check if lock file is up-to-date before installing the environment,
+    /// aborts when lock file isn't up-to-date with the manifest file.
     #[clap(
         long,
         env = "PIXI_LOCKED",
@@ -309,7 +313,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         EnvFilter::builder()
             .with_default_directive(level_filter.into())
             .parse(format!(
-                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}"
+                "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},rattler_upload={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}"
             ))
             .into_diagnostic()?
     } else {
@@ -317,7 +321,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         // Parse RUST_LOG because we need to set it other our other directives
         let env_directives = env::var("RUST_LOG").unwrap_or_default();
         let original_directives = format!(
-            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}",
+            "apple_codesign=off,pixi={pixi_level},pixi_command_dispatcher={pixi_level},pixi_core={pixi_level},rattler_upload={pixi_level},uv_resolver={pixi_level},resolvo={low_level_filter}",
         );
         // Concatenate both directives where the LOG overrides the potential original directives
         let final_directives = if env_directives.is_empty() {
@@ -367,6 +371,7 @@ pub async fn execute_command(
         Command::Task(cmd) => task::execute(cmd).await,
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Import(cmd) => import::execute(cmd).await,
+        Command::Publish(cmd) => publish::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Workspace(cmd) => workspace::execute(cmd).await,

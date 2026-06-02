@@ -1,10 +1,9 @@
 {% set PYTHON="%PYTHON%" if build_platform == "windows" else "$PYTHON" -%}
-{% set EDITABLE_OPTION = "--editable" if editable else "" -%}
 {%- set OPTIONS = [
     "-vv",
     "--no-deps",
     "--no-build-isolation"
-] + extra_args + [EDITABLE_OPTION, manifest_root]
+] + extra_args + (["--editable"] if editable else [])
 -%}
 
 {% if build_platform == "windows" -%}
@@ -14,9 +13,11 @@
 {% endif -%}
 
 {% if installer == "uv" -%}
-uv pip install --python "{{ PYTHON }}" {{ OPTIONS }}
+uv pip install --python "{{ PYTHON }}" {{ OPTIONS }} "{{ manifest_root }}"
+{% elif build_platform == "windows" -%}
+"{{ PYTHON }}" -m pip install --ignore-installed {{ OPTIONS }} "{{ manifest_root }}"
 {% else %}
-"{{ PYTHON }}" -m pip install --ignore-installed {{ OPTIONS }}
+"{{ PYTHON }}" -m pip install --ignore-installed {{ OPTIONS }} "{{ manifest_root }}"
 {% endif -%}
 
 {% if build_platform == "windows" -%}

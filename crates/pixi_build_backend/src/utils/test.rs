@@ -7,13 +7,13 @@ use pixi_build_types::{
         initialize::InitializeParams,
     },
 };
-use rattler_build::console_utils::LoggingOutputHandler;
+use rattler_build_core::console_utils::LoggingOutputHandler;
 use rattler_conda_types::Platform;
 use serde_json::Value;
 
 use crate::{
     generated_recipe::GenerateRecipe, intermediate_backend::IntermediateBackendInstantiator,
-    protocol::ProtocolInstantiator,
+    protocol::ProtocolInstantiator, tools::BackendIdentifier,
 };
 
 /// A utility function to remove empty values from a JSON object.
@@ -63,17 +63,20 @@ where
     };
 
     let (protocol, _result) = IntermediateBackendInstantiator::<T>::new(
+        BackendIdentifier::new("test-backend", env!("CARGO_PKG_VERSION")),
         LoggingOutputHandler::default(),
         Arc::new(T::default()),
     )
     .initialize(InitializeParams {
         workspace_directory: None,
+        checkout_root: None,
         source_directory: source_dir,
         manifest_path,
         project_model,
         configuration: None,
         target_configuration: None,
         cache_directory: None,
+        workspace_scratch_directory: None,
     })
     .await
     .unwrap();

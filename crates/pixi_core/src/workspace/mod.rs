@@ -3,6 +3,7 @@ mod environment;
 pub mod errors;
 pub mod grouped_environment;
 mod has_project_ref;
+pub mod registry;
 mod repodata;
 mod solve_group;
 pub mod virtual_packages;
@@ -16,7 +17,6 @@ use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
-    str::FromStr,
     sync::Arc,
 };
 
@@ -40,9 +40,9 @@ use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, ExplicitManifestError,
-    HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
-    SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, HasWorkspaceManifest,
+    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, SpecType, WithProvenance,
+    WithWarnings, WorkspaceManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -53,11 +53,14 @@ use pixi_utils::{
     variants::{VariantConfig, VariantValue},
 };
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
-use rattler_lock::{LockFile, LockedPackageRef};
+use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
+use rattler_lock::LockFile;
+
+use crate::lock_file::LockedPackageKind;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
 use url::Url;
@@ -65,6 +68,7 @@ pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
+static CUSTOM_BUILD_DIR_WARN: OnceCell<()> = OnceCell::new();
 
 /// The dependency types we support
 #[derive(Debug, Copy, Clone)]
@@ -203,8 +207,12 @@ pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
 pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
 
 impl Workspace {
-    /// Constructs a new instance from an internal manifest representation
-    pub(crate) fn from_manifests(manifest: Manifests) -> Self {
+    /// Core constructor: takes parsed manifests and loads the workspace config
+    /// using `source` for the system + user-level layer.
+    pub(crate) fn from_manifests(
+        manifest: Manifests,
+        source: &pixi_config::GlobalConfigSource,
+    ) -> Self {
         let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
         // Get the absolute path of the manifest, preserving symlinks by only
         // canonicalizing the parent directory
@@ -235,7 +243,7 @@ impl Workspace {
             })
             .collect::<HashMap<String, s3_middleware::S3Config>>();
 
-        let config = Config::load(&root);
+        let config = Config::load_with(&root, source);
         Self {
             root,
             manifest_location_name,
@@ -252,23 +260,37 @@ impl Workspace {
         }
     }
 
-    /// Loads a project from manifest file. The `manifest_path` is expected to
-    /// be a workspace manifest.
+    /// Loads a workspace from a manifest file using the default global-config
+    /// search. Pass a source to [`Workspace::from_path_with_source`] to honor
+    /// `--no-config` / `--config-file`.
     pub fn from_path(manifest_path: &Path) -> Result<Self, LoadManifestsError> {
+        Self::from_path_with_source(manifest_path, &pixi_config::GlobalConfigSource::Search)
+    }
+
+    /// Loads a workspace from a manifest file, using `source` for the global
+    /// config layer.
+    pub fn from_path_with_source(
+        manifest_path: &Path,
+        source: &pixi_config::GlobalConfigSource,
+    ) -> Result<Self, LoadManifestsError> {
         let WithWarnings {
             value: manifests, ..
         } = Manifests::from_workspace_manifest_path(manifest_path.to_path_buf())?;
-        Ok(Self::from_manifests(manifests))
+        Ok(Self::from_manifests(manifests, source))
     }
 
-    /// Constructs a workspace from source loaded from a specific location.
+    /// Constructs a workspace from a manifest string loaded from a specific
+    /// location. Uses the default global-config search.
     pub fn from_str(manifest_path: &Path, content: &str) -> Result<Self, LoadManifestsError> {
         let WithWarnings {
             value: manifests, ..
         } = Manifests::from_workspace_source(
             content.with_provenance(ManifestProvenance::from_path(manifest_path.to_path_buf())?),
         )?;
-        Ok(Self::from_manifests(manifests))
+        Ok(Self::from_manifests(
+            manifests,
+            &pixi_config::GlobalConfigSource::Search,
+        ))
     }
 
     /// Initialize empty map of environments variables
@@ -325,9 +347,18 @@ impl Workspace {
         &self.root
     }
 
-    /// Returns the pixi directory of the workspace [consts::PIXI_DIR]
-    pub fn pixi_dir(&self) -> PathBuf {
+    /// Returns the default pixi directory of the workspace [consts::PIXI_DIR],
+    /// always pointing to `.pixi` regardless of detached-environments configuration.
+    pub fn default_pixi_dir(&self) -> PathBuf {
         self.root.join(consts::PIXI_DIR)
+    }
+
+    /// Returns the effective pixi directory for the workspace. When
+    /// detached-environments is configured, this returns the project-specific
+    /// detached path instead of the default `.pixi` directory.
+    pub fn pixi_dir(&self) -> PathBuf {
+        self.detached_environments_path()
+            .unwrap_or_else(|| self.default_pixi_dir())
     }
 
     /// Create the detached-environments path for this project if it is set in
@@ -347,7 +378,7 @@ impl Workspace {
     /// Returns the default environment directory without interacting with
     /// config.
     pub fn default_environments_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
+        self.default_pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
 
     /// Returns the environment directory
@@ -396,17 +427,55 @@ impl Workspace {
     /// Returns the default solve group environments directory, without
     /// interacting with config
     pub fn default_solve_group_environments_dir(&self) -> PathBuf {
-        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        self.default_pixi_dir()
+            .join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
     /// Returns the solve group environments directory
     pub fn solve_group_environments_dir(&self) -> PathBuf {
-        // If the detached-environments path is set, use it instead of the default
-        // directory.
-        if let Some(detached_environments_path) = self.detached_environments_path() {
-            return detached_environments_path.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR);
+        self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+    }
+
+    /// Returns the default build cache directory without interacting with config.
+    pub fn default_build_dir(&self) -> PathBuf {
+        self.default_pixi_dir().join(consts::WORKSPACE_CACHE_DIR)
+    }
+
+    /// Returns the build cache directory. When detached-environments is
+    /// configured, this returns the detached path and creates a symlink from
+    /// the default `.pixi/build` location.
+    pub fn build_dir(&self) -> PathBuf {
+        let default_build_dir = self.default_build_dir();
+
+        // Early out if detached-environments is not set
+        if self.config().detached_environments().is_false() {
+            return default_build_dir;
         }
-        self.default_solve_group_environments_dir()
+
+        if self.detached_environments_path().is_some() {
+            let detached_build_path = self.pixi_dir().join(consts::WORKSPACE_CACHE_DIR);
+            let _ = CUSTOM_BUILD_DIR_WARN.get_or_init(|| {
+                if !default_build_dir.is_symlink() && default_build_dir.exists() {
+                    tracing::warn!(
+                        "Build cache found in '{}', this will be ignored and build artifacts will be stored in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
+                        default_build_dir.display(),
+                        detached_build_path.parent().expect("path should have parent").display(),
+                        format!("{}/{}", consts::PIXI_DIR, consts::WORKSPACE_CACHE_DIR),
+                        if cfg!(windows) { "" } else { " as a symlink can be made, please re-install after removal." }
+                    );
+                } else {
+                    #[cfg(not(windows))]
+                    create_symlink(&detached_build_path, &default_build_dir);
+                }
+
+                #[cfg(windows)]
+                write_warning_file(&default_build_dir, &detached_build_path);
+            });
+
+            return detached_build_path;
+        }
+
+        default_build_dir
     }
 
     /// Returns the path to the lock file of the project
@@ -536,11 +605,11 @@ impl Workspace {
         })
     }
 
-    // /// Returns the reqwest client used for http networking
-    // /// this api is not used now, uncomment when use in the future
-    // pub(crate) fn client(&self) -> miette::Result<&reqwest::Client> {
-    //     Ok(&self.client_and_authenticated_client()?.0)
-    // }
+    /// Returns the reqwest client used for http networking
+    /// this api is not used now, uncomment when use in the future
+    pub fn client(&self) -> miette::Result<&LazyReqwestClient> {
+        Ok(&self.lazy_client_and_authenticated_client()?.0)
+    }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
@@ -559,8 +628,9 @@ impl Workspace {
             .clone()
     }
 
-    /// Returns a pre-filled command dispatcher builder that can be used to
-    /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
+    /// Returns a pre-filled command dispatcher builder. Seeds a
+    /// [`RayonPrimer`](crate::rayon_primer::RayonPrimer) in the install /
+    /// solve / instantiate-backend reporter slots; UI reporters override.
     pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
         let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
             .expect("cache dir is not absolute")
@@ -588,6 +658,7 @@ impl Workspace {
             .expect("root dir is not absolute")
             .into_assume_dir();
 
+        let rayon_primer = std::sync::Arc::new(crate::rayon_primer::RayonPrimer::default());
         Ok(CommandDispatcher::builder()
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
@@ -604,10 +675,17 @@ impl Workspace {
                     .or_else(|| BackendOverride::from_env().ok().flatten())
                     .unwrap_or_default(),
             )
+            .with_channel_config(self.channel_config())
             .execute_link_scripts(match self.config.run_post_link_scripts() {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
             })
+            .with_allow_symbolic_links(self.config.allow_symbolic_links)
+            .with_allow_hard_links(self.config.allow_hard_links)
+            .with_allow_ref_links(self.config.allow_ref_links)
+            .with_pixi_install_reporter(rayon_primer.clone())
+            .with_pixi_solve_reporter(rayon_primer.clone())
+            .with_instantiate_backend_reporter(rayon_primer)
             .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 
@@ -747,7 +825,7 @@ impl Workspace {
         })
     }
 
-    /// Constructs a new lock-file where some of the constraints have been
+    /// Constructs a new lock file where some of the constraints have been
     /// removed.
     fn unlock_packages(
         &self,
@@ -759,27 +837,13 @@ impl Workspace {
         filter_lock_file(self, lock_file, |env, platform, package| {
             if affected_environments.contains(&(env.name().as_str(), platform)) {
                 match package {
-                    LockedPackageRef::Conda(package) => {
-                        !conda_packages.contains(&package.record().name)
-                    }
-                    LockedPackageRef::Pypi(package, _env) => !pypi_packages.contains(&package.name),
+                    LockedPackageKind::Conda(name) => !conda_packages.contains(name),
+                    LockedPackageKind::Pypi(name) => !pypi_packages.contains(name),
                 }
             } else {
                 true
             }
         })
-    }
-
-    /// Verify the pixi version requirement.
-    pub fn verify_current_pixi_meets_requirement(&self) -> Result<(), ExplicitManifestError> {
-        if let Some(ref requires_pixi) = self.workspace.value.workspace.requires_pixi
-            && !requires_pixi.matches(&Version::from_str(consts::PIXI_VERSION)?)
-        {
-            return Err(ExplicitManifestError::SelfVersionMatchError {
-                requires_pixi: requires_pixi.clone(),
-            });
-        }
-        Ok(())
     }
 }
 
@@ -935,10 +999,11 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
+    use pixi_config::{Config, DetachedEnvironments};
     use pixi_manifest::{FeatureName, FeaturesExt};
     use rattler_conda_types::{Platform, Version};
     use rattler_virtual_packages::{LibC, VirtualPackage};
-    use std::env;
+    use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
 
@@ -1364,6 +1429,88 @@ mod tests {
             workspace.pixi_dir(),
             expected_pixi_dir,
             ".pixi directory should be in the symlink's parent directory"
+        );
+    }
+
+    const WORKSPACE_MANIFEST_STR: &str = r#"[workspace]
+name = "myproj"
+channels = []
+platforms = []
+"#;
+
+    #[test]
+    fn test_dirs_without_detached() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap();
+
+        let dot_pixi = dunce::canonicalize(temp_dir.path()).unwrap().join(".pixi");
+        assert_eq!(workspace.default_pixi_dir(), dot_pixi);
+        assert_eq!(workspace.pixi_dir(), dot_pixi);
+        assert_eq!(
+            workspace.default_environments_dir(),
+            dot_pixi.join(consts::ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_solve_group_environments_dir(),
+            dot_pixi.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_build_dir(),
+            dot_pixi.join(consts::WORKSPACE_CACHE_DIR)
+        );
+        assert_eq!(workspace.build_dir(), workspace.default_build_dir());
+    }
+
+    #[test]
+    fn test_dirs_with_detached() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let detached_dir = tempfile::tempdir().unwrap();
+
+        let workspace = Workspace::from_str(
+            &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            detached_environments: Some(DetachedEnvironments::Path(
+                detached_dir.path().to_path_buf(),
+            )),
+            ..Default::default()
+        });
+
+        let dot_pixi = dunce::canonicalize(workspace_dir.path())
+            .unwrap()
+            .join(".pixi");
+        let detached_subdir = detached_dir.path().join(format!(
+            "{}-{}",
+            workspace.display_name(),
+            xxh3_64(workspace.root().to_string_lossy().as_bytes())
+        ));
+
+        // default_* methods always point at local .pixi
+        assert_eq!(workspace.default_pixi_dir(), dot_pixi);
+        assert_eq!(
+            workspace.default_environments_dir(),
+            dot_pixi.join(consts::ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_solve_group_environments_dir(),
+            dot_pixi.join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
+        );
+        assert_eq!(
+            workspace.default_build_dir(),
+            dot_pixi.join(consts::WORKSPACE_CACHE_DIR)
+        );
+
+        // effective paths point into the detached directory
+        assert_eq!(workspace.pixi_dir(), detached_subdir);
+        assert_eq!(
+            workspace.build_dir(),
+            detached_subdir.join(consts::WORKSPACE_CACHE_DIR)
         );
     }
 }

@@ -8,7 +8,7 @@ use std::collections::HashSet;
 
 use itertools::Itertools;
 use pixi_build_types::{self as pbt};
-use rattler_build::NormalizedKey;
+use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{Platform, Version};
 
 use super::{Dependencies, PackageSpec, targets::Targets};

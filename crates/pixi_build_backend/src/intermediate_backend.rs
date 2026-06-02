@@ -20,11 +20,12 @@ use pixi_build_types::{
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
 };
-use rattler_build::{
+use rattler_build_core::{
     DiscoveredOutput,
     build::{WorkingDirectoryBehavior, run_build},
     console_utils::LoggingOutputHandler,
-    metadata::{BuildConfiguration, Debug, Output, PlatformWithVirtualPackages},
+    metadata::{BuildConfiguration, Output, PlatformWithVirtualPackages},
+    system_tools::SystemTools,
     tool_configuration::Configuration,
     types::{Directories, PackageIdentifier, PackagingSettings},
 };
@@ -51,7 +52,7 @@ use crate::{
         convert_variant_from_pixi_build_types, convert_variant_to_pixi_build_types,
         from_build_v1_args_to_finalized_dependencies,
     },
-    tools::{OneOrMultipleOutputs, output_directory},
+    tools::{BackendIdentifier, OneOrMultipleOutputs, output_directory},
     traits::targets::TargetSelector as _,
 };
 
@@ -68,14 +69,20 @@ pub struct IntermediateBackendConfig {
 }
 
 pub struct IntermediateBackendInstantiator<T: GenerateRecipe> {
+    backend_identifier: BackendIdentifier,
     logging_output_handler: LoggingOutputHandler,
 
     generator: Arc<T>,
 }
 
 impl<T: GenerateRecipe> IntermediateBackendInstantiator<T> {
-    pub fn new(logging_output_handler: LoggingOutputHandler, instance: Arc<T>) -> Self {
+    pub fn new(
+        backend_identifier: BackendIdentifier,
+        logging_output_handler: LoggingOutputHandler,
+        instance: Arc<T>,
+    ) -> Self {
         Self {
+            backend_identifier,
             logging_output_handler,
             generator: instance,
         }
@@ -83,6 +90,7 @@ impl<T: GenerateRecipe> IntermediateBackendInstantiator<T> {
 }
 
 pub struct IntermediateBackend<T: GenerateRecipe> {
+    pub(crate) backend_identifier: BackendIdentifier,
     pub(crate) logging_output_handler: LoggingOutputHandler,
     pub(crate) source_dir: PathBuf,
     /// The path to the manifest file relative to the source directory.
@@ -92,10 +100,14 @@ pub struct IntermediateBackend<T: GenerateRecipe> {
     pub(crate) config: T::Config,
     pub(crate) target_config: OrderMap<TargetSelector, T::Config>,
     pub(crate) cache_dir: Option<PathBuf>,
+    pub(crate) workspace_scratch_directory: Option<PathBuf>,
+    pub(crate) workspace_directory: Option<PathBuf>,
+    pub(crate) checkout_root: Option<PathBuf>,
 }
 impl<T: GenerateRecipe> IntermediateBackend<T> {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
+        backend_identifier: BackendIdentifier,
         manifest_path: PathBuf,
         source_dir: Option<PathBuf>,
         project_model: ProjectModel,
@@ -104,6 +116,9 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
         target_config: OrderMap<TargetSelector, serde_json::Value>,
         logging_output_handler: LoggingOutputHandler,
         cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
+        workspace_directory: Option<PathBuf>,
+        checkout_root: Option<PathBuf>,
     ) -> miette::Result<Self> {
         // Determine the root directory of the manifest
         let (source_dir, manifest_rel_path) = match source_dir {
@@ -158,6 +173,7 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
             .collect::<Result<_, miette::Report>>()?;
 
         Ok(Self {
+            backend_identifier,
             source_dir,
             manifest_rel_path,
             project_model,
@@ -166,6 +182,9 @@ impl<T: GenerateRecipe> IntermediateBackend<T> {
             target_config,
             logging_output_handler,
             cache_dir,
+            workspace_scratch_directory,
+            workspace_directory,
+            checkout_root,
         })
     }
 }
@@ -193,6 +212,7 @@ where
         let target_config = params.target_configuration.unwrap_or_default();
 
         let instance = IntermediateBackend::<T>::new(
+            self.backend_identifier,
             params.manifest_path,
             params.source_directory,
             project_model,
@@ -201,6 +221,9 @@ where
             target_config,
             self.logging_output_handler.clone(),
             params.cache_directory,
+            params.workspace_scratch_directory,
+            params.workspace_directory,
+            params.checkout_root,
         )?;
 
         Ok((Box::new(instance), InitializeResult {}))
@@ -267,6 +290,9 @@ where
                 &variant_config.variants.keys().cloned().collect(),
                 params.channels,
                 self.cache_dir.clone(),
+                self.workspace_scratch_directory.clone(),
+                self.workspace_directory.clone(),
+                self.checkout_root.clone(),
             )
             .await?;
 
@@ -278,9 +304,7 @@ where
         let named_source = Source {
             name: self.manifest_rel_path.display().to_string(),
             code: Arc::from(
-                generated_recipe
-                    .recipe
-                    .to_yaml_pretty()
+                serde_yaml::to_string(&generated_recipe.recipe)
                     .into_diagnostic()?
                     .as_str(),
             ),
@@ -297,11 +321,17 @@ where
         let stage0_recipe = rattler_build_recipe::parse_recipe(&source)?;
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(params.host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(params.host_platform)
             .with_recipe_path(&recipe_path);
+        if let Some(prefix) = &self.project_model.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.project_model.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -395,7 +425,7 @@ where
                 .await
                 .into_diagnostic()?;
 
-            let recipe_yaml = generated_recipe.recipe.to_yaml_pretty().into_diagnostic()?;
+            let recipe_yaml = serde_yaml::to_string(&generated_recipe.recipe).into_diagnostic()?;
 
             tokio_fs::write(&package_recipe_path, &recipe_yaml)
                 .await
@@ -546,13 +576,21 @@ where
 
                 // The input globs are the same for all outputs
                 input_globs: None,
+                input_glob_sets: None,
                 // TODO: Implement caching
             });
         }
 
+        let metadata_input_glob_sets = if generated_recipe.metadata_input_glob_sets.is_empty() {
+            None
+        } else {
+            Some(generated_recipe.metadata_input_glob_sets)
+        };
+
         Ok(CondaOutputsResult {
             outputs,
             input_globs: generated_recipe.metadata_input_globs,
+            input_glob_sets: metadata_input_glob_sets,
         })
     }
 
@@ -605,6 +643,9 @@ where
                 &variants.keys().cloned().collect(),
                 params.channels,
                 self.cache_dir.clone(),
+                self.workspace_scratch_directory.clone(),
+                self.workspace_directory.clone(),
+                self.checkout_root.clone(),
             )
             .await?;
 
@@ -613,8 +654,11 @@ where
         // immediately use the intermediate recipe for some of this rattler-build
         // functions.
         let recipe_path = self.source_dir.join(&self.manifest_rel_path);
-        let recipe_code: Arc<str> =
-            Arc::from(recipe.recipe.to_yaml_pretty().into_diagnostic()?.as_str());
+        let recipe_code: Arc<str> = Arc::from(
+            serde_yaml::to_string(&recipe.recipe)
+                .into_diagnostic()?
+                .as_str(),
+        );
 
         // Parse the recipe into stage0
         // Create source for error reporting
@@ -631,11 +675,17 @@ where
         };
 
         // Build render config
-        let render_config = RenderConfig::new()
+        let mut render_config = RenderConfig::new()
             .with_target_platform(host_platform)
             .with_build_platform(build_platform)
             .with_host_platform(host_platform)
             .with_recipe_path(&recipe_path);
+        if let Some(prefix) = &self.project_model.build_string_prefix {
+            render_config = render_config.with_build_string_prefix(prefix);
+        }
+        if let Some(bn) = self.project_model.build_number {
+            render_config = render_config.with_build_number_override(bn);
+        }
 
         // Render recipe with variant config
         let rendered_variants = rattler_build_recipe::render_recipe(
@@ -707,7 +757,7 @@ where
             .await
             .into_diagnostic()?;
 
-        let recipe_yaml = recipe.recipe.to_yaml_pretty().into_diagnostic()?;
+        let recipe_yaml = serde_yaml::to_string(&recipe.recipe).into_diagnostic()?;
 
         tokio_fs::write(&package_recipe_path, &recipe_yaml)
             .await
@@ -743,6 +793,7 @@ where
             // This indicates that the environments are externally managed, e.g. they are already
             // prepared.
             .with_environments_externally_managed(true)
+            .with_allow_absolute_license_paths(true)
             .finish();
 
         let output = Output {
@@ -766,14 +817,21 @@ where
                 timestamp: chrono::Utc::now(),
                 subpackages: BTreeMap::new(),
                 packaging_settings: PackagingSettings::from_args(
-                    CondaArchiveType::Conda,
-                    CompressionLevel::default(),
+                    params
+                        .package_format
+                        .map(|pf| pf.archive_type)
+                        .unwrap_or(CondaArchiveType::Conda),
+                    params
+                        .package_format
+                        .map(|pf| CompressionLevel::from(pf.compression_level))
+                        .unwrap_or_default(),
                 ),
                 store_recipe: false,
                 force_colors: true,
                 sandbox_config: None,
-                debug: Debug::new(false),
                 exclude_newer: None,
+                env_isolation: Default::default(),
+                v3: false,
             },
             finalized_dependencies: Some(from_build_v1_args_to_finalized_dependencies(
                 params.build_prefix,
@@ -786,8 +844,12 @@ where
             finalized_cache_dependencies: None,
             finalized_cache_sources: None,
             build_summary: Arc::default(),
-            system_tools: Default::default(),
+            system_tools: SystemTools::new(
+                self.backend_identifier.name,
+                self.backend_identifier.version,
+            ),
             extra_meta: None,
+            staging_library_name_map: None,
         };
 
         let (output, output_path) =
@@ -801,9 +863,16 @@ where
         )?;
         input_globs.append(&mut recipe.build_input_globs);
 
+        let build_input_glob_sets = if recipe.build_input_glob_sets.is_empty() {
+            None
+        } else {
+            Some(std::mem::take(&mut recipe.build_input_glob_sets))
+        };
+
         Ok(CondaBuildV1Result {
             output_file: output_path,
             input_globs,
+            input_glob_sets: build_input_glob_sets,
             name: output.name().as_normalized().to_string(),
             version: output.version().clone(),
             build: output.build_string().into_owned(),
