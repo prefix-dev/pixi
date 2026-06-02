@@ -15,7 +15,8 @@ use crate::CommandDispatcherError;
 use crate::CondaPackageFormat;
 use crate::cache::markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir};
 use crate::compute_data::{
-    HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasPackageCache, HasPixiInstallReporter,
+    HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasIoConcurrencySemaphore, HasPackageCache,
+    HasPixiInstallReporter,
 };
 use crate::install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
@@ -241,6 +242,9 @@ async fn install_inner(
         .with_ignored_packages(spec.ignore_packages.take().unwrap_or_default())
         .with_execute_link_scripts(data.allow_execute_link_scripts())
         .with_link_options(data.allow_link_options());
+    if let Some(io_semaphore) = data.io_concurrency_semaphore() {
+        installer = installer.with_io_concurrency_semaphore(io_semaphore.clone());
+    }
     if let Some(installed) = spec.installed.take() {
         installer = installer.with_installed_packages(installed);
     }

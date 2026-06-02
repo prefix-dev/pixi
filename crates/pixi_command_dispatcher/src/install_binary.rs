@@ -11,7 +11,9 @@ use pixi_compute_engine::DataStore;
 use rattler::install::{Installer, InstallerError};
 use rattler_conda_types::{Platform, RepoDataRecord, prefix::Prefix};
 
-use crate::compute_data::{HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasPackageCache};
+use crate::compute_data::{
+    HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasIoConcurrencySemaphore, HasPackageCache,
+};
 use crate::install_pixi::reporter::WrappingInstallReporter;
 use pixi_compute_network::HasDownloadClient;
 
@@ -40,6 +42,10 @@ pub async fn install_binary_records(
         .with_package_cache(data.package_cache().clone())
         .with_execute_link_scripts(data.allow_execute_link_scripts())
         .with_link_options(data.allow_link_options());
+
+    if let Some(io_semaphore) = data.io_concurrency_semaphore() {
+        installer = installer.with_io_concurrency_semaphore(io_semaphore.clone());
+    }
 
     if let Some(reporter) = reporter {
         installer = installer.with_reporter(WrappingInstallReporter(reporter));

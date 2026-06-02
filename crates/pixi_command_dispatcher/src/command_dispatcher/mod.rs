@@ -157,6 +157,12 @@ pub(crate) struct CommandDispatcherData {
     /// through the compute engine. `None` means unbounded.
     pub backend_source_build_semaphore: Option<Arc<Semaphore>>,
 
+    /// Semaphore that bounds concurrent filesystem operations while linking
+    /// packages into prefixes. Shared across all installs so concurrent
+    /// environment installs cannot exhaust the file descriptor limit. `None`
+    /// means unbounded.
+    pub io_concurrency_semaphore: Option<Arc<Semaphore>>,
+
     /// Registry of workspace environment specs reachable by id. Callers
     /// allocate refs via [`CommandDispatcher::workspace_env_registry`]
     /// and pass them into Keys that carry an
