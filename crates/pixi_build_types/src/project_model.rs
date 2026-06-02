@@ -85,8 +85,13 @@ impl IsDefault for ProjectModel {
     }
 }
 
-/// Represents a target selector. Currently, we only support explicit platform
-/// selection.
+/// Represents a target selector.
+///
+/// In addition to explicit platform selection, the `Expression` variant allows
+/// arbitrary selector expressions wrapped in `if(...)` (e.g.
+/// `"if(host_platform == build_platform)"`) that are passed through directly to
+/// rattler-build. The stored string is the bare inner expression without the
+/// `if(...)` wrapper.
 #[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Eq, PartialEq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub enum TargetSelector {
@@ -96,7 +101,10 @@ pub enum TargetSelector {
     Win,
     MacOs,
     Platform(String),
-    // TODO: Add minijinja coolness here.
+    /// A free-form selector expression passed through to rattler-build.
+    /// Written by users as `if(<expression>)`; the stored value is the bare
+    /// inner expression.
+    Expression(String),
 }
 
 impl Display for TargetSelector {
@@ -107,6 +115,7 @@ impl Display for TargetSelector {
             TargetSelector::Win => write!(f, "win"),
             TargetSelector::MacOs => write!(f, "macos"),
             TargetSelector::Platform(p) => write!(f, "{p}"),
+            TargetSelector::Expression(expr) => write!(f, "if({expr})"),
         }
     }
 }
@@ -114,14 +123,25 @@ impl FromStr for TargetSelector {
     type Err = Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "unix" => Ok(TargetSelector::Unix),
-            "linux" => Ok(TargetSelector::Linux),
-            "win" => Ok(TargetSelector::Win),
-            "macos" => Ok(TargetSelector::MacOs),
-            _ => Ok(TargetSelector::Platform(s.to_string())),
+        // Expression selectors are wrapped in `if(...)`, e.g.
+        // `if(host_platform == build_platform)`.
+        if let Some(inner) = strip_if_wrapper(s) {
+            return Ok(TargetSelector::Expression(inner.to_string()));
         }
+        Ok(match s {
+            "unix" => TargetSelector::Unix,
+            "linux" => TargetSelector::Linux,
+            "win" => TargetSelector::Win,
+            "macos" => TargetSelector::MacOs,
+            _ => TargetSelector::Platform(s.to_string()),
+        })
     }
+}
+
+/// If `s` is wrapped as `if(<expr>)`, return the trimmed inner expression.
+fn strip_if_wrapper(s: &str) -> Option<&str> {
+    let inner = s.strip_prefix("if(")?.strip_suffix(')')?;
+    Some(inner.trim())
 }
 
 /// A collect of targets including a default target.
@@ -600,6 +620,10 @@ impl Hash for TargetSelector {
             TargetSelector::Platform(p) => {
                 4u8.hash(state);
                 p.hash(state);
+            }
+            TargetSelector::Expression(expr) => {
+                5u8.hash(state);
+                expr.hash(state);
             }
         }
     }

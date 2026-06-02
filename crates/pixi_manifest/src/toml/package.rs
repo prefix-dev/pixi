@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use indexmap::IndexMap;
 use pixi_spec::TomlSpec;
 pub use pixi_toml::TomlFromStr;
-use pixi_toml::{DeserializeAs, Same, TomlIndexMap, TomlWith};
+use pixi_toml::{DeserializeAs, FromKey, Same, TomlIndexMap, TomlWith};
 use rattler_conda_types::{PackageName, Version};
 use thiserror::Error;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
@@ -18,6 +18,21 @@ use crate::{
     },
     utils::{PixiSpanned, inheritable_package_map::InheritablePackageMap},
 };
+
+/// A wrapper around [`TargetSelector`] for use as a TOML key in the
+/// `[package.target]` section. Unlike `TargetSelector::from_str`, this
+/// additionally accepts `if(<expression>)` wrappers for selector expressions
+/// passed through to rattler-build.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct PackageTargetKey(pub TargetSelector);
+
+impl<'de> FromKey<'de> for PackageTargetKey {
+    type Err = crate::target::ParseTargetSelectorError;
+
+    fn from_key(key: toml_span::value::Key<'de>) -> Result<Self, Self::Err> {
+        TargetSelector::from_str_or_expression(&key.name).map(PackageTargetKey)
+    }
+}
 
 /// Represents a field that can either have a direct value or inherit from
 /// workspace
@@ -137,7 +152,7 @@ pub struct TomlPackage {
     pub build_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
     pub run_dependencies: Option<PixiSpanned<InheritablePackageMap>>,
     pub run_constraints: Option<PixiSpanned<InheritablePackageMap>>,
-    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
+    pub target: IndexMap<PixiSpanned<PackageTargetKey>, TomlPackageTarget>,
 
     pub span: Span,
 }
@@ -366,6 +381,10 @@ impl TomlPackage {
             .into_iter()
             .map(|(selector, target)| {
                 let target = target.into_package_target(preview, &workspace_dependencies)?;
+                let selector = PixiSpanned {
+                    value: selector.value.0,
+                    span: selector.span,
+                };
                 Ok::<_, TomlError>((selector, target))
             })
             .collect::<Result<_, _>>()?;
@@ -1349,6 +1368,82 @@ mod test {
         // Verify the readme path is set correctly
         let manifest = result.unwrap().value;
         assert!(manifest.package.readme.is_some());
+    }
+
+    #[test]
+    fn test_expression_selector_in_package_target() {
+        let input = r#"
+        name = "package-name"
+        version = "1.0.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target."if(host_platform == build_platform)".build-dependencies]
+        cmake = "*"
+        "#;
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties::default();
+
+        let parsed = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                Path::new(""),
+            )
+            .unwrap();
+
+        // Verify the expression selector target was parsed correctly
+        let targets = &parsed.value.targets;
+        let expr_target = targets
+            .iter()
+            .find_map(|(target, selector)| {
+                selector.and_then(|s| {
+                    if s.is_expression() {
+                        Some((s, target))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .expect("expected an expression selector target");
+        // Display re-wraps the expression in `if(...)` for round-tripping.
+        assert_eq!(
+            expr_target.0.to_string(),
+            "if(host_platform == build_platform)"
+        );
+        assert!(expr_target.1.build_dependencies().is_some());
+    }
+
+    #[test]
+    fn test_bare_expression_in_package_target_is_rejected() {
+        // Without the `if(...)` wrapper, an expression-like key must fail to
+        // parse as a platform. The error must include a hint pointing users
+        // at the `if(...)` wrapper.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        name = "package-name"
+        version = "1.0.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target."host_platform == build_platform".build-dependencies]
+        cmake = "*"
+        "#,
+        ), @r###"
+          × 'host_platform == build_platform' is not a known platform. Valid platforms are 'noarch', 'unknown', 'linux-32', 'linux-64', 'linux-aarch64', 'linux-armv6l', 'linux-armv7l', 'linux-loongarch64',
+          │ 'linux-ppc64le', 'linux-ppc64', 'linux-ppc', 'linux-s390x', 'linux-riscv32', 'linux-riscv64', 'freebsd-32', 'freebsd-64', 'freebsd-arm64', 'osx-64', 'osx-arm64', 'win-32', 'win-64', 'win-arm64',
+          │ 'emscripten-wasm32', 'wasi-wasm32', 'zos-z'
+           ╭─[pixi.toml:8:18]
+         7 │
+         8 │         [target."host_platform == build_platform".build-dependencies]
+           ·                  ───────────────────────────────
+         9 │         cmake = "*"
+           ╰────
+          help: 'host_platform == build_platform' looks like a selector expression. Wrap it in `if(...)` to pass it through to rattler-build, e.g. `if(host_platform == build_platform)`.
+        "###);
     }
 
     #[test]
