@@ -497,6 +497,7 @@ impl PixiControl {
                 config: Default::default(),
                 config_source: isolated_config_source(),
                 editable: false,
+                index: None,
             },
         }
     }
