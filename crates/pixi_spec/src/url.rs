@@ -1,6 +1,6 @@
 use crate::{BinarySpec, Subdirectory};
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, package::CondaArchiveIdentifier};
+use rattler_conda_types::{NamelessMatchSpec, StringMatcher, package::CondaArchiveIdentifier};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -28,6 +28,18 @@ pub struct UrlSpec {
     /// The subdirectory of the package inside the archive
     #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
     pub subdirectory: Subdirectory,
+
+    /// Extra dependency groups to enable for the package. Only meaningful
+    /// when the URL refers to a source package; hoisted into
+    /// [`crate::SourceSpec::extras`] when the spec is converted.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub extras: Option<Vec<String>>,
+
+    /// Variant flags to select for the package. Hoisted into
+    /// [`crate::SourceSpec::flags`] on conversion, like `extras`.
+    #[serde_as(as = "Option<Vec<serde_with::DisplayFromStr>>")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub flags: Option<Vec<StringMatcher>>,
 }
 
 impl UrlSpec {
@@ -146,6 +158,8 @@ impl From<UrlSourceSpec> for UrlSpec {
             md5: value.md5,
             sha256: value.sha256,
             subdirectory: value.subdirectory,
+            extras: None,
+            flags: None,
         }
     }
 }
@@ -171,6 +185,8 @@ impl From<UrlBinarySpec> for UrlSpec {
             sha256: value.sha256,
             // A binary url spec is already a conda package so it cannot have a subdirectory
             subdirectory: Subdirectory::default(),
+            extras: None,
+            flags: None,
         }
     }
 }

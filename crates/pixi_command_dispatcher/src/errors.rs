@@ -235,6 +235,9 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     SpecConversionError(Arc<SpecConversionError>),
 
+    #[error(transparent)]
+    ExtraNotProvided(Arc<crate::solve_conda::SolveCondaEnvironmentError>),
+
     #[error("detected a cyclic dependency:\n\n{0}")]
     Cycle(Cycle),
 
@@ -326,6 +329,9 @@ impl From<SolveCondaEnvironmentError> for SolvePixiEnvironmentError {
             }
             SolveCondaEnvironmentError::Gateway(err) => {
                 SolvePixiEnvironmentError::QueryError(Arc::new(err))
+            }
+            err @ SolveCondaEnvironmentError::ExtraNotProvided { .. } => {
+                SolvePixiEnvironmentError::ExtraNotProvided(Arc::new(err))
             }
         }
     }

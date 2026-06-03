@@ -39,6 +39,8 @@ async fn pin_and_checkout_url_reuses_cached_checkout() {
         md5: None,
         sha256: Some(sha),
         subdirectory: Subdirectory::default(),
+        extras: None,
+        flags: None,
     };
 
     let spec_for_engine = spec.clone();
@@ -78,12 +80,16 @@ async fn pin_and_checkout_url_reports_sha_mismatch_from_concurrent_request() {
         md5: None,
         sha256: None,
         subdirectory: Subdirectory::default(),
+        extras: None,
+        flags: None,
     };
     let bad_spec = UrlSpec {
         url,
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-sha")),
         subdirectory: Subdirectory::default(),
+        extras: None,
+        flags: None,
     };
 
     let (good, bad) = tokio::join!(
@@ -121,6 +127,8 @@ async fn pin_and_checkout_url_validates_cached_results() {
         md5: None,
         sha256: None,
         subdirectory: Subdirectory::default(),
+        extras: None,
+        flags: None,
     };
 
     engine
@@ -134,6 +142,8 @@ async fn pin_and_checkout_url_validates_cached_results() {
         md5: None,
         sha256: Some(Sha256::digest(b"pixi-url-bad-cache")),
         subdirectory: Subdirectory::default(),
+        extras: None,
+        flags: None,
     };
 
     let err = engine
@@ -172,6 +182,8 @@ async fn url_checkout_fires_full_reporter_lifecycle() {
                 md5: None,
                 sha256: None,
                 subdirectory: Subdirectory::default(),
+                extras: None,
+                flags: None,
             })
             .await
         })
@@ -207,6 +219,8 @@ async fn url_checkout_semaphore_limits_inflight_count() {
         md5: None,
         sha256: None,
         subdirectory: Subdirectory::default(),
+        extras: None,
+        flags: None,
     };
 
     let (a, b, c) = tokio::join!(

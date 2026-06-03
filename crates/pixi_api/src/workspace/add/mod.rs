@@ -66,6 +66,8 @@ pub async fn add_conda_dep(
                     git: git.clone(),
                     rev: Some(git_options.reference.clone()),
                     subdirectory: subdirectory.clone(),
+                    extras: None,
+                    flags: None,
                 };
                 (
                     name.clone(),

@@ -356,6 +356,11 @@ pub enum SpecError {
     #[error("{0} cannot be used with {1}")]
     InvalidCombination(Cow<'static, str>, Cow<'static, str>),
 
+    #[error(
+        "{0} cannot be used with {1} pointing to a binary archive; it is only supported for source packages"
+    )]
+    SourceFieldOnBinaryArchive(Cow<'static, str>, Cow<'static, str>),
+
     #[error("{message}")]
     InvalidWhen {
         message: String,
@@ -556,15 +561,16 @@ impl TomlSpec {
         .collect::<Vec<_>>()
         .join(", ");
 
-        // Common field checks
+        // Common field checks. `extras` and `flags` are deliberately absent:
+        // they are valid on source specs (e.g. requesting an extra group of a
+        // path dependency) and are validated separately in `into_spec` /
+        // `into_binary_spec`.
         if !non_detailed_keys.is_empty() {
             for (field_name, is_some) in [
                 ("`version`", self.version.is_some()),
                 ("`build`", self.build.is_some()),
                 ("`build-number`", self.build_number.is_some()),
                 ("`file-name`", self.file_name.is_some()),
-                ("`extras`", self.extras.is_some()),
-                ("`flags`", self.flags.is_some()),
                 ("`channel`", self.channel.is_some()),
                 ("`subdir`", self.subdir.is_some()),
                 ("`when`", self.when.is_some()),
@@ -606,22 +612,71 @@ impl TomlSpec {
 
     /// Convert the TOML representation into an actual [`PixiSpec`].
     pub fn into_spec(self) -> Result<PixiSpec, SpecError> {
+        // `extras` and `flags` request behavior of a *source* package (extra
+        // dependency groups, variant selection), so a `path`/`url` that
+        // resolves to a binary archive cannot honor them.
+        fn reject_source_fields_on_binary_archive(
+            is_binary_archive: bool,
+            location: &'static str,
+            extras: &Option<Vec<String>>,
+            flags: &Option<Vec<StringMatcher>>,
+        ) -> Result<(), SpecError> {
+            if !is_binary_archive {
+                return Ok(());
+            }
+            for (field_name, is_some) in
+                [("`extras`", extras.is_some()), ("`flags`", flags.is_some())]
+            {
+                if is_some {
+                    return Err(SpecError::SourceFieldOnBinaryArchive(
+                        field_name.into(),
+                        location.into(),
+                    ));
+                }
+            }
+            Ok(())
+        }
+
         self.validate_field_combinations()?;
 
         let spec: PixiSpec;
         if let Some(loc) = self.location {
             spec = match (loc.url, loc.path, loc.git) {
-                (Some(url), None, None) => PixiSpec::Url(UrlSpec {
-                    url,
-                    md5: loc.md5,
-                    sha256: loc.sha256,
-                    subdirectory: loc
-                        .subdirectory
-                        .map(Subdirectory::try_from)
-                        .transpose()?
-                        .unwrap_or_default(),
-                }),
-                (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
+                (Some(url), None, None) => {
+                    let url_spec = UrlSpec {
+                        url,
+                        md5: loc.md5,
+                        sha256: loc.sha256,
+                        subdirectory: loc
+                            .subdirectory
+                            .map(Subdirectory::try_from)
+                            .transpose()?
+                            .unwrap_or_default(),
+                        extras: self.extras,
+                        flags: self.flags,
+                    };
+                    reject_source_fields_on_binary_archive(
+                        url_spec.is_binary(),
+                        "`url`",
+                        &url_spec.extras,
+                        &url_spec.flags,
+                    )?;
+                    PixiSpec::Url(url_spec)
+                }
+                (None, Some(path), None) => {
+                    let path_spec = PathSpec {
+                        path: path.into(),
+                        extras: self.extras,
+                        flags: self.flags,
+                    };
+                    reject_source_fields_on_binary_archive(
+                        path_spec.is_binary(),
+                        "`path`",
+                        &path_spec.extras,
+                        &path_spec.flags,
+                    )?;
+                    PixiSpec::Path(path_spec)
+                }
                 (None, None, Some(git)) => {
                     let rev = match (loc.branch, loc.rev, loc.tag) {
                         (Some(branch), None, None) => Some(GitReference::Branch(branch)),
@@ -641,6 +696,8 @@ impl TomlSpec {
                         git,
                         rev,
                         subdirectory,
+                        extras: self.extras,
+                        flags: self.flags,
                     })
                 }
                 (None, None, None) => {
@@ -725,6 +782,21 @@ impl TomlSpec {
 
         let spec: BinarySpec;
         if let Some(loc) = self.location {
+            // Binary specs cannot represent source packages, so the
+            // source-only fields are invalid with any location.
+            if loc.url.is_some() || loc.path.is_some() || loc.git.is_some() {
+                for (field_name, is_some) in [
+                    ("`extras`", self.extras.is_some()),
+                    ("`flags`", self.flags.is_some()),
+                ] {
+                    if is_some {
+                        return Err(SpecError::InvalidCombination(
+                            field_name.into(),
+                            "a binary package location".into(),
+                        ));
+                    }
+                }
+            }
             spec = match (loc.url, loc.path, loc.git) {
                 (Some(url), None, None) => {
                     let url_spec = UrlSpec {
@@ -736,6 +808,8 @@ impl TomlSpec {
                             .map(Subdirectory::try_from)
                             .transpose()?
                             .unwrap_or_default(),
+                        extras: None,
+                        flags: None,
                     };
                     if let Either::Right(binary) = url_spec.into_source_or_binary() {
                         BinarySpec::Url(binary)
@@ -744,7 +818,7 @@ impl TomlSpec {
                     }
                 }
                 (None, Some(path), None) => {
-                    let path_spec = PathSpec { path: path.into() };
+                    let path_spec = PathSpec::new(path);
                     if let Either::Right(binary) = path_spec.into_source_or_binary() {
                         BinarySpec::Path(binary)
                     } else {
@@ -1156,6 +1230,10 @@ impl TomlLocationSpec {
                     git,
                     rev,
                     subdirectory,
+                    // Locations never carry extras/flags; those live on the
+                    // surrounding `SourceSpec`.
+                    extras: None,
+                    flags: None,
                 })
             }
             (_, _, _) => return Err(SourceLocationSpecError::MultipleIdentifiers),
@@ -1498,13 +1576,21 @@ impl<'de> Deserialize<'de> for PathSpec {
     where
         D: Deserializer<'de>,
     {
+        #[serde_as]
         #[derive(Deserialize)]
         struct Raw {
             path: String,
+            #[serde(default)]
+            extras: Option<Vec<String>>,
+            #[serde_as(as = "Option<Vec<serde_with::DisplayFromStr>>")]
+            #[serde(default)]
+            flags: Option<Vec<StringMatcher>>,
         }
 
         Raw::deserialize(deserializer).map(|raw| PathSpec {
             path: raw.path.into(),
+            extras: raw.extras,
+            flags: raw.flags,
         })
     }
 }
@@ -1514,13 +1600,21 @@ impl Serialize for PathSpec {
     where
         S: Serializer,
     {
+        #[serde_as]
         #[derive(Serialize)]
-        struct Raw {
+        struct Raw<'a> {
             path: String,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            extras: &'a Option<Vec<String>>,
+            #[serde_as(as = "Option<Vec<serde_with::DisplayFromStr>>")]
+            #[serde(skip_serializing_if = "Option::is_none")]
+            flags: &'a Option<Vec<StringMatcher>>,
         }
 
         Raw {
             path: self.path.to_string(),
+            extras: &self.extras,
+            flags: &self.flags,
         }
         .serialize(serializer)
     }
@@ -1528,6 +1622,8 @@ impl Serialize for PathSpec {
 
 #[cfg(test)]
 mod test {
+    use std::str::FromStr;
+
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
     use pixi_toml::TomlDiagnostic;
@@ -1599,7 +1695,11 @@ mod test {
             json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
             json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
+            json!({ "path": "foobar", "extras": ["dev"] }),
+            json!({ "path": "foobar", "extras": ["dev"], "flags": ["cuda"] }),
+            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "extras": ["dev"] }),
             // Errors:
+            json!({ "path": "foobar.conda", "extras": ["dev"] }),
             json!({ "ver": "1.2.3" }),
             json!({ "path": "foobar" , "version": "1.2.3" }),
             json!({ "version": "//" }),
@@ -2267,15 +2367,64 @@ when = "__unix""#;
     }
 
     #[test]
-    fn test_v3_reject_extras_with_path_json() {
+    fn test_v3_extras_with_path_json() {
         let input = json!({ "path": "../foo", "extras": ["dev"] });
-        assert_snapshot!(parse_json_error(input), @"`extras` cannot be used with `path`");
+        let spec: PixiSpec = serde_json::from_value(input).unwrap();
+        assert_eq!(
+            spec.as_path().unwrap().extras,
+            Some(vec!["dev".to_string()])
+        );
+
+        // Conversion hoists the extras out of the location into the source
+        // spec.
+        let source = spec.try_into_source_spec().unwrap();
+        assert_eq!(source.extras, Some(vec!["dev".to_string()]));
     }
 
     #[test]
-    fn test_v3_reject_flags_with_git_json() {
+    fn test_v3_flags_with_git_json() {
         let input = json!({ "git": "https://example.com/foo.git", "flags": ["cuda"] });
-        assert_snapshot!(parse_json_error(input), @"`flags` cannot be used with `git`");
+        let spec: PixiSpec = serde_json::from_value(input).unwrap();
+
+        let source = spec.try_into_source_spec().unwrap();
+        assert_eq!(
+            source.flags,
+            Some(vec![StringMatcher::from_str("cuda").unwrap()])
+        );
+
+        // The location copy must not retain the hoisted fields; it ends up in
+        // lock-file `sources` maps which never carry them.
+        let SourceLocationSpec::Git(git) = &source.location else {
+            panic!("expected a git location");
+        };
+        assert_eq!(git.extras, None);
+        assert_eq!(git.flags, None);
+    }
+
+    #[test]
+    fn test_v3_extras_with_url_source_json() {
+        let input = json!({ "url": "https://example.com/foo.tar.gz", "extras": ["dev"] });
+        let spec: PixiSpec = serde_json::from_value(input).unwrap();
+        let source = spec.try_into_source_spec().unwrap();
+        assert_eq!(source.extras, Some(vec!["dev".to_string()]));
+    }
+
+    #[test]
+    fn test_v3_reject_extras_with_binary_path_json() {
+        let input = json!({ "path": "../foo.conda", "extras": ["dev"] });
+        assert_snapshot!(
+            parse_json_error(input),
+            @"`extras` cannot be used with `path` pointing to a binary archive; it is only supported for source packages"
+        );
+    }
+
+    #[test]
+    fn test_v3_reject_flags_with_binary_url_json() {
+        let input = json!({ "url": "https://example.com/foo-1.0-h123_0.conda", "flags": ["cuda"] });
+        assert_snapshot!(
+            parse_json_error(input),
+            @"`flags` cannot be used with `url` pointing to a binary archive; it is only supported for source packages"
+        );
     }
 
     #[test]
@@ -2344,29 +2493,28 @@ flags = ["*[unclosed"]"#;
     }
 
     #[test]
-    fn test_v3_reject_extras_with_path_toml() {
+    fn test_v3_extras_with_path_toml() {
         let input = r#"path = "../foo"
 extras = ["dev"]"#;
-        assert_snapshot!(parse_toml_error(input), @r###"
-         × `extras` cannot be used with `path`
-          ╭─[pixi.toml:1:1]
-        1 │ ╭─▶ path = "../foo"
-        2 │ ╰─▶ extras = ["dev"]
-          ╰────
-        "###);
+        let mut value = toml_span::parse(input).unwrap();
+        let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut value).unwrap();
+        assert_eq!(
+            spec.as_path().unwrap().extras,
+            Some(vec!["dev".to_string()])
+        );
     }
 
     #[test]
-    fn test_v3_reject_flags_with_url_toml() {
-        let input = r#"url = "https://example.com/foo.conda"
+    fn test_v3_reject_flags_with_binary_url_toml() {
+        let input = r#"url = "https://example.com/foo-1.0-h123_0.conda"
 flags = ["cuda"]"#;
-        assert_snapshot!(parse_toml_error(input), @r###"
-         × `flags` cannot be used with `url`
+        assert_snapshot!(parse_toml_error(input), @r#"
+         × `flags` cannot be used with `url` pointing to a binary archive; it is only supported for source packages
           ╭─[pixi.toml:1:1]
-        1 │ ╭─▶ url = "https://example.com/foo.conda"
+        1 │ ╭─▶ url = "https://example.com/foo-1.0-h123_0.conda"
         2 │ ╰─▶ flags = ["cuda"]
           ╰────
-        "###);
+        "#);
     }
 
     #[test]

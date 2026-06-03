@@ -229,6 +229,8 @@ pub async fn simple_test() {
                     git: git_repo.url.parse().unwrap(),
                     rev: Some(GitReference::Rev(git_repo.commits[0].clone())),
                     subdirectory: Subdirectory::try_from("recipe").unwrap(),
+                    extras: None,
+                    flags: None,
                 }
                 .into(),
             )]),
@@ -592,10 +594,7 @@ pub async fn test_cycle() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "package_a".parse().unwrap(),
-                PathSpec {
-                    path: "package_a".into(),
-                }
-                .into(),
+                PathSpec::new("package_a").into(),
             )]),
             env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
             ..empty_pixi_env_spec()
@@ -643,10 +642,7 @@ pub async fn test_cycle_three_packages() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "package_a".parse().unwrap(),
-                PathSpec {
-                    path: "package_a".into(),
-                }
-                .into(),
+                PathSpec::new("package_a").into(),
             )]),
             env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
             ..empty_pixi_env_spec()
@@ -2135,7 +2131,7 @@ pub async fn test_installed_host_packages_pin_nested_solve() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "foo".parse().unwrap(),
-                PathSpec { path: "foo".into() }.into(),
+                PathSpec::new("foo").into(),
             )]),
             installed,
             installed_source_hints,
@@ -2294,7 +2290,7 @@ pub async fn test_installed_hint_reused_across_variants() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "foo".parse().unwrap(),
-                PathSpec { path: "foo".into() }.into(),
+                PathSpec::new("foo").into(),
             )]),
             installed,
             installed_source_hints,
@@ -2409,7 +2405,7 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
         SolvePixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
                 "foo".parse().unwrap(),
-                PathSpec { path: "foo".into() }.into(),
+                PathSpec::new("foo").into(),
             )]),
             installed,
             installed_source_hints,
@@ -2587,14 +2583,8 @@ foo = { path = "../foo" }
 
     let make_spec = |installed: Vec<pixi_record::UnresolvedPixiRecord>| SolvePixiEnvironmentSpec {
         dependencies: DependencyMap::from_iter([
-            (
-                "foo".parse().unwrap(),
-                PathSpec { path: "foo".into() }.into(),
-            ),
-            (
-                "bar".parse().unwrap(),
-                PathSpec { path: "bar".into() }.into(),
-            ),
+            ("foo".parse().unwrap(), PathSpec::new("foo").into()),
+            ("bar".parse().unwrap(), PathSpec::new("bar").into()),
         ]),
         installed: std::sync::Arc::from(installed),
         env_ref: env_ref.clone(),

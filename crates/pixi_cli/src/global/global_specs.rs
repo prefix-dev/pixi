@@ -104,6 +104,8 @@ impl GlobalSpecs {
                     .map(Subdirectory::try_from)
                     .transpose()?
                     .unwrap_or_default(),
+                extras: None,
+                flags: None,
             };
             Some(PixiSpec::Git(git_spec))
         } else if let Some(path) = &self.path {
@@ -159,10 +161,10 @@ impl GlobalSpecs {
                         manifest_root.to_string_lossy().to_string(),
                     )
                 })?;
-            Some(PixiSpec::Path(pixi_spec::PathSpec {
-                path: Utf8NativePathBuf::from(relative_path.to_string_lossy().to_string())
+            Some(PixiSpec::Path(pixi_spec::PathSpec::new(
+                Utf8NativePathBuf::from(relative_path.to_string_lossy().to_string())
                     .to_typed_path_buf(),
-            }))
+            )))
         } else {
             fn pathlike(s: &str) -> bool {
                 s.contains(".conda") || s.contains('/') || s.contains('\\')

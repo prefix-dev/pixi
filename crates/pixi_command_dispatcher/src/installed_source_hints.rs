@@ -388,6 +388,8 @@ mod tests {
             git: url::Url::parse(url).expect("valid git url"),
             rev: Some(GitReference::Branch("main".into())),
             subdirectory: Default::default(),
+            extras: None,
+            flags: None,
         })
     }
 

@@ -4,6 +4,9 @@
 ignore-interior-mutability = [
   "pixi_core::workspace::environment::Environment",
   "pixi_core::workspace::solve_group::SolveGroup",
+  # StringMatcher's Hash/Eq are derived from the pattern string; the interior
+  # mutability is only a lazily-built regex cache and cannot destabilize keys.
+  "rattler_conda_types::StringMatcher",
 ]
 
 disallowed-methods = [

@@ -29,6 +29,8 @@ async fn pin_and_checkout_git_default_branch() {
         git: repo.base_url.clone(),
         rev: None,
         subdirectory: Subdirectory::default(),
+        extras: None,
+        flags: None,
     };
 
     let checkout = engine
@@ -76,6 +78,8 @@ async fn git_checkout_fires_full_reporter_lifecycle() {
                 git: repo.base_url.clone(),
                 rev: None,
                 subdirectory: Subdirectory::default(),
+                extras: None,
+                flags: None,
             })
             .await
         })

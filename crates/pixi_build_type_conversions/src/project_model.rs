@@ -64,6 +64,8 @@ fn to_pixi_spec_v1(
                         git,
                         rev,
                         subdirectory,
+                        extras: _,
+                        flags: _,
                     } = git_spec;
                     pbt::SourcePackageLocationSpec::Git(pbt::GitSpec {
                         git,

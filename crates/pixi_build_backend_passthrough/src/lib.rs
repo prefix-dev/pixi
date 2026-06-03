@@ -588,7 +588,18 @@ fn create_output(
         )),
         host_dependencies: Some(host_deps),
         run_dependencies,
-        extra_dependencies: convert_extra_depends(&index_json.experimental_extra_depends),
+        extra_dependencies: {
+            // Groups declared in the source manifest's
+            // `[package.extra-dependencies]` extend (and shadow per group)
+            // whatever a pre-built package recorded in its repodata.
+            let mut extra_dependencies =
+                convert_extra_depends(&index_json.experimental_extra_depends);
+            extra_dependencies.extend(extract_extra_dependencies(
+                &project_model.targets,
+                params.host_platform,
+            ));
+            extra_dependencies
+        },
         metadata: CondaOutputMetadata {
             name: project_model
                 .name
@@ -731,6 +742,42 @@ fn resolve_run_export_spec(
         }
         .into(),
     })
+}
+
+/// Collects the `[package.extra-dependencies]` groups declared in the source
+/// manifest's project model for the given platform, mirroring how
+/// `extract_dependencies` resolves the regular dependency tables.
+fn extract_extra_dependencies(
+    targets: &Option<Targets>,
+    platform: Platform,
+) -> BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> {
+    let mut result: BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> = BTreeMap::new();
+    let matching_targets = targets.iter().flat_map(|targets| {
+        targets
+            .default_target
+            .iter()
+            .chain(
+                targets
+                    .targets
+                    .iter()
+                    .flatten()
+                    .flat_map(|(selector, target)| {
+                        matches_target_selector(selector, platform).then_some(target)
+                    }),
+            )
+    });
+    for target in matching_targets {
+        for (group, deps) in target.extra_dependencies.iter().flatten() {
+            result
+                .entry(group.clone())
+                .or_default()
+                .extend(deps.iter().map(|(name, spec)| NamedSpec {
+                    name: name.clone(),
+                    spec: spec.clone(),
+                }));
+        }
+    }
+    result
 }
 
 /// Converts a finished package's `experimental_extra_depends` (group name to a

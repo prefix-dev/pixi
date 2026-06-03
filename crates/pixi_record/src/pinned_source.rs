@@ -168,6 +168,8 @@ impl PinnedSourceSpec {
     ///     git: Url::parse("https://github.com/user/repo.git")?,
     ///     rev: None,
     ///     subdirectory: Default::default(),
+    ///     extras: None,
+    ///     flags: None,
     /// });
     ///
     /// assert!(pinned_git.matches_source_spec(&source_spec));
@@ -951,6 +953,8 @@ impl From<PinnedGitSpec> for GitSpec {
             git: value.git,
             subdirectory: value.source.subdirectory,
             rev: Some(value.source.reference),
+            extras: None,
+            flags: None,
         }
     }
 }
@@ -982,6 +986,8 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            extras: None,
+            flags: None,
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec);
@@ -1001,6 +1007,8 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            extras: None,
+            flags: None,
         };
 
         let result = locked_git_spec_without_git_suffix.satisfies(&requested_git_spec);
@@ -1020,6 +1028,8 @@ mod tests {
             git: Url::parse("https://github.com/example/repo").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            extras: None,
+            flags: None,
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec_without_suffix);
@@ -1039,6 +1049,8 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            extras: None,
+            flags: None,
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec);
@@ -1058,6 +1070,8 @@ mod tests {
             git: Url::parse("git+https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            extras: None,
+            flags: None,
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec_with_prefix);
@@ -1082,6 +1096,8 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("d2e32".to_string())),
+            extras: None,
+            flags: None,
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
@@ -1103,6 +1119,8 @@ mod tests {
             git: Url::parse("https://github.com/example/repo.git").unwrap(),
             subdirectory: Default::default(),
             rev: Some(pixi_spec::GitReference::Rev("9de9e1b".to_string())),
+            extras: None,
+            flags: None,
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
@@ -1126,6 +1144,8 @@ mod tests {
             // we are not specifying the rev
             // and request the default branch
             rev: None,
+            extras: None,
+            flags: None,
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec);
@@ -1149,6 +1169,8 @@ mod tests {
             // we are not specifying the rev
             // and request the default branch
             rev: None,
+            extras: None,
+            flags: None,
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
@@ -1173,6 +1195,8 @@ mod tests {
             // we are not specifying the rev
             // and request the default branch
             rev: None,
+            extras: None,
+            flags: None,
         };
 
         let result = locked_git_spec.satisfies(&requested_git_spec).unwrap_err();
@@ -1226,6 +1250,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo.git").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            extras: None,
+            flags: None,
         });
 
         // Should match despite .git suffix difference
@@ -1247,6 +1273,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            extras: None,
+            flags: None,
         });
 
         // Should match despite .git suffix difference
@@ -1268,6 +1296,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo2").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            extras: None,
+            flags: None,
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1288,6 +1318,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            extras: None,
+            flags: None,
         });
 
         // Should match - spec doesn't care about subdirectory
@@ -1309,6 +1341,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Subdirectory::try_from("subdir").unwrap(),
+            extras: None,
+            flags: None,
         });
 
         assert!(pinned.matches_source_spec(&spec));
@@ -1329,6 +1363,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Subdirectory::try_from("subdir2").unwrap(),
+            extras: None,
+            flags: None,
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1349,6 +1385,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Subdirectory::try_from("subdir").unwrap(),
+            extras: None,
+            flags: None,
         });
 
         // Should not match - spec requires a subdirectory that pinned doesn't have
@@ -1409,6 +1447,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            extras: None,
+            flags: None,
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1473,6 +1513,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: Some(GitReference::Rev("v2.0.0".to_string())),
             subdirectory: Default::default(),
+            extras: None,
+            flags: None,
         });
 
         assert!(!pinned.matches_source_spec(&spec));
@@ -1495,6 +1537,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: Some(GitReference::Branch("main".to_string())),
             subdirectory: Default::default(),
+            extras: None,
+            flags: None,
         });
 
         assert!(pinned.matches_source_spec(&spec));
@@ -1515,6 +1559,8 @@ mod tests {
             git: Url::parse("https://github.com/user/repo").unwrap(),
             rev: None,
             subdirectory: Default::default(),
+            extras: None,
+            flags: None,
         });
 
         // Should match - GitHub URLs are case-insensitive

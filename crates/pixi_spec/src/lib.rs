@@ -143,6 +143,8 @@ impl PixiSpec {
                 // A nameless matchspec always describes a binary spec which cannot have a
                 // subdirectory
                 subdirectory: Subdirectory::default(),
+                extras: spec.extras,
+                flags: spec.flags,
             })
         } else if spec.build.is_none()
             && spec.build_number.is_none()
@@ -303,38 +305,99 @@ impl PixiSpec {
     }
 
     /// Converts this instance in a source or binary spec.
+    ///
+    /// `extras` and `flags` are hoisted from the location-carrying spec into
+    /// [`SourceSpec`] for source packages. For binary archives they are
+    /// dropped; parsing already rejects that combination.
     pub fn into_source_or_binary(self) -> Either<SourceSpec, BinarySpec> {
         match self {
             PixiSpec::Version(version) => Either::Right(BinarySpec::Version(version)),
             PixiSpec::DetailedVersion(detailed) => {
                 Either::Right(BinarySpec::DetailedVersion(detailed))
             }
-            PixiSpec::Url(url) => url
-                .into_source_or_binary()
-                .map_left(|url| SourceLocationSpec::Url(url).into())
-                .map_right(BinarySpec::Url),
-            PixiSpec::Git(git) => Either::Left(SourceLocationSpec::Git(git).into()),
-            PixiSpec::Path(path) => path
-                .into_source_or_binary()
-                .map_left(|path| SourceLocationSpec::Path(path).into())
-                .map_right(BinarySpec::Path),
+            PixiSpec::Url(mut url) => {
+                let extras = url.extras.take();
+                let flags = url.flags.take();
+                url.into_source_or_binary()
+                    .map_left(|url| SourceSpec {
+                        extras,
+                        flags,
+                        ..SourceLocationSpec::Url(url).into()
+                    })
+                    .map_right(BinarySpec::Url)
+            }
+            PixiSpec::Git(mut git) => {
+                let extras = git.extras.take();
+                let flags = git.flags.take();
+                Either::Left(SourceSpec {
+                    extras,
+                    flags,
+                    ..SourceLocationSpec::Git(git).into()
+                })
+            }
+            PixiSpec::Path(mut path) => {
+                let extras = path.extras.take();
+                let flags = path.flags.take();
+                path.into_source_or_binary()
+                    .map_left(|path| SourceSpec {
+                        extras,
+                        flags,
+                        ..SourceLocationSpec::Path(path).into()
+                    })
+                    .map_right(BinarySpec::Path)
+            }
         }
     }
 
     /// Converts this instance into a source spec if this instance represents a
     /// source package.
+    ///
+    /// `extras` and `flags` are hoisted into [`SourceSpec`], mirroring
+    /// [`Self::into_source_or_binary`].
     #[allow(clippy::result_large_err)]
     pub fn try_into_source_spec(self) -> Result<SourceSpec, Self> {
         match self {
-            PixiSpec::Url(url) => url
-                .try_into_source_url()
-                .map(SourceSpec::from)
-                .map_err(PixiSpec::from),
-            PixiSpec::Git(git) => Ok(SourceLocationSpec::Git(git).into()),
-            PixiSpec::Path(path) => path
-                .try_into_source_path()
-                .map(SourceSpec::from)
-                .map_err(PixiSpec::from),
+            PixiSpec::Url(mut url) => {
+                let extras = url.extras.take();
+                let flags = url.flags.take();
+                match url.try_into_source_url() {
+                    Ok(url) => Ok(SourceSpec {
+                        extras,
+                        flags,
+                        ..SourceLocationSpec::Url(url).into()
+                    }),
+                    Err(mut url) => {
+                        url.extras = extras;
+                        url.flags = flags;
+                        Err(PixiSpec::from(url))
+                    }
+                }
+            }
+            PixiSpec::Git(mut git) => {
+                let extras = git.extras.take();
+                let flags = git.flags.take();
+                Ok(SourceSpec {
+                    extras,
+                    flags,
+                    ..SourceLocationSpec::Git(git).into()
+                })
+            }
+            PixiSpec::Path(mut path) => {
+                let extras = path.extras.take();
+                let flags = path.flags.take();
+                match path.try_into_source_path() {
+                    Ok(path) => Ok(SourceSpec {
+                        extras,
+                        flags,
+                        ..SourceLocationSpec::Path(path).into()
+                    }),
+                    Err(mut path) => {
+                        path.extras = extras;
+                        path.flags = flags;
+                        Err(PixiSpec::from(path))
+                    }
+                }
+            }
             _ => Err(self),
         }
     }
@@ -591,10 +654,30 @@ impl SourceLocationSpec {
 
 impl From<SourceSpec> for PixiSpec {
     fn from(value: SourceSpec) -> Self {
-        match value.location {
-            SourceLocationSpec::Url(url) => Self::Url(url.into()),
-            SourceLocationSpec::Git(git) => Self::Git(git),
-            SourceLocationSpec::Path(path) => Self::Path(path.into()),
+        let SourceSpec {
+            location,
+            extras,
+            flags,
+            ..
+        } = value;
+        match location {
+            SourceLocationSpec::Url(url) => {
+                let mut url = UrlSpec::from(url);
+                url.extras = extras;
+                url.flags = flags;
+                Self::Url(url)
+            }
+            SourceLocationSpec::Git(mut git) => {
+                git.extras = extras;
+                git.flags = flags;
+                Self::Git(git)
+            }
+            SourceLocationSpec::Path(path) => {
+                let mut path = PathSpec::from(path);
+                path.extras = extras;
+                path.flags = flags;
+                Self::Path(path)
+            }
         }
     }
 }
@@ -795,6 +878,9 @@ impl From<rattler_lock::source::GitSourceLocation> for GitSpec {
                 .subdirectory
                 .and_then(|s| Subdirectory::try_from(s).ok())
                 .unwrap_or_default(),
+            // Lock-file locations never carry extras/flags.
+            extras: None,
+            flags: None,
         }
     }
 }
@@ -989,6 +1075,28 @@ mod test {
         assert_eq!(roundtrip.license_family, spec.license_family);
         assert_eq!(roundtrip.condition, spec.condition);
         assert_eq!(roundtrip.track_features, spec.track_features);
+    }
+
+    #[test]
+    fn test_source_spec_pixi_spec_roundtrip_preserves_extras() {
+        // `extras`/`flags` are hoisted into `SourceSpec` on conversion and
+        // must be restored into the variant struct on the way back.
+        let spec: PixiSpec = serde_json::from_value(json!({
+            "git": "https://example.com/foo.git",
+            "extras": ["dev"],
+            "flags": ["cuda"],
+        }))
+        .unwrap();
+
+        let source = spec.clone().try_into_source_spec().unwrap();
+        assert_eq!(source.extras, Some(vec!["dev".to_string()]));
+        assert_eq!(
+            source.flags,
+            Some(vec![StringMatcher::from_str("cuda").unwrap()])
+        );
+
+        let roundtrip = PixiSpec::from(source);
+        assert_eq!(roundtrip, spec);
     }
 
     #[test]

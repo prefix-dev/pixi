@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_spec/src/toml.rs
+assertion_line: 1744
 expression: snapshot
 ---
 - input: 1.2.3
@@ -70,6 +71,40 @@ expression: snapshot
   result:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
+- input:
+    path: foobar
+    extras:
+      - dev
+  result:
+    path: foobar
+    extras:
+      - dev
+- input:
+    path: foobar
+    extras:
+      - dev
+    flags:
+      - cuda
+  result:
+    path: foobar
+    extras:
+      - dev
+    flags:
+      - cuda
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    extras:
+      - dev
+  result:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    extras:
+      - dev
+- input:
+    path: foobar.conda
+    extras:
+      - dev
+  result:
+    error: "ERROR: `extras` cannot be used with `path` pointing to a binary archive; it is only supported for source packages"
 - input:
     ver: 1.2.3
   result:

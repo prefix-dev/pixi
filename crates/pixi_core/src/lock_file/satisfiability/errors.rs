@@ -339,6 +339,9 @@ pub enum PlatformUnsat {
     #[error("the locked source package '{0}' does not match the requested source package, {1}")]
     SourcePackageMismatch(String, SourceMismatchError),
 
+    #[error("the locked package '{0}' does not provide the requested extra '{1}'")]
+    ExtraNotProvided(String, String),
+
     #[error("failed to convert the requirement for '{0}'")]
     FailedToConvertRequirement(pep508_rs::PackageName, #[source] Box<ParsedUrlError>),
 

@@ -158,6 +158,8 @@ impl RawPyPiRequirement {
                                 .map(pixi_spec::Subdirectory::try_from)
                                 .transpose()?
                                 .unwrap_or_default(),
+                            extras: None,
+                            flags: None,
                         },
                     },
                     self.extras,
@@ -336,6 +338,8 @@ impl From<PixiPypiSpec> for toml_edit::Value {
                         git,
                         rev,
                         subdirectory,
+                        extras: _,
+                        flags: _,
                     },
             } => {
                 let mut table = toml_edit::Table::new().into_inline_table();
@@ -682,6 +686,8 @@ mod test {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: None,
                     subdirectory: Default::default(),
+                    extras: None,
+                    flags: None,
                 },
             })
         );
@@ -701,6 +707,8 @@ mod test {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: Some(GitReference::Branch("main".to_string())),
                     subdirectory: Default::default(),
+                    extras: None,
+                    flags: None,
                 },
             })
         );
@@ -720,6 +728,8 @@ mod test {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: Some(GitReference::Tag("v.1.2.3".to_string())),
                     subdirectory: Default::default(),
+                    extras: None,
+                    flags: None,
                 },
             })
         );
@@ -739,6 +749,8 @@ mod test {
                     git: Url::parse("https://github.com/pallets/flask.git").unwrap(),
                     rev: Some(GitReference::Tag("3.0.0".to_string())),
                     subdirectory: Default::default(),
+                    extras: None,
+                    flags: None,
                 },
             }),
         );
@@ -758,6 +770,8 @@ mod test {
                     git: Url::parse("https://test.url.git").unwrap(),
                     rev: Some(GitReference::Rev("123456".to_string())),
                     subdirectory: Default::default(),
+                    extras: None,
+                    flags: None,
                 },
             })
         );

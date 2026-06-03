@@ -180,6 +180,9 @@ pub enum SolveCondaKeyError {
 
     #[error(transparent)]
     Gateway(Arc<GatewayError>),
+
+    #[error(transparent)]
+    ExtraNotProvided(Arc<SolveCondaEnvironmentError>),
 }
 
 impl From<SolveCondaEnvironmentError> for SolveCondaKeyError {
@@ -190,6 +193,9 @@ impl From<SolveCondaEnvironmentError> for SolveCondaKeyError {
                 SolveCondaKeyError::SpecConversion(Arc::new(e))
             }
             SolveCondaEnvironmentError::Gateway(e) => SolveCondaKeyError::Gateway(Arc::new(e)),
+            err @ SolveCondaEnvironmentError::ExtraNotProvided { .. } => {
+                SolveCondaKeyError::ExtraNotProvided(Arc::new(err))
+            }
         }
     }
 }

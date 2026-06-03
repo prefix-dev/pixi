@@ -4,7 +4,7 @@ use std::{
 };
 
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, package::CondaArchiveType};
+use rattler_conda_types::{NamelessMatchSpec, StringMatcher, package::CondaArchiveType};
 use serde_with::serde_as;
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
@@ -15,12 +15,25 @@ use crate::{BinarySpec, SpecConversionError};
 pub struct PathSpec {
     /// The path to the package
     pub path: Utf8TypedPathBuf,
+
+    /// Extra dependency groups to enable for the package. Only meaningful
+    /// when the path refers to a source package; hoisted into
+    /// [`crate::SourceSpec::extras`] when the spec is converted.
+    pub extras: Option<Vec<String>>,
+
+    /// Variant flags to select for the package. Hoisted into
+    /// [`crate::SourceSpec::flags`] on conversion, like `extras`.
+    pub flags: Option<Vec<StringMatcher>>,
 }
 
 impl PathSpec {
     /// Constructs a new [`PathSpec`] from the given path.
     pub fn new(path: impl Into<Utf8TypedPathBuf>) -> Self {
-        Self { path: path.into() }
+        Self {
+            path: path.into(),
+            extras: None,
+            flags: None,
+        }
     }
 
     /// Converts this instance into a [`NamelessMatchSpec`] if the path points
@@ -134,7 +147,7 @@ impl<'de> serde::Deserialize<'de> for PathSourceSpec {
 
 impl From<PathSourceSpec> for PathSpec {
     fn from(value: PathSourceSpec) -> Self {
-        Self { path: value.path }
+        Self::new(value.path)
     }
 }
 
@@ -161,7 +174,7 @@ pub struct PathBinarySpec {
 
 impl From<PathBinarySpec> for PathSpec {
     fn from(value: PathBinarySpec) -> Self {
-        Self { path: value.path }
+        Self::new(value.path)
     }
 }
 

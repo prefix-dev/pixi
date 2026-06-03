@@ -31,6 +31,8 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                                     git: git_url.repository().clone(),
                                     rev: Some(git_url.reference().clone().into()),
                                     subdirectory,
+                                    extras: None,
+                                    flags: None,
                                 };
 
                                 PixiPypiSpec::with_extras_and_markers(
@@ -78,6 +80,8 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
                             git: git_url.repository().clone(),
                             rev: Some(git_url.reference().clone().into()),
                             subdirectory,
+                            extras: None,
+                            flags: None,
                         };
                         PixiPypiSpec::with_extras_and_markers(
                             PixiPypiSource::Git { git: git_spec },

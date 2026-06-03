@@ -198,6 +198,8 @@ impl UrlSourceCheckoutExt for ComputeCtx {
             md5: pinned_url_spec.md5,
             sha256: Some(pinned_url_spec.sha256),
             subdirectory: pinned_url_spec.subdirectory.clone(),
+            extras: None,
+            flags: None,
         };
         let fut = self.compute(&CheckoutUrl(url_spec));
         async move {

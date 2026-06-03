@@ -46,6 +46,8 @@ impl SourceCheckoutExt for ComputeCtx {
                         md5: url.md5,
                         sha256: url.sha256,
                         subdirectory: url.subdirectory,
+                        extras: None,
+                        flags: None,
                     })
                     .boxed(),
                 SourceLocationSpec::Path(path) => {

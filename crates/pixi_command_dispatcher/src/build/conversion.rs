@@ -66,6 +66,8 @@ pub fn from_source_package_location_spec(
                     .subdirectory
                     .and_then(|s| pixi_spec::Subdirectory::try_from(s).ok())
                     .unwrap_or_default(),
+                extras: None,
+                flags: None,
             })
         }
 

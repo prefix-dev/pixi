@@ -1,13 +1,16 @@
 use std::fmt::Display;
 
 use pixi_git::git;
+use rattler_conda_types::StringMatcher;
 use serde::{Serialize, Serializer};
+use serde_with::serde_as;
 use thiserror::Error;
 use url::Url;
 
 use crate::Subdirectory;
 
 /// A specification of a package from a git repository.
+#[serde_as]
 #[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct GitSpec {
@@ -21,6 +24,18 @@ pub struct GitSpec {
     /// The git subdirectory of the package
     #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
     pub subdirectory: Subdirectory,
+
+    /// Extra dependency groups to enable for the package. Only meaningful on
+    /// manifest-side specs; hoisted into [`crate::SourceSpec::extras`] when
+    /// the spec is converted, so location copies always carry `None`.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub extras: Option<Vec<String>>,
+
+    /// Variant flags to select for the package. Hoisted into
+    /// [`crate::SourceSpec::flags`] on conversion, like `extras`.
+    #[serde_as(as = "Option<Vec<serde_with::DisplayFromStr>>")]
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub flags: Option<Vec<StringMatcher>>,
 }
 
 impl Display for GitSpec {

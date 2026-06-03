@@ -1235,6 +1235,255 @@ dep-a = ">=1.0"
     );
 }
 
+/// Writes the source package manifest used by the extras tests: regular
+/// run-dependency `dep-a` plus a `training` extra group containing
+/// `extra-dep`.
+fn write_extras_source_manifest(source_dir: &std::path::Path) {
+    let source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "passthrough", version = "*" }
+
+[package.run-dependencies]
+dep-a = ">=1.0"
+
+[package.extra-dependencies.training]
+extra-dep = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_manifest).unwrap();
+}
+
+/// Builds the channel for the extras tests: `dep-a` (regular run-dep)
+/// and `extra-dep` (only reachable through the `training` extra group).
+async fn extras_test_channel() -> pixi_test_utils::LocalChannel {
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("dep-a", "1.0.0").finish());
+    package_database.add_package(Package::build("extra-dep", "1.0.0").finish());
+    package_database.into_channel().await.unwrap()
+}
+
+/// A path dependency requesting an extra group must pull that group's
+/// dependencies into the environment, and the resulting lock file must be
+/// stable: an immediate re-check may not trigger another solve.
+#[tokio::test]
+async fn test_source_dependency_with_extras_locks_extra_deps() {
+    setup_tracing();
+
+    let channel = extras_test_channel().await;
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    write_extras_source_manifest(&source_dir);
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package", extras = ["training"] }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    let (lock_file_data, was_updated) = workspace
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("initial lock file generation should succeed");
+    assert!(was_updated, "initial solve must create the lock file");
+
+    let lock_file = lock_file_data.into_lock_file();
+    for package in ["my-package", "dep-a", "extra-dep"] {
+        assert!(
+            lock_file.contains_conda_package(
+                consts::DEFAULT_ENVIRONMENT_NAME,
+                Platform::current(),
+                package,
+            ),
+            "expected '{package}' to be locked",
+        );
+    }
+
+    // Re-checking the fresh lock file must not trigger another solve. This
+    // exercises the satisfiability walk over `experimental_extra_depends`:
+    // without it, `extra-dep` is unreachable and the verifier rejects the
+    // lock file as carrying too many packages.
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated_again) = workspace
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("re-checking the lock file should succeed");
+    assert!(
+        !was_updated_again,
+        "a lock file with extras must be stable across satisfiability checks",
+    );
+}
+
+/// Adding or removing `extras` on a path dependency must invalidate the
+/// lock file in both directions.
+#[tokio::test]
+async fn test_changing_extras_on_source_dependency_invalidates_lock_file() {
+    setup_tracing();
+
+    let channel = extras_test_channel().await;
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    write_extras_source_manifest(&source_dir);
+
+    let manifest_without_extras = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    let manifest_with_extras = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package", extras = ["training"] }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+
+    fs::write(pixi.manifest_path(), &manifest_without_extras).unwrap();
+    let workspace = pixi.workspace().unwrap();
+    let (lock_file_data, _) = workspace
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("initial lock file generation should succeed");
+    assert!(
+        !lock_file_data.into_lock_file().contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "extra-dep",
+        ),
+        "without extras the extra group's dependency must not be locked",
+    );
+
+    // Requesting the extra must invalidate the lock file and pull the
+    // group's dependency in.
+    fs::write(pixi.manifest_path(), &manifest_with_extras).unwrap();
+    let workspace = pixi.workspace().unwrap();
+    let (lock_file_data, was_updated) = workspace
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("lock file update after adding extras should succeed");
+    assert!(
+        was_updated,
+        "adding extras to a path dependency must invalidate the lock file",
+    );
+    assert!(
+        lock_file_data.into_lock_file().contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "extra-dep",
+        ),
+        "the requested extra group's dependency must be locked",
+    );
+
+    // Dropping the extra must invalidate the lock file again and remove
+    // the group's dependency.
+    fs::write(pixi.manifest_path(), &manifest_without_extras).unwrap();
+    let workspace = pixi.workspace().unwrap();
+    let (lock_file_data, was_updated) = workspace
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("lock file update after removing extras should succeed");
+    assert!(
+        was_updated,
+        "removing extras from a path dependency must invalidate the lock file",
+    );
+    assert!(
+        !lock_file_data.into_lock_file().contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "extra-dep",
+        ),
+        "after dropping the extra its dependency must be gone from the lock file",
+    );
+}
+
+/// Requesting an extra group the source package does not declare must
+/// fail the solve instead of being silently ignored.
+#[tokio::test]
+async fn test_unknown_extra_on_source_dependency_fails() {
+    setup_tracing();
+
+    let channel = extras_test_channel().await;
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    write_extras_source_manifest(&source_dir);
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package", extras = ["does-not-exist"] }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    let result = workspace
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .await;
+    let error = result
+        .err()
+        .expect("requesting an undeclared extra must fail the solve")
+        .chain()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("; ");
+    assert!(
+        error.contains("'my-package' does not provide the requested extra 'does-not-exist'"),
+        "error must name the package and the missing extra, got: {error}",
+    );
+    assert!(
+        error.contains("available extras: training"),
+        "error must list the available extras, got: {error}",
+    );
+}
+
 /// Removing a host-dependency that contributes a `weak_constrains`
 /// run-export must invalidate the lock file, even though pixi's manifest
 /// schema doesn't currently expose `[package.run-constraints]` directly.

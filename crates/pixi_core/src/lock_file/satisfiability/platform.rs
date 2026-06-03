@@ -833,6 +833,7 @@ async fn verify_package_platform_satisfiability(
                     let pkg_idx = CondaPackageIdx(*repodata_idx);
                     conda_packages_used_by_pypi
                         .insert(locked_pixi_records.records[pkg_idx.0].name().clone());
+                    // PyPI extras do not map onto conda extras.
                     FoundPackage::Conda(pkg_idx, Vec::new())
                 } else {
                     match to_normalize(&requirement.name)
@@ -899,7 +900,9 @@ async fn verify_package_platform_satisfiability(
                 let record = &locked_pixi_records.records[idx.0];
 
                 // Regular deps on first visit, plus deps of any newly requested
-                // extra (else extra-only packages look unused).
+                // extra (else extra-only packages look unused). A requested
+                // extra the locked package does not provide makes the lock
+                // file unsatisfiable.
                 let mut depends_to_walk: Vec<&String> = Vec::new();
                 if newly_visited {
                     depends_to_walk.extend(record.package_record().depends.iter());
@@ -907,12 +910,19 @@ async fn verify_package_platform_satisfiability(
                 {
                     let followed = conda_extras_followed.entry(idx).or_default();
                     for extra in &extras {
-                        if followed.insert(extra.clone())
-                            && let Some(extra_depends) = record
-                                .package_record()
-                                .experimental_extra_depends
-                                .get(extra)
-                        {
+                        let Some(extra_depends) = record
+                            .package_record()
+                            .experimental_extra_depends
+                            .get(extra)
+                        else {
+                            return Err(CommandDispatcherError::Failed(Box::new(
+                                PlatformUnsat::ExtraNotProvided(
+                                    record.name().as_source().to_string(),
+                                    extra.clone(),
+                                ),
+                            )));
+                        };
+                        if followed.insert(extra.clone()) {
                             depends_to_walk.extend(extra_depends.iter());
                         }
                     }

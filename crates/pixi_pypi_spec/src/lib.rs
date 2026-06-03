@@ -353,6 +353,8 @@ mod tests {
                 git: Url::parse("https://github.com/example/repo").unwrap(),
                 rev: None,
                 subdirectory: Default::default(),
+                extras: None,
+                flags: None,
             },
         });
         assert!(spec.is_source_dependency());
@@ -399,6 +401,8 @@ mod tests {
                     git: Url::parse("https://github.com/example/repo").unwrap(),
                     rev: None,
                     subdirectory: Default::default(),
+                    extras: None,
+                    flags: None,
                 },
             },
             vec![extra.clone()],
@@ -424,6 +428,8 @@ mod tests {
                     git: Url::parse("https://github.com/example/repo").unwrap(),
                     rev: None,
                     subdirectory: Default::default(),
+                    extras: None,
+                    flags: None,
                 },
             },
             vec![],
@@ -574,6 +580,8 @@ mod tests {
                     git: Url::parse("https://github.com/ecederstrand/exchangelib").unwrap(),
                     rev: Some(GitReference::DefaultBranch),
                     subdirectory: Default::default(),
+                    extras: None,
+                    flags: None,
                 },
             })
         );
@@ -589,6 +597,8 @@ mod tests {
                         "b283011c6df4a9e034baca9aea19aa8e5a70e3ab".to_string()
                     )),
                     subdirectory: Default::default(),
+                    extras: None,
+                    flags: None,
                 },
             })
         );
@@ -681,7 +691,9 @@ mod tests {
                 git: GitSpec {
                     git: Url::parse("ssh://git@github.com/python-attrs/attrs.git").unwrap(),
                     rev: Some(GitReference::Rev("main".to_string())),
-                    subdirectory: Default::default()
+                    subdirectory: Default::default(),
+                    extras: None,
+                    flags: None,
                 },
             })
         );
@@ -698,6 +710,8 @@ mod tests {
                     git: Url::parse("https://github.com/Deltares/Ribasim.git").unwrap(),
                     rev: Some(GitReference::DefaultBranch),
                     subdirectory: Subdirectory::try_from("python/ribasim").unwrap(),
+                    extras: None,
+                    flags: None,
                 },
             })
         );

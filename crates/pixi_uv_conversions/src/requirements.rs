@@ -112,6 +112,8 @@ pub fn as_uv_req(
                     git,
                     rev,
                     subdirectory,
+                    extras: _,
+                    flags: _,
                 },
         } => {
             let git_url = GitUrlWithPrefix::from(git);
@@ -363,6 +365,8 @@ mod tests {
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
                 subdirectory: Default::default(),
+                extras: None,
+                flags: None,
             },
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
@@ -391,6 +395,8 @@ mod tests {
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
                 subdirectory: Default::default(),
+                extras: None,
+                flags: None,
             },
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();

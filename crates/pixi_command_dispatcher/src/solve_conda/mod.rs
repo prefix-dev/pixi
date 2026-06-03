@@ -5,7 +5,7 @@ use std::{
 
 use itertools::Itertools;
 use pixi_record::{PixiRecord, SourceRecord};
-use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
+use pixi_spec::{BinarySpec, PixiSpec, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
@@ -119,6 +119,32 @@ impl SolveCondaEnvironmentSpec {
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
             let exclude_newer = self.exclude_newer.clone().map(Into::into);
+
+            // Remember which extras each direct or dev-source dependency
+            // requested. The solver treats extras as conditional activation:
+            // a record that does not provide a requested extra still solves,
+            // silently ignoring the request. Collect the requests up front
+            // (the spec maps are consumed below) and verify them against the
+            // solved records afterwards.
+            let requested_extras = self
+                .source_specs
+                .iter_specs()
+                .filter_map(|(name, spec)| spec.extras.clone().map(|extras| (name.clone(), extras)))
+                .chain(self.binary_specs.iter_specs().filter_map(|(name, spec)| {
+                    let BinarySpec::DetailedVersion(detailed) = spec else {
+                        return None;
+                    };
+                    detailed.extras.clone().map(|extras| (name.clone(), extras))
+                }))
+                .chain(
+                    self.dev_source_records
+                        .iter()
+                        .flat_map(|dev_source| dev_source.dependencies.iter_specs())
+                        .filter_map(|(name, spec)| {
+                            pixi_spec_extras(spec).map(|extras| (name.clone(), extras.to_vec()))
+                        }),
+                )
+                .collect_vec();
 
             // Determine for which records we have source records because those records should only
             //  be installed as source records.
@@ -310,24 +336,67 @@ impl SolveCondaEnvironmentSpec {
             let solver_result = rattler_solve::resolvo::Solver.solve(task)?;
 
             // Convert the results back into pixi records.
-            Ok::<_, SolveCondaEnvironmentError>(
-                solver_result
-                    .records
-                    .into_iter()
-                    .filter_map(|record| {
-                        if let Some(source_record) = url_to_source_package.remove(&record.url) {
-                            // This is a source package, we want to return the source record
-                            // instead of the binary record.
-                            return Some(PixiRecord::Source(Arc::new(source_record.0)));
-                        } else if let Some(_dev_source) = url_to_dev_source.remove(&record.url) {
-                            // This is a dev source, we don't want to return it.
-                            return None;
-                        }
+            let records = solver_result
+                .records
+                .into_iter()
+                .filter_map(|record| {
+                    if let Some(source_record) = url_to_source_package.remove(&record.url) {
+                        // This is a source package, we want to return the source record
+                        // instead of the binary record.
+                        return Some(PixiRecord::Source(Arc::new(source_record.0)));
+                    } else if let Some(_dev_source) = url_to_dev_source.remove(&record.url) {
+                        // This is a dev source, we don't want to return it.
+                        return None;
+                    }
 
-                        Some(PixiRecord::Binary(Arc::new(record)))
+                    Some(PixiRecord::Binary(Arc::new(record)))
+                })
+                .collect_vec();
+
+            // Reject requested extras that the solved records do not provide;
+            // the solver itself silently ignores them. Besides the direct
+            // requests collected above, also mirror the lock-file
+            // satisfiability walk by checking extras requested through the
+            // solved records' own `depends` strings (`pkg[extras=[...]]`),
+            // so a lock file produced here always verifies.
+            let records_by_name: HashMap<&rattler_conda_types::PackageName, &PixiRecord> = records
+                .iter()
+                .map(|record| (&record.package_record().name, record))
+                .collect();
+            let transitive_extras = records.iter().flat_map(|record| {
+                record
+                    .package_record()
+                    .depends
+                    .iter()
+                    .filter(|depend| depend.contains("extras="))
+                    .filter_map(|depend| {
+                        let spec = MatchSpec::from_str(
+                            depend,
+                            rattler_conda_types::ParseMatchSpecOptions::lenient()
+                                .with_repodata_revision(rattler_conda_types::RepodataRevision::V3),
+                        )
+                        .ok()?;
+                        let name = spec.name.as_exact()?.clone();
+                        Some((name, spec.extras?))
                     })
-                    .collect_vec(),
-            )
+            });
+            for (name, extras) in requested_extras.into_iter().chain(transitive_extras) {
+                let Some(record) = records_by_name.get(&name) else {
+                    continue;
+                };
+                let provided = &record.package_record().experimental_extra_depends;
+                for extra in extras {
+                    if !provided.contains_key(&extra) {
+                        return Err(SolveCondaEnvironmentError::ExtraNotProvided {
+                            package: name.as_source().to_string(),
+                            extra,
+                            available: provided.keys().cloned().collect(),
+                        });
+                    }
+                }
+            }
+
+            Ok::<_, SolveCondaEnvironmentError>(records)
         })
         .await;
 
@@ -354,6 +423,17 @@ pub enum SolveCondaBlockingError {
     /// The blocking task panicked; payload is passed through so callers
     /// can decide whether to resume the unwind.
     Panic(Box<dyn std::any::Any + Send + 'static>),
+}
+
+/// Returns the extras requested by a [`PixiSpec`], if any.
+fn pixi_spec_extras(spec: &PixiSpec) -> Option<&[String]> {
+    match spec {
+        PixiSpec::DetailedVersion(detailed) => detailed.extras.as_deref(),
+        PixiSpec::Url(url) => url.extras.as_deref(),
+        PixiSpec::Git(git) => git.extras.as_deref(),
+        PixiSpec::Path(path) => path.extras.as_deref(),
+        PixiSpec::Version(_) => None,
+    }
 }
 
 /// Generates a unique URL for a source record.
@@ -404,6 +484,24 @@ fn dev_source_build_string(dev_source: &pixi_record::DevSourceRecord) -> String 
 pub enum SolveCondaEnvironmentError {
     #[error(transparent)]
     SolveError(#[from] rattler_solve::SolveError),
+
+    /// A dependency requested an extra group that none of the candidate
+    /// records of the package provide. The solver itself treats extras as
+    /// conditional activation and would silently ignore the request, so this
+    /// is validated eagerly to surface typos.
+    #[error(
+        "the package '{package}' does not provide the requested extra '{extra}'{}",
+        if .available.is_empty() {
+            String::new()
+        } else {
+            format!("; available extras: {}", .available.join(", "))
+        }
+    )]
+    ExtraNotProvided {
+        package: String,
+        extra: String,
+        available: Vec<String>,
+    },
 
     #[error(transparent)]
     SpecConversionError(#[from] pixi_spec::SpecConversionError),
