@@ -442,6 +442,7 @@ async fn compute_inner(
 /// the seeds. Binary match specs are NOT collected here; they're
 /// derived downstream inside [`SolveCondaKey`] from the same
 /// assembled records (see `derive_fetch_specs_from_source_repodata`).
+#[allow(clippy::mutable_key_type)]
 async fn walk_and_resolve(
     ctx: &mut ComputeCtx,
     seeds: Vec<(PackageName, SourceSpec)>,
@@ -549,7 +550,13 @@ async fn walk_and_resolve(
         for record in records.iter() {
             let anchor =
                 SourceAnchor::from(SourceLocationSpec::from(record.manifest_source().clone()));
-            for depend_str in &record.package_record().depends {
+            for depend_str in record.package_record().depends.iter().chain(
+                record
+                    .package_record()
+                    .experimental_extra_depends
+                    .values()
+                    .flatten(),
+            ) {
                 let Ok(match_spec) = MatchSpec::from_str(
                     depend_str,
                     ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
@@ -561,7 +568,7 @@ async fn walk_and_resolve(
                     continue;
                 };
                 if let Some(source_location) = record.sources().get(child_name.as_normalized()) {
-                    let resolved_location = anchor.resolve(source_location.clone());
+                    let resolved_location = anchor.resolve_location(source_location.clone());
                     push(
                         &mut p,
                         &mut pending,
@@ -596,7 +603,7 @@ async fn process_dev_sources(
             let name = name.clone();
             let env_ref = spec.env_ref.clone();
             let preferred_build_source = spec.preferred_build_source.get(&name).cloned();
-            let fut = ctx.pin_and_checkout(dev_spec.source.location.clone());
+            let fut = ctx.pin_and_checkout(dev_spec.source.clone());
             async move {
                 let checkout = fut
                     .await

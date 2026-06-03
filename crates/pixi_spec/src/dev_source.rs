@@ -4,7 +4,7 @@
 //! Development sources are source packages whose dependencies should be installed
 //! without building the package itself - useful for development environments.
 
-use crate::SourceSpec;
+use crate::SourceLocationSpec;
 
 /// A development source specification as provided by the user (e.g., from pixi.toml).
 ///
@@ -25,11 +25,11 @@ use crate::SourceSpec;
 /// This would be represented as:
 /// ```ignore
 /// DevSourceSpec {
-///     source: SourceSpec::Path(PathSourceSpec { path: "../my-package" }),
+///     source: SourceLocationSpec::Path(PathSpec { path: "../my-package" }),
 /// }
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
 pub struct DevSourceSpec {
-    /// The source specification (path/git/url)
-    pub source: SourceSpec,
+    /// The source location (path/git/url)
+    pub source: SourceLocationSpec,
 }

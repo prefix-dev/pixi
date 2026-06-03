@@ -579,6 +579,15 @@ fn create_output(
         }
     }
 
+    // Extra groups come from the project model, and -
+    // when the backend was handed a pre-built package - from its index.json.
+    let mut extra_dependencies = convert_extra_depends(&index_json.experimental_extra_depends);
+    for (group, specs) in
+        extract_extra_dependencies(&project_model.targets, params.host_platform, &variant)
+    {
+        extra_dependencies.entry(group).or_default().extend(specs);
+    }
+
     CondaOutput {
         build_dependencies: Some(extract_dependencies(
             &project_model.targets,
@@ -588,7 +597,7 @@ fn create_output(
         )),
         host_dependencies: Some(host_deps),
         run_dependencies,
-        extra_dependencies: convert_extra_depends(&index_json.experimental_extra_depends),
+        extra_dependencies,
         metadata: CondaOutputMetadata {
             name: project_model
                 .name
@@ -628,7 +637,25 @@ fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, Pa
     platform: Platform,
     variant: &BTreeMap<String, VariantValue>,
 ) -> CondaOutputDependencies {
-    let depends = targets
+    let depends = applicable_targets(targets, platform)
+        .into_iter()
+        .flat_map(|target| extract(target).into_iter().flat_map(OrderMap::iter))
+        .map(|(name, spec)| NamedSpec {
+            name: name.clone(),
+            spec: resolve_dependency_spec(name, spec, variant),
+        })
+        .collect();
+
+    CondaOutputDependencies {
+        depends,
+        constraints: Vec::new(),
+    }
+}
+
+/// Returns the default target plus any platform-specific targets whose selector
+/// matches `platform`.
+fn applicable_targets(targets: &Option<Targets>, platform: Platform) -> Vec<&Target> {
+    targets
         .iter()
         .flat_map(|targets| {
             targets
@@ -639,46 +666,64 @@ fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, Pa
                         .targets
                         .iter()
                         .flatten()
-                        .flat_map(|(selector, target)| {
+                        .flat_map(move |(selector, target)| {
                             matches_target_selector(selector, platform).then_some(target)
                         }),
                 )
-                .flat_map(|target| extract(target).into_iter().flat_map(OrderMap::iter))
-                .map(|(name, spec)| {
-                    // If this is a star dependency and we have a variant for it, replace the spec
-                    let resolved_spec = if is_star_requirement(spec) {
-                        if let Some(variant_value) = variant.get(name.as_str()) {
-                            // Replace with a version spec using the variant value
-                            BinaryPackageSpec {
-                                version: Some(
-                                    rattler_conda_types::VersionSpec::from_str(
-                                        variant_value.to_string().as_str(),
-                                        rattler_conda_types::ParseStrictness::Lenient,
-                                    )
-                                    .unwrap(),
-                                ),
-                                ..Default::default()
-                            }
-                            .into()
-                        } else {
-                            spec.clone()
-                        }
-                    } else {
-                        spec.clone()
-                    };
-
-                    NamedSpec {
-                        name: name.clone(),
-                        spec: resolved_spec,
-                    }
-                })
         })
-        .collect();
+        .collect()
+}
 
-    CondaOutputDependencies {
-        depends,
-        constraints: Vec::new(),
+/// Resolves a single dependency spec, substituting the variant value when the
+/// spec is a bare star requirement and a matching variant exists.
+fn resolve_dependency_spec(
+    name: &SourcePackageName,
+    spec: &PackageSpec,
+    variant: &BTreeMap<String, VariantValue>,
+) -> PackageSpec {
+    if is_star_requirement(spec)
+        && let Some(variant_value) = variant.get(name.as_str())
+    {
+        return BinaryPackageSpec {
+            version: Some(
+                rattler_conda_types::VersionSpec::from_str(
+                    variant_value.to_string().as_str(),
+                    rattler_conda_types::ParseStrictness::Lenient,
+                )
+                .unwrap(),
+            ),
+            ..Default::default()
+        }
+        .into();
     }
+
+    spec.clone()
+}
+
+/// Extracts the extra groups declared by the project
+/// model for the given platform, mirroring how `extract_dependencies` walks
+/// targets. Groups declared across multiple matching targets are merged.
+fn extract_extra_dependencies(
+    targets: &Option<Targets>,
+    platform: Platform,
+    variant: &BTreeMap<String, VariantValue>,
+) -> BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> {
+    let mut result: BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> = BTreeMap::new();
+    for target in applicable_targets(targets, platform) {
+        let Some(extras) = target.extra_dependencies.as_ref() else {
+            continue;
+        };
+        for (group, deps) in extras {
+            let entry = result.entry(group.clone()).or_default();
+            for (name, spec) in deps {
+                entry.push(NamedSpec {
+                    name: name.clone(),
+                    spec: resolve_dependency_spec(name, spec, variant),
+                });
+            }
+        }
+    }
+    result
 }
 
 /// Resolves a run_export spec string (like "sdl2 *") by substituting variant values.

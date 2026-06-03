@@ -24,7 +24,7 @@ pub struct PackageBuild {
     /// channels from the containing workspace should be used.
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
-    /// Optional package source specification
+    /// Optional package source location
     pub source: Option<SourceLocationSpec>,
 
     /// Additional configuration for the build backend.

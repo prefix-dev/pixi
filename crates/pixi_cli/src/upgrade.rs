@@ -426,8 +426,13 @@ fn parse_specs(
         })
         // Only upgrade version specs
         .filter_map(|(name, req)| match req {
-            PixiSpec::DetailedVersion(version_spec) => {
-                let mut nameless_match_spec = version_spec
+            PixiSpec::Version(_) => {
+                // A bare version spec carries no extra selectors, so upgrading
+                // means dropping the constraint entirely.
+                Some((name.clone(), (MatchSpec::from(name), spec_type)))
+            }
+            PixiSpec::DetailedVersion(detailed) => {
+                let mut nameless_match_spec = detailed
                     .try_into_nameless_match_spec(&workspace.workspace().channel_config())
                     .ok()?;
                 // If it is a detailed spec, always unset version
@@ -463,7 +468,6 @@ fn parse_specs(
                     ),
                 ))
             }
-            PixiSpec::Version(_) => Some((name.clone(), (MatchSpec::from(name), spec_type))),
             _ => {
                 tracing::debug!("skipping non-version spec {:?}", req);
                 None

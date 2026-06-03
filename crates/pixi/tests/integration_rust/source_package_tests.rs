@@ -10,7 +10,7 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::{
-    common::{LockFileExt, PixiControl, isolated_config_source},
+    common::{LockFileExt, PixiControl, isolated_config_source, logging::try_init_test_subscriber},
     setup_tracing,
 };
 use pixi_cli::publish;
@@ -395,6 +395,367 @@ my-package = {{ path = "./my-package" }}
         Platform::current(),
         "my-package",
     ));
+}
+
+/// A source package can declare extra groups through
+/// `[package.extra-dependencies.<group>]`. A workspace that depends on the
+/// source package and selects a group via `extras = ["<group>"]` must pull the
+/// group's dependencies into the lock file.
+#[tokio::test]
+async fn test_source_dependency_extras_are_pulled_in() {
+    setup_tracing();
+
+    // Channel providing the package referenced by the optional `test` group.
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("extra-pkg", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.extra-dependencies.test]
+extra-pkg = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_manifest).unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package", extras = ["test"] }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        ),
+        "the source package itself must be locked"
+    );
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "extra-pkg",
+        ),
+        "selecting the `test` extra must pull its dependency into the lock file"
+    );
+}
+
+/// Counterpart to [`test_source_dependency_extras_are_pulled_in`]: when the
+/// workspace does not select the optional group, the group's dependencies must
+/// not appear in the lock file.
+#[tokio::test]
+async fn test_source_dependency_unselected_extras_are_absent() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("extra-pkg", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.extra-dependencies.test]
+extra-pkg = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_manifest).unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        ),
+        "the source package itself must be locked"
+    );
+    assert!(
+        !lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "extra-pkg",
+        ),
+        "without selecting the `test` extra its dependency must not be locked"
+    );
+}
+
+/// Requesting an extra the source package does not declare must not fail the
+/// solve (the solver drops unknown extras silently, by design), but it should
+/// warn, naming the unknown extra and listing the extras that do exist.
+#[tokio::test]
+async fn test_source_dependency_unknown_extra_warns() {
+    let writer = try_init_test_subscriber();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("extra-pkg", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.extra-dependencies.test]
+extra-pkg = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_manifest).unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package", extras = ["nonexistent"] }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "my-package",
+        ),
+        "the source package itself must still be locked despite the unknown extra"
+    );
+
+    let logs = writer.get_output();
+    assert!(
+        logs.contains(
+            "extra 'nonexistent' requested for 'my-package' does not exist (available extras: test)"
+        ),
+        "expected a warning naming the unknown extra and the available extras, got:\n{logs}"
+    );
+}
+
+/// A source package can depend on another source package. This mirrors the
+/// `example-rust` -> `example-rattler-build` shape, with the inner source
+/// declared as a `[package.run-dependencies]` path dependency. Both packages
+/// are built by the passthrough backend, and the inner package's own run
+/// dependency must be resolved transitively into the lock file.
+#[tokio::test]
+async fn test_source_dependency_on_source_run_dependency() {
+    setup_tracing();
+
+    // Channel providing the inner source package's own (binary) dependency.
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("transitive-dep", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Inner source package, located next to the outer package's manifest.
+    let recipe_dir = pixi.workspace_path().join("example-rust").join("recipe");
+    fs::create_dir_all(&recipe_dir).unwrap();
+    let inner_manifest = r#"
+[package]
+name = "example-rattler-build"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.run-dependencies]
+transitive-dep = ">=1.0"
+"#;
+    fs::write(recipe_dir.join("pixi.toml"), inner_manifest).unwrap();
+
+    // Outer source package depending on the inner one via a path.
+    let outer_manifest = r#"
+[package]
+name = "example-rust"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.run-dependencies]
+example-rattler-build = { path = "./recipe" }
+"#;
+    fs::write(
+        pixi.workspace_path().join("example-rust").join("pixi.toml"),
+        outer_manifest,
+    )
+    .unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+example-rust = {{ path = "./example-rust" }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    for pkg in ["example-rust", "example-rattler-build", "transitive-dep"] {
+        assert!(
+            lock_file.contains_conda_package(
+                consts::DEFAULT_ENVIRONMENT_NAME,
+                Platform::current(),
+                pkg,
+            ),
+            "{pkg} should be locked"
+        );
+    }
+}
+
+/// Same `example-rust` -> `example-rattler-build` source-on-source shape, but
+/// the inner source is declared in a `[package.extra-dependencies.<group>]`
+/// group and pulled in by the workspace selecting `extras = ["recipe"]`. The
+/// inner source package and its transitive dependency must end up in the lock
+/// file just like a run dependency would.
+#[tokio::test]
+async fn test_source_dependency_on_source_extra_dependency() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("transitive-dep", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let recipe_dir = pixi.workspace_path().join("example-rust").join("recipe");
+    fs::create_dir_all(&recipe_dir).unwrap();
+    let inner_manifest = r#"
+[package]
+name = "example-rattler-build"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.run-dependencies]
+transitive-dep = ">=1.0"
+"#;
+    fs::write(recipe_dir.join("pixi.toml"), inner_manifest).unwrap();
+
+    let outer_manifest = r#"
+[package]
+name = "example-rust"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.extra-dependencies.recipe]
+example-rattler-build = { path = "./recipe" }
+"#;
+    fs::write(
+        pixi.workspace_path().join("example-rust").join("pixi.toml"),
+        outer_manifest,
+    )
+    .unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+example-rust = {{ path = "./example-rust", extras = ["recipe"] }}
+"#,
+        channel = channel.url(),
+        platform = Platform::current(),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    for pkg in ["example-rust", "example-rattler-build", "transitive-dep"] {
+        assert!(
+            lock_file.contains_conda_package(
+                consts::DEFAULT_ENVIRONMENT_NAME,
+                Platform::current(),
+                pkg,
+            ),
+            "{pkg} should be locked (pulled in through the `recipe` extra)"
+        );
+    }
 }
 
 /// Test that verifies [package.build] source.path is resolved relative to the
