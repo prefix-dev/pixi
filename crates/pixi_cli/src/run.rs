@@ -23,9 +23,13 @@ use pixi_core::{
     workspace::{
         Environment, HasWorkspaceRef, PlatformOverrides, PlatformSource,
         errors::UnsupportedPlatformError,
+        virtual_packages::{
+            EnvironmentRunnability, classify_environment_runnability,
+            verify_current_platform_can_run_environment,
+        },
     },
 };
-use pixi_manifest::{PixiPlatformName, TaskName};
+use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName, TaskName};
 use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -199,20 +203,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    // Check if the current platform is supported, but only when we're going to
-    // install/activate. Without installs we skip environment activation,
-    // so platform doesn't matter. A `--platform` that the environment doesn't
-    // list gets a clear membership error, matching `pixi install --platform`.
-    if args.lock_and_install_config.allow_installs() && best_declared_platform.is_none() {
-        return Err(if let Some(name) = user_platform.as_ref() {
-            miette::miette!(
-                "platform '{}' is not part of environment '{}'",
-                name,
-                environment.name(),
-            )
-        } else {
-            environment.unsupported_platform_error().into()
-        });
+    // A `--platform` the environment doesn't list is a membership error. With
+    // no platform requested, defer to the install path's minimum fallback.
+    if args.lock_and_install_config.allow_installs()
+        && best_declared_platform.is_none()
+        && let Some(name) = user_platform.as_ref()
+    {
+        return Err(miette::miette!(
+            "platform '{}' is not part of environment '{}'",
+            name,
+            environment.name(),
+        ));
     }
 
     if args.lock_and_install_config.allow_installs() {
@@ -248,10 +249,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     });
 
     // Construct a task graph from the input arguments.
-    // When installs are allowed, filter by platform since we are activating
-    // an environment and the platform matters.
+    // Pin the search only to an explicit `--platform`; otherwise each
+    // environment resolves its own platform, so foreign-platform tasks are found.
     let search_platform = if args.lock_and_install_config.allow_installs() {
-        best_declared_platform
+        user_platform.as_ref().and_then(|name| {
+            (&workspace)
+                .workspace_manifest()
+                .workspace
+                .platform_by_name(name)
+        })
     } else {
         None
     };
@@ -301,6 +307,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // don't instantiate a prefix for an alias.
         if !executable_task.task().is_executable() {
             continue;
+        }
+
+        // Fail before announcing a task whose environment can't run here at
+        // all; by-accident environments proceed and `--platform` overrides.
+        if args.lock_and_install_config.allow_installs()
+            && user_platform.is_none()
+            && classify_environment_runnability(
+                &executable_task.run_environment,
+                Some(lock_file.as_lock_file()),
+            ) == EnvironmentRunnability::Unsupported
+        {
+            return Err(
+                match verify_current_platform_can_run_environment(
+                    &executable_task.run_environment,
+                    Some(lock_file.as_lock_file()),
+                ) {
+                    Err(err) => err.into(),
+                    Ok(()) => executable_task
+                        .run_environment
+                        .unsupported_platform_error()
+                        .into(),
+                },
+            );
         }
 
         // Showing which command is being run if the level and type allows it.

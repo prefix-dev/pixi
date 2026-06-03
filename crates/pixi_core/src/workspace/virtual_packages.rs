@@ -83,7 +83,8 @@ fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPack
 /// requirements.
 #[derive(Debug, Error, Diagnostic)]
 pub enum VerifyCurrentPlatformError {
-    #[error("The current platform does not satisfy the minimal virtual package requirements")]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     UnsupportedPlatform(#[from] Box<UnsupportedPlatformError>),
 
     #[error(transparent)]
@@ -140,6 +141,42 @@ pub fn verify_current_platform_can_run_environment(
 
     // Check 2: does the machine satisfy the minimal-required platform for a
     // subdir it can run (the current subdir or an architecture fallback)?
+    match minimum_compatible_declared_platform(environment, lock_file) {
+        Ok(_) => {
+            // Check 1 failed but the resolution is compatible -- continue.
+            tracing::warn!(
+                "The current machine is not one of the platforms declared for environment '{}', but the resolved dependencies are compatible with it -- continuing.",
+                environment.name().fancy_display(),
+            );
+            Ok(())
+        }
+        // Both checks failed: report the unmet minimal requirements.
+        Err(unmet) => Err(VerifyCurrentPlatformError::from(Box::new(
+            UnsupportedPlatformError {
+                environments_platforms: environment.platforms().into_iter().collect(),
+                environment: environment.name().clone(),
+                platform: environment
+                    .workspace()
+                    .host_platform(
+                        PlatformSource::Defaults,
+                        PlatformOverrides::EnvironmentVariableOverrides,
+                    )
+                    .subdir(),
+                unsatisfied_requirements: unmet,
+            },
+        ))),
+    }
+}
+
+/// The declared platform an environment can run on "by accident": none of
+/// the declared platforms' virtual packages are satisfied by this machine,
+/// but the lock-resolved minimum requirements for a subdir the machine can
+/// run are. Returns the declared platform install should target, or the
+/// unmet minimal requirements when the machine falls below the minimum too.
+pub fn minimum_compatible_declared_platform<'p>(
+    environment: &Environment<'p>,
+    lock_file: &LockFile,
+) -> Result<&'p PixiPlatform, Vec<GenericVirtualPackage>> {
     let current = environment
         .workspace()
         .host_platform(
@@ -161,10 +198,14 @@ pub fn verify_current_platform_can_run_environment(
         .candidate_subdirs(current);
 
     let manifest = environment.workspace_manifest();
-    let declared_platforms: Vec<&PixiPlatform> = environment
-        .platforms()
+    let env_platform_names = environment.platforms();
+    // Workspace declaration order, so ties between declared platforms that
+    // share a subdir resolve deterministically.
+    let declared_platforms: Vec<&PixiPlatform> = manifest
+        .workspace
+        .platforms
         .iter()
-        .filter_map(|name| manifest.workspace.platform_by_name(name))
+        .filter(|platform| env_platform_names.contains(platform.name()))
         .collect();
     let minimal =
         compute_minimal_required_platforms(lock_file, environment.name(), &declared_platforms);
@@ -176,25 +217,18 @@ pub fn verify_current_platform_can_run_environment(
         };
         let unsatisfied = unsatisfied_virtual_packages(platform, &system_virtual_packages);
         if unsatisfied.is_empty() {
-            // Check 1 failed but the resolution is compatible -- continue.
-            tracing::warn!(
-                "The current machine is not one of the platforms declared for environment '{}', but the resolved dependencies are compatible with it -- continuing.",
-                environment.name().fancy_display(),
-            );
-            return Ok(());
+            if let Some(declared) = declared_platforms
+                .iter()
+                .find(|declared| declared.subdir() == *subdir)
+            {
+                return Ok(declared);
+            }
+            continue;
         }
         unmet.get_or_insert(unsatisfied);
     }
 
-    // Both checks failed: report the unmet minimal requirements.
-    Err(VerifyCurrentPlatformError::from(Box::new(
-        UnsupportedPlatformError {
-            environments_platforms: environment.platforms().into_iter().collect(),
-            environment: environment.name().clone(),
-            platform: current,
-            unsatisfied_requirements: unmet.unwrap_or_default(),
-        },
-    )))
+    Err(unmet.unwrap_or_default())
 }
 
 /// The declared virtual packages of `platform` that the machine does not
@@ -401,6 +435,69 @@ pub fn verify_run_platform(
     }
 }
 
+/// Whether the current machine can run an environment by design (it
+/// satisfies the platform the environment was resolved for) or by accident
+/// (only the resolved packages' minimum requirements).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EnvironmentRunnability {
+    /// The machine satisfies the platform the environment was resolved for.
+    ByDesign,
+    /// The machine only satisfies the resolved packages' minimum requirements.
+    ByAccident,
+    /// The machine cannot run the environment.
+    Unsupported,
+}
+
+/// Classify how the current machine (including virtual-package overrides)
+/// runs `environment`: from the resolved/minimum platforms recorded in
+/// `conda-meta/pixi` when installed, else from the declared platforms and
+/// the lock file's minimal requirements.
+pub fn classify_environment_runnability(
+    environment: &Environment<'_>,
+    lock_file: Option<&LockFile>,
+) -> EnvironmentRunnability {
+    // Mirror `verify_current_platform_can_run_environment`: an explicit
+    // platform override means the user vouches for the machine.
+    if std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+        return EnvironmentRunnability::ByDesign;
+    }
+
+    if let (Some(resolved), Some(minimum)) = environment.installed_platforms() {
+        let current = environment
+            .workspace()
+            .host_platform(
+                PlatformSource::Defaults,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            )
+            .subdir();
+        let base_subdirs = environment
+            .workspace_manifest()
+            .workspace
+            .candidate_subdirs(current);
+        let base_capabilities = environment
+            .workspace()
+            .host_platform(
+                PlatformSource::AutoDetected,
+                PlatformOverrides::EnvironmentVariableOverrides,
+            )
+            .declared_virtual_packages()
+            .to_vec();
+        return match classify_run_platform(&base_subdirs, &base_capabilities, &resolved, &minimum) {
+            RunPlatformVerdict::Compatible => EnvironmentRunnability::ByDesign,
+            RunPlatformVerdict::OnlyMinimum => EnvironmentRunnability::ByAccident,
+            RunPlatformVerdict::BelowMinimum(_) => EnvironmentRunnability::Unsupported,
+        };
+    }
+
+    if environment.best_declared_platform().is_some() {
+        return EnvironmentRunnability::ByDesign;
+    }
+    match lock_file.map(|lock| minimum_compatible_declared_platform(environment, lock)) {
+        Some(Ok(_)) => EnvironmentRunnability::ByAccident,
+        Some(Err(_)) | None => EnvironmentRunnability::Unsupported,
+    }
+}
+
 impl Environment<'_> {
     /// Returns the set of virtual packages to use for the specified platform.
     /// Reads them straight off `platform.declared_virtual_packages()`: the
@@ -444,6 +541,87 @@ mod tests {
                 assert_debug_snapshot!(packages);
             });
         }
+    }
+
+    /// Lock-fallback classification: a machine matching no declared platform
+    /// runs the environment "by accident" when the lock-resolved minimum is
+    /// satisfied, and not at all when it isn't.
+    #[test]
+    fn classify_runnability_falls_back_to_lock_minimum() {
+        let current = Platform::current();
+        let manifest = format!(
+            r#"
+            [workspace]
+            name = "demo"
+            channels = []
+            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}]
+            "#
+        );
+        let workspace =
+            crate::Workspace::from_str(std::path::Path::new("pixi.toml"), &manifest).unwrap();
+        let environment = workspace.default_environment();
+
+        let lock = |depends: &str| {
+            let source = format!(
+                r#"version: 7
+platforms:
+- name: gpu
+  subdir: {current}
+  virtual-packages:
+  - __cuda=99
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      gpu:
+      - conda: https://conda.anaconda.org/conda-forge/{current}/foo-1.0-h0.conda
+packages:
+- conda: https://conda.anaconda.org/conda-forge/{current}/foo-1.0-h0.conda
+{depends}"#
+            );
+            rattler_lock::LockFile::from_str_with_base_directory(&source, None).unwrap()
+        };
+
+        // No lock file: nothing to fall back on.
+        assert_eq!(
+            classify_environment_runnability(&environment, None),
+            EnvironmentRunnability::Unsupported,
+        );
+        // The resolved package needs no virtual packages: runs by accident.
+        assert_eq!(
+            classify_environment_runnability(&environment, Some(&lock(""))),
+            EnvironmentRunnability::ByAccident,
+        );
+        // The resolved package needs a `__cuda` no machine provides.
+        assert_eq!(
+            classify_environment_runnability(
+                &environment,
+                Some(&lock("  depends:\n  - __cuda >=9999\n")),
+            ),
+            EnvironmentRunnability::Unsupported,
+        );
+    }
+
+    /// A machine-compatible declared platform classifies as "by design"
+    /// without consulting any lock file.
+    #[test]
+    fn classify_runnability_by_design_via_declared_platform() {
+        let current = Platform::current();
+        let manifest = format!(
+            r#"
+            [workspace]
+            name = "demo"
+            channels = []
+            platforms = ["{current}"]
+            "#
+        );
+        let workspace =
+            crate::Workspace::from_str(std::path::Path::new("pixi.toml"), &manifest).unwrap();
+        assert_eq!(
+            classify_environment_runnability(&workspace.default_environment(), None),
+            EnvironmentRunnability::ByDesign,
+        );
     }
 
     #[test]

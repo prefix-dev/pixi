@@ -5,7 +5,8 @@ use miette::IntoDiagnostic;
 use pixi_core::{
     Workspace,
     workspace::{
-        Environment, WorkspaceMut, virtual_packages::verify_current_platform_can_run_environment,
+        Environment, WorkspaceMut,
+        virtual_packages::{EnvironmentRunnability, classify_environment_runnability},
     },
 };
 use pixi_manifest::{
@@ -39,7 +40,7 @@ fn resolve_task_platform(
 pub async fn list_tasks(
     workspace: &Workspace,
     environment: Option<EnvironmentName>,
-) -> miette::Result<HashMap<EnvironmentName, HashMap<TaskName, Task>>> {
+) -> miette::Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>> {
     let explicit_environment = environment
         .map(|n| {
             workspace
@@ -54,30 +55,30 @@ pub async fn list_tasks(
         .ok()
         .map(|r| r.into_lock_file_or_empty_with_warning());
 
-    let env_task_map: HashMap<Environment, HashSet<TaskName>> = if let Some(explicit_environment) =
-        explicit_environment
-    {
-        HashMap::from([(
-            explicit_environment.clone(),
-            explicit_environment.get_filtered_tasks(),
-        )])
-    } else {
-        workspace
-            .environments()
-            .iter()
-            .filter_map(|env| {
-                if verify_current_platform_can_run_environment(env, lock_file.as_ref()).is_ok() {
-                    Some((env.clone(), env.get_filtered_tasks()))
-                } else {
-                    None
-                }
-            })
-            .collect()
-    };
+    let env_task_map: HashMap<Environment, (EnvironmentRunnability, HashSet<TaskName>)> =
+        if let Some(explicit_environment) = explicit_environment {
+            let runnability =
+                classify_environment_runnability(&explicit_environment, lock_file.as_ref());
+            HashMap::from([(
+                explicit_environment.clone(),
+                (runnability, explicit_environment.get_filtered_tasks()),
+            )])
+        } else {
+            workspace
+                .environments()
+                .iter()
+                .filter_map(
+                    |env| match classify_environment_runnability(env, lock_file.as_ref()) {
+                        EnvironmentRunnability::Unsupported => None,
+                        runnability => Some((env.clone(), (runnability, env.get_filtered_tasks()))),
+                    },
+                )
+                .collect()
+        };
 
     Ok(env_task_map
         .into_iter()
-        .map(|(env, task_names)| {
+        .map(|(env, (runnability, task_names))| {
             let env_name = env.name().clone();
             let best_declared_platform = env.best_declared_platform();
             let task_map = task_names
@@ -88,7 +89,7 @@ pub async fn list_tasks(
                         .map(|task| (task_name, task.clone()))
                 })
                 .collect();
-            (env_name, task_map)
+            (env_name, (runnability, task_map))
         })
         .collect())
 }

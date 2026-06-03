@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
-use pixi_core::workspace::{Environment, PypiDeps, UpdateDeps, WorkspaceMut};
+use pixi_core::workspace::{
+    Environment, PypiDeps, UpdateDeps, WorkspaceMut, virtual_packages::EnvironmentRunnability,
+};
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, Feature, FeatureName, PixiPlatform, PixiPlatformName, PlatformEdit,
@@ -384,7 +386,8 @@ impl<I: Interface> WorkspaceContext<I> {
     pub async fn list_tasks(
         &self,
         environment: Option<EnvironmentName>,
-    ) -> miette::Result<HashMap<EnvironmentName, HashMap<TaskName, Task>>> {
+    ) -> miette::Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>>
+    {
         crate::workspace::task::list_tasks(&self.workspace, environment).await
     }
 

@@ -83,6 +83,9 @@ use crate::{
         errors::VariantsError,
         get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
+        virtual_packages::{
+            minimum_compatible_declared_platform, verify_current_platform_can_run_environment,
+        },
     },
 };
 
@@ -708,12 +711,37 @@ impl<'p> LockFileDerivedData<'p> {
     /// installed prefix: the platform the environment was resolved with, and
     /// the minimum platform its resolved packages actually require. `None` when
     /// no declared platform runs on this machine.
+    /// The declared platform install targets for `environment`: the explicit
+    /// `--platform` override or the best declared platform; when neither
+    /// matches this machine, a declared platform whose lock-resolved minimum
+    /// requirements the machine meets (running "by accident").
+    fn install_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
+        let target_override = self.target_platform.as_ref();
+        environment
+            .named_or_best_declared_platform(target_override)
+            .or_else(|| {
+                if target_override.is_some() {
+                    return None;
+                }
+                let fallback =
+                    minimum_compatible_declared_platform(environment, &self.lock_file).ok();
+                if let Some(platform) = fallback {
+                    tracing::debug!(
+                        "no declared platform of environment '{}' matches this machine; \
+                         installing minimum-compatible platform '{}'",
+                        environment.name(),
+                        platform.name(),
+                    );
+                }
+                fallback
+            })
+    }
+
     fn installed_platform_data(
         &self,
         environment: &Environment<'p>,
     ) -> Option<(PlatformData, PlatformData)> {
-        let resolved =
-            environment.named_or_best_declared_platform(self.target_platform.as_ref())?;
+        let resolved = self.install_platform(environment)?;
         let minimal =
             compute_minimal_required_platforms(&self.lock_file, environment.name(), &[resolved]);
         // A subdir whose lock entry has no conda packages is absent from the
@@ -872,13 +900,23 @@ impl<'p> LockFileDerivedData<'p> {
                 // Skip the host-VP validation when `--platform` pins a target the
                 // local machine can't satisfy -- that's the case the override exists for.
                 let target_override = self.target_platform.as_ref();
-                let best_declared_platform =
-                    environment.named_or_best_declared_platform(target_override).ok_or_else(|| {
-                        miette::miette!(
+                let best_declared_platform = self.install_platform(environment).ok_or_else(|| {
+                    // Prefer the requirement-level diagnosis (which platforms
+                    // and virtual packages are unmet) over a generic message.
+                    match verify_current_platform_can_run_environment(
+                        environment,
+                        Some(&self.lock_file),
+                    ) {
+                        Err(err) => miette::Report::new(err).wrap_err(format!(
+                            "Cannot install environment '{}'",
+                            environment.name().fancy_display()
+                        )),
+                        Ok(()) => miette::miette!(
                             "Cannot install environment '{}': no platform supported by it matches the current system",
                             environment.name().fancy_display()
-                        )
-                    })?;
+                        ),
+                    }
+                })?;
                 if target_override.is_none() {
                     validate_system_meets_environment_requirements(
                         &self.lock_file,

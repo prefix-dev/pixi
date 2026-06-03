@@ -709,20 +709,19 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
 
     let no_install = update_lock_file_options.no_install;
     for env in environments {
+        // A `--platform` the environment doesn't list is a membership error.
+        // With no platform requested, defer to the install path's minimum fallback.
         if !no_install
             && env
                 .named_or_best_declared_platform(target_platform)
                 .is_none()
+            && let Some(name) = target_platform
         {
-            return Err(if let Some(name) = target_platform {
-                miette::miette!(
-                    "platform '{}' is not part of environment '{}'",
-                    name,
-                    env.name(),
-                )
-            } else {
-                env.unsupported_platform_error().into()
-            });
+            return Err(miette::miette!(
+                "platform '{}' is not part of environment '{}'",
+                name,
+                env.name(),
+            ));
         }
         if !no_install {
             env.emit_emulation_warning();

@@ -20,8 +20,13 @@ use thiserror::Error;
 
 use crate::{
     TaskDisambiguation,
-    error::{AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError},
-    task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
+    error::{
+        AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError,
+        UnrunnableTaskError,
+    },
+    task_environment::{
+        FindTaskError, FindTaskSource, SearchEnvironments, environments_defining_task,
+    },
 };
 
 /// Joins command-line arguments into a single shell command string.
@@ -236,7 +241,23 @@ impl<'p> TaskGraph<'p> {
         {
             match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs, None)
             {
-                Err(FindTaskError::MissingTask(_)) => {}
+                Err(FindTaskError::MissingTask(_)) => {
+                    // The name may still be a task elsewhere (another env or
+                    // platform); a shell fallback would say "command not found".
+                    let task_name = TaskName::from(name.clone());
+                    let environments = environments_defining_task(project, &task_name);
+                    if !environments.is_empty() {
+                        return Err(TaskGraphError::UnrunnableTask(UnrunnableTaskError {
+                            task_name,
+                            environments,
+                            explicit_environment: search_envs
+                                .explicit_environment
+                                .as_ref()
+                                .map(|env| env.name().clone()),
+                            platform: search_envs.platform.map(|p| p.name().clone()),
+                        }));
+                    }
+                }
                 Err(FindTaskError::AmbiguousTask(err)) => {
                     return Err(TaskGraphError::AmbiguousTask(err));
                 }
@@ -662,6 +683,10 @@ pub enum TaskGraphError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    UnrunnableTask(#[from] UnrunnableTaskError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     AmbiguousTask(AmbiguousTaskError),
 
     #[error("could not split task, assuming non valid task")]
@@ -796,6 +821,40 @@ mod test {
         fn expect_error(&self) -> TaskGraphError {
             self.build_graph().unwrap_err()
         }
+    }
+
+    /// A name that matches a task defined in *another* environment must not
+    /// fall through to "execute as a shell command" (which reports a
+    /// confusing "command not found") -- it errors, pointing at the
+    /// environments that define the task.
+    #[test]
+    fn test_task_in_other_environment_is_not_treated_as_executable() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+        [feature.test.tasks]
+        test = "pytest"
+
+        [feature.prod.tasks]
+        run = "python start.py"
+
+        [environments]
+        test = ["test"]
+        prod = ["prod"]
+    "#;
+        let err = TaskGraphTest::new(workspace_str, &["test"])
+            .environment("prod")
+            .expect_error();
+        assert_matches!(err, TaskGraphError::UnrunnableTask(err) => {
+            assert_eq!(err.task_name.as_str(), "test");
+            assert_eq!(
+                err.environments.iter().map(|e| e.as_str()).collect::<Vec<_>>(),
+                vec!["test"]
+            );
+        });
     }
 
     #[test]
