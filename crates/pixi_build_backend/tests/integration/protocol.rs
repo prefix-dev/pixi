@@ -275,6 +275,7 @@ async fn test_conda_outputs_extra_dependencies() {
                 ..Target::default()
             }),
             targets: Some(platform_targets),
+            conditional: None,
         }),
         ..ProjectModel::default()
     };

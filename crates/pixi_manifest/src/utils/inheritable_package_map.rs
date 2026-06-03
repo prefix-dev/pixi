@@ -10,7 +10,12 @@ use toml_span::{
     value::{Table, ValueInner},
 };
 
-use crate::{TomlError, error::GenericError, utils::package_map::UniquePackageMap};
+use crate::{
+    TomlError,
+    error::GenericError,
+    target::{key_looks_conditional, parse_if_expression},
+    utils::package_map::UniquePackageMap,
+};
 
 /// Entry in a `[package.*-dependencies]` table that may inherit from
 /// `[workspace.dependencies]`.
@@ -202,6 +207,109 @@ impl<'de> toml_span::Deserialize<'de> for InheritablePackageMap {
 
         if errors.errors.is_empty() {
             Ok(result)
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// A single `if(<expression>)` sub-table inside a package dependency table.
+#[derive(Debug)]
+pub struct ConditionalSpecs {
+    /// The bare inner expression, without the `if(...)` wrapper.
+    pub expression: String,
+    /// Span of the sub-table value.
+    pub value_span: Range<usize>,
+    /// The dependencies declared under this condition.
+    pub specs: InheritablePackageMap,
+}
+
+/// A package dependency table that, in addition to plain `name = spec` entries,
+/// may contain conditional sub-tables keyed by `if(<expression>)`. Plain
+/// entries land in `unconditional`; each `if(...)` sub-table becomes a
+/// [`ConditionalSpecs`] in source order.
+///
+/// Keys are routed by `key_looks_conditional`:
+/// a key containing `(` must be a well-formed `if(<expression>)` or it is
+/// reported as an error.
+#[derive(Default, Debug)]
+pub struct ConditionalInheritablePackageMap {
+    pub unconditional: InheritablePackageMap,
+    pub conditional: Vec<ConditionalSpecs>,
+}
+
+impl ConditionalInheritablePackageMap {
+    /// Split into the unconditional map and the list of conditional sub-tables.
+    pub fn into_parts(self) -> (InheritablePackageMap, Vec<ConditionalSpecs>) {
+        (self.unconditional, self.conditional)
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for ConditionalInheritablePackageMap {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let span = value.span;
+        let table = match value.take() {
+            ValueInner::Table(table) => table,
+            inner => return Err(expected("a table", inner, span).into()),
+        };
+
+        let mut errors = DeserError { errors: vec![] };
+        let mut plain: Table<'de> = Table::new();
+        let mut conditional = Vec::new();
+
+        for (key, mut entry_value) in table.into_iter().sorted_by_key(|(k, _)| k.span.start) {
+            if key_looks_conditional(&key.name) {
+                match parse_if_expression(&key.name) {
+                    Some(expression) => {
+                        let value_span = entry_value.span;
+                        match InheritablePackageMap::deserialize(&mut entry_value) {
+                            Ok(specs) => conditional.push(ConditionalSpecs {
+                                expression: expression.to_string(),
+                                value_span: value_span.start..value_span.end,
+                                specs,
+                            }),
+                            Err(e) => errors.merge(e),
+                        }
+                    }
+                    None => {
+                        errors.errors.push(toml_span::Error {
+                            kind: toml_span::ErrorKind::Custom(
+                                format!(
+                                    "`{}` is not a valid selector. Wrap the expression in `if(...)`, e.g. `if(host_platform == 'linux-64')`",
+                                    key.name
+                                )
+                                .into(),
+                            ),
+                            span: key.span,
+                            line_info: None,
+                        });
+                    }
+                }
+            } else {
+                plain.insert(key, entry_value);
+            }
+        }
+
+        // Delegate the plain entries to `InheritablePackageMap` so name parsing,
+        // duplicate detection and spec parsing stay in one place.
+        let unconditional = if plain.is_empty() {
+            InheritablePackageMap::default()
+        } else {
+            let mut tmp = Value::with_span(ValueInner::Table(plain), span);
+            match InheritablePackageMap::deserialize(&mut tmp) {
+                Ok(map) => map,
+                Err(e) => {
+                    errors.merge(e);
+                    InheritablePackageMap::default()
+                }
+            }
+        };
+
+        if errors.errors.is_empty() {
+            Ok(Self {
+                unconditional,
+                conditional,
+            })
         } else {
             Err(errors)
         }

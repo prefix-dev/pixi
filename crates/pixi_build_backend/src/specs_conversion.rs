@@ -21,13 +21,21 @@ use rattler_build_recipe::stage0::{
 };
 
 use crate::package_dependency::{PackageDependency, SourceMatchSpec};
+use miette::Diagnostic;
 use rattler_conda_types::{
     Channel, MatchSpec, PackageName, PackageNameMatcher, package::RunExportsJson,
 };
 use serde::Deserialize;
+use thiserror::Error;
 use url::Url;
 
 use crate::encoded_source_spec_url::EncodedSourceSpecUrl;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum SelectorConversionError {
+    #[error("invalid selector expression `{expression}`: {message}")]
+    InvalidExpression { expression: String, message: String },
+}
 
 pub fn from_source_url_to_source_package(source_url: Url) -> Option<SourcePackageSpec> {
     match source_url.scheme() {
@@ -75,13 +83,23 @@ pub fn convert_variant_to_pixi_build_types(
     pixi_build_types::VariantValue::deserialize(value)
 }
 
-pub fn to_rattler_build_selector(selector: &TargetSelector, platform_kind: PlatformKind) -> String {
-    match selector {
+pub fn to_rattler_build_selector(
+    selector: &TargetSelector,
+    platform_kind: PlatformKind,
+) -> Result<JinjaExpression, SelectorConversionError> {
+    let selector_str = match selector {
         TargetSelector::Platform(p) | TargetSelector::Subdir(p) => {
             format!("{platform_kind}_platform == '{p}'")
         }
         _ => selector.to_string(),
-    }
+    };
+
+    JinjaExpression::new(selector_str.clone()).map_err(|message| {
+        SelectorConversionError::InvalidExpression {
+            expression: selector_str,
+            message,
+        }
+    })
 }
 
 /// Convert a `PackageDependency` to a `SerializableMatchSpec` for use in
@@ -98,126 +116,121 @@ fn package_dependency_to_item(dep: PackageDependency) -> Item<SerializableMatchS
     ))
 }
 
-pub fn from_targets_v1_to_conditional_requirements(targets: &Targets) -> Requirements {
-    let mut build_items = ConditionalList::default();
-    let mut host_items = ConditionalList::default();
-    let mut run_items = ConditionalList::default();
-    let mut run_constraints_items = ConditionalList::default();
-    let mut extras: BTreeMap<String, ConditionalList<SerializableMatchSpec>> = BTreeMap::new();
+/// Accumulates the per-section requirement items while converting targets.
+#[derive(Default)]
+struct RequirementItems {
+    build: ConditionalList<SerializableMatchSpec>,
+    host: ConditionalList<SerializableMatchSpec>,
+    run: ConditionalList<SerializableMatchSpec>,
+    run_constraints: ConditionalList<SerializableMatchSpec>,
+    extras: BTreeMap<String, ConditionalList<SerializableMatchSpec>>,
+}
 
-    // Add default target
-    if let Some(default_target) = &targets.default_target {
-        let package_requirements = PackageSpecDependencies::from(default_target);
+impl RequirementItems {
+    /// Add the dependencies of `target`, wrapping each one in `condition` when
+    /// one is given.
+    fn add_target(&mut self, target: &Target, condition: Option<&JinjaExpression>) {
+        let to_item = |dep: PackageDependency| -> Item<SerializableMatchSpec> {
+            let item = package_dependency_to_item(dep);
+            match condition {
+                Some(condition) => Item::Conditional(Conditional {
+                    condition: condition.clone(),
+                    then: NestedItemList::single(item),
+                    else_value: None,
+                    condition_span: None,
+                }),
+                None => item,
+            }
+        };
 
-        build_items.extend(
-            package_requirements
+        let requirements = PackageSpecDependencies::from(target);
+        self.build.extend(
+            requirements
                 .build
                 .into_iter()
                 .map(|spec| spec.1)
-                .map(package_dependency_to_item),
+                .map(to_item),
         );
-
-        host_items.extend(
-            package_requirements
+        self.host.extend(
+            requirements
                 .host
                 .into_iter()
                 .map(|spec| spec.1)
-                .map(package_dependency_to_item),
+                .map(to_item),
         );
-
-        run_items.extend(
-            package_requirements
-                .run
-                .into_iter()
-                .map(|spec| spec.1)
-                .map(package_dependency_to_item),
-        );
-
-        run_constraints_items.extend(
-            package_requirements
+        self.run
+            .extend(requirements.run.into_iter().map(|spec| spec.1).map(to_item));
+        self.run_constraints.extend(
+            requirements
                 .run_constraints
                 .into_iter()
                 .map(|spec| spec.1)
-                .map(package_dependency_to_item),
+                .map(to_item),
         );
 
-        if let Some(default_extras) = &default_target.extra_dependencies {
-            for (group, deps) in default_extras {
+        if let Some(target_extras) = &target.extra_dependencies {
+            for (group, deps) in target_extras {
                 let items = package_specs_to_package_dependency(deps.clone())
                     .unwrap()
                     .into_iter()
-                    .map(package_dependency_to_item);
-                extras.entry(group.to_string()).or_default().extend(items);
+                    .map(to_item);
+                self.extras
+                    .entry(group.to_string())
+                    .or_default()
+                    .extend(items);
             }
         }
     }
+}
 
-    // Add specific targets
+pub fn from_targets_v1_to_conditional_requirements(
+    targets: &Targets,
+) -> Result<Requirements, SelectorConversionError> {
+    let mut items = RequirementItems::default();
+
+    // Add default target
+    if let Some(default_target) = &targets.default_target {
+        items.add_target(default_target, None);
+    }
+
+    // Add specific targets. The platform selector becomes a condition on every
+    // dependency under the target.
     if let Some(specific_targets) = &targets.targets {
         for (selector, target) in specific_targets {
-            let package_requirements = PackageSpecDependencies::from(target);
-            let selector_str = to_rattler_build_selector(selector, PlatformKind::Host);
-
-            // Helper to wrap a dep in a conditional
-            let make_conditional = |dep: PackageDependency| -> Item<SerializableMatchSpec> {
-                Item::Conditional(Conditional {
-                    condition: JinjaExpression::new(selector_str.clone())
-                        .expect("valid jinja expression"),
-                    then: NestedItemList::single(package_dependency_to_item(dep)),
-                    else_value: None,
-                    condition_span: None,
-                })
-            };
-
-            build_items.extend(
-                package_requirements
-                    .build
-                    .into_iter()
-                    .map(|spec| spec.1)
-                    .map(make_conditional),
-            );
-            host_items.extend(
-                package_requirements
-                    .host
-                    .into_iter()
-                    .map(|spec| spec.1)
-                    .map(make_conditional),
-            );
-            run_items.extend(
-                package_requirements
-                    .run
-                    .into_iter()
-                    .map(|spec| spec.1)
-                    .map(make_conditional),
-            );
-            run_constraints_items.extend(
-                package_requirements
-                    .run_constraints
-                    .into_iter()
-                    .map(|spec| spec.1)
-                    .map(make_conditional),
-            );
-
-            if let Some(target_extras) = &target.extra_dependencies {
-                for (group, deps) in target_extras {
-                    let items = package_specs_to_package_dependency(deps.clone())
-                        .unwrap()
-                        .into_iter()
-                        .map(&make_conditional);
-                    extras.entry(group.to_string()).or_default().extend(items);
-                }
-            }
+            let condition = to_rattler_build_selector(selector, PlatformKind::Host)?;
+            items.add_target(target, Some(&condition));
         }
     }
 
-    Requirements {
-        build: build_items,
-        host: host_items,
-        run: run_items,
-        run_constraints: run_constraints_items,
+    // Add conditional `if(...)` targets. The expression is handed to
+    // rattler-build verbatim; pixi does not evaluate it.
+    if let Some(conditional_targets) = &targets.conditional {
+        for (expression, target) in conditional_targets {
+            let condition = JinjaExpression::new(expression.to_string()).map_err(|message| {
+                SelectorConversionError::InvalidExpression {
+                    expression: expression.to_string(),
+                    message,
+                }
+            })?;
+            items.add_target(target, Some(&condition));
+        }
+    }
+
+    let RequirementItems {
+        build,
+        host,
+        run,
+        run_constraints,
+        extras,
+    } = items;
+    Ok(Requirements {
+        build,
+        host,
+        run,
+        run_constraints,
         extras,
         ..Default::default()
-    }
+    })
 }
 
 pub(crate) fn source_package_spec_to_package_dependency(
@@ -510,6 +523,7 @@ pub fn from_build_v1_args_to_finalized_dependencies(
 
 #[cfg(test)]
 mod test {
+    use pixi_build_types::ConditionalExpression;
     use rattler_conda_types::ParseMatchSpecOptions;
 
     use super::*;
@@ -609,8 +623,9 @@ mod test {
                 ..Target::default()
             }),
             targets: None,
+            conditional: None,
         };
-        let requirements = from_targets_v1_to_conditional_requirements(&targets);
+        let requirements = from_targets_v1_to_conditional_requirements(&targets).unwrap();
         let value = serde_json::to_value(&requirements.extras).unwrap();
 
         assert_eq!(
@@ -618,6 +633,96 @@ mod test {
             serde_json::json!({
                 "test": ["gtest"]
             })
+        );
+    }
+
+    #[test]
+    fn test_to_rattler_build_selector_platform() {
+        // Platform selectors become `<kind>_platform == '...'`.
+        assert_eq!(
+            to_rattler_build_selector(
+                &TargetSelector::Platform("linux-64".to_string()),
+                PlatformKind::Host
+            )
+            .unwrap()
+            .source(),
+            "host_platform == 'linux-64'"
+        );
+    }
+
+    /// A conditional `if(...)` dependency is wrapped in a `Conditional` carrying
+    /// the user's expression verbatim.
+    #[test]
+    fn test_conditional_expression_passthrough() {
+        let mut dependencies = OrderMap::new();
+        dependencies.insert(
+            SourcePackageName::from(PackageName::new_unchecked("foo")),
+            BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+
+        let mut conditional = OrderMap::new();
+        conditional.insert(
+            ConditionalExpression::new("host_platform != build_platform"),
+            Target {
+                build_dependencies: Some(dependencies),
+                ..Target::default()
+            },
+        );
+        let targets = Targets {
+            default_target: None,
+            targets: None,
+            conditional: Some(conditional),
+        };
+
+        let requirements = from_targets_v1_to_conditional_requirements(&targets).unwrap();
+
+        let value = serde_json::to_string(&requirements.build).unwrap();
+        assert!(
+            value.contains("host_platform != build_platform"),
+            "conditional expression must be preserved verbatim: {value}"
+        );
+        assert!(
+            value.contains("foo"),
+            "conditional dependency must be present: {value}"
+        );
+    }
+
+    /// A malformed user-supplied expression selector must surface as an error
+    /// rather than panicking inside `JinjaExpression::new`.
+    #[test]
+    fn test_invalid_expression_selector_errors_instead_of_panicking() {
+        let mut dependencies = OrderMap::new();
+        dependencies.insert(
+            SourcePackageName::from(PackageName::new_unchecked("foo")),
+            BinaryPackageSpec {
+                version: Some("*".parse().unwrap()),
+                ..BinaryPackageSpec::default()
+            }
+            .into(),
+        );
+
+        let mut conditional = OrderMap::new();
+        conditional.insert(
+            ConditionalExpression::new(")("),
+            Target {
+                build_dependencies: Some(dependencies),
+                ..Target::default()
+            },
+        );
+        let targets = Targets {
+            default_target: None,
+            targets: None,
+            conditional: Some(conditional),
+        };
+
+        let result = from_targets_v1_to_conditional_requirements(&targets);
+        assert!(
+            result.is_err(),
+            "a malformed selector expression must return an error, not panic"
         );
     }
 
@@ -652,9 +757,10 @@ mod test {
         let targets = Targets {
             default_target: None,
             targets: Some(platform_targets),
+            conditional: None,
         };
 
-        let requirements = from_targets_v1_to_conditional_requirements(&targets);
+        let requirements = from_targets_v1_to_conditional_requirements(&targets).unwrap();
         let test_group = requirements
             .extras
             .get("test")
@@ -754,9 +860,10 @@ mod test {
         let targets = Targets {
             default_target: Some(target_with_only_run_constraints("everywhere", ">=1.0")),
             targets: Some(targets_map),
+            conditional: None,
         };
 
-        let req = from_targets_v1_to_conditional_requirements(&targets);
+        let req = from_targets_v1_to_conditional_requirements(&targets).unwrap();
         assert!(req.build.is_empty());
         assert!(req.host.is_empty());
         assert!(req.run.is_empty());

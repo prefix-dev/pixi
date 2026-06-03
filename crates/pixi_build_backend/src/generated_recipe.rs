@@ -16,7 +16,9 @@ use serde::de::DeserializeOwned;
 use thiserror::Error;
 use url::Url;
 
-use crate::specs_conversion::from_targets_v1_to_conditional_requirements;
+use crate::specs_conversion::{
+    SelectorConversionError, from_targets_v1_to_conditional_requirements,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct PythonParams {
@@ -151,6 +153,9 @@ pub enum GenerateRecipeError<MetadataProviderError: Diagnostic + 'static> {
         #[source]
         MetadataProviderError,
     ),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidSelectorExpression(#[from] SelectorConversionError),
 }
 
 #[derive(Clone)]
@@ -247,7 +252,7 @@ impl GeneratedRecipe {
         );
 
         let requirements =
-            from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default());
+            from_targets_v1_to_conditional_requirements(&model.targets.unwrap_or_default())?;
 
         macro_rules! derive_value {
             ($ident:ident) => {
@@ -409,6 +414,7 @@ mod tests {
                     ..Target::default()
                 }),
                 targets: None,
+                conditional: None,
             }),
             ..ProjectModel::default()
         };
@@ -444,6 +450,7 @@ mod tests {
             targets: Some(Targets {
                 default_target: None,
                 targets: Some(platform_targets),
+                conditional: None,
             }),
             ..ProjectModel::default()
         };

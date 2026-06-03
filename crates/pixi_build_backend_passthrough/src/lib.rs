@@ -310,6 +310,8 @@ fn generate_variant_outputs(
     package_run_exports: Option<&RunExportsJson>,
     config: &PassthroughBackendConfig,
 ) -> Vec<CondaOutput> {
+    reject_conditional_targets(project_model);
+
     // Check if we have variant configurations and dependencies with "*"
     let variant_keys = find_variant_keys(project_model, params);
 
@@ -909,6 +911,18 @@ fn matches_target_selector(selector: &TargetSelector, platform: Platform) -> boo
     }
 }
 
+/// The passthrough backend has no jinja evaluator and therefore cannot decide
+/// whether an `if(...)` conditional applies. Panic rather than silently dropping
+/// the conditional dependencies; a real backend evaluates these via
+/// rattler-build.
+fn reject_conditional_targets(project_model: &ProjectModel) {
+    if let Some(targets) = &project_model.targets
+        && targets.conditional.as_ref().is_some_and(|c| !c.is_empty())
+    {
+        unimplemented!("passthrough backend cannot evaluate if(...) conditional dependencies")
+    }
+}
+
 /// An implementation of the [`InMemoryBackendInstantiator`] that creates a
 /// [`PassthroughBackend`].
 #[derive(Default)]
@@ -1202,7 +1216,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use pixi_build_types::{BinaryPackageSpec, PackageSpec};
+    use pixi_build_types::{BinaryPackageSpec, ConditionalExpression, PackageSpec};
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use super::*;
@@ -1234,6 +1248,27 @@ mod tests {
         let spec: PackageSpec = BinaryPackageSpec::default().into();
 
         assert!(is_star_requirement(&spec));
+    }
+
+    #[test]
+    #[should_panic(expected = "passthrough backend cannot evaluate if(")]
+    fn test_passthrough_rejects_conditional_dependencies() {
+        // The passthrough backend has no jinja evaluator, so conditional
+        // `if(...)` dependencies must fail loudly rather than being silently
+        // dropped.
+        let mut conditional = OrderMap::new();
+        conditional.insert(
+            ConditionalExpression::new("host_platform != build_platform"),
+            Target::default(),
+        );
+        let project_model = ProjectModel {
+            targets: Some(Targets {
+                conditional: Some(conditional),
+                ..Targets::default()
+            }),
+            ..ProjectModel::default()
+        };
+        reject_conditional_targets(&project_model);
     }
 
     #[test]

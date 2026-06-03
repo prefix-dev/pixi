@@ -119,6 +119,7 @@ pub(crate) fn convert_test_model_to_project_model_v1(test_model: TestProjectMode
                 })
                 .collect(),
         ),
+        conditional: None,
     };
 
     ProjectModel {

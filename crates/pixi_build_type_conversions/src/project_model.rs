@@ -11,7 +11,7 @@ use ordermap::OrderMap;
 // different types
 use pixi_build_types::{self as pbt};
 
-use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
+use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector};
 use pixi_spec::{GitReference, MatchspecFields, PixiSpec, SourceLocationSpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName};
 
@@ -209,10 +209,11 @@ pub fn to_target_selector_v1(selector: &TargetSelector) -> pbt::TargetSelector {
 }
 
 fn to_targets_v1(
-    targets: &Targets<PackageTarget>,
+    manifest: &PackageManifest,
     channel_config: &ChannelConfig,
 ) -> Result<pbt::Targets, SpecConversionError> {
-    let selected_targets = targets
+    let selected_targets = manifest
+        .targets
         .iter()
         .filter_map(|(k, v)| {
             v.map(|selector| {
@@ -222,9 +223,21 @@ fn to_targets_v1(
         })
         .collect::<Result<OrderMap<pbt::TargetSelector, pbt::Target>, _>>()?;
 
+    // Conditional `if(...)` dependencies are not platform selectors; they are
+    // carried separately and passed through to rattler-build, which evaluates
+    // the expression.
+    let conditional = manifest
+        .conditional_dependencies
+        .iter()
+        .map(|(expression, target)| {
+            to_target_v1(target, channel_config).map(|target| (expression.clone(), target))
+        })
+        .collect::<Result<OrderMap<pbt::ConditionalExpression, pbt::Target>, _>>()?;
+
     Ok(pbt::Targets {
-        default_target: Some(to_target_v1(targets.default(), channel_config)?),
+        default_target: Some(to_target_v1(manifest.targets.default(), channel_config)?),
         targets: Some(selected_targets),
+        conditional: (!conditional.is_empty()).then_some(conditional),
     })
 }
 
@@ -247,7 +260,7 @@ pub fn to_project_model_v1(
         homepage: manifest.package.homepage.clone(),
         repository: manifest.package.repository.clone(),
         documentation: manifest.package.documentation.clone(),
-        targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
+        targets: Some(to_targets_v1(manifest, channel_config)?),
         secrets: manifest.build.secrets.clone(),
     };
     Ok(project)

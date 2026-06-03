@@ -141,7 +141,17 @@
           ]
         },
         "targets": {
-          "description": "We use an [`OrderMap`] to preserve the order in which the items where\ndefined in the manifest.",
+          "description": "Platform-specific targets.\n\n# Deprecated\n\nThese correspond to the deprecated `[package.target.<platform>]` tables\nand will be removed in a future version. Use [`Targets::conditional`]\n(`if(<expression>)` dependencies) instead.\n\nWe use an [`OrderMap`] to preserve the order in which the items where\ndefined in the manifest.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Target"
+          }
+        },
+        "conditional": {
+          "description": "Conditional `if(<expression>)` dependencies. The expression is passed\nthrough to rattler-build, which evaluates it; pixi does not. Keyed by the\nbare inner expression without the `if(...)` wrapper.",
           "type": [
             "object",
             "null"

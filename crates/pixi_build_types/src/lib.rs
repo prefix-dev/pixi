@@ -16,9 +16,10 @@ pub use conda_package_metadata::CondaPackageMetadata;
 pub use extra_group_name::{ExtraGroupName, InvalidExtraGroupName, MAX_EXTRA_GROUP_NAME_LEN};
 pub use input_glob_set::InputGlobSet;
 pub use project_model::{
-    BinaryPackageSpec, ConstraintSpec, GitReference, GitSpec, NamedSpec, PackageSpec, PathSpec,
-    PinBound, PinCompatibleSpec, PinExpression, ProjectModel, SourcePackageLocationSpec,
-    SourcePackageName, SourcePackageSpec, Target, TargetSelector, Targets, UrlSpec,
+    BinaryPackageSpec, ConditionalExpression, ConstraintSpec, GitReference, GitSpec, NamedSpec,
+    PackageSpec, PathSpec, PinBound, PinCompatibleSpec, PinExpression, ProjectModel,
+    SourcePackageLocationSpec, SourcePackageName, SourcePackageSpec, Target, TargetSelector,
+    Targets, UrlSpec,
 };
 use rattler_conda_types::{
     GenericVirtualPackage, PackageName, Platform, Version, VersionSpec,
@@ -32,7 +33,10 @@ pub use variant::VariantValue;
 // Version 2: Name in project models can be `None`.
 // Version 3: Outputs with the same name must have unique variants.
 // Version 4: (BREAKING) Add matchspec fields to source record, cleanup types, remove version from project model and streamline use of directory vs dir.
-// Version 5: (BREAKING) Serialize match specs in `conda/build_v1` as structured objects instead of strings and add extra dependency groups.
+// Version 5: (BREAKING) Serialize match specs in `conda/build_v1` as
+//   structured objects instead of strings, add extra dependency groups,
+//   and add `if(<expression>)` target selectors that are passed through
+//   to rattler-build. Older backends would silently mishandle them.
 
 /// The constraint for the pixi build api version package
 /// Adding this constraint when solving a pixi build backend environment ensures

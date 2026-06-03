@@ -1,0 +1,70 @@
+---
+source: crates/pixi_build_type_conversions/src/project_model.rs
+expression: project_model
+---
+{
+  "name": "cuda_probe",
+  "buildStringPrefix": null,
+  "buildNumber": null,
+  "version": "0.1.0",
+  "description": "A C++ executable that demonstrates if(...) conditional dependencies",
+  "authors": null,
+  "license": null,
+  "licenseFile": null,
+  "readme": null,
+  "homepage": null,
+  "repository": null,
+  "documentation": null,
+  "targets": {
+    "defaultTarget": {
+      "hostDependencies": {},
+      "buildDependencies": {},
+      "runDependencies": {},
+      "runConstraints": {}
+    },
+    "targets": {},
+    "conditional": {
+      "linux or win": {
+        "hostDependencies": {},
+        "buildDependencies": {},
+        "runDependencies": {
+          "cuda-version": {
+            "binary": {
+              "version": "12.*",
+              "build": null,
+              "buildNumber": null,
+              "fileName": null,
+              "extras": null,
+              "flags": null,
+              "channel": null,
+              "subdir": null,
+              "md5": null,
+              "sha256": null,
+              "url": null,
+              "license": null,
+              "condition": null
+            }
+          },
+          "cuda-nvcc": {
+            "binary": {
+              "version": "12.*",
+              "build": null,
+              "buildNumber": null,
+              "fileName": null,
+              "extras": null,
+              "flags": null,
+              "channel": null,
+              "subdir": null,
+              "md5": null,
+              "sha256": null,
+              "url": null,
+              "license": null,
+              "condition": null
+            }
+          }
+        },
+        "runConstraints": {}
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+#:schema ./../../schema.json
+[project]
+channels = ["conda-forge"]
+name = "project"
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+
+[package]
+name = "project"
+version = "0.1.0"
+
+[package.build.backend]
+name = "pixi-build-python"
+version = "*"
+
+# The `[package.target.*]` syntax has been removed from the schema in favor of
+# `[package.<section>."if(...)"]` conditional dependency tables.
+[package.target.linux-64.host-dependencies]
+foo = "*"
