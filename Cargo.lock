@@ -5955,7 +5955,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.70.0"
+version = "0.70.1"
 dependencies = [
  "astral-reqwest-middleware",
  "async-trait",
