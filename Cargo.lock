@@ -6956,6 +6956,7 @@ dependencies = [
  "uv-distribution-filename",
  "uv-distribution-types",
  "uv-flags",
+ "uv-git",
  "uv-install-wheel",
  "uv-installer",
  "uv-normalize",
@@ -6967,6 +6968,7 @@ dependencies = [
  "uv-redacted",
  "uv-resolver",
  "uv-types",
+ "uv-workspace",
 ]
 
 [[package]]

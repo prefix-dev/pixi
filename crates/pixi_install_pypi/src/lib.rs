@@ -24,7 +24,7 @@ use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
-    pypi_build_config_settings, pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
+    pypi_cache_config_settings, pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -135,11 +135,14 @@ impl InstallablePypiRecord {
     }
 }
 
+pub(crate) mod cache_scoped_build_context;
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
 pub(crate) mod install_wheel;
 pub(crate) mod plan;
 pub(crate) mod utils;
+
+use cache_scoped_build_context::CacheScopedBuildContext;
 
 /// Continue or skip a PyPI prefix update based on the interpreter state.
 pub enum ContinuePyPIPrefixUpdate<'a> {
@@ -349,7 +352,12 @@ struct UvInstallerPlannerConfig {
     tags: Tags,
     index_locations: IndexLocations,
     build_options: BuildOptions,
+    /// Settings passed to the PEP 517 backend (kept clean of pixi internals).
     config_settings: ConfigSettings,
+    /// Fingerprint-bearing settings used *only* as the build context's cache key,
+    /// never handed to the backend. See [`pypi_cache_config_settings`] and
+    /// [`CacheScopedBuildContext`].
+    cache_config_settings: ConfigSettings,
     venv: PythonEnvironment,
 }
 
@@ -360,7 +368,12 @@ struct UvInstallerConfig {
     build_options: BuildOptions,
     registry_client: Arc<RegistryClient>,
     flat_index: FlatIndex,
+    /// Settings passed to the PEP 517 backend (kept clean of pixi internals).
     config_settings: ConfigSettings,
+    /// Fingerprint-bearing settings used *only* as the build context's cache key,
+    /// never handed to the backend. See [`pypi_cache_config_settings`] and
+    /// [`CacheScopedBuildContext`].
+    cache_config_settings: ConfigSettings,
     venv: PythonEnvironment,
     build_isolation: BuildIsolation,
     constraints: Constraints,
@@ -517,9 +530,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             pypi_options_to_build_options(self.build_config.no_build, self.build_config.no_binary)
                 .into_diagnostic()?;
 
-        // Scope source builds to the conda environment, matching the key used
-        // during resolution. See issue #6226.
-        let config_settings = pypi_build_config_settings(pixi_records);
+        // The backend gets clean settings; the conda-environment fingerprint is
+        // applied only to the build cache key via `CacheScopedBuildContext`, so
+        // strict backends like meson-python aren't broken (#6271) while wheels
+        // stay scoped per environment (#6226).
+        let config_settings = ConfigSettings::default();
+        let cache_config_settings = pypi_cache_config_settings(&config_settings, pixi_records);
 
         // Setup the interpreter from the conda prefix
         let python_location = self.config.prefix.root().join(python_interpreter_path);
@@ -540,6 +556,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             index_locations,
             build_options,
             config_settings,
+            cache_config_settings,
             venv,
         })
     }
@@ -607,6 +624,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             registry_client,
             flat_index,
             config_settings: planner_config.config_settings,
+            cache_config_settings: planner_config.cache_config_settings,
             venv: planner_config.venv,
             build_isolation,
             constraints: Constraints::default(),
@@ -639,8 +657,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let extra_build_requires = ExtraBuildRequires::default();
         let package_settings = PackageConfigSettings::default();
-
         let extra_build_variables = ExtraBuildVariables::default();
+
+        // The cache lookup must use the fingerprinted settings, the same ones the
+        // build dispatch exposes via `CacheScopedBuildContext`, or the
+        // per-environment shard a wheel is built into would never be found again.
+        let cache_config_settings = &planner_config.cache_config_settings;
 
         // This is used to find wheels that are available from the registry
         let registry_index = RegistryWheelIndex::new(
@@ -648,7 +670,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &planner_config.tags,
             &planner_config.index_locations,
             &self.context_config.uv_context.hash_strategy,
-            &planner_config.config_settings,
+            cache_config_settings,
             &package_settings,
             &extra_build_requires,
             &extra_build_variables,
@@ -659,7 +681,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &self.context_config.uv_context.cache,
             &planner_config.tags,
             &self.context_config.uv_context.hash_strategy,
-            &planner_config.config_settings,
+            cache_config_settings,
             &package_settings,
             &extra_build_requires,
             &extra_build_variables,
@@ -932,7 +954,13 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         } else {
             HashMap::new()
         };
-        let build_dispatch = self.create_build_dispatch(setup, &env_vars);
+        // Wrap the dispatch so the conda-environment fingerprint scopes the build
+        // cache key without reaching the PEP 517 backend (see
+        // `CacheScopedBuildContext`).
+        let build_dispatch = CacheScopedBuildContext::new(
+            self.create_build_dispatch(setup, &env_vars),
+            setup.cache_config_settings.clone(),
+        );
 
         let distribution_database = DistributionDatabase::new(
             setup.registry_client.as_ref(),
