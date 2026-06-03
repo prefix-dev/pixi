@@ -1372,8 +1372,7 @@ mod tests {
     #[test]
     fn test_collect_locked_indexes_includes_find_links() {
         let pypi_index = Url::parse("https://pypi.org/simple").unwrap();
-        let find_links_url =
-            Url::parse("https://data.pyg.org/whl/torch-2.8.0+cpu.html").unwrap();
+        let find_links_url = Url::parse("https://data.pyg.org/whl/torch-2.8.0+cpu.html").unwrap();
 
         let indexes = PypiIndexes {
             indexes: vec![pypi_index.clone()],
