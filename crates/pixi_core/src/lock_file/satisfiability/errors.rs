@@ -634,6 +634,22 @@ pub enum PlatformUnsat {
     },
 
     #[error(
+        "the resolved extra group '{group}' of source package '{package}' no longer matches what the backend would re-derive from the manifest{added_msg}{removed_msg}",
+        added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
+        removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
+    )]
+    SourceExtraDependenciesChanged {
+        /// The source package whose extra group drifted.
+        package: String,
+        /// The extra group name.
+        group: String,
+        /// Specs the backend now declares that the locked group is missing.
+        added: Vec<String>,
+        /// Specs the locked group carries that the backend no longer declares.
+        removed: Vec<String>,
+    },
+
+    #[error(
         "the locked package build source for '{0}' does not match the requested build source, {1}"
     )]
     PackageBuildSourceMismatch(String, SourceMismatchError),
