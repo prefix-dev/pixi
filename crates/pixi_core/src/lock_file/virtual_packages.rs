@@ -1,3 +1,4 @@
+use crate::workspace::errors::conda_override_hint;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -34,27 +35,16 @@ impl VirtualPackageNotFoundError {
         required_package: &MatchSpec,
         system_virtual_packages: &Vec<&GenericVirtualPackage>,
     ) -> Self {
-        let glibc = PackageName::from_str("__glibc").expect("__glibc is a valid package name");
-        let cuda = PackageName::from_str("__cuda").expect("__cuda is a valid package name");
-        let osx = PackageName::from_str("__osx").expect("__osx is a valid package name");
-
-        let override_var = if required_package.name.matches(&glibc) {
-            // TODO: would be awesome to set the version based on the required version.
-            // 2.17 is used as it's a good default
-            Some("`CONDA_OVERRIDE_GLIBC=2.17`")
-        } else if required_package.name.matches(&cuda) {
-            Some("`CONDA_OVERRIDE_CUDA=12.0`")
-        } else if required_package.name.matches(&osx) {
-            Some("`CONDA_OVERRIDE_OSX=10.15`")
-        } else {
-            None
-        };
-
-        let help = override_var.map(|override_var| {
-            format!(
-            " You can mock the virtual package by overriding the environment variable, e.g.: '{override_var}'"
-        )
-        });
+        let required_version = required_package.version.as_ref().and_then(spec_version);
+        let help = required_package
+            .name
+            .as_exact()
+            .and_then(|name| conda_override_hint(name.as_normalized(), required_version))
+            .map(|hint| {
+                format!(
+                    " You can mock the virtual package by overriding the environment variable, e.g.: '`{hint}`'"
+                )
+            });
 
         let msg = format!(
             "Virtual package '{}' does not match any of the available virtual packages on your machine: [{}]",
@@ -610,8 +600,8 @@ packages:
 
         let error1 = VirtualPackageNotFoundError::new(&spec, &system_virtual_packages);
 
-        // Create a test MatchSpec for win which doesn't have an override
-        let spec = MatchSpec::from_str("__win >= 1.2.3", ParseStrictness::Strict).unwrap();
+        // Create a test MatchSpec for unix which doesn't have an override
+        let spec = MatchSpec::from_str("__unix >= 1.2.3", ParseStrictness::Strict).unwrap();
         let error2 = VirtualPackageNotFoundError::new(&spec, &system_virtual_packages);
 
         assert_snapshot!(format!(

@@ -74,7 +74,7 @@ impl Diagnostic for UnsupportedPlatformError {
         let overrides: Vec<String> = self
             .unsatisfied_requirements
             .iter()
-            .filter_map(override_hint)
+            .filter_map(|req| conda_override_hint(req.name.as_normalized(), Some(&req.version)))
             .collect();
 
         if overrides.is_empty() {
@@ -109,11 +109,11 @@ fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
         .join(", ")
 }
 
-/// Maps a missing virtual package to the `CONDA_OVERRIDE_*` env-var hint that
-/// would mock it. Returns `None` for virtual packages without a known override
-/// (e.g. `__unix`).
-fn override_hint(req: &GenericVirtualPackage) -> Option<String> {
-    let env_var = match req.name.as_normalized() {
+/// `CONDA_OVERRIDE_*` hint for a missing virtual package: the required
+/// version when known, a realistic example otherwise. `None` for virtual
+/// packages without a known override (e.g. `__unix`).
+pub(crate) fn conda_override_hint(name: &str, version: Option<&Version>) -> Option<String> {
+    let env_var = match name {
         "__glibc" => "CONDA_OVERRIDE_GLIBC",
         "__cuda" => "CONDA_OVERRIDE_CUDA",
         "__osx" => "CONDA_OVERRIDE_OSX",
@@ -122,17 +122,16 @@ fn override_hint(req: &GenericVirtualPackage) -> Option<String> {
         "__archspec" => "CONDA_OVERRIDE_ARCHSPEC",
         _ => return None,
     };
-    // "=0" would technically satisfy an any-version requirement but reads
-    // like nonsense; suggest a realistic value instead.
-    let example = if req.version == Version::major(0) {
-        match req.name.as_normalized() {
+    // A version-0 requirement means "any version"; "=0" reads like nonsense,
+    // so suggest a realistic value instead.
+    let example = match version.filter(|v| **v != Version::major(0)) {
+        Some(version) => version.to_string(),
+        None => match name {
             "__glibc" => "2.17".to_string(),
             "__cuda" => "12.0".to_string(),
             "__osx" => "10.15".to_string(),
-            _ => req.version.to_string(),
-        }
-    } else {
-        req.version.to_string()
+            _ => "0".to_string(),
+        },
     };
     Some(format!("{env_var}={example}"))
 }
