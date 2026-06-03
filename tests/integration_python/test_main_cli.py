@@ -1118,7 +1118,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                     "minimum_supported_platform": {
                         "name": "linux-64",
                         "subdir": "linux-64",
-                        "virtual_packages": [],
+                        "virtual_packages": ["__glibc=0", "__unix=0"],
                     },
                     "tasks": [],
                     "channels": ["conda-forge"],

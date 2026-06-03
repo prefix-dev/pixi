@@ -168,19 +168,24 @@ pub(crate) fn compute_minimal_required_platforms(
             let Some(name) = spec.name.as_exact() else {
                 continue;
             };
-            let Some(version) = spec.version.as_ref().and_then(spec_version) else {
-                continue;
-            };
+            // A version-less spec (bare `__cuda`) still requires presence;
+            // version 0 loses to any versioned requirement but is never dropped.
+            let version = spec
+                .version
+                .as_ref()
+                .and_then(spec_version)
+                .cloned()
+                .unwrap_or_else(|| Version::major(0));
             aggregated
                 .entry(name.clone())
                 .and_modify(|existing| {
-                    if *version > existing.version {
+                    if version > existing.version {
                         existing.version = version.clone();
                     }
                 })
                 .or_insert_with(|| GenericVirtualPackage {
                     name: name.clone(),
-                    version: version.clone(),
+                    version,
                     build_string: String::new(),
                 });
         }
@@ -454,6 +459,47 @@ mod test {
                 .iter()
                 .any(|vp| vp.name.as_normalized() == "__archspec")
         );
+    }
+
+    /// A version-less virtual-package dependency (bare `__cuda`) still
+    /// requires the package to be present. It used to be dropped from the
+    /// minimal platform, making machines without the package look compatible
+    /// while `validate_system_meets_environment_requirements` rejected them.
+    #[test]
+    fn test_compute_minimal_required_platforms_versionless_spec() {
+        let lock_source = r#"version: 7
+platforms:
+- name: linux-64
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/foo-1.0-h0.conda
+packages:
+- conda: https://conda.anaconda.org/conda-forge/linux-64/foo-1.0-h0.conda
+  depends:
+  - __cuda
+"#;
+        let lock_file = LockFile::from_str_with_base_directory(lock_source, None).unwrap();
+        let declared = PixiPlatform::from_subdir(Platform::Linux64);
+
+        let minimal = compute_minimal_required_platforms(
+            &lock_file,
+            &EnvironmentName::default(),
+            &[&declared],
+        );
+
+        let platform = minimal
+            .get(&Platform::Linux64)
+            .expect("linux-64 minimal platform");
+        let cuda = platform
+            .declared_virtual_packages()
+            .iter()
+            .find(|vp| vp.name.as_normalized() == "__cuda")
+            .expect("bare __cuda must survive into the minimal platform");
+        assert_eq!(cuda.version, Version::major(0));
     }
 
     #[test]

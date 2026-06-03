@@ -3,7 +3,7 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
 use pixi_manifest::{EnvironmentName, PixiPlatformName, TaskName};
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
@@ -97,7 +97,15 @@ impl Diagnostic for UnsupportedPlatformError {
 
 fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
     reqs.iter()
-        .map(|r| format!("{} >= {}", r.name.as_normalized(), r.version))
+        .map(|r| {
+            // Version 0 encodes a version-less requirement (a bare `__cuda`
+            // dependency): the package must be present at any version.
+            if r.version == Version::major(0) {
+                format!("{} (any version)", r.name.as_normalized())
+            } else {
+                format!("{} >= {}", r.name.as_normalized(), r.version)
+            }
+        })
         .join(", ")
 }
 
@@ -114,7 +122,19 @@ fn override_hint(req: &GenericVirtualPackage) -> Option<String> {
         "__archspec" => "CONDA_OVERRIDE_ARCHSPEC",
         _ => return None,
     };
-    Some(format!("{env_var}={}", req.version))
+    // "=0" would technically satisfy an any-version requirement but reads
+    // like nonsense; suggest a realistic value instead.
+    let example = if req.version == Version::major(0) {
+        match req.name.as_normalized() {
+            "__glibc" => "2.17".to_string(),
+            "__cuda" => "12.0".to_string(),
+            "__osx" => "10.15".to_string(),
+            _ => req.version.to_string(),
+        }
+    } else {
+        req.version.to_string()
+    };
+    Some(format!("{env_var}={example}"))
 }
 
 /// Errors that can occur while resolving workspace build variants.
@@ -223,13 +243,27 @@ mod tests {
 
     #[test]
     fn unknown_vp_name_skips_override_hint_but_still_lists_requirement() {
+        // Version 0 means "must be present at any version" and renders as
+        // such instead of a nonsensical ">= 0".
         let e = err(vec![vp("__unix", "0")]);
         let display = e.to_string();
         assert!(
-            display.contains("Unsatisfied requirements: __unix >= 0"),
+            display.contains("Unsatisfied requirements: __unix (any version)"),
             "{display}"
         );
         let help = e.help().unwrap().to_string();
         assert!(!help.contains("CONDA_OVERRIDE"), "{help}");
+    }
+
+    #[test]
+    fn versionless_requirement_suggests_realistic_override() {
+        let e = err(vec![vp("__cuda", "0")]);
+        let display = e.to_string();
+        assert!(
+            display.contains("Unsatisfied requirements: __cuda (any version)"),
+            "{display}"
+        );
+        let help = e.help().unwrap().to_string();
+        assert!(help.contains("CONDA_OVERRIDE_CUDA=12.0"), "{help}");
     }
 }
