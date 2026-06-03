@@ -691,6 +691,8 @@ async fn verify_package_platform_satisfiability(
 
     // Keep a list of all conda packages that we have already visited
     let mut conda_packages_visited = HashSet::new();
+    // Extras already followed per package, so each is expanded once.
+    let mut conda_extras_followed: HashMap<CondaPackageIdx, HashSet<String>> = HashMap::new();
     let mut pypi_packages_visited = HashSet::new();
     let mut pypi_requirements_visited = pypi_requirements
         .iter()
@@ -717,11 +719,18 @@ async fn verify_package_platform_satisfiability(
         // Determine the package that matches the requirement of matchspec.
         let found_package = match package {
             Dependency::Input(name, spec, source) => {
-                let found_package = match spec.into_source_or_binary() {
+                let (found_package, extras) = match spec.into_source_or_binary() {
                     Either::Left(source_spec) => {
                         expected_conda_source_dependencies.insert(name.clone());
-                        find_matching_source_package(locked_pixi_records, name, source_spec, source)
-                            .map_err(CommandDispatcherError::Failed)?
+                        let extras = source_spec.extras.clone().unwrap_or_default();
+                        let found_package = find_matching_source_package(
+                            locked_pixi_records,
+                            name,
+                            source_spec,
+                            source,
+                        )
+                        .map_err(CommandDispatcherError::Failed)?;
+                        (found_package, extras)
                     }
                     Either::Right(binary_spec) => {
                         let spec = binary_spec
@@ -732,6 +741,7 @@ async fn verify_package_platform_satisfiability(
                                     spec_conversion_to_match_spec_error(e),
                                 ))
                             })?;
+                        let extras = spec.extras.clone().unwrap_or_default();
                         match find_matching_package(
                             locked_pixi_records,
                             &virtual_packages,
@@ -740,7 +750,7 @@ async fn verify_package_platform_satisfiability(
                         )
                         .map_err(CommandDispatcherError::Failed)?
                         {
-                            Some(pkg) => pkg,
+                            Some(pkg) => (pkg, extras),
                             None => continue,
                         }
                     }
@@ -748,25 +758,28 @@ async fn verify_package_platform_satisfiability(
 
                 expected_conda_packages
                     .insert(locked_pixi_records.records[found_package.0].name().clone());
-                FoundPackage::Conda(found_package)
+                FoundPackage::Conda(found_package, extras)
             }
             Dependency::Conda(spec, source) => {
+                let extras = spec.extras.clone().unwrap_or_default();
                 match find_matching_package(locked_pixi_records, &virtual_packages, spec, source)
                     .map_err(CommandDispatcherError::Failed)?
                 {
                     Some(pkg) => {
                         expected_conda_packages
                             .insert(locked_pixi_records.records[pkg.0].name().clone());
-                        FoundPackage::Conda(pkg)
+                        FoundPackage::Conda(pkg, extras)
                     }
                     None => continue,
                 }
             }
             Dependency::CondaSource(name, source_spec, source) => {
                 expected_conda_source_dependencies.insert(name.clone());
+                let extras = source_spec.extras.clone().unwrap_or_default();
                 FoundPackage::Conda(
                     find_matching_source_package(locked_pixi_records, name, source_spec, source)
                         .map_err(CommandDispatcherError::Failed)?,
+                    extras,
                 )
             }
             Dependency::PyPi(requirement, source, origin) => {
@@ -820,7 +833,7 @@ async fn verify_package_platform_satisfiability(
                     let pkg_idx = CondaPackageIdx(*repodata_idx);
                     conda_packages_used_by_pypi
                         .insert(locked_pixi_records.records[pkg_idx.0].name().clone());
-                    FoundPackage::Conda(pkg_idx)
+                    FoundPackage::Conda(pkg_idx, Vec::new())
                 } else {
                     match to_normalize(&requirement.name)
                         .map(|name| locked_pypi_records.index_by_name(&name))
@@ -880,15 +893,32 @@ async fn verify_package_platform_satisfiability(
 
         // Add all the requirements of the package to the queue.
         match found_package {
-            FoundPackage::Conda(idx) => {
-                if !conda_packages_visited.insert(idx) {
-                    // We already visited this package, so we can skip adding its dependencies to
-                    // the queue
-                    continue;
-                }
+            FoundPackage::Conda(idx, extras) => {
+                let newly_visited = conda_packages_visited.insert(idx);
 
                 let record = &locked_pixi_records.records[idx.0];
-                for depends in &record.package_record().depends {
+
+                // Regular deps on first visit, plus deps of any newly requested
+                // extra (else extra-only packages look unused).
+                let mut depends_to_walk: Vec<&String> = Vec::new();
+                if newly_visited {
+                    depends_to_walk.extend(record.package_record().depends.iter());
+                }
+                {
+                    let followed = conda_extras_followed.entry(idx).or_default();
+                    for extra in &extras {
+                        if followed.insert(extra.clone())
+                            && let Some(extra_depends) = record
+                                .package_record()
+                                .experimental_extra_depends
+                                .get(extra)
+                        {
+                            depends_to_walk.extend(extra_depends.iter());
+                        }
+                    }
+                }
+
+                for depends in depends_to_walk {
                     let spec = MatchSpec::from_str(
                         depends.as_str(),
                         ParseMatchSpecOptions::lenient()
@@ -1132,7 +1162,8 @@ async fn verify_package_platform_satisfiability(
 }
 
 enum FoundPackage {
-    Conda(CondaPackageIdx),
+    // Requested extra groups for this conda package.
+    Conda(CondaPackageIdx, Vec<String>),
     PyPi(PypiPackageIdx, Vec<uv_normalize::ExtraName>),
 }
 
