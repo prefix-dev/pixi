@@ -11,7 +11,7 @@ const INSTALL_LOCK_PROGRESS_INTERVAL: Duration = Duration::from_secs(30);
 use pixi_compute_engine::{ComputeCtx, DataStore};
 use pixi_record::UnresolvedPixiRecord;
 use rattler::install::{Installer, InstallerError, PythonInfo, Transaction};
-use rattler_conda_types::{PackageName, RepoDataRecord};
+use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 
 use crate::BuildProfile;
 use crate::CommandDispatcherError;
@@ -180,14 +180,27 @@ async fn install_inner(
                 // immediately, so use the cheapest compression.
                 package_format: Some(CondaPackageFormat::fast()),
             };
+            // A failed cross-build is usually the platform mismatch, not the
+            // recipe. Compare the real machine: installs set build_platform to the target.
+            let host_platform = shared.build_environment.host_platform;
+            let machine = Platform::current();
             sub_ctx
                 .compute(&SourceBuildKey::new(build_spec))
                 .await
                 .map_err(|err| {
+                    let help = (host_platform != machine).then(|| {
+                        format!(
+                            "The package was being built for platform '{host_platform}' on a \
+                             '{machine}' machine; cross-building source packages often fails. \
+                             Retry without '--platform', or install on a '{host_platform}' \
+                             machine."
+                        )
+                    });
                     InstallPixiEnvironmentError::BuildUnresolvedSourceError(
                         name,
                         Box::new(manifest_source),
                         err,
+                        help,
                     )
                 })
         }
