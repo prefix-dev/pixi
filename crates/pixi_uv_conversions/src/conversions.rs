@@ -15,18 +15,40 @@ use pixi_manifest::pypi::{
         PypiOptions,
     },
 };
-use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
+use pixi_record::{
+    CondaEnvironmentFingerprint, LockedGitUrl, PinnedGitCheckout, PinnedGitSpec, PixiRecord,
+};
 use pixi_spec::GitReference as PixiReference;
 use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
 use uv_configuration::TrustedHost;
-use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
+use uv_distribution_types::{
+    ConfigSettingEntry, ConfigSettings, GitSourceDist, Index, IndexLocations, IndexUrl,
+};
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
 use uv_redacted::DisplaySafeUrl;
 
 use crate::{ConversionError, VersionError, WorkspaceAnchor};
+
+/// The `config_settings` key under which the conda-environment fingerprint is
+/// injected.
+const CONDA_ENVIRONMENT_CONFIG_SETTING: &str = "pixi-conda-environment";
+
+/// Builds the [`ConfigSettings`] for PyPI resolution and installation, seeded
+/// with a fingerprint of the conda environment.
+///
+/// uv folds `config_settings` into the cache key of wheels it builds from
+/// source, so this scopes source builds per environment. Prebuilt registry
+/// wheels are unaffected. See <https://github.com/prefix-dev/pixi/issues/6226>.
+pub fn pypi_build_config_settings(conda_records: &[PixiRecord]) -> ConfigSettings {
+    let fingerprint = CondaEnvironmentFingerprint::new(conda_records);
+    let entry =
+        ConfigSettingEntry::from_str(&format!("{CONDA_ENVIRONMENT_CONFIG_SETTING}={fingerprint}"))
+            .expect("the fingerprint is always a valid `KEY=VALUE` config setting");
+    std::iter::once(entry).collect()
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
@@ -308,7 +330,7 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 /// If no original reference is provided, which happens for git deps that
 /// aren't top-level workspace deps (e.g. transitive deps coming in through an
 /// editable self-package's `requires_dist`, issue #5661), fall back to
-/// whatever reference uv resolved. That keeps the lock-file
+/// whatever reference uv resolved. That keeps the lock file
 /// `?branch=/?tag=/?rev=` in sync with what the manifest's PEP 508 string
 /// actually says, so the satisfiability check matches without relying on the
 /// no-ref fallback.
@@ -337,10 +359,11 @@ pub fn into_pinned_git_spec(
         reference,
     );
 
-    // uv stores the percent-encoded drive-letter form internally (see
-    // `encode_windows_drive_letter`). Decode it back here so the lock file
-    // shows `file:///D:/...` rather than `file:///D%3A/...`.
-    let repository: url::Url = (**dist.git.repository()).clone();
+    // `url()` is the original URL; `repository()` is the canonical
+    // (lowercased + `.git`-stripped) form that would corrupt the lockfile
+    // (prefix-dev/pixi#6185). `decode_windows_drive_letter` undoes uv's
+    // percent-encoded drive letters so the lockfile shows `file:///D:/...`.
+    let repository: url::Url = (**dist.git.url()).clone();
     PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
 }
 
@@ -466,7 +489,8 @@ pub fn to_requirements_relative_to<'req>(
                     git,
                     subdirectory,
                 } => {
-                    write!(package_string, " @ git+{}", git.repository())?;
+                    // `url()`, not `repository()`, see #6185.
+                    write!(package_string, " @ git+{}", git.url())?;
                     if let Some(reference) = git.reference().as_str() {
                         write!(package_string, "@{reference}")?;
                     }
@@ -1031,5 +1055,37 @@ mod tests {
             panic!("expected URL requirement");
         };
         assert_eq!(url.given(), Some("./pkg-b"));
+    }
+
+    /// #6185: lock file URL must keep original casing and `.git` suffix.
+    #[test]
+    fn into_pinned_git_spec_preserves_original_url() {
+        use uv_distribution_types::GitSourceDist;
+        use uv_git_types::{GitLfs, GitOid, GitReference as UvGitReference, GitUrl as UvGitUrl};
+        use uv_normalize::PackageName;
+        use uv_pep508::VerbatimUrl;
+
+        let original = "https://github.com/VaasuDevanS/cowsay-python.git";
+        let safe_url = DisplaySafeUrl::parse(original).unwrap();
+        let commit = GitOid::from_str("dcf7236f0b5ece9ed56e91271486e560526049cf").unwrap();
+
+        let git_url = UvGitUrl::from_commit(
+            safe_url.clone(),
+            UvGitReference::DefaultBranch,
+            commit,
+            GitLfs::Disabled,
+        )
+        .unwrap();
+
+        let dist = GitSourceDist {
+            name: PackageName::from_str("cowsay").unwrap(),
+            git: Box::new(git_url),
+            subdirectory: None,
+            url: VerbatimUrl::from_url(safe_url),
+        };
+
+        let pinned = into_pinned_git_spec(dist, None);
+
+        assert_eq!(pinned.git.as_str(), original);
     }
 }

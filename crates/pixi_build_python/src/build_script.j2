@@ -2,7 +2,8 @@
 {%- set OPTIONS = [
     "-vv",
     "--no-deps",
-    "--no-build-isolation"
+    "--no-build-isolation",
+    "--no-index"
 ] + extra_args + (["--editable"] if editable else [])
 -%}
 
@@ -13,11 +14,11 @@
 {% endif -%}
 
 {% if installer == "uv" -%}
-uv pip install --python "{{ PYTHON }}" {{ OPTIONS }} "{{ manifest_root }}"
+uv pip install --python "{{ PYTHON }}" --reinstall {{ OPTIONS }} "{{ manifest_root }}"
 {% elif build_platform == "windows" -%}
-"{{ PYTHON }}" -m pip install --ignore-installed {{ OPTIONS }} "{{ manifest_root }}"
+"{{ PYTHON }}" -m pip install --force-reinstall {{ OPTIONS }} "{{ manifest_root }}"
 {% else %}
-"{{ PYTHON }}" -m pip install --ignore-installed {{ OPTIONS }} "{{ manifest_root }}"
+"{{ PYTHON }}" -m pip install --force-reinstall {{ OPTIONS }} "{{ manifest_root }}"
 {% endif -%}
 
 {% if build_platform == "windows" -%}

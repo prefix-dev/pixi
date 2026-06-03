@@ -114,9 +114,9 @@ impl ChannelsConfig {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUpdateConfig {
-    /// DEPRECATED: use `--frozen` `--no-install`. Skips lock-file updates
+    /// DEPRECATED: use `--frozen` `--no-install`. Skips lock file updates
     #[clap(hide = true, long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
-    pub no_lockfile_update: bool,
+    pub no_lock_file_update: bool,
 
     /// Lock file usage from the CLI
     #[clap(flatten)]
@@ -126,9 +126,9 @@ pub struct LockFileUpdateConfig {
 impl LockFileUpdateConfig {
     pub fn lock_file_usage(&self) -> miette::Result<LockFileUsage> {
         // Error on deprecated flag usage
-        if self.no_lockfile_update {
+        if self.no_lock_file_update {
             return Err(miette::miette!(
-                help = "Use '--frozen' to skip lock-file updates.\nUse '--no-install' to skip installation.",
+                help = "Use '--frozen' to skip lock file updates.\nUse '--no-install' to skip installation.",
                 "The '--no-lockfile-update' flag has been deprecated due to inconsistent behavior across commands. This flag will be removed in a future version."
             ));
         }
@@ -140,7 +140,7 @@ impl LockFileUpdateConfig {
 /// Configuration for skipping installation
 #[derive(Parser, Debug, Default, Clone)]
 pub struct NoInstallConfig {
-    /// Don't modify the environment, only modify the lock-file.
+    /// Don't modify the environment, only modify the lock file.
     #[arg(long, env = "PIXI_NO_INSTALL", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
 }

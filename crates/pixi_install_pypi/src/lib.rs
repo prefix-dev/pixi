@@ -24,7 +24,7 @@ use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
-    pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
+    pypi_build_config_settings, pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -51,7 +51,7 @@ use uv_resolver::{ExcludeNewer, FlatIndex};
 
 use crate::plan::{CachedWheels, RequiredDists};
 
-/// Extra data available from the manifest, not the lockfile
+/// Extra data available from the manifest, not the lock file
 #[derive(Clone)]
 pub struct ManifestData {
     pub editable: bool,
@@ -517,7 +517,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             pypi_options_to_build_options(self.build_config.no_build, self.build_config.no_binary)
                 .into_diagnostic()?;
 
-        let config_settings = ConfigSettings::default();
+        // Scope source builds to the conda environment, matching the key used
+        // during resolution. See issue #6226.
+        let config_settings = pypi_build_config_settings(pixi_records);
 
         // Setup the interpreter from the conda prefix
         let python_location = self.config.prefix.root().join(python_interpreter_path);

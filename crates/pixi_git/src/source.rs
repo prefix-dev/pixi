@@ -20,6 +20,34 @@ use crate::{
     url::RepositoryUrl,
 };
 
+/// Tri-state default for LFS fetching. Accepts `1`/`0`, `true`/`false`,
+/// `yes`/`no`, `on`/`off` (case-insensitive). Unset/empty → `None`.
+pub const PIXI_GIT_LFS_ENV: &str = "PIXI_GIT_LFS";
+
+pub fn lfs_enabled_from_env() -> Option<bool> {
+    let raw = std::env::var(PIXI_GIT_LFS_ENV).ok()?;
+    let value = raw.trim();
+    if value.is_empty() {
+        return None;
+    }
+    if value == "0"
+        || value.eq_ignore_ascii_case("false")
+        || value.eq_ignore_ascii_case("no")
+        || value.eq_ignore_ascii_case("off")
+    {
+        return Some(false);
+    }
+    if value == "1"
+        || value.eq_ignore_ascii_case("true")
+        || value.eq_ignore_ascii_case("yes")
+        || value.eq_ignore_ascii_case("on")
+    {
+        return Some(true);
+    }
+    tracing::warn!("unrecognised value for {PIXI_GIT_LFS_ENV}: {raw:?}; treating as enabled");
+    Some(true)
+}
+
 /// A remote Git source that can be checked out locally.
 pub struct GitSource {
     /// The Git reference from the manifest file.
@@ -30,6 +58,9 @@ pub struct GitSource {
     cache: PathBuf,
     /// The reporter to use for this source.
     reporter: Option<Arc<dyn Reporter>>,
+    /// `Some(true)` = fetch LFS, `Some(false)` = skip + force-skip smudge,
+    /// `None` = no opinion (don't touch `GIT_LFS_SKIP_SMUDGE`).
+    lfs: Option<bool>,
 }
 
 impl GitSource {
@@ -40,6 +71,7 @@ impl GitSource {
             client,
             cache: cache.into(),
             reporter: None,
+            lfs: lfs_enabled_from_env(),
         }
     }
 
@@ -50,6 +82,12 @@ impl GitSource {
             reporter: Some(reporter),
             ..self
         }
+    }
+
+    /// Override the LFS preference. See [`PIXI_GIT_LFS_ENV`] for tri-state semantics.
+    #[must_use]
+    pub fn with_lfs(self, lfs: Option<bool>) -> Self {
+        Self { lfs, ..self }
     }
 
     /// Fetch the underlying Git repository at the given revision.
@@ -70,15 +108,20 @@ impl GitSource {
         };
 
         let remote = GitRemote::new(&remote);
+        let lfs_requested = self.lfs == Some(true);
         let (db, actual_rev, task) = match (self.git.precise, remote.db_at(&db_path).ok()) {
-            // If we have a locked revision, and we have a preexisting database
-            // which has that revision, then no update needs to happen.
-            (Some(rev), Some(db)) if db.contains(rev.into()) => {
+            // Cache hit: the DB has the commit and, if LFS was requested,
+            // its LFS objects validate. Skip the regular fetch + checkout.
+            (Some(rev), Some(db))
+                if db.contains(rev.into())
+                    && (!lfs_requested || db.contains_lfs_artifacts(rev.into())) =>
+            {
                 tracing::debug!(
                     "Using existing Git source `{}` pointed at `{}`",
                     self.git.repository,
                     rev
                 );
+                let db = db.with_lfs_ready(lfs_requested.then_some(true));
                 (db, rev, None)
             }
 
@@ -100,6 +143,7 @@ impl GitSource {
                     &self.git.reference,
                     locked_rev.map(GitOid::from),
                     &self.client,
+                    self.lfs,
                 )?;
 
                 (db, GitSha::from(actual_rev), task)
@@ -124,7 +168,7 @@ impl GitSource {
             actual_rev,
             checkout_path.display()
         );
-        db.copy_to(actual_rev.into(), &checkout_path)?;
+        db.copy_to(actual_rev.into(), &checkout_path, self.lfs)?;
 
         // Report the checkout operation to the reporter.
         if let Some(task) = task
@@ -142,6 +186,7 @@ impl GitSource {
             },
             commit: actual_rev,
             path: checkout_path,
+            lfs_ready: db.lfs_ready() == Some(true),
         })
     }
 }
@@ -156,6 +201,10 @@ pub struct Fetch {
 
     /// The path to the checked-out repository.
     path: PathBuf,
+
+    /// True iff LFS was requested for this fetch and `git lfs fsck` passed.
+    /// `false` means either LFS wasn't requested or it wasn't ready.
+    lfs_ready: bool,
 }
 
 impl Fetch {
@@ -174,6 +223,10 @@ impl Fetch {
     pub fn into_path(self) -> PathBuf {
         self.path
     }
+
+    pub fn lfs_ready(&self) -> &bool {
+        &self.lfs_ready
+    }
 }
 
 pub fn cache_digest(url: &RepositoryUrl) -> String {
@@ -181,4 +234,57 @@ pub fn cache_digest(url: &RepositoryUrl) -> String {
     url.hash(&mut hasher);
     let hash = hasher.finish();
     format!("{hash:x}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Serialised env-var swap to keep parallel tests from racing.
+    fn with_env<R>(value: Option<&str>, body: impl FnOnce() -> R) -> R {
+        use std::sync::Mutex;
+        static LOCK: Mutex<()> = Mutex::new(());
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let previous = std::env::var(PIXI_GIT_LFS_ENV).ok();
+        // SAFETY: tests are serialised by LOCK above.
+        match value {
+            Some(v) => unsafe { std::env::set_var(PIXI_GIT_LFS_ENV, v) },
+            None => unsafe { std::env::remove_var(PIXI_GIT_LFS_ENV) },
+        }
+        let out = body();
+        match previous {
+            Some(v) => unsafe { std::env::set_var(PIXI_GIT_LFS_ENV, v) },
+            None => unsafe { std::env::remove_var(PIXI_GIT_LFS_ENV) },
+        }
+        out
+    }
+
+    #[test]
+    fn env_unset_is_none() {
+        with_env(None, || assert_eq!(lfs_enabled_from_env(), None));
+    }
+
+    #[test]
+    fn env_empty_is_none() {
+        with_env(Some(""), || assert_eq!(lfs_enabled_from_env(), None));
+        with_env(Some("   "), || assert_eq!(lfs_enabled_from_env(), None));
+    }
+
+    #[test]
+    fn env_truthy_is_some_true() {
+        for v in ["1", "true", "TRUE", "yes", "YES", "on", "ON"] {
+            with_env(Some(v), || {
+                assert_eq!(lfs_enabled_from_env(), Some(true), "value={v}")
+            });
+        }
+    }
+
+    #[test]
+    fn env_falsy_is_some_false() {
+        for v in ["0", "false", "FALSE", "no", "NO", "off", "OFF"] {
+            with_env(Some(v), || {
+                assert_eq!(lfs_enabled_from_env(), Some(false), "value={v}")
+            });
+        }
+    }
 }

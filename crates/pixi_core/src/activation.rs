@@ -249,8 +249,7 @@ async fn try_get_valid_activation_cache(
     // can't reuse a cached activation safely, so treat the cache as
     // missing. The fingerprint is written by
     // `LockFileDerivedData::prefix` after a successful install.
-    let installed_fingerprint =
-        pixi_command_dispatcher::EnvironmentFingerprint::read(&environment.dir())?;
+    let installed_fingerprint = pixi_utils::EnvironmentFingerprint::read(&environment.dir())?;
     let hash = EnvironmentHash::for_activation(
         environment,
         &current_input_env_vars,
@@ -386,7 +385,7 @@ pub async fn run_activation(
         // activation will re-run; correctness over a tempting but
         // dead cache.
         let Some(installed_fingerprint) =
-            pixi_command_dispatcher::EnvironmentFingerprint::read(&environment.dir())
+            pixi_utils::EnvironmentFingerprint::read(&environment.dir())
         else {
             return Ok(activator_result);
         };
@@ -534,6 +533,20 @@ mod tests {
     use super::*;
     use std::path::Path;
 
+    /// Write a completed-install fingerprint marker for `env_dir` via
+    /// the install lock, so the activation cache engages. `fp` must be
+    /// 16 hex chars (the on-disk fingerprint width).
+    async fn write_fingerprint(env_dir: &Path, fp: &str) {
+        pixi_utils::EnvironmentLock::acquire(env_dir)
+            .await
+            .unwrap()
+            .finish(&pixi_utils::EnvironmentFingerprint::from_string(
+                fp.to_string(),
+            ))
+            .await
+            .unwrap();
+    }
+
     #[test]
     fn test_metadata_env() {
         let multi_env_workspace = r#"
@@ -651,7 +664,7 @@ mod tests {
         );
     }
 
-    /// Test that the activation cache is created and used correctly based on the lockfile.
+    /// Test that the activation cache is created and used correctly based on the lock file.
     ///
     /// Validates that the activation cache:
     /// - is not written without an install fingerprint marker;
@@ -689,9 +702,7 @@ mod tests {
         assert!(!project.activation_env_cache_folder().exists());
 
         // Write a fingerprint marker so the cache becomes operative.
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-1".to_string())
-            .write(&default_env.dir())
-            .unwrap();
+        write_fingerprint(&default_env.dir(), "000000000000000a").await;
 
         let _env = run_activation(
             &default_env,
@@ -725,9 +736,7 @@ mod tests {
         // Bumping the fingerprint mimics a fresh install with
         // different content — the cache key changes, so activation
         // runs again and overwrites the cache file.
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-2".to_string())
-            .write(&default_env.dir())
-            .unwrap();
+        write_fingerprint(&default_env.dir(), "000000000000000b").await;
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,
@@ -760,9 +769,7 @@ mod tests {
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
         // A fingerprint marker is required for the cache to engage at all.
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-stable".to_string())
-            .write(&default_env.dir())
-            .unwrap();
+        write_fingerprint(&default_env.dir(), "00000000000000fb").await;
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,
@@ -795,9 +802,7 @@ mod tests {
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
         // Marker survives the manifest edit (same prefix dir).
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-stable".to_string())
-            .write(&default_env.dir())
-            .unwrap();
+        write_fingerprint(&default_env.dir(), "00000000000000fb").await;
         let env = run_activation(
             &default_env,
             &CurrentEnvVarBehavior::Include,

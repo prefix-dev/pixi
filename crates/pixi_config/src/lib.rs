@@ -149,6 +149,63 @@ static NETFS_REDIRECT_WARNED: LazyLock<Mutex<HashSet<CacheKind>>> =
 /// Workspace-scoped overrides flow through [`Config::cache_dir_for`] instead.
 static GLOBAL_CACHE_CONFIG: LazyLock<CacheConfig> = LazyLock::new(|| Config::load_global().cache);
 
+/// Describes where the system + user-level config layer comes from. Built from
+/// [`ConfigSourceCli`] (which mirrors `--no-config` / `--config-file`) and
+/// passed into [`Config::load_global_with`] and [`Config::load_with`].
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum GlobalConfigSource {
+    /// Search the system and user-level paths (the default).
+    #[default]
+    Search,
+    /// Skip every system and user-level config file.
+    None,
+    /// Load only this file as the global layer.
+    File(PathBuf),
+}
+
+/// CLI flags that select where the global (system + user-level) config layer is
+/// read from. Flattened into each subcommand's `Args` so `--no-config` /
+/// `--config-file` are available per command.
+#[derive(Parser, Debug, Default, Clone)]
+pub struct ConfigSourceCli {
+    /// Don't read system or user-level configuration files. Project-local
+    /// `<project>/.pixi/config.toml` is still loaded.
+    #[arg(
+        long,
+        env = "PIXI_NO_CONFIG",
+        value_parser = clap::builder::BoolishValueParser::new(),
+        default_value_t = false,
+        conflicts_with = "config_file",
+        help_heading = consts::CLAP_CONFIG_OPTIONS
+    )]
+    pub no_config: bool,
+
+    /// Load configuration from this file instead of searching system and
+    /// user-level paths. Project-local `<project>/.pixi/config.toml` is still
+    /// merged on top.
+    #[arg(
+        long,
+        value_name = "PATH",
+        env = "PIXI_CONFIG_FILE",
+        conflicts_with = "no_config",
+        help_heading = consts::CLAP_CONFIG_OPTIONS
+    )]
+    pub config_file: Option<PathBuf>,
+}
+
+impl ConfigSourceCli {
+    /// Translate the flags into a [`GlobalConfigSource`].
+    pub fn source(&self) -> GlobalConfigSource {
+        if self.no_config {
+            GlobalConfigSource::None
+        } else if let Some(path) = &self.config_file {
+            GlobalConfigSource::File(path.clone())
+        } else {
+            GlobalConfigSource::Search
+        }
+    }
+}
+
 /// Get pixi home directory, default to `$HOME/.pixi`
 ///
 /// It may be overridden by the `PIXI_HOME` environment variable.
@@ -629,51 +686,51 @@ fn resolve_cache_root(cache_cfg: &CacheConfig) -> Option<(PathBuf, CacheDirSourc
 pub struct ConfigCli {
     /// Path to the file containing the authentication token.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    auth_file: Option<PathBuf>,
+    pub auth_file: Option<PathBuf>,
 
     /// Max concurrent network requests, default is `50`
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    concurrent_downloads: Option<usize>,
+    pub concurrent_downloads: Option<usize>,
 
     /// Max concurrent solves, default is the number of CPUs
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    concurrent_solves: Option<usize>,
+    pub concurrent_solves: Option<usize>,
 
     /// Set pinning strategy
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS, value_enum)]
-    pinning_strategy: Option<PinningStrategy>,
+    pub pinning_strategy: Option<PinningStrategy>,
 
     /// Specifies whether to use the keyring to look up credentials for PyPI.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pypi_keyring_provider: Option<KeyringProvider>,
+    pub pypi_keyring_provider: Option<KeyringProvider>,
 
     /// Run post-link scripts (insecure)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    run_post_link_scripts: bool,
+    pub run_post_link_scripts: bool,
 
     /// Disallow symbolic links during package installation
     #[arg(long, env = "PIXI_NO_SYMBOLIC_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    no_symbolic_links: bool,
+    pub no_symbolic_links: bool,
 
     /// Disallow hard links during package installation
     #[arg(long, env = "PIXI_NO_HARD_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    no_hard_links: bool,
+    pub no_hard_links: bool,
 
     /// Disallow ref links (copy-on-write) during package installation
     #[arg(long, env = "PIXI_NO_REF_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    no_ref_links: bool,
+    pub no_ref_links: bool,
 
     /// Do not verify the TLS certificate of the server.
     #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    tls_no_verify: bool,
+    pub tls_no_verify: bool,
 
     /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store).
     #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    tls_root_certs: Option<TlsRootCerts>,
+    pub tls_root_certs: Option<TlsRootCerts>,
 
     /// Use environment activation cache (experimental)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    use_environment_activation_cache: bool,
+    pub use_environment_activation_cache: bool,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -1917,22 +1974,22 @@ impl Config {
         Ok(())
     }
 
-    /// Load the global config file from various global paths.
+    /// Load the global (system + user-level) config layer using the given
+    /// source.
     ///
-    /// # Returns
+    /// - [`GlobalConfigSource::None`]: return [`Config::default`].
+    /// - [`GlobalConfigSource::File`]: load only that file.
+    /// - [`GlobalConfigSource::Search`]: load `/etc/pixi/config.toml` and
+    ///   every entry in [`config_path_global`], merging them in order. This
+    ///   case is cached process-wide because the underlying files are
+    ///   env-independent.
     ///
-    /// The loaded global config
-    ///
-    /// # Caching
-    ///
-    /// The system + global file layers are env-independent, so we cache them
-    /// on the first call. The cached value is cloned and the env-derived CLI
-    /// defaults are layered on each call, so per-process env changes still
-    /// take effect. Without this cache pixi would re-parse the same files (and
-    /// re-emit any deprecation warnings) once for [`Config::with_cli_config`]
-    /// and again when the workspace creates its own [`Config::load`].
-    pub fn load_global() -> Config {
-        static FILE_LAYERS: LazyLock<Config> = LazyLock::new(|| {
+    /// The project-local `<project>/.pixi/config.toml` layer that
+    /// [`Config::load_with`] adds on top is unaffected.
+    pub fn load_global_with(source: &GlobalConfigSource) -> Config {
+        // Cache only the default search-the-disk layers; non-default sources
+        // (--no-config / --config-file) are per-invocation and can vary.
+        static SEARCH_LAYERS: LazyLock<Config> = LazyLock::new(|| {
             let mut config = Config::load_system();
             for p in config_path_global() {
                 match Config::from_path(&p) {
@@ -1948,13 +2005,32 @@ impl Config {
             config
         });
 
-        // Layer the env-derived defaults on each call so changes to the
-        // process environment within a single pixi invocation still apply.
-        // This will add any environment variables defined in the `clap`
-        // attributes to the config.
+        let file_layers = match source {
+            GlobalConfigSource::None => Config::default(),
+            GlobalConfigSource::File(path) => match Config::from_path(path) {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::error!(
+                        "Failed to load config file '{}' (from --config-file / \
+                         PIXI_CONFIG_FILE): {}",
+                        path.display(),
+                        e
+                    );
+                    Config::default()
+                }
+            },
+            GlobalConfigSource::Search => SEARCH_LAYERS.clone(),
+        };
+
+        // Layer env-derived CLI defaults so process-env changes still apply.
         let mut default_cli = ConfigCli::default();
         default_cli.update_from(std::env::args().take(0));
-        FILE_LAYERS.clone().merge_config(default_cli.into())
+        file_layers.merge_config(default_cli.into())
+    }
+
+    /// Load the global config layer using the default search behavior.
+    pub fn load_global() -> Config {
+        Self::load_global_with(&GlobalConfigSource::Search)
     }
 
     /// Load the global config and layer the given cli config on top of it.
@@ -1963,13 +2039,11 @@ impl Config {
         config.merge_config(cli.clone().into())
     }
 
-    /// Load the config from the given path (project root).
-    ///
-    /// # Returns
-    ///
-    /// The loaded config (merged with the global config)
-    pub fn load(project_root: &Path) -> Config {
-        let mut config = Self::load_global();
+    /// Load the config from the given path (project root), using the supplied
+    /// source for the global layer. Project-local
+    /// `<project>/.pixi/config.toml` is merged on top.
+    pub fn load_with(project_root: &Path, source: &GlobalConfigSource) -> Config {
+        let mut config = Self::load_global_with(source);
         let local_config_path = project_root
             .join(consts::PIXI_DIR)
             .join(consts::CONFIG_FILE);
@@ -1984,6 +2058,12 @@ impl Config {
         }
 
         config
+    }
+
+    /// Load the config from the given path (project root) using the default
+    /// global search.
+    pub fn load(project_root: &Path) -> Config {
+        Self::load_with(project_root, &GlobalConfigSource::Search)
     }
 
     // Get all possible keys of the configuration

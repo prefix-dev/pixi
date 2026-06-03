@@ -520,10 +520,7 @@ pub async fn dropping_future_cancels_background_task() {
     let prefix_dir = dispatcher
         .cache_dir::<BuildBackendsDir>()
         .join(spec.cache_key());
-    let mut write_guard = pixi_utils::AsyncPrefixGuard::new(prefix_dir.as_std_path())
-        .await
-        .unwrap()
-        .write()
+    let write_guard = pixi_utils::EnvironmentLock::acquire(prefix_dir.as_std_path())
         .await
         .unwrap();
 
@@ -552,7 +549,6 @@ pub async fn dropping_future_cancels_background_task() {
 
     // Release our write lock (after cancellation). If cancellation worked,
     // the background task should not proceed into installation.
-    write_guard.begin().await.unwrap();
     drop(write_guard);
 
     // The aborted task should unwind promptly once the prefix lock is
@@ -2518,7 +2514,7 @@ pub async fn test_duplicate_installed_source_hints_are_order_independent() {
 
 /// When the environment contains both a top-level source package `foo`
 /// and another source package `bar` whose host environment also resolves
-/// `foo`, lockfile-derived installed hints can currently carry two
+/// `foo`, lock file-derived installed hints can currently carry two
 /// different locked instances of `foo` in the same environment.
 ///
 /// The solve should normalize those hints so the final environment does

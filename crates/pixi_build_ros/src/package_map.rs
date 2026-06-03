@@ -437,7 +437,7 @@ pub struct ConditionalRequirements {
 }
 
 /// Extract a package name from an Item, if it's a concrete spec.
-fn item_package_name(item: &Item<SerializableMatchSpec>) -> Option<String> {
+pub(crate) fn item_package_name(item: &Item<SerializableMatchSpec>) -> Option<String> {
     match item {
         Item::Value(v) => v
             .as_concrete()

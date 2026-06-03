@@ -69,12 +69,14 @@ where
     )
     .initialize(InitializeParams {
         workspace_directory: None,
+        checkout_root: None,
         source_directory: source_dir,
         manifest_path,
         project_model,
         configuration: None,
         target_configuration: None,
         cache_directory: None,
+        workspace_scratch_directory: None,
     })
     .await
     .unwrap();

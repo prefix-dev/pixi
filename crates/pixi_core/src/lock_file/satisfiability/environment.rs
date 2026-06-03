@@ -19,7 +19,7 @@ use super::errors::{EnvironmentUnsat, IndexesMismatch, verify_exclude_newer};
 use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 
 /// Verifies that all the requirements of the specified `environment` can be
-/// satisfied with the packages present in the lock-file.
+/// satisfied with the packages present in the lock file.
 ///
 /// This function returns a [`EnvironmentUnsat`] error if a verification issue
 /// occurred. The [`EnvironmentUnsat`] error should contain enough information

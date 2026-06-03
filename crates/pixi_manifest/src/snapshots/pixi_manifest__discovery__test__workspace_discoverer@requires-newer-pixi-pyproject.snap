@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_manifest/src/discovery.rs
-assertion_line: 778
 expression: snapshot
 ---
   × this project requires pixi '>=100', but you have pixi <PIXI_VERSION>
@@ -11,4 +10,4 @@ expression: snapshot
    ·                    ╰── this version requirement is not satisfied
  8 │ some-future-field = true
    ╰────
-  help: update pixi to a version that satisfies '>=100'
+  help: update pixi to a version that satisfies '>=100' with `pixi self-update`

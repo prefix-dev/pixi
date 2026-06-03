@@ -43,6 +43,12 @@ NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
 Md5Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{32}$")]
 Sha256Sum = Annotated[str, StringConstraints(pattern=r"^[a-fA-F0-9]{64}$")]
 PathNoBackslash = Annotated[str, StringConstraints(pattern=r"^[^\\]+$")]
+# Extra-dependency group names follow the conda optional-dependencies naming
+# rules (CEP-0044).
+ExtraName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9._+-]{1,64}$")]
+# Variant flags are non-empty strings with optional `key:value` semantics,
+# allowing a single colon as the separator.
+FlagName = Annotated[str, StringConstraints(pattern=r"^[a-z0-9_]+(:[a-z0-9_]+)?$")]
 Glob = NonEmptyStr
 UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
@@ -258,8 +264,8 @@ class Workspace(StrictBaseModel):
 ########################
 
 
-class MatchspecTable(StrictBaseModel):
-    """A precise description of a `conda` package version."""
+class BinaryMatchspecTable(StrictBaseModel):
+    """A precise description of a `conda` binary package version. Excludes source-location fields."""
 
     version: NonEmptyStr | None = Field(
         None,
@@ -298,6 +304,10 @@ class MatchspecTable(StrictBaseModel):
     track_features: list[NonEmptyStr] | None = Field(
         None, description="The track features of the package"
     )
+
+
+class MatchspecTable(BinaryMatchspecTable):
+    """A precise description of a `conda` package version."""
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
@@ -505,6 +515,7 @@ RunConstraintsField = Field(
 )
 Dependencies = dict[CondaPackageName, MatchSpec] | None
 InheritableDependencies = dict[CondaPackageName, InheritableMatchSpec] | None
+ExtraDependencies = dict[ExtraName, dict[CondaPackageName, MatchSpec]] | None
 
 
 ################
@@ -942,6 +953,11 @@ class Package(StrictBaseModel):
     host_dependencies: InheritableDependencies = HostDependenciesField
     build_dependencies: InheritableDependencies = BuildDependenciesField
     run_dependencies: InheritableDependencies = RunDependenciesField
+    extra_dependencies: ExtraDependencies = Field(
+        None,
+        description="Extra groups that can be requested through MatchSpec extras. Each group uses the same conda package specification syntax as run-dependencies.",
+        examples=[{"test": {"pytest": ">=8", "hypothesis": "*"}}],
+    )
     run_constraints: InheritableDependencies = RunConstraintsField
 
     target: dict[TargetName, PackageTarget] | None = Field(
@@ -980,6 +996,11 @@ class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
     channels: list[Channel] | None = Field(
         None, description="The `conda` channels that are used to fetch the build backend from"
+    )
+    flags: list[FlagName] | None = Field(
+        None,
+        description="Plain string flags recorded on built packages for v3 package variant selection",
+        examples=[["cuda", "blas_openblas"]],
     )
     additional_dependencies: Dependencies = Field(
         None, description="Additional dependencies to install alongside the build backend"
@@ -1020,7 +1041,7 @@ class Build(StrictBaseModel):
     )
 
 
-class BuildBackend(MatchspecTable):
+class BuildBackend(BinaryMatchspecTable):
     name: NonEmptyStr | None = Field(None, description="The name of the build backend package")
     channels: list[Channel] | None = Field(
         None, description="The `conda` channels that are used to fetch the build backend from"
@@ -1043,6 +1064,11 @@ class PackageTarget(StrictBaseModel):
     run_constraints: InheritableDependencies = RunConstraintsField
     host_dependencies: InheritableDependencies = HostDependenciesField
     build_dependencies: InheritableDependencies = BuildDependenciesField
+    extra_dependencies: ExtraDependencies = Field(
+        None,
+        description="Extra groups for this target. Same shape as the top-level `extra-dependencies`, but scoped to the matching platform selector.",
+        examples=[{"test": {"pytest": ">=8"}}],
+    )
 
 
 #######################

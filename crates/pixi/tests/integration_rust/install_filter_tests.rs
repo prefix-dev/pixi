@@ -62,7 +62,7 @@ async fn setup_simple_graph_project() -> (PixiControl, LocalChannel) {
 async fn install_filter_skip_direct_soft_exclusion() {
     let (pixi, _channel) = setup_simple_graph_project().await;
 
-    // Ensure lockfile exists
+    // Ensure lock file exists
     pixi.update_lock_file().await.unwrap();
 
     // Build derived data and workspace env

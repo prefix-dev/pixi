@@ -18,6 +18,9 @@ use crate::cli_config::WorkspaceConfig;
 #[derive(Debug, Default, Parser)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
     /// Explicit path to export the environment file to.
@@ -44,7 +47,7 @@ pub struct Args {
     /// This produces a "frozen" conda environment file that can be used to
     /// recreate the same environment without re-running the solver.
     #[arg(long)]
-    pub from_lockfile: bool,
+    pub from_lock_file: bool,
 }
 
 fn format_pip_extras(extras: &[ExtraName]) -> String {
@@ -258,14 +261,14 @@ fn format_locked_pypi_dependency(pypi: &PypiPackageData, is_editable: bool) -> S
     }
 }
 
-fn build_env_yaml_from_lockfile(
+fn build_env_yaml_from_lock_file(
     platform: &Platform,
     environment: &Environment,
-    lockfile: &LockFile,
+    lock_file: &LockFile,
     name: String,
 ) -> miette::Result<EnvironmentYaml> {
     let env_name = environment.name().as_str();
-    let lockfile_env = lockfile.environment(env_name).ok_or_else(|| {
+    let lock_file_env = lock_file.environment(env_name).ok_or_else(|| {
         miette::miette!(
             help = "Run `pixi lock` (or another command that updates the lock file) first.",
             "environment '{env_name}' not found in the lock file"
@@ -282,7 +285,7 @@ fn build_env_yaml_from_lockfile(
 
     // Resolve the rattler_conda_types::Platform we were given to the
     // rattler_lock::Platform<'_> handle that `Environment::packages` expects.
-    let lock_platform = lockfile_env
+    let lock_platform = lock_file_env
         .platforms()
         .find(|p| p.subdir() == *platform)
         .ok_or_else(|| {
@@ -291,7 +294,7 @@ fn build_env_yaml_from_lockfile(
                 "platform '{platform}' not found in the lock file for environment '{env_name}'"
             )
         })?;
-    let packages = lockfile_env.packages(lock_platform).ok_or_else(|| {
+    let packages = lock_file_env.packages(lock_platform).ok_or_else(|| {
         miette::miette!(
             help = "Run `pixi lock` to update the lock file for this platform.",
             "platform '{platform}' not found in the lock file for environment '{env_name}'"
@@ -406,6 +409,7 @@ fn channels_with_nodefaults(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChanne
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
@@ -415,7 +419,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .name
         .unwrap_or_else(|| environment.name().as_str().to_string());
 
-    let env_yaml = if args.from_lockfile {
+    let env_yaml = if args.from_lock_file {
         let lock_file_path = workspace.lock_file_path();
         if !lock_file_path.is_file() {
             miette::bail!(
@@ -424,12 +428,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 lock_file_path.display(),
             );
         }
-        let lockfile = LockFile::from_path(&lock_file_path)
+        let lock_file = LockFile::from_path(&lock_file_path)
             .into_diagnostic()
             .with_context(|| {
                 format!("failed to read lock file at '{}'", lock_file_path.display())
             })?;
-        build_env_yaml_from_lockfile(&platform, &environment, &lockfile, name)?
+        build_env_yaml_from_lock_file(&platform, &environment, &lock_file, name)?
     } else {
         build_env_yaml(
             &platform,
@@ -467,8 +471,9 @@ mod tests {
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
-            from_lockfile: false,
+            from_lock_file: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -496,8 +501,9 @@ mod tests {
             platform: None,
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
-            from_lockfile: false,
+            from_lock_file: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -526,8 +532,9 @@ mod tests {
             platform: None,
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
-            from_lockfile: false,
+            from_lock_file: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -561,8 +568,9 @@ mod tests {
             platform: None,
             environment: Some("alternative".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
-            from_lockfile: false,
+            from_lock_file: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -591,8 +599,9 @@ mod tests {
             platform: None,
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
-            from_lockfile: false,
+            from_lock_file: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -620,8 +629,9 @@ mod tests {
             platform: Some(Platform::OsxArm64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
-            from_lockfile: false,
+            from_lock_file: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -657,8 +667,9 @@ mod tests {
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: None,
-            from_lockfile: false,
+            from_lock_file: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)
@@ -695,46 +706,46 @@ mod tests {
     }
 
     #[test]
-    fn test_export_conda_env_yaml_from_lockfile() {
+    fn test_export_conda_env_yaml_from_lock_file() {
         let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
             .join("tests/data/mock-projects/test-project-export/pixi.toml");
         let workspace = Workspace::from_path(&path).unwrap();
-        let lockfile = LockFile::from_path(&workspace.lock_file_path()).unwrap();
+        let lock_file = LockFile::from_path(&workspace.lock_file_path()).unwrap();
 
         let environment = workspace
             .environment_from_name_or_env_var(Some("default".to_string()))
             .unwrap();
 
         for platform in [Platform::Osx64, Platform::Linux64, Platform::OsxArm64] {
-            let env_yaml = build_env_yaml_from_lockfile(
+            let env_yaml = build_env_yaml_from_lock_file(
                 &platform,
                 &environment,
-                &lockfile,
+                &lock_file,
                 environment.name().as_str().to_string(),
             )
             .unwrap();
             insta::assert_snapshot!(
-                format!("test_export_conda_env_yaml_from_lockfile_{platform}"),
+                format!("test_export_conda_env_yaml_from_lock_file_{platform}"),
                 env_yaml.to_yaml_string()
             );
         }
     }
 
     #[test]
-    fn test_export_conda_env_yaml_from_lockfile_unknown_platform() {
+    fn test_export_conda_env_yaml_from_lock_file_unknown_platform() {
         let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
             .join("tests/data/mock-projects/test-project-export/pixi.toml");
         let workspace = Workspace::from_path(&path).unwrap();
-        let lockfile = LockFile::from_path(&workspace.lock_file_path()).unwrap();
+        let lock_file = LockFile::from_path(&workspace.lock_file_path()).unwrap();
         let environment = workspace
             .environment_from_name_or_env_var(Some("default".to_string()))
             .unwrap();
 
         // win-64 is not in the lock file for this project; expect an error.
-        let result = build_env_yaml_from_lockfile(
+        let result = build_env_yaml_from_lock_file(
             &Platform::Win64,
             &environment,
-            &lockfile,
+            &lock_file,
             environment.name().as_str().to_string(),
         );
         assert!(result.is_err());
@@ -751,8 +762,9 @@ mod tests {
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
             workspace_config: WorkspaceConfig::default(),
+            config_source: Default::default(),
             name: Some(env_name.clone()),
-            from_lockfile: false,
+            from_lock_file: false,
         };
         let environment = workspace
             .environment_from_name_or_env_var(args.environment)

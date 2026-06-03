@@ -1,7 +1,6 @@
 use indexmap::IndexMap;
 use insta::assert_snapshot;
 use pixi_cli::upgrade::{Args, parse_specs_for_platform};
-use pixi_core::Workspace;
 use rattler_conda_types::Platform;
 use tempfile::TempDir;
 use url::Url;
@@ -56,8 +55,9 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
     let mut args = Args::default();
     args.workspace_config.manifest_path = Some(pixi.manifest_path());
     args.no_install_config.no_install = true;
+    args.config_source.no_config = true;
 
-    let workspace = Workspace::from_path(&pixi.manifest_path()).unwrap();
+    let workspace = pixi.workspace().unwrap();
 
     let workspace_value = workspace.workspace.value.clone();
     let feature = workspace_value.default_feature();
@@ -139,6 +139,7 @@ async fn upgrade_command_updates_platform_specific_version() {
     let mut args = Args::default();
     args.workspace_config.manifest_path = Some(pixi.manifest_path());
     args.no_install_config.no_install = true;
+    args.config_source.no_config = true;
 
     pixi_cli::upgrade::execute(args).await.unwrap();
 
@@ -190,6 +191,7 @@ async fn upgrade_command_updates_all_platform_specific_targets() {
     let mut args = Args::default();
     args.workspace_config.manifest_path = Some(pixi.manifest_path());
     args.no_install_config.no_install = true;
+    args.config_source.no_config = true;
 
     pixi_cli::upgrade::execute(args).await.unwrap();
 
@@ -278,6 +280,7 @@ async fn pypi_dependency_upgrade_uses_custom_index() {
     let mut args = Args::default();
     args.workspace_config.manifest_path = Some(pixi.manifest_path());
     args.no_install_config.no_install = true;
+    args.config_source.no_config = true;
     args.specs.packages = Some(vec!["foo".to_string()]);
 
     pixi_cli::upgrade::execute(args).await.unwrap();

@@ -15,6 +15,8 @@ pub fn can_be_used_as_variant(spec: &pbt::PackageSpec) -> bool {
                 build,
                 build_number,
                 file_name,
+                extras,
+                flags,
                 channel,
                 subdir,
                 md5,
@@ -22,12 +24,14 @@ pub fn can_be_used_as_variant(spec: &pbt::PackageSpec) -> bool {
                 url,
                 license,
                 condition,
-            } = spec;
+            } = spec.as_ref();
 
             version == &Some(VersionSpec::Any)
                 && build.is_none()
                 && build_number.is_none()
                 && file_name.is_none()
+                && extras.is_none()
+                && flags.is_none()
                 && channel.is_none()
                 && subdir.is_none()
                 && md5.is_none()

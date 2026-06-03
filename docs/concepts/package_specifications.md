@@ -80,7 +80,7 @@ This syntax allows you to specify:
 
 ### Extras And Flags
 
-Some conda packages expose optional dependency groups or variant flags in their package metadata.
+Some conda packages expose extra dependency groups or variant flags in their package metadata.
 Use `extras` to request optional dependencies and `flags` to select variants that are represented as package metadata instead of a separate package name.
 
 ```toml title="pixi.toml"

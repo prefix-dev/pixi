@@ -19,8 +19,8 @@ use pixi_build_frontend::{
     json_rpc::CommunicationError,
 };
 use pixi_build_types::{
-    BackendCapabilities, BinaryPackageSpec, ConstraintSpec, NamedSpec, PackageSpec, ProjectModel,
-    SourcePackageName, Target, TargetSelector, Targets, VariantValue,
+    BackendCapabilities, BinaryPackageSpec, ConstraintSpec, ExtraGroupName, NamedSpec, PackageSpec,
+    ProjectModel, SourcePackageName, Target, TargetSelector, Targets, VariantValue,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -101,6 +101,7 @@ impl InMemoryBackend for PassthroughBackend {
         Ok(CondaOutputsResult {
             outputs,
             input_globs: Default::default(),
+            input_glob_sets: None,
         })
     }
 
@@ -205,6 +206,7 @@ impl InMemoryBackend for PassthroughBackend {
         Ok(CondaBuildV1Result {
             output_file,
             input_globs: self.config.build_globs.clone().unwrap_or_default(),
+            input_glob_sets: None,
             name: self.index_json.name.as_normalized().to_owned(),
             version: self.index_json.version.clone(),
             build: build_string,
@@ -411,12 +413,14 @@ fn is_star_requirement(spec: &PackageSpec) -> bool {
         return false;
     };
 
-    match boxed {
+    match boxed.as_ref() {
         BinaryPackageSpec {
             version,
             build: None,
             build_number: None,
             file_name: None,
+            extras: None,
+            flags: None,
             channel: None,
             subdir: None,
             md5: None,
@@ -584,6 +588,7 @@ fn create_output(
         )),
         host_dependencies: Some(host_deps),
         run_dependencies,
+        extra_dependencies: convert_extra_depends(&index_json.experimental_extra_depends),
         metadata: CondaOutputMetadata {
             name: project_model
                 .name
@@ -602,6 +607,7 @@ fn create_output(
             subdir,
             license: project_model.license.clone(),
             license_family: None,
+            flags: index_json.flags.clone(),
             noarch: index_json.noarch,
             purls: None,
             python_site_packages_path: None,
@@ -612,6 +618,7 @@ fn create_output(
             .map(convert_run_exports_json)
             .unwrap_or_default(),
         input_globs: None,
+        input_glob_sets: None,
     }
 }
 
@@ -642,7 +649,7 @@ fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, Pa
                     let resolved_spec = if is_star_requirement(spec) {
                         if let Some(variant_value) = variant.get(name.as_str()) {
                             // Replace with a version spec using the variant value
-                            PackageSpec::Binary(BinaryPackageSpec {
+                            BinaryPackageSpec {
                                 version: Some(
                                     rattler_conda_types::VersionSpec::from_str(
                                         variant_value.to_string().as_str(),
@@ -651,7 +658,8 @@ fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, Pa
                                     .unwrap(),
                                 ),
                                 ..Default::default()
-                            })
+                            }
+                            .into()
                         } else {
                             spec.clone()
                         }
@@ -714,11 +722,53 @@ fn resolve_run_export_spec(
 
     Some(NamedSpec {
         name: SourcePackageName::from(pkg_name),
-        spec: PackageSpec::Binary(BinaryPackageSpec {
+        spec: BinaryPackageSpec {
             version: version_spec,
+            extras: match_spec.extras.clone(),
+            flags: match_spec.flags.clone(),
+            condition: match_spec.condition.clone(),
             ..Default::default()
-        }),
+        }
+        .into(),
     })
+}
+
+/// Converts a finished package's `experimental_extra_depends` (group name to a
+/// list of match-spec strings) into the typed representation used by
+/// `CondaOutput`. Because the data comes from already-built repodata, groups
+/// with an invalid name and specs that fail to parse are skipped.
+fn convert_extra_depends(
+    extra_depends: &BTreeMap<String, Vec<String>>,
+) -> BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> {
+    extra_depends
+        .iter()
+        .filter_map(|(group, specs)| {
+            let group = ExtraGroupName::new(group.clone()).ok()?;
+            let specs = specs
+                .iter()
+                .filter_map(|spec_str| {
+                    let match_spec = rattler_conda_types::MatchSpec::from_str(
+                        spec_str,
+                        rattler_conda_types::ParseStrictness::Lenient,
+                    )
+                    .ok()?;
+                    let pkg_name = match_spec.name.as_exact()?.clone();
+                    Some(NamedSpec {
+                        name: SourcePackageName::from(pkg_name),
+                        spec: BinaryPackageSpec {
+                            version: match_spec.version.clone(),
+                            extras: match_spec.extras.clone(),
+                            flags: match_spec.flags.clone(),
+                            condition: match_spec.condition.clone(),
+                            ..Default::default()
+                        }
+                        .into(),
+                    })
+                })
+                .collect();
+            Some((group, specs))
+        })
+        .collect()
 }
 
 /// Converts a `RunExportsJson` (from a conda package) to `CondaOutputRunExports`.
@@ -739,10 +789,14 @@ fn convert_run_exports_json(
 
                 Some(NamedSpec {
                     name: SourcePackageName::from(pkg_name),
-                    spec: PackageSpec::Binary(BinaryPackageSpec {
+                    spec: BinaryPackageSpec {
                         version: match_spec.version.clone(),
+                        extras: match_spec.extras.clone(),
+                        flags: match_spec.flags.clone(),
+                        condition: match_spec.condition.clone(),
                         ..Default::default()
-                    }),
+                    }
+                    .into(),
                 })
             })
             .collect()
@@ -764,6 +818,9 @@ fn convert_run_exports_json(
                     name: SourcePackageName::from(pkg_name),
                     spec: ConstraintSpec::Binary(BinaryPackageSpec {
                         version: match_spec.version.clone(),
+                        extras: match_spec.extras.clone(),
+                        flags: match_spec.flags.clone(),
+                        condition: match_spec.condition.clone(),
                         ..Default::default()
                     }),
                 })
@@ -919,7 +976,7 @@ pub struct PassthroughBackendConfig {
     pub noarch: Option<bool>,
 
     /// Build globs
-    pub build_globs: Option<BTreeSet<String>>,
+    pub build_globs: Option<Vec<String>>,
 }
 
 /// Observer that allows collecting backend events from an ObservableBackend.
@@ -1092,27 +1149,29 @@ mod tests {
 
     #[test]
     fn test_is_star_requirement_with_star() {
-        let spec = PackageSpec::Binary(BinaryPackageSpec {
+        let spec: PackageSpec = BinaryPackageSpec {
             version: Some(VersionSpec::from_str("*", ParseStrictness::Lenient).unwrap()),
             ..Default::default()
-        });
+        }
+        .into();
 
         assert!(is_star_requirement(&spec));
     }
 
     #[test]
     fn test_is_star_requirement_with_version() {
-        let spec = PackageSpec::Binary(BinaryPackageSpec {
+        let spec: PackageSpec = BinaryPackageSpec {
             version: Some(VersionSpec::from_str(">=1.0", ParseStrictness::Lenient).unwrap()),
             ..Default::default()
-        });
+        }
+        .into();
 
         assert!(!is_star_requirement(&spec));
     }
 
     #[test]
     fn test_is_star_requirement_with_no_version() {
-        let spec = PackageSpec::Binary(BinaryPackageSpec::default());
+        let spec: PackageSpec = BinaryPackageSpec::default().into();
 
         assert!(is_star_requirement(&spec));
     }

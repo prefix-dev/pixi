@@ -20,8 +20,8 @@ use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     WorkspaceAnchor, configure_insecure_hosts_for_tls_bypass, into_pixi_reference,
-    pypi_options_to_build_options, pypi_options_to_index_locations, to_index_strategy,
-    to_requirements_relative_to,
+    pypi_build_config_settings, pypi_options_to_build_options, pypi_options_to_index_locations,
+    to_index_strategy, to_requirements_relative_to,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
@@ -118,13 +118,13 @@ pub(crate) fn pypi_satisfies_editable(
 /// Also does an additional check for git urls when using direct url references.
 ///
 /// `origin` disambiguates an absent `index`: `Manifest` triggers the strict
-/// "removed the index" check; `RequiresDist` trusts the lock-file (pep508
+/// "removed the index" check; `RequiresDist` trusts the lock file (pep508
 /// carries no index info).
 ///
-/// `locked_indexes` are the env-level indexes recorded in the lock-file
+/// `locked_indexes` are the env-level indexes recorded in the lock file
 /// (already verified against the manifest); a requirement with no
 /// per-package `index` is satisfied by any of them. Empty slice falls back
-/// to the default PyPI URL (pre-v7 lockfiles).
+/// to the default PyPI URL (pre-v7 lock files).
 pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
     locked_record: &LockedPypiRecord,
@@ -174,8 +174,8 @@ pub(crate) fn pypi_satisfies_requirement(
                 .into());
             }
 
-            // Verify the index in the requirement matches the lock-file.
-            // Pre-v7 lockfiles don't store per-package index URLs, so
+            // Verify the index in the requirement matches the lock file.
+            // Pre-v7 lock files don't store per-package index URLs, so
             // index_url is None — skip the comparison in that case.
             match (
                 index,
@@ -212,9 +212,9 @@ pub(crate) fn pypi_satisfies_requirement(
                         .into());
                     }
                 }
-                // Either the locked index is missing (pre-v7 lockfile) or the
+                // Either the locked index is missing (pre-v7 lock file) or the
                 // requirement comes from a parent's `requires_dist` (pep508
-                // carries no index info, so we trust the lock-file's
+                // carries no index info, so we trust the lock file's
                 // recorded index).
                 (_, None) | (None, _) => {}
             }
@@ -294,7 +294,7 @@ pub(crate) fn pypi_satisfies_requirement(
                         }
 
                         // Normalize the input requirement subdirectory the same way we do in our
-                        // lock-file. We convert to string to ensure we have a valid fallback if
+                        // lock file. We convert to string to ensure we have a valid fallback if
                         // `Subdirectory` validation fails.
                         let spec_subdir_str = subdirectory
                             .as_deref()
@@ -317,10 +317,10 @@ pub(crate) fn pypi_satisfies_requirement(
                             }
                             .into());
                         }
-                        // v6 lockfiles encode git deps as
+                        // v6 lock files encode git deps as
                         //   git+https://repo.git#<sha>
                         // without any ref information — no ?tag=/?branch=/?rev=
-                        // query params and no @ref in the URL path. v7 lockfiles
+                        // query params and no @ref in the URL path. v7 lock files
                         // always include the ref as a query param. When the
                         // locked URL carries no ref information the original ref
                         // was not recorded and the commit SHA is the only
@@ -634,8 +634,11 @@ async fn read_local_package_metadata(
         )
     };
 
-    // Create build dispatch parameters
-    let config_settings = ConfigSettings::default();
+    // Scope source builds to the conda environment. See issue #6226.
+    let config_settings = match ctx.building_pixi_records.as_ref() {
+        Ok(records) => pypi_build_config_settings(&records.records),
+        Err(_) => ConfigSettings::default(),
+    };
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &ctx.uv_context.cache,
@@ -762,10 +765,10 @@ async fn read_local_package_metadata(
         }
     };
 
-    // Match the lockfile-write serializer so both sides of `compare_metadata` agree on
+    // Match the lock file-write serializer so both sides of `compare_metadata` agree on
     // `[tool.uv.sources]` requirements (#6049 follow-up). Anchor relative `given`s to the
-    // workspace root (the lockfile's base dir) so the URL parses back the same way after a
-    // lockfile round-trip.
+    // workspace root (the lock file's base dir) so the URL parses back the same way after a
+    // lock file round-trip.
     let anchor = WorkspaceAnchor::new(ctx.project_root);
     let requires_dist_vec: Vec<pep508_rs::Requirement> =
         to_requirements_relative_to(requires_dist.requires_dist.iter(), Some(&anchor)).map_err(
@@ -937,7 +940,7 @@ mod tests {
     /// `pyproject.toml`-style PEP 508 string roundtrips through pixi's manifest
     /// types (PixiPypiSpec) and through `as_uv_req` -- which is the path
     /// actually exercised by the satisfiability check -- and must satisfy a
-    /// lockfile entry that pixi just wrote for the same dependency.
+    /// lock file entry that pixi just wrote for the same dependency.
     #[test]
     fn test_pypi_git_full_commit_via_as_uv_req() {
         use pixi_pypi_spec::PixiPypiSpec;
@@ -970,7 +973,7 @@ mod tests {
             None,
         ));
 
-        // The manifest spec must satisfy the lockfile entry pixi wrote for
+        // The manifest spec must satisfy the lock file entry pixi wrote for
         // the very same dependency.
         pypi_satisfies_requirement(
             &uv_req,
@@ -983,7 +986,7 @@ mod tests {
     }
 
     // Do not use unix paths on windows: The path gets normalized to something
-    // unix-y, and the lockfile keeps the "pretty" path the user filled in at
+    // unix-y, and the lock file keeps the "pretty" path the user filled in at
     // all times. So on windows the test fails.
 
     #[cfg(not(target_os = "windows"))]
@@ -1157,11 +1160,11 @@ mod tests {
     }
 
     /// Regression test: removing a PyPI `index` from the manifest should
-    /// invalidate the lock-file when the locked package was resolved from that
+    /// invalidate the lock file when the locked package was resolved from that
     /// index.
     ///
     /// Verify that removing an explicit index from a PyPI requirement
-    /// invalidates the lock-file entry that was resolved from that index.
+    /// invalidates the lock file entry that was resolved from that index.
     #[test]
     fn test_pypi_index_removed_should_invalidate() {
         // Locked data: package was resolved from a custom index.
@@ -1244,7 +1247,7 @@ mod tests {
         )
         .expect_err("direct requirement without index must not satisfy custom-index lock");
 
-        // Transitive check must accept the lock-file's recorded index.
+        // Transitive check must accept the lock file's recorded index.
         pypi_satisfies_requirement(
             &spec,
             &locked_data,
@@ -1326,7 +1329,7 @@ mod tests {
     }
 
     /// Verify that changing a PyPI index to a different non-default index
-    /// invalidates the lock-file.
+    /// invalidates the lock file.
     #[test]
     fn test_pypi_index_changed_should_invalidate() {
         let locked_data = lock_for_test(make_wheel_package_with(
@@ -1395,7 +1398,7 @@ mod tests {
     }
 
     /// Verify that adding an index to a requirement that was locked with the
-    /// default index invalidates the lock-file.
+    /// default index invalidates the lock file.
     #[test]
     fn test_pypi_index_added_should_invalidate() {
         let locked_data = lock_for_test(make_wheel_package_with(
@@ -1428,7 +1431,7 @@ mod tests {
     }
 
     /// Regression for #6060: a feature-level `index-url` plus a manifest
-    /// requirement with no per-package `index` must satisfy a lock-file
+    /// requirement with no per-package `index` must satisfy a lock file
     /// recorded against that custom URL.
     #[test]
     fn test_pypi_feature_level_index_should_satisfy() {
@@ -1520,14 +1523,14 @@ mod tests {
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
     }
 
-    /// V6 lockfiles don't store per-package PyPI index URLs, so
+    /// V6 lock files don't store per-package PyPI index URLs, so
     /// `index_url` is `None` after parsing. When the manifest specifies a
     /// per-package `index`, the satisfiability check must not treat the
     /// missing locked index as a mismatch — it is simply absent from the
     /// older format.
     ///
     /// This is a regression test for a bug observed in crater runs where
-    /// `pixi install --all` upgraded v6 lockfiles to v7.
+    /// `pixi install --all` upgraded v6 lock files to v7.
     #[test]
     fn test_v6_missing_index_url_should_not_invalidate() {
         let index_url = "https://custom.example.com/simple";
@@ -1558,7 +1561,7 @@ mod tests {
         );
         assert!(
             result.is_ok(),
-            "v6 lockfile with missing index_url should still satisfy a \
+            "v6 lock file with missing index_url should still satisfy a \
              requirement with an explicit index, got: {:?}",
             result.unwrap_err()
         );

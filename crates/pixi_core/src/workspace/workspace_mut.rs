@@ -522,7 +522,7 @@ impl WorkspaceMut {
     }
 
     /// Update the conda specs of newly added packages based on the contents of
-    /// the updated lock-file.
+    /// the updated lock file.
     fn update_conda_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -596,7 +596,7 @@ impl WorkspaceMut {
     }
 
     /// Update the pypi specs of newly added packages based on the contents of
-    /// the updated lock-file.
+    /// the updated lock file.
     fn update_pypi_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -639,7 +639,7 @@ impl WorkspaceMut {
             .pinning_strategy
             .unwrap_or_default();
 
-        // Determine the versions of the packages in the lock-file
+        // Determine the versions of the packages in the lock file
         for (name, (req, pixi_req, location)) in pypi_specs_to_add_constraints_for {
             let version_constraint = pinning_strategy.determine_version_constraint(
                 pypi_records

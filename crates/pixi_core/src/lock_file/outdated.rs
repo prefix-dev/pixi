@@ -63,18 +63,18 @@ impl BuildCacheKey {
 /// A struct that contains information about specific outdated environments.
 ///
 /// Use [`OutdatedEnvironments::from_workspace_and_lock_file`] to create an
-/// instance of this struct by examining the project and lock-file and finding
+/// instance of this struct by examining the project and lock file and finding
 /// any mismatches.
 pub struct OutdatedEnvironments<'p> {
     /// The conda environments that are considered out of date with the
-    /// lock-file.
+    /// lock file.
     pub conda: HashMap<Environment<'p>, HashSet<Platform>>,
 
     /// The pypi environments that are considered out of date with the
-    /// lock-file.
+    /// lock file.
     pub pypi: HashMap<Environment<'p>, HashSet<Platform>>,
 
-    /// Records the environments for which the lock-file content should also be
+    /// Records the environments for which the lock file content should also be
     /// discarded. This is the case for instance when the order of the
     /// channels changed.
     pub disregard_locked_content: DisregardLockedContent<'p>,
@@ -120,14 +120,14 @@ impl<'p> DisregardLockedContent<'p> {
 
 impl<'p> OutdatedEnvironments<'p> {
     /// Constructs a new instance of this struct by examining the project and
-    /// lock-file and finding any mismatches.
+    /// lock file and finding any mismatches.
     pub(crate) async fn from_workspace_and_lock_file(
         workspace: &'p Workspace,
         command_dispatcher: CommandDispatcher,
         lock_file: &LockFile,
         resolver: &LockFileResolver,
     ) -> Self {
-        // Find all targets that are not satisfied by the lock-file
+        // Find all targets that are not satisfied by the lock file
         let (
             UnsatisfiableTargets {
                 mut outdated_conda,
@@ -199,7 +199,7 @@ impl<'p> OutdatedEnvironments<'p> {
         }
     }
 
-    /// Returns true if the lock-file is up-to-date with the project (e.g. there
+    /// Returns true if the lock file is up-to-date with the project (e.g. there
     /// are no outdated targets).
     pub(crate) fn is_empty(&self) -> bool {
         self.conda.is_empty() && self.pypi.is_empty()
@@ -253,7 +253,7 @@ async fn find_unsatisfiable_targets<'p>(
         // Get the locked environment from the environment
         let Some(locked_environment) = lock_file.environment(environment.name().as_str()) else {
             tracing::info!(
-                "environment '{0}' is out of date because it does not exist in the lock-file.",
+                "environment '{0}' is out of date because it does not exist in the lock file.",
                 environment.name().fancy_display()
             );
 
@@ -470,7 +470,7 @@ async fn find_unsatisfiable_targets<'p>(
 /// groups that are out of date.
 ///
 /// If one of the environments in a solve-group is no longer satisfied by the
-/// lock-file all the environments in the same solve-group have to be
+/// lock file all the environments in the same solve-group have to be
 /// recomputed.
 fn map_outdated_targets_to_solve_groups<'p>(
     outdated_conda: &HashMap<Environment<'p>, HashSet<Platform>>,

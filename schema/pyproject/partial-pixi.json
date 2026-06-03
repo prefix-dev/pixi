@@ -266,7 +266,7 @@
       "description": "The workspace's metadata information"
     }
   },
-  "$comment": "Generated from `pixi` v0.69.0",
+  "$comment": "Generated from `pixi` v0.70.1",
   "$defs": {
     "Activation": {
       "title": "Activation",
@@ -379,6 +379,21 @@
           "type": "object",
           "additionalProperties": true
         },
+        "flags": {
+          "title": "Flags",
+          "description": "Plain string flags recorded on built packages for v3 package variant selection",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+(:[a-z0-9_]+)?$"
+          },
+          "examples": [
+            [
+              "cuda",
+              "blas_openblas"
+            ]
+          ]
+        },
         "secrets": {
           "title": "Secrets",
           "description": "Names of environment variables to expose as secrets to the build script. Values are read from the host environment at build time; only the names live in the manifest. Forwarded to rattler-build's `build.script.secrets`.",
@@ -448,12 +463,6 @@
             "minLength": 1
           }
         },
-        "branch": {
-          "title": "Branch",
-          "description": "A git branch to use",
-          "type": "string",
-          "minLength": 1
-        },
         "build": {
           "title": "Build",
           "description": "The build string of the package",
@@ -522,12 +531,6 @@
             "minLength": 1
           }
         },
-        "git": {
-          "title": "Git",
-          "description": "The git URL to the repo",
-          "type": "string",
-          "minLength": 1
-        },
         "license": {
           "title": "License",
           "description": "The license of the package",
@@ -540,51 +543,15 @@
           "type": "string",
           "minLength": 1
         },
-        "md5": {
-          "title": "Md5",
-          "description": "The md5 hash of the package",
-          "type": "string",
-          "pattern": "^[a-fA-F0-9]{32}$"
-        },
         "name": {
           "title": "Name",
           "description": "The name of the build backend package",
           "type": "string",
           "minLength": 1
         },
-        "path": {
-          "title": "Path",
-          "description": "The path to the package",
-          "type": "string",
-          "minLength": 1
-        },
-        "rev": {
-          "title": "Rev",
-          "description": "A git SHA revision to use",
-          "type": "string",
-          "minLength": 1
-        },
-        "sha256": {
-          "title": "Sha256",
-          "description": "The sha256 hash of the package",
-          "type": "string",
-          "pattern": "^[a-fA-F0-9]{64}$"
-        },
         "subdir": {
           "title": "Subdir",
           "description": "The subdir of the package, also known as platform",
-          "type": "string",
-          "minLength": 1
-        },
-        "subdirectory": {
-          "title": "Subdirectory",
-          "description": "A subdirectory to use in the repo",
-          "type": "string",
-          "minLength": 1
-        },
-        "tag": {
-          "title": "Tag",
-          "description": "A git tag to use",
           "type": "string",
           "minLength": 1
         },
@@ -596,12 +563,6 @@
             "type": "string",
             "minLength": 1
           }
-        },
-        "url": {
-          "title": "Url",
-          "description": "The URL to the package",
-          "type": "string",
-          "minLength": 1
         },
         "version": {
           "title": "Version",
@@ -1495,6 +1456,38 @@
             }
           ]
         },
+        "extra-dependencies": {
+          "title": "Extra-Dependencies",
+          "description": "Extra groups that can be requested through MatchSpec extras. Each group uses the same conda package specification syntax as run-dependencies.",
+          "type": "object",
+          "patternProperties": {
+            "^[a-z0-9._+-]{1,64}$": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  }
+                ]
+              },
+              "propertyNames": {
+                "minLength": 1
+              }
+            }
+          },
+          "examples": [
+            {
+              "test": {
+                "hypothesis": "*",
+                "pytest": ">=8"
+              }
+            }
+          ]
+        },
         "homepage": {
           "title": "Homepage",
           "description": "The URL of the homepage of the project. Can be a URL or { workspace = true } to inherit from workspace",
@@ -1701,6 +1694,37 @@
           "propertyNames": {
             "minLength": 1
           }
+        },
+        "extra-dependencies": {
+          "title": "Extra-Dependencies",
+          "description": "Extra groups for this target. Same shape as the top-level `extra-dependencies`, but scoped to the matching platform selector.",
+          "type": "object",
+          "patternProperties": {
+            "^[a-z0-9._+-]{1,64}$": {
+              "type": "object",
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/$defs/MatchspecTable"
+                  }
+                ]
+              },
+              "propertyNames": {
+                "minLength": 1
+              }
+            }
+          },
+          "examples": [
+            {
+              "test": {
+                "pytest": ">=8"
+              }
+            }
+          ]
         },
         "host-dependencies": {
           "title": "Host-Dependencies",

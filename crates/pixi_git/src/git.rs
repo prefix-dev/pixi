@@ -26,6 +26,7 @@ use crate::{
 const CHECKOUT_READY_LOCK: &str = ".ok";
 pub const GIT_DIR: &str = "GIT_DIR";
 pub const GIT_TERMINAL_PROMPT: &str = "GIT_TERMINAL_PROMPT";
+pub const GIT_LFS_SKIP_SMUDGE: &str = "GIT_LFS_SKIP_SMUDGE";
 
 #[derive(Debug, thiserror::Error, Clone)]
 pub enum GitBinaryError {
@@ -42,6 +43,49 @@ pub static GIT: LazyLock<Result<PathBuf, GitBinaryError>> = LazyLock::new(|| {
         e => GitBinaryError::Other(e),
     })
 });
+
+/// Cached `git lfs` invoker. Probes `git lfs version` once; on success
+/// callers get a `GitLfs` whose [`GitLfs::cmd`] returns a fresh `Command`
+/// pre-set to `git lfs ...` with the terminal prompt disabled. Mirrors uv's
+/// `GIT_LFS` static.
+pub static GIT_LFS: LazyLock<Result<GitLfs, GitBinaryError>> = LazyLock::new(GitLfs::probe);
+
+/// Pre-configured `git lfs` command builder. Kept opaque so the git path is
+/// resolved exactly once.
+#[derive(Debug, Clone)]
+pub struct GitLfs {
+    git: PathBuf,
+}
+
+impl GitLfs {
+    fn probe() -> Result<Self, GitBinaryError> {
+        let git = GIT.as_ref().map_err(|e| e.clone())?.clone();
+        let ok = Command::new(&git)
+            .args(["lfs", "version"])
+            .env(GIT_TERMINAL_PROMPT, "0")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if ok {
+            Ok(Self { git })
+        } else {
+            Err(GitBinaryError::GitNotFound)
+        }
+    }
+
+    /// Fresh `git lfs` command with `GIT_TERMINAL_PROMPT=0` already set.
+    pub fn cmd(&self) -> Command {
+        let mut c = Command::new(&self.git);
+        c.arg("lfs").env(GIT_TERMINAL_PROMPT, "0");
+        c
+    }
+}
+
+/// Value for `GIT_LFS_SKIP_SMUDGE`, or `None` to leave the var unset.
+/// `Some(true)` → "0" (run smudge), `Some(false)` → "1" (skip smudge).
+fn lfs_skip_smudge_env(lfs: Option<bool>) -> Option<&'static str> {
+    lfs.map(|on| if on { "0" } else { "1" })
+}
 
 /// Strategy when fetching refspecs for a [`GitReference`]
 enum RefspecStrategy {
@@ -224,6 +268,7 @@ impl GitRemote {
         reference: &GitReference,
         locked_rev: Option<GitOid>,
         client: &LazyClient,
+        lfs: Option<bool>,
     ) -> Result<(GitDatabase, GitOid), GitError> {
         let locked_ref = locked_rev.map(|oid| GitReference::FullCommit(oid.to_string()));
         let reference = locked_ref.as_ref().unwrap_or(reference);
@@ -236,13 +281,14 @@ impl GitRemote {
             };
 
             if let Some(rev) = resolved_commit_hash {
-                return Ok((db, rev));
+                let ready = (lfs == Some(true))
+                    .then(|| maybe_fetch_lfs(&mut db.repo, self.url.as_str(), rev))
+                    .flatten();
+                return Ok((db.with_lfs_ready(ready), rev));
             }
         }
 
         // Otherwise start from scratch to handle corrupt git repositories.
-        // After our fetch (which is interpreted as a clone now) we do the same
-        // resolution to figure out what we cloned.
         if into.exists() {
             fs_err::remove_dir_all(into)?;
         }
@@ -255,14 +301,28 @@ impl GitRemote {
             None => reference.resolve(&repo)?,
         };
 
-        Ok((GitDatabase { repo }, rev))
+        let ready = (lfs == Some(true))
+            .then(|| maybe_fetch_lfs(&mut repo, self.url.as_str(), rev))
+            .flatten();
+
+        Ok((
+            GitDatabase {
+                repo,
+                lfs_ready: None,
+            }
+            .with_lfs_ready(ready),
+            rev,
+        ))
     }
 
     /// Creates a [`GitDatabase`] of this remote at `db_path`.
     #[allow(clippy::unused_self)]
     pub(crate) fn db_at(&self, db_path: &Path) -> Result<GitDatabase, GitError> {
         let repo = GitRepository::open(db_path)?;
-        Ok(GitDatabase { repo })
+        Ok(GitDatabase {
+            repo,
+            lfs_ready: None,
+        })
     }
 
     pub fn url(&self) -> &Url {
@@ -275,11 +335,38 @@ impl GitRemote {
 pub(crate) struct GitDatabase {
     /// Underlying Git repository instance for this database.
     repo: GitRepository,
+    /// `Some(true)` = fsck passed, `Some(false)` = fsck failed or git-lfs
+    /// missing, `None` = LFS never requested.
+    lfs_ready: Option<bool>,
 }
 
 impl GitDatabase {
+    pub(crate) fn lfs_ready(&self) -> Option<bool> {
+        self.lfs_ready
+    }
+
+    /// Builder: set [`Self::lfs_ready`] and return self. Mirrors uv's
+    /// `with_lfs_ready` so callers can chain after a fetch or cache hit.
+    #[must_use]
+    pub(crate) fn with_lfs_ready(mut self, value: Option<bool>) -> Self {
+        self.lfs_ready = value;
+        self
+    }
+
+    /// True if the LFS objects reachable from `revision` are already present
+    /// and valid in this database (i.e. `git lfs fsck --objects` passes).
+    /// Used to decide whether a cached DB satisfies an LFS-aware request.
+    pub(crate) fn contains_lfs_artifacts(&self, revision: GitOid) -> bool {
+        self.repo.lfs_fsck_objects(revision)
+    }
+
     /// Checkouts to a revision at `destination` from this database.
-    pub(crate) fn copy_to(&self, rev: GitOid, destination: &Path) -> Result<GitCheckout, GitError> {
+    pub(crate) fn copy_to(
+        &self,
+        rev: GitOid,
+        destination: &Path,
+        lfs: Option<bool>,
+    ) -> Result<GitCheckout, GitError> {
         // If the existing checkout exists, and it is fresh, use it.
         // A non-fresh checkout can happen if the checkout operation was
         // interrupted. In that case, the checkout gets deleted and a new
@@ -290,7 +377,7 @@ impl GitDatabase {
             .filter(GitCheckout::is_fresh)
         {
             Some(co) => co,
-            None => GitCheckout::clone_into(destination, self, rev)?,
+            None => GitCheckout::clone_into(destination, self, rev, lfs)?,
         };
         Ok(checkout)
     }
@@ -363,6 +450,41 @@ impl GitRepository {
         result.truncate(result.trim_end().len());
         result.parse().map_err(GitError::OidParse)
     }
+
+    /// `git lfs fsck --objects <revision>`. Returns `true` iff fsck passes;
+    /// any failure (missing git-lfs, non-zero exit) is warned and returns
+    /// `false`. Informational — see [`GitDatabase::lfs_ready`].
+    fn lfs_fsck_objects(&self, revision: GitOid) -> bool {
+        let Ok(lfs) = GIT_LFS.as_ref() else {
+            return false;
+        };
+        let output = lfs
+            .cmd()
+            .arg("fsck")
+            .arg("--objects")
+            .arg(revision.as_str())
+            .env_remove(GIT_DIR)
+            .current_dir(&self.path)
+            .output();
+        match output {
+            Ok(out) if out.status.success() => true,
+            Ok(out) => {
+                tracing::warn!(
+                    "`git lfs fsck` reported problems for {revision} in {}: {}",
+                    self.path.display(),
+                    String::from_utf8_lossy(&out.stderr).trim()
+                );
+                false
+            }
+            Err(err) => {
+                tracing::warn!(
+                    "failed to run `git lfs fsck` for {revision} in {}: {err}",
+                    self.path.display()
+                );
+                false
+            }
+        }
+    }
 }
 
 /// A local checkout of a particular revision from a [`GitRepository`].
@@ -384,7 +506,12 @@ impl GitCheckout {
 
     /// Clone a repo for a `revision` into a local path from a `database`.
     /// This is a filesystem-to-filesystem clone.
-    fn clone_into(into: &Path, database: &GitDatabase, revision: GitOid) -> Result<Self, GitError> {
+    fn clone_into(
+        into: &Path,
+        database: &GitDatabase,
+        revision: GitOid,
+        lfs: Option<bool>,
+    ) -> Result<Self, GitError> {
         tracing::debug!("cloning into {:?} from {:?}", database.repo.path, into);
         let dirname = into.parent().expect("into path must have a parent");
         fs_err::create_dir_all(dirname)?;
@@ -409,7 +536,7 @@ impl GitCheckout {
 
         let repo = GitRepository::open(into)?;
         let checkout = GitCheckout::new(revision, repo);
-        checkout.reset()?;
+        checkout.reset(lfs)?;
         Ok(checkout)
     }
 
@@ -437,29 +564,38 @@ impl GitCheckout {
     /// *doesn't* exist, and then once we're done we create the file.
     ///
     /// [`.ok`]: CHECKOUT_READY_LOCK
-    fn reset(&self) -> Result<(), GitError> {
+    fn reset(&self, lfs: Option<bool>) -> Result<(), GitError> {
         let ok_file = self.repo.path.join(CHECKOUT_READY_LOCK);
         let _ = fs_err::remove_file(&ok_file);
 
         tracing::debug!("reset {} to {}", self.repo.path.display(), self.revision);
 
+        let skip_smudge = lfs_skip_smudge_env(lfs);
+
         // Perform the hard reset.
-        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+        let mut reset_cmd = Command::new(GIT.as_ref().map_err(|e| e.clone())?);
+        reset_cmd
             .arg("reset")
             .arg("--hard")
             .arg(self.revision.as_str())
-            .current_dir(&self.repo.path)
-            .output()?;
+            .current_dir(&self.repo.path);
+        if let Some(value) = skip_smudge {
+            reset_cmd.env(GIT_LFS_SKIP_SMUDGE, value);
+        }
+        reset_cmd.output()?;
 
         // Update submodules (`git submodule update --recursive`).
-        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+        let mut submodule_cmd = Command::new(GIT.as_ref().map_err(|e| e.clone())?);
+        submodule_cmd
             .arg("submodule")
             .arg("update")
             .arg("--recursive")
             .arg("--init")
-            .current_dir(&self.repo.path)
-            .output()
-            .map(drop)?;
+            .current_dir(&self.repo.path);
+        if let Some(value) = skip_smudge {
+            submodule_cmd.env(GIT_LFS_SKIP_SMUDGE, value);
+        }
+        submodule_cmd.output().map(drop)?;
 
         fs_err::File::create(ok_file)?;
         Ok(())
@@ -603,6 +739,58 @@ pub(crate) fn fetch(
     };
     tracing::debug!("fetched with cli {:?}", result);
     result
+}
+
+/// Best-effort `fetch_lfs`: warns and continues on missing git-lfs or fetch
+/// failure. Returns the value to record in [`GitDatabase::lfs_ready`].
+fn maybe_fetch_lfs(repo: &mut GitRepository, url: &str, revision: GitOid) -> Option<bool> {
+    let lfs = match GIT_LFS.as_ref() {
+        Ok(lfs) => lfs,
+        Err(_) => {
+            tracing::warn!(
+                "`git-lfs` is not installed; skipping LFS fetch for {url}. \
+                 Install git-lfs to download LFS-tracked files."
+            );
+            return Some(false);
+        }
+    };
+    match fetch_lfs(lfs, repo, url, revision) {
+        Ok(fsck_ok) => Some(fsck_ok),
+        Err(err) => {
+            tracing::warn!("failed to fetch LFS objects for {url} at {revision}: {err}");
+            Some(false)
+        }
+    }
+}
+
+/// `git lfs fetch <url> <revision>` then `git lfs fsck --objects <revision>`.
+/// Scoping to the resolved rev (not just HEAD) means LFS objects on feature
+/// branches and tags are fetched too. Returns the fsck result; the bool of
+/// `Ok` is `true` if fsck passes. `GIT_LFS_SKIP_SMUDGE` is removed from the
+/// env so an inherited value can't suppress smudge mid-fetch.
+fn fetch_lfs(
+    lfs: &GitLfs,
+    repo: &mut GitRepository,
+    url: &str,
+    revision: GitOid,
+) -> Result<bool, GitError> {
+    tracing::debug!("fetching LFS objects for {url} at {revision}");
+    let output = lfs
+        .cmd()
+        .arg("fetch")
+        .arg(url)
+        .arg(revision.as_str())
+        .env_remove(GIT_DIR)
+        .env_remove(GIT_LFS_SKIP_SMUDGE)
+        .current_dir(&repo.path)
+        .output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8(output.stderr)?;
+        return Err(GitError::LfsFetch(url.to_string(), stderr));
+    }
+    tracing::debug!("git lfs fetch output: {:?}", output);
+
+    Ok(repo.lfs_fsck_objects(revision))
 }
 
 /// Attempts to use `git` CLI installed on the system to fetch a repository.

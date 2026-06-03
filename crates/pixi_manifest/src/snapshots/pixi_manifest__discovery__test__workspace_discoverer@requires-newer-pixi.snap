@@ -10,4 +10,4 @@ expression: snapshot
    ·                    ╰── this version requirement is not satisfied
  6 │ some-future-field = true
    ╰────
-  help: update pixi to a version that satisfies '>=100'
+  help: update pixi to a version that satisfies '>=100' with `pixi self-update`

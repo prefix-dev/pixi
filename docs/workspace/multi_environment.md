@@ -64,7 +64,7 @@ pytest = "*"
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 pypi-dependencies = {torch = "1.9.0"}
 platforms = ["linux-64", "osx-arm64"]
-activation = {scripts = ["cuda_activation.sh"]}
+activation = {scripts = ["cuda_activation.sh"], env = {CUDA_HOME = "$CONDA_PREFIX"}}
 system-requirements = {cuda = "12"}
 # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
 # Using the priority the concatenation is controlled, default is 0, the default channels are used last.

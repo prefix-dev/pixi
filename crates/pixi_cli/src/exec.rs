@@ -7,7 +7,7 @@ use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
-use pixi_utils::{AsyncPrefixGuard, EnvironmentHash, reqwest::build_reqwest_clients};
+use pixi_utils::{EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -18,7 +18,7 @@ use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::initialize_rayon_once;
 
-use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath};
+use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
 
 /// Run a command and install it in a temporary environment.
 ///
@@ -155,8 +155,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()
         .with_context(|| format!("failed to execute '{}'", command))?;
 
-    // Return the exit code of the command
-    std::process::exit(status.code().unwrap_or(1));
+    // Mirror the child's exit (including signal deaths like SIGSEGV) so the
+    // parent shell sees the same outcome it would if the child had run
+    // directly.
+    process_exit::exit_with_status(status);
 }
 
 /// Creates a prefix for the `pixi exec` command.
@@ -191,33 +193,29 @@ pub async fn create_exec_prefix(
             .join(environment_hash.name(dir_prefix.as_deref())),
     );
 
-    let guard = AsyncPrefixGuard::new(prefix.root())
-        .await
-        .into_diagnostic()
-        .context("failed to create prefix guard")?;
+    // Cross-process install lock. The prefix is content-addressed by
+    // `environment_hash`, so any prior finish here is reusable.
+    let mut env_lock = await_in_progress("acquiring write lock on prefix", |_| {
+        EnvironmentLock::acquire(prefix.root())
+    })
+    .await
+    .into_diagnostic()
+    .context("failed to acquire write lock on prefix")?;
 
-    let mut write_guard = await_in_progress("acquiring write lock on prefix", |_| guard.write())
-        .await
-        .into_diagnostic()
-        .context("failed to acquire write lock to prefix guard")?;
-
-    // If the environment already exists, and we are not forcing a
-    // reinstallation, we can return early.
-    if write_guard.is_ready() && !args.force_reinstall {
+    // Reuse the cached prefix when it is already installed. `--list`
+    // still needs the solved records to print the table, so it falls
+    // through to the (cheap, no-op) install path below rather than
+    // returning here.
+    if !args.force_reinstall && args.list.is_none() && env_lock.current().is_some() {
         tracing::info!(
             "reusing existing environment in {}",
             prefix.root().display()
         );
-        write_guard.finish().await.into_diagnostic()?;
         return Ok(prefix);
     }
 
-    // Update the prefix to indicate that we are installing it.
-    write_guard
-        .begin()
-        .await
-        .into_diagnostic()
-        .context("failed to write lock status to prefix guard")?;
+    // A previous install here crashed; re-link everything below.
+    let reinstall_all = env_lock.was_interrupted();
 
     // Construct a gateway to get repodata.
     let gateway = config.gateway().with_client(client.clone()).finish();
@@ -297,8 +295,17 @@ pub async fn create_exec_prefix(
     // by the Installer.
     initialize_rayon_once();
 
-    // Install the environment
-    Installer::new()
+    // Mark the prefix dirty for the duration of the install so a crash
+    // is detected next time.
+    env_lock
+        .begin()
+        .await
+        .into_diagnostic()
+        .context("failed to mark prefix install in progress")?;
+
+    // Install the environment. When recovering from an interrupted
+    // install, re-link every package rather than trusting conda-meta.
+    let mut installer = Installer::new()
         .with_target_platform(args.platform)
         .with_download_client(client.clone())
         .with_reporter(
@@ -309,13 +316,29 @@ pub async fn create_exec_prefix(
         )
         .with_package_cache(PackageCache::new(
             cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
-        ))
+        ));
+    if reinstall_all {
+        installer = installer.with_reinstall_packages(
+            solved_records
+                .records
+                .iter()
+                .map(|r| r.package_record.name.clone())
+                .collect(),
+        );
+    }
+    installer
         .install(prefix.root(), solved_records.records.clone())
         .await
         .into_diagnostic()
         .context("failed to create environment")?;
 
-    write_guard.finish().await.into_diagnostic()?;
+    let installed_fingerprint =
+        pixi_utils::EnvironmentFingerprint::compute(solved_records.records.iter());
+    env_lock
+        .finish(&installed_fingerprint)
+        .await
+        .into_diagnostic()
+        .context("failed to record prefix install fingerprint")?;
 
     if let Some(ref regex) = args.list {
         list_exec_environment(final_specs, solved_records, regex.clone())?;

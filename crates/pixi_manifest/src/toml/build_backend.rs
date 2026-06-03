@@ -7,7 +7,7 @@ use std::{
 use indexmap::IndexMap;
 use pixi_spec::{SourceLocationSpec, TomlLocationSpec, TomlSpec};
 use pixi_toml::{Same, TomlBTreeSet, TomlFromStr, TomlIndexMap, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName};
+use rattler_conda_types::{Flag, NamedChannelOrUrl, PackageName};
 use std::borrow::Cow;
 use toml_span::{DeserError, Error, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
@@ -27,6 +27,7 @@ pub struct TomlPackageBuild {
     pub additional_dependencies: UniquePackageMap,
     pub source: Option<SourceLocationSpec>,
     pub configuration: Option<serde_value::Value>,
+    pub flags: Vec<Flag>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
     pub warnings: Vec<crate::Warning>,
 
@@ -75,6 +76,13 @@ impl TomlPackageBuild {
                 marker_span,
             )?,
         };
+
+        if build_backend_spec.is_source() {
+            return Err(TomlError::Generic(
+                GenericError::new("build backends cannot be defined as source dependencies")
+                    .with_opt_span(self.backend.span.clone()),
+            ));
+        }
 
         // Convert the additional dependencies and make sure that they are binary.
         // Prioritize backend.additional_dependencies over top-level additional_dependencies
@@ -128,6 +136,7 @@ impl TomlPackageBuild {
                 channels,
                 source: self.source,
                 config: self.configuration,
+                flags: self.flags,
                 target_config: if target_config.is_empty() {
                     None
                 } else {
@@ -268,6 +277,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .optional_s::<TomlLocationSpec>("source")
             .map(spec_from_spanned_toml_location)
             .transpose()?;
+        let flags = th
+            .optional::<TomlWith<_, Vec<TomlFromStr<Flag>>>>("flags")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
 
         // Try the new "config" key first, then fall back to deprecated "configuration"
         let configuration = if let Some((_, mut value)) = th.take("config") {
@@ -339,6 +352,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             additional_dependencies,
             source,
             configuration,
+            flags,
             target,
             warnings,
             build_string_prefix,
@@ -575,6 +589,25 @@ mod test {
     }
 
     #[test]
+    fn test_build_flags() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            flags = ["cuda", "blas_openblas"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(|b| b.into_build_system(&indexmap::IndexMap::new()))
+            .expect("parsing should succeed");
+
+        let flags = parsed
+            .value
+            .flags
+            .iter()
+            .map(|flag: &Flag| flag.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(flags, vec!["cuda", "blas_openblas"]);
+    }
+
+    #[test]
     fn test_secrets() {
         let toml = r#"
             backend = { name = "foobar", version = "*" }
@@ -590,6 +623,46 @@ mod test {
                 .into_iter()
                 .map(String::from)
                 .collect()
+        );
+    }
+
+    #[test]
+    fn test_backend_source_path_rejected() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+            backend = { name = "foobar", path = "./local-backend" }
+        "#
+            ),
+            @r#"
+          × build backends cannot be defined as source dependencies
+           ╭─[pixi.toml:2:23]
+         1 │
+         2 │             backend = { name = "foobar", path = "./local-backend" }
+           ·                       ─────────────────────────────────────────────
+         3 │
+           ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_backend_source_git_rejected() {
+        assert_snapshot!(
+            expect_parse_failure(
+                r#"
+            backend = { name = "foobar", git = "https://example.com/repo.git" }
+        "#
+            ),
+            @r#"
+          × build backends cannot be defined as source dependencies
+           ╭─[pixi.toml:2:23]
+         1 │
+         2 │             backend = { name = "foobar", git = "https://example.com/repo.git" }
+           ·                       ─────────────────────────────────────────────────────────
+         3 │
+           ╰────
+        "#
         );
     }
 

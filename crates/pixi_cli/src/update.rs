@@ -24,6 +24,9 @@ use crate::cli_config::WorkspaceConfig;
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub config: ConfigCli,
 
     #[clap(flatten)]
@@ -34,7 +37,7 @@ pub struct Args {
     #[arg(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
-    /// Don't actually write the lockfile or update any environment.
+    /// Don't actually write the lock file or update any environment.
     #[clap(short = 'n', long)]
     pub dry_run: bool,
 
@@ -124,11 +127,11 @@ impl UpdateSpecs {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = args.config;
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(config);
+        .with_cli_config(args.config);
 
     let specs = UpdateSpecs::from(args.specs);
 
@@ -144,7 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    // Load the current lock-file, if any. If none is found, a dummy lock-file is
+    // Load the current lock file, if any. If none is found, a dummy lock file is
     // returned.
     let loaded_lock_file = &workspace
         .load_lock_file()
@@ -158,10 +161,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    // Unlock dependencies in the lock-file that we want to update.
+    // Unlock dependencies in the lock file that we want to update.
     let relaxed_lock_file = unlock_packages(&workspace, loaded_lock_file, &specs);
 
-    // Update the packages in the lock-file.
+    // Update the packages in the lock file.
     let progress = pixi_reporters::TopLevelProgress::from_global();
     let dispatcher = progress
         .clone()
@@ -176,14 +179,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .update()
         .await?;
 
-    // If we're doing a dry-run, we don't want to write the lock-file.
+    // If we're doing a dry-run, we don't want to write the lock file.
     if !args.dry_run {
         updated_lock_file.write_to_disk()?;
     }
 
     let lock_file = updated_lock_file.into_lock_file();
 
-    // Determine the diff between the old and new lock-file.
+    // Determine the diff between the old and new lock file.
     let diff = LockFileDiff::from_lock_files(loaded_lock_file, &lock_file);
 
     // Format as json?
@@ -200,7 +203,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         diff.print()
             .into_diagnostic()
-            .context("failed to print lock-file diff")?;
+            .context("failed to print lock file diff")?;
     }
 
     Ok(())
@@ -281,7 +284,7 @@ fn ensure_package_exists(
     .into())
 }
 
-/// Constructs a new lock-file where some of the constraints have been removed.
+/// Constructs a new lock file where some of the constraints have been removed.
 ///
 /// The same predicate runs against top-level entries and against the
 /// transitive `build_packages` / `host_packages` of every kept source record,

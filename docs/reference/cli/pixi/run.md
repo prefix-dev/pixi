@@ -35,6 +35,13 @@ pixi run [OPTIONS] [TASK]...
 :
 
 ## Config Options
+- <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
+:  Don't read system or user-level configuration files. Project-local `<project>/.pixi/config.toml` is still loaded
+<br>**env**: `PIXI_NO_CONFIG`
+<br>**default**: `false`
+- <a id="arg---config-file" href="#arg---config-file">`--config-file <PATH>`</a>
+:  Load configuration from this file instead of searching system and user-level paths. Project-local `<project>/.pixi/config.toml` is still merged on top
+<br>**env**: `PIXI_CONFIG_FILE`
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
@@ -72,13 +79,13 @@ pixi run [OPTIONS] [TASK]...
 
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock-file
+:  Don't modify the environment, only modify the lock file
 <br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
-:  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+:  Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
-:  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+:  Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
 - <a id="arg---as-is" href="#arg---as-is">`--as-is`</a>
 :  Shorthand for the combination of --no-install and --frozen
@@ -94,7 +101,7 @@ Runs task in the pixi environment.
 
 This command is used to run tasks in the pixi environment. It will activate the environment and run the task in the environment. It is using the deno_task_shell to run the task.
 
-`pixi run` will also update the lockfile and install the environment if it is required.
+`pixi run` will also update the lock file and install the environment if it is required.
 
 
 --8<-- "docs/reference/cli/pixi/run_extender:example"

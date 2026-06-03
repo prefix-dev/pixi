@@ -232,6 +232,7 @@ async fn compute_inner(
         .compute(
             &InstantiateBackendKey::new(
                 manifest_checkout.path.as_std_path(),
+                crate::build_backend_metadata::checkout_root_for(&manifest_checkout),
                 manifest_anchor.clone(),
                 build_source_dir,
                 spec.exclude_newer.clone(),
@@ -272,7 +273,7 @@ async fn compute_inner(
     // install_prefix recurses into source entries via SourceBuildKey,
     // so build_records / host_records are all binaries on disk. Build
     // and host packages come pre-resolved on the input record (v7+
-    // lockfile), so the two installs are independent and can run
+    // lock file), so the two installs are independent and can run
     // concurrently.
     let directories = Directories::new(&work_directory, spec.build_environment.host_platform);
     let ((build_records, _build_install_result), (host_records, _host_install_result)) = ctx
