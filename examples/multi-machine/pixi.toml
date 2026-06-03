@@ -5,11 +5,11 @@ name = "multi-machine"
 # The platforms fields can define custom platform features, like `cuda` and `osx` in this example.
 # Use the field `name` to easily manage platform specific definitions.
 platforms = [
-    { name = "cuda-win-64", platform = "win-64", cuda = "12"},
-    "win-64",
-    { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
-    "linux-64",
-    { platform = "osx-arm64", macos = "13.5" },
+  { name = "cuda-win-64", platform = "win-64", cuda = "12" },
+  "win-64",
+  { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+  "linux-64",
+  { platform = "osx-arm64", macos = "13.5" },
 ]
 
 [tasks]
@@ -22,8 +22,8 @@ ipykernel = ">=7.2.0,<8"
 matplotlib-base = ">=3.10.9,<4"
 polars = ">=1.41.1,<2"
 python = ">=3.13.13,<4"
-torchvision = ">=0.26.0,<0.27"
 pytorch = ">=2.10.0,<3"
+torchvision = ">=0.26.0,<0.27"
 
 [target.cuda-win-64.tasks]
 test = "python test.py --cuda"

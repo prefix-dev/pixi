@@ -412,6 +412,7 @@ impl Workspace {
     pub async fn load_lock_file(&self) -> miette::Result<LockFileLoadResult> {
         let lock_file_path = self.lock_file_path();
         let manifest = self.workspace_manifest().clone();
+        let workspace_root = self.root().to_path_buf();
         if lock_file_path.is_file() {
             // Spawn a background task because loading the file might be IO bound.
             tokio::task::spawn_blocking(move || {
@@ -424,7 +425,11 @@ impl Workspace {
                         // existing locked packages, and downstream code
                         // (satisfiability, environment lookup, install) sees
                         // the workspace-current names directly.
-                        crate::lock_file::platform_rename::align_platform_names(lock, &manifest)
+                        crate::lock_file::platform_rename::align_platform_names(
+                            lock,
+                            &manifest,
+                            &workspace_root,
+                        )
                     })
                     .map(LockFileLoadResult::Loaded)
                     .or_else(|err| match err {
@@ -664,6 +669,7 @@ impl<'p> LockFileDerivedData<'p> {
         let lock_file = crate::lock_file::platform_rename::shorten_platform_names(
             self.lock_file.clone(),
             self.workspace.workspace_manifest(),
+            self.workspace.root(),
         );
         lock_file
             .to_path(&lock_file_path)

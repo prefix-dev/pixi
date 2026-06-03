@@ -82,6 +82,7 @@ async fn verify_lock_file_satisfiability(
     let aligned_lock_file = crate::lock_file::platform_rename::align_platform_names(
         lock_file.clone(),
         project.workspace_manifest(),
+        project.root(),
     );
     let lock_file = &aligned_lock_file;
 

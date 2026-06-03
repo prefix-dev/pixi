@@ -19,26 +19,32 @@
 //! their full descriptive identity names. Because the load-time pass matches by
 //! identity rather than name, those aliases round-trip transparently -- the real
 //! names only ever live in `pixi.toml`.
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use pixi_manifest::{PixiPlatform, WorkspaceManifest, platform};
+use pixi_record::{LockFileResolver, LockFileResolverError, LockFileWriter};
 use rattler_conda_types::GenericVirtualPackage;
-use rattler_lock::{LockFile, PlatformData, PlatformName};
+use rattler_lock::{LockFile, LockedPackage, PlatformData, PlatformName};
+use thiserror::Error;
 
 /// Rewrite locked platform names so they match the manifest's current names
 /// where the identity matches. Returns the original lockfile unchanged when
 /// no renames apply.
-pub(crate) fn align_platform_names(lock_file: LockFile, manifest: &WorkspaceManifest) -> LockFile {
+pub(crate) fn align_platform_names(
+    lock_file: LockFile,
+    manifest: &WorkspaceManifest,
+    workspace_root: &Path,
+) -> LockFile {
     let renames = compute_renames(&lock_file, manifest);
     if renames.is_empty() {
         return lock_file;
     }
-    match rebuild_with_renames(&lock_file, &renames) {
+    match rebuild_with_renames(&lock_file, &renames, workspace_root) {
         Ok(rebuilt) => rebuilt,
-        // The rebuild only fails if the rattler builder rejects an input we
-        // just read out of a valid lockfile. That would be a rattler bug; we
-        // log and fall back to the unmodified lockfile so the user still gets
-        // a working (though stale-named) result.
+        // The rebuild only fails if the rattler builder or the lock file
+        // resolver rejects an input we just read out of a valid lockfile.
+        // Log and fall back to the unmodified lockfile so the user still
+        // gets a working (though stale-named) result.
         Err(err) => {
             tracing::warn!(
                 "failed to rewrite lockfile platform names against the manifest: {err}; \
@@ -59,6 +65,7 @@ pub(crate) fn align_platform_names(lock_file: LockFile, manifest: &WorkspaceMani
 pub(crate) fn shorten_platform_names(
     lock_file: LockFile,
     manifest: &WorkspaceManifest,
+    workspace_root: &Path,
 ) -> LockFile {
     let mut renames: HashMap<String, String> = HashMap::new();
     let mut ordinal = 0usize;
@@ -72,7 +79,7 @@ pub(crate) fn shorten_platform_names(
     if renames.is_empty() {
         return lock_file;
     }
-    match rebuild_with_renames(&lock_file, &renames) {
+    match rebuild_with_renames(&lock_file, &renames, workspace_root) {
         Ok(rebuilt) => rebuilt,
         Err(err) => {
             tracing::warn!(
@@ -172,14 +179,30 @@ fn locked_customisations(locked: &rattler_lock::Platform<'_>) -> Vec<GenericVirt
     customised
 }
 
+#[derive(Debug, Error)]
+enum RebuildError {
+    #[error(transparent)]
+    Resolver(#[from] LockFileResolverError),
+
+    #[error(transparent)]
+    Lock(#[from] rattler_lock::ParseCondaLockError),
+}
+
 /// Rebuild the lockfile with renamed platform entries via the
 /// [`rattler_lock::LockFileBuilder`]. Channels, indexes, solve options, and
 /// packages are copied across verbatim; only the [`PlatformData::name`] of
 /// each renamed entry changes.
+///
+/// Conda packages are re-registered through [`LockFileResolver`] so source
+/// records' `build_packages` / `host_packages` land in the new builder's
+/// package table. Raw `LockedPackage` copies would carry handles indexed
+/// into the old table, silently dropping build/host-only packages.
 fn rebuild_with_renames(
     lock_file: &LockFile,
     renames: &HashMap<String, String>,
-) -> Result<LockFile, rattler_lock::ParseCondaLockError> {
+    workspace_root: &Path,
+) -> Result<LockFile, RebuildError> {
+    let resolver = LockFileResolver::build(lock_file, workspace_root)?;
     let mut builder = LockFile::builder();
     let platforms: Vec<PlatformData> = lock_file
         .platforms()
@@ -197,13 +220,18 @@ fn rebuild_with_renames(
         })
         .collect();
     builder = builder.with_platforms(platforms)?;
+    let mut writer = LockFileWriter::new(&mut builder);
 
     for (env_name, env) in lock_file.environments() {
-        builder.set_channels(env_name, env.channels().iter().cloned());
+        writer
+            .builder
+            .set_channels(env_name, env.channels().iter().cloned());
         if let Some(indexes) = env.pypi_indexes() {
-            builder.set_pypi_indexes(env_name, indexes.clone());
+            writer.builder.set_pypi_indexes(env_name, indexes.clone());
         }
-        builder.set_options(env_name, env.solve_options().clone());
+        writer
+            .builder
+            .set_options(env_name, env.solve_options().clone());
         for (platform, packages) in env.packages_by_platform() {
             let raw_name = platform.name().to_string();
             let resolved = renames
@@ -211,10 +239,26 @@ fn rebuild_with_renames(
                 .map(String::as_str)
                 .unwrap_or(raw_name.as_str());
             for package in packages {
-                builder.add_package(env_name, resolved, package.clone())?;
+                match package {
+                    LockedPackage::Conda(_) => {
+                        let Some(record) = resolver.get_for_package(package) else {
+                            // Pointer-identity miss can't happen for a package
+                            // from the same lock file; skip defensively.
+                            continue;
+                        };
+                        let data = record.into_conda_package_data(&mut writer, workspace_root);
+                        writer.builder.add_conda_package(env_name, resolved, data)?;
+                    }
+                    LockedPackage::Pypi(_) => {
+                        writer
+                            .builder
+                            .add_package(env_name, resolved, package.clone())?;
+                    }
+                }
             }
         }
     }
+    drop(writer);
 
     Ok(builder.finish())
 }
@@ -290,7 +334,7 @@ mod tests {
         builder.set_options("default", rattler_lock::SolveOptions::default());
         let lock = builder.finish();
 
-        let shortened = shorten_platform_names(lock, &manifest);
+        let shortened = shorten_platform_names(lock, &manifest, Path::new("/"));
 
         // `mac` is the first non-subdir entry, `gpu` the second; `linux-64`
         // is a subdir platform and keeps its name.
@@ -302,7 +346,7 @@ mod tests {
 
         // The load pass restores the manifest names by identity, so the
         // aliases never escape `pixi.lock`.
-        let restored = align_platform_names(shortened, &manifest);
+        let restored = align_platform_names(shortened, &manifest, Path::new("/"));
         assert!(restored.platform("mac").is_some());
         assert!(restored.platform("gpu").is_some());
         assert!(restored.platform("linux-64").is_some());
@@ -329,7 +373,7 @@ mod tests {
             vec!["__cuda=12.0".to_string()],
         );
 
-        let aligned = align_platform_names(lock, &manifest);
+        let aligned = align_platform_names(lock, &manifest, Path::new("/"));
 
         assert!(
             aligned.platform("gpu-linux").is_some(),
@@ -360,7 +404,7 @@ mod tests {
             vec!["__cuda=12.0".to_string()],
         );
 
-        let aligned = align_platform_names(lock, &manifest);
+        let aligned = align_platform_names(lock, &manifest, Path::new("/"));
 
         // The manifest has no `__cuda` entry, so no rename can apply.
         assert!(aligned.platform("leftover").is_some());
@@ -403,7 +447,7 @@ mod tests {
         builder.set_options("default", rattler_lock::SolveOptions::default());
         let lock = builder.finish();
 
-        let aligned = align_platform_names(lock, &manifest);
+        let aligned = align_platform_names(lock, &manifest, Path::new("/"));
 
         // Both rows survive under their original names: the colliding
         // rename was skipped rather than overwriting.
@@ -440,9 +484,64 @@ mod tests {
             ],
         );
 
-        let aligned = align_platform_names(lock, &manifest);
+        let aligned = align_platform_names(lock, &manifest, Path::new("/"));
 
         assert!(aligned.platform("gpu-linux").is_some());
         assert!(aligned.platform("linux-64-cuda").is_none());
+    }
+
+    /// Renaming must keep packages that are only reachable through a source
+    /// record's `build_packages` / `host_packages`. The raw-copy rebuild used
+    /// to drop them, writing a lockfile that failed its own reparse with
+    /// `MissingPackage`.
+    #[test]
+    fn rename_keeps_build_only_packages() {
+        let manifest = manifest(
+            r#"
+            [workspace]
+            name = "demo"
+            channels = []
+            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+            "#,
+        );
+        // `build-tool` is referenced only from the source record's
+        // `build_packages`, not from any environment.
+        let lock_source = r#"version: 7
+platforms:
+- name: gpu
+  subdir: linux-64
+  virtual-packages:
+  - __cuda=12.0
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      gpu:
+      - conda_source: my-package[12345678] @ git+https://github.com/example/my-package.git?tag=v0.1.0#abc123def456abc123def456abc123def456abc1
+packages:
+- conda: https://conda.anaconda.org/conda-forge/linux-64/build-tool-1.0.0-h0.conda
+- conda_source: my-package[12345678] @ git+https://github.com/example/my-package.git?tag=v0.1.0#abc123def456abc123def456abc123def456abc1
+  version: 0.1.0
+  build: h0
+  subdir: linux-64
+  build_packages:
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/build-tool-1.0.0-h0.conda
+"#;
+        let lock = LockFile::from_str_with_base_directory(lock_source, Some(Path::new("/")))
+            .expect("fixture lockfile should parse");
+
+        let shortened = shorten_platform_names(lock, &manifest, Path::new("/"));
+
+        assert!(shortened.platform("p1").is_some(), "rename should apply");
+        let rendered = shortened
+            .render_to_string()
+            .expect("rebuilt lockfile should serialize");
+        assert!(
+            rendered.contains("build-tool-1.0.0-h0.conda"),
+            "build-only package record must survive the rebuild:\n{rendered}"
+        );
+        LockFile::from_str_with_base_directory(&rendered, Some(Path::new("/")))
+            .expect("rebuilt lockfile should round-trip through the on-disk format");
     }
 }
