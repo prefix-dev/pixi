@@ -231,10 +231,10 @@ pub enum PlatformOverrides {
 }
 
 /// Apply `CONDA_OVERRIDE_*` env vars to `packages`, matching upstream rattler
-/// semantics: unset keeps the current version, non-empty replaces it, and
-/// empty removes the package entirely. Rattler drives this per slot via
-/// `detect_with_fallback`; `Ok(Some(v))` = use v, `Ok(None)` = disabled,
-/// error = leave untouched.
+/// semantics: unset keeps the current version, non-empty replaces it (adding
+/// the package if it wasn't detected at all), and empty removes the package
+/// entirely. Rattler drives this per slot via `detect_with_fallback`;
+/// `Ok(Some(v))` = use v, `Ok(None)` = disabled, error = leave untouched.
 fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage>) {
     let env = Override::DefaultEnvVar;
     packages.retain_mut(|package| {
@@ -271,6 +271,48 @@ fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage
             None => true,
         }
     });
+
+    // Overrides can introduce packages the machine lacks (`CONDA_OVERRIDE_CUDA`
+    // without a GPU), matching rattler; the `Ok(None)` fallback adds only set vars.
+    let mut add_missing = |name: &str, version: Option<Version>| {
+        let Some(version) = version else { return };
+        if packages.iter().any(|p| p.name.as_normalized() == name) {
+            return;
+        }
+        packages.push(GenericVirtualPackage {
+            name: name.parse().expect("static virtual package name is valid"),
+            version,
+            build_string: "0".to_string(),
+        });
+    };
+    add_missing(
+        "__cuda",
+        Cuda::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|cuda| cuda.version),
+    );
+    add_missing(
+        "__osx",
+        Osx::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|osx| osx.version),
+    );
+    add_missing(
+        "__linux",
+        Linux::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|linux| linux.version),
+    );
+    add_missing(
+        "__glibc",
+        LibC::detect_with_fallback(&env, || Ok(None))
+            .ok()
+            .flatten()
+            .map(|libc| libc.version),
+    );
 }
 
 impl Workspace {
@@ -1133,6 +1175,24 @@ mod tests {
         channels = []
         platforms = ["linux-64", "win-64"]
         "#;
+
+    /// `CONDA_OVERRIDE_*` must be able to *introduce* a virtual package the
+    /// machine doesn't provide (e.g. cuda on a GPU-less box), not just
+    /// override detected ones.
+    #[test]
+    fn override_adds_undetected_virtual_package() {
+        // Safe under nextest: each test runs in its own process.
+        unsafe { std::env::set_var("CONDA_OVERRIDE_CUDA", "12.0") };
+        let mut packages = Vec::new();
+        apply_environment_variable_overrides(&mut packages);
+        unsafe { std::env::remove_var("CONDA_OVERRIDE_CUDA") };
+
+        let cuda = packages
+            .iter()
+            .find(|p| p.name.as_normalized() == "__cuda")
+            .expect("__cuda should be added from the override");
+        assert_eq!(cuda.version, Version::from_str("12.0").unwrap());
+    }
 
     /// Every legacy `[system-requirements]` shape parses through the
     /// `[system-requirements]`-to-platforms migration and ends up as a
