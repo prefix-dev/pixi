@@ -490,25 +490,19 @@ async fn resolve_single_dev_dependency(
     Ok(dependencies)
 }
 
-/// Collect the set of PyPI indexes a locked package URL may belong to in
-/// order to satisfy a requirement that has no per-package `index`.
-///
-/// This is the union of the regular `indexes` (index-url + extra-index-urls)
-/// and the URL-based `find-links` entries. Packages resolved from a
-/// `find-links` flat index record the find-links URL as their `index_url`,
-/// so those URLs must be considered acceptable as well (issue #6265).
-/// Path-based find-links entries carry no URL and are skipped.
-///
-/// Returns an empty vector for pre-v7 lock files (no recorded indexes).
+/// Indexes a locked package URL may belong to: the regular `indexes` plus
+/// the URL-based `find-links` entries. Packages from a `find-links` flat
+/// index record the find-links URL as their `index_url` (issue #6265).
+/// Path-based find-links carry no URL and are skipped. Empty for pre-v7
+/// lock files.
 fn collect_locked_indexes(
     locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
-) -> Vec<url::Url> {
+) -> Vec<&url::Url> {
     locked_pypi_indexes
         .map(|i| {
             i.indexes
                 .iter()
-                .cloned()
-                .chain(i.find_links.iter().filter_map(|fl| fl.as_url().cloned()))
+                .chain(i.find_links.iter().filter_map(|fl| fl.as_url()))
                 .collect()
         })
         .unwrap_or_default()
@@ -1391,6 +1385,6 @@ mod tests {
         };
 
         let collected = collect_locked_indexes(Some(&indexes));
-        assert_eq!(collected, vec![pypi_index, find_links_url]);
+        assert_eq!(collected, vec![&pypi_index, &find_links_url]);
     }
 }

@@ -130,7 +130,7 @@ pub(crate) fn pypi_satisfies_requirement(
     locked_record: &LockedPypiRecord,
     project_root: &Path,
     origin: RequirementOrigin,
-    locked_indexes: &[Url],
+    locked_indexes: &[&Url],
 ) -> Result<(), Box<PlatformUnsat>> {
     let locked_data = &locked_record.data;
     if spec.name.to_string() != locked_data.name().to_string() {
@@ -195,8 +195,9 @@ pub(crate) fn pypi_satisfies_requirement(
                 (None, Some(locked_url)) if origin == RequirementOrigin::Manifest => {
                     // Issue #6060: accept the locked URL if it matches any
                     // env-level configured index; fall back to PyPI default.
-                    let effective_indexes: &[Url] = if locked_indexes.is_empty() {
-                        std::slice::from_ref(&*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL)
+                    let default_index = &*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL;
+                    let effective_indexes: &[&Url] = if locked_indexes.is_empty() {
+                        std::slice::from_ref(&default_index)
                     } else {
                         locked_indexes
                     };
@@ -1457,7 +1458,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
-            &[Url::parse(custom_index).unwrap()],
+            &[&Url::parse(custom_index).unwrap()],
         );
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
@@ -1467,7 +1468,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
-            &[Url::parse(&format!("{custom_index}/")).unwrap()],
+            &[&Url::parse(&format!("{custom_index}/")).unwrap()],
         );
         assert!(result_with_trailing_slash.is_ok());
 
@@ -1477,7 +1478,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
-            &[Url::parse("https://unrelated.example.com/simple").unwrap()],
+            &[&Url::parse("https://unrelated.example.com/simple").unwrap()],
         );
         assert!(result_unrelated.is_err());
     }
@@ -1512,8 +1513,8 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[
-                pixi_consts::consts::DEFAULT_PYPI_INDEX_URL.clone(),
-                Url::parse(extra_index).unwrap(),
+                &*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL,
+                &Url::parse(extra_index).unwrap(),
             ],
         );
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
