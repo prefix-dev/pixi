@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.70.1] - 2026-06-03
+#### ✨ Highlights
+
+This release lays the foundation for repodata v3 support and adds a couple of important fixes:
+
+- parallel `pixi install` now works reliably
+- issues that came up with parallelized `pixi global` have been fixed 
+
+#### Added
+
+- Add --index option to specify PyPI index URL by @suleman1412 in [#5575](https://github.com/prefix-dev/pixi/pull/5575)
+- Implement extras and flags support for pixi and pixi-build by @wolfv in [#5998](https://github.com/prefix-dev/pixi/pull/5998)
+- Serialize concurrent environment installs and recover from interrupted ones by @baszalmstra in [#6233](https://github.com/prefix-dev/pixi/pull/6233)
+
+
+#### Changed
+
+- Reinstall to avoid duplicate dist-info by @baszalmstra in [#6257](https://github.com/prefix-dev/pixi/pull/6257)
+
+
+#### Documentation
+
+- Link to parselmouth mapping browser in conda/PyPI page by @tdejager in [#6256](https://github.com/prefix-dev/pixi/pull/6256)
+
+
+#### Fixed
+
+- Scope PyPI source-build cache by conda environment by @baszalmstra in [#6240](https://github.com/prefix-dev/pixi/pull/6240)
+- Limit concurrent global update by @Hofer-Julian in [#6253](https://github.com/prefix-dev/pixi/pull/6253)
+- Global share command dispatcher by @Hofer-Julian in [#6255](https://github.com/prefix-dev/pixi/pull/6255)
+- Support conda extras for satisfiabily and solve groups by @baszalmstra in [#6260](https://github.com/prefix-dev/pixi/pull/6260)
+
+
+
 ### [0.70.0] - 2026-06-01
 #### ✨ Highlights
 
