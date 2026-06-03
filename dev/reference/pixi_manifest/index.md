@@ -1292,8 +1292,11 @@ More documentation on the backends can be found in the [build backend documentat
 backend = { name = "pixi-build-cmake", version = "0.*" }
 # not required:
 channels = ["https://prefix.dev/conda-forge"]
-config = { key = "value" }                    # Optional configuration, specific to the build backend
-flags = ["cuda", "blas_openblas"]             # Optional variant flags recorded in the package metadata
+config = { key = "value" } # Optional configuration, specific to the build backend
+flags = [
+  "cuda",
+  "blas_openblas",
+] # Optional variant flags recorded in the package metadata
 ```
 
 #### Target-specific build configuration example
@@ -1385,8 +1388,8 @@ The `extra-dependencies` table defines extra dependency groups for a package. Fo
 
 ```toml
 [package.extra-dependencies.test]
-pytest = ">=8"
 hypothesis = "*"
+pytest = ">=8"
 
 [package.extra-dependencies.cuda]
 cupy = ">=13"

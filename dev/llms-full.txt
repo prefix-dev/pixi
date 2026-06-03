@@ -11727,7 +11727,7 @@ More examples
 For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.70.0 AS build
+FROM ghcr.io/prefix-dev/pixi:0.70.1 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
@@ -12380,7 +12380,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.6
   with:
-    pixi-version: v0.70.0
+    pixi-version: v0.70.1
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -13202,7 +13202,7 @@ Create a new directory `.devcontainer` in the root of your workspace. Then, crea
 ```dockerfile
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.70.0
+ARG PIXI_VERSION=v0.70.1
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -16425,8 +16425,11 @@ More documentation on the backends can be found in the [build backend documentat
 backend = { name = "pixi-build-cmake", version = "0.*" }
 # not required:
 channels = ["https://prefix.dev/conda-forge"]
-config = { key = "value" }                    # Optional configuration, specific to the build backend
-flags = ["cuda", "blas_openblas"]             # Optional variant flags recorded in the package metadata
+config = { key = "value" } # Optional configuration, specific to the build backend
+flags = [
+  "cuda",
+  "blas_openblas",
+] # Optional variant flags recorded in the package metadata
 ```
 
 #### Target-specific build configuration example
@@ -16518,8 +16521,8 @@ The `extra-dependencies` table defines extra dependency groups for a package. Fo
 
 ```toml
 [package.extra-dependencies.test]
-pytest = ">=8"
 hypothesis = "*"
+pytest = ">=8"
 
 [package.extra-dependencies.cuda]
 cupy = ">=13"
@@ -22966,6 +22969,36 @@ pixi workspace version set <VERSION>
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.70.1] - 2026-06-03
+
+#### ✨ Highlights
+
+This release lays the foundation for repodata v3 support and adds a couple of important fixes:
+
+- parallel `pixi install` now works reliably
+- issues that came up with parallelized `pixi global` have been fixed
+
+#### Added
+
+- Add --index option to specify PyPI index URL by @suleman1412 in [#5575](https://github.com/prefix-dev/pixi/pull/5575)
+- Implement extras and flags support for pixi and pixi-build by @wolfv in [#5998](https://github.com/prefix-dev/pixi/pull/5998)
+- Serialize concurrent environment installs and recover from interrupted ones by @baszalmstra in [#6233](https://github.com/prefix-dev/pixi/pull/6233)
+
+#### Changed
+
+- Reinstall to avoid duplicate dist-info by @baszalmstra in [#6257](https://github.com/prefix-dev/pixi/pull/6257)
+
+#### Documentation
+
+- Link to parselmouth mapping browser in conda/PyPI page by @tdejager in [#6256](https://github.com/prefix-dev/pixi/pull/6256)
+
+#### Fixed
+
+- Scope PyPI source-build cache by conda environment by @baszalmstra in [#6240](https://github.com/prefix-dev/pixi/pull/6240)
+- Limit concurrent global update by @Hofer-Julian in [#6253](https://github.com/prefix-dev/pixi/pull/6253)
+- Global share command dispatcher by @Hofer-Julian in [#6255](https://github.com/prefix-dev/pixi/pull/6255)
+- Support conda extras for satisfiabily and solve groups by @baszalmstra in [#6260](https://github.com/prefix-dev/pixi/pull/6260)
 
 ### [0.70.0] - 2026-06-01
 
