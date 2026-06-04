@@ -251,20 +251,24 @@ pub(crate) fn pypi_satisfies_requirement(
         RequirementSource::Git {
             git, subdirectory, ..
         } => {
-            let repository = git.repository();
+            // Use `git.url()`, not `git.repository()`: uv's `repository()` strips the
+            // `git@` ssh username that pixi's `RepositoryUrl` keeps (because it doubles
+            // as the cloneable/pinned url), so comparing the two sides spuriously
+            // mismatches for ssh deps (#6259).
+            let git_url = git.url();
             let reference = git.reference();
             match &**locked_data.location() {
                 UrlOrPath::Url(url) => {
                     if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
                     {
                         let pinned_repository = RepositoryUrl::new(&pinned_git_spec.git);
-                        let specified_repository = RepositoryUrl::new(repository);
+                        let specified_repository = RepositoryUrl::new(git_url);
 
                         let repo_is_same = pinned_repository == specified_repository;
                         if !repo_is_same {
                             return Err(PlatformUnsat::LockedPyPIGitUrlMismatch {
                                 name: spec.name.clone().to_string(),
-                                spec_url: repository.to_string(),
+                                spec_url: git_url.to_string(),
                                 lock_url: pinned_git_spec.git.to_string(),
                             }
                             .into());
@@ -971,6 +975,44 @@ mod tests {
 
         // The manifest spec must satisfy the lock file entry pixi wrote for
         // the very same dependency.
+        pypi_satisfies_requirement(
+            &uv_req,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[],
+        )
+        .unwrap();
+    }
+
+    /// #6259: an ssh git url (`ssh://git@host/...`) must satisfy the lock file
+    /// pixi wrote for it, despite uv stripping the `git@` user on the spec side.
+    #[test]
+    fn test_pypi_git_ssh_url_via_as_uv_req() {
+        use pixi_pypi_spec::PixiPypiSpec;
+        use pixi_uv_conversions::as_uv_req;
+
+        let pep_req = pep508_rs::Requirement::from_str(
+            "flask @ git+ssh://git@github.com/pallets/flask@9898ccbb783e7e6a35ae165e7deb9fa84edfe21c",
+        )
+        .unwrap();
+        let pixi_spec = PixiPypiSpec::try_from(pep_req).unwrap();
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let uv_req = as_uv_req(&pixi_spec, "flask", &project_root).unwrap();
+
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "flask",
+            "3.0.0",
+            "git+ssh://git@github.com/pallets/flask?rev=9898ccbb783e7e6a35ae165e7deb9fa84edfe21c#9898ccbb783e7e6a35ae165e7deb9fa84edfe21c"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+
         pypi_satisfies_requirement(
             &uv_req,
             &locked_data,
