@@ -968,10 +968,10 @@ impl DetachedEnvironments {
     //
     // `cache` is the resolved cache config to consult when the default
     // directory has to be derived (i.e. when detached-environments is just
-    // enabled via a boolean). Pass the workspace-merged
-    // [`Config::cache`] so workspace-level `[cache.detached-environments]`
-    // overrides are honored.
-    pub fn path(&self, cache: &CacheConfig) -> miette::Result<Option<PathBuf>> {
+    // enabled via a boolean), so workspace-level `[cache.detached-environments]`
+    // overrides are honored. Callers should use
+    // [`Config::detached_environments_dir`] rather than calling this directly.
+    fn path(&self, cache: &CacheConfig) -> miette::Result<Option<PathBuf>> {
         let resolved_self = self.resolve_path()?;
         match resolved_self {
             DetachedEnvironments::Path(p) => Ok(Some(p.clone())),
@@ -2236,6 +2236,13 @@ impl Config {
         self.detached_environments.clone().unwrap_or_default()
     }
 
+    /// Resolve the detached-environments directory for this config, honoring
+    /// this config's `[cache]` settings when the directory has to be derived.
+    /// Returns `None` when detached-environments is disabled.
+    pub fn detached_environments_dir(&self) -> miette::Result<Option<PathBuf>> {
+        self.detached_environments().path(&self.cache)
+    }
+
     pub fn force_activate(&self) -> bool {
         self.shell.force_activate.unwrap_or(false)
     }
@@ -2785,7 +2792,7 @@ mod tests {
 
     #[test]
     fn test_config_parse() {
-        // Calls get_cache_dir() via detached_environments().path(); serialize
+        // Calls get_cache_dir() via detached_environments_dir(); serialize
         // against other tests that mutate the process env.
         let _guard = NETFS_ENV_LOCK.lock().unwrap();
         let toml = format!(
@@ -2809,7 +2816,7 @@ UNUSED = "unused"
         let expected_legacy = TlsRootCerts::LegacyNative;
         assert_eq!(config.tls_root_certs, Some(expected_legacy));
         assert_eq!(
-            config.detached_environments().path(&config.cache).unwrap(),
+            config.detached_environments_dir().unwrap(),
             Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
@@ -2818,11 +2825,7 @@ UNUSED = "unused"
         let toml = r"detached-environments = true";
         let (config, _) = Config::from_toml(toml, None).unwrap();
         assert_eq!(
-            config
-                .detached_environments()
-                .path(&config.cache)
-                .unwrap()
-                .unwrap(),
+            config.detached_environments_dir().unwrap().unwrap(),
             get_cache_dir()
                 .unwrap()
                 .join(consts::ENVIRONMENTS_DIR)
@@ -2853,11 +2856,7 @@ UNUSED = "unused"
         let expected_detached_envs_path = home_dir.join("my/envs");
 
         let (config, _) = Config::from_toml(toml, None).unwrap();
-        let actual_detached_envs_path = config
-            .detached_environments()
-            .path(&config.cache)
-            .unwrap()
-            .unwrap();
+        let actual_detached_envs_path = config.detached_environments_dir().unwrap().unwrap();
 
         assert_eq!(actual_detached_envs_path, expected_detached_envs_path);
     }
@@ -2868,11 +2867,7 @@ UNUSED = "unused"
         let toml = r#"detached-environments = "/home/me/envs""#;
 
         let (config, _) = Config::from_toml(toml, None).unwrap();
-        let actual_detached_envs_path = config
-            .detached_environments()
-            .path(&config.cache)
-            .unwrap()
-            .unwrap();
+        let actual_detached_envs_path = config.detached_environments_dir().unwrap().unwrap();
         let expected_detached_envs_path = PathBuf::from("/home/me/envs");
         assert_eq!(actual_detached_envs_path, expected_detached_envs_path);
     }
@@ -3166,7 +3161,7 @@ UNUSED = "unused"
         );
         assert_eq!(config.tls_no_verify, Some(true));
         assert_eq!(
-            config.detached_environments().path(&config.cache).unwrap(),
+            config.detached_environments_dir().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
         assert!(config.s3_options.contains_key("bucket1"));
@@ -3196,7 +3191,7 @@ UNUSED = "unused"
         );
         assert_eq!(config.tls_no_verify, Some(false));
         assert_eq!(
-            config.detached_environments().path(&config.cache).unwrap(),
+            config.detached_environments_dir().unwrap(),
             Some(PathBuf::from("/path/to/envs2"))
         );
         assert_eq!(config.max_concurrent_solves(), 5);
@@ -3321,11 +3316,7 @@ UNUSED = "unused"
             .set("detached-environments", Some("true".to_string()))
             .unwrap();
         assert_eq!(
-            config
-                .detached_environments()
-                .path(&config.cache)
-                .unwrap()
-                .unwrap(),
+            config.detached_environments_dir().unwrap().unwrap(),
             get_cache_dir()
                 .unwrap()
                 .join(consts::ENVIRONMENTS_DIR)
@@ -3336,7 +3327,7 @@ UNUSED = "unused"
             .set("detached-environments", Some("/path/to/envs".to_string()))
             .unwrap();
         assert_eq!(
-            config.detached_environments().path(&config.cache).unwrap(),
+            config.detached_environments_dir().unwrap(),
             Some(PathBuf::from("/path/to/envs"))
         );
 

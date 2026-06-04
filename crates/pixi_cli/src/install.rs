@@ -243,11 +243,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .expect("failed to write into message buffer");
     }
 
-    if let Ok(Some(path)) = workspace
-        .config()
-        .detached_environments()
-        .path(&workspace.config().cache)
-    {
+    if let Ok(Some(path)) = workspace.config().detached_environments_dir() {
         write!(
             &mut message,
             " in '{}'",

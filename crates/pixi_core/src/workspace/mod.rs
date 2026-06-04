@@ -364,11 +364,7 @@ impl Workspace {
     /// Create the detached-environments path for this project if it is set in
     /// the config
     fn detached_environments_path(&self) -> Option<PathBuf> {
-        if let Ok(Some(detached_environments_path)) = self
-            .config()
-            .detached_environments()
-            .path(&self.config().cache)
-        {
+        if let Ok(Some(detached_environments_path)) = self.config().detached_environments_dir() {
             Some(detached_environments_path.join(format!(
                 "{}-{}",
                 self.display_name(),
