@@ -6,6 +6,7 @@ use std::{
     str::FromStr,
 };
 
+use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use minijinja::{Environment, context};
 use pixi_config::{Config, get_default_author, pixi_home};
@@ -60,7 +61,9 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
     let platforms = if options.platforms.is_empty() {
         vec![Platform::current().to_string()]
     } else {
-        options.platforms.clone()
+        // Dedup so a repeated `--platform` (or one matching the current
+        // platform) doesn't write a manifest the parser then rejects.
+        options.platforms.iter().cloned().unique().collect()
     };
 
     let index_url = config.pypi_config.index_url.clone();

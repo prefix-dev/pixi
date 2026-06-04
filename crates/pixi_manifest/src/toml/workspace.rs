@@ -309,16 +309,35 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let solve_strategy = th
             .optional::<TomlWith<_, TomlFromStr<_>>>("solve-strategy")
             .map(TomlWith::into_inner);
-        let platforms = th
-            .optional::<Spanned<Vec<TomlPixiPlatform>>>("platforms")
-            .map(|spanned| Spanned {
-                span: spanned.span,
-                value: spanned
-                    .value
-                    .into_iter()
-                    .map(TomlPixiPlatform::into_inner)
-                    .collect::<IndexSet<_>>(),
-            });
+        // Reject repeated names: `PixiPlatform`'s `Eq`/`Hash` are by name only,
+        // so duplicates would otherwise silently collapse to the first entry.
+        let platforms = match th.optional::<Spanned<Vec<Spanned<TomlPixiPlatform>>>>("platforms") {
+            None => None,
+            Some(spanned) => {
+                let span = spanned.span;
+                let mut value = IndexSet::new();
+                let mut seen: IndexMap<String, Span> = IndexMap::new();
+                for entry in spanned.value {
+                    let entry_span = entry.span;
+                    let platform = entry.value.into_inner();
+                    let name = platform.name().to_string();
+                    if let Some(first) = seen.get(&name) {
+                        return Err(toml_span::Error {
+                            kind: toml_span::ErrorKind::DuplicateKey {
+                                key: name,
+                                first: *first,
+                            },
+                            span: entry_span,
+                            line_info: None,
+                        }
+                        .into());
+                    }
+                    seen.insert(name, entry_span);
+                    value.insert(platform);
+                }
+                Some(Spanned { span, value })
+            }
+        };
         let license = th.optional("license");
         let license_file = th
             .optional::<TomlWith<_, Spanned<TomlFromStr<_>>>>("license-file")
@@ -558,6 +577,22 @@ mod test {
                 rattler_conda_types::Platform::OsxArm64,
             ]
         );
+    }
+
+    /// Two platform entries that resolve to the same name must be rejected,
+    /// not silently collapsed to the first (`PixiPlatform` is keyed by name).
+    #[test]
+    fn test_duplicate_workspace_platform_name_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = [
+          { name = "gpu", platform = "linux-64", cuda = "12.0" },
+          { name = "gpu", platform = "linux-64", cuda = "13.0" },
+        ]
+        "#,
+        ));
     }
 
     #[test]
