@@ -1744,13 +1744,15 @@ impl<'p> UpdateContextBuilder<'p> {
                 let locked_env = lock_file.environment(env.name().as_str())?;
                 let platforms: Vec<_> = locked_env
                     .packages_by_platform()
-                    .map(|(lock_platform, packages)| {
-                        let platform = PixiPlatformName::try_from(lock_platform.name().as_str())
-                            .expect("lockfile platform name should be a valid pixi platform name");
+                    .filter_map(|(lock_platform, packages)| {
+                        // A name that isn't a valid pixi platform name has no
+                        // carryable records; dropping it re-solves that platform.
+                        let platform =
+                            PixiPlatformName::try_from(lock_platform.name().as_str()).ok()?;
                         let unresolved = packages
                             .filter_map(|pkg| resolver.get_for_package(pkg))
                             .collect::<Vec<_>>();
-                        (platform, unresolved)
+                        Some((platform, unresolved))
                     })
                     .collect();
                 Some((env, platforms))
@@ -1788,18 +1790,18 @@ impl<'p> UpdateContextBuilder<'p> {
                             env.clone(),
                             locked_env
                                 .pypi_packages_by_platform()
-                                .map(|(lock_platform, records)| {
-                                    (
-                                        PixiPlatformName::try_from(
-                                            lock_platform.name().as_str(),
-                                        )
-                                        .expect(
-                                            "lockfile platform name should be a valid pixi platform name",
-                                        ),
+                                .filter_map(|(lock_platform, records)| {
+                                    // Skip names that aren't valid pixi platform
+                                    // names; the platform is re-solved instead.
+                                    let platform =
+                                        PixiPlatformName::try_from(lock_platform.name().as_str())
+                                            .ok()?;
+                                    Some((
+                                        platform,
                                         Arc::new(PypiRecordsByName::from_iter(
                                             records.map(|r| r.clone().into()),
                                         )),
-                                    )
+                                    ))
                                 })
                                 .collect(),
                         )

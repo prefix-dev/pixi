@@ -19,3 +19,7 @@ rattler_lock = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 tabwriter = { workspace = true }
+
+[dev-dependencies]
+rattler_conda_types = { workspace = true }
+url = { workspace = true }

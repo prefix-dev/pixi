@@ -94,8 +94,9 @@ pub fn verify_environment_satisfiability(
     let additional_platforms: HashSet<PixiPlatformName> = locked_platform_data
         .iter()
         .filter_map(|lp| {
-            let name = PixiPlatformName::try_from(lp.name.as_str())
-                .expect("lockfile platform name should be a valid pixi platform name");
+            // A foreign/hand-edited name that isn't a valid pixi platform name
+            // can't match a workspace platform; skip it rather than panicking.
+            let name = PixiPlatformName::try_from(lp.name.as_str()).ok()?;
             if platforms.contains(&name) || env_subdirs.contains(&lp.subdir) {
                 None
             } else {

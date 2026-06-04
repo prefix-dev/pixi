@@ -108,11 +108,14 @@ pub fn filter_lock_file<
         writer.builder.set_pypi_indexes(environment_name, indexes);
 
         for (lock_platform, packages) in environment.packages_by_platform() {
-            let platform = PixiPlatformName::try_from(lock_platform.name().as_str())
-                .expect("lockfile platform name should be a valid pixi platform name");
-            let platform_str = platform.to_string();
+            // A name that isn't a valid pixi platform name can't be matched, so
+            // keep its packages verbatim (raw name) instead of dropping them.
+            let platform = PixiPlatformName::try_from(lock_platform.name().as_str()).ok();
+            let platform_str = lock_platform.name().to_string();
             for package in packages {
-                if !should_keep(&project_env, &platform, package.into()) {
+                if let Some(platform) = &platform
+                    && !should_keep(&project_env, platform, package.into())
+                {
                     continue;
                 }
                 match package {
@@ -123,19 +126,21 @@ pub fn filter_lock_file<
                             // defensively.
                             continue;
                         };
-                        if let UnresolvedPixiRecord::Source(arc) = &mut record {
+                        if let UnresolvedPixiRecord::Source(arc) = &mut record
+                            && let Some(platform) = &platform
+                        {
                             let src = Arc::make_mut(arc);
                             src.build_packages.retain(|p| {
                                 should_keep(
                                     &project_env,
-                                    &platform,
+                                    platform,
                                     LockedPackageKind::Conda(p.name()),
                                 )
                             });
                             src.host_packages.retain(|p| {
                                 should_keep(
                                     &project_env,
-                                    &platform,
+                                    platform,
                                     LockedPackageKind::Conda(p.name()),
                                 )
                             });

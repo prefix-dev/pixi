@@ -6795,10 +6795,12 @@ dependencies = [
  "itertools 0.14.0",
  "pixi_consts",
  "pixi_manifest",
+ "rattler_conda_types",
  "rattler_lock",
  "serde",
  "serde_json",
  "tabwriter",
+ "url",
 ]
 
 [[package]]

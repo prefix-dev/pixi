@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, PixiPlatformName};
-use rattler_lock::{CondaPackageData, LockFile, LockedPackage};
+use rattler_lock::{CondaPackageData, LockFile, LockedPackage, PlatformName};
 use serde::Serialize;
 use serde_json::Value;
 use tabwriter::TabWriter;
@@ -30,7 +30,7 @@ impl PackagesDiff {
 
 /// Contains the changes between two lock files.
 pub struct LockFileDiff {
-    pub environment: IndexMap<String, IndexMap<PixiPlatformName, PackagesDiff>>,
+    pub environment: IndexMap<String, IndexMap<PlatformName, PackagesDiff>>,
 }
 
 impl LockFileDiff {
@@ -46,8 +46,9 @@ impl LockFileDiff {
             let mut environment_diff = IndexMap::new();
 
             for (lock_platform, packages) in environment.packages_by_platform() {
-                let platform = PixiPlatformName::try_from(lock_platform.name().as_str())
-                    .expect("lockfile platform name should be a valid pixi platform name");
+                // Key by rattler's PlatformName so foreign/hand-edited names
+                // (invalid pixi platform names) still appear instead of crashing.
+                let platform = lock_platform.name().clone();
                 // Determine the packages that were previously there.
                 let (mut previous_conda_packages, mut previous_pypi_packages): (
                     HashMap<_, _>,
@@ -126,15 +127,10 @@ impl LockFileDiff {
                 .map(|e| e.packages_by_platform())
                 .into_iter()
                 .flatten()
-                .filter(|(p, _)| {
-                    let name = PixiPlatformName::try_from(p.name().as_str())
-                        .expect("lockfile platform name should be a valid pixi platform name");
-                    !environment_diff.contains_key(&name)
-                })
+                .filter(|(p, _)| !environment_diff.contains_key(p.name()))
                 .collect_vec()
             {
-                let platform = PixiPlatformName::try_from(lock_platform.name().as_str())
-                    .expect("lockfile platform name should be a valid pixi platform name");
+                let platform = lock_platform.name().clone();
                 let mut diff = PackagesDiff::default();
                 for package in packages {
                     diff.removed.push(package.clone());
@@ -162,8 +158,7 @@ impl LockFileDiff {
                 for package in packages {
                     diff.removed.push(package.clone());
                 }
-                let platform = PixiPlatformName::try_from(lock_platform.name().as_str())
-                    .expect("lockfile platform name should be a valid pixi platform name");
+                let platform = lock_platform.name().clone();
                 environment_diff.insert(platform, diff);
             }
             result
@@ -433,7 +428,7 @@ pub enum JsonPackageType {
 #[derive(Serialize, Clone)]
 pub struct LockFileJsonDiff {
     pub version: usize,
-    pub environment: IndexMap<String, IndexMap<PixiPlatformName, Vec<JsonPackageDiff>>>,
+    pub environment: IndexMap<String, IndexMap<String, Vec<JsonPackageDiff>>>,
 }
 
 impl LockFileJsonDiff {
@@ -451,9 +446,8 @@ impl LockFileJsonDiff {
                     .as_ref()
                     .and_then(|p| p.get(environment_name.as_str()));
                 let pixi_platform = env.and_then(|env| {
-                    env.workspace_manifest()
-                        .workspace
-                        .platform_by_name(&platform)
+                    let name = PixiPlatformName::try_from(platform.as_str()).ok()?;
+                    env.workspace_manifest().workspace.platform_by_name(&name)
                 });
                 let conda_dependencies = env
                     .map(|env| env.dependencies(pixi_manifest::SpecType::Run, pixi_platform))
@@ -541,7 +535,7 @@ impl LockFileJsonDiff {
                     .sorted_by_key(|diff| diff.name.clone())
                     .collect_vec();
 
-                environment_diff_json.insert(platform, packages_diff_json);
+                environment_diff_json.insert(platform.to_string(), packages_diff_json);
             }
 
             environment.insert(environment_name, environment_diff_json);
@@ -572,4 +566,81 @@ fn compute_json_diff(
         });
     }
     (a, b)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use pixi_manifest::PixiPlatformName;
+    use rattler_conda_types::{
+        PackageName, PackageRecord, Platform, Version, package::DistArchiveIdentifier,
+    };
+    use rattler_lock::{
+        CondaBinaryData, CondaPackageData, LockFile, PlatformData, PlatformName, UrlOrPath,
+    };
+    use url::Url;
+
+    use super::LockFileDiff;
+
+    fn conda_package(url: &str) -> CondaPackageData {
+        CondaPackageData::Binary(Box::new(CondaBinaryData {
+            package_record: PackageRecord::new(
+                PackageName::new_unchecked("foo"),
+                Version::from_str("1.0").unwrap(),
+                "0".to_string(),
+            ),
+            location: UrlOrPath::Url(Url::parse(url).unwrap()),
+            file_name: DistArchiveIdentifier::try_from_filename("foo-1.0-0.conda").unwrap(),
+            channel: None,
+        }))
+    }
+
+    fn lock_file_with_foreign_platform(url: &str) -> LockFile {
+        let mut builder = LockFile::builder()
+            // `linux` is valid for rattler but reserved (invalid) for pixi --
+            // the mismatch that used to panic the diff.
+            .with_platforms(vec![PlatformData {
+                name: PlatformName::try_from("linux").unwrap(),
+                subdir: Platform::Linux64,
+                virtual_packages: vec![],
+            }])
+            .unwrap();
+        builder.set_channels("default", Vec::<rattler_lock::Channel>::new());
+        builder.set_options("default", rattler_lock::SolveOptions::default());
+        builder
+            .add_conda_package("default", "linux", conda_package(url))
+            .unwrap();
+        builder.finish()
+    }
+
+    /// A lock-file platform name that rattler accepts but pixi rejects must be
+    /// preserved in the diff, not crash it. Regression test for the
+    /// `PixiPlatformName::try_from(...).expect(...)` panics.
+    #[test]
+    fn diff_preserves_foreign_platform_name() {
+        assert!(
+            PlatformName::try_from("linux").is_ok(),
+            "precondition: rattler accepts `linux` as a platform name"
+        );
+        assert!(
+            PixiPlatformName::try_from("linux").is_err(),
+            "precondition: pixi rejects `linux` as a reserved platform name"
+        );
+
+        let previous = lock_file_with_foreign_platform("https://example.com/foo-1.0-0.conda");
+        let current = lock_file_with_foreign_platform("https://example.com/foo-2.0-0.conda");
+
+        let diff = LockFileDiff::from_lock_files(&previous, &current);
+
+        let platforms = diff
+            .environment
+            .get("default")
+            .expect("the default environment should appear in the diff");
+        assert!(
+            platforms.contains_key(&PlatformName::try_from("linux").unwrap()),
+            "the foreign `linux` platform should be preserved, got {:?}",
+            platforms.keys().collect::<Vec<_>>()
+        );
+    }
 }
