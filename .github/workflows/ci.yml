@@ -34,13 +34,9 @@ env:
   PYTHONIOENCODING: utf-8 # necessary to make unicode symbols print correctly on Windows
 
   #
-  # Select a profile that is used for building the binary. The profile optimizes for certain use-cases.
-  # For distribution builds we want to reduce the size of the binary as much as possible. Whereas in
-  # regular CI builds we just want the fastest build possible.
-  #
-  # We switch based on the branch that is being built. If it's the main branch or a tag, we use the `dist`.
-  #
-  # Inspiration was taken from this blog: https://arusahni.net/blog/2020/03/optimizing-rust-binary-size.html
+  # The cargo profile used to build the binary artifacts. CI uses the `ci`
+  # profile, which favors fast builds over a small binary. The `dist` profile,
+  # which optimizes for binary size, is used for distribution builds elsewhere.
   #
   CARGO_BUILD_PROFILE: ci
 
@@ -183,7 +179,7 @@ jobs:
     timeout-minutes: 15
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-8
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -197,7 +193,7 @@ jobs:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
       - name: Test pixi
-        run: pixi run test-slow --retries 2
+        run: pixi run test-slow --cargo-profile fast-build --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
@@ -231,7 +227,7 @@ jobs:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
       - name: Test pixi
-        run: pixi run test-slow --retries 2
+        run: pixi run test-slow --cargo-profile fast-build --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
@@ -265,7 +261,7 @@ jobs:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
       - name: Test pixi
-        run: pixi run test-slow --retries 2
+        run: pixi run test-slow --cargo-profile fast-build --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
@@ -303,9 +299,8 @@ jobs:
           key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
-        run: pixi run test-slow --retries 2
+        run: pixi run test-slow --cargo-profile fast-build --retries 2
         env:
-          CARGO_PROFILE_DEV_DEBUG: 0 # Disable debuginfo only on windows because it takes a lot of space
           CARGO_TARGET_DIR: ${{ env.DEV_DRIVE }}/target
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
@@ -317,7 +312,7 @@ jobs:
   build-binary-linux-x86_64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
-    runs-on: namespace-profile-ubuntu-24-04-x86-64-4
+    runs-on: namespace-profile-ubuntu-24-04-x86-64-8
     name: "build binary | linux x86_64"
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
