@@ -490,18 +490,6 @@ pub fn store_credentials_from_requirements(git_requirements: Vec<GitSpec>) {
     }
 }
 
-fn look_up_platform_by_name<'a>(
-    project: &'a Workspace,
-    platform: &'a PixiPlatformName,
-) -> &'a PixiPlatform {
-    project
-        .workspace
-        .value
-        .workspace
-        .platform_by_name(platform)
-        .expect("Internal error: Unknown platform used")
-}
-
 /// Extract any credentials that are defined on the project dependencies
 /// themselves. While we don't store plaintext credentials in the `pixi.lock`,
 /// we do respect credentials that are defined in the `pixi.toml` or
@@ -510,8 +498,14 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
     for env in project.environments() {
         let env_platforms = env.platforms();
         for platform in env_platforms {
-            let platform = look_up_platform_by_name(project, &platform);
-            let dependencies = env.combined_dependencies(Some(platform));
+            // A feature may name a platform absent from `workspace.platforms`;
+            // pass the `Option` through (a miss means no platform overrides).
+            let platform = project
+                .workspace
+                .value
+                .workspace
+                .platform_by_name(&platform);
+            let dependencies = env.combined_dependencies(platform);
             for (_, dep_spec) in dependencies {
                 for spec in dep_spec {
                     if let PixiSpec::Git(spec) = spec {
