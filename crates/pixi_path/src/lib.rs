@@ -401,9 +401,22 @@ impl ToOwned for AbsPath {
 ///
 /// An `AbsPathBuf` always contains an absolute path. This is enforced at
 /// construction time.
-#[derive(Clone, Hash, Eq, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Debug, serde::Serialize)]
 #[serde(transparent)]
 pub struct AbsPathBuf(PathBuf);
+
+impl<'de> serde::Deserialize<'de> for AbsPathBuf {
+    /// Validates the absolute-path invariant on the way in, so a serialized
+    /// relative path is rejected rather than silently producing a malformed
+    /// `AbsPathBuf`.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let path = <PathBuf as serde::Deserialize>::deserialize(deserializer)?;
+        Self::new(path).map_err(serde::de::Error::custom)
+    }
+}
 
 impl AbsPathBuf {
     /// Creates a new `AbsPathBuf` from a path.
@@ -1163,6 +1176,18 @@ mod tests {
     fn test_abs_path_buf_new_with_relative() {
         let result = AbsPathBuf::new("relative/path");
         assert!(matches!(result, Err(PathError::NotAbsolute(_))));
+    }
+
+    #[test]
+    fn test_abs_path_buf_deserialize_validates_absoluteness() {
+        // An absolute path round-trips.
+        let abs = AbsPathBuf::new(get_absolute_path()).unwrap();
+        let json = serde_json::to_string(&abs).unwrap();
+        assert_eq!(serde_json::from_str::<AbsPathBuf>(&json).unwrap(), abs);
+
+        // A relative path is rejected rather than producing a malformed value.
+        let relative = serde_json::to_string(&PathBuf::from("relative/path")).unwrap();
+        assert!(serde_json::from_str::<AbsPathBuf>(&relative).is_err());
     }
 
     #[test]

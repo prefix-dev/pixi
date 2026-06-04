@@ -205,10 +205,9 @@ async fn compute_inner(
     let source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
-        .as_std_path()
         .to_path_buf();
     if let Some(hit) = artifact_cache
-        .lookup(spec.record.name(), &cache_key, &source_dir)
+        .lookup(ctx, spec.record.name(), &cache_key, &source_dir)
         .await
         .map_err(map_cache_err)?
     {
@@ -423,7 +422,6 @@ async fn compute_inner(
             version: output.metadata.version.clone(),
             build: output.metadata.build.clone(),
             subdir: output.metadata.subdir.to_string(),
-            source_dir: source_dir.clone(),
             work_directory,
             channels: spec.channels.clone(),
         })
@@ -435,14 +433,20 @@ async fn compute_inner(
     // can persist it alongside the artifact.
     let record = synthesize_repodata(&built.output_file).await?;
 
+    // Resolve the files matching the build's reported globs through the
+    // compute engine (same deduped walk as `build_backend_metadata`).
+    let input_files =
+        crate::input_globs::collect_input_files(ctx, &built.input_glob_sets, &source_dir)
+            .await
+            .map_err(SourceBuildError::GlobSet)?;
+
     let stored = artifact_cache
         .store(
             spec.record.name(),
             &cache_key,
             &built.output_file,
-            built.input_globs,
-            built.input_files,
-            &source_dir,
+            built.input_glob_sets,
+            input_files,
             record,
         )
         .await
