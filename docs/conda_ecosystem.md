@@ -153,7 +153,7 @@ platforms = [
 ```
 
 See [Declaring virtual packages per platform](workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform)
-for the full inline-table syntax (friendly keys for `cuda`, `libc`,
+for the full inline-table syntax (friendly keys for `cuda`, `glibc`,
 `macos`, …, raw `__name` escape hatch, naming entries to bind them to
 features). Environment-variable overrides like `CONDA_OVERRIDE_CUDA`
 are listed on the

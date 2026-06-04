@@ -324,7 +324,16 @@ impl PixiPlatform {
 
     pub fn virtual_packages(&self) -> Result<VirtualPackages, DetectVirtualPackageError> {
         let overrides = overrides_from_declared(&self.declared_virtual_packages);
-        VirtualPackages::detect_for_platform(self.subdir, &overrides)
+        let mut detected = VirtualPackages::detect_for_platform(self.subdir, &overrides)?;
+        // rattler's libc override slot is glibc-only, so a declared `__musl`/
+        // `__eglibc` comes back labelled `glibc`. Relabel it to the declared
+        // family so the configured libc survives into the detected output.
+        if let Some(libc) = detected.libc.as_mut()
+            && let Some(family) = declared_libc_family(&self.declared_virtual_packages)
+        {
+            libc.family = family;
+        }
+        Ok(detected)
     }
 
     pub fn set_declared_virtual_packages(
@@ -602,6 +611,18 @@ pub(crate) fn merge_subdir_defaults(declared: &mut Vec<GenericVirtualPackage>, s
 /// escape-hatch name like `__future_pkg`) round-trips through TOML but has no
 /// effect at detection -- declaring it neither overrides nor introduces a
 /// detected virtual package.
+/// The libc family a platform declares (`glibc`/`musl`/`eglibc`), if any.
+fn declared_libc_family(declared: &[GenericVirtualPackage]) -> Option<String> {
+    declared
+        .iter()
+        .find_map(|gvp| match gvp.name.as_normalized() {
+            name @ ("__glibc" | "__musl" | "__eglibc") => {
+                Some(name.trim_start_matches('_').to_string())
+            }
+            _ => None,
+        })
+}
+
 fn overrides_from_declared(declared: &[GenericVirtualPackage]) -> VirtualPackageOverrides {
     let mut overrides = VirtualPackageOverrides::default();
     for gvp in declared {
@@ -1184,5 +1205,52 @@ mod tests {
         assert!(declares(&p, "__linux"));
         assert!(declares(&p, "__glibc"));
         assert!(declares(&p, "__archspec"));
+    }
+
+    fn with_defaults(
+        name: &str,
+        subdir: Platform,
+        vps: Vec<GenericVirtualPackage>,
+    ) -> PixiPlatform {
+        PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from(name).expect("valid name"),
+            subdir,
+            vps,
+        )
+        .expect("rich platform with name != subdir")
+    }
+
+    /// A linux platform declaring `__musl` must not get the default `__glibc`
+    /// merged on top: exactly one libc family applies, and rattler models all
+    /// three as the same override slot.
+    #[test]
+    fn declared_musl_suppresses_default_glibc() {
+        let p = with_defaults("alpine", Platform::Linux64, vec![gvp("__musl", "1.2.4")]);
+        assert!(declares(&p, "__musl"));
+        assert!(!declares(&p, "__glibc"));
+    }
+
+    /// Same guard for `__eglibc`.
+    #[test]
+    fn declared_eglibc_suppresses_default_glibc() {
+        let p = with_defaults("embedded", Platform::Linux64, vec![gvp("__eglibc", "2.30")]);
+        assert!(declares(&p, "__eglibc"));
+        assert!(!declares(&p, "__glibc"));
+    }
+
+    /// rattler's libc override slot is glibc-only, so detection re-labels a
+    /// declared `__musl` as `glibc`. `virtual_packages` must restore the
+    /// declared family so the detected output stays `__musl`, not `__glibc`.
+    #[test]
+    fn detected_virtual_packages_preserve_declared_musl() {
+        let p = with_defaults("alpine", Platform::Linux64, vec![gvp("__musl", "1.2.4")]);
+        let names: Vec<String> = p
+            .virtual_packages()
+            .expect("detection should succeed")
+            .into_generic_virtual_packages()
+            .map(|gvp| gvp.name.as_normalized().to_string())
+            .collect();
+        assert!(names.iter().any(|n| n == "__musl"), "got {names:?}");
+        assert!(!names.iter().any(|n| n == "__glibc"), "got {names:?}");
     }
 }

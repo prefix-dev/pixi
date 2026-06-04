@@ -60,7 +60,7 @@ Putting the constraints on the platform makes the data flow obvious:
     ```toml title="After"
     [workspace]
     platforms = [
-      { platform = "linux-64", libc = "2.28" },
+      { platform = "linux-64", glibc = "2.28" },
       { platform = "osx-arm64", macos = "13.0" },
     ]
     ```
@@ -91,7 +91,7 @@ Putting the constraints on the platform makes the data flow obvious:
     gpu = ["gpu"]
     ```
 
-The recognised friendly keys (`cuda`, `archspec`, `libc`, `linux`, `macos`,
+The recognised friendly keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`,
 `windows`) and the raw `__name = "version"` escape hatch are documented under
 [Declaring virtual packages per platform](./multi_platform_configuration.md#declaring-virtual-packages-per-platform).
 

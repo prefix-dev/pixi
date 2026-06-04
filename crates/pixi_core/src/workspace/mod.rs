@@ -249,14 +249,8 @@ fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage
             "__osx" => Osx::detect_with_fallback(&env, || Ok(Some(Osx { version: base })))
                 .ok()
                 .map(|osx| osx.map(|osx| osx.version)),
-            "__glibc" | "__musl" | "__eglibc" => LibC::detect_with_fallback(&env, || {
-                Ok(Some(LibC {
-                    family: "glibc".to_string(),
-                    version: base,
-                }))
-            })
-            .ok()
-            .map(|libc| libc.map(|libc| libc.version)),
+            // The libc family is handled by `apply_glibc_override` below, since
+            // the single glibc env var must not rewrite `__musl`/`__eglibc`.
             _ => None,
         };
         match outcome {
@@ -306,13 +300,45 @@ fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage
             .flatten()
             .map(|linux| linux.version),
     );
-    add_missing(
-        "__glibc",
-        LibC::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|libc| libc.version),
-    );
+
+    apply_glibc_override(packages);
+}
+
+/// Apply `CONDA_OVERRIDE_GLIBC` (rattler's only libc slot) to `packages`. The
+/// glibc env var governs glibc alone: unset leaves libc packages untouched, an
+/// empty value removes `__glibc`, and a concrete version pins
+/// `__glibc=<version>=0` and drops `__musl`/`__eglibc` (one libc family
+/// applies).
+fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>) {
+    // Read the variable rattler would and reuse its empty-vs-version parsing.
+    let Ok(value) = std::env::var(LibC::DEFAULT_ENV_NAME) else {
+        return;
+    };
+    match LibC::parse_version_opt(&value) {
+        // `CONDA_OVERRIDE_GLIBC=""`: drop `__glibc`, leave `__musl`/`__eglibc`.
+        Ok(None) => packages.retain(|p| p.name.as_normalized() != "__glibc"),
+        // `CONDA_OVERRIDE_GLIBC=<version>`: glibc becomes the active libc.
+        Ok(Some(libc)) => {
+            packages.retain(|p| !matches!(p.name.as_normalized(), "__musl" | "__eglibc"));
+            if let Some(glibc) = packages
+                .iter_mut()
+                .find(|p| p.name.as_normalized() == "__glibc")
+            {
+                glibc.version = libc.version;
+                glibc.build_string = "0".to_string();
+            } else {
+                packages.push(GenericVirtualPackage {
+                    name: "__glibc"
+                        .parse()
+                        .expect("static virtual package name is valid"),
+                    version: libc.version,
+                    build_string: "0".to_string(),
+                });
+            }
+        }
+        // Unparsable value: leave the detected packages untouched.
+        Err(_) => {}
+    }
 }
 
 impl Workspace {
@@ -1181,17 +1207,70 @@ mod tests {
     /// override detected ones.
     #[test]
     fn override_adds_undetected_virtual_package() {
-        // Safe under nextest: each test runs in its own process.
-        unsafe { std::env::set_var("CONDA_OVERRIDE_CUDA", "12.0") };
-        let mut packages = Vec::new();
-        apply_environment_variable_overrides(&mut packages);
-        unsafe { std::env::remove_var("CONDA_OVERRIDE_CUDA") };
+        let packages = temp_env::with_var("CONDA_OVERRIDE_CUDA", Some("12.0"), || {
+            let mut packages = Vec::new();
+            apply_environment_variable_overrides(&mut packages);
+            packages
+        });
 
         let cuda = packages
             .iter()
             .find(|p| p.name.as_normalized() == "__cuda")
             .expect("__cuda should be added from the override");
         assert_eq!(cuda.version, Version::from_str("12.0").unwrap());
+    }
+
+    fn libc_package(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: Version::from_str(version).unwrap(),
+            build_string: "0".to_string(),
+        }
+    }
+
+    fn has_package(packages: &[GenericVirtualPackage], name: &str) -> bool {
+        packages.iter().any(|p| p.name.as_normalized() == name)
+    }
+
+    /// An empty `CONDA_OVERRIDE_GLIBC` drops `__glibc` but must leave a
+    /// non-glibc libc family (here `__musl`) untouched -- the glibc slot only
+    /// governs glibc.
+    #[test]
+    fn empty_glibc_override_drops_glibc_but_keeps_musl() {
+        let packages = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some(""), || {
+            let mut packages = vec![
+                libc_package("__glibc", "2.28"),
+                libc_package("__musl", "1.2"),
+            ];
+            apply_environment_variable_overrides(&mut packages);
+            packages
+        });
+
+        assert!(!has_package(&packages, "__glibc"));
+        assert!(has_package(&packages, "__musl"));
+    }
+
+    /// A `CONDA_OVERRIDE_GLIBC` version makes glibc the active libc: it pins
+    /// `__glibc=<version>=0` and displaces any detected `__musl`/`__eglibc`.
+    #[test]
+    fn glibc_version_override_displaces_other_libc_families() {
+        let packages = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some("2.40"), || {
+            let mut packages = vec![
+                libc_package("__musl", "1.2"),
+                libc_package("__eglibc", "2.30"),
+            ];
+            apply_environment_variable_overrides(&mut packages);
+            packages
+        });
+
+        assert!(!has_package(&packages, "__musl"));
+        assert!(!has_package(&packages, "__eglibc"));
+        let glibc = packages
+            .iter()
+            .find(|p| p.name.as_normalized() == "__glibc")
+            .expect("a glibc version override should add __glibc");
+        assert_eq!(glibc.version, Version::from_str("2.40").unwrap());
+        assert_eq!(glibc.build_string, "0");
     }
 
     /// Every legacy `[system-requirements]` shape parses through the

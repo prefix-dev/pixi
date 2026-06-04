@@ -20,7 +20,9 @@ use uv_distribution_filename::WheelFilename;
 
 /// Define accepted virtual packages as a constant set
 /// These packages will be checked against the system virtual packages
-const ACCEPTED_VIRTUAL_PACKAGES: &[&str] = &["__glibc", "__cuda", "__osx", "__win", "__linux"];
+const ACCEPTED_VIRTUAL_PACKAGES: &[&str] = &[
+    "__glibc", "__musl", "__eglibc", "__cuda", "__osx", "__win", "__linux",
+];
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("{msg}")]
@@ -368,9 +370,12 @@ mod test {
     use super::*;
     use insta::assert_snapshot;
     use pixi_test_utils::format_diagnostic;
-    use rattler_conda_types::{ParseStrictness, Platform};
+    use rattler_conda_types::package::DistArchiveIdentifier;
+    use rattler_conda_types::{PackageRecord, ParseStrictness, Platform};
+    use rattler_lock::{CondaBinaryData, PlatformData, PlatformName, UrlOrPath};
     use rattler_virtual_packages::Override;
     use std::path::Path;
+    use url::Url;
 
     #[test]
     fn test_get_minimal_virtual_packages() {
@@ -527,6 +532,67 @@ packages:
             Some(overrides),
         );
         assert!(result.is_err());
+    }
+
+    /// Build a single-package linux-64 lock file whose lone conda package
+    /// carries `depends`, used to drive the required-virtual-package check.
+    fn lock_requiring(depends: &str) -> LockFile {
+        let mut record = PackageRecord::new(
+            PackageName::new_unchecked("needs-libc"),
+            Version::from_str("1.0").unwrap(),
+            "0".to_string(),
+        );
+        record.subdir = "linux-64".to_string();
+        record.depends = vec![depends.to_string()];
+        let package = CondaPackageData::Binary(Box::new(CondaBinaryData {
+            package_record: record,
+            location: UrlOrPath::Url(
+                Url::parse("https://example.com/needs-libc-1.0-0.conda").unwrap(),
+            ),
+            file_name: DistArchiveIdentifier::try_from_filename("needs-libc-1.0-0.conda").unwrap(),
+            channel: None,
+        }));
+        let mut builder = LockFile::builder()
+            .with_platforms(vec![PlatformData {
+                name: PlatformName::try_from("linux-64").unwrap(),
+                subdir: Platform::Linux64,
+                virtual_packages: vec![],
+            }])
+            .unwrap();
+        builder.set_channels("default", Vec::<rattler_lock::Channel>::new());
+        builder.set_options("default", rattler_lock::SolveOptions::default());
+        builder
+            .add_conda_package("default", "linux-64", package)
+            .unwrap();
+        builder.finish()
+    }
+
+    /// `__musl`/`__eglibc` are verified at run-time like `__glibc`, not silently
+    /// skipped. Forcing the libc slot to glibc means the host never reports
+    /// `__musl`, so a musl-requiring environment must fail verification
+    /// regardless of the test machine.
+    #[test]
+    fn musl_requirement_is_verified_not_skipped() {
+        let lock_file = lock_requiring("__musl >=1.2");
+        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let overrides = VirtualPackageOverrides {
+            libc: Some(Override::String("2.28".to_string())),
+            ..VirtualPackageOverrides::default()
+        };
+
+        let result = validate_system_meets_environment_requirements(
+            &lock_file,
+            &platform,
+            &EnvironmentName::default(),
+            Some(overrides),
+        );
+        assert!(
+            matches!(
+                result,
+                Err(MachineValidationError::VirtualPackageNotFound(_))
+            ),
+            "{result:?}"
+        );
     }
 
     #[test]

@@ -132,7 +132,7 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
         kind: VirtualPackageValueKind::Microarch,
     },
     FriendlyVirtualPackage {
-        key: "libc",
+        key: "glibc",
         aliases: &[],
         conda_name: "__glibc",
         kind: VirtualPackageValueKind::Version,
@@ -167,7 +167,7 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 ///
 /// # Inline-table form: a conda subdir plus declared virtual packages.
 /// platforms = [
-///   { platform = "linux-64", cuda = "12.0", libc = "2.28" },
+///   { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
 ///   { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8", archspec = "armv8-a" },
 /// ]
 /// ```
@@ -181,7 +181,7 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 ///   `platform` and the declared virtual packages so the entry still has a
 ///   stable identifier.
 /// * Each remaining key is a virtual-package shortcut: `cuda`, `archspec`,
-///   `libc`, `linux`, `macos` (alias `osx`), `windows`. Their values are conda
+///   `glibc`, `linux`, `macos` (alias `osx`), `windows`. Their values are conda
 ///   version strings (or, for `archspec`, a microarchitecture string). Any key
 ///   starting with `__` is taken as a raw `GenericVirtualPackage` so rattler
 ///   can grow new virtual packages without the TOML layer needing to learn
@@ -517,7 +517,7 @@ fn synthesize_name(
 pub struct InlineVirtualPackage {
     /// The conda virtual package the entry represents.
     pub package: GenericVirtualPackage,
-    /// `key=value` rendering. Friendly keys (`cuda`, `archspec`, `libc`,
+    /// `key=value` rendering. Friendly keys (`cuda`, `archspec`, `glibc`,
     /// `linux`, `macos`, `windows`) are used when the entry fits one;
     /// otherwise the raw `__name=value` form is used.
     pub rendered: String,
@@ -529,7 +529,7 @@ pub struct InlineVirtualPackage {
 /// them.
 ///
 /// Friendly entries use the `FRIENDLY_VIRTUAL_PACKAGES` short keys
-/// (`cuda`, `archspec`, `libc`, ...), in canonical order. Raw entries
+/// (`cuda`, `archspec`, `glibc`, ...), in canonical order. Raw entries
 /// (virtual packages without a friendly slot, or with an off-shape value
 /// the friendly form can't represent) keep their `__name` form. Subdir
 /// defaults are filtered out, mirroring the on-disk shape -- only entries
@@ -824,7 +824,7 @@ mod test {
     #[test]
     fn test_workspace_platform_friendly_virtual_packages_auto_name() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", cuda = "12.0", libc = "2.28" }"#,
+            r#"platform = { platform = "linux-64", cuda = "12.0", glibc = "2.28" }"#,
         )
         .unwrap();
         assert_eq!(parsed.platform.subdir(), Platform::Linux64);
@@ -838,7 +838,7 @@ mod test {
                 "__archspec=0=x86_64".to_string(),
             ]
         );
-        // `libc = "2.28"` matches the linux-64 default and is elided from the
+        // `glibc = "2.28"` matches the linux-64 default and is elided from the
         // synthesised name, leaving only the truly customised `cuda`.
         assert_eq!(parsed.platform.name().as_str(), "linux-64-cuda-12-0");
     }
@@ -864,11 +864,11 @@ mod test {
     #[test]
     fn test_workspace_platform_friendly_virtual_packages_order_independent() {
         let a = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", cuda = "12.0", libc = "2.28" }"#,
+            r#"platform = { platform = "linux-64", cuda = "12.0", glibc = "2.28" }"#,
         )
         .unwrap();
         let b = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", libc = "2.28", cuda = "12.0" }"#,
+            r#"platform = { platform = "linux-64", glibc = "2.28", cuda = "12.0" }"#,
         )
         .unwrap();
         assert_eq!(a.platform.name(), b.platform.name());
@@ -1154,10 +1154,10 @@ mod test {
 
     #[test]
     fn test_roundtrip_friendly_table() {
-        // `libc = "2.28"` is exactly the linux-64 default, so it's elided
+        // `glibc = "2.28"` is exactly the linux-64 default, so it's elided
         // from the serialised shape (the next parse will re-materialise it
         // from defaults). `cuda` has no default and survives the round-trip.
-        let original = r#"platform = { platform = "linux-64", cuda = "12.0", libc = "2.28" }"#;
+        let original = r#"platform = { platform = "linux-64", cuda = "12.0", glibc = "2.28" }"#;
         let parsed = TopLevel::from_toml_str(original).unwrap();
         let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
         assert_eq!(

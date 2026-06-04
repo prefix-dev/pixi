@@ -198,7 +198,7 @@ pixi workspace platform add linux-64 --cuda 12
 pixi add ros-humble-desktop pytorch torchvision opencv
 ```
 
-See [`pixi workspace platform`](reference/cli/pixi/workspace/platform.md) for the full list of friendly virtual-package keys (`cuda`, `libc`, `macos`, …) and for editing or removing entries.
+See [`pixi workspace platform`](reference/cli/pixi/workspace/platform.md) for the full list of friendly virtual-package keys (`cuda`, `glibc`, `macos`, …) and for editing or removing entries.
 
 ---
 

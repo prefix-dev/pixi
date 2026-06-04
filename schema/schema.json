@@ -3209,7 +3209,7 @@
         },
         "platforms": {
           "title": "Platforms",
-          "description": "The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `libc`, `linux`, `macos`/`osx`, `windows`).",
+          "description": "The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`, `windows`).",
           "type": "array",
           "items": {
             "anyOf": [
@@ -3351,8 +3351,8 @@
           "type": "string",
           "minLength": 1
         },
-        "libc": {
-          "title": "Libc",
+        "glibc": {
+          "title": "Glibc",
           "description": "Declare a `__glibc` virtual package at the given version, e.g. `2.28`.",
           "type": "string",
           "minLength": 1

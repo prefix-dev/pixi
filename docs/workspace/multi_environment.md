@@ -37,7 +37,7 @@ As an environment goes beyond just `dependencies` the `feature` fields can be de
 ```toml title="Default features"
 [workspace]
 # A rich entry declares __glibc 2.33 as available on linux-64.
-platforms = [{ platform = "linux-64", libc = "2.33" }]
+platforms = [{ platform = "linux-64", glibc = "2.33" }]
 
 [dependencies] # short for [feature.default.dependencies]
 python = "*"

@@ -115,7 +115,7 @@ class WorkspacePlatform(BaseModel):
     guarantees, identified by a workspace-scoped name."""
 
     # extra="allow" because workspace platforms accept top-level virtual-package
-    # shortcut keys (`cuda`, `archspec`, `libc`, `linux`, `macos`/`osx`,
+    # shortcut keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`,
     # `windows`) and forward-compatible raw `__name` keys whose value is
     # `version` or `version=build_string`. Listing the fixed slots explicitly is
     # enough for documentation; the open shape is preserved here.
@@ -152,7 +152,7 @@ class WorkspacePlatform(BaseModel):
         None,
         description="Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`.",
     )
-    libc: NonEmptyStr | None = Field(
+    glibc: NonEmptyStr | None = Field(
         None,
         description="Declare a `__glibc` virtual package at the given version, e.g. `2.28`.",
     )
@@ -277,7 +277,7 @@ class Workspace(StrictBaseModel):
     )
     platforms: list[Platform | PlatformName | WorkspacePlatform] | None = Field(
         None,
-        description="The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `libc`, `linux`, `macos`/`osx`, `windows`).",
+        description="The platforms that the project supports. Each entry is either a conda subdir, the name of a workspace platform defined elsewhere, or an inline table describing a workspace platform (optional `name`, optional `platform`, plus virtual-package shortcut keys such as `cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`, `windows`).",
     )
     license: NonEmptyStr | None = Field(
         None,

@@ -77,7 +77,7 @@ Each entry can also be an inline table that pins which virtual packages the solv
 [workspace]
 platforms = [
   "osx-arm64",
-  { platform = "linux-64", cuda = "12.0", libc = "2.28" },
+  { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
   { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" },
 ]
 ```

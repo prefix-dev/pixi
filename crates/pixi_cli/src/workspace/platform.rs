@@ -32,7 +32,7 @@ pub struct Args {
 /// in a clap struct so the rules (parsing, validation, conversion to
 /// `GenericVirtualPackage`) live in one place.
 ///
-/// Mirrors the TOML's per-virtual-package keys (`cuda`, `archspec`, `libc`,
+/// Mirrors the TOML's per-virtual-package keys (`cuda`, `archspec`, `glibc`,
 /// `linux`, `macos`, `windows`). Virtual packages without a friendly flag are
 /// declared as trailing `__name[=version[=build_string]]` positionals on the
 /// surrounding `add` / `edit` command, matching the `__name` raw-key escape
@@ -52,7 +52,7 @@ pub struct VirtualPackageArgs {
     /// Declare a `__glibc` virtual package at the given version, e.g. `2.28`.
     /// Only valid on linux subdirs.
     #[clap(long, value_name = "VERSION")]
-    pub libc: Option<String>,
+    pub glibc: Option<String>,
 
     /// Declare a `__linux` virtual package at the given kernel version,
     /// e.g. `5.10`. Only valid on linux subdirs.
@@ -75,7 +75,7 @@ impl VirtualPackageArgs {
     pub fn is_empty(&self) -> bool {
         self.cuda.is_none()
             && self.archspec.is_none()
-            && self.libc.is_none()
+            && self.glibc.is_none()
             && self.linux.is_none()
             && self.macos.is_none()
             && self.windows.is_none()
@@ -83,7 +83,7 @@ impl VirtualPackageArgs {
 
     /// Translate the friendly flags plus any trailing raw `__name=value`
     /// positionals into a vector of [`GenericVirtualPackage`]. `subdir` is
-    /// used to reject nonsensical combinations (e.g. `--libc` on win-64).
+    /// used to reject nonsensical combinations (e.g. `--glibc` on win-64).
     pub fn into_specs(
         self,
         subdir: Platform,
@@ -114,9 +114,9 @@ impl VirtualPackageArgs {
                 value,
             )?;
         }
-        if let Some(value) = self.libc {
-            require_subdir_family(subdir, Platform::is_linux, "--libc", "linux")?;
-            let version = parse_virtual_package_version("--libc", &value)?;
+        if let Some(value) = self.glibc {
+            require_subdir_family(subdir, Platform::is_linux, "--glibc", "linux")?;
+            let version = parse_virtual_package_version("--glibc", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
@@ -493,7 +493,7 @@ async fn execute_edit(
 
     if edit.is_noop() {
         miette::bail!(
-            "nothing to do: pass at least one of --subdir, a virtual-package flag (--cuda, --archspec, --libc, --linux, --macos, --windows), a `__name=value` positional, --remove-virtual-package, or --clear-virtual-packages"
+            "nothing to do: pass at least one of --subdir, a virtual-package flag (--cuda, --archspec, --glibc, --linux, --macos, --windows), a `__name=value` positional, --remove-virtual-package, or --clear-virtual-packages"
         );
     }
 

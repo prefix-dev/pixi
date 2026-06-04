@@ -81,7 +81,7 @@ a glibc minimum.
 [workspace]
 platforms = [
   "osx-arm64",
-  { platform = "linux-64", cuda = "12.0", libc = "2.28" },
+  { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
   { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" },
 ]
 ```
@@ -95,7 +95,7 @@ Each inline-table entry has:
   commands). When omitted, Pixi synthesises a name from `platform` plus the
   declared virtual packages, so two entries that declare the same set in
   different key order share the same identifier.
-- Friendly keys for the common virtual packages: `cuda`, `archspec`, `libc`,
+- Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`,
   `linux`, `macos` (alias `osx`), `windows`. Each maps onto the matching
   `__name` conda virtual package (`cuda` -> `__cuda`, `libc` -> `__glibc`,
   `macos` -> `__osx`, etc.).
@@ -133,7 +133,7 @@ platforms = ["linux-64-cuda-12-0"]  # the synthesised name for the entry above
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) is
 the CLI surface for these entries:
 
-- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--libc 2.28] ...`
+- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--glibc 2.28] ...`
   appends bare subdirs or rich platforms.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __libc]`
   mutates a custom platform's declared virtual packages.

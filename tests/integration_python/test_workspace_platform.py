@@ -150,7 +150,7 @@ def test_add_custom_name_with_subdir(pixi: Path, tmp_pixi_workspace: Path) -> No
     entry = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
     assert entry["platform"] == "linux-64"
     # No virtual-package shortcut keys should leak in when none were requested.
-    for vp_key in ("cuda", "archspec", "libc", "linux", "macos", "windows"):
+    for vp_key in ("cuda", "archspec", "glibc", "linux", "macos", "windows"):
         assert vp_key not in entry
 
 
@@ -171,14 +171,14 @@ def test_add_custom_name_with_cuda(pixi: Path, tmp_pixi_workspace: Path) -> None
     assert entry["cuda"] == "12.0"
 
 
-def test_add_custom_name_with_libc_on_linux(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_add_custom_name_with_glibc_on_linux(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "add",
         "modern-linux=linux-64",
-        "--libc",
+        "--glibc",
         "2.40",
         "--no-install",
     )
@@ -187,23 +187,23 @@ def test_add_custom_name_with_libc_on_linux(pixi: Path, tmp_pixi_workspace: Path
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "modern-linux"
     )
-    # `--libc` shortcut writes the `libc` key (mapped to `__glibc` internally).
+    # `--glibc` shortcut writes the `glibc` key (mapped to `__glibc` internally).
     # Use a non-default value (the linux-64 default `__glibc` is elided).
-    assert entry["libc"] == "2.40"
+    assert entry["glibc"] == "2.40"
 
 
-def test_add_libc_on_windows_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_add_glibc_on_windows_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "add",
         "weird-win=win-64",
-        "--libc",
+        "--glibc",
         "2.28",
         "--no-install",
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="--libc only applies to linux subdirs",
+        stderr_contains="--glibc only applies to linux subdirs",
     )
 
 
@@ -248,7 +248,7 @@ def test_add_family_flag_subdir_restriction(
     family: str,
 ) -> None:
     """Each family flag rejects subdirs outside its family, the same way
-    `--libc` already does for non-linux subdirs."""
+    `--glibc` already does for non-linux subdirs."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
@@ -302,7 +302,7 @@ def test_add_raw_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) 
         if isinstance(p, dict) and p["name"] == "rich-linux"
     )
     assert entry["cuda"] == "12.0"
-    assert entry["libc"] == "2.40"
+    assert entry["glibc"] == "2.40"
 
 
 def test_add_duplicate_virtual_package_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -594,7 +594,7 @@ def test_edit_add_second_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         tmp_pixi_workspace,
         "edit",
         "gpu-linux",
-        "--libc",
+        "--glibc",
         "2.40",
         "--no-install",
     )
@@ -604,7 +604,7 @@ def test_edit_add_second_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
     assert entry["cuda"] == "11.0"
-    assert entry["libc"] == "2.40"
+    assert entry["glibc"] == "2.40"
 
 
 def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -614,7 +614,7 @@ def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         tmp_pixi_workspace,
         "edit",
         "gpu-linux",
-        "--libc",
+        "--glibc",
         "2.40",
         "--no-install",
     )
@@ -632,7 +632,7 @@ def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
         if isinstance(p, dict) and p["name"] == "gpu-linux"
     )
-    assert entry["libc"] == "2.40"
+    assert entry["glibc"] == "2.40"
     assert "cuda" not in entry
 
 
