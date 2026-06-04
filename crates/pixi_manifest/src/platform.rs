@@ -30,11 +30,18 @@ pub enum PixiPlatformNameError {
 /// custom names like `gpu-linux-cuda12-glibc228`.
 const MAX_PLATFORM_NAME_BYTES: usize = 64;
 
-#[derive(
-    Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize, serde::Deserialize,
-)]
+// `Deserialize` is implemented by hand (below) to route through `TryFrom` so
+// the name validation can't be bypassed; the derive would accept any string.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, serde::Serialize)]
 #[serde(transparent)]
 pub struct PixiPlatformName(String);
+
+impl<'de> serde::Deserialize<'de> for PixiPlatformName {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let raw = <String as serde::Deserialize>::deserialize(deserializer)?;
+        PixiPlatformName::try_from(raw.as_str()).map_err(serde::de::Error::custom)
+    }
+}
 
 impl Display for PixiPlatformName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -992,6 +999,22 @@ mod tests {
             matches!(err, PixiPlatformNameError::Empty),
             "expected Empty, got {err:?}",
         );
+    }
+
+    /// Deserialization must enforce the same validation as `try_from`; the
+    /// hand-written impl exists precisely so a derived one can't wave through
+    /// empty, reserved, or malformed names.
+    #[test]
+    fn deserialize_enforces_name_validation() {
+        let ok = serde_json::from_str::<PixiPlatformName>("\"linux-64\"").unwrap();
+        assert_eq!(ok.as_str(), "linux-64");
+
+        for invalid in ["\"\"", "\"linux\"", "\"bad name\"", "\"1linux\""] {
+            assert!(
+                serde_json::from_str::<PixiPlatformName>(invalid).is_err(),
+                "deserializing {invalid} should fail validation",
+            );
+        }
     }
 
     #[test]
