@@ -37,6 +37,30 @@ fn resolve_task_platform(
     )
 }
 
+/// Resolve `platform`, auto-declare it on the default feature when it's a
+/// subdir pixi hasn't seen yet (matching `pixi add --platform`), then add the
+/// task under `feature`. Shared by `add_task`/`alias_task` so their resolution
+/// rules stay in lock-step. Does not save the workspace.
+fn declare_platform_and_add_task(
+    workspace: &mut WorkspaceMut,
+    name: &TaskName,
+    task: &Task,
+    feature: &FeatureName,
+    platform: Option<&PixiPlatformName>,
+) -> miette::Result<()> {
+    let pixi_platform = resolve_task_platform(workspace.workspace(), platform)?;
+    // The auto-declare is idempotent on already-declared entries.
+    if let Some(p) = &pixi_platform {
+        workspace
+            .manifest()
+            .add_platforms(std::slice::from_ref(p).iter(), &FeatureName::DEFAULT)?;
+    }
+    workspace
+        .manifest()
+        .add_task(name.clone(), task.clone(), pixi_platform.as_ref(), feature)?;
+    Ok(())
+}
+
 pub async fn list_tasks(
     workspace: &Workspace,
     environment: Option<EnvironmentName>,
@@ -102,18 +126,7 @@ pub async fn add_task<I: Interface>(
     feature: FeatureName,
     platform: Option<PixiPlatformName>,
 ) -> miette::Result<()> {
-    let pixi_platform = resolve_task_platform(workspace.workspace(), platform.as_ref())?;
-    // Auto-declare the subdir-platform when the user passed a name pixi
-    // hasn't seen yet (matches `pixi add --platform <subdir>`). The
-    // mutation is idempotent on already-declared entries.
-    if let Some(p) = &pixi_platform {
-        workspace
-            .manifest()
-            .add_platforms(std::slice::from_ref(p).iter(), &FeatureName::DEFAULT)?;
-    }
-    workspace
-        .manifest()
-        .add_task(name.clone(), task.clone(), pixi_platform.as_ref(), &feature)?;
+    declare_platform_and_add_task(&mut workspace, &name, &task, &feature, platform.as_ref())?;
     workspace.save().await.into_diagnostic()?;
 
     interface
@@ -134,17 +147,12 @@ pub async fn alias_task<I: Interface>(
     task: Task,
     platform: Option<PixiPlatformName>,
 ) -> miette::Result<()> {
-    let pixi_platform = resolve_task_platform(workspace.workspace(), platform.as_ref())?;
-    if let Some(p) = &pixi_platform {
-        workspace
-            .manifest()
-            .add_platforms(std::slice::from_ref(p).iter(), &FeatureName::DEFAULT)?;
-    }
-    workspace.manifest().add_task(
-        name.clone(),
-        task.clone(),
-        pixi_platform.as_ref(),
+    declare_platform_and_add_task(
+        &mut workspace,
+        &name,
+        &task,
         &FeatureName::DEFAULT,
+        platform.as_ref(),
     )?;
     workspace.save().await.into_diagnostic()?;
 
