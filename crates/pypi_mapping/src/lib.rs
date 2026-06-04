@@ -177,7 +177,7 @@ impl MappingClient {
     /// the resolved on-disk `cache_path` for the conda-pypi mapping cache.
     ///
     /// The caller is responsible for resolving `cache_path` (e.g. through
-    /// [`pixi_config::Config::cache_dir_for`]) so that workspace-level
+    /// `pixi_config::Config::cache_dir_for`) so that workspace-level
     /// `[cache.pypi-mapping]` overrides are respected; this crate stays
     /// agnostic about which config layer wins.
     pub fn builder(client: LazyClient, cache_path: PathBuf) -> MappingClientBuilder {
