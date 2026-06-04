@@ -59,12 +59,15 @@ pub async fn reinstall<I: Interface>(
     let installed_envs: Vec<_> = environments.iter().map(|env| env.name().clone()).collect();
 
     // Message what's installed
-    let detached_envs_message =
-        if let Ok(Some(path)) = workspace.config().detached_environments().path() {
-            format!(" in '{}'", console::style(path.display()).bold())
-        } else {
-            "".to_string()
-        };
+    let detached_envs_message = if let Ok(Some(path)) = workspace
+        .config()
+        .detached_environments()
+        .path(&workspace.config().cache)
+    {
+        format!(" in '{}'", console::style(path.display()).bold())
+    } else {
+        "".to_string()
+    };
 
     let is_cli = interface.is_cli().await;
     let installed_envs_names: Vec<String> = installed_envs

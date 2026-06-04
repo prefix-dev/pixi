@@ -285,7 +285,14 @@ async fn test_purl_are_missing_for_non_conda_forge() {
         channel: Some("dummy-channel".to_owned()),
     };
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(&MappingSource::Prefix, vec![&mut repo_data_record], None)
         .await
@@ -329,7 +336,14 @@ async fn test_purl_are_generated_using_custom_mapping() {
         MappingLocation::Memory(compressed_mapping),
     )]);
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
             &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
@@ -371,7 +385,14 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 
     let packages = vec![&mut repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(&MappingSource::Prefix, packages, None)
         .await
@@ -417,7 +438,14 @@ async fn test_dont_record_not_present_package_as_purl() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
@@ -530,7 +558,14 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mut packages = vec![repo_data_record, boltons_repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
@@ -602,7 +637,14 @@ async fn test_custom_mapping_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
@@ -659,7 +701,14 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
@@ -715,7 +764,14 @@ async fn test_path_channel() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
@@ -793,7 +849,14 @@ async fn test_file_url_as_mapping_location() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
@@ -855,7 +918,14 @@ async fn test_disabled_mapping() {
 
     let mut packages = vec![boltons_repo_data_record];
 
-    let mapping_client = pypi_mapping::MappingClient::builder(blocked_client.into()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        blocked_client.into(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     mapping_client
         .amend_purls(
             project.pypi_name_mapping_source().unwrap(),
@@ -1192,7 +1262,14 @@ async fn test_missing_mapping_file_error_includes_path() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    let mapping_client = pypi_mapping::MappingClient::builder(
+        client.clone(),
+        project
+            .config()
+            .cache_dir_for(pixi_config::CacheKind::PypiMapping)
+            .unwrap(),
+    )
+    .finish();
     let result = mapping_client
         .amend_purls(
             &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
