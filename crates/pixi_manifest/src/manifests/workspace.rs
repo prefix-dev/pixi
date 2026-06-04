@@ -808,8 +808,6 @@ impl WorkspaceManifestMut<'_> {
             .platforms_mut()
             .retain(|p| !platforms.contains(p));
 
-        // TODO: Should features that have their last platform removed get deleted?!
-
         // Update TOML document feature platforms
         self.document
             .get_array_mut("platforms", feature_name)?

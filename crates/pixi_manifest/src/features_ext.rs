@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_spec::{ExcludeNewer, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
@@ -172,9 +172,9 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn platforms(&self) -> HashSet<PixiPlatformName> {
         self.features()
             .map(|feature| {
-                let it: Box<dyn Iterator<Item = &PixiPlatformName>> = match &feature.platforms {
-                    Some(platforms) => Box::new(platforms.iter()),
-                    None => Box::new(
+                let it = match &feature.platforms {
+                    Some(platforms) => Either::Left(platforms.iter()),
+                    None => Either::Right(
                         self.workspace_manifest()
                             .workspace
                             .platforms

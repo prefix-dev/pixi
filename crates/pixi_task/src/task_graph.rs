@@ -239,12 +239,11 @@ impl<'p> TaskGraph<'p> {
         if prefer_executable == PreferExecutable::TaskFirst
             && let Some(name) = args.first()
         {
-            match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs, None)
-            {
+            let task_name = TaskName::from(name.clone());
+            match search_envs.find_task(task_name.clone(), FindTaskSource::CmdArgs, None) {
                 Err(FindTaskError::MissingTask(_)) => {
                     // The name may still be a task elsewhere (another env or
                     // platform); a shell fallback would say "command not found".
-                    let task_name = TaskName::from(name.clone());
                     let environments = environments_defining_task(project, &task_name);
                     if !environments.is_empty() {
                         return Err(TaskGraphError::UnrunnableTask(UnrunnableTaskError {
@@ -853,6 +852,33 @@ mod test {
             assert_eq!(
                 err.environments.iter().map(|e| e.as_str()).collect::<Vec<_>>(),
                 vec!["test"]
+            );
+        });
+    }
+
+    /// The platform axis of the same guard: a task defined only for another
+    /// *platform* must also surface as an `UnrunnableTask` carrying the pinned
+    /// platform, rather than falling through to a shell command.
+    #[test]
+    fn test_task_on_other_platform_reports_pinned_platform() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64"]
+
+        [target.osx-64.tasks]
+        mac-only = "echo mac"
+    "#;
+        let err = TaskGraphTest::new(workspace_str, &["mac-only"])
+            .platform(Platform::Linux64)
+            .expect_error();
+        assert_matches!(err, TaskGraphError::UnrunnableTask(err) => {
+            assert_eq!(err.task_name.as_str(), "mac-only");
+            assert_eq!(err.platform.as_ref().map(|p| p.as_str()), Some("linux-64"));
+            assert_eq!(
+                err.environments.iter().map(|e| e.as_str()).collect::<Vec<_>>(),
+                vec!["default"]
             );
         });
     }

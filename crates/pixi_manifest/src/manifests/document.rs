@@ -712,8 +712,14 @@ impl ManifestDocument {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_feature_name(feature_name);
+        let keys = table_name.as_keys();
+        // Don't materialise the parent table just to remove a child from it: a
+        // missing parent (e.g. `[feature.X]`) means there's nothing to remove.
+        if self.manifest_mut().get_nested_table(&keys).is_err() {
+            return Ok(());
+        }
         self.manifest_mut()
-            .get_or_insert_nested_table(&table_name.as_keys())?
+            .get_or_insert_nested_table(&keys)?
             .remove(consts::SYSTEM_REQUIREMENTS);
         Ok(())
     }

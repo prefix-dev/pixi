@@ -219,9 +219,9 @@ fn parse_virtual_package_version(flag: &str, value: &str) -> miette::Result<Vers
 fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage> {
     let mut parts = spec.split('=');
     let name_str = parts.next().unwrap_or("");
-    if !name_str.starts_with("__") {
+    if name_str.strip_prefix("__").is_none_or(str::is_empty) {
         miette::bail!(
-            "'{spec}' is not a virtual package spec: name must start with '__' (e.g. '__cuda=12.0')"
+            "'{spec}' is not a virtual package spec: name must start with '__' followed by a name (e.g. '__cuda=12.0')"
         );
     }
     let name = PackageName::try_from(name_str)
@@ -611,7 +611,7 @@ fn print_autodetected_host(workspace: &pixi_core::Workspace) {
 }
 
 /// Walk all environments + features in the workspace and collect the names of
-/// those that reference `platform` by name. Used by the `show` output so the
+/// those that reference `platform` by name. Used by the `list` output so the
 /// user can see what would break if they remove the entry.
 fn environments_and_features_using(
     workspace: &pixi_core::Workspace,
@@ -927,4 +927,61 @@ fn autodetected_to_json() -> serde_json::Value {
         "is_current": true,
         "is_autodetected": true,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn into_specs_rejects_glibc_on_windows() {
+        let args = VirtualPackageArgs {
+            glibc: Some("2.28".into()),
+            ..Default::default()
+        };
+        let err = args.into_specs(Platform::Win64, &[]).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("--glibc only applies to linux subdirs"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn into_specs_rejects_macos_on_linux() {
+        let args = VirtualPackageArgs {
+            macos: Some("14.0".into()),
+            ..Default::default()
+        };
+        let err = args.into_specs(Platform::Linux64, &[]).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("--macos only applies to osx subdirs"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn into_specs_accepts_glibc_on_linux() {
+        let args = VirtualPackageArgs {
+            glibc: Some("2.28".into()),
+            ..Default::default()
+        };
+        let specs = args.into_specs(Platform::Linux64, &[]).unwrap();
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].name.as_normalized(), "__glibc");
+        assert_eq!(specs[0].version.to_string(), "2.28");
+    }
+
+    #[test]
+    fn into_specs_rejects_raw_positional_duplicate_of_friendly_flag() {
+        let args = VirtualPackageArgs {
+            cuda: Some("12.0".into()),
+            ..Default::default()
+        };
+        let err = args
+            .into_specs(Platform::Linux64, &["__cuda=11.0".to_string()])
+            .unwrap_err();
+        assert!(err.to_string().contains("more than once"), "{err}");
+    }
 }

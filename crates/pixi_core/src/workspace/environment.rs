@@ -127,6 +127,13 @@ impl<'p> Environment<'p> {
     /// `--platform`. `None` when the environment isn't installed or its
     /// resolved platform is no longer declared.
     pub fn installed_resolved_platform_name(&self) -> Option<PixiPlatformName> {
+        self.installed_resolved_platform()
+            .map(|platform| platform.name().clone())
+    }
+
+    /// The declared platform [`Self::installed_resolved_platform_name`] refers
+    /// to, returned by reference to avoid a second name-based lookup.
+    pub fn installed_resolved_platform(&self) -> Option<&'p PixiPlatform> {
         let (resolved, _) = self.installed_platforms();
         let resolved = resolved?;
         self.workspace_manifest()
@@ -140,7 +147,6 @@ impl<'p> Environment<'p> {
                         resolved.virtual_packages(),
                     )
             })
-            .map(|platform| platform.name().clone())
     }
 
     /// We store a hash of the lock file and all activation env variables in a
@@ -443,8 +449,8 @@ fn virtual_packages_match(a: &[GenericVirtualPackage], b: &[GenericVirtualPackag
     if a.len() != b.len() {
         return false;
     }
-    let mut a = a.to_vec();
-    let mut b = b.to_vec();
+    let mut a: Vec<&GenericVirtualPackage> = a.iter().collect();
+    let mut b: Vec<&GenericVirtualPackage> = b.iter().collect();
     a.sort();
     b.sort();
     a == b
@@ -1434,13 +1440,11 @@ mod tests {
         )
         .unwrap();
         let env = manifest.default_environment();
-        // SAFETY: this test sets PIXI_OVERRIDE_PLATFORM to simulate a Win64
-        // current platform; tests touching this env var must not run in
-        // parallel with each other.
-        unsafe { std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "win-64") };
-        let best = env.best_declared_platform();
-        unsafe { std::env::remove_var(consts::PIXI_OVERRIDE_PLATFORM) };
-        assert_eq!(best.map(|p| p.subdir()), Some(Platform::Win32));
+        // Simulate a win-64 current platform via PIXI_OVERRIDE_PLATFORM.
+        let best = temp_env::with_var(consts::PIXI_OVERRIDE_PLATFORM, Some("win-64"), || {
+            env.best_declared_platform().map(|p| p.subdir())
+        });
+        assert_eq!(best, Some(Platform::Win32));
     }
 
     #[test]

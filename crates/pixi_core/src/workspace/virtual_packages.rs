@@ -68,12 +68,12 @@ fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPack
             // Rattler maps an archspec string through a microarch database
             // lookup; an empty/"0" build-string means "unknown microarch"
             // and `from_name` returns the generic catch-all in that case.
-            let name = if gvp.build_string.is_empty() || gvp.build_string == "0" {
+            if gvp.build_string.is_empty() || gvp.build_string == "0" {
                 return Some(VirtualPackage::Archspec(Archspec::Unknown));
-            } else {
-                gvp.build_string.as_str()
-            };
-            Some(VirtualPackage::Archspec(Archspec::from_name(name)))
+            }
+            Some(VirtualPackage::Archspec(Archspec::from_name(
+                gvp.build_string.as_str(),
+            )))
         }
         _ => None,
     }
@@ -626,7 +626,7 @@ packages:
 
     #[test]
     fn declared_cuda_overrides_default() {
-        let mut pp = pixi_manifest::PixiPlatform::new(
+        let pp = pixi_manifest::PixiPlatform::new(
             pixi_manifest::PixiPlatformName::try_from("gpu").unwrap(),
             Platform::Linux64,
             vec![GenericVirtualPackage {
@@ -646,11 +646,7 @@ packages:
             .expect("__cuda should be present");
         assert_eq!(cuda.to_string(), "12.0");
 
-        // Without declaration, cuda is absent.
-        pp.set_declared_virtual_packages(Vec::new()).ok();
-        // Note: set_declared_virtual_packages errors on subdir-platforms; in
-        // this case the name "gpu" != subdir "linux-64" so it succeeds. A
-        // platform with no declared cuda should not emit a __cuda VP.
+        // A platform with no declared cuda should not emit a __cuda VP.
         let bare = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert!(
             !get_minimal_virtual_packages(&bare)

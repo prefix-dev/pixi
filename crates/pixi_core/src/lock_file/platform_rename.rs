@@ -544,4 +544,58 @@ packages:
         LockFile::from_str_with_base_directory(&rendered, Some(Path::new("/")))
             .expect("rebuilt lockfile should round-trip through the on-disk format");
     }
+
+    /// The host-only axis of the same fix: a package reachable only through a
+    /// source record's `host_packages` must survive the rebuild too, not just
+    /// `build_packages`.
+    #[test]
+    fn rename_keeps_host_only_packages() {
+        let manifest = manifest(
+            r#"
+            [workspace]
+            name = "demo"
+            channels = []
+            platforms = [{ name = "gpu", platform = "linux-64", cuda = "12.0" }]
+            "#,
+        );
+        // `host-tool` is referenced only from the source record's
+        // `host_packages`, not from any environment.
+        let lock_source = r#"version: 7
+platforms:
+- name: gpu
+  subdir: linux-64
+  virtual-packages:
+  - __cuda=12.0
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      gpu:
+      - conda_source: my-package[12345678] @ git+https://github.com/example/my-package.git?tag=v0.1.0#abc123def456abc123def456abc123def456abc1
+packages:
+- conda: https://conda.anaconda.org/conda-forge/linux-64/host-tool-1.0.0-h0.conda
+- conda_source: my-package[12345678] @ git+https://github.com/example/my-package.git?tag=v0.1.0#abc123def456abc123def456abc123def456abc1
+  version: 0.1.0
+  build: h0
+  subdir: linux-64
+  host_packages:
+  - conda: https://conda.anaconda.org/conda-forge/linux-64/host-tool-1.0.0-h0.conda
+"#;
+        let lock = LockFile::from_str_with_base_directory(lock_source, Some(Path::new("/")))
+            .expect("fixture lockfile should parse");
+
+        let shortened = shorten_platform_names(lock, &manifest, Path::new("/"));
+
+        assert!(shortened.platform("p1").is_some(), "rename should apply");
+        let rendered = shortened
+            .render_to_string()
+            .expect("rebuilt lockfile should serialize");
+        assert!(
+            rendered.contains("host-tool-1.0.0-h0.conda"),
+            "host-only package record must survive the rebuild:\n{rendered}"
+        );
+        LockFile::from_str_with_base_directory(&rendered, Some(Path::new("/")))
+            .expect("rebuilt lockfile should round-trip through the on-disk format");
+    }
 }
