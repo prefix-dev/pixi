@@ -86,7 +86,7 @@ Recognised keys on an inline-table entry:
 
 - `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
 - `name`: workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
-- Friendly virtual-package keys: `cuda`, `archspec`, `libc`, `linux`, `macos` (alias `osx`), `windows`. Each maps to the matching `__name` conda virtual package (`cuda` to `__cuda`, `libc` to `__glibc`, `macos` to `__osx`, etc.).
+- Friendly virtual-package keys: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps to the matching `__name` conda virtual package (`cuda` to `__cuda`, `glibc` to `__glibc`, `macos` to `__osx`, etc.).
 - Raw `__name = "version"` entries are accepted as an escape hatch for virtual packages without a friendly key.
 
 Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir using whatever virtual packages Pixi auto-detects on the host.

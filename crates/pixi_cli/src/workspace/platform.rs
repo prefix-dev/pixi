@@ -585,7 +585,6 @@ async fn execute_remove(
         .await
 }
 
-/// Resolve the subdir `list` should treat as "current": the host's real
 /// Pretty-print rattler's host detection as a "diagnostic" header rather
 /// than another `<name>:` row -- the host has no manifest-side identity, so
 /// labelling it `current:` was misleading. The body is the same
@@ -667,8 +666,8 @@ impl HostMachine {
             .workspace_manifest()
             .workspace
             .candidate_subdirs(current);
-        // `VirtualPackageOverrides::from_env()` reads the `CONDA_OVERRIDE_*`
-        // family (`CUDA`, `GLIBC`, `OSX`, `WIN`, `ARCHSPEC`, ...). Calling
+        // `VirtualPackageOverrides::from_env()` applies the `CONDA_OVERRIDE_*`
+        // family, so this detection matches what the workspace rows are tested against.
         let detected =
             VirtualPackages::detect_for_platform(current, &VirtualPackageOverrides::from_env())
                 .map(|d| d.into_generic_virtual_packages().collect::<Vec<_>>())

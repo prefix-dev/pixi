@@ -97,7 +97,7 @@ Each inline-table entry has:
   different key order share the same identifier.
 - Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`,
   `linux`, `macos` (alias `osx`), `windows`. Each maps onto the matching
-  `__name` conda virtual package (`cuda` -> `__cuda`, `libc` -> `__glibc`,
+  `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`,
   `macos` -> `__osx`, etc.).
 - For virtual packages without a friendly key, a raw `__name = "version"`
   entry is also accepted as an escape hatch. Only the virtual packages pixi
@@ -135,7 +135,7 @@ the CLI surface for these entries:
 
 - `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--glibc 2.28] ...`
   appends bare subdirs or rich platforms.
-- `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __libc]`
+- `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]`
   mutates a custom platform's declared virtual packages.
 - `pixi workspace platform list` inspects what is declared.
 - `pixi workspace platform remove <NAME>` drops an entry.

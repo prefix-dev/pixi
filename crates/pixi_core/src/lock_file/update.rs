@@ -707,10 +707,6 @@ impl<'p> LockFileDerivedData<'p> {
         ))
     }
 
-    /// The platform data recorded in the `conda-meta/pixi` marker file for the
-    /// installed prefix: the platform the environment was resolved with, and
-    /// the minimum platform its resolved packages actually require. `None` when
-    /// no declared platform runs on this machine.
     /// The declared platform install targets for `environment`: the explicit
     /// `--platform` override or the best declared platform; when neither
     /// matches this machine, a declared platform whose lock-resolved minimum
@@ -737,6 +733,10 @@ impl<'p> LockFileDerivedData<'p> {
             })
     }
 
+    /// The platform data recorded in the `conda-meta/pixi` marker file for the
+    /// installed prefix: the platform the environment was resolved with, and
+    /// the minimum platform its resolved packages actually require. `None` when
+    /// no declared platform runs on this machine.
     fn installed_platform_data(
         &self,
         environment: &Environment<'p>,
