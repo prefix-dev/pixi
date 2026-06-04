@@ -9,6 +9,7 @@ use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::{PlatformOverrides, PlatformSource};
 use pixi_manifest::{
     FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, PlatformEdit,
+    platform::subdir_default_virtual_packages,
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
@@ -705,8 +706,8 @@ impl HostMachine {
             return false;
         }
         pixi_manifest::toml::inline_virtual_package_specs(
-            subdir,
             platform.declared_virtual_packages(),
+            Some(&subdir_default_virtual_packages(subdir)),
         )
         .iter()
         .all(|spec| self.satisfies(&spec.package))
@@ -789,8 +790,8 @@ fn print_workspace_platform_row(
 
     let mut all_vps_ok = true;
     for spec in pixi_manifest::toml::inline_virtual_package_specs(
-        subdir,
         platform.declared_virtual_packages(),
+        Some(&subdir_default_virtual_packages(subdir)),
     ) {
         let satisfied = machine.satisfies(&spec.package);
         if !satisfied {
@@ -865,47 +866,42 @@ fn format_user_names(names: &[String], unreachable: &HashSet<String>) -> String 
 /// use.
 fn inline_entry_body(subdir: Platform, declared: &[GenericVirtualPackage]) -> String {
     let mut parts = vec![format!("platform={}", subdir.as_str())];
-    parts.extend(
-        pixi_manifest::toml::inline_virtual_package_specs(subdir, declared)
-            .into_iter()
-            .map(|s| s.rendered),
-    );
+    parts.extend(render_friendly(
+        declared,
+        Some(&subdir_default_virtual_packages(subdir)),
+    ));
     parts.join(", ")
 }
 
-/// Same compact form pixi_manifest writes to pixi.toml: bare name when version
-/// and build are zero, `name=version` when only the build is zero, otherwise
-/// the full conda spec. Used by the JSON renderers so machine-readable
-/// output keeps the raw `__name` form for consumers that want to round-trip.
-fn format_virtual_package_short(gvp: &GenericVirtualPackage) -> String {
-    let name = gvp.name.as_normalized();
-    let version_is_zero = gvp.version.to_string() == "0";
-    let build_is_zero = gvp.build_string.is_empty() || gvp.build_string == "0";
-    if version_is_zero && build_is_zero {
-        name.to_string()
-    } else if build_is_zero {
-        format!("{}={}", name, gvp.version)
-    } else {
-        gvp.to_string()
-    }
+/// Render `declared` virtual packages in the friendly `key=value` form used
+/// consistently across `pixi info` and `pixi workspace platform` text and
+/// JSON output. When `baseline` (the subdir defaults) is given, entries
+/// matching it are filtered out.
+fn render_friendly(
+    declared: &[GenericVirtualPackage],
+    baseline: Option<&[GenericVirtualPackage]>,
+) -> Vec<String> {
+    pixi_manifest::toml::inline_virtual_package_specs(declared, baseline)
+        .into_iter()
+        .map(|spec| spec.rendered)
+        .collect()
 }
 
 fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::Value {
     let detected: Vec<String> = match platform.virtual_packages() {
-        Ok(detected) => detected
-            .into_generic_virtual_packages()
-            .map(|gvp| format_virtual_package_short(&gvp))
-            .collect(),
+        Ok(detected) => render_friendly(
+            &detected.into_generic_virtual_packages().collect::<Vec<_>>(),
+            None,
+        ),
         Err(_) => Vec::new(),
     };
     serde_json::json!({
         "name": platform.name().as_str(),
         "subdir": platform.subdir().as_str(),
-        "virtual_packages": platform
-            .declared_virtual_packages()
-            .iter()
-            .map(format_virtual_package_short)
-            .collect::<Vec<_>>(),
+        "virtual_packages": render_friendly(
+            platform.declared_virtual_packages(),
+            Some(&subdir_default_virtual_packages(platform.subdir())),
+        ),
         "detected_virtual_packages": detected,
         "features": users.features,
         "environments": users.environments,
@@ -918,10 +914,7 @@ fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::V
 fn autodetected_to_json() -> serde_json::Value {
     let host = PixiPlatform::auto_detected(Platform::current());
     let detected: Vec<String> = match host.virtual_packages() {
-        Ok(d) => d
-            .into_generic_virtual_packages()
-            .map(|gvp| format_virtual_package_short(&gvp))
-            .collect(),
+        Ok(d) => render_friendly(&d.into_generic_virtual_packages().collect::<Vec<_>>(), None),
         Err(_) => Vec::new(),
     };
     serde_json::json!({

@@ -9,6 +9,8 @@ use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::environment::PlatformData;
 use pixi_global::{BinDir, EnvRoot};
+use pixi_manifest::platform::subdir_default_virtual_packages;
+use pixi_manifest::toml::inline_virtual_package_specs;
 use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasWorkspaceManifest};
 use pixi_progress::await_in_progress;
@@ -56,7 +58,20 @@ pub struct WorkspaceInfo {
 pub struct PlatformInfo {
     name: PixiPlatformName,
     subdir: String,
+    /// Friendly `key=value` form, used for both text and `--json`.
     virtual_packages: Vec<String>,
+}
+
+/// Render `declared` in the friendly `key=value` form, optionally filtering
+/// `baseline` (the subdir defaults).
+fn friendly_virtual_packages(
+    declared: &[GenericVirtualPackage],
+    baseline: Option<&[GenericVirtualPackage]>,
+) -> Vec<String> {
+    inline_virtual_package_specs(declared, baseline)
+        .into_iter()
+        .map(|spec| spec.rendered)
+        .collect()
 }
 
 impl From<&pixi_manifest::PixiPlatform> for PlatformInfo {
@@ -64,11 +79,11 @@ impl From<&pixi_manifest::PixiPlatform> for PlatformInfo {
         Self {
             name: platform.name().clone(),
             subdir: platform.subdir().to_string(),
-            virtual_packages: platform
-                .declared_virtual_packages()
-                .iter()
-                .map(|gvp| gvp.to_string())
-                .collect(),
+            // Declared platform: filter the subdir defaults, like `platform list`.
+            virtual_packages: friendly_virtual_packages(
+                platform.declared_virtual_packages(),
+                Some(&subdir_default_virtual_packages(platform.subdir())),
+            ),
         }
     }
 }
@@ -80,18 +95,16 @@ impl From<&PlatformData> for PlatformInfo {
         Self {
             name: data.subdir().into(),
             subdir: data.subdir().to_string(),
-            virtual_packages: data
-                .virtual_packages()
-                .iter()
-                .map(|gvp| gvp.to_string())
-                .collect(),
+            // Resolved/minimum is a computed set, not a declaration: don't filter,
+            // so a requirement that equals a subdir default still shows.
+            virtual_packages: friendly_virtual_packages(data.virtual_packages(), None),
         }
     }
 }
 
 /// Human-readable representation of a platform entry in the `pixi info`
-/// output: bare name when it carries no declared VPs, otherwise
-/// `<name> (vp1, vp2, ...)`.
+/// output: bare name when it carries no customised VPs, otherwise
+/// `<name> (vp1, vp2, ...)` in friendly form.
 fn format_platform(info: &PlatformInfo) -> String {
     if info.virtual_packages.is_empty() {
         info.name.to_string()

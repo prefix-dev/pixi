@@ -884,7 +884,7 @@ def test_list_json_payload_shape(pixi: Path, tmp_pixi_workspace: Path) -> None:
     assert auto["name"] == "current"
     gpu = next(p for p in payload["platforms"][1:] if p["name"] == "gpu-linux")
     assert gpu["subdir"] == "linux-64"
-    assert "__cuda=11.0" in gpu["virtual_packages"]
+    assert "cuda=11.0" in gpu["virtual_packages"]
     assert "detected_virtual_packages" in gpu
 
 

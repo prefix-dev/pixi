@@ -519,7 +519,10 @@ impl PlatformEdit {
 /// set): `__unix` on unix subdirs, `__linux` + `__glibc` on linux, `__win` on
 /// windows, `__osx` on osx, and `__archspec` wherever rattler knows the
 /// minimum microarchitecture. `__cuda` is never a default -- it's opt-in.
-fn subdir_default_virtual_packages(subdir: Platform) -> Vec<GenericVirtualPackage> {
+///
+/// Exposed so renderers can pass it as the `baseline` to filter the defaults
+/// out of a platform's declared virtual packages.
+pub fn subdir_default_virtual_packages(subdir: Platform) -> Vec<GenericVirtualPackage> {
     fn version_pkg(name: &str, version: Version) -> GenericVirtualPackage {
         GenericVirtualPackage {
             name: PackageName::try_from(name).expect("static virtual-package name"),

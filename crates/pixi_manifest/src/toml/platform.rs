@@ -9,7 +9,7 @@ use toml_span::{
     value::ValueInner,
 };
 
-use crate::{PixiPlatform, PixiPlatformName, platform::is_subdir_default};
+use crate::{PixiPlatform, PixiPlatformName, platform::subdir_default_virtual_packages};
 
 /// This type is used to represent the platform in the manifest file. The
 /// [`Platform`] type from rattler contains more platforms than we actually
@@ -287,7 +287,10 @@ impl Serialize for TomlPixiPlatform {
         let subdir_str = platform.subdir().to_string();
         let declared = platform.declared_virtual_packages();
 
-        let (friendly, raw) = classify_virtual_packages(platform.subdir(), declared);
+        let (friendly, raw) = classify_virtual_packages(
+            declared,
+            Some(&subdir_default_virtual_packages(platform.subdir())),
+        );
         // Subdir platforms (`name == subdir`) carry the subdir defaults, but
         // the defaults are filtered out by `classify_virtual_packages` so
         // `friendly` and `raw` end up empty -- the bare-string shape covers
@@ -535,19 +538,18 @@ pub struct InlineVirtualPackage {
 /// defaults are filtered out, mirroring the on-disk shape -- only entries
 /// the user actually customised appear.
 pub fn inline_virtual_package_specs(
-    subdir: Platform,
     declared: &[GenericVirtualPackage],
+    baseline: Option<&[GenericVirtualPackage]>,
 ) -> Vec<InlineVirtualPackage> {
     let by_name: std::collections::HashMap<&str, &GenericVirtualPackage> = declared
         .iter()
         .map(|gvp| (gvp.name.as_normalized(), gvp))
         .collect();
-    let (friendly, raw) = classify_virtual_packages(subdir, declared);
+    let (friendly, raw) = classify_virtual_packages(declared, baseline);
     let mut out = Vec::with_capacity(friendly.len() + raw.len());
     for (key, value) in friendly {
-        // `classify_virtual_packages` filters defaults and only keeps
-        // entries it could resolve to a friendly slot; the corresponding
-        // `__conda_name` must therefore be in `declared`.
+        // `classify_virtual_packages` only keeps entries it could resolve to a
+        // friendly slot, so the corresponding `__conda_name` is in `declared`.
         let conda_name = FRIENDLY_VIRTUAL_PACKAGES
             .iter()
             .find(|entry| entry.key == key)
@@ -559,7 +561,7 @@ pub fn inline_virtual_package_specs(
         .clone();
         out.push(InlineVirtualPackage {
             package,
-            rendered: format!("{key}={value}"),
+            rendered: render_key_value(key, &value),
         });
     }
     for (conda_name, value) in raw {
@@ -569,10 +571,20 @@ pub fn inline_virtual_package_specs(
         .clone();
         out.push(InlineVirtualPackage {
             package,
-            rendered: format!("{conda_name}={value}"),
+            rendered: render_key_value(&conda_name, &value),
         });
     }
     out
+}
+
+/// Render a classified `key`/`value` pair. A version-0 entry (`value == "0"`)
+/// renders as just the key (`__unix`, `glibc`); otherwise `key=value`.
+fn render_key_value(key: &str, value: &str) -> String {
+    if value == "0" {
+        key.to_string()
+    } else {
+        format!("{key}={value}")
+    }
 }
 
 /// Build the canonical auto-derived name for `(subdir, declared)`.
@@ -587,7 +599,8 @@ pub(crate) fn synthesize_name_string(
     subdir: Platform,
     declared: &[GenericVirtualPackage],
 ) -> String {
-    let (friendly, raw) = classify_virtual_packages(subdir, declared);
+    let (friendly, raw) =
+        classify_virtual_packages(declared, Some(&subdir_default_virtual_packages(subdir)));
     let mut parts: Vec<String> = vec![subdir.as_str().to_string()];
     for (key, value) in friendly {
         parts.push(format!("{key}-{}", sanitize_name_segment(&value)));
@@ -643,12 +656,20 @@ type RawEntry = (String, String);
 /// (`is_subdir_default`) are filtered out so that materialised defaults
 /// don't leak into the on-disk shape or the synthesised platform name.
 fn classify_virtual_packages(
-    subdir: Platform,
     declared: &[GenericVirtualPackage],
+    baseline: Option<&[GenericVirtualPackage]>,
 ) -> (Vec<FriendlyEntry>, Vec<RawEntry>) {
     let customised: Vec<&GenericVirtualPackage> = declared
         .iter()
-        .filter(|gvp| !is_subdir_default(gvp, subdir))
+        .filter(|gvp| {
+            baseline.is_none_or(|base| {
+                !base.iter().any(|d| {
+                    d.name == gvp.name
+                        && d.version == gvp.version
+                        && d.build_string == gvp.build_string
+                })
+            })
+        })
         .collect();
 
     let mut friendly = Vec::new();
@@ -713,7 +734,10 @@ pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit:
     let subdir_str = platform.subdir().to_string();
     let declared = platform.declared_virtual_packages();
 
-    let (friendly, raw) = classify_virtual_packages(platform.subdir(), declared);
+    let (friendly, raw) = classify_virtual_packages(
+        declared,
+        Some(&subdir_default_virtual_packages(platform.subdir())),
+    );
     if name == subdir_str && friendly.is_empty() && raw.is_empty() {
         return toml_edit::Value::from(name);
     }
