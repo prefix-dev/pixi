@@ -490,6 +490,24 @@ async fn resolve_single_dev_dependency(
     Ok(dependencies)
 }
 
+/// Indexes a locked package URL may belong to: the regular `indexes` plus
+/// the URL-based `find-links` entries. Packages from a `find-links` flat
+/// index record the find-links URL as their `index_url` (issue #6265).
+/// Path-based find-links carry no URL and are skipped. Empty for pre-v7
+/// lock files.
+fn collect_locked_indexes(
+    locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
+) -> Vec<&url::Url> {
+    locked_pypi_indexes
+        .map(|i| {
+            i.indexes
+                .iter()
+                .chain(i.find_links.iter().filter_map(|fl| fl.as_url()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 async fn verify_package_platform_satisfiability(
     ctx: &VerifySatisfiabilityContext<'_>,
     platform_setup: &crate::lock_file::platform_setup::PlatformSetup,
@@ -519,10 +537,8 @@ async fn verify_package_platform_satisfiability(
     // Indexes the lock file was resolved against. Authoritative because
     // `verify_pypi_indexes` already confirmed they match the manifest. A
     // locked package URL must be one of these to satisfy a requirement
-    // with no per-package `index`. None for pre-v7 lock files.
-    let locked_indexes: &[url::Url] = locked_pypi_indexes
-        .map(|i| i.indexes.as_slice())
-        .unwrap_or(&[]);
+    // with no per-package `index`. Empty for pre-v7 lock files.
+    let locked_indexes = collect_locked_indexes(locked_pypi_indexes);
 
     // retrieve dependency-overrides
     // map it to (name => requirement) for later matching
@@ -861,7 +877,7 @@ async fn verify_package_platform_satisfiability(
                                     record,
                                     ctx.project_root,
                                     origin,
-                                    locked_indexes,
+                                    &locked_indexes,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -1365,4 +1381,40 @@ pub fn verify_solve_group_satisfiability(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use rattler_lock::{FindLinksUrlOrPath, PypiIndexes};
+    use url::Url;
+
+    use super::collect_locked_indexes;
+
+    /// Pre-v7 lock files don't record indexes; the set is empty.
+    #[test]
+    fn test_collect_locked_indexes_none() {
+        assert!(collect_locked_indexes(None).is_empty());
+    }
+
+    /// Regression for issue #6265: URL-based `find-links` entries must be
+    /// included in the set of acceptable indexes, alongside the regular
+    /// `indexes`. A package resolved from a flat index records the
+    /// find-links URL as its `index_url`, so satisfiability must accept it.
+    #[test]
+    fn test_collect_locked_indexes_includes_find_links() {
+        let pypi_index = Url::parse("https://pypi.org/simple").unwrap();
+        let find_links_url = Url::parse("https://data.pyg.org/whl/torch-2.8.0+cpu.html").unwrap();
+
+        let indexes = PypiIndexes {
+            indexes: vec![pypi_index.clone()],
+            find_links: vec![
+                FindLinksUrlOrPath::Url(find_links_url.clone()),
+                // Path-based find-links carry no URL and must be skipped.
+                FindLinksUrlOrPath::Path("./local-wheels".into()),
+            ],
+        };
+
+        let collected = collect_locked_indexes(Some(&indexes));
+        assert_eq!(collected, vec![&pypi_index, &find_links_url]);
+    }
 }
