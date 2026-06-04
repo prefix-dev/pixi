@@ -289,6 +289,12 @@ rattler_build_yaml_parser = { git = "https://github.com/prefix-dev/rattler-build
 [patch."https://github.com/prefix-dev/rattler-build"]
 #rattler-build = { path = "/var/home/tobias/src/rattler-build" }
 
+# Strip debug info from dependencies: faster links, much smaller `target/`,
+# while keeping full debuggability for our own crates.
+# See https://matklad.github.io/2021/09/04/fast-rust-builds.html
+[profile.dev.package."*"]
+debug = false
+
 [profile.ci]
 codegen-units = 16
 inherits = "release"
