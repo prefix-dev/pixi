@@ -169,12 +169,7 @@ fn get_macos_platform_tags(
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let osx_version = declared_version(platform.declared_virtual_packages(), "__osx")
         .unwrap_or_else(|| default_mac_os_version(platform.subdir()));
-    let (major, minor) = osx_version
-        .as_major_minor()
-        .or_else(|| Some((major_only(&osx_version)?, 0)))
-        .ok_or_else(|| {
-            PyPITagError::FailedToGetMajorMinorVersion("macos".to_string(), osx_version.to_string())
-        })?;
+    let (major, minor) = macos_major_minor(&osx_version, "macos")?;
 
     let arch = get_arch_tags(platform)?;
 
@@ -192,6 +187,18 @@ fn get_macos_platform_tags(
 /// `macos = "15"`), so the caller can default the minor to 0.
 fn major_only(version: &Version) -> Option<u64> {
     version.segments().next()?.components().next()?.as_number()
+}
+
+/// Extract a macOS `(major, minor)` from `version`, accepting a single-segment
+/// value (`15` -> `(15, 0)`) via [`major_only`]. `label` names the source in
+/// the error. Shared so every macOS tag path applies the same fallback.
+fn macos_major_minor(version: &Version, label: &str) -> Result<(u64, u64), PyPITagError> {
+    version
+        .as_major_minor()
+        .or_else(|| Some((major_only(version)?, 0)))
+        .ok_or_else(|| {
+            PyPITagError::FailedToGetMajorMinorVersion(label.to_string(), version.to_string())
+        })
 }
 
 /// Get the arch tag for the specified platform
@@ -345,13 +352,7 @@ fn get_pypi_platform_from_virtual_packages(
                 platform.to_string(),
             ))?;
 
-        let (major, minor) =
-            osx.version
-                .as_major_minor()
-                .ok_or(PyPITagError::FailedToGetMajorMinorVersion(
-                    platform.to_string(),
-                    osx.version.to_string(),
-                ))?;
+        let (major, minor) = macos_major_minor(&osx.version, &platform.to_string())?;
         // Protect casting with an error to avoid hard to find bugs
         let major = u64::try_into(major).map_err(|_| PyPITagError::VersionCastError(major))?;
         let minor = u64::try_into(minor).map_err(|_| PyPITagError::VersionCastError(minor))?;
@@ -423,6 +424,26 @@ mod tests {
             }
         );
         assert_eq!(platform.arch(), UvArch::X86_64);
+    }
+
+    /// A single-segment `__osx` version (`15`) must resolve through the
+    /// virtual-package path too, not just `get_macos_platform_tags`.
+    #[test]
+    fn test_get_platform_from_vpkgs_osx_major_only() {
+        let vpkgs = vec![VirtualPackage::Osx(Osx {
+            version: "15".parse().unwrap(),
+        })];
+        let res = get_pypi_platform_from_virtual_packages(
+            &vpkgs,
+            &PixiPlatform::from_subdir(Platform::OsxArm64),
+        );
+        assert_eq!(
+            res.unwrap().os(),
+            &uv_platform_tags::Os::Macos {
+                major: 15,
+                minor: 0
+            }
+        );
     }
 
     #[test]
