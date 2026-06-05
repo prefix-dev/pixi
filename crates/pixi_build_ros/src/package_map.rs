@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use miette::Diagnostic;
 use rattler_build_recipe::stage0::{ConditionalList, Item, SerializableMatchSpec, Value};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{MatchSpec, ParseStrictness, Platform};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -64,6 +64,21 @@ pub enum PackageMapError {
 
     #[error("cannot merge version specifiers: '{spec1}' or '{spec2}' contains spaces")]
     MergeSpecsWithSpaces { spec1: String, spec2: String },
+
+    #[error("rosdep '{dep_name}' resolved to an invalid conda package spec '{spec}'")]
+    #[diagnostic(help(
+        "'{dep_name}' could not be mapped to a valid conda package. If it is not in the \
+         package map it is assumed to be a ROS package and rewritten to `ros-<distro>-...`, \
+         which fails when the name contains characters that are illegal in conda package \
+         names (such as `+`). Add or fix a mapping for '{dep_name}' in robostack.yaml or via \
+         the `extra-package-mappings` configuration."
+    ))]
+    InvalidCondaPackageSpec {
+        dep_name: String,
+        spec: String,
+        #[source]
+        source: rattler_conda_types::ParseMatchSpecError,
+    },
 }
 
 /// A single entry in a package mapping file.
@@ -121,7 +136,39 @@ pub fn load_package_map_data(sources: &[PackageMappingSource]) -> HashMap<String
 }
 
 /// Convert a ROS dependency to conda package spec(s).
+///
+/// Every resolved spec is validated as a strict conda [`MatchSpec`] before it
+/// is returned. An unmapped rosdep is optimistically rewritten to
+/// `ros-<distro>-<name>`, and names carrying characters that are illegal in
+/// conda package names (e.g. `crypto++`) would otherwise surface as an opaque
+/// MatchSpec parse panic during `pixi lock`; here they fail with an actionable
+/// [`PackageMapError::InvalidCondaPackageSpec`] instead.
 pub fn rosdep_to_conda_package_spec(
+    dep: &Dependency,
+    distro: &Distro,
+    host_platform: Platform,
+    package_map_data: &HashMap<String, PackageMapEntry>,
+) -> Result<Vec<String>, PackageMapError> {
+    let specs = resolve_rosdep_to_conda_package_spec(dep, distro, host_platform, package_map_data)?;
+
+    for spec in &specs {
+        if spec.trim().is_empty() {
+            continue;
+        }
+        MatchSpec::from_str(spec, ParseStrictness::Strict).map_err(|source| {
+            PackageMapError::InvalidCondaPackageSpec {
+                dep_name: dep.name.clone(),
+                spec: spec.clone(),
+                source,
+            }
+        })?;
+    }
+
+    Ok(specs)
+}
+
+/// Resolve a ROS dependency to conda package spec(s) without validation.
+fn resolve_rosdep_to_conda_package_spec(
     dep: &Dependency,
     distro: &Distro,
     host_platform: Platform,
@@ -991,5 +1038,55 @@ mod tests {
             rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &HashMap::new())
                 .unwrap();
         assert_eq!(result, vec!["ros-jazzy-customlib >1.0.0"]);
+    }
+
+    #[test]
+    fn test_lttng_resolves_per_platform() {
+        // `liblttng-ust-dev` used to map to a `${{ "lttng-ust" if linux }}`
+        // selector that leaked into the recipe as a literal `${{` and panicked
+        // downstream (prefix-dev/pixi#6288). It must now resolve to the concrete
+        // `lttng-ust` on linux and to nothing elsewhere.
+        let distro = jazzy_distro();
+        let package_map = robostack_data();
+        let dep = Dependency::from("liblttng-ust-dev");
+
+        let linux =
+            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
+        assert_eq!(linux, vec!["lttng-ust"]);
+
+        let osx =
+            rosdep_to_conda_package_spec(&dep, &distro, Platform::Osx64, &package_map).unwrap();
+        assert_eq!(osx, Vec::<String>::new());
+
+        let win =
+            rosdep_to_conda_package_spec(&dep, &distro, Platform::Win64, &package_map).unwrap();
+        assert_eq!(win, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_crypto_pp_maps_to_cryptopp() {
+        let distro = jazzy_distro();
+        let package_map = robostack_data();
+        let dep = Dependency::from("crypto++");
+
+        let result =
+            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
+        assert_eq!(result, vec!["cryptopp"]);
+    }
+
+    #[test]
+    fn test_unmapped_invalid_conda_name_errors() {
+        // An unmapped rosdep whose synthesized `ros-<distro>-<name>` is not a
+        // valid conda package name must fail with a clear, actionable error
+        // rather than panicking later during MatchSpec parsing.
+        let distro = jazzy_distro();
+        let dep = Dependency::from("crypto++");
+
+        let result =
+            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &HashMap::new());
+        assert!(matches!(
+            result,
+            Err(PackageMapError::InvalidCondaPackageSpec { .. })
+        ));
     }
 }
