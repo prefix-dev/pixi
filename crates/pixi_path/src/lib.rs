@@ -52,6 +52,7 @@ use std::path::{Component, Path, PathBuf};
 use thiserror::Error;
 
 pub mod normalize;
+pub use normalize::normalize_std;
 
 /// Error type for path validation failures.
 #[derive(Debug, Error)]
@@ -187,7 +188,7 @@ impl AbsPath {
     /// # #[cfg(unix)]
     /// let path = AbsPath::new(Path::new("/usr/bin/../lib")).unwrap();
     /// # #[cfg(unix)]
-    /// assert_eq!(path.normalized().unwrap().as_path(), Path::new("/usr/lib"));
+    /// assert_eq!(path.normalized().unwrap().as_std_path(), Path::new("/usr/lib"));
     /// ```
     pub fn normalized(&self) -> Result<AbsPathBuf, NormalizeError> {
         let mut components = self.0.components().peekable();

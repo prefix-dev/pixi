@@ -1174,17 +1174,21 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         // Verify if pypi wheels will override existing conda packages and warn if they
         // are
-        if let Ok(Some(clobber_packages)) =
-            pypi_conda_clobber.clobber_on_installation(all_dists.to_vec(), &setup.venv)
-        {
-            let packages_names = clobber_packages.iter().join(", ");
-
-            tracing::warn!("These conda-packages will be overridden by pypi: \n\t{packages_names}");
+        if let Ok(Some(clobber_report)) = pypi_conda_clobber.clobber_on_installation(
+            all_dists.to_vec(),
+            &setup.venv,
+            self.config.prefix.root(),
+        ) {
+            tracing::warn!("{clobber_report}");
 
             // because we are removing conda packages
             // we filter the ones we already warn
             if !installer_mismatch.is_empty() {
-                installer_mismatch.retain(|name| !packages_names.contains(name));
+                installer_mismatch.retain(|name| {
+                    !clobber_report
+                        .keys()
+                        .any(|(_, conda_package)| conda_package == name)
+                });
             }
         }
 
