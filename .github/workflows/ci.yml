@@ -141,6 +141,33 @@ jobs:
       - name: Test cargo vendor
         run: cargo vendor --locked
 
+  # Ensures the `workspace-hack` crate stays in sync. It unifies the features of
+  # all third-party dependencies across the workspace so that `cargo test -p`,
+  # `cargo build` and `cargo nextest run` resolve the same feature set and stop
+  # rebuilding shared dependencies. If this fails, run `pixi run hakari-generate`
+  # (or `cargo hakari generate && cargo hakari manage-deps`) locally and commit.
+  cargo-hakari:
+    name: "cargo hakari"
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: ". -> target/pixi"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install cargo-hakari
+        uses: taiki-e/install-action@8f531eaecd1898bc3da7d104ad91bee98d1b97bd # v2.79.9
+        with:
+          tool: cargo-hakari
+      - name: Check workspace-hack Cargo.toml is up-to-date
+        run: cargo hakari generate --diff
+      - name: Check all workspace crates depend on workspace-hack
+        run: cargo hakari manage-deps --dry-run
+
   check-cli-docs:
     name: check cli docs
     runs-on: ubuntu-latest

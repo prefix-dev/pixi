@@ -304,6 +304,13 @@ build-debug = { cmd = "cargo build --workspace --bin pixi", description = "Build
 build-release = { cmd = "cargo build --workspace --bin pixi --release", description = "Build pixi in release mode" }
 build-workspace-debug = { cmd = "cargo build --workspace", description = "Build all workspace members in debug mode" }
 build-workspace-release = { cmd = "cargo build --workspace --release", description = "Build all workspace members in release mode" }
+# hakari-* keep the `workspace-hack` crate in sync. It unifies the features of
+# all third-party dependencies across the workspace so that `cargo test -p`,
+# `cargo build` and `cargo nextest run` resolve the same feature set and stop
+# rebuilding shared dependencies. Requires `cargo install cargo-hakari` (the
+# tool is not available on conda-forge).
+hakari-check = { cmd = "cargo hakari generate --diff && cargo hakari manage-deps --dry-run", description = "Check that the workspace-hack crate is up-to-date" }
+hakari-generate = { cmd = "cargo hakari generate && cargo hakari manage-deps", description = "Regenerate the workspace-hack crate and wire it into all members" }
 install = { cmd = "cargo install --path crates/pixi --locked", description = "Install pixi itself locally using cargo" }
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",

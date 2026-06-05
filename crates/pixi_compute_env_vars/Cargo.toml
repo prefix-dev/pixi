@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 pixi_compute_engine = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 tokio-test = { workspace = true }

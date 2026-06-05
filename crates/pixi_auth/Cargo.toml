@@ -18,3 +18,4 @@ rustls = ["rattler_networking/rustls"]
 pixi_config = { workspace = true }
 rattler_networking = { workspace = true, features = ["system-integration"] }
 tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

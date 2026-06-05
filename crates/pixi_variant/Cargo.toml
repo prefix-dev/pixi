@@ -13,5 +13,6 @@ version = "0.1.0"
 pixi_build_types = { workspace = true, optional = true }
 rattler_lock = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

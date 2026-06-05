@@ -23,6 +23,7 @@ url = { workspace = true }
 pixi_git = { workspace = true }
 pixi_spec = { workspace = true, features = ["rattler_lock"] }
 pixi_toml = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml"] }

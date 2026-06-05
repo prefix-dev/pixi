@@ -16,3 +16,4 @@ serde = { workspace = true, features = ["derive"] }
 rattler_conda_types = { workspace = true }
 
 pixi_spec = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

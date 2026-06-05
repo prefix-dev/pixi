@@ -107,6 +107,7 @@ uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 uv-workspace = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 xxhash-rust = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]

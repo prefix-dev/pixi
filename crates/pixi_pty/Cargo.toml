@@ -9,6 +9,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

@@ -50,6 +50,9 @@ pre-commit:
       glob: "*.toml"
       exclude:
         - schema/examples/invalid/*.toml
+        # Generated and formatted by `cargo hakari`; taplo's reorder_keys would
+        # fight the layout and break the `cargo hakari generate --diff` CI check.
+        - crates/workspace-hack/Cargo.toml
       run: pixi {run} -e default toml-fmt {staged_files}
     - name: dprint
       glob: "*.{yaml,yml}"

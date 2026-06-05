@@ -35,6 +35,7 @@ url = { workspace = true }
 pixi_path = { workspace = true }
 pixi_toml = { workspace = true }
 toml-span = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "filters"] }

@@ -26,3 +26,4 @@ uv-pep508 = { workspace = true }
 uv-preview = { workspace = true }
 uv-types = { workspace = true }
 uv-workspace = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

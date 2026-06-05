@@ -58,6 +58,7 @@ tracing-subscriber = { workspace = true }
 url = { workspace = true }
 uv-configuration = { workspace = true }
 webpki-root-certs = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]

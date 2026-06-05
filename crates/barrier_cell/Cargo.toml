@@ -13,3 +13,4 @@ version = "0.1.0"
 parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

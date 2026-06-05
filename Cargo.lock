@@ -1228,6 +1228,7 @@ dependencies = [
  "parking_lot 0.12.5",
  "thiserror 2.0.18",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2876,6 +2877,7 @@ name = "fancy_display"
 version = "0.1.0"
 dependencies = [
  "console",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6006,6 +6008,7 @@ dependencies = [
  "uv-installer",
  "uv-normalize",
  "uv-python",
+ "workspace-hack",
  "zip",
 ]
 
@@ -6033,6 +6036,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6056,6 +6060,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6086,6 +6091,7 @@ dependencies = [
  "toml 1.1.2+spec-1.1.0",
  "tracing",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6110,6 +6116,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6134,6 +6141,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6166,6 +6174,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6191,6 +6200,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6243,6 +6253,7 @@ dependencies = [
  "uv-normalize",
  "uv-pep508",
  "uv-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6252,6 +6263,7 @@ dependencies = [
  "pixi_config",
  "rattler_networking",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6292,6 +6304,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6310,6 +6323,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6335,6 +6349,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6355,6 +6370,7 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.18",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6369,6 +6385,7 @@ dependencies = [
  "pixi_spec",
  "rattler_conda_types",
  "rstest",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6385,6 +6402,7 @@ dependencies = [
  "serde_with",
  "thiserror 2.0.18",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6478,6 +6496,7 @@ dependencies = [
  "uv-pypi-types",
  "uv-requirements-txt",
  "which",
+ "workspace-hack",
  "zip",
 ]
 
@@ -6548,6 +6567,7 @@ dependencies = [
  "typed-path",
  "url",
  "which",
+ "workspace-hack",
  "xxhash-rust",
 ]
 
@@ -6559,6 +6579,7 @@ dependencies = [
  "pixi_compute_env_vars",
  "pixi_path",
  "tokio-test",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6575,6 +6596,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-test",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6583,6 +6605,7 @@ version = "0.1.0"
 dependencies = [
  "pixi_compute_engine",
  "tokio-test",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6591,6 +6614,7 @@ version = "0.1.0"
 dependencies = [
  "pixi_compute_engine",
  "rattler_networking",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6602,6 +6626,7 @@ dependencies = [
  "pixi_compute_engine",
  "serde",
  "tokio",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6633,6 +6658,7 @@ dependencies = [
  "tokio",
  "typed-path",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6661,6 +6687,7 @@ dependencies = [
  "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6671,6 +6698,7 @@ dependencies = [
  "rattler_cache",
  "rattler_conda_types",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6776,6 +6804,7 @@ dependencies = [
  "uv-resolver",
  "uv-types",
  "uv-workspace",
+ "workspace-hack",
  "xxhash-rust",
 ]
 
@@ -6784,6 +6813,7 @@ name = "pixi_default_versions"
 version = "0.1.0"
 dependencies = [
  "rattler_conda_types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6801,6 +6831,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tabwriter",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6812,6 +6843,7 @@ dependencies = [
  "itertools 0.14.0",
  "pixi_cli",
  "rattler_conda_types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6834,6 +6866,7 @@ dependencies = [
  "url",
  "urlencoding",
  "which",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6854,6 +6887,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6907,6 +6941,7 @@ dependencies = [
  "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
  "url",
+ "workspace-hack",
  "zstd",
 ]
 
@@ -6970,6 +7005,7 @@ dependencies = [
  "uv-resolver",
  "uv-types",
  "uv-workspace",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7017,6 +7053,7 @@ dependencies = [
  "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7028,6 +7065,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "typed-path",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7036,6 +7074,7 @@ version = "0.1.0"
 dependencies = [
  "indicatif",
  "parking_lot 0.12.5",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7045,6 +7084,7 @@ dependencies = [
  "libc",
  "nix 0.29.0",
  "signal-hook",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7067,6 +7107,7 @@ dependencies = [
  "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7074,6 +7115,7 @@ name = "pixi_python_status"
 version = "0.1.0"
 dependencies = [
  "rattler",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7098,6 +7140,7 @@ dependencies = [
  "tracing",
  "typed-path",
  "url",
+ "workspace-hack",
  "xxhash-rust",
 ]
 
@@ -7131,6 +7174,7 @@ dependencies = [
  "uv-normalize",
  "uv-redacted",
  "uv-resolver",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7164,6 +7208,7 @@ dependencies = [
  "tracing",
  "typed-path",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7175,6 +7220,7 @@ dependencies = [
  "pixi_spec",
  "rattler_conda_types",
  "serde",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7186,6 +7232,7 @@ dependencies = [
  "rattler_digest",
  "serde_json",
  "url",
+ "workspace-hack",
  "xxhash-rust",
 ]
 
@@ -7217,6 +7264,7 @@ dependencies = [
  "tokio",
  "tracing",
  "uv-configuration",
+ "workspace-hack",
  "xxhash-rust",
 ]
 
@@ -7236,6 +7284,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7251,6 +7300,7 @@ dependencies = [
  "strsim",
  "strum",
  "toml-span",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7279,6 +7329,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "workspace-hack",
  "zip",
  "zstd",
 ]
@@ -7323,6 +7374,7 @@ dependencies = [
  "url",
  "uv-configuration",
  "webpki-root-certs 1.0.7",
+ "workspace-hack",
  "xxhash-rust",
 ]
 
@@ -7347,6 +7399,7 @@ dependencies = [
  "uv-preview",
  "uv-types",
  "uv-workspace",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7383,6 +7436,7 @@ dependencies = [
  "uv-redacted",
  "uv-resolver",
  "uv-types",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7392,6 +7446,7 @@ dependencies = [
  "pixi_build_types",
  "rattler_lock",
  "serde",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7717,6 +7772,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -7733,6 +7789,7 @@ dependencies = [
  "uv-distribution-filename",
  "uv-pep508",
  "uv-platform-tags",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -13990,6 +14047,196 @@ dependencies = [
 ]
 
 [[package]]
+name = "workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "aho-corasick",
+ "ambient-id",
+ "arrayvec",
+ "astral-reqwest-middleware",
+ "async-compression",
+ "aws-lc-rs",
+ "axum",
+ "axum-core",
+ "bit-set",
+ "bit-vec",
+ "bitflags 2.11.1",
+ "bstr",
+ "bytecheck",
+ "bytes",
+ "chrono",
+ "clap",
+ "clap_builder",
+ "comfy-table",
+ "console",
+ "const-oid 0.9.6",
+ "core-foundation 0.10.1",
+ "core-foundation-sys",
+ "crypto-common 0.1.7",
+ "der 0.7.10",
+ "deranged",
+ "derive_more",
+ "derive_more-impl",
+ "digest 0.10.7",
+ "digest 0.11.3",
+ "displaydoc",
+ "either",
+ "elliptic-curve 0.13.8",
+ "errno",
+ "event-listener",
+ "flate2",
+ "form_urlencoded",
+ "fs-err",
+ "futures",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-io",
+ "futures-lite",
+ "futures-sink",
+ "futures-task",
+ "futures-timer",
+ "futures-util",
+ "generic-array",
+ "getrandom 0.2.17",
+ "getrandom 0.3.4",
+ "getrandom 0.4.2",
+ "goblin",
+ "hashbrown 0.17.1",
+ "hex",
+ "hyper 1.9.0",
+ "hyper-rustls",
+ "hyper-util",
+ "indexmap 2.14.0",
+ "indicatif",
+ "insta",
+ "libc",
+ "linux-raw-sys 0.12.1",
+ "log",
+ "lzma-rust2",
+ "lzma-sys",
+ "memchr",
+ "miette 7.6.0",
+ "minijinja",
+ "nix 0.29.0",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "once_cell",
+ "opendal",
+ "opendal-core",
+ "ordermap",
+ "percent-encoding",
+ "pkcs8 0.10.2",
+ "ppv-lite86",
+ "proc-macro2",
+ "quick-xml 0.39.4",
+ "quote",
+ "rand 0.8.6",
+ "rand 0.9.4",
+ "rand_chacha 0.9.0",
+ "rattler",
+ "rattler_build_core",
+ "rattler_build_networking",
+ "rattler_build_source_cache",
+ "rattler_cache",
+ "rattler_conda_types",
+ "rattler_config",
+ "rattler_digest",
+ "rattler_index",
+ "rattler_networking",
+ "rattler_package_streaming",
+ "rattler_redaction",
+ "rattler_repodata_gateway",
+ "rattler_s3",
+ "rattler_shell",
+ "rattler_solve",
+ "rattler_upload",
+ "regex-automata 0.4.14",
+ "regex-syntax 0.8.10",
+ "reqwest",
+ "rsa",
+ "rustix 1.1.4",
+ "rustls",
+ "rustls-webpki 0.103.13",
+ "schemars 1.2.1",
+ "scroll",
+ "security-framework-sys",
+ "serde",
+ "serde_core",
+ "serde_json",
+ "serde_spanned",
+ "serde_with",
+ "sha2 0.10.9",
+ "sha2 0.11.0",
+ "sigstore-bundle 0.6.6",
+ "sigstore-fulcio",
+ "sigstore-oidc",
+ "sigstore-rekor 0.6.6",
+ "sigstore-sign",
+ "sigstore-tsa 0.6.6",
+ "simd-adler32",
+ "slab",
+ "smallvec",
+ "stable_deref_trait",
+ "strum",
+ "subtle",
+ "syn",
+ "tabwriter",
+ "textwrap",
+ "time",
+ "tokio",
+ "tokio-rustls",
+ "tokio-stream",
+ "tokio-util 0.7.18",
+ "toml 0.9.12+spec-1.1.0",
+ "toml 1.1.2+spec-1.1.0",
+ "toml-span",
+ "toml_datetime 0.7.5+spec-1.1.0",
+ "toml_datetime 1.1.1+spec-1.1.0",
+ "toml_edit 0.25.11+spec-1.1.0",
+ "toml_parser",
+ "toml_writer",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-core",
+ "tracing-subscriber",
+ "typenum",
+ "url",
+ "uuid",
+ "uv-cache-info",
+ "uv-configuration",
+ "uv-distribution-types",
+ "uv-fs",
+ "uv-install-wheel",
+ "uv-normalize",
+ "uv-pypi-types",
+ "uv-python",
+ "uv-redacted",
+ "uv-requirements-txt",
+ "uv-resolver",
+ "uv-small-str",
+ "uv-torch",
+ "uv-workspace",
+ "which",
+ "winapi",
+ "windows 0.61.3",
+ "windows 0.62.2",
+ "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
+ "winnow 0.7.15",
+ "winnow 1.0.3",
+ "xz2",
+ "zeroize",
+ "zstd",
+ "zstd-safe",
+ "zstd-sys",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14088,6 +14335,7 @@ dependencies = [
  "schemars 1.2.1",
  "serde_json",
  "similar-asserts",
+ "workspace-hack",
 ]
 
 [[package]]

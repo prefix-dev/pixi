@@ -29,6 +29,7 @@ pixi_build_backend = { workspace = true }
 pixi_build_types = { workspace = true }
 
 rattler_build_recipe = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }

@@ -46,6 +46,7 @@ pixi_build_types = { workspace = true }
 jsonrpc-core = { workspace = true }
 jsonrpc-http-server = { workspace = true }
 jsonrpc-stdio-server = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 
 [dev-dependencies]

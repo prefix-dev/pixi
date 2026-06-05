@@ -30,6 +30,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]

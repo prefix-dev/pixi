@@ -30,6 +30,7 @@ pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_url = { workspace = true }
 url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 fs-err = { workspace = true }

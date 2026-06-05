@@ -67,6 +67,7 @@ pixi_stable_hash = { workspace = true, features = ["serde_json"] }
 pixi_url = { workspace = true }
 pixi_utils = { workspace = true }
 pixi_variant = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 indexmap = { workspace = true }

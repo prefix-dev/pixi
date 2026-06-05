@@ -63,6 +63,7 @@ uv-redacted = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 uv-workspace = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
