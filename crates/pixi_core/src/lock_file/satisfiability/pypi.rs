@@ -20,8 +20,8 @@ use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     WorkspaceAnchor, configure_insecure_hosts_for_tls_bypass, into_pixi_reference,
-    pypi_build_config_settings, pypi_options_to_build_options, pypi_options_to_index_locations,
-    to_index_strategy, to_requirements_relative_to,
+    pypi_options_to_build_options, pypi_options_to_index_locations, to_index_strategy,
+    to_requirements_relative_to,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
@@ -130,7 +130,7 @@ pub(crate) fn pypi_satisfies_requirement(
     locked_record: &LockedPypiRecord,
     project_root: &Path,
     origin: RequirementOrigin,
-    locked_indexes: &[Url],
+    locked_indexes: &[&Url],
 ) -> Result<(), Box<PlatformUnsat>> {
     let locked_data = &locked_record.data;
     if spec.name.to_string() != locked_data.name().to_string() {
@@ -195,8 +195,9 @@ pub(crate) fn pypi_satisfies_requirement(
                 (None, Some(locked_url)) if origin == RequirementOrigin::Manifest => {
                     // Issue #6060: accept the locked URL if it matches any
                     // env-level configured index; fall back to PyPI default.
-                    let effective_indexes: &[Url] = if locked_indexes.is_empty() {
-                        std::slice::from_ref(&*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL)
+                    let default_index = &*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL;
+                    let effective_indexes: &[&Url] = if locked_indexes.is_empty() {
+                        std::slice::from_ref(&default_index)
                     } else {
                         locked_indexes
                     };
@@ -251,20 +252,24 @@ pub(crate) fn pypi_satisfies_requirement(
         RequirementSource::Git {
             git, subdirectory, ..
         } => {
-            let repository = git.repository();
+            // Use `git.url()`, not `git.repository()`: uv's `repository()` strips the
+            // `git@` ssh username that pixi's `RepositoryUrl` keeps (because it doubles
+            // as the cloneable/pinned url), so comparing the two sides spuriously
+            // mismatches for ssh deps (#6259).
+            let git_url = git.url();
             let reference = git.reference();
             match &**locked_data.location() {
                 UrlOrPath::Url(url) => {
                     if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
                     {
                         let pinned_repository = RepositoryUrl::new(&pinned_git_spec.git);
-                        let specified_repository = RepositoryUrl::new(repository);
+                        let specified_repository = RepositoryUrl::new(git_url);
 
                         let repo_is_same = pinned_repository == specified_repository;
                         if !repo_is_same {
                             return Err(PlatformUnsat::LockedPyPIGitUrlMismatch {
                                 name: spec.name.clone().to_string(),
-                                spec_url: repository.to_string(),
+                                spec_url: git_url.to_string(),
                                 lock_url: pinned_git_spec.git.to_string(),
                             }
                             .into());
@@ -634,11 +639,11 @@ async fn read_local_package_metadata(
         )
     };
 
-    // Scope source builds to the conda environment. See issue #6226.
-    let config_settings = match ctx.building_pixi_records.as_ref() {
-        Ok(records) => pypi_build_config_settings(&records.records),
-        Err(_) => ConfigSettings::default(),
-    };
+    // Metadata extraction is env-independent, so no scoping here; the build cache
+    // is scoped per environment at install time (see `CacheScopedBuildContext` in
+    // pixi_install_pypi). Keeping the fingerprint out of `config_settings` also
+    // avoids breaking strict PEP 517 backends like meson-python. See #6271 and #6226.
+    let config_settings = ConfigSettings::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &ctx.uv_context.cache,
@@ -975,6 +980,44 @@ mod tests {
 
         // The manifest spec must satisfy the lock file entry pixi wrote for
         // the very same dependency.
+        pypi_satisfies_requirement(
+            &uv_req,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[],
+        )
+        .unwrap();
+    }
+
+    /// #6259: an ssh git url (`ssh://git@host/...`) must satisfy the lock file
+    /// pixi wrote for it, despite uv stripping the `git@` user on the spec side.
+    #[test]
+    fn test_pypi_git_ssh_url_via_as_uv_req() {
+        use pixi_pypi_spec::PixiPypiSpec;
+        use pixi_uv_conversions::as_uv_req;
+
+        let pep_req = pep508_rs::Requirement::from_str(
+            "flask @ git+ssh://git@github.com/pallets/flask@9898ccbb783e7e6a35ae165e7deb9fa84edfe21c",
+        )
+        .unwrap();
+        let pixi_spec = PixiPypiSpec::try_from(pep_req).unwrap();
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        let uv_req = as_uv_req(&pixi_spec, "flask", &project_root).unwrap();
+
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "flask",
+            "3.0.0",
+            "git+ssh://git@github.com/pallets/flask?rev=9898ccbb783e7e6a35ae165e7deb9fa84edfe21c#9898ccbb783e7e6a35ae165e7deb9fa84edfe21c"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+
         pypi_satisfies_requirement(
             &uv_req,
             &locked_data,
@@ -1461,7 +1504,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
-            &[Url::parse(custom_index).unwrap()],
+            &[&Url::parse(custom_index).unwrap()],
         );
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
@@ -1471,7 +1514,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
-            &[Url::parse(&format!("{custom_index}/")).unwrap()],
+            &[&Url::parse(&format!("{custom_index}/")).unwrap()],
         );
         assert!(result_with_trailing_slash.is_ok());
 
@@ -1481,7 +1524,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
-            &[Url::parse("https://unrelated.example.com/simple").unwrap()],
+            &[&Url::parse("https://unrelated.example.com/simple").unwrap()],
         );
         assert!(result_unrelated.is_err());
     }
@@ -1516,8 +1559,8 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[
-                pixi_consts::consts::DEFAULT_PYPI_INDEX_URL.clone(),
-                Url::parse(extra_index).unwrap(),
+                &*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL,
+                &Url::parse(extra_index).unwrap(),
             ],
         );
         assert!(result.is_ok(), "{:?}", result.unwrap_err());

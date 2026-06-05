@@ -32,22 +32,32 @@ use uv_redacted::DisplaySafeUrl;
 
 use crate::{ConversionError, VersionError, WorkspaceAnchor};
 
-/// The `config_settings` key under which the conda-environment fingerprint is
-/// injected.
+/// `config_settings` key carrying the conda-environment fingerprint.
 const CONDA_ENVIRONMENT_CONFIG_SETTING: &str = "pixi-conda-environment";
 
-/// Builds the [`ConfigSettings`] for PyPI resolution and installation, seeded
-/// with a fingerprint of the conda environment.
+/// Builds the [`ConfigSettings`] used to scope the PyPI source-build cache to the
+/// conda environment: a wheel built against one set of conda dependencies is not
+/// reused in an environment that resolves different ones (issue #6226).
 ///
-/// uv folds `config_settings` into the cache key of wheels it builds from
-/// source, so this scopes source builds per environment. Prebuilt registry
-/// wheels are unaffected. See <https://github.com/prefix-dev/pixi/issues/6226>.
-pub fn pypi_build_config_settings(conda_records: &[PixiRecord]) -> ConfigSettings {
+/// The result is `config_settings` (the settings handed to the PEP 517 backend)
+/// with the conda-environment fingerprint layered on top, so the cache key always
+/// reflects the real backend settings as well; should those stop being empty, the
+/// scoping keeps working.
+///
+/// uv folds `config_settings` into the built-wheel cache key, so this is applied
+/// globally. It must only be used as the build context's *cache* settings, never
+/// handed to the build dispatch that invokes the PEP 517 backend, since strict
+/// backends like meson-python reject unknown keys (issue #6271).
+pub fn pypi_cache_config_settings(
+    config_settings: &ConfigSettings,
+    conda_records: &[PixiRecord],
+) -> ConfigSettings {
     let fingerprint = CondaEnvironmentFingerprint::new(conda_records);
     let entry =
         ConfigSettingEntry::from_str(&format!("{CONDA_ENVIRONMENT_CONFIG_SETTING}={fingerprint}"))
             .expect("the fingerprint is always a valid `KEY=VALUE` config setting");
-    std::iter::once(entry).collect()
+    let fingerprint_settings: ConfigSettings = std::iter::once(entry).collect();
+    config_settings.clone().merge(fingerprint_settings)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -1087,5 +1097,26 @@ mod tests {
         let pinned = into_pinned_git_spec(dist, None);
 
         assert_eq!(pinned.git.as_str(), original);
+    }
+
+    /// #6271/#6226: the cache settings carry the conda-environment fingerprint on
+    /// top of the given backend settings, so the cache key reflects both.
+    #[test]
+    fn pypi_cache_config_settings_layers_fingerprint_on_base() {
+        use pixi_record::CondaEnvironmentFingerprint;
+
+        let base: ConfigSettings =
+            std::iter::once(ConfigSettingEntry::from_str("backend-key=backend-value").unwrap())
+                .collect();
+        let settings = pypi_cache_config_settings(&base, &[]);
+
+        let rendered = settings.escape_for_python();
+        // The fingerprint of the (here empty) conda environment is present...
+        let expected = CondaEnvironmentFingerprint::new(&[]).to_string();
+        assert!(rendered.contains(CONDA_ENVIRONMENT_CONFIG_SETTING));
+        assert!(rendered.contains(&expected));
+        // ...and the base backend settings are preserved.
+        assert!(rendered.contains("backend-key"));
+        assert!(rendered.contains("backend-value"));
     }
 }

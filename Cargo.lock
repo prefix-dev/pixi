@@ -6698,6 +6698,7 @@ dependencies = [
  "miette 7.6.0",
  "once_cell",
  "ordermap",
+ "pathdiff",
  "pep440_rs",
  "pep508_rs",
  "pixi_build_backend_passthrough",
@@ -6956,6 +6957,7 @@ dependencies = [
  "uv-distribution-filename",
  "uv-distribution-types",
  "uv-flags",
+ "uv-git",
  "uv-install-wheel",
  "uv-installer",
  "uv-normalize",
@@ -6967,6 +6969,7 @@ dependencies = [
  "uv-redacted",
  "uv-resolver",
  "uv-types",
+ "uv-workspace",
 ]
 
 [[package]]
@@ -7355,7 +7358,6 @@ dependencies = [
  "fs-err",
  "jiff",
  "miette 7.6.0",
- "pathdiff",
  "pep440_rs",
  "pep508_rs",
  "pixi_git",
@@ -7368,7 +7370,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
- "typed-path",
  "url",
  "uv-configuration",
  "uv-distribution-filename",

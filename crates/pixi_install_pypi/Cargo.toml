@@ -50,6 +50,7 @@ uv-distribution = { workspace = true }
 uv-distribution-filename = { workspace = true }
 uv-distribution-types = { workspace = true }
 uv-flags = { workspace = true }
+uv-git = { workspace = true }
 uv-install-wheel = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
@@ -61,6 +62,7 @@ uv-python = { workspace = true }
 uv-redacted = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
+uv-workspace = { workspace = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
