@@ -589,19 +589,20 @@ impl WorkspaceManifestMut<'_> {
         name: &PixiPlatformName,
         edit: PlatformEdit,
     ) -> miette::Result<()> {
-        let mut updated = self
+        let (index, original) = self
             .workspace
             .workspace
             .platforms
             .iter()
-            .find(|p| p.name() == name)
-            .cloned()
+            .enumerate()
+            .find(|(_, p)| p.name() == name)
             .ok_or_else(|| {
                 miette!(
                     "workspace does not define a platform named '{}'",
                     name.as_str()
                 )
             })?;
+        let mut updated = original.clone();
 
         // The edit only matters if it actually changes the platform; a no-op
         // edit (e.g. removing an absent VP) must leave the document untouched.
@@ -616,16 +617,21 @@ impl WorkspaceManifestMut<'_> {
             return Ok(());
         }
 
+        // A pending legacy migration re-renders the whole array (every subdir
+        // entry becomes its rich form and `[system-requirements]` drops out),
+        // so the in-memory set and the document diverge. Capture this before
+        // `commit_if_needed` clears the flag.
+        let was_migrating = self.workspace.workspace.must_migrate;
+
         // The edit may rename the platform (collapsing to a bare subdir or
         // recomputing the synthesised name), and the set is keyed by name, so
-        // drop the original entry before inserting the edited one. The document
-        // is re-rendered from a sorted view below, so set order is irrelevant.
+        // replace the entry at its existing index to keep the set order.
         let new_name = updated.name().clone();
+        self.workspace.workspace.platforms.shift_remove_index(index);
         self.workspace
             .workspace
             .platforms
-            .retain(|p| p.name() != name);
-        self.workspace.workspace.platforms.insert(updated);
+            .shift_insert(index, updated.clone());
 
         if &new_name != name {
             self.rename_feature_platform_references(name, &new_name)?;
@@ -633,10 +639,37 @@ impl WorkspaceManifestMut<'_> {
 
         // A real edit of a rich platform commits a pending legacy migration:
         // the on-disk subdir entry becomes its rich form and the
-        // `[system-requirements]` tables drop out. Outside a migration this is
-        // a no-op and the rewrite below just re-renders the edited entry.
+        // `[system-requirements]` tables drop out.
         migrate_to_rich_platforms::commit_if_needed(self, true)?;
-        self.rewrite_workspace_platforms_toml()
+
+        if was_migrating {
+            // The migration rebuilt the whole platform set; re-render it.
+            self.rewrite_workspace_platforms_toml()
+        } else {
+            // Otherwise only this one entry changed: rewrite it in place so the
+            // array keeps its order and on-disk formatting.
+            self.replace_workspace_platform_value(index, &updated)
+        }
+    }
+
+    /// Rewrite the `index`th entry of the workspace `platforms` array from
+    /// `platform`, preserving that entry's surrounding whitespace so the
+    /// array's layout and the other entries stay untouched.
+    fn replace_workspace_platform_value(
+        &mut self,
+        index: usize,
+        platform: &PixiPlatform,
+    ) -> miette::Result<()> {
+        let value = crate::toml::platform::pixi_platform_to_toml_value(platform);
+        let array = self
+            .document
+            .get_array_mut("platforms", &Default::default())?;
+        if let Some(item) = array.get_mut(index) {
+            let decor = item.decor().clone();
+            *item = value;
+            *item.decor_mut() = decor;
+        }
+        Ok(())
     }
 
     /// Rename every feature's `platforms` reference from `old` to `new`, in the
@@ -4549,6 +4582,52 @@ exclude-newer = "2015-12-02T02:07:43Z"
         assert!(
             after.contains("cuda = \"12.5\""),
             "edited cuda version should land in the document:\n{after}",
+        );
+    }
+
+    #[test]
+    fn test_edit_preserves_array_order_and_formatting() {
+        // Editing one entry must touch only that entry: the multi-line layout
+        // and the order of the other entries stay byte-for-byte intact.
+        let file_contents = r#"[workspace]
+name = "named-variants"
+channels = ["conda-forge"]
+platforms = [
+    { name = "modern", platform = "linux-64" },
+    "linux-64",
+]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        assert!(!workspace.manifest.workspace.must_migrate);
+
+        let mut editable = workspace.editable();
+        editable
+            .edit_workspace_platform(
+                &PixiPlatformName::try_from("modern").unwrap(),
+                PlatformEdit {
+                    insert_or_update_virtual_packages: vec![
+                        rattler_conda_types::GenericVirtualPackage {
+                            name: rattler_conda_types::PackageName::try_from("__archspec").unwrap(),
+                            version: Version::major(0),
+                            build_string: "x86-64-v3".to_string(),
+                        },
+                    ],
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+
+        assert_eq!(
+            editable.document.to_string(),
+            r#"[workspace]
+name = "named-variants"
+channels = ["conda-forge"]
+platforms = [
+    { name = "modern", platform = "linux-64", archspec = "x86-64-v3" },
+    "linux-64",
+]
+"#,
         );
     }
 
