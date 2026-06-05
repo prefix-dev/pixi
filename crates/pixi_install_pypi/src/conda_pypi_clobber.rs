@@ -15,15 +15,42 @@ pub(crate) struct PypiCondaClobberRegistry {
     paths_registry: AHashMap<PathBuf, rattler_conda_types::PackageName>,
 }
 
+fn wheel_record_install_path(
+    site_packages_dir: &Path,
+    scripts_dir: &Path,
+    record_path: impl AsRef<Path>,
+) -> PathBuf {
+    let record_path = record_path.as_ref();
+
+    // PEP 427 "spreads" `{distribution}-{version}.data/scripts/*` into the
+    // environment scripts directory (`bin` on Unix, `Scripts` on Windows).
+    let mut components = record_path.components();
+    if let (Some(first), Some(second)) = (components.next(), components.next())
+        && Path::new(first.as_os_str())
+            .extension()
+            .is_some_and(|extension| extension == "data")
+        && second.as_os_str() == "scripts"
+    {
+        return scripts_dir.join(components.as_path());
+    }
+
+    site_packages_dir.join(record_path)
+}
+
 fn conda_relative_wheel_record_path(
     site_packages_dir: &Path,
+    scripts_dir: &Path,
     record_path: impl AsRef<Path>,
     prefix_root: &Path,
 ) -> Option<PathBuf> {
-    normalize_std(&site_packages_dir.join(record_path))
-        .strip_prefix(prefix_root)
-        .ok()
-        .map(Path::to_path_buf)
+    normalize_std(&wheel_record_install_path(
+        site_packages_dir,
+        scripts_dir,
+        record_path,
+    ))
+    .strip_prefix(prefix_root)
+    .ok()
+    .map(Path::to_path_buf)
 }
 
 impl PypiCondaClobberRegistry {
@@ -63,9 +90,12 @@ impl PypiCondaClobberRegistry {
             };
 
             for entry in whl_info.0 {
-                let Some(path_to_clobber) =
-                    conda_relative_wheel_record_path(&whl_info.1, entry.path, prefix_root)
-                else {
+                let Some(path_to_clobber) = conda_relative_wheel_record_path(
+                    &whl_info.1,
+                    venv.scripts(),
+                    entry.path,
+                    prefix_root,
+                ) else {
                     continue;
                 };
 
@@ -93,7 +123,12 @@ mod tests {
         let site_packages = prefix.join("lib/python3.12/site-packages");
 
         assert_eq!(
-            conda_relative_wheel_record_path(&site_packages, "../../../bin/prek", prefix),
+            conda_relative_wheel_record_path(
+                &site_packages,
+                &prefix.join("bin"),
+                "../../../bin/prek",
+                prefix,
+            ),
             Some(PathBuf::from("bin/prek"))
         );
     }
@@ -104,8 +139,30 @@ mod tests {
         let site_packages = prefix.join("lib/python3.12/site-packages");
 
         assert_eq!(
-            conda_relative_wheel_record_path(&site_packages, "../../../../../bin/prek", prefix),
+            conda_relative_wheel_record_path(
+                &site_packages,
+                &prefix.join("bin"),
+                "../../../../../bin/prek",
+                prefix,
+            ),
             None
+        );
+    }
+
+    #[test]
+    fn wheel_data_scripts_path_is_matched_prefix_relative() {
+        let prefix = Path::new("/prefix");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let scripts = prefix.join("bin");
+
+        assert_eq!(
+            conda_relative_wheel_record_path(
+                &site_packages,
+                &scripts,
+                "prek-0.4.4.data/scripts/prek",
+                prefix,
+            ),
+            Some(PathBuf::from("bin/prek"))
         );
     }
 }
