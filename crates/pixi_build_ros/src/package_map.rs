@@ -66,13 +66,7 @@ pub enum PackageMapError {
     MergeSpecsWithSpaces { spec1: String, spec2: String },
 
     #[error("rosdep '{dep_name}' resolved to an invalid conda package spec '{spec}'")]
-    #[diagnostic(help(
-        "'{dep_name}' could not be mapped to a valid conda package. If it is not in the \
-         package map it is assumed to be a ROS package and rewritten to `ros-<distro>-...`, \
-         which fails when the name contains characters that are illegal in conda package \
-         names (such as `+`). Add or fix a mapping for '{dep_name}' in robostack.yaml or via \
-         the `extra-package-mappings` configuration."
-    ))]
+    #[diagnostic(help("Map '{dep_name}' to a valid conda package via `extra-package-mappings`."))]
     InvalidCondaPackageSpec {
         dep_name: String,
         spec: String,
@@ -137,12 +131,8 @@ pub fn load_package_map_data(sources: &[PackageMappingSource]) -> HashMap<String
 
 /// Convert a ROS dependency to conda package spec(s).
 ///
-/// Every resolved spec is validated as a strict conda [`MatchSpec`] before it
-/// is returned. An unmapped rosdep is optimistically rewritten to
-/// `ros-<distro>-<name>`, and names carrying characters that are illegal in
-/// conda package names (e.g. `crypto++`) would otherwise surface as an opaque
-/// MatchSpec parse panic during `pixi lock`; here they fail with an actionable
-/// [`PackageMapError::InvalidCondaPackageSpec`] instead.
+/// Each resolved spec is validated as a strict conda [`MatchSpec`]; an invalid
+/// name (e.g. `crypto++`) errors here instead of panicking downstream.
 pub fn rosdep_to_conda_package_spec(
     dep: &Dependency,
     distro: &Distro,
@@ -1042,10 +1032,8 @@ mod tests {
 
     #[test]
     fn test_lttng_resolves_per_platform() {
-        // `liblttng-ust-dev` used to map to a `${{ "lttng-ust" if linux }}`
-        // selector that leaked into the recipe as a literal `${{` and panicked
-        // downstream (prefix-dev/pixi#6288). It must now resolve to the concrete
-        // `lttng-ust` on linux and to nothing elsewhere.
+        // Regression for prefix-dev/pixi#6288: `lttng-ust` on linux, nothing
+        // elsewhere (was a leaked `${{` selector).
         let distro = jazzy_distro();
         let package_map = robostack_data();
         let dep = Dependency::from("liblttng-ust-dev");
@@ -1076,9 +1064,7 @@ mod tests {
 
     #[test]
     fn test_unmapped_invalid_conda_name_errors() {
-        // An unmapped rosdep whose synthesized `ros-<distro>-<name>` is not a
-        // valid conda package name must fail with a clear, actionable error
-        // rather than panicking later during MatchSpec parsing.
+        // Unmapped rosdep with an invalid conda name must error, not panic.
         let distro = jazzy_distro();
         let dep = Dependency::from("crypto++");
 
