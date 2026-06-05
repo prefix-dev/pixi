@@ -29,3 +29,27 @@ platforms = [
 
 # Write out exact versions rather than a semver range. (Defaults to false.)
 # exact-versions = true
+
+# Keep the mutually exclusive `rustls` (default) and `native-tls` TLS backends
+# separate. These members toggle `native-tls`/`rustls` on reqwest and the
+# rattler/sigstore crates; without excluding them, hakari's all-features pass
+# would unify both backends into workspace-hack and force native-tls (OpenSSL)
+# into every build. Excluding them from traversal drops their direct
+# workspace-hack dependency so they stay free to pick a TLS backend, while the
+# shared dependencies they pull in still get unified through the lower-level
+# library crates (e.g. pixi_core), which keep the hack.
+[traversal-excludes]
+workspace-members = [
+  "pixi",
+  "pixi_auth",
+  "pixi_cli",
+  "pixi_utils",
+  "pixi_build_backend",
+  "pixi-build-cmake",
+  "pixi-build-mojo",
+  "pixi-build-python",
+  "pixi-build-r",
+  "pixi-build-rattler-build",
+  "pixi-build-ros",
+  "pixi-build-rust",
+]

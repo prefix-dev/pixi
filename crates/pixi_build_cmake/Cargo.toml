@@ -29,7 +29,6 @@ rattler_conda_types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["macros"] }
 tracing = { workspace = true }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["yaml", "redactions", "filters"] }
