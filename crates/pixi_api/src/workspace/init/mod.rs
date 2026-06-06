@@ -238,7 +238,7 @@ async fn init_from_env_file<I: Interface>(
     let env_vars = env_file.variables();
     // TODO: Improve this:
     //  - Use .condarc as channel config
-    let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
+    let (conda_deps, pypi_deps, channels) = env_file.to_manifest(config)?;
 
     let env = Environment::new();
     let rendered_workspace_template = render_workspace(
