@@ -6230,6 +6230,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_lock",
  "regex",
+ "rstest",
  "same-file",
  "serde",
  "tempfile",

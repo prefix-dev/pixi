@@ -155,7 +155,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
 
             let (name, pixi_name) = match pyproject.name() {
                 Some(name) => (name.to_string(), false),
-                None => (default_name.clone(), true),
+                None => (get_pypi_safe_name(&default_name), true),
             };
             let environments = pyproject.environments_from_groups(&dir).into_diagnostic()?;
             let rv = env
@@ -211,14 +211,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         } else if pyproject {
             // PyPI package names must not start or end with '-', '_', or '.',
             // so strip those boundary characters before normalizing.
-            let pypi_safe_name = {
-                let trimmed = default_name.trim_matches(|c: char| matches!(c, '_' | '-' | '.'));
-                if trimmed.is_empty() {
-                    "workspace".to_string()
-                } else {
-                    trimmed.to_string()
-                }
-            };
+            let pypi_safe_name = get_pypi_safe_name(&default_name);
             // Normalize separators to '-' as PyPI dist-info convention requires.
             let pypi_package_name = PackageName::from_str(&pypi_safe_name)
                 .map(|name| name.as_dist_info_name().to_string())
@@ -270,16 +263,16 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
             Workspace::from_path(&pyproject_manifest_path)?
         // Create a 'pixi.toml' manifest
         } else {
-            let path = if options.format == Some(ManifestFormat::Mojoproject) {
-                mojoproject_manifest_path
+            let (path, file_name) = if options.format == Some(ManifestFormat::Mojoproject) {
+                (mojoproject_manifest_path, consts::MOJOPROJECT_MANIFEST)
             } else {
-                pixi_manifest_path
+                (pixi_manifest_path, consts::WORKSPACE_MANIFEST)
             };
 
             // Check if the manifest file doesn't already exist. We don't want to
             // overwrite it.
             if path.is_file() {
-                miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
+                miette::bail!("{} already exists", file_name);
             }
 
             let rv = render_workspace(
@@ -447,10 +440,22 @@ fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+fn get_pypi_safe_name(name: &str) -> String {
+    // PyPI package names must not start or end with '-', '_', or '.'
+    // so strip those boundary characters before normalizing.
+    let trimmed = name.trim_matches(|c: char| matches!(c, '_' | '-' | '.'));
+    if trimmed.is_empty() {
+        "workspace".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{io::Read, path::Path};
 
+    use rstest::rstest;
     use tempfile::tempdir;
 
     use super::*;
@@ -486,5 +491,454 @@ mod tests {
         assert!(create_or_append_file(dir.path(), template).is_err());
 
         dir.close().unwrap();
+    }
+
+    struct MockInterface {
+        pub confirm_response: bool,
+    }
+
+    impl Interface for MockInterface {
+        async fn is_cli(&self) -> bool {
+            false
+        }
+        async fn confirm(&self, _msg: &str) -> miette::Result<bool> {
+            Ok(self.confirm_response)
+        }
+        async fn error(&self, _msg: &str) {}
+        async fn info(&self, _msg: &str) {}
+        async fn success(&self, _msg: &str) {}
+        async fn warning(&self, _msg: &str) {}
+    }
+
+    #[derive(Default)]
+    struct TestConfig {
+        pub format: Option<ManifestFormat>,
+        pub pre_existing_pixi: bool,
+        pub pre_existing_pyproject: bool,
+        pub pre_existing_mojo: bool,
+        pub with_env_file: bool,
+        pub confirm_response: bool,
+        pub pyproject_already_extended: bool,
+    }
+
+    struct TestOutcome {
+        pub result: miette::Result<Workspace>,
+        pub project_path: std::path::PathBuf,
+        pub pixi_exists: bool,
+        pub pyproject_exists: bool,
+        pub mojo_exists: bool,
+        pub _tmp_dir: tempfile::TempDir,
+    }
+
+    // Create TestOutcome function
+    async fn run_init_scenario(config: TestConfig) -> TestOutcome {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let project_path = tmp_dir.path().to_path_buf();
+
+        if config.pre_existing_pyproject {
+            let pyproject_path = project_path.join(consts::PYPROJECT_MANIFEST);
+            let content = if config.pyproject_already_extended {
+                "[workspace]\nname = \"existing_pixi\"\nchannels = []\nplatforms = []\n\n[tool.pixi.workspace]\nchannels = []"
+            } else {
+                "[workspace]\nname = \"existing_pixi\"\nchannels = []\nplatforms = []"
+            };
+            fs_err::write(&pyproject_path, content).unwrap();
+        }
+
+        if config.pre_existing_pixi {
+            let pixi_path = project_path.join(consts::WORKSPACE_MANIFEST);
+            fs_err::write(
+                &pixi_path,
+                "[workspace]\nname = \"existing_pixi\"\nchannels = []\nplatforms = []",
+            )
+            .unwrap();
+        }
+
+        if config.pre_existing_mojo {
+            let mojo_path = project_path.join(consts::MOJOPROJECT_MANIFEST);
+            fs_err::write(
+                &mojo_path,
+                "[workspace]\nname = \"existing_pixi\"\nchannels = []\nplatforms = []",
+            )
+            .unwrap();
+        }
+
+        let mut env_file = None;
+        if config.with_env_file {
+            let env_path = project_path.join("environment.yml");
+            fs_err::write(
+                &env_path,
+                "name: env\nchannels: [conda-forge]\ndependencies: [python]",
+            )
+            .unwrap();
+            env_file = Some(env_path);
+        }
+
+        let options = InitOptions {
+            path: project_path.clone(),
+            env_file,
+            format: config.format,
+            channels: None,
+            platforms: vec![],
+            scm: None,
+            conda_pypi_mapping: None,
+        };
+
+        let interface = MockInterface {
+            confirm_response: config.confirm_response,
+        };
+        let result = init(&interface, options).await;
+
+        let pixi_exists = project_path.join(consts::WORKSPACE_MANIFEST).is_file();
+        let pyproject_exists = project_path.join(consts::PYPROJECT_MANIFEST).is_file();
+        let mojo_exists = project_path.join(consts::MOJOPROJECT_MANIFEST).is_file();
+
+        TestOutcome {
+            result,
+            project_path,
+            pixi_exists,
+            pyproject_exists,
+            mojo_exists,
+            _tmp_dir: tmp_dir,
+        }
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_init_with_env_file_fail_if_pixi_exists(
+        #[values(
+            None,
+            Some(ManifestFormat::Pixi),
+            Some(ManifestFormat::Pyproject),
+            Some(ManifestFormat::Mojoproject)
+        )]
+        format: Option<ManifestFormat>,
+        #[values(true, false)] pre_existing_pyproject: bool,
+        #[values(true, false)] pre_existing_mojo: bool,
+        #[values(true, false)] confirm_response: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format,
+            with_env_file: true,
+            pre_existing_pixi: true,
+            pre_existing_pyproject,
+            pre_existing_mojo,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        let error = outcome.result.unwrap_err();
+        let error_msg = format!("{:?}", error);
+
+        assert!(
+            error_msg.contains("pixi.toml already exists"),
+            "The command failed, but for the wrong reason. Error texts was: {}",
+            error_msg
+        )
+    }
+
+    #[rstest]
+    #[tokio::test]
+
+    async fn test_init_with_env_file_succeeds(
+        #[values(
+            None,
+            Some(ManifestFormat::Pixi),
+            Some(ManifestFormat::Pyproject),
+            Some(ManifestFormat::Mojoproject)
+        )]
+        format: Option<ManifestFormat>,
+        #[values(true, false)] pre_existing_pyproject: bool,
+        #[values(true, false)] pre_existing_mojo: bool,
+        #[values(true, false)] confirm_response: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format,
+            with_env_file: true,
+            pre_existing_pixi: false,
+            pre_existing_pyproject,
+            pre_existing_mojo,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        assert!(outcome.result.is_ok());
+        assert!(outcome.pixi_exists);
+    }
+
+    #[rstest]
+    #[tokio::test]
+
+    async fn test_prompt_for_extending_pyproject_confirm_yes_not_extended(
+        #[values(true, false)] pre_existing_mojo: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: None,
+            with_env_file: false,
+            pre_existing_pixi: false,
+            pre_existing_pyproject: true,
+            pre_existing_mojo,
+            confirm_response: true,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        // let workspace = outcome.result.unwrap();
+        assert!(outcome.result.is_ok());
+        assert!(outcome.pyproject_exists);
+
+        // check that the relevant table was added to pyproject file
+        let pyproject_path = outcome.project_path.join(consts::PYPROJECT_MANIFEST);
+        let content = fs_err::read_to_string(pyproject_path).unwrap();
+        assert!(
+            content.contains("[tool.pixi.workspace]"),
+            "Pyproject.toml should include [tool.pixi.workspace] after extending"
+        )
+    }
+
+    #[rstest]
+    #[tokio::test]
+
+    async fn test_prompt_for_extending_pyproject_confirm_no(
+        #[values(true, false)] pre_existing_mojo: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: None,
+            with_env_file: false,
+            pre_existing_pixi: false,
+            pre_existing_pyproject: true,
+            pre_existing_mojo,
+            confirm_response: false,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        assert!(outcome.result.is_ok());
+        assert!(outcome.pyproject_exists);
+        assert!(outcome.pixi_exists);
+
+        let pyproject_path = outcome.project_path.join(consts::PYPROJECT_MANIFEST);
+        let content = fs_err::read_to_string(pyproject_path).unwrap();
+        assert!(
+            !content.contains("[tool.pixi.workspace]"),
+            "Pyproject.toml shouldn't include [tool.pixi.workspace] as extending didn't take place"
+        )
+    }
+
+    #[rstest]
+    #[tokio::test]
+
+    async fn test_prompt_for_extending_pyproject_confirm_yes_already_extended(
+        #[values(true, false)] pre_existing_mojo: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: None,
+            with_env_file: false,
+            pre_existing_pixi: false,
+            pre_existing_pyproject: true,
+            pre_existing_mojo,
+            confirm_response: true,
+            pyproject_already_extended: true,
+        })
+        .await;
+
+        assert!(outcome.result.is_ok());
+        assert!(outcome.pyproject_exists);
+
+        let pyproject_path = outcome.project_path.join(consts::PYPROJECT_MANIFEST);
+        let content = fs_err::read_to_string(pyproject_path).unwrap();
+
+        let pixi_table_count = content.matches("[tool.pixi.workspace]").count();
+
+        assert_eq!(
+            pixi_table_count, 1,
+            "The [tool.pixi.workspace] table was duplicated! Early exit failed."
+        );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_new_pyproject_format(
+        #[values(true, false)] pre_existing_mojo: bool,
+        #[values(true, false)] confirm_response: bool,
+        #[values(true, false)] pre_existing_pixi: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: Some(ManifestFormat::Pyproject),
+            with_env_file: false,
+            pre_existing_pixi,
+            pre_existing_pyproject: false,
+            pre_existing_mojo,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        assert!(outcome.result.is_ok());
+        assert!(outcome.pyproject_exists);
+        assert_eq!(outcome.pixi_exists, pre_existing_pixi);
+
+        let pyproject_path = outcome.project_path.join(consts::PYPROJECT_MANIFEST);
+        let content = fs_err::read_to_string(pyproject_path).unwrap();
+        assert!(
+            content.contains("[tool.pixi.workspace]"),
+            "Pyproject.toml should include [tool.pixi.workspace]"
+        )
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_mojo_format_fails_if_mojo_exists(
+        #[values(true, false)] confirm_response: bool,
+        #[values(true, false)] pre_existing_pixi: bool,
+        #[values(true, false)] pre_existing_pyproject: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: Some(ManifestFormat::Mojoproject),
+            with_env_file: false,
+            pre_existing_pixi,
+            pre_existing_pyproject,
+            pre_existing_mojo: true,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        let error = outcome.result.unwrap_err();
+        let error_msg = format!("{:?}", error);
+
+        assert!(
+            error_msg.contains("mojoproject.toml already exists"),
+            "The command failed, but for the wrong reason. Error texts was: {}",
+            error_msg
+        )
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_mojo_format_succeeds(
+        #[values(true, false)] confirm_response: bool,
+        #[values(true, false)] pre_existing_pixi: bool,
+        #[values(true, false)] pre_existing_pyproject: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: Some(ManifestFormat::Mojoproject),
+            with_env_file: false,
+            pre_existing_pixi,
+            pre_existing_pyproject,
+            pre_existing_mojo: false,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        assert!(outcome.result.is_ok());
+        assert_eq!(outcome.pyproject_exists, pre_existing_pyproject);
+        assert_eq!(outcome.pixi_exists, pre_existing_pixi);
+        assert!(outcome.mojo_exists);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_pixi_format_succeeds(
+        #[values(true, false)] confirm_response: bool,
+        #[values(true, false)] pre_existing_pyproject: bool,
+        #[values(true, false)] pre_existing_mojo: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: Some(ManifestFormat::Pixi),
+            with_env_file: false,
+            pre_existing_pixi: false,
+            pre_existing_pyproject,
+            pre_existing_mojo,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        assert!(outcome.result.is_ok());
+        assert_eq!(outcome.pyproject_exists, pre_existing_pyproject);
+        assert_eq!(outcome.mojo_exists, pre_existing_mojo);
+        assert!(outcome.pixi_exists);
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_pixi_format_fails_if_pixi_exists(
+        #[values(true, false)] confirm_response: bool,
+        #[values(true, false)] pre_existing_pyproject: bool,
+        #[values(true, false)] pre_existing_mojo: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: Some(ManifestFormat::Pixi),
+            with_env_file: false,
+            pre_existing_pixi: true,
+            pre_existing_pyproject,
+            pre_existing_mojo,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        let error = outcome.result.unwrap_err();
+        let error_msg = format!("{:?}", error);
+
+        assert!(
+            error_msg.contains("pixi.toml already exists"),
+            "The command failed, but for the wrong reason. Error texts was: {}",
+            error_msg
+        )
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_init_default_fails_if_pixi_exists(
+        #[values(true, false)] confirm_response: bool,
+        #[values(true, false)] pre_existing_mojo: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: None,
+            with_env_file: false,
+            pre_existing_pixi: true,
+            pre_existing_pyproject: false,
+            pre_existing_mojo,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        let error = outcome.result.unwrap_err();
+        let error_msg = format!("{:?}", error);
+
+        assert!(
+            error_msg.contains("pixi.toml already exists"),
+            "The command failed, but for the wrong reason. Error texts was: {}",
+            error_msg
+        )
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_default_format_succeeds(
+        #[values(true, false)] confirm_response: bool,
+        #[values(true, false)] pre_existing_mojo: bool,
+    ) {
+        let outcome = run_init_scenario(TestConfig {
+            format: None,
+            with_env_file: false,
+            pre_existing_pixi: false,
+            pre_existing_pyproject: false,
+            pre_existing_mojo,
+            confirm_response,
+            pyproject_already_extended: false,
+        })
+        .await;
+
+        assert!(outcome.result.is_ok());
+        assert!(!outcome.pyproject_exists);
+        assert_eq!(outcome.mojo_exists, pre_existing_mojo);
+        assert!(outcome.pixi_exists);
     }
 }
